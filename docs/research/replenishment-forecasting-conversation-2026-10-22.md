@@ -23,6 +23,11 @@ The original December example meant a future period where categories such as Bev
 - Retain stock-rule buying-quantity suggestions using current stock, reorder level, safety stock, MOQ, and package size, with the Inventory Manager deciding the final quantity. This does not require sales-history forecasting.
 - Count safety stock only once in stock-rule suggestions. The user approved correcting the duplicate-buffer design; no code has been changed.
 - Purchases by the store are evidence of replenishment behavior. They do not directly establish what customers bought or wanted.
+- October 26 clarification: retire product-unit sales forecasts from the live Store workflow, while retaining stock-based buying suggestions. The exact screens, jobs, and data-retention changes remain to be designed; no code has changed.
+- Describe the initial output as a replenishment buying pattern, not a seasonal customer-demand claim. Do not claim annual seasonality without repeated, complete periods.
+- Treat months with missing receipts as unknown, not as months with no purchases. Withhold a future-category heads-up when coverage is too weak; the exact evidence rule remains open.
+- Test and compare any proposed category model in Google Colab before deciding whether to integrate it. Report precision, recall, and F1 for later months; do not invent results from the current incomplete archive.
+- October 27 direction: train and test in Google Colab first, explain weak precision/recall/F1 and data limitations, improve only where evidence supports it, then connect a satisfactory model result to RetailMind. Produce a November 2026 prediction before November begins and evaluate it only after November receipts are complete. The criteria for satisfactory performance and the exact integration path remain open.
 
 ## Available receipts
 
@@ -99,7 +104,7 @@ The current design uses chronological evaluation and sales-quantity metrics. Tho
 - Review category coverage against the receipts; reusing existing categories and a heads-up limit of up to five categories are agreed.
 - Model choice, evaluation windows, and useful improvement thresholds once data is inspected.
 - Treatment of incomplete coverage; cancelled purchases are excluded, errors corrected, and returns do not erase valid purchase decisions.
-- The user rejected keeping the sales-history forecasting approach alongside this feature, citing insufficient historical data. Retaining stock-rule quantity suggestions with the Inventory Manager deciding the final quantity is agreed. Settle the exact retirement scope; ADR 0005 has not yet been superseded and no implementation has occurred.
+- The user confirmed retiring the sales-history forecast from the live Store workflow, while retaining stock-rule quantity suggestions with Inventory Manager review. Settle the exact retirement scope; ADR 0005 has not yet been superseded and no implementation has occurred.
 - Finalize the stock-rule target and formula using the agreed rule that safety stock counts only once. Current code still adds safety stock to reorder level, while the glossary says reorder level already includes safety stock; implementation remains pending.
 - Final confirmation of the complete design before implementation.
 

@@ -21,6 +21,11 @@ Status: In discussion. Agreed scope is recorded in ADR 0016; the remaining propo
 - Count safety stock only once in stock-rule suggestions. The user approved avoiding the duplicate buffer in the current fallback calculation; implementation remains pending.
 - All supplied receipts are for Store replenishment; personal-purchase filtering is not currently required.
 - Latest currently confirmed receipt: September 16, 2026. Additional receipts are with another person, so the complete date range remains unknown.
+- Retire the product-unit sales forecast from the live Store workflow, retaining stock-based buying suggestions. Implementation scope remains open.
+- Call the first output a replenishment buying pattern; do not claim annual seasonality or measured customer demand from these receipts.
+- Missing-receipt months have unknown purchase status, not zero purchases. Withhold the heads-up where coverage is too weak; define the threshold after inspecting the full archive.
+- Evaluate candidate models in Google Colab before any production integration, reporting precision, recall, and F1 on later periods against a simple baseline. No measured result exists yet.
+- Review weak predictions and data gaps before choosing any improvement. Generate a November 2026 category prediction before that month begins; November accuracy can be measured only after its receipt coverage is confirmed complete. Integrate only after evaluation, with success criteria and integration scope still to be settled.
 
 ## Proposed capture format
 
@@ -100,7 +105,7 @@ For a manually reviewed first batch, try Excel for Microsoft 365: Data > From Pi
 - Deferred until the user has the complete receipt collection: what are the earliest and latest receipt dates, and are any replenishment receipts missing between them? Ask again when the user says the receipts are ready. Coverage affects monthly evaluation and whether seasonal claims have supporting history; it does not block receipt extraction.
 - Review the existing category list against the receipts; reuse categories unless none fits. Which comparison baselines and useful performance thresholds should be approved?
 - How should incomplete receipt coverage affect labels?
-- The user rejected coexistence with the sales-history forecasting approach because the available history does not support it. Retaining stock-rule quantity suggestions with Inventory Manager review is agreed. The exact retirement scope and replacement of ADR 0005 still require a settled design; no implementation or architecture retirement has occurred.
+- The user chose to retire the sales-history forecast from the live Store workflow because available history does not support it. Retaining stock-rule quantity suggestions with Inventory Manager review is agreed. The exact retirement scope and replacement of ADR 0005 still require a settled design; no implementation or architecture retirement has occurred.
 - Finalize the stock-rule target and formula before implementation, applying the agreed rule that safety stock counts only once. The existing fallback in ReplenishmentQueueService::getRecommendations adds safety stock to reorder level, while GLOSSARY.md defines Reorder Level as already including Safety Stock. The user approved avoiding this duplicate buffer; the code has not been changed.
 
 ## Receipt collection progress
