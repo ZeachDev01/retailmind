@@ -87,7 +87,7 @@ try {
     $post=['csrf_token'=>'fixture-csrf','product_id'=>1,'category'=>'damaged','quantity'=>1,'explanation'=>'HTTP packaging defect','cashier_id'=>2,'shift_id'=>999,'role'=>'admin'];
     $movement=['csrf_token'=>'fixture-csrf','action'=>'movement','movement_type'=>'cash_out','amount'=>10,'reason'=>'petty_cash','approved_by'=>1,'shift_id'=>999,'cashier_id'=>2];
     [$status,$body]=$request(1,'cashier',$movement,'/shifts');
-    $assert(str_contains($status,'200') && str_contains($body,'Check physical cash before payouts') && str_contains($body,'Cash Refunds'),'Drawer form renders physical-cash and refund guidance');
+    $assert(str_contains($status,'200') && str_contains($body,'Record drawer cash'),'Drawer form renders after rejected movement');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'Forged approver identity cannot authorize spending');
     $movement['approver_username']='fixture-admin';$movement['approver_password']='fixture-password';
     $request(1,'cashier',$movement,'/shifts');

@@ -24,7 +24,7 @@ window.RetailMindInventoryDrafts = (() => {
     }
     function eligible(form) {
         return form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, #pullout-form, .count-form, .review-form, #receiving_form, .inline-form') ||
-            (location.pathname.endsWith('/products.php') && form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form');
+            (location.pathname.endsWith('/products.php') && form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value);
     }
     function hidden(form, name, value) {
         let field = form.elements.namedItem(name);
@@ -172,6 +172,7 @@ window.RetailMindInventoryDrafts = (() => {
         finally { restoring = false; }
     }
     async function offer(storageKey) {
+        if (location.pathname.endsWith('/products.php') && storageKey === prefix + 'entry:') return;
         try {
             const stored = JSON.parse(localStorage.getItem(storageKey));
             const plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));

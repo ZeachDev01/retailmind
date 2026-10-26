@@ -108,13 +108,6 @@
         margin: 1.5rem 0;
     }
 
-    .cashier-refunds-page .refund-policy {
-        background: var(--surface-soft);
-        padding: 1rem;
-        border-radius: 10px;
-        max-width: none;
-    }
-
     .cashier-refunds-page .refund-form fieldset {
         min-width: 0;
         border: 1px solid var(--border);
@@ -173,11 +166,6 @@
         color: var(--muted);
         font-size: 0.8rem;
         overflow-wrap: anywhere;
-    }
-
-    .cashier-refunds-page #refund-note-help {
-        display: block;
-        margin-top: 0.5rem;
     }
 
     .cashier-refunds-page .refund-items-table {

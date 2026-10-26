@@ -204,8 +204,6 @@
 .cashier-shifts-page .main-content { line-height: 1.5; }
 .cashier-shifts-page .main-content :is(input, select, textarea, button) { font-family: inherit; }
 .cashier-shifts-page :is(input[type="number"], .money-counter-row label, .money-counter-totals strong, .money-count-breakdown dd, .metric, .shift-details dd, .shift-movement-table td[data-label="Amount"]) { font-variant-numeric: tabular-nums; }
-.cashier-shifts-page .shift-help a { color: var(--theme-info-text, #1d4ed8); text-underline-offset: .2em; }
-.cashier-shifts-page .shift-help a:hover { text-decoration-thickness: 2px; }
 .cashier-shifts-page .money-counter-subtotal { font-size: 1rem; line-height: 1.5; }
 
 .cashier-shifts-page .shift-overview {

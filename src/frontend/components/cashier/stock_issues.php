@@ -160,11 +160,10 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                     <option value="piece">Loose Piece(s)</option>
                                     <option value="pack" id="form-option-pack" disabled>Sealed Pack(s)</option>
                                 </select>
-                                <small id="form-hint" class="muted">Piece by default. Pack enabled only if Sales Pack configured.</small>
                             </div>
                             <div class="form-group">
                                 <label for="quantity" class="required">Quantity affected</label>
-                                <input type="number" name="quantity" id="quantity" min="1" step="1" required placeholder="Units affected" <?= $openShift ? '' : 'disabled' ?>>
+                                <input type="number" name="quantity" id="quantity" min="1" step="1" required <?= $openShift ? '' : 'disabled' ?>>
                             </div>
                         </div>
                         <div class="form-group">
@@ -268,8 +267,6 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                                             <?php endif; ?>
                                         </div>
                                     </form>
-                                <?php elseif (in_array($adj['status'], ['approved', 'rejected'], true)): ?>
-                                    <div class="adjustment-reason"><small>This report is locked and cannot be edited, cancelled, reopened, or deleted.</small></div>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
@@ -293,17 +290,14 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
         function updateFormSelect(packSize) {
             const formSelect = document.getElementById('form');
             const packOpt = document.getElementById('form-option-pack');
-            const formHint = document.getElementById('form-hint');
             if (!formSelect || !packOpt) return;
             if (packSize && packSize > 1) {
                 packOpt.disabled = false;
                 packOpt.textContent = 'Sealed Pack(s) (Pack of ' + packSize + ')';
-                if (formHint) formHint.textContent = '1 pack = ' + packSize + ' base units';
             } else {
                 packOpt.disabled = true;
                 packOpt.textContent = 'Sealed Pack(s) (N/A)';
                 formSelect.value = 'piece';
-                if (formHint) formHint.textContent = 'Piece by default. Pack enabled only if Sales Pack configured.';
             }
         }
 

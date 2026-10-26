@@ -10,9 +10,6 @@ const { chromium } = require('playwright');
         await page.setContent(execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/drawer_movement_fixture.php')], { encoding: 'utf8' }));
         const root = path.resolve(__dirname, '../../..');
         await page.addStyleTag({ content: fs.readFileSync(path.join(root, 'src/frontend/assets/css/cashier-pages.css'), 'utf8') });
-        assert.match(await page.locator('body').innerText(), /Check physical cash before payouts; add and record float first if needed/);
-        assert.match(await page.locator('body').innerText(), /Record refunds only in Cash Refunds/);
-        assert.match(await page.getByRole('link', { name: 'Cash Refunds', exact: true }).getAttribute('href'), /cashier\/refunds.php$/);
         await page.locator('#movement-type').selectOption('cash_out');
         assert.equal(await page.locator('#movement-reason').inputValue(), 'petty_cash');
         assert.equal(await page.locator('#movement-approver').evaluate(el => el.required), true);
@@ -29,6 +26,6 @@ const { chromium } = require('playwright');
         await page.locator('#movement-type').selectOption('safe_drop');
         assert.equal(await page.locator('#movement-reason').inputValue(), 'excess_cash');
         assert.equal(await page.locator('#movement-note').evaluate(el => el.required), false);
-        console.log('Drawer movement browser: passed (guidance, reasons, authorization fields and bound form)');
+        console.log('Drawer movement browser: passed (reasons, authorization fields and bound form)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

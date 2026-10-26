@@ -202,7 +202,6 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section>
                 <?php if ($openShift && $isCashier && !$ownRegisterLocked && !$countPreview): ?><section class="dashboard-section shift-movement">
                         <h2>Record drawer cash</h2>
-                        <p class="shift-help">Check physical cash before payouts; add and record float first if needed. Record refunds only in <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>">Cash Refunds</a>.</p>
                         <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="movement">
                             <div class="form-row">
                                 <div><label for="movement-type">Cash movement</label><select id="movement-type" name="movement_type">
