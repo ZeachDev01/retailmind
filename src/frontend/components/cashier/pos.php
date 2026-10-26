@@ -652,8 +652,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-breakdown" aria-label="Drawer preview">
                         <div><span>Cash added</span><strong>&#8369;<span id="drawer-cash-added">0.00</span></strong></div>
                     </div>
-                    <p class="pos-lock-note">Preview only. Cash received minus change is added when payment is confirmed.</p>
-
                     <div class="payment-field">
                         <label class="pos-field-label" for="payment-method">Payment method</label>
                         <select name="payment_method" id="payment-method" class="pos-select">
@@ -680,8 +678,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         </div>
                     </div>
 
-                    <p class="muted">Review the final quote to confirm payment and change.</p>
-
                     <div class="payment-field hidden" id="reference-field">
                         <label class="pos-field-label" for="payment-reference">Payment reference</label>
                         <input type="text" name="payment_reference" id="payment-reference" placeholder="Enter after quote review" readonly>
@@ -691,7 +687,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <label class="pos-field-label" for="promotion-id">Promotion</label>
                         <select name="promotion_id" id="promotion-id" class="pos-select" aria-describedby="promotion-status"><option value="">No promotion</option></select>
                         <small id="promotion-status" class="muted" role="status" aria-live="polite">Add items to see eligible promotions.</small>
-                        <small id="discount-summary" class="muted">No promotion applied.</small>
                     </div>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" title="Checkout (Ctrl+Enter)" disabled>
@@ -865,7 +860,6 @@ const clearCartButton = document.getElementById('clear-cart-btn');
 const cashQuick = document.getElementById('cash-quick');
 const promotionSelect = document.getElementById('promotion-id');
 const checkoutQuote = new CheckoutQuote(checkoutForm);
-const discountSummary = document.getElementById('discount-summary');
 const fullscreenToggle = document.getElementById('pos-fullscreen-toggle');
 const cashierClock = document.getElementById('cashier-clock');
 const quickCategoryFilters = document.getElementById('quick-category-filters');
@@ -1751,9 +1745,6 @@ function updatePaymentFields() {
     document.getElementById('summary-change').textContent = money(Math.max(0, received - total));
     setTextIfPresent('snapshot-discount', money(discount));
     setTextIfPresent('snapshot-total', money(total));
-    if (discountSummary) {
-        discountSummary.textContent = discount > 0 ? `Gross ₱${money(gross)} · Discount ₱${money(discount)} · Net ₱${money(total)}` : 'No discount applied.';
-    }
 }
 
 

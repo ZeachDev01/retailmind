@@ -51,7 +51,7 @@ class CheckoutQuote {
         if (invalidated) this.invalidate();
         this.form.querySelector('#promotion-status').textContent = invalidated
             ? 'Selected promotion no longer qualifies for this cart or is unavailable. Selection cleared; review the updated total before payment.'
-            : (promotions.length ? 'Choose one promotion, or No promotion.' : 'No eligible promotions for this cart.');
+            : (promotions.length ? 'Choose one promotion, or No promotion.' : '');
         return invalidated;
     }
 
