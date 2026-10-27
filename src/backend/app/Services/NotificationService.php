@@ -30,12 +30,11 @@ class NotificationService
     {
         foreach (['inventory_manager', 'admin'] as $role) {
             foreach ($this->recipients($role) as $user) {
-                $threshold = (int)($user['low_stock_threshold'] ?? 0) ?: null;
                 $items = [];
-                foreach ($this->getLowStockProducts($threshold) as $product) {
+                foreach ($this->getLowStockProducts() as $product) {
                     $out = (int)$product['quantity_on_hand'] <= 0;
                     if ($role === 'admin' && !$out) continue;
-                    $target = $threshold ?? $product['reorder_level'];
+                    $target = (int)$product['reorder_level'];
                     $items[] = new \App\Attention\AttentionItem(
                         ($role === 'admin' ? 'oversight' : 'inventory') . '.stock.' . $product['product_id'],
                         $out ? 'critical' : 'warning', 'inventory',
@@ -281,22 +280,13 @@ class NotificationService
         $stmt->execute([$userId, $type, $title, $message, $referenceId, $referenceType, $workspace, (int)$inApp]);
     }
 
-    private function getLowStockProducts(?int $threshold = null): array
+    private function getLowStockProducts(): array
     {
         $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
                 FROM products p
-                JOIN inventory i ON p.product_id = i.product_id";
-        $products = $this->pdo->query($sql)->fetchAll();
-
-        if ($threshold !== null && $threshold >= 0) {
-            return array_values(array_filter($products, function ($product) use ($threshold): bool {
-                return (int)$product['quantity_on_hand'] <= $threshold;
-            }));
-        }
-
-        return array_values(array_filter($products, function ($product): bool {
-            return (int)$product['quantity_on_hand'] <= (int)$product['reorder_level'];
-        }));
+                JOIN inventory i ON p.product_id = i.product_id
+                WHERE i.quantity_on_hand <= p.reorder_level";
+        return $this->pdo->query($sql)->fetchAll();
     }
 
     private function getExpiringBatches(int $days, bool $expired): array

@@ -1213,6 +1213,13 @@ class ProductService
 
             if ($ownsTransaction) {
                 $this->pdo->commit();
+                if ($hasReorderLevel && $reorderLevel !== (int)$existing['reorder_level']) {
+                    try {
+                        $this->notificationService->checkAndNotifyLowStock();
+                    } catch (Throwable $e) {
+                        error_log('Product reorder-level alert check failed: ' . $e->getMessage());
+                    }
+                }
             }
 
             return $updated;

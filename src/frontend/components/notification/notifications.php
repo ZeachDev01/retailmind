@@ -22,6 +22,7 @@ $stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WH
 $stmt->execute([$user_id]);
 $categories = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $category = $_GET['category'] ?? '';
+if ($category === 'stocking') $category = 'low_stock';
 if (!is_string($category) || !isset($categories[$category])) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $category !== '') {
         http_response_code(400);

@@ -339,8 +339,8 @@ const fixture = action => {
             if(await editable.count()) { await editable.fill('Unsubmitted theme test'); await select('light'); assert.equal(await editable.inputValue(),'Unsubmitted theme test'); await select('dark'); }
             if (role === 'admin') {
                 await page.goto('/components/auth/preferences.php');
-                await page.locator('#low_stock_threshold').fill('17');
-                await select('light'); assert.equal(await page.locator('#low_stock_threshold').inputValue(),'17'); await select('dark');
+                await page.locator('#notify_low_stock').uncheck();
+                await select('light'); assert.equal(await page.locator('#notify_low_stock').isChecked(),false); await select('dark');
                 await page.goto('/components/auth/change_password.php');
                 await page.locator('#new_password').fill('Unsubmitted@2026');
                 await select('light'); assert.equal(await page.locator('#new_password').inputValue(),'Unsubmitted@2026'); await select('dark');

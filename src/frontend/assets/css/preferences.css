@@ -87,8 +87,7 @@
     font-size: .9rem;
 }
 
-.preference-option small,
-.threshold-field small {
+.preference-option small {
     margin-top: .2rem;
     color: var(--muted);
     font-size: .78rem;
@@ -101,52 +100,6 @@
     flex: 0 0 1.15rem;
     accent-color: var(--preference-accent);
     cursor: pointer;
-}
-
-.threshold-field {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-left: 3.55rem;
-    padding: .9rem 1rem;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--theme-surface, #fff);
-}
-
-.threshold-field label,
-.threshold-field small {
-    display: block;
-}
-
-.threshold-field label {
-    color: var(--text);
-    font-size: .9rem;
-    font-weight: 700;
-}
-
-.threshold-input {
-    display: flex;
-    align-items: center;
-    gap: .45rem;
-    color: var(--muted);
-    font-size: .8rem;
-}
-
-.threshold-input input {
-    width: 88px;
-    padding: .65rem .7rem;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    color: var(--text);
-    font: inherit;
-}
-
-.threshold-input input:focus {
-    outline: none;
-    border-color: var(--preference-accent);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
 }
 
 .preferences-actions {
@@ -166,14 +119,8 @@
         padding: 1rem;
     }
 
-    .preference-options,
-    .threshold-field {
+    .preference-options {
         margin-left: 0;
-    }
-
-    .threshold-field {
-        align-items: flex-start;
-        flex-direction: column;
     }
 
     .preferences-actions {

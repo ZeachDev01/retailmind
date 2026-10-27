@@ -92,9 +92,10 @@ const query = sql => {
         assert.match(await csv.text(), /Theme Test Item/);
         await page.goto(origin + '/components/auth/preferences.php');
         assert.equal(await page.locator('[name="notify_replenishment"]').count(), 0);
-        await page.locator('#low_stock_threshold').fill('7');
+        assert.equal(await page.locator('#low_stock_threshold').count(), 0, 'Low stock uses product reorder levels');
+        await page.locator('#notify_low_stock').uncheck();
         await submit(page.getByRole('button', {name: /Save/}));
-        assert.equal(await page.locator('#low_stock_threshold').inputValue(), '7', 'Retained notification preferences persist');
+        assert.equal(await page.locator('#notify_low_stock').isChecked(), false, 'Low stock delivery preference persists');
         await page.goto(origin + '/components/auth/logout.php');
         await page.goto(origin + '/?login=1');
         await page.locator('#landing-login-username').fill('theme_inventory_manager');
