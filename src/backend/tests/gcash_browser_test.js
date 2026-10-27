@@ -394,6 +394,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
 
         assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Automatic printing defaults unchecked');
+        assert.ok((await page.locator('#gcash-print-receipt').boundingBox()).y > (await page.locator('#gcash-confirm-cash').boundingBox()).y,
+            'Print receipt option appears below the cash confirmation');
         await page.evaluate(() => { window.receiptPrints = 0; window.print = () => { window.receiptPrints++; throw new Error('Printer unavailable'); }; });
         await page.locator('#gcash-print-receipt').check();
         const completionResponse = page.waitForResponse(response => response.url().includes('gcash_api.php') && response.request().method() === 'POST');

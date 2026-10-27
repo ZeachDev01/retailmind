@@ -201,11 +201,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                             <input type="checkbox" id="gcash-confirm-wallet" name="confirmed_wallet">
                             <span id="gcash-confirm-wallet-text">I confirmed the wallet transfer of PHP 0.00 in the authorized GCash app</span>
                         </label>
-                        <label class="receipt-auto-print"><input type="checkbox" id="gcash-print-receipt"> Print receipt automatically</label>
                         <label class="gcash-confirm" id="gcash-confirm-cash-label">
                             <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
                             <span id="gcash-confirm-cash-text">I confirmed receipt of PHP 0.00 physical cash at the counter</span>
                         </label>
+                        <label class="receipt-auto-print"><input type="checkbox" id="gcash-print-receipt"> Print receipt automatically</label>
                     </div>
                     </div>
                     <div class="gcash-actions gcash-submit-actions">
