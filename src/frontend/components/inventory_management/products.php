@@ -1168,7 +1168,6 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
-            <header class="page-heading"><div><h1>Products &amp; Stock</h1><p class="page-subtitle">Find products, review stock, and maintain the Store catalog.</p></div></header>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">

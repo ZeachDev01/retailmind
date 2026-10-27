@@ -88,15 +88,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <div class="topbar">
-            <div>
-                <h1><?= htmlspecialchars($pageTitle) ?></h1>
-            </div>
-            <div class="u-flex-wrap u-flex-gap-sm no-print">
-                <a class="btn btn-secondary queue-recalculate" id="queue-recalculate" href="replenishment_queue.php?recalculate=1" aria-label="Recalculate recommendations"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate</a>
-                <?php if ($queue): ?>
-                    <button class="btn btn-secondary queue-print" id="queue-download-pdf" type="button" aria-label="Download all recommendations as PDF"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
-                <?php endif; ?>
-            </div>
         </div>
 
             <?php if ($error): ?>
@@ -106,37 +97,21 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 </div>
             <?php endif; ?>
 
-            <section class="queue-summary" aria-label="Recommendation summary">
-                <?php foreach (['Out of stock', 'Low stock', 'In stock'] as $stockStatus): ?>
-                    <a class="queue-stat queue-<?= str_replace(' ', '-', strtolower($stockStatus)) ?>" href="#queue-products" data-queue-stock="<?= $stockStatus ?>" aria-label="Show <?= $stockStatus ?> products">
-                        <strong class="queue-stat-number"><?= $queueUnavailable ? '-' : ($stockCounts[$stockStatus] ?? 0) ?></strong>
-                        <div><strong class="queue-stat-label"><?= $stockStatus ?></strong></div>
-                    </a>
-                <?php endforeach; ?>
-                <div class="queue-stat queue-forecast">
-                    <i class="bi bi-clock" aria-hidden="true"></i>
-                    <div><strong><?= $isDemo ? 'Demo Mode' : ($isProduction ? 'Production forecast' : ($jobId ? 'Demand Forecast' : 'Stock-rule guidance')) ?></strong>
-                        <span><?= $activeModelVersion ? 'Model: ' . htmlspecialchars($activeModelVersion) : 'Forecast unavailable' ?></span>
-                    </div>
-                </div>
-            </section>
-            <aside class="queue-guidance" aria-label="Buying guidance">
-                <i class="bi bi-info-circle" aria-hidden="true"></i>
-                <details>
-                    <summary><strong>Buying guidance, not a purchase order</strong></summary>
-                    <p>Review suggested quantities before buying outside RetailMind. No supplier setup is needed. Reviewing recommendations does not place orders or change stock.</p>
-                    <p>Quantities use base units. Set cases during receiving; stock updates only when goods are received.</p>
-                    <p>Low stock is at or below the reorder level. In stock is above it.</p>
-                </details>
-            </aside>
+            <script>
+                window.RetailMindUI?.toast(
+                    'Review quantities before buying. Recommendations do not place orders or change stock.',
+                    'info',
+                    'Buying guidance, not a purchase order',
+                    8000
+                );
+            </script>
             <?php if ($isDemo): ?>
                 <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
             <?php endif; ?>
             <?php if ($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_replay_result'")->fetchColumn()): ?>
                 <p class="tag-warning">The train-only replay model is not approved. This page retains normal stock-rule guidance. <a href="../report/forecast_replay.php">Compare test predictions and view experimental buying quantities</a>.</p>
             <?php endif; ?>
-            <section class="queue-panel" id="queue-products" tabindex="-1" aria-labelledby="queue-title">
-                <header class="queue-panel-heading"><div><h2 id="queue-title">Recommendations</h2><span class="queue-count"><?= $replenishCount ?> to replenish</span></div></header>
+            <section class="queue-panel" id="queue-products" tabindex="-1">
                     <?php if ($queueUnavailable): ?>
                         <p>Recommendations could not be loaded. Reload to try again.</p>
                     <?php elseif (empty($queue)): ?>
@@ -149,9 +124,17 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
                             <label>Stock status<select id="queue-stock"><option value="">All statuses</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
                             <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
+                            <div class="queue-actions" id="queue-actions">
+                                <button class="btn btn-secondary" id="queue-actions-trigger" type="button" aria-expanded="false" aria-controls="queue-actions-menu" aria-haspopup="menu">Actions</button>
+                                <div class="queue-actions-menu" id="queue-actions-menu" role="menu" hidden>
+                                    <a class="queue-actions-item queue-recalculate" id="queue-recalculate" role="menuitem" href="replenishment_queue.php?recalculate=1"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate</a>
+                                    <?php if ($queue): ?>
+                                        <button class="queue-actions-item queue-print" id="queue-download-pdf" type="button" role="menuitem"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </div>
-                        <p class="queue-help muted no-print" id="queue-help">Scroll sideways for quantities and actions.</p>
-                        <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations" aria-describedby="queue-help">
+                        <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
                                     <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested</th><th scope="col">Why now</th><th scope="col"><?= $canReceive ? 'Next action' : 'Access' ?></th>

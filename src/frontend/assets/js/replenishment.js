@@ -2,7 +2,6 @@
     const table = document.querySelector('.queue-list table');
     if (!table) return;
     let rows = Array.from(table.querySelectorAll('.queue-item'));
-    const cards = Array.from(document.querySelectorAll('[data-queue-stock]'));
     const search = document.getElementById('queue-search');
     const stock = document.getElementById('queue-stock');
     const sort = document.getElementById('queue-sort');
@@ -10,6 +9,9 @@
     const pageStatus = document.getElementById('queue-page-status');
     const pagination = document.getElementById('queue-pagination');
     const recalculateBtn = document.getElementById('queue-recalculate');
+    const actions = document.getElementById('queue-actions');
+    const actionsTrigger = document.getElementById('queue-actions-trigger');
+    const actionsMenu = document.getElementById('queue-actions-menu');
     const priority = { 'Out of stock': 0, 'Low stock': 1, 'In stock': 2 };
     const originalOrder = new Map(rows.map((row, index) => [row, index]));
     let lastSort;
@@ -36,6 +38,24 @@
             try {
                 storage.removeItem(SNAPSHOT_KEY);
             } catch (_) {}
+        });
+    }
+
+    if (actions && actionsTrigger && actionsMenu) {
+        const setActionsOpen = open => {
+            actionsMenu.hidden = !open;
+            actionsTrigger.setAttribute('aria-expanded', String(open));
+            if (open) actionsMenu.querySelector('[role="menuitem"]')?.focus();
+        };
+        actionsTrigger.addEventListener('click', () => setActionsOpen(actionsMenu.hidden));
+        document.addEventListener('click', event => {
+            if (!actions.contains(event.target)) setActionsOpen(false);
+        });
+        actions.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                setActionsOpen(false);
+                actionsTrigger.focus();
+            }
         });
     }
 
@@ -71,22 +91,6 @@
             `</tr>`;
     }
 
-    function updateSummaryCounts(activeRows) {
-        const counts = { 'Out of stock': 0, 'Low stock': 0, 'In stock': 0 };
-        let replenish = 0;
-        activeRows.forEach(row => {
-            if (counts[row.dataset.stock] !== undefined) counts[row.dataset.stock]++;
-            if (Number(row.dataset.quantity) > 0) replenish++;
-        });
-        cards.forEach(card => {
-            const s = card.dataset.queueStock;
-            const numEl = card.querySelector?.('.queue-stat-number');
-            if (numEl && counts[s] !== undefined) numEl.textContent = counts[s];
-        });
-        const countEl = document.querySelector('.queue-count');
-        if (countEl) countEl.textContent = `${replenish} to replenish`;
-    }
-
     let lastSnapRaw = null;
     function syncFromSnapshot() {
         if (!storage) return;
@@ -101,7 +105,6 @@
                 rows = Array.from(table.querySelectorAll('.queue-item'));
                 originalOrder.clear();
                 rows.forEach((r, idx) => originalOrder.set(r, idx));
-                updateSummaryCounts(rows);
             }
         } catch (_) {}
     }
@@ -151,13 +154,6 @@
             if (sortChanged) table.tBodies[0].append(row);
         });
         filtered.slice(start, start + size).forEach(row => { row.hidden = false; });
-        cards.forEach(card => {
-            if (stock.value && card.dataset.queueStock === stock.value) {
-                card.setAttribute('aria-current', 'true');
-            } else {
-                card.removeAttribute('aria-current');
-            }
-        });
         document.getElementById('queue-results').textContent = pageSize
             ? `Showing ${filtered.length ? start + 1 : 0}–${Math.min(start + size, filtered.length)} of ${filtered.length} products`
             : `Showing ${filtered.length} of ${rows.length} products`;
@@ -180,14 +176,6 @@
     search.addEventListener('input', () => { currentPage = 1; update(); });
     [stock, sort].forEach(control => control.addEventListener('change', () => { currentPage = 1; update(); }));
     pageSize?.addEventListener('change', () => { currentPage = 1; update(); });
-    cards.forEach(card => {
-        card.addEventListener('click', () => {
-            search.value = '';
-            stock.value = stock.value === card.dataset.queueStock ? '' : card.dataset.queueStock;
-            currentPage = 1;
-            update();
-        });
-    });
     syncFromSnapshot();
     update();
 })();
