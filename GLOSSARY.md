@@ -4,6 +4,14 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Starter Category**:
+A common Product category available when a Store begins with no categories. Staff choose the category that fits each Product and may create other categories.
+_Avoid_: Default product category, automatic classification
+
+**Brand Suggestion**:
+A familiar brand name offered while entering a Product's optional Brand. It does not restrict or automatically set the Product's Brand.
+_Avoid_: Default brand, required brand
+
 **Store Migration**:
 The transfer of the Store's recorded state and uploaded files to another RetailMind installation, which becomes its sole active installation after verification. It supports movement between a local host and web hosting.
 _Avoid_: Synchronization, merging Stores

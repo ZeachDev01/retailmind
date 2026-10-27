@@ -1622,3 +1622,16 @@ CREATE TABLE IF NOT EXISTS `store_record_origins` (
 INSERT INTO schema_migrations (migration_key,description)
 VALUES ('202610250002_identity_provenance','Retain roleless Historical Actors and installation-aware record provenance')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- Common Product categories are added only to Stores without categories.
+INSERT INTO categories (category_name)
+SELECT starter.category_name
+FROM (
+    SELECT 'Food' AS category_name UNION ALL SELECT 'Snacks' UNION ALL SELECT 'Drinks'
+    UNION ALL SELECT 'Bread' UNION ALL SELECT 'Personal' UNION ALL SELECT 'Household'
+    UNION ALL SELECT 'School'
+) AS starter
+WHERE NOT EXISTS (SELECT 1 FROM categories);
+INSERT INTO schema_migrations (migration_key,description)
+VALUES ('202610270001_starter_product_categories','Add common Product categories when the Store has none')
+ON DUPLICATE KEY UPDATE description=VALUES(description);

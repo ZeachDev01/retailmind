@@ -1593,7 +1593,7 @@ CREATE TABLE `user_roles` (
 
 -- Dump completed
 
--- Fresh-install identity and application defaults. Business tables start empty.
+-- Fresh-install identity and application defaults. Product and transaction tables start empty.
 INSERT INTO branches (branch_id,branch_name,branch_code,status)
 VALUES (1,'RetailMind Store','RETAILMIND-STORE','active');
 INSERT INTO roles (role_id,role_name)
@@ -1606,6 +1606,8 @@ INSERT INTO store_settings (setting_key,setting_value,updated_by) VALUES
 ('currency_symbol','₱',NULL),
 ('timezone','Asia/Manila',NULL),
 ('receipt_footer','Thank you for shopping with us.',NULL);
+INSERT INTO categories (category_name) VALUES
+('Food'),('Snacks'),('Drinks'),('Bread'),('Personal'),('Household'),('School');
 -- Required migration backfills and defaults for fresh installations.
 INSERT IGNORE INTO user_roles (user_id,role_id,is_primary) SELECT user_id,role_id,1 FROM users WHERE role_id IS NOT NULL;
 INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes');
@@ -1953,4 +1955,5 @@ INSERT INTO schema_migrations (migration_key,description) VALUES
 ('202610220001_fiscal_period_lifecycle','Enforce one open fiscal period and fiscal lifecycle metadata'),
 ('202610250001_retire_unused_storage','Remove retired tables, unused columns, and Emergency Access setting'),
 ('202610250001_store_receipt_print_jobs','Queue saved receipts for the Store PC printer'),
-('202610250002_inventory_recovery','Private inventory draft keys and committed submission identities (#316)');
+('202610250002_inventory_recovery','Private inventory draft keys and committed submission identities (#316)'),
+('202610270001_starter_product_categories','Add common Product categories when the Store has none');

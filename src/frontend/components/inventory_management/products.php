@@ -370,7 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $categories = $productService->getCategories();
 $products = $productService->getProductsForManagement();
 $existingBrands = $pdo->query("SELECT DISTINCT TRIM(brand) AS brand FROM products WHERE brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
-$knownFoodBrands = [
+$knownBrands = [
     "JACK'nJILL", 'Oishi', 'Piattos', 'Nova', 'Chippy', 'Clover', 'Rebisco',
     'Fita', 'SkyFlakes', 'Hansel', 'Nissin', 'Lucky Me!', 'Indomie', 'Maggi',
     'Knorr', 'Del Monte', 'Dole', 'Heinz', 'UFC', 'Mama Sita\'s', 'Ajinomoto',
@@ -381,10 +381,11 @@ $knownFoodBrands = [
     'Nutella', 'Kellogg\'s', 'Quaker', 'Pringles', 'Lay\'s', 'Doritos',
     'Cheetos', 'Coca-Cola', 'Pepsi', 'Sprite', 'Fanta', 'Royal', 'Mountain Dew',
     '7UP', 'Tang', 'C2', 'Zesto', 'Dutch Mill', 'Yakult', 'Gatorade',
+    'Dove', 'Sunsilk', 'Closeup', 'Rexona', 'Surf', 'Breeze',
 ];
 $brandSuggestions = [];
 // Prefer the saved spelling when a known brand already exists.
-foreach (array_merge($existingBrands, $knownFoodBrands) as $brand) {
+foreach (array_merge($existingBrands, $knownBrands) as $brand) {
     $brandKey = strtolower(trim($brand));
     if (!isset($brandSuggestions[$brandKey])) {
         $brandSuggestions[$brandKey] = trim($brand);
