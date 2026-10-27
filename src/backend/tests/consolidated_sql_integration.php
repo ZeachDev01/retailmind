@@ -71,6 +71,12 @@ try {
         $import($db, __DIR__ . '/../database/sql/schema.sql');
         $assertRetired($db);
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');
+        $assert($runner->pending() === [], 'Fresh schema.sql import still requires PHP migrations');
+        foreach (['store_calendar', 'ml_model_evaluations', 'demand_forecasts', 'forecast_sales_imports', 'scheduled_demand_drivers'] as $table) {
+            $assert(App\Database\Schema::tableExists($db, $table), "Fresh schema.sql is missing {$table}");
+        }
+        $assert((int)$db->query('SELECT COUNT(*) FROM product_batches WHERE remaining_quantity <> sealed_quantity + loose_quantity')->fetchColumn() === 0,
+            'Fresh schema.sql leaves batch quantities without sealed or loose form');
         $runner->runPending();
         $assertRetired($db);
         $assert($runner->pending() === [], 'Fresh import plus migrations leaves pending migrations');

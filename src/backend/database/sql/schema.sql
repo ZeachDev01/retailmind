@@ -1,6 +1,6 @@
  -- RetailMind canonical database schema and seed data
 -- Fresh inventory workflow includes procurement storage retirement (2026-10-15).
--- Apply pending PHP migrations for later forecasting and platform updates.
+-- Direct fresh import includes current forecasting and platform migrations.
 -- Complete schema plus Store, accounts, products, stock, and required settings.
 -- Existing database: import update.sql instead; this file replaces records.
 -- WARNING: Importing this file drops and recreates existing RetailMind tables.
@@ -2072,3 +2072,114 @@ CREATE TABLE `store_record_origins` (
 INSERT INTO schema_migrations (migration_key,description)
 VALUES ('202610250002_identity_provenance','Retain roleless Historical Actors and installation-aware record provenance')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- Complete fresh-install structures also created by the PHP upgrade path.
+CREATE TABLE `store_calendar` (
+  `calendar_id` int NOT NULL AUTO_INCREMENT,
+  `calendar_date` date NOT NULL,
+  `status` enum('open','closed','holiday','exceptional-closure') NOT NULL,
+  `recorded_by` int DEFAULT NULL,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`calendar_id`),
+  KEY `fk_store_calendar_user` (`recorded_by`),
+  KEY `idx_store_calendar_history` (`calendar_date`,`recorded_at` DESC),
+  CONSTRAINT `fk_store_calendar_user` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `ml_model_evaluations` (
+  `evaluation_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `model_version` varchar(50) NOT NULL,
+  `horizon_days` int NOT NULL COMMENT '7, 14, or 28',
+  `mae` decimal(10,4) DEFAULT NULL,
+  `rmse` decimal(10,4) DEFAULT NULL,
+  `wape` decimal(10,4) DEFAULT NULL,
+  `baseline_mae` decimal(10,4) DEFAULT NULL,
+  `baseline_rmse` decimal(10,4) DEFAULT NULL,
+  `baseline_wape` decimal(10,4) DEFAULT NULL,
+  `missing_metric_reason` varchar(255) DEFAULT NULL,
+  `data_window_start` date NOT NULL,
+  `data_window_end` date NOT NULL,
+  `candidate_gate_outcome` varchar(50) NOT NULL COMMENT 'passed, failed, incomplete',
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`evaluation_id`),
+  KEY `idx_ml_model_evaluations_model_version` (`model_version`),
+  KEY `idx_ml_model_evaluations_horizon` (`horizon_days`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `demand_forecasts` (
+  `forecast_id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `job_id` bigint unsigned NOT NULL,
+  `product_id` int NOT NULL,
+  `forecast_origin` date NOT NULL,
+  `target_date` date NOT NULL,
+  `horizon_day` int NOT NULL COMMENT '1 to 28',
+  `predicted_units` int NOT NULL,
+  `model_version` varchar(50) NOT NULL,
+  `readiness_level` varchar(20) NOT NULL COMMENT 'Insufficient, Low, Medium, High',
+  `limitation_marker` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`forecast_id`),
+  KEY `idx_demand_forecasts_product_origin` (`product_id`,`forecast_origin`),
+  KEY `idx_demand_forecasts_job` (`job_id`),
+  CONSTRAINT `demand_forecasts_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
+  CONSTRAINT `demand_forecasts_ibfk_2` FOREIGN KEY (`job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `forecast_sales_imports` (
+  `product_id` int NOT NULL,
+  `sale_date` date NOT NULL,
+  `quantity` int unsigned NOT NULL,
+  `imported_by` int DEFAULT NULL,
+  `imported_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`product_id`,`sale_date`),
+  KEY `imported_by` (`imported_by`),
+  CONSTRAINT `forecast_sales_imports_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
+  CONSTRAINT `forecast_sales_imports_ibfk_2` FOREIGN KEY (`imported_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `scheduled_demand_drivers` (
+  `driver_id` int NOT NULL AUTO_INCREMENT,
+  `product_id` int NOT NULL,
+  `driver_type` varchar(50) NOT NULL,
+  `effective_date` date NOT NULL,
+  `scheduled_at` timestamp NOT NULL,
+  `details_json` json NOT NULL,
+  PRIMARY KEY (`driver_id`),
+  KEY `idx_scheduled_demand_drivers_history` (`product_id`,`effective_date`,`scheduled_at` DESC),
+  CONSTRAINT `fk_scheduled_demand_drivers_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+UPDATE product_batches SET loose_quantity = remaining_quantity
+WHERE loose_quantity = 0 AND sealed_quantity = 0 AND remaining_quantity > 0;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES
+('202610090001_store_business_calendar','Record Store open days, holidays, and exceptional closures'),
+('202610100000_ml_tables','Create ML jobs, evaluation, and demand forecasts tables'),
+('202610100001_forecast_history_import','Imported daily demand history for forecasting'),
+('202610100001_scheduled_demand_drivers','Record and track price and promotion schedules over time'),
+('202610100002_forecast_history_backup_compatibility','Keep imported forecast history compatible with SQL database backups'),
+('202610100002_forecasting_schedule_defaults','Add default forecasting schedules'),
+('202610120001_forecast_decision_source','Retain demand forecast job/product sources alongside legacy prediction history'),
+('202610150001_receiving_groups','Dedicated grouped receiving history and stable shopping trip grouping'),
+('202610150002_retire_procurement_attention','Remove retired purchasing notifications and approval thresholds (#186)'),
+('202610150003_retire_procurement_storage','Retire development procurement storage; preserve receiving and operational records'),
+('202610180001_gcash_transactions','GCash reference records with explicit verification and unique references'),
+('202610180001_inventory_count_batches','Track batch-level counted quantities, shortages, extras, and undated reconciliation items'),
+('202610180002_stock_issue_batches','Track affected batches deducted during stock issue approval'),
+('202610180004_supplier_pullouts','Record batch-specific Supplier Pullouts under Inventory Control (ticket #224)'),
+('202610180005_sold_stock_cost_snapshots','Gross Profit: preserve sold-stock costs during checkout (ticket #228)'),
+('202610180006_historical_sale_cost_recovery','Gross Profit: establish stable historical costs for older sales (ticket #230)'),
+('202610190001_attention_notification_type','Allow shared attention notifications in the daily operational check'),
+('202610190002_gcash_service_sessions','GCash service sessions for tracking service cash, wallet balances, and cashier handover'),
+('202610190003_gcash_accountable_movements','GCash accountable money movements with principal, fee, deltas, and shift attribution'),
+('202610200001_sales_packs_and_stock_forms','Support Sales Pack configuration and batch-level sealed and loose stock forms (issue #246)'),
+('202610200002_stock_receiving_sales_pack_forms','Support Sales Pack and loose piece forms in stock receiving (issue #247)'),
+('202610200003_sale_items_sales_pack_forms','Support selling_form and pack_size on sale_items (issue #251)'),
+('202610200004_stock_counts_and_issues_forms','Support Sales Pack and loose piece forms in inventory counts and stock issues (issue #248)'),
+('202610200005_supplier_movements_stock_forms','Preserve sealed packs and loose pieces on supplier pullouts and replacement receiving (issue #249)'),
+('202610200006_cash_refund_sales_pack_forms','Support selling_form and pack_size on cash_refund_items (issue #252)'),
+('202610210001_notification_workspaces','Scope notification history and pending daily email by Workspace'),
+('202610220001_fiscal_period_lifecycle','Enforce one open fiscal period and fiscal lifecycle metadata'),
+('202610250001_retire_unused_storage','Remove retired tables, unused columns, and Emergency Access setting'),
+('202610250001_store_receipt_print_jobs','Queue saved receipts for the Store PC printer'),
+('202610250002_inventory_recovery','Private inventory draft keys and committed submission identities (#316)');
