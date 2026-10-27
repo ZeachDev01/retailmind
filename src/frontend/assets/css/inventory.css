@@ -26,7 +26,6 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 .overview-metric-copy strong,.overview-metric-copy span { display: block; }
 .overview-metric-copy strong { font-size: 1.35rem; line-height: 1.1; }
 .overview-metric-copy span { margin-top: .25rem; color: var(--muted); font-size: .75rem; white-space: nowrap; }
-.overview-metric-arrow { margin-left: auto; color: #94a3b8; font-size: .75rem; }
 .overview-charts-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 1rem; margin-bottom: 1.75rem; }
 .overview-forecast-card { margin-bottom: 1.75rem; }
 .overview-chart-card { border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); padding: 1.15rem; display: flex; flex-direction: column; min-width: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
@@ -684,7 +683,7 @@ button.overview-metric:hover,button.overview-metric:focus-visible { border-color
 .overview-chart-header > div { flex:1 1 200px; }
 .overview-metric-copy span { white-space:normal; }
 .overview-chart-header h3 { font-size:1.05rem; }
-.overview-metric-arrow,.overview-empty i { color:var(--muted); }
+.overview-empty i { color:var(--muted); }
 .overview-chart-icon--blue { color:var(--theme-info-text, #1d4ed8); }
 .overview-table-shell { overflow-x:auto; }
 .overview-table { min-width:640px; }
