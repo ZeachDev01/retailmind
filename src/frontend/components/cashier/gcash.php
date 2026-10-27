@@ -117,7 +117,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                             <input id="gcash-photo-file" type="file" accept="image/*" hidden aria-label="Choose a GCash receipt or notification photo">
                         </div>
                         <section id="gcash-camera" class="gcash-camera" aria-label="Reference from photo" hidden>
-                            <a id="gcash-photo-preview-link" target="_blank" rel="noopener"><img id="gcash-photo-preview" alt="Selected GCash receipt or notification photo"><span>Open photo to zoom</span></a>
+                            <button id="gcash-photo-preview-open" class="gcash-photo-preview-open" type="button"><img id="gcash-photo-preview" alt="Selected GCash receipt or notification photo"><span>Enlarge photo</span></button>
                             <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
                             <div id="gcash-ocr-review" hidden>
                                 <label class="pos-field-label" for="gcash-ocr-candidate">Suggested reference from photo</label>
@@ -253,6 +253,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </section>
         </div>
+        <dialog id="gcash-photo-dialog" aria-labelledby="gcash-photo-dialog-title">
+            <div class="gcash-photo-dialog-header">
+                <h2 id="gcash-photo-dialog-title">Selected photo</h2>
+                <button class="btn btn-secondary" type="button" id="gcash-photo-dialog-close">Close photo</button>
+            </div>
+            <img id="gcash-photo-dialog-image" alt="Selected GCash receipt or notification photo enlarged">
+        </dialog>
         <dialog id="gcash-review-dialog" aria-labelledby="gcash-review-title">
             <form id="gcash-review-form">
                 <h2 id="gcash-review-title">Review transaction</h2>

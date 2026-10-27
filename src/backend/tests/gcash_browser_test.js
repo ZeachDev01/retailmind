@@ -321,7 +321,23 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await (await cameraPicker).setFiles(photo);
         await page.locator('#gcash-ocr-review').waitFor();
         assert.equal(await page.locator('#gcash-photo-preview').isVisible(), true, 'Cashier can compare suggested digits with the photo');
-        assert.match(await page.locator('#gcash-photo-preview-link').getAttribute('href'), /^blob:/, 'Photo can open at full size');
+        const popup = page.waitForEvent('popup', {timeout: 1000}).then(() => true, () => false);
+        await page.locator('#gcash-photo-preview-open').click();
+        await page.locator('#gcash-photo-dialog').waitFor();
+        assert.equal(await page.locator('#gcash-photo-dialog-image').isVisible(), true, 'Selected photo opens in a modal');
+        assert.equal(await popup, false, 'Photo does not open a new page');
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Photo modal fits at ' + width);
+            await page.screenshot({path: path.join(output, 'gcash-photo-modal-' + width + '.png'), fullPage: true});
+        }
+        await page.setViewportSize({width: 1440, height: 900});
+        await page.keyboard.press('Escape');
+        await page.locator('#gcash-photo-dialog').waitFor({state: 'hidden'});
+        assert.equal(await page.locator('#gcash-photo-preview-open').evaluate(node => node === document.activeElement), true, 'Escape returns focus to preview');
+        await page.locator('#gcash-photo-preview-open').click();
+        await page.locator('#gcash-photo-dialog-close').click();
+        await page.locator('#gcash-photo-dialog').waitFor({state: 'hidden'});
         assert.equal(await page.locator('.gcash-reference-field #gcash-camera').count(), 1, 'Photo suggestion stays beside reference entry');
         assert.equal(await page.locator('#gcash-scan-status').textContent(), '', 'Empty reference does not show a conflicting error');
         assert.equal(await reference.inputValue(), '', 'OCR suggestion must await confirmation');

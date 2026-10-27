@@ -27,9 +27,11 @@
 .gcash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-top: .5rem; }
 #gcash-duplicate { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
 .gcash-camera { margin-top: .5rem; padding: 1rem; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border); border-radius: 10px; }
-#gcash-photo-preview-link { display: block; text-align: center; margin-bottom: .75rem; }
+#gcash-photo-preview-open { display: block; width: 100%; margin-bottom: .75rem; padding: 0; border: 0; background: transparent; color: var(--cashier-blue); text-align: center; font: inherit; cursor: pointer; }
+#gcash-photo-preview-open[hidden] { display: none; }
+#gcash-photo-preview-open:focus-visible { outline: 2px solid var(--cashier-blue); outline-offset: 3px; }
 #gcash-photo-preview { display: block; max-width: 100%; max-height: 240px; margin: auto; }
-#gcash-photo-preview-link span { display: block; margin-top: .5rem; }
+#gcash-photo-preview-open span { display: block; margin-top: .5rem; text-decoration: underline; text-underline-offset: 3px; }
 #gcash-ocr-status { margin: 0 0 .75rem; }
 #gcash-ocr-review { max-width: 640px; }
 #gcash-ocr-use, #gcash-camera-close { margin-top: .75rem; }
@@ -60,6 +62,10 @@
 .gcash-status-needs-checking { color: var(--theme-warning-text, #b45309); background: var(--theme-warning-surface, #fffbeb); }
 .gcash-pagination { justify-content: flex-end; }
 dialog[id^="gcash-"] { margin: auto; }
+#gcash-photo-dialog { box-sizing: border-box; width: min(960px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1rem; border: 0; border-radius: 14px; background: var(--cashier-surface); color: var(--text); box-shadow: 0 24px 64px rgb(15 23 42 / .24); }
+#gcash-photo-dialog::backdrop { background: rgb(15 23 42 / .65); }
+.gcash-photo-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+#gcash-photo-dialog-image { display: block; max-width: 100%; height: auto; margin: auto; }
 #gcash-review-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 14px; background: var(--cashier-surface); color: var(--text); }
 #gcash-review-dialog::backdrop { background: rgb(0 0 0 / .55); }
 .gcash-confirm { display: flex; align-items: flex-start; gap: .6rem; margin: 1rem 0; line-height: 1.5; }

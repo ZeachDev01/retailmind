@@ -889,12 +889,19 @@
     function closeCamera() {
         cameraVersion++;
         if (worker) { worker.terminate().catch(() => {}); worker = null; }
+        if (el('photo-dialog').open) el('photo-dialog').close();
         if (photoUrl) { URL.revokeObjectURL(photoUrl); photoUrl = null; }
         el('photo-preview').removeAttribute('src');
-        el('photo-preview-link').removeAttribute('href');
+        el('photo-dialog-image').removeAttribute('src');
         el('camera').hidden = true;
     }
     el('camera-close').addEventListener('click', closeCamera);
+    el('photo-preview-open').addEventListener('click', () => {
+        if (!photoUrl) return;
+        el('photo-dialog-image').src = photoUrl;
+        el('photo-dialog').showModal();
+    });
+    el('photo-dialog-close').addEventListener('click', () => el('photo-dialog').close());
     el('camera-open').addEventListener('click', () => el('camera-file').click());
     el('photo-open').addEventListener('click', () => el('photo-file').click());
     let libraryPromise;
@@ -922,13 +929,12 @@
         el('ocr-review').hidden = true;
         if (!['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'].includes(file.type) || file.size > 15 * 1024 * 1024) {
             el('ocr-status').textContent = 'Choose a JPG, PNG, WebP, BMP, or GIF photo under 15 MB.';
-            el('photo-preview-link').hidden = true;
+            el('photo-preview-open').hidden = true;
             return;
         }
         photoUrl = URL.createObjectURL(file);
         el('photo-preview').src = photoUrl;
-        el('photo-preview-link').href = photoUrl;
-        el('photo-preview-link').hidden = false;
+        el('photo-preview-open').hidden = false;
         try {
             await loadOCR();
             if (version !== cameraVersion || leaving) return;
