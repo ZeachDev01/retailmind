@@ -319,7 +319,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         'Qty On Hand' => (int)$row['quantity_on_hand'],
                         'Cost Price' => money_value($row['cost_price']),
                         'Retail Price' => money_value($row['unit_price']),
-                        'Profit' => money_value((float)($row['cost_price'] ?? 0) - (float)($row['unit_price'] ?? 0)),
+                        'Profit' => money_value((float)($row['unit_price'] ?? 0) - (float)($row['cost_price'] ?? 0)),
                         'Inventory Value' => money_value($row['inventory_value']),
                     ];
             }
