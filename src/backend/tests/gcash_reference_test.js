@@ -9,6 +9,8 @@ for (const input of ['09171234567', 'PHP 123.00', '0002010102122637GCash merchan
     assert.equal(parser.extract(input, rules), null, input);
 }
 assert.equal(parser.extract('Amount 100.00\nPhone 09171234567\nReference No. 0012 345 678901\nPaid', rules, true), '0012345678901');
+assert.equal(parser.extract('Total Amount Sent ₱1.00\nRef No. 0012 345 678901\nOct 27, 2026', rules, true), '0012345678901');
+assert.equal(parser.extract('You have received PHP 410.00. Your new balance is PHP 455.05. Ref. No. 0012345678901.', rules, true), '0012345678901');
 assert.equal(parser.extract('0012345678901', rules, true), null, 'OCR requires a reference label');
 assert.equal(parser.extract('Ref No. 00123O5678901', rules, true), null, 'OCR must not silently turn letters into digits');
 assert.equal(parser.extract('123456', {min: 6, max: 8}), '123456');

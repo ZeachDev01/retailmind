@@ -126,8 +126,8 @@ Principal means the amount loaded for cash-in or cash requested for cash-out. Th
 - Keep existing reference normalization, configured numeric length validation, leading-zero preservation, ambiguity refusal, and database uniqueness protections.
 - Scanner input is scoped to the reference field. Enter checks the reference and never submits a financial transaction.
 - Barcode/QR content must actually contain a supported reference. A merchant payment QR is not assumed to contain a completed-transfer reference. C986 hardware compatibility has not been demonstrated.
-- Camera text reading suggests a reference for explicit human review. Keep manual correction and fallback entry, permission/error messages, and camera cleanup. Do not upload or retain receipt images as part of this feature.
-- Preserve HTTPS/localhost requirements and disclose the camera reading tool's download requirement. No new scanner SDK or paid reading service is required.
+- Native camera/file capture suggests a reference for explicit human review beside a local photo preview. Keep manual correction and fallback entry, actionable capture/reading errors, and cleanup of the photo preview and OCR worker. Do not upload or retain receipt images as part of this feature.
+- Native file capture may open a file picker when the browser cannot open its camera. Disclose the camera reading tool's download requirement. No new scanner SDK or paid reading service is required.
 
 ### Records, state, and integrity
 

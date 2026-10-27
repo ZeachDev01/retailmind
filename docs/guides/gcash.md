@@ -23,13 +23,13 @@ GCASH_REFERENCE_MAX_LENGTH=13
 
 These are local validation defaults, not a guarantee of every GCash receipt format. Both values must be between 6 and 32, and minimum must not exceed maximum. Leading zeroes are preserved. References permit digits; spaces and hyphens are removed. Amounts must be PHP 0.01–99,999,999.99 with at most two decimals.
 
-## Scanning
+## Reference entry
 
-Configure a USB scanner for **HID keyboard mode**, matching the Windows keyboard layout, preferably with an Enter suffix. Focus the reference field or click **Manual entry / USB scan**. Input is checked after a short pause or Enter. Enter never saves. A supported 2D barcode scanner can read phone QR codes; a typical 1D scanner cannot read QR codes or plain text.
+Type the GCash reference number into the reference field. Input is checked after a short pause or Enter. Enter never saves.
 
 Supported payloads: a numeric reference, `Reference No.: 0012345678901`, JSON string fields, or HTTP(S) URL query parameters named `reference_number`, `reference_no`, `ref_no`, `reference`, or `gcash_reference`. URLs are parsed locally and never opened. JSON numeric values are refused to avoid losing leading zeroes or precision. Conflicting references are refused. A merchant payment QR often identifies a payee, not a completed transaction; it must not be used as a receipt reference.
 
-For plain text use manual entry, an OCR-capable device, or **Camera OCR**. Camera access requires HTTPS or localhost and browser permission. Tesseract.js 6.0.1, its worker/core and English language data download on demand from free public CDNs; internet access is needed for the initial downloads. Receipt images are processed in the browser and are not uploaded or stored by this application. OCR searches near Reference No./Ref No. labels, refuses ambiguous results, and shows an editable suggestion. Check every digit before choosing **Use this reference**. Closing the camera, capture, or leaving the page stops its tracks. No paid service or GCash API credentials are required.
+Use **Take photo** to open the device camera, or **Choose photo** for an existing receipt or notification image. On desktops or browsers without native camera capture, **Take photo** may open a file picker. Supported images are JPG, PNG, WebP, BMP, or GIF up to 15 MB. Tesseract.js 6.0.1, its worker/core and English language data download on demand from free public CDNs; internet access is needed for the initial downloads. Images are processed in the browser and are not uploaded or stored by this application. OCR searches near Reference No., Ref No., or Ref. No. labels, refuses ambiguous results, and shows an editable suggestion beside the selected photo. Open the photo to zoom if needed; check every digit before choosing **Use this reference**. A customer's image does not verify payment; check the authorized GCash wallet separately. No paid service or GCash API credentials are required.
 
 ## Saving and verification
 
@@ -39,7 +39,7 @@ Only an authenticated Cashier workspace with POS capability may use this endpoin
 
 From history, choose **Verify / Reject**. Compare the actual reference, amount, and transaction type with the authorized receiving GCash account or its transaction records. A customer's screenshot or scanned reference is insufficient. Verification requires an explicit confirmation and review note; rejection requires a note. A record can leave Pending only once. Verification identity, review time, and before/after audit entries are saved atomically. These are staff attestations, not an automated payment confirmation. Cash-In and Cash-Out are labels for recording externally handled transactions; this page does not execute those operations.
 
-Pending records cannot be edited after saving. Correct the reference/amount before saving; reject an incorrect saved record and refer to its audit trail. A rejected reference stays reserved to prevent reuse. Product scanning is unchanged: this page attaches HID listeners only to its reference field and loads no POS product scanner code.
+Pending records cannot be edited after saving. Correct the reference/amount before saving; reject an incorrect saved record and refer to its audit trail. A rejected reference stays reserved to prevent reuse. Product scanning is unchanged: this page handles Enter only within its reference field and loads no POS product scanner code.
 
 ## Automatic fees and exchange instructions preview
 
@@ -70,6 +70,6 @@ $env:RUN_DB_TESTS = '1'
 node src/backend/tests/gcash_browser_test.js
 ```
 
-The database/browser suite creates and removes a disposable `retailmind_theme_test_*` database. It requires local MySQL, Playwright Chromium, and permission to create disposable databases. OCR tests use a deterministic Tesseract stub; real phone displays, scanner hardware, lighting, and OCR accuracy require a device check.
+The database/browser suite creates and removes a disposable `retailmind_theme_test_*` database. It requires local MySQL, Playwright Chromium, and permission to create disposable databases. OCR tests use a deterministic Tesseract stub; native camera capture, lighting, and OCR accuracy require a device check.
 
-OCR implementation follows the [Tesseract.js browser API](https://github.com/naptha/tesseract.js/blob/master/docs/api.md). Camera connection requirements follow [MDN getUserMedia guidance](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
+OCR implementation follows the [Tesseract.js browser API](https://github.com/naptha/tesseract.js/blob/master/docs/api.md). Native camera capture follows [MDN capture guidance](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/capture).

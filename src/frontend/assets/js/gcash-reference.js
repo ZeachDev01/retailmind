@@ -10,7 +10,7 @@
         const candidates = new Set();
         const add = value => { const candidate = normalize(value); if (valid(candidate, rules)) candidates.add(candidate); };
         // Require a label for receipt OCR: amounts, phone numbers, and dates are not references.
-        const labels = /\b(?:reference\s*(?:number|no\.?)?|ref\s*(?:number|no\.?))\s*[:#=\-]?\s*([0-9](?:[0-9 \t-]*[0-9])?)/gi;
+        const labels = /\b(?:reference\s*(?:number|no\.?)?|ref\.?\s*(?:number|no\.?))\s*[:#=\-]?\s*([0-9](?:[0-9 \t-]*[0-9])?)/gi;
         for (const match of text.matchAll(labels)) add(match[1]);
         if (!labeledOnly) {
             try {

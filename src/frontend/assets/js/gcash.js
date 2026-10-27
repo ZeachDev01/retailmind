@@ -9,7 +9,7 @@
     const save = el('save');
     let saving = false, reviewing = false, checking = false, duplicate = false;
     let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
-    let stream, worker, cameraVersion = 0, ocrBusy = false, leaving = false;
+    let worker, photoUrl, cameraVersion = 0, leaving = false;
     let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
@@ -59,8 +59,8 @@
         if (el('confirm-wallet')) el('confirm-wallet').disabled = disabled;
         if (el('confirm-cash')) el('confirm-cash').disabled = disabled;
         if (el('print-receipt')) el('print-receipt').disabled = disabled;
-        el('manual').disabled = disabled;
         el('camera-open').disabled = disabled;
+        el('photo-open').disabled = disabled;
         updateSave();
     }
 
@@ -162,8 +162,8 @@
         reference.setCustomValidity('');
         if (!candidate) {
             checking = false;
-            reference.setCustomValidity('Enter one numeric reference matching the configured length.');
-            scanStatus('No valid reference found. Enter it manually or scan a code containing a reference.');
+            reference.setCustomValidity(reference.value.trim() ? 'Enter one numeric reference matching the configured length.' : '');
+            scanStatus(reference.value.trim() ? 'No valid reference found. Enter the number or read it from a photo.' : '');
             updateSave();
             return false;
         }
@@ -404,8 +404,6 @@
     el('fee-method')?.addEventListener('change', updatePreview);
     el('confirm-wallet')?.addEventListener('change', updateSave);
     el('confirm-cash')?.addEventListener('change', updateSave);
-
-    el('manual').addEventListener('click', () => { reference.focus(); reference.select(); if (reference.value.trim()) checkReference(); });
 
     if (el('complete-cash-in')) {
         el('complete-cash-in').addEventListener('click', async () => {
@@ -888,41 +886,17 @@
     el('review-form').addEventListener('submit', event => { event.preventDefault(); review('Verified'); });
     el('reject').addEventListener('click', () => review('Rejected'));
 
-    function stopCamera() {
-        stream?.getTracks().forEach(track => track.stop()); stream = null;
-        el('video').srcObject = null;
-    }
     function closeCamera() {
         cameraVersion++;
-        stopCamera();
         if (worker) { worker.terminate().catch(() => {}); worker = null; }
-        ocrBusy = false;
+        if (photoUrl) { URL.revokeObjectURL(photoUrl); photoUrl = null; }
+        el('photo-preview').removeAttribute('src');
+        el('photo-preview-link').removeAttribute('href');
         el('camera').hidden = true;
-        el('capture').disabled = false;
     }
     el('camera-close').addEventListener('click', closeCamera);
-    el('camera-open').addEventListener('click', async () => {
-        closeCamera();
-        const version = cameraVersion;
-        el('camera').hidden = false;
-        el('ocr-review').hidden = true;
-        el('ocr-status').textContent = 'Requesting camera access…';
-        el('capture').disabled = true;
-        try {
-            if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera requires HTTPS or localhost. Use manual entry on this connection.');
-            const capturedStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal: 'environment'}, width: {ideal: 1920}, height: {ideal: 1080}}, audio: false});
-            if (version !== cameraVersion || leaving) { capturedStream.getTracks().forEach(track => track.stop()); return; }
-            stream = capturedStream;
-            el('video').srcObject = stream;
-            await el('video').play();
-            if (version !== cameraVersion) return;
-            el('capture').disabled = false;
-            el('ocr-status').textContent = 'Camera ready. Capture the reference label and number.';
-        } catch (error) {
-            if (version !== cameraVersion || leaving) return;
-            stopCamera(); el('ocr-status').textContent = error.message + ' Manual entry is available.';
-        }
-    });
+    el('camera-open').addEventListener('click', () => el('camera-file').click());
+    el('photo-open').addEventListener('click', () => el('photo-file').click());
     let libraryPromise;
     function loadOCR() {
         if (window.Tesseract) return Promise.resolve();
@@ -936,15 +910,25 @@
         });
         return libraryPromise;
     }
-    el('capture').addEventListener('click', async () => {
-        if (ocrBusy || !stream || !el('video').videoWidth) return;
-        ocrBusy = true; el('capture').disabled = true;
+    async function readPhoto(event) {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        closeCamera();
         const version = cameraVersion;
-        const canvas = document.createElement('canvas');
-        canvas.width = el('video').videoWidth; canvas.height = el('video').videoHeight;
-        canvas.getContext('2d').drawImage(el('video'), 0, 0);
-        stopCamera();
-        el('ocr-status').textContent = 'Reading receipt…';
+        if (!parser.extract(reference.value, rules)) scanStatus('');
+        el('ocr-status').textContent = 'Reading photo…';
+        el('camera').hidden = false;
+        el('ocr-review').hidden = true;
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/gif'].includes(file.type) || file.size > 15 * 1024 * 1024) {
+            el('ocr-status').textContent = 'Choose a JPG, PNG, WebP, BMP, or GIF photo under 15 MB.';
+            el('photo-preview-link').hidden = true;
+            return;
+        }
+        photoUrl = URL.createObjectURL(file);
+        el('photo-preview').src = photoUrl;
+        el('photo-preview-link').href = photoUrl;
+        el('photo-preview-link').hidden = false;
         try {
             await loadOCR();
             if (version !== cameraVersion || leaving) return;
@@ -953,23 +937,23 @@
             }});
             if (version !== cameraVersion || leaving) { await createdWorker.terminate(); return; }
             worker = createdWorker;
-            const result = await worker.recognize(canvas);
+            const result = await worker.recognize(file);
             if (version !== cameraVersion || leaving) return;
             const candidate = parser.extract(result.data.text, rules, true);
             el('ocr-candidate').value = candidate || '';
             el('ocr-review').hidden = false;
-            el('ocr-status').textContent = candidate ? 'Suggested reference found. Check every digit before using it.' : 'No unambiguous labeled reference found. Type the reference manually or reopen the camera to retry.';
+            el('ocr-status').textContent = candidate ? 'Check every digit against the photo before using it.' : 'No clear reference found. Type the number or choose another photo.';
             el('ocr-candidate').focus();
         } catch (error) {
-            if (version === cameraVersion && !leaving) { el('ocr-status').textContent = 'OCR could not read this receipt. Enter the reference manually or reopen the camera.'; notify(error.message, 'error'); }
+            if (version === cameraVersion && !leaving) { el('ocr-status').textContent = 'Could not read this photo. Check internet access, choose another photo, or enter the reference.'; }
         } finally {
-            canvas.width = canvas.height = 0;
             if (version === cameraVersion) {
                 if (worker) { worker.terminate().catch(() => {}); worker = null; }
-                ocrBusy = false;
             }
         }
-    });
+    }
+    el('camera-file').addEventListener('change', readPhoto);
+    el('photo-file').addEventListener('change', readPhoto);
     el('ocr-use').addEventListener('click', async () => {
         const candidate = parser.normalize(el('ocr-candidate').value);
         if (!parser.valid(candidate, rules)) { notify('Correct the suggested reference before using it.', 'warning'); return; }

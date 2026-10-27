@@ -26,10 +26,14 @@
 .gcash-field small, .gcash-help { color: var(--muted); line-height: 1.6; }
 .gcash-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin-top: .5rem; }
 #gcash-duplicate { color: var(--theme-danger-text, #b91c1c); font-weight: 600; }
-.gcash-camera { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; }
-.gcash-camera video { display: block; width: min(100%, 640px); max-height: 400px; background: #111; border-radius: 10px; }
-#gcash-ocr-review { max-width: 640px; margin-top: .75rem; }
-#gcash-ocr-use { margin-top: .5rem; }
+.gcash-camera { margin-top: .5rem; padding: 1rem; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border); border-radius: 10px; }
+#gcash-photo-preview-link { display: block; text-align: center; margin-bottom: .75rem; }
+#gcash-photo-preview { display: block; max-width: 100%; max-height: 240px; margin: auto; }
+#gcash-photo-preview-link span { display: block; margin-top: .5rem; }
+#gcash-ocr-status { margin: 0 0 .75rem; }
+#gcash-ocr-review { max-width: 640px; }
+#gcash-ocr-use, #gcash-camera-close { margin-top: .75rem; }
+#gcash-ocr-use { margin-right: .5rem; }
 .gcash-history { margin-top: 1rem; }
 .gcash-table-wrap { max-width: 100%; overflow: auto; scrollbar-color: var(--muted) var(--surface-soft); }
 .gcash-table-wrap:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

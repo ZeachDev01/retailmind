@@ -303,34 +303,53 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal((await post({action: 'save', reference: [], amount: '1', type: 'Payment'})).status(), 422);
         const results = await Promise.all([post({action: 'save', reference: '0012345678902', amount: '1', type: 'Cash-Out'}), post({action: 'save', reference: '0012345678902', amount: '1', type: 'Cash-Out'})]);
         assert.deepEqual(results.map(result => result.status()).sort(), [200, 409]);
-        // Deterministic camera/OCR; images remain local and do not require physical hardware.
+        await reference.fill('');
+        await reference.press('Enter');
+        assert.equal(await page.locator('#gcash-scan-status').textContent(), '', 'Empty reference has no error before submission');
+        // Deterministic photo/OCR; photos stay in the browser and need no camera hardware.
+        assert.equal(await page.locator('#gcash-camera-file').getAttribute('capture'), 'environment');
+        assert.equal(await page.locator('#gcash-video').count(), 0);
+        assert.equal(await page.locator('#gcash-manual').count(), 0);
         await page.evaluate(() => {
-            Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {configurable: true, value: async () => { throw new DOMException('Camera permission denied', 'NotAllowedError'); }});
+            window.Tesseract = {createWorker: async () => ({recognize: async file => ({data: {text: file.name === 'notification.png'
+                ? 'You have received PHP 410.00. Your new balance is PHP 455.05. Ref. No. 0012345678903.'
+                : 'Total Amount Sent ₱1.00\nRef No. 0012 345 678903\nOct 27, 2026'}}), terminate: async () => { window.gcashWorkerStopped = true; }})};
         });
+        const photo = {name: 'receipt.png', mimeType: 'image/png', buffer: fs.readFileSync('src/frontend/assets/img/retailmind-logo-600x200.png')};
+        const cameraPicker = page.waitForEvent('filechooser');
         await page.locator('#gcash-camera-open').click();
-        await page.getByText('Camera permission denied Manual entry is available.', {exact: true}).waitFor();
-        await page.locator('#gcash-camera-close').click();
-        await page.evaluate(() => {
-            Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {configurable: true, value: async () => {
-                const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 480;
-                canvas.getContext('2d').fillRect(0, 0, 640, 480);
-                window.gcashTestStream = canvas.captureStream(5);
-                return window.gcashTestStream;
-            }});
-            window.Tesseract = {createWorker: async () => ({recognize: async () => ({data: {text: 'Reference No. 0012345678903'}}), terminate: async () => { window.gcashWorkerStopped = true; }})};
-        });
-        await page.locator('#gcash-camera-open').click();
-        await page.getByText('Camera ready. Capture the reference label and number.', {exact: true}).waitFor();
-        await page.locator('#gcash-capture').click();
+        await (await cameraPicker).setFiles(photo);
         await page.locator('#gcash-ocr-review').waitFor();
-        assert.equal(await reference.inputValue(), '0012345678901', 'OCR suggestion must await confirmation');
+        assert.equal(await page.locator('#gcash-photo-preview').isVisible(), true, 'Cashier can compare suggested digits with the photo');
+        assert.match(await page.locator('#gcash-photo-preview-link').getAttribute('href'), /^blob:/, 'Photo can open at full size');
+        assert.equal(await page.locator('.gcash-reference-field #gcash-camera').count(), 1, 'Photo suggestion stays beside reference entry');
+        assert.equal(await page.locator('#gcash-scan-status').textContent(), '', 'Empty reference does not show a conflicting error');
+        assert.equal(await reference.inputValue(), '', 'OCR suggestion must await confirmation');
         assert.equal(await page.locator('#gcash-ocr-candidate').inputValue(), '0012345678903');
-        assert.equal(await page.evaluate(() => gcashTestStream.getTracks().every(track => track.readyState === 'ended')), true);
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            await page.screenshot({path: path.join(output, 'gcash-photo-' + width + '.png'), fullPage: true});
+        }
+        await page.setViewportSize({width: 1440, height: 900});
+        await page.locator('#gcash-camera-close').click();
+        assert.equal(await page.locator('#gcash-photo-preview').getAttribute('src'), null, 'Closing clears the local photo');
+        const photoPicker = page.waitForEvent('filechooser');
+        await page.locator('#gcash-photo-open').click();
+        await (await photoPicker).setFiles({...photo, name: 'notification.png'});
+        await page.locator('#gcash-ocr-review').waitFor();
+        assert.equal(await page.locator('#gcash-ocr-candidate').inputValue(), '0012345678903');
         await page.locator('#gcash-ocr-candidate').fill('0012345678904');
         await page.locator('#gcash-ocr-use').click();
         await page.getByText('Reference captured. Review the number and amount; payment remains unverified.', {exact: true}).waitFor();
         assert.equal(await reference.inputValue(), '0012345678904', 'Cashier can correct OCR');
         assert.equal(await page.evaluate(() => gcashWorkerStopped), true);
+        await page.evaluate(() => { window.Tesseract.createWorker = async () => { throw new Error('worker internal path /private/customer.jpg'); }; });
+        const failedPicker = page.waitForEvent('filechooser');
+        await page.locator('#gcash-photo-open').click();
+        await (await failedPicker).setFiles(photo);
+        await page.getByText('Could not read this photo. Check internet access, choose another photo, or enter the reference.', {exact: true}).waitFor();
+        assert.doesNotMatch(await page.locator('#gcash-ocr-status').textContent(), /private\/customer/);
+        await page.locator('#gcash-camera-close').click();
         for (const width of [375, 768, 1440]) {
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'No page overflow at ' + width);

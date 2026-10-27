@@ -111,25 +111,23 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <span id="gcash-scan-status" role="status" aria-live="polite"></span>
                         <span id="gcash-duplicate" role="alert" hidden>This reference has already been recorded. Check transaction history before proceeding.</span>
                         <div class="gcash-reference-tools">
-                            <button class="btn btn-secondary" type="button" id="gcash-manual"><i class="bi bi-upc-scan" aria-hidden="true"></i> Use USB scanner</button>
-                            <button class="btn btn-secondary" type="button" id="gcash-camera-open"><i class="bi bi-camera" aria-hidden="true"></i> Scan receipt</button>
+                            <button class="btn btn-secondary" type="button" id="gcash-camera-open"><i class="bi bi-camera" aria-hidden="true"></i> Take photo</button>
+                            <button class="btn btn-secondary" type="button" id="gcash-photo-open"><i class="bi bi-image" aria-hidden="true"></i> Choose photo</button>
+                            <input id="gcash-camera-file" type="file" accept="image/*" capture="environment" hidden aria-label="Take a photo of the GCash receipt or notification">
+                            <input id="gcash-photo-file" type="file" accept="image/*" hidden aria-label="Choose a GCash receipt or notification photo">
                         </div>
+                        <section id="gcash-camera" class="gcash-camera" aria-label="Reference from photo" hidden>
+                            <a id="gcash-photo-preview-link" target="_blank" rel="noopener"><img id="gcash-photo-preview" alt="Selected GCash receipt or notification photo"><span>Open photo to zoom</span></a>
+                            <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
+                            <div id="gcash-ocr-review" hidden>
+                                <label class="pos-field-label" for="gcash-ocr-candidate">Suggested reference from photo</label>
+                                <input class="pos-input" id="gcash-ocr-candidate" type="text" inputmode="numeric" autocomplete="off" maxlength="64" aria-describedby="gcash-ocr-status">
+                                <button class="btn" type="button" id="gcash-ocr-use">Use this reference</button>
+                            </div>
+                            <button class="btn btn-secondary" type="button" id="gcash-camera-close">Close</button>
+                        </section>
                     </div>
                     </div>
-                <section id="gcash-camera" class="gcash-camera" aria-labelledby="gcash-camera-title" hidden>
-                    <h3 id="gcash-camera-title">Scan receipt reference</h3>
-                    <video id="gcash-video" autoplay playsinline muted aria-label="Receipt camera preview"></video>
-                    <div class="gcash-actions">
-                        <button class="btn" type="button" id="gcash-capture">Capture and read</button>
-                        <button class="btn btn-secondary" type="button" id="gcash-camera-close">Close camera</button>
-                    </div>
-                    <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
-                    <div id="gcash-ocr-review" hidden>
-                        <label class="pos-field-label" for="gcash-ocr-candidate">Suggested reference — correct before using</label>
-                        <input class="pos-input" id="gcash-ocr-candidate" type="text" inputmode="numeric" autocomplete="off" maxlength="64">
-                        <button class="btn" type="button" id="gcash-ocr-use">Use this reference</button>
-                    </div>
-                </section>
                 </div>
             </section>
             <section class="pos-panel gcash-review-panel" aria-labelledby="gcash-preview-title">
