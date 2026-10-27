@@ -137,7 +137,17 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                         <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
-                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested</th>
+                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested
+    <span class="info-tooltip" tabindex="0" role="button" aria-expanded="false" aria-label="How suggested quantity works">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        <span class="tooltip-box">
+            <strong>How Suggested Quantity works:</strong><br>
+            If current stock is at or below Reorder Level:<br>
+            <code>(Reorder Level + Safety Stock) - Current Stock</code><br>
+            Rounded up to package size &amp; minimum order.
+        </span>
+    </span>
+</th>
                                 </tr></thead>
                                 <tbody>
                                     <?php foreach ($queue as $item):

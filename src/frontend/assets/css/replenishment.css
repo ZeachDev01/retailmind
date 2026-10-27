@@ -41,7 +41,7 @@
 .queue-search > div { position: relative; }
 .queue-search i { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); font-size: 1rem; pointer-events: none; }
 .queue-search input { padding-left: 2.75rem; }
-.replenishment-page .queue-list { max-height: 70vh; overflow: auto; border: 0; border-radius: 0; }
+.replenishment-page .queue-list { min-height: 260px; max-height: 70vh; overflow: auto; border: 0; border-radius: 0; }
 .replenishment-page .queue-list table { width: 100%; min-width: 600px; table-layout: auto; }
 .queue-list th:nth-child(1) { width: 16%; }
 .queue-list th:nth-child(2) { width: 54%; }
@@ -98,3 +98,10 @@ html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); c
     .queue-list th:last-child, .queue-list td:last-child, .queue-panel-footer, #queue-no-results { display: none; }
     .replenishment-page .queue-list th { position: static; }
 }
+
+.info-tooltip { position: relative; display: inline-flex; align-items: center; margin-left: .35rem; color: var(--muted); cursor: pointer; vertical-align: middle; }
+.info-tooltip:hover, .info-tooltip:focus, .info-tooltip:focus-within { color: var(--primary); outline: none; }
+.tooltip-box { display: none; position: absolute; top: calc(100% + 6px); right: .5rem; width: 240px; padding: .6rem .75rem; background: var(--card-bg, #ffffff); color: var(--text, #111827); border: 1px solid var(--border, #e5e7eb); border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); font-size: .75rem; font-weight: 400; line-height: 1.4; white-space: normal; text-transform: none; z-index: 1000; text-align: left; }
+.tooltip-box strong { color: var(--text); font-weight: 700; display: block; margin-bottom: .25rem; }
+.tooltip-box code { display: block; margin: .35rem 0; padding: .25rem .4rem; background: var(--surface-soft, #f3f4f6); border-radius: 4px; font-size: .7rem; font-family: monospace; color: var(--primary); }
+.info-tooltip:hover .tooltip-box, .info-tooltip:focus .tooltip-box, .info-tooltip:focus-within .tooltip-box { display: block; }
