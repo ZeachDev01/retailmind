@@ -17,52 +17,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $notifyAdjustment = isset($_POST['notify_adjustment']) ? 1 : 0;
     $notifyEmail = isset($_POST['notify_email']) ? 1 : 0;
     $notifyInApp = isset($_POST['notify_inapp']) ? 1 : 0;
-    $lowStockThreshold = (int)($_POST['low_stock_threshold'] ?? 10);
 
-    if ($lowStockThreshold < 1) {
-        $error = 'Low stock threshold must be at least 1.';
-    } else {
-        try {
-            $checkStmt = $pdo->prepare('SELECT pref_id FROM notification_preferences WHERE user_id = ?');
-            $checkStmt->execute([(int)$_SESSION['user_id']]);
+    try {
+        $checkStmt = $pdo->prepare('SELECT pref_id FROM notification_preferences WHERE user_id = ?');
+        $checkStmt->execute([(int)$_SESSION['user_id']]);
 
-            if ($checkStmt->fetchColumn()) {
-                $stmt = $pdo->prepare(
-                    'UPDATE notification_preferences
-                     SET notify_low_stock = ?, notify_adjustment = ?,
-                         notify_email = ?, notify_inapp = ?, low_stock_threshold = ?
-                     WHERE user_id = ?'
-                );
-                $stmt->execute([
-                    $notifyLowStock,
-                    $notifyAdjustment,
-                    $notifyEmail,
-                    $notifyInApp,
-                    $lowStockThreshold,
-                    (int)$_SESSION['user_id'],
-                ]);
-            } else {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO notification_preferences
-                        (user_id, notify_low_stock, notify_adjustment,
-                         notify_email, notify_inapp, low_stock_threshold)
-                     VALUES (?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([
-                    (int)$_SESSION['user_id'],
-                    $notifyLowStock,
-                    $notifyAdjustment,
-                    $notifyEmail,
-                    $notifyInApp,
-                    $lowStockThreshold,
-                ]);
-            }
-
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Updated notification preferences');
-            $message = 'Preferences updated successfully.';
-        } catch (Throwable $e) {
-            $error = \App\Support\OperatorAlert::message($e, 'Unable to update preferences right now. Please try again.');
+        if ($checkStmt->fetchColumn()) {
+            $stmt = $pdo->prepare(
+                'UPDATE notification_preferences
+                 SET notify_low_stock = ?, notify_adjustment = ?,
+                     notify_email = ?, notify_inapp = ?
+                 WHERE user_id = ?'
+            );
+            $stmt->execute([$notifyLowStock, $notifyAdjustment, $notifyEmail, $notifyInApp, (int)$_SESSION['user_id']]);
+        } else {
+            $stmt = $pdo->prepare(
+                'INSERT INTO notification_preferences
+                    (user_id, notify_low_stock, notify_adjustment, notify_email, notify_inapp)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([(int)$_SESSION['user_id'], $notifyLowStock, $notifyAdjustment, $notifyEmail, $notifyInApp]);
         }
+
+        log_activity($pdo, (int)$_SESSION['user_id'], 'Updated notification preferences');
+        $message = 'Preferences updated successfully.';
+    } catch (Throwable $e) {
+        $error = \App\Support\OperatorAlert::message($e, 'Unable to update preferences right now. Please try again.');
     }
 }
 
@@ -159,27 +139,6 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                             </span>
                             <input type="checkbox" name="notify_email" id="notify_email" <?= !empty($prefs['notify_email']) ? 'checked' : '' ?>>
                         </label>
-                    </div>
-                </section>
-
-                <section class="preference-section" aria-labelledby="advanced-settings-heading">
-                    <div class="preference-section-heading">
-                        <span class="preference-section-icon"><i class="bi bi-sliders" aria-hidden="true"></i></span>
-                        <div>
-                            <h2 id="advanced-settings-heading">Advanced settings</h2>
-                            <p>Fine-tune when low stock notifications are triggered.</p>
-                        </div>
-                    </div>
-
-                    <div class="threshold-field">
-                        <div>
-                            <label for="low_stock_threshold">Low stock threshold</label>
-                            <small>Override the default reorder level for all products.</small>
-                        </div>
-                        <div class="threshold-input">
-                            <input type="number" name="low_stock_threshold" id="low_stock_threshold" value="<?= htmlspecialchars((string)$prefs['low_stock_threshold']) ?>" min="1" required>
-                            <span>units</span>
-                        </div>
                     </div>
                 </section>
 

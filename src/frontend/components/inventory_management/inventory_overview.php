@@ -152,47 +152,45 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <header class="page-heading"><div><h1>Stock Overview</h1></div></header>
-        <section class="overview-metrics" aria-label="Inventory summary">
+        <header class="page-heading"><div>
+            <div class="overview-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
+                <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
+                <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
+            </div>
+        </div></header>
+        <section class="overview-metrics" id="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format((int)$total_products) ?></strong><span>Total products</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric" data-overview-view="in-stock" aria-controls="overview-product-view">
                 <span class="overview-metric-icon overview-metric-icon--green" aria-hidden="true"><i class="bi bi-boxes"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format((int)$total_units) ?></strong><span>Units on hand</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--danger" data-overview-view="out" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-x-octagon"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format((int)$out_of_stock) ?></strong><span>Out of stock</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--warning" data-overview-view="low" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format(count($low_stock)) ?></strong><span>Low stock</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--warning" data-overview-view="expiring" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format(count($expiring_batches)) ?></strong><span>Expiring soon</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--danger" data-overview-view="expired" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-calendar-x"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format(count($expired_batches)) ?></strong><span>Expired batches</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
             <button type="button" class="overview-metric overview-metric--warning" data-overview-view="missing-exp" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-calendar-minus"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format((int)$missing_expiration_count) ?></strong><span>Missing Expiration</span></span>
-                <i class="bi bi-chevron-right overview-metric-arrow" aria-hidden="true"></i>
             </button>
         </section>
 
 
-        <section class="overview-chart-card overview-forecast-card" aria-labelledby="overview-forecast-heading">
+        <section class="overview-chart-card overview-forecast-card" id="overview-forecast" aria-labelledby="overview-forecast-heading">
             <div class="overview-chart-header">
                 <div>
                     <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
@@ -220,7 +218,7 @@ $chartDataJson = json_encode([
             <?php endif; ?>
         </section>
 
-        <section class="overview-charts-grid" aria-label="Inventory visual analytics">
+        <section class="overview-charts-grid" id="overview-charts" aria-label="Inventory visual analytics">
             <div class="overview-chart-card">
                 <div class="overview-chart-header">
                     <div>
@@ -250,34 +248,31 @@ $chartDataJson = json_encode([
             </div>
         </section>
 
-        <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products">
+        <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
             <div class="overview-product-view-header">
                 <button type="button" class="btn btn-quiet" id="overview-back">View stock movements</button>
                 <div class="overview-view-filter-group">
                     <div class="overview-filter-field overview-search-field">
-                    <label for="overview-product-search">Search products</label>
-                    <input type="search" id="overview-product-search" class="form-control" placeholder="Name, brand, SKU, barcode" aria-controls="overview-product-table-body">
+                        <input type="search" id="overview-product-search" class="form-control" placeholder="Search products" aria-label="Search products" aria-controls="overview-product-table-body">
                     </div>
                     <div class="overview-filter-field">
-                    <label for="overview-category-filter">Category</label>
-                    <select id="overview-category-filter" class="form-select">
-                        <option value="">All Categories</option>
-                        <?php foreach ($productCategories as $category): ?>
-                        <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                        <select id="overview-category-filter" class="form-select" aria-label="Filter by category">
+                            <option value="">All Categories</option>
+                            <?php foreach ($productCategories as $category): ?>
+                            <option value="<?= htmlspecialchars($category) ?>"><?= htmlspecialchars($category) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="overview-filter-field">
-                    <label for="overview-filter-select">Stock status</label>
-                    <select id="overview-filter-select" class="form-select form-select-sm" aria-label="Filter products">
-                        <option value="all">All Products</option>
-                        <option value="in-stock">In Stock</option>
-                        <option value="out">Out of Stock</option>
-                        <option value="low">Low Stock</option>
-                        <option value="expiring">Expiring Soon</option>
-                        <option value="expired">Expired</option>
-                        <option value="missing-exp">Missing Expiration</option>
-                    </select>
+                        <select id="overview-filter-select" class="form-select form-select-sm" aria-label="Filter by stock status">
+                            <option value="all">All Products</option>
+                            <option value="in-stock">In Stock</option>
+                            <option value="out">Out of Stock</option>
+                            <option value="low">Low Stock</option>
+                            <option value="expiring">Expiring Soon</option>
+                            <option value="expired">Expired</option>
+                            <option value="missing-exp">Missing Expiration</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -853,30 +848,64 @@ document.addEventListener('DOMContentLoaded', function () {
             && row.dataset.search.toLowerCase().includes(productSearch.value.trim().toLowerCase());
     }
 
-    function showProductView(view, scroll = true) {
+    function showProductView(view) {
         activeProductView = view;
         productPage = 1;
         renderProductPage();
+        const selectedMetric = document.querySelector('[data-overview-view="' + view + '"]');
+        const productsTab = document.getElementById('overview-products-tab');
+        productsTab.textContent = selectedMetric
+            ? selectedMetric.querySelector('.overview-metric-copy span').textContent.trim()
+            : 'Products';
+        document.getElementById('overview-filter-select').value = view;
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.toggle('is-active', button.dataset.overviewView === view);
         });
-        const filterSelect = document.getElementById('overview-filter-select');
-        if (filterSelect) {
-            filterSelect.value = view;
-        }
+        document.getElementById('overview-metrics').hidden = true;
+        document.getElementById('overview-forecast').hidden = true;
+        document.getElementById('overview-charts').hidden = true;
         defaultView.hidden = true;
         productView.hidden = false;
-        if (scroll) productView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setOverviewTab('products');
     }
+
+    function setOverviewTab(view) {
+        document.querySelectorAll('#overview-product-tabs [data-overview-page-tab]').forEach(function (tab) {
+            const active = tab.dataset.overviewPageTab === view;
+            tab.classList.toggle('is-active', active);
+            tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            tab.tabIndex = active ? 0 : -1;
+        });
+    }
+
+    function showOverviewSummary() {
+        productView.hidden = true;
+        defaultView.hidden = true;
+        document.getElementById('overview-metrics').hidden = false;
+        document.getElementById('overview-forecast').hidden = false;
+        document.getElementById('overview-charts').hidden = false;
+        document.querySelectorAll('[data-overview-view]').forEach(function (button) {
+            button.classList.remove('is-active');
+        });
+        setOverviewTab('summary');
+    }
+
+    document.getElementById('overview-summary-tab').addEventListener('click', showOverviewSummary);
+    document.getElementById('overview-products-tab').addEventListener('click', function () {
+        showProductView(activeProductView);
+    });
 
     document.getElementById('overview-back').addEventListener('click', function () {
         productView.hidden = true;
         defaultView.hidden = false;
+        document.getElementById('overview-metrics').hidden = false;
+        document.getElementById('overview-forecast').hidden = false;
+        document.getElementById('overview-charts').hidden = false;
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.remove('is-active');
         });
+        setOverviewTab('summary');
         document.querySelector('.overview-tab.is-active').focus({preventScroll: true});
-        defaultView.scrollIntoView({behavior: 'smooth', block: 'start'});
     });
 
     function renderProductPage() {
@@ -903,7 +932,7 @@ document.addEventListener('DOMContentLoaded', function () {
         productPagination.hidden = matchingRows.length === 0;
     }
 
-    showProductView('all', false);
+    renderProductPage();
     let sortColumn = null;
     let sortDirection = 1;
     const sortButtons = Array.from(document.querySelectorAll('.overview-product-table [data-sort-column]'));
@@ -931,6 +960,12 @@ document.addEventListener('DOMContentLoaded', function () {
             renderProductPage();
         });
     });
+    document.querySelectorAll('[data-overview-view]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            showProductView(button.dataset.overviewView);
+        });
+    });
+
     productSearch.addEventListener('input', function () {
         productPage = 1;
         renderProductPage();
@@ -939,11 +974,8 @@ document.addEventListener('DOMContentLoaded', function () {
         productPage = 1;
         renderProductPage();
     });
-
-    document.querySelectorAll('[data-overview-view]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            showProductView(button.dataset.overviewView);
-        });
+    document.getElementById('overview-filter-select').addEventListener('change', function () {
+        showProductView(this.value);
     });
 
     selectAll.addEventListener('change', function () {
@@ -1029,13 +1061,6 @@ document.addEventListener('DOMContentLoaded', function () {
             RetailMindUI.openOverlay(modal);
         });
     });
-
-    const filterSelect = document.getElementById('overview-filter-select');
-    if (filterSelect) {
-        filterSelect.addEventListener('change', function () {
-            showProductView(this.value);
-        });
-    }
 
     function escapeBatchHtml(str) {
         if (str === null || str === undefined) return '';

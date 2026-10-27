@@ -808,6 +808,13 @@ foreach ($products as $product) {
             color: var(--text);
         }
 
+        .catalog-show-field select,
+        .catalog-sort-field select {
+            appearance: none;
+            background-image: none;
+            padding-right: .85rem;
+        }
+
         .catalog-show-field,
         .catalog-sort-field {
             flex: 0 1 180px;
@@ -1168,7 +1175,6 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
-            <header class="page-heading"><div><h1>Products &amp; Stock</h1><p class="page-subtitle">Find products, review stock, and maintain the Store catalog.</p></div></header>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">
@@ -1187,7 +1193,7 @@ foreach ($products as $product) {
                         </select></label>
                         <button type="button" class="btn btn-quiet btn-icon catalog-filter-button" id="catalog-filter-toggle" aria-expanded="false" aria-controls="catalog-filter-row"><i class="bi bi-funnel" aria-hidden="true"></i>Filter</button>
                         <div class="product-add-menu" id="product-add-menu">
-                            <button type="button" class="btn product-add-trigger" id="product-add-trigger" aria-expanded="false" aria-controls="product-add-options" aria-haspopup="menu"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add</span><i class="bi bi-chevron-down" aria-hidden="true"></i></button>
+                            <button type="button" class="btn product-add-trigger" id="product-add-trigger" aria-expanded="false" aria-controls="product-add-options" aria-haspopup="menu"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add</span></button>
                             <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
                                 <?php if ($canManageInventory): ?><button type="button" class="product-add-menu-item" id="add-product-btn" role="menuitem"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Add Product</strong></button><button type="button" class="product-add-menu-item" id="add-category-btn" role="menuitem"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button><?php endif; ?>
                                 <a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>

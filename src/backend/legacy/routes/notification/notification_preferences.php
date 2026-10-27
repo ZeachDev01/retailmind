@@ -15,37 +15,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $notify_adjustment = isset($_POST['notify_adjustment']) ? 1 : 0;
     $notify_email = isset($_POST['notify_email']) ? 1 : 0;
     $notify_inapp = isset($_POST['notify_inapp']) ? 1 : 0;
-    $low_stock_threshold = (int)($_POST['low_stock_threshold'] ?? 10);
+    $check_stmt = $pdo->prepare("SELECT pref_id FROM notification_preferences WHERE user_id = ?");
+    $check_stmt->execute([$_SESSION['user_id']]);
+    $exists = $check_stmt->fetch();
 
-    if ($low_stock_threshold < 1) {
-        $error = 'Low stock threshold must be at least 1';
-    } else {
-        // Check if preferences exist
-        $check_stmt = $pdo->prepare("SELECT pref_id FROM notification_preferences WHERE user_id = ?");
-        $check_stmt->execute([$_SESSION['user_id']]);
-        $exists = $check_stmt->fetch();
-
-        try {
-            if ($exists) {
-                $stmt = $pdo->prepare("UPDATE notification_preferences 
-                                      SET notify_low_stock = ?, notify_adjustment = ?,
-                                          notify_email = ?, notify_inapp = ?, low_stock_threshold = ?
-                                      WHERE user_id = ?");
-                $stmt->execute([$notify_low_stock, $notify_adjustment,
-                               $notify_email, $notify_inapp, $low_stock_threshold, $_SESSION['user_id']]);
-            } else {
-                $stmt = $pdo->prepare("INSERT INTO notification_preferences 
-                                      (user_id, notify_low_stock, notify_adjustment,
-                                       notify_email, notify_inapp, low_stock_threshold)
-                                      VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->execute([$_SESSION['user_id'], $notify_low_stock, $notify_adjustment,
-                               $notify_email, $notify_inapp, $low_stock_threshold]);
-            }
-            $message = "Notification preferences updated successfully!";
-            log_activity($pdo, $_SESSION['user_id'], "Updated notification preferences");
-        } catch (Exception $e) {
-            $error = "Error updating preferences: " . $e->getMessage();
+    try {
+        if ($exists) {
+            $stmt = $pdo->prepare("UPDATE notification_preferences
+                                  SET notify_low_stock = ?, notify_adjustment = ?,
+                                      notify_email = ?, notify_inapp = ?
+                                  WHERE user_id = ?");
+            $stmt->execute([$notify_low_stock, $notify_adjustment,
+                           $notify_email, $notify_inapp, $_SESSION['user_id']]);
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO notification_preferences
+                                  (user_id, notify_low_stock, notify_adjustment,
+                                   notify_email, notify_inapp)
+                                  VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $notify_low_stock, $notify_adjustment,
+                           $notify_email, $notify_inapp]);
         }
+        $message = "Notification preferences updated successfully!";
+        log_activity($pdo, $_SESSION['user_id'], "Updated notification preferences");
+    } catch (Exception $e) {
+        $error = "Error updating preferences: " . $e->getMessage();
     }
 }
 
@@ -191,56 +184,6 @@ $prefs = get_notification_prefs($pdo, $_SESSION['user_id']);
 
         <form method="POST" class="preferences-form">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-
-            <div class="form-section">
-                <h3>📬 Notification Types</h3>
-                <p>Choose which types of notifications you want to receive:</p>
-
-                <div class="form-group">
-                    <input type="checkbox" name="notify_low_stock" id="notify_low_stock" 
-                           <?= $prefs['notify_low_stock'] ? 'checked' : '' ?>>
-                    <label for="notify_low_stock">Low Stock Alerts</label>
-                    <span class="description">Notified when inventory levels drop below reorder point</span>
-                </div>
-
-                <div class="form-group">
-                    <input type="checkbox" name="notify_adjustment" id="notify_adjustment" 
-                           <?= $prefs['notify_adjustment'] ? 'checked' : '' ?>>
-                    <label for="notify_adjustment">Inventory Adjustments</label>
-                    <span class="description">Notified when adjustments (damaged/expired/missing) are reported</span>
-                </div>
-            </div>
-
-            <div class="form-section">
-                <h3>📨 Delivery Method</h3>
-                <p>Select how you'd like to receive notifications:</p>
-
-                <div class="form-group">
-                    <input type="checkbox" name="notify_inapp" id="notify_inapp" 
-                           <?= $prefs['notify_inapp'] ? 'checked' : '' ?>>
-                    <label for="notify_inapp">In-App Notifications</label>
-                    <span class="description">Notifications appear in the notification center (default: enabled)</span>
-                </div>
-
-                <div class="form-group">
-                    <input type="checkbox" name="notify_email" id="notify_email" 
-                           <?= $prefs['notify_email'] ? 'checked' : '' ?>>
-                    <label for="notify_email">Email Notifications</label>
-                    <span class="description">Send important updates to <?= htmlspecialchars($_SESSION['email'] ?? 'your email') ?></span>
-                </div>
-            </div>
-
-            <div class="form-section">
-                <h3>⚙️ Advanced Settings</h3>
-                <p>Fine-tune notification triggers:</p>
-
-                <div class="threshold-group">
-                    <label for="low_stock_threshold">Low Stock Threshold (units):</label>
-                    <input type="number" name="low_stock_threshold" id="low_stock_threshold" 
-                           value="<?= htmlspecialchars($prefs['low_stock_threshold']) ?>" min="1">
-                    <span style="color: #666; font-size: 0.85rem;">Override default reorder levels for all products</span>
-                </div>
-            </div>
 
             <button type="submit" class="btn-submit">Save Preferences</button>
         </form>
