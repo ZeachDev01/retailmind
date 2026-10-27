@@ -47,7 +47,7 @@ The single retail location operated through RetailMind. RetailMind does not divi
 _Avoid_: Branch, location assignment, tenant
 
 **Super Administrator**:
-The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. It governs technical access policy and Super Administrator identity protection; ordinary Administrator lifecycle is shared with the Administrator Workspace. Other accounts cannot manage a Super Administrator identity, and Recovery Account management stays outside ordinary Users workflows. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. While in the Super Administrator workspace it may inspect Store operations for oversight but does not perform operational mutations; stepping into Store administration, inventory execution, or point-of-sale work requires switching into the corresponding active workspace.
+The single technical owner responsible for platform security, Platform Settings, recovery, access policy, system health, and demand-forecasting model operation. Its ordinary-user management is limited to creating ordinary Administrator accounts and disabling ordinary accounts with Administrator access; routine staff management belongs to the Administrator Workspace. Other accounts cannot manage a Super Administrator identity, and Recovery Account management stays outside ordinary Users workflows. One primary account is used routinely; a sealed Recovery Account exists only for lockout or disaster recovery. While in the Super Administrator workspace it may inspect Store operations for oversight but does not perform operational mutations; stepping into Store administration, inventory execution, or point-of-sale work requires switching into the corresponding assigned workspace, apart from explicitly permitted per-action Administrator credential approvals.
 _Avoid_: Superadmin, unrestricted operator, Store operator
 
 **Recovery Account**:
@@ -157,6 +157,10 @@ _Avoid_: Shared shift, inferred shift, silent sale without a shift
 **Register**:
 The named physical till that anchors drawer accountability for one open Cashier Shift at a time. It is created, renamed, or disabled without deleting its history, and unavailable Registers are excluded from new shifts.
 _Avoid_: Shared drawer, inferred till, deleted register history
+
+**Cashier Shift Variance Review**:
+The Administrator's recorded investigation of a closed Cashier Shift's cash shortage or excess, with an explanation and reviewer identity and time. Review ends pending attention while preserving the original amounts and history; it does not establish that missing money was recovered.
+_Avoid_: Cash correction, recovered shortage, GCash discrepancy waiver
 
 **Held Sale**:
 A cart a Cashier suspended at the till. It belongs to that Cashier and to the Cashier Shift that was open when it was held, is listed and resumed only by its owner, and stays unresolved — owed a decision — from the moment it is held until it either becomes a sale or is discarded with a structured reason. Resuming does not resolve it, and no Cashier Shift closes while one is unresolved. Discarding moves no cash and is recorded as a Protected Audit Record. Time alone never resolves a Held Sale; an orphan — a Held Sale belonging to no open Cashier Shift — is the only one that expires on its own.

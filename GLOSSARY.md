@@ -60,6 +60,26 @@ _Avoid_: Product-sale cash, wallet balance
 The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
 _Avoid_: Personal wallet, product-payment account
 
+**GCash Closing Difference Review**:
+The Administrator's recorded check and explanation of a GCash session's cash and wallet shortages or excesses. Both differences must be checked before the review finishes; original amounts remain in history, and review does not mean missing money was returned.
+_Avoid_: Waive (in user-facing actions), cash adjustment, recovered shortage
+
+**GCash Follow-up Responsibility**:
+A Cashier's accepted responsibility to follow up a specific unfinished GCash exchange, retained across Shift and service-session closure. It preserves the original recorder and money history and does not assign blame for an earlier shortage or mean the Cashier currently holds the service funds.
+_Avoid_: Transfer of blame, completed exchange, current fund custody
+
+**Refund Correction Review**:
+The Administrator's investigation of a mistake in a completed Cash Refund, with linked correction work assigned to the proper roles. Finishing the investigation does not mean outstanding money or stock corrections are complete, and the original Sale Receipt and refund remain unchanged.
+_Avoid_: Refund deletion, edited original receipt, automatic repayment
+
+**Recorded Stock Value**:
+The purchase cost recorded for goods remaining in the Store, using their remaining quantities and recorded batch costs. It excludes quantities whose purchase cost is only estimated or missing.
+_Avoid_: Latest-price value, earned profit, estimated stock value
+
+**Estimated Stock Value**:
+The value of remaining goods without recorded purchase costs, estimated from usable current Product costs and identified separately from Recorded Stock Value. Goods with no usable cost remain unvalued rather than being treated as free.
+_Avoid_: Exact stock value, recorded purchase cost, zero-cost stock
+
 **Bread Pullout Reminder**:
 An expiry-based prompt to prepare bread for supplier collection before its printed expiration date. It does not represent a completed collection.
 _Avoid_: Completed pullout, stock deduction, supplier collection schedule
