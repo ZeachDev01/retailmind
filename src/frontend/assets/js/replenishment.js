@@ -17,7 +17,7 @@
     let lastSort;
     let currentPage = 1;
 
-    const SNAPSHOT_KEY = 'retailmind_replenishment_snapshot';
+    const SNAPSHOT_KEY = 'retailmind_replenishment_snapshot_v2';
     const storage = (() => {
         try {
             return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage : null;
@@ -86,8 +86,6 @@
             `<td><a class="queue-product" href="../products/product_detail.php?id=${encodeURIComponent(String(item.productId || 0))}">${esc(item.name)}</a><small class="muted queue-sku">${esc(item.sku)}</small></td>` +
             `<td><strong class="queue-number ${onHand <= 0 ? 'queue-out' : ''}">${onHand}</strong> <small class="muted">units</small></td>` +
             `<td><strong class="queue-number queue-suggested">${qty}</strong> <small class="muted">units</small></td>` +
-            `<td class="queue-reason">${esc(stockStatus)}</td>` +
-            `<td><span class="muted">View only</span></td>` +
             `</tr>`;
     }
 
@@ -142,9 +140,16 @@
                     || originalOrder.get(a) - originalOrder.get(b);
             });
         }
-        const filtered = rows.filter(row =>
-            `${row.dataset.name} ${row.dataset.sku}`.toLocaleLowerCase().includes(query)
-            && (!stock.value || row.dataset.stock === stock.value));
+        const filtered = rows.filter(row => {
+            const matchesQuery = `${row.dataset.name} ${row.dataset.sku}`.toLocaleLowerCase().includes(query);
+            let matchesStock = true;
+            if (stock.value === 'needs_replenishment') {
+                matchesStock = Number(row.dataset.quantity) > 0 || row.dataset.stock === 'Out of stock' || row.dataset.stock === 'Low stock';
+            } else if (stock.value) {
+                matchesStock = row.dataset.stock === stock.value;
+            }
+            return matchesQuery && matchesStock;
+        });
         const size = Number(pageSize?.value) || filtered.length || 1;
         const pages = Math.max(1, Math.ceil(filtered.length / size));
         currentPage = Math.min(currentPage, pages);

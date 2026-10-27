@@ -122,7 +122,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <?php else: ?>
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
-                            <label>Stock status<select id="queue-stock"><option value="">All statuses</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
+                            <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">Needs replenishment</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
                             <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
                             <div class="queue-actions" id="queue-actions">
                                 <button class="btn btn-secondary" id="queue-actions-trigger" type="button" aria-expanded="false" aria-controls="queue-actions-menu" aria-haspopup="menu">Actions</button>
@@ -137,7 +137,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                         <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
-                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested</th><th scope="col">Why now</th><th scope="col"><?= $canReceive ? 'Next action' : 'Access' ?></th>
+                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested</th>
                                 </tr></thead>
                                 <tbody>
                                     <?php foreach ($queue as $item):
@@ -152,24 +152,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
                                             <td><strong class="queue-number queue-suggested"><?= (int)$item['recommended_quantity'] ?></strong> <small class="muted">units</small></td>
-                                            <td class="queue-reason">
-                                                <?= htmlspecialchars($item['stock_status'] === 'In stock' ? ($item['recommended_quantity'] > 0 ? 'Below target stock' : ($item['urgency_label'] === 'Covered' ? 'Stock covers demand' : 'No stock-rule purchase needed')) : $item['stock_status']) ?>
-                                                <details class="queue-details"><summary>Forecast details</summary>
-                                                    <strong><?= htmlspecialchars($item['basis']) ?></strong>
-                                                    <p><?= htmlspecialchars($item['explanation']) ?></p>
-                                                    <p><?= htmlspecialchars($item['forecast_status']) ?></p>
-                                                    <?php if ($item['forecast_origin'] && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
-                                                        <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
-                                                    <?php endif; ?>
-                                                </details>
-                                            </td>
-                                            <td>
-                                                <?php if ($canReceive): ?>
-                                                    <a class="btn <?= $item['recommended_quantity'] > 0 ? 'btn-primary' : 'btn-secondary' ?> queue-receive" aria-label="Add bought goods for <?= htmlspecialchars($item['product_name']) ?>" href="../report/stock_receiving.php?product_id=<?= (int)$item['product_id'] ?>">Add bought goods <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
-                                                <?php else: ?>
-                                                    <span class="muted">View only</span>
-                                                <?php endif; ?>
-                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
