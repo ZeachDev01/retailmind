@@ -227,7 +227,8 @@ function fixture(action) {
         await page.locator('#add-product-form [name="product_name"]').fill('Unfinished Product draft');
         await page.locator('#add-product-form [name="brand"]').fill('Draft brand');
         await page.locator('#product-image-input').setInputFiles({name:'draft.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6w5kAAAAASUVORK5CYII=', 'base64')});
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.waitForFunction(() => Object.keys(localStorage).some(key => key.endsWith(':add-product-form')));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload(); await resumeDraft();
         assert.equal(await page.locator('#add-product-form [name="product_name"]').inputValue(), 'Unfinished Product draft');
         assert.equal(await page.locator('#add-product-form [name="brand"]').inputValue(), 'Draft brand');

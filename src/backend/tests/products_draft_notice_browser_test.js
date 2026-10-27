@@ -52,6 +52,8 @@ const { chromium } = require('playwright');
         assert.equal(await page.getByText('Unfinished inventory work (entry:).').count(), 0, 'Products does not offer an unnamed form draft');
         await page.locator('[name="product_name"]').fill('Named Product draft');
         await page.waitForFunction(() => Object.keys(localStorage).some(key => key.endsWith(':add-product-form')));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Unfinished Product keeps its draft without showing a save notice');
         await page.evaluate(() => localStorage.removeItem('retailmind:inventory:v1:1:/products.php:entry:'));
         await page.locator('[name="note"]').fill('Temporary note');
         await page.waitForTimeout(100);

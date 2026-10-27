@@ -75,7 +75,7 @@ window.RetailMindInventoryDrafts = (() => {
         prepare(form);
         const id = identity(form);
         busy++;
-        notice('Keeping unsaved values...');
+        if (form.id !== 'add-product-form') notice('Keeping unsaved values...');
         try {
             const prior = snapshots.get(id) || Promise.resolve();
             const next = prior.catch(() => {}).then(async () => {
@@ -92,7 +92,7 @@ window.RetailMindInventoryDrafts = (() => {
             });
             snapshots.set(id, next);
             await next;
-            if (busy === 1) notice('Unsaved values kept on this device. Inventory changes only after server confirmation.');
+            if (busy === 1 && form.id !== 'add-product-form') notice('Unsaved values kept on this device. Inventory changes only after server confirmation.');
         } catch (_) { notice('Draft could not be kept. Keep this page open; these values may be lost if you close it.', true); }
         finally { busy--; }
     }
