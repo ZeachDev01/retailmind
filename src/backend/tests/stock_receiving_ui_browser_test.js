@@ -153,7 +153,7 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_damaged').innerText(), '2');
         assert.equal(await page.locator('#summary_cost').innerText(), '₱35.00');
         assert.equal(await page.locator('#package_conversion').innerText(), '12 units received − 2 damaged = 10 accepted units.');
-        assert.equal(await page.locator('#receiving_back').innerText(), 'Back to products');
+        assert.equal(await page.locator('#receiving_back').innerText(), 'Add products');
         assert.equal(await page.locator('#receiving_return_products').count(), 0, 'one action returns to products');
 
         page.once('dialog', dialog => dialog.dismiss());
@@ -177,6 +177,8 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_review > p').count(), 0, 'blank receipt details stay out of review');
         assert.doesNotMatch(await page.locator('#receiving_review').innerText(), /Not supplied/);
         assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: unknown; product cost unchanged/);
+        assert.equal(await page.locator('#receiving_back').innerText(), 'Back to quantities');
+        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '3');
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
 
         await page.goto(url);

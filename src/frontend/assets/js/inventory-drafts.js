@@ -8,15 +8,18 @@ window.RetailMindInventoryDrafts = (() => {
     const encode = bytes => btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
     const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
     const resubmitting = new WeakSet(), submitted = new WeakMap();
-    function notice(message, error = false) {
+    let noticeTimer;
+    function notice(message, error = false, duration = error ? 0 : 4000) {
+        clearTimeout(noticeTimer);
         let status = document.getElementById('inventory-draft-status');
         if (!status) {
             status = document.createElement('p'); status.id = 'inventory-draft-status'; status.role = 'status';
             (document.querySelector('main') || document.body).prepend(status);
         }
         status.textContent = message;
-        const close = document.createElement('button'); close.type = 'button'; close.className = 'inventory-draft-dismiss'; close.setAttribute('aria-label', 'Dismiss notice'); close.innerHTML = '&times;'; close.onclick = () => status.remove(); status.append(close);
+        const close = document.createElement('button'); close.type = 'button'; close.className = 'inventory-draft-dismiss'; close.setAttribute('aria-label', 'Dismiss notice'); close.innerHTML = '&times;'; close.onclick = () => { clearTimeout(noticeTimer); status.remove(); }; status.append(close);
         status.setAttribute('role', error ? 'alert' : 'status');
+        if (duration > 0) noticeTimer = setTimeout(() => status.remove(), duration);
     }
     function token() { return Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join(''); }
     function identity(form) {
@@ -249,7 +252,7 @@ window.RetailMindInventoryDrafts = (() => {
             }
         }
     }
-    function destroy() { active = false; lifetime.abort(); observer?.disconnect(); key = null; }
+    function destroy() { clearTimeout(noticeTimer); active = false; lifetime.abort(); observer?.disconnect(); key = null; }
     return {
         start(options) {
             config = options;

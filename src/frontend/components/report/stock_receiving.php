@@ -377,10 +377,9 @@ $categoryIcon = static function (string $categoryName): string {
                 </fieldset>
 
                 <div class="u-flex-wrap receiving-actions" id="receiving_actions">
-                    <button type="button" class="btn btn-primary" id="receiving_next">Continue</button>
-                    <button type="button" class="btn btn-secondary" id="receiving_return_products" hidden>Add products</button>
-                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Edit</button>
                     <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save receiving entry & update stock</button>
+                    <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Add products</button>
+                    <button type="button" class="btn btn-primary" id="receiving_next">Continue</button>
                 </div>
                 </div>
                 </section>
@@ -1166,7 +1165,7 @@ function showStep(next, focus = true) {
     document.getElementById('delivery_title').textContent = step === 3 ? 'Check your delivery' : 'Delivery lines';
     document.getElementById('summary_status').textContent = step === 3 ? 'Review' : 'Draft';
     document.getElementById('receiving_back').hidden = step === 1;
-    document.getElementById('receiving_return_products').hidden = step !== 2;
+    document.getElementById('receiving_back').textContent = step === 2 ? 'Add products' : 'Back to quantities';
     document.getElementById('receiving_next').hidden = step === 3;
     document.getElementById('receiving_next').textContent = step === 1 ? 'Continue' : 'Review entry';
     (step === 1 ? document.getElementById('receiving_delivery_actions') : document.getElementById('receiving_actions')).append(document.getElementById('receiving_next'));
@@ -1397,7 +1396,6 @@ function renderReview() {
 }
 
 document.getElementById('receiving_back').addEventListener('click', () => showStep(step - 1));
-document.getElementById('receiving_return_products').addEventListener('click', () => showStep(1));
 document.getElementById('receiving_next').addEventListener('click', () => {
     if (!validateProducts()) return;
     if (step === 1) { showStep(2); return; }
