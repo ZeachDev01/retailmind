@@ -13,6 +13,7 @@
 .overview-branch-filter select { min-width: 190px; min-height: 40px; padding: .5rem .7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); color: var(--text); }
 .overview-workflow-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 .overview-workflow-actions .btn { min-height: 40px; }
+.overview-main > [hidden],.overview-product-tabs[hidden] { display: none !important; }
 .overview-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7rem; margin-bottom: 1.75rem; }
 .overview-metric { min-width: 0; min-height: 86px; display: flex; align-items: center; gap: .7rem; padding: .8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); color: var(--text); font: inherit; text-align: left; }
 button.overview-metric { cursor: pointer; }
