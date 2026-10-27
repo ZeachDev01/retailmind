@@ -18,7 +18,7 @@ try {
     }
 } catch (Throwable $e) { error_log('Inventory draft key unavailable: ' . $e->getMessage()); }
 ?>
-<script src="<?= htmlspecialchars(app_url('assets/js/inventory-drafts.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/inventory-drafts.js') . '?v=' . filemtime(__DIR__ . '/../../frontend/assets/js/inventory-drafts.js')) ?>"></script>
 <script>
 window.RetailMindInventoryDrafts.start({
     key: <?= json_encode($draftKey ?: null) ?>,
