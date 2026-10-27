@@ -69,14 +69,25 @@ try {
         $db->exec("SET time_zone='+08:00'");
         $db->exec("SET timestamp=1791417600");
         $import($db, __DIR__ . '/../database/sql/schema.sql');
+        $import($db, __DIR__ . '/../database/sql/schema.sql');
         $assertRetired($db);
+        $accounts = $db->query('SELECT username, password_hash, must_change_password FROM users')->fetchAll();
+        $assert(count($accounts) === 1 && $accounts[0]['username'] === 'superadmin', 'Fresh schema.sql must seed only superadmin');
+        $assert(password_verify('RetailMind@2026', (string)($accounts[0]['password_hash'] ?? '')), 'Fresh superadmin password does not match');
+        $assert((int)($accounts[0]['must_change_password'] ?? 0) === 1, 'Fresh superadmin must change the seeded password');
+        $assert($db->query("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.username='superadmin'")->fetchColumn() === 'super_admin',
+            'Fresh superadmin role cannot be resolved at login');
+        $assert((new App\Store\StoreScope($db))->id() === 1, 'Fresh Store scope is unavailable');
+        foreach (['categories', 'products', 'inventory', 'product_batches', 'stock_receiving', 'purchase_history'] as $table) {
+            $assert((int)$db->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn() === 0, "Fresh schema.sql must not seed {$table}");
+        }
+        $assert((int)$db->query("SELECT AUTO_INCREMENT FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='products'")->fetchColumn() === 1,
+            'Fresh products must start at ID 1');
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');
         $assert($runner->pending() === [], 'Fresh schema.sql import still requires PHP migrations');
         foreach (['store_calendar', 'ml_model_evaluations', 'demand_forecasts', 'forecast_sales_imports', 'scheduled_demand_drivers'] as $table) {
             $assert(App\Database\Schema::tableExists($db, $table), "Fresh schema.sql is missing {$table}");
         }
-        $assert((int)$db->query('SELECT COUNT(*) FROM product_batches WHERE remaining_quantity <> sealed_quantity + loose_quantity')->fetchColumn() === 0,
-            'Fresh schema.sql leaves batch quantities without sealed or loose form');
         $runner->runPending();
         $assertRetired($db);
         $assert($runner->pending() === [], 'Fresh import plus migrations leaves pending migrations');
