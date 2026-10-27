@@ -266,9 +266,9 @@ $chartDataJson = json_encode([
                     <div class="overview-filter-field">
                         <select id="overview-filter-select" class="form-select form-select-sm" aria-label="Filter by stock status">
                             <option value="all">All Products</option>
-                            <option value="in-stock">In Stock</option>
-                            <option value="out">Out of Stock</option>
-                            <option value="low">Low Stock</option>
+                            <option value="in-stock">🟢 In Stock</option>
+                            <option value="out">🔴 Out of Stock</option>
+                            <option value="low">🟡 Low Stock</option>
                             <option value="expiring">Expiring Soon</option>
                             <option value="expired">Expired</option>
                             <option value="missing-exp">Missing Expiration</option>

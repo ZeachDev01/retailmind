@@ -122,7 +122,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <?php else: ?>
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
-                            <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">Needs replenishment</option><option>Out of stock</option><option>Low stock</option><option>In stock</option></select></label>
+                            <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">🔵 Needs replenishment</option><option value="Out of stock">🔴 Out of stock</option><option value="Low stock">🟡 Low stock</option><option value="In stock">🟢 In stock</option></select></label>
                             <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
                             <div class="queue-actions" id="queue-actions">
                                 <button class="btn btn-secondary" id="queue-actions-trigger" type="button" aria-expanded="false" aria-controls="queue-actions-menu" aria-haspopup="menu">Actions</button>

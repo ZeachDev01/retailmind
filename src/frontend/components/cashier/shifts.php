@@ -169,7 +169,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section><?php endif; ?>
             <div class="shift-grid">
                 <section class="dashboard-section shift-overview">
-                    <div class="shift-section-heading"><h2><?= $openShift ? 'Current shift' : ($isCashier ? 'Open a shift' : 'No open shift') ?></h2><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php endif; ?></div>
+                    <div class="shift-section-heading"><?php if ($openShift): ?><span class="shift-status shift-status--open">Open</span><?php else: ?><h2><?= $isCashier ? 'Open a shift' : 'No open shift' ?></h2><?php endif; ?></div>
                     <?php if (!$isCashier && !$openShift): ?><p class="shift-help">Only Cashiers can open their own shifts.</p><?php endif; ?>
                     <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p>No Register is available. Ask your Administrator for help.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
                             <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>

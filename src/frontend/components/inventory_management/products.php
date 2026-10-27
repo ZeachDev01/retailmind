@@ -1187,7 +1187,7 @@ foreach ($products as $product) {
                             <input type="search" id="product-search" placeholder="Search products..." autocomplete="off">
                         </label>
                         <label class="catalog-field catalog-show-field"><span>Show</span><select id="stock-filter" aria-label="Show products by stock status">
-                            <option value="">All Products</option><option value="available">Available</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
+                            <option value="">All Products</option><option value="available">🟢 Available</option><option value="low">🟡 Low stock</option><option value="out">🔴 Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
                         </select></label>
                         <label class="catalog-field catalog-sort-field"><span>Sort by</span><select id="catalog-sort" aria-label="Sort products">
                             <option value="name:1">Default</option><option value="name:1">Name A-Z</option><option value="name:-1">Name Z-A</option><option value="stock:1">Stock: Low to High</option><option value="stock:-1">Stock: High to Low</option><option value="price:1">Price: Low to High</option><option value="price:-1">Price: High to Low</option>

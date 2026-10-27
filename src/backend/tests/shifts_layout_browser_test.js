@@ -61,6 +61,9 @@ const {chromium} = require('playwright');
                 }
             }
             assert.equal(await page.locator('.shift-history td[data-label]').count(), 7);
+            if (variant === 'open') {
+                assert.doesNotMatch(await page.locator('.shift-overview').innerText(), /Current shift/, 'Redundant Current shift text is removed from shift overview');
+            }
             const intervention = page.locator('.shift-intervention');
             assert.equal(await intervention.locator('p').isVisible(), false, 'Long intervention reason starts collapsed');
             await intervention.locator('summary').click();

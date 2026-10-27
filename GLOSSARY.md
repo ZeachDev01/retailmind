@@ -167,3 +167,7 @@ _Avoid_: Combined permissions, role bundle
 **Owner Remote Monitoring**:
 The Store owner's read-only access to Store activity while away from the Store. It does not authorize remote operational or administrative changes.
 _Avoid_: Remote administration, staff remote access
+
+**Stock Status Indicator**:
+A standardized color-coded visual indicator (🔴 Out of stock, 🟡 Low stock, 🟢 In stock/Available, 🔵 Needs replenishment) displayed across inventory dropdowns and status badges to convey stock health without altering underlying filter values.
+_Avoid_: Custom icon component, unstandardized badge color
