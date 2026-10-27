@@ -15,6 +15,7 @@ window.RetailMindInventoryDrafts = (() => {
             (document.querySelector('main') || document.body).prepend(status);
         }
         status.textContent = message;
+        const close = document.createElement('button'); close.type = 'button'; close.className = 'inventory-draft-dismiss'; close.setAttribute('aria-label', 'Dismiss notice'); close.innerHTML = '&times;'; close.onclick = () => status.remove(); status.append(close);
         status.setAttribute('role', error ? 'alert' : 'status');
     }
     function token() { return Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join(''); }
@@ -166,7 +167,7 @@ window.RetailMindInventoryDrafts = (() => {
             }
             document.dispatchEvent(new CustomEvent('inventorydraft:restored', {detail: {draft, form}}));
             form.scrollIntoView({block: 'nearest'});
-            notice('Draft resumed. Review current Products and quantities before saving. Nothing has been posted.');
+            notice('Draft restored. Review items and quantities before saving.');
             return true;
         } catch (_) { notice('Draft could not be resumed. Sign in again if your session expired, check your connection and current Products, then try Resume again. Your draft is still kept.', true); return false; }
         finally { restoring = false; }
