@@ -5,7 +5,8 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
 
-require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
+require_role(['super_admin']);
+require_capability(RoleCapabilityPolicy::CONFIGURE_MODELS);
 $storeId = store_scope_id($pdo);
 $saleUnitsSql = sales_units_sql($pdo, 'si');
 
