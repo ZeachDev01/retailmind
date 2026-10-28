@@ -1796,10 +1796,204 @@ final class GCashTransactionService
         ];
     }
 
+    public function recordShortageRecovery(int $cashierId, array $data): int
+    {
+        $targetSessionId = filter_var($data['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if (!$targetSessionId) {
+            throw new DomainException('A valid target session ID is required to link shortage recovery.', 422);
+        }
+        $amount = filter_var($data['amount'] ?? null, FILTER_VALIDATE_FLOAT);
+        if ($amount === false || $amount <= 0) {
+            throw new DomainException('Enter a positive shortage recovery amount.', 422);
+        }
+        $amount = round($amount, 2);
+
+        $authBy = $this->authorizeAdmin((string)($data['approver_username'] ?? ''), (string)($data['approver_password'] ?? ''));
+
+        if (empty($data['receipt_confirmed'])) {
+            throw new DomainException('The responsible Cashier must confirm receipt of funds before posting.', 422);
+        }
+
+        StoreWriteGate::begin($this->pdo());
+        try {
+            $this->fiscalPeriodGuard()->assertOpenNow('gcash_funding_movements', 'GCash shortage recovery');
+
+            // Find target session
+            $tStmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE session_id = ?");
+            $tStmt->execute([$targetSessionId]);
+            $target = $tStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$target) {
+                throw new DomainException('Target session for shortage recovery not found.', 404);
+            }
+            if ($target['status'] !== 'closed') {
+                throw new DomainException('Shortage recovery can only be applied to a closed session.', 422);
+            }
+
+            // Target session review check
+            $reviewShortage = (float)($target['review_shortage'] ?? abs((float)$target['cash_variance'] + (float)$target['wallet_variance']));
+            $recovered = (float)($target['recovered_shortage'] ?? 0.0);
+            $remaining = max(0.0, round($reviewShortage - $recovered, 2));
+            if ($amount > $remaining && $remaining > 0) {
+                throw new DomainException(sprintf('Recovery amount PHP %.2f exceeds remaining unrecovered shortage PHP %.2f.', $amount, $remaining), 422);
+            }
+
+            // Current open session for cashier
+            $openStmt = $this->pdo()->prepare("SELECT session_id FROM gcash_service_sessions WHERE cashier_id = ? AND status = 'open' ORDER BY session_id DESC LIMIT 1");
+            $openStmt->execute([$cashierId]);
+            $currentSessionId = $openStmt->fetchColumn();
+            if (!$currentSessionId) {
+                throw new DomainException('Responsible Cashier must have an eligible open GCash session in an open Fiscal Period.', 422);
+            }
+            $currentSessionId = (int)$currentSessionId;
+
+            // Record funding movement
+            $evidence = trim((string)($data['evidence_reference'] ?? $data['evidence'] ?? 'Shortage settlement'));
+            $reason = trim((string)($data['reason'] ?? 'Shortage recovery settlement'));
+
+            $hasExtraCols = false;
+            try {
+                $cols = array_column($this->pdo()->query("PRAGMA table_info(gcash_funding_movements)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+                $hasExtraCols = in_array('linked_session_id', $cols, true);
+            } catch (Throwable) {
+                try {
+                    $cols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_funding_movements")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                    $hasExtraCols = in_array('linked_session_id', $cols, true);
+                } catch (Throwable) {}
+            }
+
+            if ($hasExtraCols) {
+                $ins = $this->pdo()->prepare(
+                    "INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by, received_by, receipt_confirmed, linked_session_id)
+                     VALUES (?, 'shortage_recovery', ?, ?, 'in', ?, ?, ?, ?, ?, 1, ?)"
+                );
+                $ins->execute([$currentSessionId, (string)($data['fund_type'] ?? 'cash'), $amount, $evidence, $reason, $authBy, $cashierId, $cashierId, $targetSessionId]);
+            } else {
+                $ins = $this->pdo()->prepare(
+                    "INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by)
+                     VALUES (?, 'shortage_recovery', ?, ?, 'in', ?, ?, ?, ?)"
+                );
+                $ins->execute([$currentSessionId, (string)($data['fund_type'] ?? 'cash'), $amount, $evidence, $reason, $authBy, $cashierId]);
+            }
+            $movementId = (int)$this->pdo()->lastInsertId();
+
+            // Update target session recovered_shortage without modifying cash_variance or review_shortage
+            $newRecovered = round($recovered + $amount, 2);
+            $hasRecoveredCol = false;
+            try {
+                $sCols = array_column($this->pdo()->query("PRAGMA table_info(gcash_service_sessions)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+                $hasRecoveredCol = in_array('recovered_shortage', $sCols, true);
+            } catch (Throwable) {
+                try {
+                    $sCols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_service_sessions")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                    $hasRecoveredCol = in_array('recovered_shortage', $sCols, true);
+                } catch (Throwable) {}
+            }
+            if ($hasRecoveredCol) {
+                $upd = $this->pdo()->prepare("UPDATE gcash_service_sessions SET recovered_shortage = ? WHERE session_id = ?");
+                $upd->execute([$newRecovered, $targetSessionId]);
+            }
+
+            \log_activity(
+                $this->pdo(),
+                $cashierId,
+                'GCash shortage recovery recorded',
+                'GCash',
+                $movementId,
+                null,
+                [
+                    'movement_id' => $movementId,
+                    'current_session_id' => $currentSessionId,
+                    'target_session_id' => $targetSessionId,
+                    'recovered_amount' => $amount,
+                    'authorized_by' => $authBy,
+                ],
+                null,
+                \App\Audit\AuditRecordCategory::STORE_OPERATION
+            );
+
+            $this->pdo()->commit();
+            return $movementId;
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function getMoneyHistory(array $filters = []): array
+    {
+        $sessionId = filter_var($filters['session_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+        $items = [];
+
+        // 1. Funding movements
+        $sql = "SELECT fm.*, u.full_name AS recorder_name, au.full_name AS authorizer_name
+                FROM gcash_funding_movements fm
+                LEFT JOIN users u ON fm.recorded_by = u.user_id
+                LEFT JOIN users au ON fm.authorized_by = au.user_id";
+        $params = [];
+        if ($sessionId) {
+            $sql .= " WHERE fm.session_id = ?";
+            $params[] = $sessionId;
+        }
+        $sql .= " ORDER BY fm.movement_id DESC";
+        $stmt = $this->pdo()->prepare($sql);
+        $stmt->execute($params);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $items[] = [
+                'id' => (int)$r['movement_id'],
+                'kind' => 'funding_movement',
+                'movement_type' => $r['movement_type'],
+                'fund_type' => $r['fund_type'],
+                'amount' => (float)$r['amount'],
+                'direction' => $r['direction'],
+                'session_id' => (int)$r['session_id'],
+                'evidence' => $r['evidence_reference'],
+                'reason' => $r['reason'],
+                'recorder_name' => $r['recorder_name'],
+                'authorizer_name' => $r['authorizer_name'],
+                'is_actual_movement' => true,
+                'linked_session_id' => isset($r['linked_session_id']) && $r['linked_session_id'] ? (int)$r['linked_session_id'] : null,
+                'linked_transaction_id' => isset($r['linked_transaction_id']) && $r['linked_transaction_id'] ? (int)$r['linked_transaction_id'] : null,
+                'created_at' => $r['created_at'],
+            ];
+        }
+
+        // 2. Adjustments / Corrections
+        $adjSql = "SELECT a.*, au.full_name AS authorizer_name FROM gcash_adjustments a LEFT JOIN users au ON a.authorized_by = au.user_id";
+        $adjParams = [];
+        if ($sessionId) {
+            $adjSql .= " WHERE a.session_id = ?";
+            $adjParams[] = $sessionId;
+        }
+        $adjSql .= " ORDER BY a.adjustment_id DESC";
+        $adjStmt = $this->pdo()->prepare($adjSql);
+        $adjStmt->execute($adjParams);
+        foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $a) {
+            $isMovement = ($a['correction_mode'] ?? 'money_movement') === 'money_movement';
+            $items[] = [
+                'id' => (int)$a['adjustment_id'],
+                'kind' => 'adjustment',
+                'movement_type' => $a['correction_mode'] ?? 'money_movement',
+                'service_cash_delta' => (float)$a['service_cash_delta'],
+                'wallet_delta' => (float)$a['wallet_delta'],
+                'amount' => abs((float)$a['service_cash_delta']) + abs((float)$a['wallet_delta']),
+                'session_id' => (int)$a['session_id'],
+                'reason' => $a['reason'],
+                'authorizer_name' => $a['authorizer_name'],
+                'is_actual_movement' => $isMovement,
+                'linked_transaction_id' => (int)$a['transaction_id'],
+                'created_at' => $a['created_at'],
+            ];
+        }
+
+        return $items;
+    }
+
     public function recordFundingMovement(int $actorId, string $actorRole, array $data): int
     {
         $type = (string)($data['movement_type'] ?? '');
-        if (!in_array($type, ['replenishment', 'withdrawal', 'product_drawer_transfer', 'owner_capital'], true)) {
+        if (!in_array($type, ['replenishment', 'withdrawal', 'product_drawer_transfer', 'owner_capital', 'shortage_recovery'], true)) {
             throw new DomainException('Select a valid funding movement type.');
         }
         $fundType = (string)($data['fund_type'] ?? '');
