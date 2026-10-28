@@ -239,6 +239,7 @@ $roleSections = [
                     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
                     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'idea', 'label' => 'Insights & Risk'],
                     ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
+                    ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Report Generation'],
                 ]],
             ],
         ],

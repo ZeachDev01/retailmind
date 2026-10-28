@@ -9,29 +9,13 @@ require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\GrossProfitService;
 use App\Services\PhilippineTime;
+use App\Services\ReportAccessService;
+
+require_once __DIR__ . '/../../../backend/app/Services/ReportAccessService.php';
 
 require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
-$reportCatalog = [
-    'sales_period' => 'Daily, Weekly and Monthly Sales',
-    'sales_product' => 'Sales by Product',
-    'sales_category' => 'Sales by Category',
-    'sales_cashier' => 'Sales by Cashier',
-    'refunds' => 'Refund History',
-    'fast_moving' => 'Fast-Moving Products',
-    'slow_moving' => 'Slow-Moving Products',
-    'low_stock' => 'Low-Stock and Out-of-Stock Products',
-    'inventory_valuation' => 'Inventory Valuation',
-    'stock_movements' => 'Stock Movement History',
-    'adjustments' => 'Damaged, Missing and Expired Items',
-    'forecast_actual' => 'Forecast Versus Actual Demand',
-    'expiration' => 'Expiration Report',
-    'count_variance' => 'Physical-Count Variance Report',
-];
-
-if (current_role() === 'admin') {
-    $reportCatalog['gross_profit'] = 'Gross Profit Report';
-}
+$reportCatalog = ReportAccessService::catalogForRole((string)current_role());
 
 function normalize_date(string $value, string $default): string
 {
@@ -92,6 +76,9 @@ function product_filters(array $filters, string $alias = 'p'): array
 
 function run_report(PDO $pdo, string $report, array $filters): array
 {
+    if (class_exists(\App\Services\ReportAccessService::class)) {
+        \App\Services\ReportAccessService::enforceAccess(function_exists('current_role') ? current_role() : null, $report);
+    }
     $fromStart = $filters['from'] . ' 00:00:00';
     $toEnd = $filters['to'] . ' 23:59:59';
     [$productWhere, $productParams] = product_filters($filters);
@@ -554,12 +541,14 @@ function run_report(PDO $pdo, string $report, array $filters): array
     return ['headers' => [], 'rows' => []];
 }
 
-$selectedReport = request_value('report', 'sales_period');
-if ($selectedReport === 'gross_profit') {
-    GrossProfitService::enforceAdministratorWorkspace(current_role());
+$selectedReport = request_value('report', '');
+if ($selectedReport !== '') {
+    ReportAccessService::enforceAccess((string)current_role(), $selectedReport);
+} else {
+    $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
 }
 if (!array_key_exists($selectedReport, $reportCatalog)) {
-    $selectedReport = 'sales_period';
+    $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
 }
 
 $tz = new DateTimeZone(PhilippineTime::ZONE);
@@ -658,10 +647,8 @@ if ($validationError === null) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
     verify_csrf_token($_POST['csrf_token'] ?? '');
-    $exportReport = request_value('report', 'sales_period');
-    if ($exportReport === 'gross_profit') {
-        GrossProfitService::enforceAdministratorWorkspace(current_role());
-    }
+    $exportReport = request_value('report', $selectedReport);
+    ReportAccessService::enforceAccess((string)current_role(), $exportReport);
     if ($validationError === null && !empty($reportData['rows'])) {
         log_activity(
             $pdo,
