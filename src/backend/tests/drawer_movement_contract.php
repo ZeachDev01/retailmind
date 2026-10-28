@@ -104,10 +104,12 @@ try {
     $pdo->exec("UPDATE users SET status='disabled' WHERE user_id=3");
     $refused(fn() => $service->addDrawerMovement(1, 'cashier', 'cash_out', 1, 'petty_cash', null, 'owner', 'owner-password'), 'disabled approver authorizes spending');
     $pdo->exec("UPDATE users SET status='active',role_id=2 WHERE user_id=3");
+    $refused(fn() => $service->addDrawerMovement(1, 'cashier', 'cash_out', 1, 'petty_cash', null, 'owner', 'owner-password'), 'Super Administrator alone cannot authorize drawer spending');
+    $pdo->exec("UPDATE users SET role_id=1 WHERE user_id=3");
     $service->addDrawerMovement(1,'cashier','cash_in',10,'additional_float');
     $service->addDrawerMovement(1,'cashier','cash_out',1,'supplier_payment',null,'owner','owner-password');
     $audit=json_decode($pdo->query('SELECT new_value FROM activity_log ORDER BY log_id DESC LIMIT 1')->fetchColumn(),true);
-    $check($audit['authorization']['approved_by']===3 && $audit['amount']===1 && $audit['shift_id']===20 && $audit['reason']==='supplier_payment', 'Super Administrator approval binds identity, amount, reason and shift');
+    $check($audit['authorization']['approved_by']===3 && $audit['amount']===1 && $audit['shift_id']===20 && $audit['reason']==='supplier_payment', 'Administrator approval binds identity, amount, reason and shift');
     $pdo->exec("UPDATE fiscal_periods SET status='closed'");
     try {
         $service->addDrawerMovement(1, 'cashier', 'cash_in', 1, 'additional_float');

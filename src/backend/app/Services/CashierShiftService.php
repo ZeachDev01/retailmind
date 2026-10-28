@@ -567,15 +567,13 @@ class CashierShiftService
 
     private function authorizeDrawerSpending(string $username, string $password): array
     {
-        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
-        $stmt = $this->pdo->prepare("SELECT u.user_id, u.password_hash, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id
-            WHERE u.username=? AND u.status='active' AND u.must_change_password=0 AND r.role_name IN ('admin','super_admin')" . $locking);
-        $stmt->execute([trim($username)]);
-        $approver = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$approver || $password === '' || !password_verify($password, (string)$approver['password_hash'])) {
-            throw new DomainException('Administrator authorization is required for supplier payments and petty cash.');
-        }
-        return ['approved_by' => (int)$approver['user_id']];
+        $approvedBy = SupervisorApprovalService::authorize(
+            $this->pdo,
+            $username,
+            $password,
+            'Administrator authorization is required for supplier payments and petty cash.'
+        );
+        return ['approved_by' => $approvedBy];
     }
 
     public function calculateShift(int $shiftId): array
@@ -700,7 +698,7 @@ class CashierShiftService
     }
 
     /** An Administrator intervenes without taking ownership of the shift. */
-    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason, ?array $denominations = null, ?int $countedShiftId = null): array
+    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason, ?array $denominations = null, ?int $countedShiftId = null, ?string $cancelHeldSalesReason = null): array
     {
         if ($actorRole !== 'admin' || $actorId === $cashierId) {
             throw new DomainException('Only an Administrator can close another Cashier\'s Shift.');
@@ -709,17 +707,17 @@ class CashierShiftService
         if ($interventionReason === '') {
             throw new DomainException('Enter an intervention reason before closing another Cashier\'s Shift.');
         }
-        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason, $denominations, $countedShiftId);
+        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason, $denominations, $countedShiftId, $cancelHeldSalesReason);
     }
 
-    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId): array
+    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId, ?string $cancelHeldSalesReason = null): array
     {
         $this->validateCountedCash($actualCash);
         $breakdown = $denominations === null ? null : CashDenominationCounter::count($denominations);
         if ($breakdown !== null && (int)round($actualCash * 100) !== $breakdown['total_cents']) {
             throw new InvalidArgumentException('Cash counted must match the bill and coin total.');
         }
-        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason, $breakdown, $countedShiftId): array {
+        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason, $breakdown, $countedShiftId, $cancelHeldSalesReason): array {
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
             $lock->execute([$cashierId]);
@@ -736,8 +734,19 @@ class CashierShiftService
             if ($countedShiftId !== null && (int)$shift['shift_id'] !== $countedShiftId) {
                 throw new DomainException('This count belongs to a different shift. Count the current drawer first.');
             }
-            $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
-            $summary = $this->calculateShift((int)$shift['shift_id']);
+            $shiftId = (int)$shift['shift_id'];
+            $unresolved = $this->unresolvedHeldSales($shiftId);
+            if ($unresolved !== []) {
+                if ($interventionReason === null || $cancelHeldSalesReason === null) {
+                    $this->requireNoUnresolvedHeldSales($shiftId);
+                }
+                $trimmedCancelReason = trim((string)$cancelHeldSalesReason);
+                if ($trimmedCancelReason === '') {
+                    throw new DomainException('Enter a reason before cancelling unpaid held sales for this abandoned shift.');
+                }
+                $this->cancelAbandonedShiftHeldSales($closingActorId, $shiftId, $trimmedCancelReason);
+            }
+            $summary = $this->calculateShift($shiftId);
             $reconciliation = $this->reconciliationResult($summary, $actualCash);
             $expected = $reconciliation['expected_cash'];
             $variance = $reconciliation['cash_variance'];
@@ -794,17 +803,25 @@ class CashierShiftService
     }
 
     /** Reveals the drawer balance only after a count has been submitted. */
-    public function previewReconciliation(int $cashierId, float $countedCash): array
+    public function previewReconciliation(int $cashierId, float $countedCash, bool $allowUnresolvedHeldSales = false): array
     {
         $this->validateCountedCash($countedCash);
         $shift = $this->getOpenShift($cashierId);
         if ($shift === null) {
             throw new DomainException('No open Cashier Shift was found.');
         }
-        $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+        if (!$allowUnresolvedHeldSales) {
+            $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+        }
         $summary = $this->calculateShift((int)$shift['shift_id']);
         return ['shift_id' => (int)$shift['shift_id']]
             + $this->reconciliationResult($summary, $countedCash);
+    }
+
+    public function cancelAbandonedShiftHeldSales(int $actorId, int $shiftId, string $reason): int
+    {
+        $held = new HeldSaleService($this->pdo, $this);
+        return $held->cancelForAbandonedShift($actorId, 'admin', $shiftId, $reason);
     }
 
     private function reconciliationResult(array $summary, float $countedCash): array
