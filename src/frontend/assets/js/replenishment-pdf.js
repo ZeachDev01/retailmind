@@ -11,8 +11,8 @@
             canvas.width = 1190;
             canvas.height = 1684;
             const context = canvas.getContext('2d');
-            const columns = [40, 240, 800, 960];
-            const widths = [180, 540, 140, 140];
+            const columns = [40, 540, 710, 940];
+            const widths = [480, 150, 210, 210];
             let y;
             let page = 0;
             const writePage = () => pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 595.28, 841.89);
@@ -26,13 +26,13 @@
                 context.font = 'bold 30px sans-serif';
                 context.fillText('Replenishment Recommendations', 40, 60);
                 context.font = '20px sans-serif';
-                context.fillText('Buying guidance only. Quantities are in base units.', 40, 96);
+                context.fillText('Inventory Manager decides what to buy. Quantities are in base units.', 40, 96);
                 context.fillText(`Page ${page}`, 1040, 96);
                 context.fillStyle = '#111827';
                 context.fillRect(40, 116, 1110, 44);
                 context.fillStyle = '#ffffff';
                 context.font = 'bold 20px sans-serif';
-                ['Priority', 'Product / SKU', 'On hand', 'Suggested'].forEach((text, i) => context.fillText(text, columns[i], 144));
+                ['Product / SKU', 'On hand', 'Stock-rule buy', '28-day sales'].forEach((text, i) => context.fillText(text, columns[i], 144));
                 context.font = '20px sans-serif';
                 y = 180;
             };
@@ -53,15 +53,18 @@
                     'Low stock': ['#92400e', '#fef3c7'],
                     'In stock': ['#166534', '#dcfce7'],
                 })[row.dataset.stock] || ['#111827', '#f8fafc'];
-                const values = [row.dataset.stock, `${row.dataset.name}\n${row.dataset.sku}`, row.dataset.onHand, row.dataset.quantity];
+                const expectedSales = row.dataset.expectedSales;
+                const forecastPeriod = row.querySelector?.('.queue-forecast-period')?.textContent?.trim() || row.dataset.forecastPeriod;
+                const values = [`${row.dataset.name}\n${row.dataset.sku}\n${row.dataset.stock}`, row.dataset.onHand, row.dataset.quantity,
+                    expectedSales == null || expectedSales === '' ? 'Unavailable' : `${expectedSales}\n${forecastPeriod}`];
                 const cells = values.map((text, i) => wrap(text, widths[i]));
                 const lineCount = Math.max(...cells.map(lines => lines.length));
                 for (let line = 0; line < lineCount; line++) {
                     if (y > 1590) { writePage(); startPage(); }
                     context.fillStyle = priorityBackground;
-                    context.fillRect(40, y - 21, 190, 26);
+                    context.fillRect(40, y - 21, 490, 26);
                     cells.forEach((lines, i) => {
-                        context.fillStyle = i === 0 ? priorityColor : i === 3 ? '#1d4ed8' : '#111827';
+                        context.fillStyle = i === 0 ? priorityColor : '#111827';
                         context.fillText(lines[line] || '', columns[i], y);
                     });
                     y += 26;

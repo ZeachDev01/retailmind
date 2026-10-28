@@ -43,9 +43,12 @@
 .queue-search input { padding-left: 2.75rem; }
 .replenishment-page .queue-list { min-height: 260px; max-height: 70vh; overflow: auto; border: 0; border-radius: 0; }
 .replenishment-page .queue-list table { width: 100%; min-width: 600px; table-layout: auto; }
-.queue-list th:nth-child(1) { width: 16%; }
-.queue-list th:nth-child(2) { width: 54%; }
-.queue-list th:nth-child(3), .queue-list th:nth-child(4) { width: 15%; }
+.queue-list th:nth-child(1) { width: 40%; }
+.queue-list th:nth-child(2) { width: 15%; }
+.queue-list th:nth-child(3), .queue-list th:nth-child(4) { width: 22.5%; }
+.queue-list th:not(:first-child), .queue-list td:not(:first-child) { text-align: right; }
+.queue-list .queue-forecast-period { display: block; margin-top: .25rem; }
+.queue-product + .queue-sku { margin-right: .5rem; }
 .replenishment-page .queue-list th { position: sticky; top: 0; z-index: 2; background: var(--surface-soft, var(--card-bg)); padding: .65rem .85rem; font-size: .8rem; }
 .replenishment-page .queue-list td { padding: .6rem .85rem; vertical-align: middle; }
 .queue-item small { display: inline; font-size: .75rem; }
@@ -95,7 +98,7 @@ html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); c
     .replenishment-page .queue-list th, .replenishment-page .queue-list td { padding: .5rem; white-space: normal; overflow: visible; }
     .queue-item[hidden] { display: table-row !important; }
     .queue-item { break-inside: avoid; }
-    .queue-list th:last-child, .queue-list td:last-child, .queue-panel-footer, #queue-no-results { display: none; }
+    .queue-panel-footer, #queue-no-results { display: none; }
     .replenishment-page .queue-list th { position: static; }
 }
 

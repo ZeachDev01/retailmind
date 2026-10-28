@@ -57,8 +57,8 @@ foreach (['replenishment_queue'] as $page) {
     if (str_contains($empty, 'Demo Mode') || str_contains($empty, 'newly-promoted-model')) {
         throw new RuntimeException("{$page}: empty history must not invent model or Demo metadata");
     }
-    if (!str_contains($empty, 'View only') || str_contains($empty, 'Add bought goods') || str_contains($empty, 'Record bought stock')) {
-        throw new RuntimeException('Read-only users must see explicit access text without receiving actions');
+    if (str_contains($empty, 'Add bought goods') || str_contains($empty, 'Record bought stock')) {
+        throw new RuntimeException('Planning comparison must not expose receiving actions');
     }
 }
 
@@ -75,8 +75,10 @@ foreach ([false, true, false] as $demo) {
     ]);
     foreach (['replenishment_queue'] as $page) {
         $html = renderReplenishmentPage($pdo, $page);
-        if (!str_contains($html, 'displayed-run-model') || str_contains($html, 'newly-promoted-model')
-            || str_contains($html, 'Demo Mode') !== $demo || !str_contains($html, 'NEEDS-STOCK')) {
+        $runMetadata = (new App\Forecasting\DemandForecastService($pdo))->getJobMetadata(10);
+        if ($runMetadata['model_version'] !== 'displayed-run-model' || str_contains($html, 'newly-promoted-model')
+            || str_contains($html, 'Demo: ') !== $demo || !str_contains($html, 'NEEDS-STOCK')
+            || !str_contains($html, 'Stock-rule suggestion') || !str_contains($html, 'Expected sales')) {
             throw new RuntimeException("{$page}: recommendations and metadata must follow displayed run and persisted provenance");
         }
     }

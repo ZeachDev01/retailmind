@@ -241,6 +241,7 @@ class WorkerEvidenceTests(unittest.TestCase):
                              'product_id': 1, 'units_sold': 10.0})
         artifact = {'model': ForecastEstimator(),
                     'metadata': dict(context, model_version='v_observation',
+                                     products=[1],
                                      feature_version=ml_worker.FEATURE_VERSION,
                                      features=ml_worker.FEATURE_COLUMNS)}
         directory = ml_worker.artifact_directory(context)
@@ -356,6 +357,26 @@ class WorkerEvidenceTests(unittest.TestCase):
             clock.now.return_value = datetime(2026, 10, 10, 12)
             context = ml_worker.dataset_context(conn.cursor())
         self.assertEqual(context['history_cutoff'], '2026-10-09')
+
+    def test_store_generation_skips_untrained_and_gapped_products(self):
+        conn = Connection('retailmind')
+        self.addCleanup(conn.db.close)
+        conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'v_test')")
+        conn.db.execute("UPDATE ml_jobs SET trigger_type='forecast_generation'")
+        conn.commit()
+        context = ml_worker.dataset_context(conn.cursor())
+        dates = pd.date_range(end=context['history_cutoff'], periods=28)
+        data = pd.concat([pd.DataFrame({'date': dates[:27] if pid == 2 else dates,
+                                       'product_id': pid, 'units_sold': 4}) for pid in (1, 2, 3)])
+        artifact = {'model': ForecastEstimator(), 'metadata': dict(context,
+            model_version='v_test', products=[1, 2], feature_version=ml_worker.FEATURE_VERSION,
+            features=ml_worker.FEATURE_COLUMNS)}
+        with patch.object(ml_worker, 'load_history', return_value=data), patch.object(ml_worker.joblib, 'load', return_value=artifact):
+            ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_generation'})
+        self.assertEqual(conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0], 'succeeded')
+        forecasts = conn.db.execute('SELECT * FROM demand_forecasts').fetchall()
+        self.assertEqual(len(forecasts), 28)
+        self.assertEqual({row['product_id'] for row in forecasts}, {1})
 
     def test_zero_actual_demand_cannot_pass_quality_gate(self):
         conn = Connection()

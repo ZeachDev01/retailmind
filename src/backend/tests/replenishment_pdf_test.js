@@ -21,7 +21,7 @@ const vm = require('node:vm');
     };
     const rows = Array.from({ length: 100 }, (_, i) => ({
         hidden: true,
-        dataset: { stock: ['Out of stock', 'Low stock', 'In stock', 'Unknown'][i % 4], name: `商品 café (${i})`, sku: `SKU-${i}`, onHand: '2', quantity: '10' },
+        dataset: { stock: ['Out of stock', 'Low stock', 'In stock', 'Unknown'][i % 4], name: `商品 café (${i})`, sku: `SKU-${i}`, onHand: '2', quantity: '10', expectedSales: i === 0 ? '' : i === 1 ? '0' : '42', forecastPeriod: '2026-10-28 – 2026-11-24' },
         querySelector() { return { firstChild: { textContent: 'Low stock' } }; },
     }));
     const document = {
@@ -54,7 +54,8 @@ const vm = require('node:vm');
         assert.ok(coloredText.some(item => item.value === value && item.color === color), `${value} uses readable priority text`);
         assert.ok(fills.some(fill => fill.color === background), `${value} has a priority background`);
     }
-    assert.ok(coloredText.some(item => item.value === '10' && item.color === '#1d4ed8'), 'Suggested quantities use blue text');
+    assert.ok(text.includes('Stock-rule buy') && text.includes('28-day sales'), 'Export separates stock-rule buying from expected sales');
+    assert.ok(text.includes('Unavailable') && text.includes('0') && text.includes('42'), 'Missing, genuine zero and positive forecasts remain distinct');
     assert.equal(button.disabled, false);
     window.jspdf = undefined;
     await click();

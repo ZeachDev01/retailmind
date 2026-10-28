@@ -28,6 +28,7 @@ try {
 
     $pdo->exec("
         CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT);
+        CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
         INSERT INTO ml_jobs VALUES (10, 'forecast_generation', 'succeeded');
         CREATE TABLE products (
             product_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,12 +232,43 @@ try {
 
     $pdo->sqliteCreateFunction('DATABASE', static fn(): string => 'u123_demo');
     $_ENV['FORECAST_REPLAY_DATABASE'] = 'u123_demo';
-    $pdo->exec("CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
-        INSERT INTO platform_settings VALUES ('demo_replay_result', '{\"preview_job\":10}')");
+    $pdo->exec("INSERT INTO platform_settings VALUES ('demo_replay_result', '{\"preview_job\":10}')");
     $previewIds = array_column($service->getReplayPreview(10), 'product_id');
     $assert(!in_array(5, $previewIds, true), 'Replay must exclude catalog products without saved forecasts');
     $assert(in_array(6, $previewIds, true), 'A saved zero-demand forecast must remain in the replay');
     if ($savedReplay === null) { unset($_ENV['FORECAST_REPLAY_DATABASE']); } else { $_ENV['FORECAST_REPLAY_DATABASE'] = $savedReplay; }
+
+    $pdo->exec("UPDATE ml_jobs SET trigger_type='forecast_generation' WHERE job_id=10;
+        DELETE FROM demand_forecasts;
+        INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'v1');
+        UPDATE products SET reorder_level=10, safety_stock=5, units_per_package=6");
+    $insertForecast = $pdo->prepare('INSERT INTO demand_forecasts
+        (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level, model_version)
+        VALUES (10, ?, ?, ?, ?, ?, ?)');
+    foreach ([1, 2, 3, 4, 6] as $id) {
+        for ($day = 1; $day <= ($id === 4 ? 27 : 28); $day++) {
+            $insertForecast->execute([$id, $day, $id === 6 ? 0 : 2,
+                $id === 2 ? '2026-10-26' : '2026-10-27', 'High', $id === 3 ? 'unapproved' : 'v1']);
+        }
+    }
+    $planningStock = (int)$pdo->query('SELECT SUM(quantity_on_hand) FROM inventory')->fetchColumn();
+    $planning = array_column($service->getRecommendations(10, '2026-10-28'), null, 'product_id');
+    $assert($planning[1]['stock_rule_quantity'] === 18, 'Stock rule must use reorder/safety/minimum/package rounding even with a forecast');
+    $assert($planning[1]['recommended_quantity'] !== $planning[1]['stock_rule_quantity'], 'Legacy forecast recommendation must remain separate');
+    $assert($planning[1]['expected_sales_28_day'] === 56, 'Current complete approved forecast must be visible independently');
+    $assert($planning[1]['expected_sales_period'] === '2026-10-28 – 2026-11-24', 'Forecast must identify its actual 28-day period');
+    foreach ([2, 3, 4, 5] as $id) {
+        $assert($planning[$id]['expected_sales_28_day'] === null, "Product $id stale, unapproved, incomplete or missing forecast must remain unavailable");
+    }
+    $assert($planning[6]['expected_sales_28_day'] === 0, 'A complete real zero forecast must remain zero, not unavailable');
+    foreach (['ml_observation_mode', 'ml_recommendations_suspended'] as $key) {
+        $pdo->prepare('INSERT INTO platform_settings VALUES (?, ?)')->execute([$key, '1']);
+        $restricted = array_column($service->getRecommendations(10, '2026-10-28'), null, 'product_id');
+        $assert($restricted[1]['expected_sales_28_day'] === null, "$key must not expose operational forecasts");
+        $assert($restricted[1]['stock_rule_quantity'] === 18, "$key must retain stock-rule guidance");
+        $pdo->prepare('DELETE FROM platform_settings WHERE setting_key=?')->execute([$key]);
+    }
+    $assert($planningStock === (int)$pdo->query('SELECT SUM(quantity_on_hand) FROM inventory')->fetchColumn(), 'Planning comparison must not change stock');
 
     if (empty($failures)) {
         echo "PASS: replenishment_queue_contract\n";

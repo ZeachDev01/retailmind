@@ -742,11 +742,11 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         </select>
                     </div>
                 <?php endif; ?>
-                <div class="form-group">
+                <div class="form-group" id="from_group">
                     <label for="from">From</label>
                     <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="to_group">
                     <label for="to">To</label>
                     <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
@@ -970,7 +970,13 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         <div>
                             <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
                             <div class="report-meta">
-                                <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>
+                                    <span>Current stock</span>
+                                <?php elseif ($selectedReport === 'expiration'): ?>
+                                    <span>As of Today (<?= htmlspecialchars($todayPh) ?>)</span>
+                                <?php else: ?>
+                                    <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <?php endif; ?>
                                 <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
                             </div>
                         </div>
@@ -1041,7 +1047,12 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
 const reportSelect = document.getElementById('report');
 const granularityGroup = document.getElementById('granularity_group');
 const periodGroup = document.getElementById('period_group');
+const fromGroup = document.getElementById('from_group');
+const toGroup = document.getElementById('to_group');
 function syncReportControls() {
+    const hideDates = ['low_stock', 'inventory_valuation', 'expiration'].includes(reportSelect.value);
+    if (fromGroup) fromGroup.style.display = hideDates ? 'none' : '';
+    if (toGroup) toGroup.style.display = hideDates ? 'none' : '';
     if (granularityGroup) {
         granularityGroup.style.display = reportSelect.value === 'sales_period' ? '' : 'none';
     }

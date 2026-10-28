@@ -191,7 +191,7 @@ def artifact_directory(context):
     return STORAGE_MODELS_DIR / context['dataset_kind'] / hashlib.sha256(identity.encode()).hexdigest()[:16]
 
 
-def load_history(cursor, context):
+def load_history(cursor, context, training=False):
     if context['dataset_kind'] == 'demo':
         if context['source'].get('source_kind') == 'uci_online_retail':
             cursor.execute('''SELECT sale_date AS date, product_id, quantity AS units_sold
@@ -221,11 +221,20 @@ def load_history(cursor, context):
             'DB_USER': os.getenv('DB_USER', 'root'),
             'DB_PASSWORD': os.getenv('DB_PASSWORD', os.getenv('DB_PASS', '')),
         })
+        command = ['php', str(SCRIPTS_DIR / 'export_demand_history.php'), context['dataset_database'], context['history_cutoff']]
+        if training:
+            command.append('--training')
         result = subprocess.run(
-            ['php', str(SCRIPTS_DIR / 'export_demand_history.php'), context['dataset_database'], context['history_cutoff']],
+            command,
             env=environment, capture_output=True, text=True, check=True,
         )
-        data = normalize_history(pd.DataFrame(json.loads(result.stdout),
+        exported = json.loads(result.stdout)
+        if training:
+            context['training_eligibility'] = exported['eligibility']
+            exported = exported['history']
+            if not exported:
+                raise ValueError('No active products have 140 consecutive usable days for training')
+        data = normalize_history(pd.DataFrame(exported,
                                              columns=['date', 'product_id', 'units_sold', 'available_date']))
     return data
 
@@ -258,6 +267,14 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
         raise ValueError("Model artifact version does not match the selected candidate")
     data = load_history(cursor, context)
     origin = data.date.max() if is_demo else pd.Timestamp(context['history_cutoff'])
+    if not is_demo:
+        known = history_at(data, origin)
+        window = pd.date_range(origin - pd.Timedelta(days=27), origin)
+        counts = known[known.date.isin(window)].groupby('product_id').date.nunique()
+        products = counts.index[(counts == 28) & counts.index.isin(meta['products'])]
+        data = data[data.product_id.isin(products)]
+        if data.empty:
+            raise ValueError('No trained products have 28 consecutive observed days for generation')
     features = build_feature_matrix(data, origin)
     predictions = artifact['model'].predict(features[FEATURE_COLUMNS])
     if not np.isfinite(predictions).all():
@@ -286,7 +303,7 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
 
 def run_model_retraining(conn, cursor, job_id):
     context = dataset_context(cursor)
-    data = load_history(cursor, context)
+    data = load_history(cursor, context, training=True)
     artifact = train_and_evaluate(data)
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
     prefix = 'demo_' if context['dataset_kind'] == 'demo' else 'v'

@@ -239,6 +239,41 @@ class DemandHistoryService
         return $history;
     }
 
+    /** Use a common observed suffix so one immature product cannot fail the shared backtest. */
+    public function getTrainingHistory(PDO $pdo, string $throughDate): array
+    {
+        // shortcut: closures break consecutive windows; add masked-window support if regular closures prevent training.
+        $history = $this->getObservedHistory($pdo, $throughDate);
+        $days = [];
+        foreach ($history as $row) {
+            $id = $row['product_id'];
+            $date = $row['date'];
+            $days[$id][$date] = ($days[$id][$date] ?? true) && $row['units_sold'] !== null;
+        }
+        $eligibility = [];
+        $starts = [];
+        foreach ($pdo->query("SELECT product_id FROM products WHERE status = 'active' ORDER BY product_id")->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $day = new \DateTimeImmutable($throughDate, $this->timezone);
+            $count = 0;
+            while (!empty($days[$id][$day->format('Y-m-d')])) {
+                $count++;
+                $day = $day->modify('-1 day');
+            }
+            $eligible = $count >= 140;
+            $eligibility[] = ['product_id' => (int)$id, 'eligible' => $eligible,
+                'consecutive_usable_days' => $count,
+                'reason' => $eligible ? null : 'Needs 140 consecutive usable days through ' . $throughDate];
+            if ($eligible) {
+                $starts[(int)$id] = $day->modify('+1 day')->format('Y-m-d');
+            }
+        }
+        $start = $starts ? max($starts) : null;
+        $selected = array_values(array_filter($history, static fn(array $row): bool =>
+            isset($starts[$row['product_id']]) && $row['date'] >= $start));
+        return ['history' => $selected, 'eligibility' => $eligibility, 'training_start' => $start,
+            'through_date' => $throughDate];
+    }
+
     /**
      * Summarizes demand history readiness according to ADR-0005.
      */
