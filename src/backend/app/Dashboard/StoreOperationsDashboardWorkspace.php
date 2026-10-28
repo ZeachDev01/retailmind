@@ -225,10 +225,10 @@ final class StoreOperationsDashboardWorkspace
         $start = $now->modify("-{$days} days")->format('Y-m-d H:i:s');
         $end = $now->format('Y-m-d H:i:s');
         $reversals = $this->count("SELECT COUNT(*) FROM sale_reversals WHERE status = 'pending'");
-        $cashVariances = $this->count(
-            "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))",
-            [(float)$thresholds['cash_variance_amount']]
-        );
+        $cashCountSql = $this->hasVarianceReviewRequiredColumn()
+            ? "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND (variance_review_required = 1 OR (variance_review_required IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))))"
+            : "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))";
+        $cashVariances = $this->count($cashCountSql, [(float)$thresholds['cash_variance_amount']]);
         $discounts = $this->count(
             "SELECT COUNT(*) FROM sales WHERE discount_type = 'percentage' AND discount_value >= ? AND sale_date >= ? AND sale_date < ?",
             [(float)$thresholds['unusual_discount_percent'], $start, $end]
@@ -545,14 +545,25 @@ final class StoreOperationsDashboardWorkspace
         ) as $row) {
             $items[] = $this->exception('warning', 'Sales reversal', ucfirst((string)$row['reversal_type']) . ' · ' . (string)$row['reason'], (string)$row['created_at'], 'components/invoice/sales.php?tab=reversals');
         }
-        foreach ($this->rows(
-            "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
-             FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
-             WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL AND cs.cash_variance IS NOT NULL AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))
-             ORDER BY cs.closed_at ASC LIMIT 20",
-            [(float)$thresholds['cash_variance_amount']]
-        ) as $row) {
-            $items[] = $this->exception('critical', 'Cash variance', (string)$row['full_name'] . ' · ' . number_format((float)$row['cash_variance'], 2), (string)$row['closed_at'], 'components/report/report_generation.php');
+        $cashVarianceSql = $this->hasVarianceReviewRequiredColumn()
+            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
+               FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
+               WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL
+                 AND (cs.variance_review_required = 1 OR (cs.variance_review_required IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))))
+               ORDER BY cs.closed_at ASC LIMIT 20"
+            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
+               FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
+               WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))
+               ORDER BY cs.closed_at ASC LIMIT 20";
+
+        foreach ($this->rows($cashVarianceSql, [(float)$thresholds['cash_variance_amount']]) as $row) {
+            $items[] = $this->exception(
+                'warning',
+                'Needs review',
+                (string)$row['full_name'] . ' · ' . number_format((float)$row['cash_variance'], 2),
+                (string)$row['closed_at'],
+                'components/administrator/shift_report.php?shift_id=' . (int)$row['shift_id']
+            );
         }
         foreach ($this->rows(
             "SELECT sale_id, discount_value, discount_amount, sale_date FROM sales
@@ -594,7 +605,11 @@ final class StoreOperationsDashboardWorkspace
     {
         return [
             'open' => $this->count("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'open'"),
-            'unreviewed_variances' => $this->count("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND ABS(cash_variance) > 0"),
+            'unreviewed_variances' => $this->count(
+                $this->hasVarianceReviewRequiredColumn()
+                    ? "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND (variance_review_required = 1 OR (variance_review_required IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0))"
+                    : "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND ABS(cash_variance) > 0"
+            ),
         ];
     }
 
@@ -819,5 +834,17 @@ final class StoreOperationsDashboardWorkspace
         $summary['total_margin'] = $summary['status'] === 'recorded' && $summary['total_net_sales'] > 0 ? round($summary['total_gross_profit'] / $summary['total_net_sales'] * 100, 2) : null;
         $summary['affected_lines_count'] = count($affectedLines);
         return $summary + ['points' => array_values($points)];
+    }
+
+    private function hasVarianceReviewRequiredColumn(): bool
+    {
+        static $hasColumn = null;
+        if ($hasColumn !== null) return $hasColumn;
+        try {
+            $this->pdo->query("SELECT variance_review_required FROM cashier_shifts LIMIT 0");
+            return $hasColumn = true;
+        } catch (\Throwable) {
+            return $hasColumn = false;
+        }
     }
 }

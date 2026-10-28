@@ -225,7 +225,8 @@ if ($isPaused && $session) {
     } catch (Throwable $e) {}
 }
 
-$canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === 'super_admin');
+$canReopen = !empty($session['is_initiator']) || in_array(($session['role'] ?? ''), ['admin', 'super_admin'], true);
+$isTakeover = !empty($session) && empty($session['is_initiator']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -300,7 +301,8 @@ $canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === '
                 </div>
 
                 <div class="bg-slate-50 p-3 rounded text-xs space-y-1 font-mono text-slate-600">
-                    <div><strong>Durable Stage:</strong> <span data-recovery-stage="<?= $escape($viewData['stage']) ?>"><?= $escape($viewData['stage']) ?></span></div>
+                    <div><strong>Durable Stage:</strong> <span data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>"><?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?></span></div>
+                    <div><strong>Next Permitted Action:</strong> <span data-recovery-next-action><?= $escape($viewData['next_permitted_action'] ?? '') ?></span></div>
                     <div><strong>Operation ID:</strong> <?= $escape($viewData['operation_id']) ?></div>
                 </div>
 
@@ -344,8 +346,8 @@ $canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === '
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div class="bg-slate-50 p-3 rounded">
                         <div class="text-xs text-slate-500 uppercase font-semibold">Current Durable Stage</div>
-                        <div class="text-base font-bold text-slate-900 mt-1" data-recovery-stage="<?= $escape($viewData['stage']) ?>">
-                            <?= $escape($viewData['stage']) ?>
+                        <div class="text-base font-bold text-slate-900 mt-1" data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>">
+                            <?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?>
                         </div>
                     </div>
                     <div class="bg-slate-50 p-3 rounded">
@@ -354,6 +356,11 @@ $canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === '
                             <?= $escape($viewData['operation_id']) ?>
                         </div>
                     </div>
+                </div>
+
+                <div class="p-3 bg-indigo-50 border border-indigo-200 rounded text-xs text-indigo-950">
+                    <div class="font-semibold text-indigo-900">Next Permitted Action:</div>
+                    <div class="mt-0.5 text-indigo-800" data-recovery-next-action><?= $escape($viewData['next_permitted_action'] ?? '') ?></div>
                 </div>
 
                 <div>
@@ -529,6 +536,11 @@ $canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === '
                             <?php endif; ?>
 
                             <?php if ($canReopen): ?>
+                                <?php if ($isTakeover): ?>
+                                    <div class="p-3 bg-amber-100 border border-amber-300 rounded text-xs text-amber-950 font-medium" data-recovery-takeover-banner>
+                                        <strong>Authenticated Takeover:</strong> Initiating administrator is unavailable. You are authorized as <?= $escape($session['role']) ?> (<?= $escape($session['username']) ?>) to take over and complete reopening with your own verified password and takeover attribution.
+                                    </div>
+                                <?php endif; ?>
                                 <form method="post" class="space-y-4" data-recovery-form="reopen" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');">
                                     <input type="hidden" name="action" value="reopen">
                                     <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
@@ -554,7 +566,7 @@ $canReopen = !empty($session['is_initiator']) || (($session['role'] ?? '') === '
                                 </form>
                             <?php else: ?>
                                 <p class="text-xs text-amber-800">
-                                    Only the initiating administrator or a pre-authorized destination Super Administrator can reopen the Store.
+                                    Only an authorized Administrator or destination Super Administrator can reopen the Store.
                                 </p>
                             <?php endif; ?>
                         </div>

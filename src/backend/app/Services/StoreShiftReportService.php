@@ -19,7 +19,7 @@ final class StoreShiftReportService
         'Sale Count', 'Cash Sales', 'Card Sales', 'E-Wallet Sales', 'Total Sales',
         'Cash Refunds', 'Card Refunds', 'E-Wallet Refunds', 'Total Refunds',
         'Cash In', 'Cash Out', 'Safe Drops', 'Opening Cash', 'Expected Cash',
-        'Counted Cash', 'Variance', 'Material Variance', 'Closing Notes',
+        'Counted Cash', 'Variance', 'Variance Explanation', 'Material Variance', 'Closing Notes',
     ];
 
     public function __construct(private PDO $pdo, private ?RoleCapabilityPolicy $policy = null)
@@ -32,16 +32,28 @@ final class StoreShiftReportService
         if (!$this->policy->allows($role, RoleCapabilityPolicy::STORE_OPERATIONS)) {
             throw new DomainException('Only the Administrator workspace can view the Store Cashier Shift report.');
         }
-        $from = (string)($filters['from'] ?? '');
-        $to = (string)($filters['to'] ?? '');
-        if (!self::validDate($from) || !self::validDate($to) || $from > $to) {
-            throw new InvalidArgumentException('Choose a valid date range.');
-        }
         $cashier = self::filterId($filters['cashier_id'] ?? '');
         $register = self::filterId($filters['register_id'] ?? '');
         $shift = self::filterId($filters['shift_id'] ?? '');
-        $where = ['cs.opened_at >= ?', 'cs.opened_at < ?'];
-        $params = [$from . ' 00:00:00', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00'];
+        $hasSpecificShift = ($shift !== '' && $shift !== 'legacy');
+
+        $from = (string)($filters['from'] ?? '');
+        $to = (string)($filters['to'] ?? '');
+        $where = [];
+        $params = [];
+
+        if ($hasSpecificShift) {
+            $where[] = 'cs.shift_id = ?';
+            $params[] = (int)$shift;
+        } else {
+            if (!self::validDate($from) || !self::validDate($to) || $from > $to) {
+                throw new InvalidArgumentException('Choose a valid date range.');
+            }
+            $where[] = 'cs.opened_at >= ?';
+            $where[] = 'cs.opened_at < ?';
+            $params[] = $from . ' 00:00:00';
+            $params[] = date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00';
+        }
         if ($cashier !== '') {
             $where[] = 'cs.cashier_id = ?';
             $params[] = (int)$cashier;
@@ -50,9 +62,8 @@ final class StoreShiftReportService
             $where[] = $register === 'legacy' ? 'cs.register_id IS NULL' : 'cs.register_id = ?';
             if ($register !== 'legacy') $params[] = (int)$register;
         }
-        if ($shift !== '') {
-            $where[] = $shift === 'legacy' ? '1 = 0' : 'cs.shift_id = ?';
-            if ($shift !== 'legacy') $params[] = (int)$shift;
+        if ($shift === 'legacy') {
+            $where[] = '1 = 0';
         }
         $statement = $this->pdo->prepare(
             'SELECT cs.shift_id, cs.cashier_id, cs.register_id, cs.opened_at, cs.closed_at,
@@ -100,8 +111,23 @@ final class StoreShiftReportService
                 'Expected Cash' => $closed ? self::money($record['expected_cash']) : self::money($summary['calculated_expected_cash']),
                 'Counted Cash' => $closed ? self::money($record['actual_cash']) : '',
                 'Variance' => $closed ? self::money($record['cash_variance']) : '',
+                'Variance Explanation' => (function() use ($closed, $record): string {
+                    if (!$closed || $record['cash_variance'] === null) return '';
+                    $val = (float)$record['cash_variance'];
+                    if ($val < 0) return 'Shortage: PHP ' . number_format(abs($val), 2) . ' short';
+                    if ($val > 0) return 'Overage: PHP ' . number_format($val, 2) . ' extra';
+                    return 'Balanced';
+                })(),
                 'Material Variance' => $closed && (int)$record['variance_review_required'] === 1 ? 'Yes' : 'No',
                 'Closing Notes' => $record['closing_notes'] ?? '',
+                'review_draft_notes' => $record['review_draft_notes'] ?? null,
+                'review_notes' => $record['review_notes'] ?? null,
+                'review_shortage' => $record['review_shortage'] ?? null,
+                'review_history' => $record['review_history'] ?? null,
+                'reviewed_by' => $record['reviewed_by'] ?? null,
+                'reviewed_at' => $record['reviewed_at'] ?? null,
+                'variance_threshold' => $record['variance_threshold'] ?? null,
+                'variance_review_required' => $record['variance_review_required'] ?? null,
             ];
         }
         if ($shift === '' || $shift === 'legacy') {
