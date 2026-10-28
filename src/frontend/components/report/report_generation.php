@@ -1203,7 +1203,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                                 <?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>
                                     <span>Current stock</span>
                                 <?php elseif ($selectedReport === 'expiration'): ?>
-                                    <span>As of Today (<?= htmlspecialchars(\App\Services\PhilippineTime::today()) ?>)</span>
+                                    <span>As of Today (<?= htmlspecialchars($todayPh) ?>)</span>
                                 <?php else: ?>
                                     <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
                                 <?php endif; ?>
@@ -1279,6 +1279,9 @@ const periodGroup = document.getElementById('period_group');
 const fromGroup = document.getElementById('from_group');
 const toGroup = document.getElementById('to_group');
 function syncReportControls() {
+    const hideDates = ['low_stock', 'inventory_valuation', 'expiration'].includes(reportSelect.value);
+    if (fromGroup) fromGroup.style.display = hideDates ? 'none' : '';
+    if (toGroup) toGroup.style.display = hideDates ? 'none' : '';
     if (granularityGroup) {
         granularityGroup.style.display = reportSelect.value === 'sales_period' ? '' : 'none';
     }

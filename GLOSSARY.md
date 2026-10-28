@@ -124,6 +124,10 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
 
+**Forecast Quantity**:
+The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
+_Avoid_: Suggested purchase quantity, guaranteed sales, stock quantity
+
 **Replenishment Receipt**:
 A receipt issued by a supplier or larger retailer for goods the Store buys to replenish its inventory. It records the Store's purchases, rather than purchases made by the Store's customers.
 _Avoid_: Sale Receipt, customer demand record

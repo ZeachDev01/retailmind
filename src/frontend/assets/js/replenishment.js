@@ -1,4 +1,12 @@
 (() => {
+    document.querySelectorAll('.info-tooltip-trigger').forEach(trigger => {
+        trigger.addEventListener('keydown', event => {
+            if (event.key === 'Escape') trigger.parentElement.setAttribute('data-dismissed', '');
+        });
+        trigger.addEventListener('focus', () => trigger.parentElement.removeAttribute('data-dismissed'));
+        trigger.addEventListener('click', () => trigger.parentElement.removeAttribute('data-dismissed'));
+        trigger.parentElement?.addEventListener('mouseleave', () => trigger.parentElement.removeAttribute('data-dismissed'));
+    });
     const table = document.querySelector('.queue-list table');
     if (!table) return;
     let rows = Array.from(table.querySelectorAll('.queue-item'));
@@ -17,7 +25,7 @@
     let lastSort;
     let currentPage = 1;
 
-    const SNAPSHOT_KEY = 'retailmind_replenishment_snapshot_v2';
+    const SNAPSHOT_KEY = 'retailmind_replenishment_snapshot_v3';
     const storage = (() => {
         try {
             return typeof window !== 'undefined' && window.sessionStorage ? window.sessionStorage : null;
@@ -68,6 +76,8 @@
                 stock: row.dataset.stock,
                 onHand: Number(row.dataset.onHand),
                 quantity: Number(row.dataset.quantity),
+                expectedSales: row.dataset.expectedSales,
+                forecastPeriod: row.dataset.forecastPeriod,
                 html: row.outerHTML
             }))
         };
@@ -81,11 +91,11 @@
         const rowClass = stockStatus.toLowerCase().replace(/\s+/g, '-');
         const onHand = Number(item.onHand || 0);
         const qty = Number(item.quantity || 0);
-        return `<tr class="queue-item queue-${rowClass}" data-stock="${esc(stockStatus)}" data-name="${esc(item.name)}" data-sku="${esc(item.sku)}" data-on-hand="${onHand}" data-quantity="${qty}">` +
-            `<td><span class="queue-priority ${stockClass}">${esc(stockStatus)}</span></td>` +
-            `<td><a class="queue-product" href="../products/product_detail.php?id=${encodeURIComponent(String(item.productId || 0))}">${esc(item.name)}</a><small class="muted queue-sku">${esc(item.sku)}</small></td>` +
+        return `<tr class="queue-item queue-${rowClass}" data-stock="${esc(stockStatus)}" data-name="${esc(item.name)}" data-sku="${esc(item.sku)}" data-on-hand="${onHand}" data-quantity="${qty}" data-expected-sales="${esc(item.expectedSales)}" data-forecast-period="${esc(item.forecastPeriod)}">` +
+            `<td><a class="queue-product" href="../products/product_detail.php?id=${encodeURIComponent(String(item.productId || 0))}">${esc(item.name)}</a><small class="muted queue-sku">${esc(item.sku)}</small><span class="queue-priority ${stockClass}">${esc(stockStatus)}</span></td>` +
             `<td><strong class="queue-number ${onHand <= 0 ? 'queue-out' : ''}">${onHand}</strong> <small class="muted">units</small></td>` +
-            `<td><strong class="queue-number queue-suggested">${qty}</strong> <small class="muted">units</small></td>` +
+            `<td><strong class="queue-number">${qty}</strong> <small class="muted">units</small></td>` +
+            `<td>${item.expectedSales == null || item.expectedSales === '' ? '<span class="muted">Unavailable</span>' : `<strong class="queue-number">${esc(item.expectedSales)}</strong> <small class="muted">units</small><small class="muted queue-forecast-period">${esc(item.forecastPeriod)}</small>`}</td>` +
             `</tr>`;
     }
 

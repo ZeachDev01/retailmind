@@ -68,7 +68,7 @@ usort($queue, static fn (array $a, array $b): int =>
     ?: ($a['current_stock'] <=> $b['current_stock'])
     ?: ($a['product_id'] <=> $b['product_id']));
 $stockCounts = array_count_values(array_column($queue, 'stock_status'));
-$replenishCount = count(array_filter($queue, static fn (array $item): bool => $item['recommended_quantity'] > 0));
+$replenishCount = count(array_filter($queue, static fn (array $item): bool => $item['stock_rule_quantity'] > 0));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,14 +97,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 </div>
             <?php endif; ?>
 
-            <script>
-                window.RetailMindUI?.toast(
-                    'Review quantities before buying. Recommendations do not place orders or change stock.',
-                    'info',
-                    'Buying guidance, not a purchase order',
-                    8000
-                );
-            </script>
             <?php if ($isDemo): ?>
                 <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
             <?php endif; ?>
@@ -123,7 +115,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
                             <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">🔵 Needs replenishment</option><option value="Out of stock">🔴 Out of stock</option><option value="Low stock">🟡 Low stock</option><option value="In stock">🟢 In stock</option></select></label>
-                            <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Suggested quantity</option></select></label>
+                            <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Stock-rule quantity</option></select></label>
                             <div class="queue-actions" id="queue-actions">
                                 <button class="btn btn-secondary" id="queue-actions-trigger" type="button" aria-expanded="false" aria-controls="queue-actions-menu" aria-haspopup="menu">Actions</button>
                                 <div class="queue-actions-menu" id="queue-actions-menu" role="menu" hidden>
@@ -137,31 +129,37 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                         <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
-                                    <th scope="col">Priority</th><th scope="col">Product</th><th scope="col">On hand</th><th scope="col">Suggested
-    <span class="info-tooltip" tabindex="0" role="button" aria-expanded="false" aria-label="How suggested quantity works">
-        <i class="bi bi-info-circle" aria-hidden="true"></i>
-        <span class="tooltip-box">
-            <strong>How Suggested Quantity works:</strong><br>
-            If current stock is at or below Reorder Level:<br>
-            <code>(Reorder Level + Safety Stock) - Current Stock</code><br>
-            Rounded up to package size &amp; minimum order.
-        </span>
-    </span>
-</th>
+                                    <th scope="col">Product</th><th scope="col">On hand</th>
+                                    <th scope="col">Stock-rule suggestion
+                                        <span class="info-tooltip no-print">
+                                            <button class="info-tooltip-trigger" type="button" aria-label="About stock-rule suggestions" aria-describedby="queue-stock-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                            <span class="tooltip-box" id="queue-stock-help" role="tooltip">Suggested units to buy at or below the reorder level: reorder level + safety stock − on hand, rounded up for the minimum order and package size. Review before buying. Recommendations do not place orders or change stock.</span>
+                                        </span>
+                                    </th>
+                                    <th scope="col">Expected sales (28 days)
+                                        <span class="info-tooltip no-print">
+                                            <button class="info-tooltip-trigger" type="button" aria-label="About expected sales" aria-describedby="queue-sales-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                            <span class="tooltip-box" id="queue-sales-help" role="tooltip">Estimated customer purchases, not a buying quantity. Requires a complete, current forecast from the approved model. The Inventory Manager decides how much to buy.</span>
+                                        </span>
+                                    </th>
                                 </tr></thead>
                                 <tbody>
                                     <?php foreach ($queue as $item):
                                         $rowClass = str_replace(' ', '-', strtolower($item['stock_status']));
                                         $stockClass = ['Out of stock' => 'tag-danger', 'Low stock' => 'tag-warning', 'In stock' => 'tag-success'][$item['stock_status']];
                                     ?>
-                                        <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['recommended_quantity'] ?>">
-                                            <td><span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span></td>
+                                        <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['stock_rule_quantity'] ?>" data-expected-sales="<?= $item['expected_sales_28_day'] === null ? '' : (int)$item['expected_sales_28_day'] ?>" data-forecast-period="<?= htmlspecialchars($item['expected_sales_period'] ?? '') ?>">
                                             <td>
                                                 <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
+                                                <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
-                                            <td><strong class="queue-number queue-suggested"><?= (int)$item['recommended_quantity'] ?></strong> <small class="muted">units</small></td>
+                                            <td><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></td>
+                                            <td><?php if ($item['expected_sales_28_day'] !== null): ?>
+                                                <strong class="queue-number"><?= (int)$item['expected_sales_28_day'] ?></strong> <small class="muted">units</small>
+                                                <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['readiness_level']) ?> readiness</small>
+                                            <?php else: ?><span class="muted">Unavailable</span><?php endif; ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

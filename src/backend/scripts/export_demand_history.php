@@ -24,7 +24,9 @@ try {
         throw new RuntimeException('Demand export requires a completed Philippine calendar day.');
     }
     $pdo->beginTransaction();
-    $history = (new App\Forecasting\DemandHistoryService())->getObservedHistory($pdo, $throughDate);
+    $reader = new App\Forecasting\DemandHistoryService();
+    $history = ($argv[3] ?? '') === '--training'
+        ? $reader->getTrainingHistory($pdo, $throughDate) : $reader->getObservedHistory($pdo, $throughDate);
     $pdo->commit();
     echo json_encode($history, JSON_THROW_ON_ERROR);
 } catch (Throwable $error) {

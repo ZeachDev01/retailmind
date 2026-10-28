@@ -16,12 +16,15 @@ class ForecastingSchedulerService {
     
     public function runScheduler(DateTime $now = null): array {
         if ($now === null) {
-            $now = new DateTime();
+            $now = new DateTime('now', new \DateTimeZone('Asia/Manila'));
         }
+        $now = clone $now;
+        $now->setTimezone(new \DateTimeZone('Asia/Manila'));
         
         $result = [
             'forecast_jobs_queued' => 0,
-            'retrain_jobs_queued' => 0
+            'retrain_jobs_queued' => 0,
+            'training_eligibility' => []
         ];
         
         // Default settings if missing
@@ -67,8 +70,16 @@ class ForecastingSchedulerService {
         if (strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime) {
             $alreadyQueued = $this->checkIfJobQueuedToday('model_retraining', $currentDate);
             if (!$alreadyQueued) {
-                $jobService->enqueueSystem('model_retraining');
-                $result['retrain_jobs_queued']++;
+                $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
+                if (!$isDemo) {
+                    $history = (new DemandHistoryService())->getTrainingHistory($this->pdo,
+                        (clone $now)->modify('-1 day')->format('Y-m-d'));
+                    $result['training_eligibility'] = $history['eligibility'];
+                }
+                if ($isDemo || $history['history']) {
+                    $jobService->enqueueSystem('model_retraining');
+                    $result['retrain_jobs_queued']++;
+                }
             }
         }
         

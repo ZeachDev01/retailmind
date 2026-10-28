@@ -23,12 +23,15 @@ class ReplenishmentQueueService
         return (int)(ceil(max($quantity, max(1, $minimumOrder)) / max(1, $packageSize)) * max(1, $packageSize));
     }
 
-    public function getRecommendations(?int $jobId = null): array
+    public function getRecommendations(?int $jobId = null, ?string $asOfDate = null): array
     {
         $forecasts = $jobId ? array_column($this->getQueue($jobId), null, 'product_id') : [];
         $settings = new CandidateEvaluationService($this->pdo);
         $observation = $settings->isObservationMode();
         $suspended = $settings->isRecommendationsSuspended();
+        $approvedVersion = $forecasts ? (string)$this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() : '';
+        $today = new \DateTimeImmutable($asOfDate ?? 'today', new \DateTimeZone('Asia/Manila'));
+        $origin = $today->modify('-1 day')->format('Y-m-d');
         $products = $this->pdo->query("SELECT p.product_id, p.sku, p.product_name,
             p.reorder_level, p.safety_stock, p.minimum_order_quantity, p.units_per_package,
             COALESCE(i.quantity_on_hand, 0) AS current_stock
@@ -41,14 +44,24 @@ class ReplenishmentQueueService
             $forecast = $forecasts[(int)$product['product_id']] ?? [];
             $available = ($forecast['readiness_level'] ?? null) !== null;
             $useForecast = $available && !$observation && !$suspended;
+            $stockRuleQuantity = $stock <= $reorder ? max(0, $reorder + (int)$product['safety_stock'] - $stock) : 0;
             $quantity = $useForecast ? (int)$forecast['recommended_quantity']
-                : ($stock <= $reorder ? max(0, $reorder + (int)$product['safety_stock'] - $stock) : 0);
+                : $stockRuleQuantity;
             if ($useForecast) {
                 $product += $forecast;
             }
             $product['recommended_quantity'] = self::roundQuantity($quantity,
                 (int)($useForecast ? $forecast['moq'] : $product['minimum_order_quantity']),
                 (int)$product['units_per_package']);
+            $product['stock_rule_quantity'] = self::roundQuantity($stockRuleQuantity,
+                (int)$product['minimum_order_quantity'], (int)$product['units_per_package']);
+            $usableForecast = $useForecast && !empty($forecast['complete_forecast'])
+                && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)
+                && $forecast['forecast_origin'] === $origin && $approvedVersion !== ''
+                && $forecast['model_version'] === $approvedVersion;
+            $product['expected_sales_28_day'] = $usableForecast ? $forecast['forecast_28_day'] : null;
+            $product['expected_sales_period'] = $usableForecast
+                ? $today->format('Y-m-d') . ' – ' . $today->modify('+27 days')->format('Y-m-d') : null;
             $product['stock_status'] = $stock <= 0 ? 'Out of stock' : ($stock <= $reorder ? 'Low stock' : 'In stock');
             $product['basis'] = $useForecast ? 'Demand Forecast' : 'Stock rules';
             $product['forecast_status'] = !$available ? 'Forecast unavailable'
@@ -133,7 +146,9 @@ class ReplenishmentQueueService
                 fc.f28 AS forecast_28_day,
                 fc.f_lead AS forecast_lead_time,
                 fc.readiness_level,
-                fc.forecast_origin
+                fc.forecast_origin,
+                fc.complete_forecast,
+                fc.model_version
                 
             FROM products p
             LEFT JOIN inventory i ON p.product_id = i.product_id
@@ -144,6 +159,15 @@ class ReplenishmentQueueService
                     1 AS has_forecast,
                     MAX(df.readiness_level) as readiness_level,
                     MAX(df.forecast_origin) as forecast_origin,
+                    MAX(df.model_version) as model_version,
+                    CASE WHEN COUNT(*) = 28 AND COUNT(DISTINCT df.horizon_day) = 28
+                        AND MIN(df.horizon_day) = 1 AND MAX(df.horizon_day) = 28
+                        AND MIN(df.predicted_units) >= 0 AND COUNT(df.predicted_units) = 28
+                        AND COUNT(DISTINCT df.forecast_origin) = 1
+                        AND COUNT(DISTINCT df.model_version) = 1
+                        AND COUNT(df.forecast_origin) = 28 AND COUNT(df.model_version) = 28
+                        AND COUNT(df.readiness_level) = 28
+                        THEN 1 ELSE 0 END as complete_forecast,
                     SUM(CASE WHEN df.horizon_day <= 7 THEN df.predicted_units ELSE 0 END) as f7,
                     SUM(CASE WHEN df.horizon_day <= 14 THEN df.predicted_units ELSE 0 END) as f14,
                     SUM(CASE WHEN df.horizon_day <= 28 THEN df.predicted_units ELSE 0 END) as f28,
@@ -236,6 +260,8 @@ class ReplenishmentQueueService
                 'forecast_lead_time' => $leadTimeDemand,
                 'readiness_level' => $row['readiness_level'],
                 'forecast_origin' => $row['forecast_origin'],
+                'complete_forecast' => (bool)$row['complete_forecast'],
+                'model_version' => $row['model_version'],
                 'stock_exposure' => $exposure,
                 'urgency_label' => $urgency,
                 'recommended_quantity' => $recommendedQty,

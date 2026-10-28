@@ -18,6 +18,11 @@ if (PHP_SAPI !== 'cli') {
 
 $scheduler = new ForecastingSchedulerService($pdo);
 $result = $scheduler->runScheduler();
+foreach ($result['training_eligibility'] as $product) {
+    if (!$product['eligible']) {
+        echo 'Training skipped product ' . $product['product_id'] . ': ' . $product['reason'] . PHP_EOL;
+    }
+}
 
 $queued = $result['forecast_jobs_queued'] + $result['retrain_jobs_queued'];
 
