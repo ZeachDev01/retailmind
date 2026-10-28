@@ -126,6 +126,13 @@ final class RoleCapabilityPolicy
             }
         }
 
+        if ($actorRole === 'super_admin'
+            && $targetRole !== null
+            && $capability === self::MANAGE_USERS
+        ) {
+            return in_array($targetRole, ['admin', 'super_admin'], true);
+        }
+
         if ($actorRole === 'admin'
             && $targetRole !== null
             && in_array($capability, [self::MANAGE_USERS, self::ASSIGN_ROLES], true)

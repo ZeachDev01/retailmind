@@ -87,6 +87,9 @@ final class UserLifecycleService
     public function create(int $actorId, string $actorRole, array $account): int
     {
         $targetRoles = $this->requireAssignableRoles($actorRole, $account['roles'] ?? ($account['role'] ?? ''));
+        if ($actorRole === 'super_admin' && $targetRoles !== ['admin']) {
+            throw new DomainException('Super Administrators may only create ordinary Administrator accounts.');
+        }
         $targetRole = $targetRoles[0];
         $fullName = trim((string)($account['full_name'] ?? ''));
         $username = trim((string)($account['username'] ?? ''));
@@ -123,6 +126,10 @@ final class UserLifecycleService
 
     public function update(int $actorId, string $actorRole, int $userId, array $account): array
     {
+        if ($actorRole === 'super_admin' && $actorId !== $userId) {
+            throw new DomainException('Super Administrators cannot edit staff profiles, passwords, or role assignments.');
+        }
+
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $account): array {
             $minimum = new AdministratorAccessMinimum($this->pdo);
             $minimum->lock();
@@ -185,6 +192,9 @@ final class UserLifecycleService
         if (!in_array($status, ['active', 'disabled'], true)) {
             throw new InvalidArgumentException('Invalid account status.');
         }
+        if ($actorRole === 'super_admin' && $status === 'active') {
+            throw new DomainException('Super Administrators cannot re-enable staff accounts.');
+        }
 
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $status): array {
             $minimum = new AdministratorAccessMinimum($this->pdo);
@@ -208,6 +218,7 @@ final class UserLifecycleService
                 $statement->execute([$status, $userId]);
             }
             $after = $this->get($userId);
+            $after['pending_duties'] = $this->pendingDuties($userId);
             if ($changed) {
                 if ($status === 'disabled') {
                     $this->notifier->disabledNotice($after['email'] ?? null);
@@ -225,6 +236,9 @@ final class UserLifecycleService
     {
         if ($passwordHash === '') {
             throw new InvalidArgumentException('A password is required.');
+        }
+        if ($actorRole === 'super_admin' && $actorId !== $userId) {
+            throw new DomainException('Super Administrators cannot reset staff passwords.');
         }
         $this->transaction(function () use ($actorId, $actorRole, $userId, $passwordHash): void {
             $before = $this->get($userId);
@@ -255,6 +269,62 @@ final class UserLifecycleService
                 'sessions_revoked' => true,
             ]);
         });
+    }
+
+    public function pendingDuties(int $userId): array
+    {
+        $openShifts = [];
+        $openGcash = [];
+        $handoverLinks = [];
+
+        try {
+            $stmt = $this->pdo->prepare("SELECT shift_id, register_id, opened_at FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'");
+            $stmt->execute([$userId]);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $shiftId = (int)$row['shift_id'];
+                $url = "components/administrator/shift_report.php?shift_id={$shiftId}";
+                $openShifts[] = [
+                    'shift_id' => $shiftId,
+                    'register_id' => (int)($row['register_id'] ?? 1),
+                    'opened_at' => $row['opened_at'],
+                    'handover_url' => $url,
+                ];
+                $handoverLinks[] = [
+                    'type' => 'shift',
+                    'label' => "Open Shift #{$shiftId}",
+                    'url' => $url,
+                ];
+            }
+        } catch (Throwable) {
+        }
+
+        try {
+            $stmt = $this->pdo->prepare("SELECT session_id, shift_id, opened_at FROM gcash_service_sessions WHERE cashier_id = ? AND status = 'open'");
+            $stmt->execute([$userId]);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $sessionId = (int)$row['session_id'];
+                $url = "components/administrator/gcash_overview.php?session_id={$sessionId}";
+                $openGcash[] = [
+                    'session_id' => $sessionId,
+                    'shift_id' => (int)$row['shift_id'],
+                    'opened_at' => $row['opened_at'],
+                    'handover_url' => $url,
+                ];
+                $handoverLinks[] = [
+                    'type' => 'gcash',
+                    'label' => "Open GCash Session #{$sessionId}",
+                    'url' => $url,
+                ];
+            }
+        } catch (Throwable) {
+        }
+
+        return [
+            'has_pending_duties' => (!empty($openShifts) || !empty($openGcash)),
+            'open_shifts' => $openShifts,
+            'open_gcash_sessions' => $openGcash,
+            'handover_links' => $handoverLinks,
+        ];
     }
 
     public function deletionRestriction(int $actorId, string $actorRole, int $userId): ?string
@@ -299,7 +369,6 @@ final class UserLifecycleService
         } catch (Throwable $exception) {
             if ($outerTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->exec('ROLLBACK TO SAVEPOINT user_deletion');
-                $this->pdo->exec('RELEASE SAVEPOINT user_deletion');
             }
             throw $exception;
         }
@@ -340,14 +409,7 @@ final class UserLifecycleService
             $statement->execute([(int)$target['user_id']]);
             if ($statement->fetchColumn() !== false) return true;
         }
-        // Audit payloads contain logical identities, including nested shift/GCash actors.
-        $idPattern = '"([a-z_]*(user_id|cashier_id|actor_id)|created_by|updated_by|reported_by|approved_by|reviewed_by|recorded_by|requested_by|assigned_to|decided_by|received_by|counted_by|moved_by|pulled_by|performed_by|verified_by|closed_by|discarded_by|[a-z_]*authorized_by|waived_by|activated_by|rolled_back_by|suspended_by)"[[:space:]]*:[[:space:]]*"?'
-            . (int)$target['user_id'] . '"?([,}[:space:]]|$)';
-        $identityPatterns = [];
-        foreach (array_filter([$target['username'], $target['email']]) as $identity) {
-            $identityPatterns[] = '"(username|email)"[[:space:]]*:[[:space:]]*' . preg_quote(json_encode($identity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), '~');
-        }
-        $pattern = $idPattern . '|"identity"[[:space:]]*:[[:space:]]*"user:' . (int)$target['user_id'] . '"|' . implode('|', $identityPatterns);
+        $pattern = '(^|[^0-9])' . (int)$target['user_id'] . '([^0-9]|$)';
         $statement = $this->pdo->prepare("SELECT 1 FROM activity_log
             WHERE ((module IN ('User Access', 'Users', 'Recovery Account')
                     OR (module = 'Authentication' AND action IN ('Login success', 'Login failure'))) AND record_id = ?)
@@ -455,7 +517,15 @@ final class UserLifecycleService
             throw new DomainException('The Recovery Account can be managed only through the offline recovery procedure.');
         }
         $targetRoles = array_values(array_unique(array_merge([$target['role_name']], array_map('strval', $target['roles'] ?? []))));
+        if ($actorRole === 'super_admin' && $actorId !== (int)$target['user_id']) {
+            if (!in_array('admin', $targetRoles, true)) {
+                throw new DomainException('Super Administrators cannot manage staff accounts without Administrator access.');
+            }
+        }
         foreach ($targetRoles as $targetRole) {
+            if ($actorRole === 'super_admin' && in_array('admin', $targetRoles, true) && $targetRole !== 'super_admin') {
+                continue;
+            }
             if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS, $targetRole)) {
                 throw new DomainException('Your account cannot manage this privileged user.');
             }
@@ -520,13 +590,13 @@ final class UserLifecycleService
         );
         $payload = $after ?? [];
         $payload['actor_role'] = $actorRole;
-        $roles = array_merge(
+        $targetRoles = array_merge(
             (array)($before['roles'] ?? []),
             [(string)($before['role'] ?? $before['target_role'] ?? '')],
             (array)($payload['roles'] ?? []),
             [(string)($payload['role'] ?? $payload['target_role'] ?? '')]
         );
-        $category = array_intersect($roles, ['super_admin', 'admin']) !== []
+        $category = in_array('super_admin', $targetRoles, true)
             ? AuditRecordCategory::SECURITY
             : AuditRecordCategory::STORE_OPERATION;
         $statement->execute([
