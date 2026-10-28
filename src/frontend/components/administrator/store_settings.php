@@ -4,14 +4,6 @@ require_role(['admin']);
 
 $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
 $fields = [
-    'reversal_count' => [
-        'label' => 'Sales reversals',
-        'help' => 'Threshold for legacy sales reversal attention (cleanup scheduled under Store Overview attention).',
-    ],
-    'unusual_discount_percent' => [
-        'label' => 'Unusual discount (%)',
-        'help' => 'Threshold for legacy discount attention (cleanup scheduled under Store Overview attention).',
-    ],
     'cash_variance_amount' => [
         'label' => 'Cash variance review threshold (₱)',
         'help' => 'Requires Shift variance review and raises Store Overview attention when counted cash difference reaches or exceeds this amount.',

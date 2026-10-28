@@ -926,6 +926,7 @@ final class GCashTransactionService
                 null, AuditRecordCategory::STORE_OPERATION);
 
             $this->pdo()->commit();
+            \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
 
             return [
                 'session_id' => $sessionId,
@@ -1900,6 +1901,7 @@ final class GCashTransactionService
                 (new \App\Receipts\GCashReceiptService($this->pdo()))->preserve($transactionId);
 
                 $this->pdo()->commit();
+                \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
                 return [
                     'transaction_id' => $transactionId,
                     'status' => 'Completed',
@@ -1971,6 +1973,7 @@ final class GCashTransactionService
                 );
 
                 $this->pdo()->commit();
+                \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
                 return [
                     'transaction_id' => $transactionId,
                     'status' => 'Rejected',
@@ -2040,6 +2043,7 @@ final class GCashTransactionService
             );
 
             $this->pdo()->commit();
+            \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
         } catch (Throwable $e) {
             if ($this->pdo && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();

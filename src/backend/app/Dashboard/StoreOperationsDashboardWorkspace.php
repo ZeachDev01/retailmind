@@ -24,7 +24,6 @@ final class StoreOperationsDashboardWorkspace
 
     private const ACTIONS = [
         ['label' => 'Store Staff', 'description' => 'Manage Cashiers and Inventory Managers', 'icon' => 'bi-people', 'destination' => 'components/user_manager/user_manager.php', 'capability' => RoleCapabilityPolicy::MANAGE_USERS],
-        ['label' => 'Sales Exceptions', 'description' => 'Review reversals and unusual discounts', 'icon' => 'bi-receipt-cutoff', 'destination' => 'components/invoice/sales.php?tab=reversals', 'capability' => RoleCapabilityPolicy::MANAGE_SALE_REVERSALS],
         ['label' => 'Stock Issue Oversight', 'description' => 'Inspect Stock Issue history read-only', 'icon' => 'bi-check2-square', 'destination' => 'components/administrator/stock_issues.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
@@ -168,6 +167,7 @@ final class StoreOperationsDashboardWorkspace
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
             $exceptions = $this->exceptions($now, $days, $thresholds);
+            $gcashAttention = $this->gcashAttention();
             $headline = $this->headline($now, $days, $thresholds);
             $netSales = $this->netSales($now);
             $financial = $this->financials($now, $netSales);
@@ -181,6 +181,7 @@ final class StoreOperationsDashboardWorkspace
                 'headline' => $headline,
                 'attention' => array_map(static fn($item): array => $item->toArray(), $attention),
                 'exceptions' => $exceptions,
+                'gcash_attention' => $gcashAttention,
                 'comparison' => $this->comparison($now, $days, $thresholds),
                 'staff' => $this->staff(),
                 'shifts' => $this->shifts(),
@@ -191,7 +192,7 @@ final class StoreOperationsDashboardWorkspace
                 'financial_history' => $financial['history'],
                 'actions' => $this->permittedActions($actorRole),
                 'freshness' => $this->freshness($now),
-                'message' => $exceptions === [] ? 'No Store-operational exceptions currently require action.' : null,
+                'message' => ($exceptions === [] && empty($gcashAttention['visible'])) ? 'No Store-operational exceptions currently require action.' : null,
             ];
 
             self::setCached($actorRole, $days, $now, $data);
@@ -205,6 +206,7 @@ final class StoreOperationsDashboardWorkspace
                 'headline' => [],
                 'attention' => [],
                 'exceptions' => [],
+                'gcash_attention' => ['visible' => true, 'status' => 'unavailable', 'unresolved_count' => null, 'differences_count' => null, 'unresolved_destination' => 'components/administrator/gcash_overview.php?tab=unresolved', 'differences_destination' => 'components/administrator/gcash_overview.php?tab=reconciliation'],
                 'comparison' => [],
                 'staff' => [],
                 'shifts' => [],
@@ -222,24 +224,17 @@ final class StoreOperationsDashboardWorkspace
 
     private function headline(DateTimeImmutable $now, int $days, array $thresholds): array
     {
-        $start = $now->modify("-{$days} days")->format('Y-m-d H:i:s');
-        $end = $now->format('Y-m-d H:i:s');
-        $reversals = $this->count("SELECT COUNT(*) FROM sale_reversals WHERE status = 'pending'");
         $cashCountSql = $this->hasVarianceReviewRequiredColumn()
             ? "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND (variance_review_required = 1 OR (variance_review_required IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))))"
             : "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))";
         $cashVariances = $this->count($cashCountSql, [(float)$thresholds['cash_variance_amount']]);
-        $discounts = $this->count(
-            "SELECT COUNT(*) FROM sales WHERE discount_type = 'percentage' AND discount_value >= ? AND sale_date >= ? AND sale_date < ?",
-            [(float)$thresholds['unusual_discount_percent'], $start, $end]
-        );
         $inventoryRisks = $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'");
         $period = $this->row("SELECT period_name, start_date, end_date, status FROM fiscal_periods WHERE status = 'open' ORDER BY end_date ASC LIMIT 1");
         $periodStatus = $period === [] ? 'not_configured' : ((string)$period['end_date'] < $now->format('Y-m-d') ? 'overdue' : 'open');
 
         return [
-            'sales_cash_exceptions' => $this->headlineItem('Sales & cash exceptions', $reversals + $cashVariances + $discounts, $reversals + $cashVariances + $discounts > 0 ? 'warning' : 'healthy', 'Unresolved reversals, cash variances, and unusual discounts.'),
-            'inventory_risks' => $this->headlineItem('Pending Stock Issues', $inventoryRisks, $inventoryRisks > 0 ? 'warning' : 'healthy', 'Awaiting Inventory Manager review; Administrator oversight is read-only.'),
+            'sales_cash_exceptions' => $this->headlineItem('Cash variances', $cashVariances, $cashVariances > 0 ? 'warning' : 'healthy', 'Unreviewed Cashier Shift cash differences.'),
+            'inventory_risks' => $this->headlineItem('Pending Stock Issues', $inventoryRisks, $inventoryRisks > 0 ? 'warning' : 'healthy', 'Waiting for Inventory Manager; Administrator oversight is read-only.'),
             'fiscal_period' => [
                 'label' => 'Current Fiscal Period',
                 'value' => $period['period_name'] ?? 'Not configured',
@@ -262,8 +257,6 @@ final class StoreOperationsDashboardWorkspace
             'previous_period' => ['start' => $previousStart->format('Y-m-d'), 'end' => $currentStart->format('Y-m-d')],
             'sales' => $this->comparisonItem($current['sales'], $previous['sales']),
             'transactions' => $this->comparisonItem($current['transactions'], $previous['transactions']),
-            'unusual_discounts' => $this->comparisonItem($current['unusual_discounts'], $previous['unusual_discounts']),
-            'reversals' => $this->comparisonItem($current['reversals'], $previous['reversals']),
         ];
     }
 
@@ -278,14 +271,6 @@ final class StoreOperationsDashboardWorkspace
         return [
             'sales' => (float)($sales['sales'] ?? 0),
             'transactions' => (int)($sales['transactions'] ?? 0),
-            'unusual_discounts' => $this->count(
-                "SELECT COUNT(*) FROM sales WHERE discount_type = 'percentage' AND discount_value >= ? AND sale_date >= ? AND sale_date < ?",
-                [(float)$thresholds['unusual_discount_percent'], $startValue, $endValue]
-            ),
-            'reversals' => $this->count(
-                'SELECT COUNT(*) FROM sale_reversals WHERE created_at >= ? AND created_at < ?',
-                [$startValue, $endValue]
-            ),
         ];
     }
 
@@ -535,16 +520,7 @@ final class StoreOperationsDashboardWorkspace
 
     private function exceptions(DateTimeImmutable $now, int $days, array $thresholds): array
     {
-        $start = $now->modify("-{$days} days")->format('Y-m-d H:i:s');
-        $end = $now->format('Y-m-d H:i:s');
         $items = [];
-        foreach ($this->rows(
-            "SELECT sr.reversal_id, sr.reversal_type, sr.reason, sr.created_at, s.total_amount
-             FROM sale_reversals sr JOIN sales s ON s.sale_id = sr.sale_id
-             WHERE sr.status = 'pending' ORDER BY sr.created_at ASC LIMIT 20"
-        ) as $row) {
-            $items[] = $this->exception('warning', 'Sales reversal', ucfirst((string)$row['reversal_type']) . ' · ' . (string)$row['reason'], (string)$row['created_at'], 'components/invoice/sales.php?tab=reversals');
-        }
         $cashVarianceSql = $this->hasVarianceReviewRequiredColumn()
             ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
@@ -565,23 +541,16 @@ final class StoreOperationsDashboardWorkspace
                 'components/administrator/shift_report.php?shift_id=' . (int)$row['shift_id']
             );
         }
-        foreach ($this->rows(
-            "SELECT sale_id, discount_value, discount_amount, sale_date FROM sales
-             WHERE discount_type = 'percentage' AND discount_value >= ? AND sale_date >= ? AND sale_date < ?
-             ORDER BY sale_date DESC LIMIT 20",
-            [(float)$thresholds['unusual_discount_percent'], $start, $end]
-        ) as $row) {
-            $items[] = $this->exception('warning', 'Unusual discount', number_format((float)$row['discount_value'], 2) . '% discount on sale #' . (int)$row['sale_id'], (string)$row['sale_date'], 'components/invoice/sales.php?tab=transactions');
-        }
+        
         foreach ($this->rows(
             "SELECT ia.adjustment_id, ia.adjustment_qty, ia.adjustment_type, ia.reported_at, p.product_name
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
-             WHERE ia.status = 'pending' AND (ia.reported_at <= ? OR ABS(ia.adjustment_qty) * p.cost_price >= ?)
+             WHERE ia.status = 'pending' AND (ia.reported_at <= ? OR ABS(ia.adjustment_qty) * p.cost_price >= CAST(? AS DECIMAL(12,2)))
              ORDER BY ia.reported_at ASC LIMIT 20",
             [$now->modify('-' . (float)$thresholds['inventory_overdue_hours'] . ' hours')->format('Y-m-d H:i:s'),
                 (float)$thresholds['inventory_high_value_amount']]
         ) as $row) {
-            $items[] = $this->exception('warning', 'Pending Stock Issue', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Awaiting Inventory Manager review', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
+            $items[] = $this->exception('warning', 'Follow up with Inventory Manager', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Follow up with Inventory Manager', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
         }
 
         $severity = ['critical' => 0, 'warning' => 1, 'info' => 2];
@@ -662,6 +631,7 @@ final class StoreOperationsDashboardWorkspace
             'evaluations' => $evalMetrics ?? [],
             'operational_exceptions' => count($exceptions),
             'exceptions' => $exceptions,
+                'gcash_attention' => $gcashAttention,
         ];
     }
 
@@ -846,5 +816,43 @@ final class StoreOperationsDashboardWorkspace
         } catch (\Throwable) {
             return $hasColumn = false;
         }
+    }
+    public function gcashAttention(): array
+    {
+        $unresolved = null;
+        $differences = null;
+        $unresolvedError = false;
+        $differencesError = false;
+
+        try {
+            $unresolved = $this->count("SELECT COUNT(*) FROM gcash_transactions WHERE verification_status = 'Needs checking'");
+        } catch (Throwable) {
+            $unresolvedError = true;
+        }
+
+        try {
+            $differences = $this->count("SELECT COUNT(*) FROM gcash_service_sessions WHERE status = 'closed' AND (cash_variance != 0 OR wallet_variance != 0) AND waived_at IS NULL");
+        } catch (Throwable) {
+            $differencesError = true;
+        }
+
+        if ($unresolvedError && $differencesError) {
+            $status = 'unavailable';
+        } elseif ($unresolvedError || $differencesError) {
+            $status = 'partial_failure';
+        } else {
+            $status = 'ready';
+        }
+
+        $visible = $status !== 'ready' || ($unresolved > 0 || $differences > 0);
+
+        return [
+            'visible' => $visible,
+            'status' => $status,
+            'unresolved_count' => $unresolved,
+            'differences_count' => $differences,
+            'unresolved_destination' => 'components/administrator/gcash_overview.php?tab=unresolved',
+            'differences_destination' => 'components/administrator/gcash_overview.php?tab=reconciliation',
+        ];
     }
 }
