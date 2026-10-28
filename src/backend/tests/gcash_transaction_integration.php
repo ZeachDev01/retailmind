@@ -1041,7 +1041,7 @@ $refuse(fn() => $service->waiveDiscrepancy(4, 'cashier', $sess8, 'Cashier cannot
 $refuse(fn() => $service->waiveDiscrepancy(1, 'admin', $sess8, 'Tiny'));
 
 // Valid discrepancy waiver by admin
-$service->waiveDiscrepancy(1, 'admin', $sess8, 'Shortage acknowledged and waived due to counterfeit 50 peso note surrendered');
+$service->waiveDiscrepancy(1, 'admin', $sess8, 'Shortage acknowledged and waived due to counterfeit 50 peso note surrendered', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 $s8Waived = $pdo->query('SELECT * FROM gcash_service_sessions WHERE session_id = ' . $sess8)->fetch(PDO::FETCH_ASSOC);
 $check((int)$s8Waived['waived_by'] === 1 && $s8Waived['waived_at'] !== null, 'Waiver recorded with admin attribution');
 $check((float)$s8Waived['cash_variance'] === -50.00, 'Permanent counted variance preserved');
@@ -1291,7 +1291,7 @@ $check($sess10Diff['wallet_variance'] === 20.00, 'Offsetting wallet excess remai
 $check($sess10Diff['is_waived'] === false, 'Session 10 variance initially not waived');
 
 // Waive discrepancy
-$service->waiveDiscrepancy(1, 'admin', $sess10, 'Approved manager variance waiver');
+$service->waiveDiscrepancy(1, 'admin', $sess10, 'Approved manager variance waiver', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 $afterWaiveOv = $service->adminOverview(['actor_role' => 'admin']);
 $waivedFound = false;
 foreach ($afterWaiveOv['reconciliation_differences'] as $diff) {

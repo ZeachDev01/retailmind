@@ -78,9 +78,10 @@ try {
         $assert($db->query("SELECT r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.username='superadmin'")->fetchColumn() === 'super_admin',
             'Fresh superadmin role cannot be resolved at login');
         $assert((new App\Store\StoreScope($db))->id() === 1, 'Fresh Store scope is unavailable');
-        foreach (['categories', 'products', 'inventory', 'product_batches', 'stock_receiving', 'purchase_history'] as $table) {
+        foreach (['products', 'inventory', 'product_batches', 'stock_receiving', 'purchase_history'] as $table) {
             $assert((int)$db->query("SELECT COUNT(*) FROM `{$table}`")->fetchColumn() === 0, "Fresh schema.sql must not seed {$table}");
         }
+        $assert((int)$db->query('SELECT COUNT(*) FROM categories')->fetchColumn() === 7, 'Fresh Store receives the seven starter Product categories');
         $assert((int)$db->query("SELECT AUTO_INCREMENT FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='products'")->fetchColumn() === 1,
             'Fresh products must start at ID 1');
         $runner = new App\Database\MigrationRunner($db, __DIR__ . '/../database/migrations');

@@ -222,7 +222,7 @@ try {
 
     $superAdminWaiveFailed = false;
     try {
-        $gcashService->waiveDiscrepancy(1, 'super_admin', 10, 'Super admin waiving discrepancy');
+        $gcashService->waiveDiscrepancy(1, 'super_admin', 10, 'Super admin waiving discrepancy', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
     } catch (\DomainException $e) {
         $superAdminWaiveFailed = true;
     }
@@ -235,7 +235,7 @@ try {
     // Cashier active workspace bypass check:
     $cashierWaiveFailed = false;
     try {
-        $gcashService->waiveDiscrepancy(3, 'cashier', 10, 'Cashier trying to waive discrepancy');
+        $gcashService->waiveDiscrepancy(3, 'cashier', 10, 'Cashier trying to waive discrepancy', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
     } catch (\DomainException $e) {
         $cashierWaiveFailed = true;
     }
@@ -245,7 +245,7 @@ try {
     $_SERVER['HTTP_CF_RAY'] = 'test-remote-ray-123';
     $remoteWaiveFailed = false;
     try {
-        $gcashService->waiveDiscrepancy(2, 'admin', 10, 'Admin trying to waive remotely');
+        $gcashService->waiveDiscrepancy(2, 'admin', 10, 'Admin trying to waive remotely', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
     } catch (\DomainException $e) {
         $remoteWaiveFailed = true;
     }
@@ -253,7 +253,7 @@ try {
     unset($_SERVER['HTTP_CF_RAY']);
 
     // Admin active workspace locally succeeds:
-    $gcashService->waiveDiscrepancy(2, 'admin', 10, 'Valid admin in-store review');
+    $gcashService->waiveDiscrepancy(2, 'admin', 10, 'Valid admin in-store review', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
     $checkSession = $pdo->query("SELECT waived_at, waived_by FROM gcash_service_sessions WHERE session_id = 10")->fetch(PDO::FETCH_ASSOC);
     $assert($checkSession['waived_at'] !== null && (int)$checkSession['waived_by'] === 2, 'admin workspace successfully waives discrepancy locally');
 

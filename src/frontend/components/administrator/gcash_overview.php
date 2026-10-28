@@ -14,12 +14,41 @@ $startDate = isset($_GET['start_date']) ? trim((string)$_GET['start_date']) : Ph
 $endDate = isset($_GET['end_date']) ? trim((string)$_GET['end_date']) : PhilippineTime::today();
 $cashierId = $_GET['cashier_id'] ?? null;
 $period = (string)($_GET['period'] ?? (isset($_GET['start_date']) || isset($_GET['end_date']) ? 'custom' : 'today'));
-$activeTab = in_array($_GET['tab'] ?? '', ['overview', 'transactions', 'reconciliation', 'unresolved'], true) ? $_GET['tab'] : 'overview';
+$activeTab = in_array($_GET['tab'] ?? '', ['overview', 'transactions', 'reconciliation', 'unresolved', 'money'], true) ? $_GET['tab'] : 'overview';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
 
 $filterError = null;
 $overview = null;
 $canMutate = current_role() === 'admin' && !(function_exists('is_remote_request') && is_remote_request());
+
+$interventionError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf_token($_POST['csrf_token'] ?? '');
+    try {
+        if (!$canMutate || ($_POST['action'] ?? '') !== 'emergency_handover') throw new DomainException('Use the in-Store Administrator Workspace for emergency handover.');
+        if (($_POST['checked'] ?? '') !== 'yes') throw new DomainException('Confirm the physical cash and wallet checks.');
+        $cash = filter_var($_POST['counted_cash'] ?? '', FILTER_VALIDATE_FLOAT);
+        $wallet = filter_var($_POST['checked_wallet'] ?? '', FILTER_VALIDATE_FLOAT);
+        if ($cash === false || $wallet === false) throw new DomainException('Enter the counted service cash and checked wallet balance.');
+        $incoming = filter_var($_POST['incoming_cashier_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
+        $service->emergencyHandover((int)$_SESSION['user_id'], $incoming, $cash, $wallet, (string)($_POST['reason'] ?? ''), []);
+        $_SESSION['_flash_success'] = $incoming ? 'Custody handed over. Incoming Cashier must accept each unfinished exchange in GCash.' : 'GCash service stopped. Unfinished exchanges remain visible and unsettled.';
+        header('Location: ' . app_url('components/administrator/gcash_overview.php?tab=unresolved'));
+        exit;
+    } catch (DomainException $e) {
+        $interventionError = $e->getMessage();
+    } catch (Throwable $e) {
+        $interventionError = \App\Support\OperatorAlert::message($e, 'Handover could not be saved. Refresh GCash status before trying again.');
+    }
+}
+$moneyHistory = null;
+$eligibleCashiers = [];
+try {
+    if (($_GET['tab'] ?? '') === 'money') $moneyHistory = $service->getMoneyHistory(['session_id' => $_GET['session_id'] ?? null]);
+    if ($canMutate) $eligibleCashiers = $pdo->query("SELECT DISTINCT u.user_id,u.full_name FROM users u JOIN cashier_shifts cs ON cs.cashier_id=u.user_id WHERE u.status='active' AND cs.status='open' AND cs.locked_at IS NULL ORDER BY u.full_name")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log((string)$e);
+}
 
 $filters = [
     'type' => (string)($_GET['type'] ?? 'all'),
@@ -126,10 +155,26 @@ function gcash_admin_money(mixed $val): string {
             </div>
         </header>
 
+        <?php if ($interventionError !== ''): ?><p class="alert alert-danger" role="alert"><?= gcash_admin_e($interventionError) ?></p><?php endif; ?>
+        <?php if ($canMutate && !empty($overview['session_id'])): ?>
+        <details class="pos-panel"><summary>Emergency handover / Stop service</summary>
+            <p>Count the physical service cash and check the GCash wallet. This closes custody without settling unfinished exchanges or shortages. Each incoming Cashier must accept unfinished exchanges separately.</p>
+            <form method="post"><input type="hidden" name="csrf_token" value="<?= gcash_admin_e(generate_csrf_token()) ?>"><input type="hidden" name="action" value="emergency_handover">
+                <div class="form-row">
+                    <label>Counted service cash (PHP)<input class="pos-input" name="counted_cash" type="number" min="0" step="0.01" required></label>
+                    <label>Checked wallet balance (PHP)<input class="pos-input" name="checked_wallet" type="number" min="0" step="0.01" required></label>
+                    <label>Incoming Cashier<select class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                </div>
+                <label>Reason<textarea class="pos-input" name="reason" required minlength="5" maxlength="255" rows="2"></textarea></label>
+                <label><input name="checked" type="checkbox" value="yes" required> I checked both balances and confirm this emergency custody change.</label>
+                <p><button class="btn btn-primary" type="submit">Confirm handover or stop</button></p>
+            </form>
+        </details>
+        <?php endif; ?>
         <nav class="gcash-section-nav" role="tablist" aria-label="GCash overview sections">
-            <?php foreach (['overview' => 'Balances & Summary', 'transactions' => 'Transactions & Filters', 'reconciliation' => 'Reconciliation Log', 'unresolved' => 'Unresolved Activity'] as $key => $label): ?>
+            <?php foreach (['overview' => 'Balances & Summary', 'transactions' => 'Transactions & Filters', 'reconciliation' => 'Reconciliation Log', 'unresolved' => 'Unresolved Activity', 'money' => 'Money history'] as $key => $label): ?>
                 <button type="button" role="tab" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
-                    <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'unresolved' => 'bi-clock-history'][$key] ?>" aria-hidden="true"></i>
+                    <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'unresolved' => 'bi-clock-history', 'money' => 'bi-journal-text'][$key] ?>" aria-hidden="true"></i>
                     <?= $label ?>
                     <?php if ($key === 'transactions'): ?><span class="gcash-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></span><?php endif; ?>
                     <?php if ($key === 'reconciliation'): ?><span class="gcash-badge"><?= $overview === null ? 'Unavailable' : 'Pending (' . (int)$overview['differences_count'] . ')' ?></span><?php endif; ?>
@@ -427,7 +472,7 @@ function gcash_admin_money(mixed $val): string {
                             <th scope="col">Actual Wallet</th>
                             <th scope="col">Wallet Variance</th>
                             <th scope="col">Session Details</th>
-                            <th scope="col">Waiver Status</th>
+                            <th scope="col">Review status</th>
                             <th scope="col">Action</th>
                         </tr>
                     </thead>
@@ -465,11 +510,11 @@ function gcash_admin_money(mixed $val): string {
                                     </td>
                                     <td>
                                         <?php if ($diff['is_waived']): ?>
-                                            <span class="gcash-status gcash-status-completed">Waived</span>
+                                            <span class="gcash-status gcash-status-completed">Reviewed</span>
                                             <details class="gcash-row-details">
-                                                <summary>Waiver details</summary>
+                                                <summary>Review details</summary>
                                                 <dl>
-                                                    <dt>Approved by</dt><dd><?= gcash_admin_e($diff['waived_by_name'] ?? 'Admin') ?></dd>
+                                                    <dt>Reviewed by</dt><dd><?= gcash_admin_e($diff['waived_by_name'] ?? 'Admin') ?></dd>
                                                     <dt>Reason</dt><dd><?= gcash_admin_e($diff['waiver_notes']) ?></dd>
                                                 </dl>
                                             </details>
@@ -618,9 +663,21 @@ function gcash_admin_money(mixed $val): string {
             </form>
         </dialog>
         <!-- Discrepancy Waiver Dialog -->
+        <div id="tab-money" data-loaded="<?= $moneyHistory !== null ? 'true' : 'false' ?>" role="tabpanel" aria-labelledby="gcash-tab-money" tabindex="0" <?= $activeTab !== 'money' ? 'hidden' : '' ?>>
+            <section class="pos-panel"><h2>Money history</h2><p>All dates. Exchanges use completion time when completed; unfinished and cancelled exchanges use their start time. Corrections and returns show when recorded. Historical counts stay unchanged.</p>
+            <form method="get"><input type="hidden" name="tab" value="money"><label>Session ID (blank for all)<input class="pos-input" type="number" name="session_id" min="1" value="<?= gcash_admin_e($_GET['session_id'] ?? '') ?>"></label><button class="btn btn-secondary" type="submit">Load money history</button></form>
+            <?php if ($moneyHistory === null): ?><p role="status">Open or reload Money history to load movements.</p><?php elseif (!$moneyHistory): ?><p>No movements recorded.</p><?php else: ?>
+            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash money history"><table class="gcash-table"><thead><tr><th>Date / time</th><th>Movement</th><th>Session / exchange</th><th>Cash / wallet effect</th><th>Recorded / approved by</th><th>Evidence / reason</th></tr></thead><tbody>
+            <?php foreach ($moneyHistory as $movement): ?><tr>
+                <td><?= gcash_admin_e($movement['created_at']) ?></td><td><?= gcash_admin_e($movement['movement_type']) ?><?= empty($movement['is_actual_movement']) ? ' (recording correction; no current money moved)' : '' ?></td>
+                <td>#<?= (int)$movement['session_id'] ?> / <?= isset($movement['linked_transaction_id']) ? '#' . (int)$movement['linked_transaction_id'] : '—' ?><?= !empty($movement['linked_session_id']) ? ' · Recovery for session #' . (int)$movement['linked_session_id'] : '' ?></td>
+                <td><?php if ($movement['kind'] === 'funding_movement'): ?><?= gcash_admin_e($movement['fund_type']) ?> <?= $movement['direction'] === 'in' ? '+' : '−' ?><?= gcash_admin_money($movement['amount']) ?><?php else: ?>Cash <?= gcash_admin_money($movement['service_cash_delta']) ?> / Wallet <?= gcash_admin_money($movement['wallet_delta']) ?><?php endif; ?></td>
+                <td><?= gcash_admin_e($movement['recorder_name'] ?? 'Not recorded') ?> / <?= gcash_admin_e($movement['authorizer_name'] ?? 'Not recorded') ?></td><td><?= gcash_admin_e($movement['evidence'] ?? '') ?> <?= gcash_admin_e($movement['reason'] ?? '') ?></td>
+            </tr><?php endforeach; ?></tbody></table></div><?php endif; ?></section>
+        </div>
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
             <h2 id="waiver-dialog-title" class="gcash-dialog-title">Mark Closing Difference Reviewed</h2>
-            <p>The counted variance stays on record. This waiver records your approval and reason.</p>
+            <p>The counted variance stays on record. Review records the investigation; it does not record repayment.</p>
             <div id="admin-waiver-summary" class="gcash-waiver-summary">
                 <p class="gcash-waiver-session"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
                 <p class="gcash-waiver-cash"><strong>Cash Variance:</strong> <span id="waiver-target-cash-var"></span></p>
@@ -628,6 +685,10 @@ function gcash_admin_money(mixed $val): string {
             </div>
             <div id="admin-waiver-error" class="alert alert-danger gcash-waiver-error" hidden></div>
             <form id="admin-waiver-form">
+                <label class="gcash-confirmation"><input id="admin-review-cash-checked" name="cash_checked" type="checkbox" required> I checked the physical service cash difference.</label>
+                <div class="gcash-field"><label for="admin-review-cash-explanation">Physical service cash findings</label><textarea class="form-control" id="admin-review-cash-explanation" name="cash_explanation" required maxlength="500" rows="2"></textarea></div>
+                <label class="gcash-confirmation"><input id="admin-review-wallet-checked" name="wallet_checked" type="checkbox" required> I checked the GCash wallet difference.</label>
+                <div class="gcash-field"><label for="admin-review-wallet-explanation">Gcash wallet findings</label><textarea class="form-control" id="admin-review-wallet-explanation" name="wallet_explanation" required maxlength="500" rows="2"></textarea></div>
                 <input type="hidden" id="waiver-session-id" name="session_id" value="">
                 <div class="gcash-field">
                     <label for="admin-waiver-notes" class="gcash-waiver-label">Investigation explanation (5–500 characters)</label>

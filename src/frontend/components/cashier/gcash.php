@@ -30,7 +30,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <button class="btn btn-secondary" type="button" id="gcash-funding-btn" hidden>Move service funds</button>
                     <button class="btn btn-secondary" type="button" id="gcash-close-session-btn" hidden>Reconcile &amp; Close</button>
                     <button class="btn btn-secondary" type="button" id="gcash-handover-session-btn" hidden>Hand Over</button>
-                    <button class="btn btn-secondary" type="button" id="gcash-waive-btn" hidden>Waive Variance</button>
+                    <button class="btn btn-secondary" type="button" id="gcash-waive-btn" hidden>Review closing difference</button>
                 </div>
             </div>
             <div id="gcash-session-banner" class="gcash-session-banner" role="status" aria-live="polite">
@@ -38,6 +38,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             </div>
         </section>
 
+        <section class="pos-panel" aria-labelledby="gcash-follow-up-title">
+            <h2 id="gcash-follow-up-title">Unfinished exchanges</h2>
+            <p>Your accepted follow-up survives Shift and session closure. Accepting follow-up does not transfer blame for an earlier shortage.</p>
+            <div id="gcash-follow-up" aria-live="polite">Loading follow-up work…</div>
+        </section>
         <div class="gcash-tabs-nav-wrap">
             <nav class="gcash-tablist" role="tablist" aria-label="GCash sections">
                 <button type="button" role="tab" id="tab-new-transaction" class="gcash-tab active" aria-selected="true" aria-controls="panel-new-transaction" tabindex="0">
@@ -447,6 +452,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <label class="pos-field-label" for="gcash-funding-password">Administrator password</label>
                     <input class="pos-input" id="gcash-funding-password" name="approver_password" type="password" required autocomplete="new-password">
                 </div>
+                <label class="gcash-confirmation"><input type="checkbox" id="gcash-funding-receipt" name="receipt_confirmed" required> I confirm these funds were actually received or handed over for this movement.</label>
                 <div class="gcash-actions">
                     <button class="btn" type="submit" id="gcash-funding-submit">Record Movement</button>
                     <button class="btn btn-secondary" type="button" id="gcash-funding-cancel">Cancel</button>
@@ -461,6 +467,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <label class="pos-field-label" for="gcash-resolve-action">Resolution Action</label>
                     <select class="pos-input" id="gcash-resolve-action" name="resolve_action" required>
                         <option value="complete">Complete transaction (confirm remaining movement)</option>
+                        <option value="return">Record actual return / recovery</option>
                         <option value="cancel">Cancel transaction (record offsetting reversal if money moved)</option>
                     </select>
                 </div>
@@ -472,9 +479,16 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <label class="pos-field-label" for="gcash-resolve-notes">Resolution notes / cancellation reason</label>
                     <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" minlength="5" maxlength="255" placeholder="Minimum 5 characters">
                 </div>
+                <div id="gcash-return-fields" hidden>
+                    <p>Record only money that actually moved now. Money previously received goes back to the customer; money previously sent must be recovered into your current service funds. Returns never change historical closing counts.</p>
+                    <label>Cash returned or recovered (PHP)<input class="pos-input" type="number" name="returned_cash" min="0" step="0.01" value="0"></label>
+                    <label>Wallet returned or recovered (PHP)<input class="pos-input" type="number" name="returned_wallet" min="0" step="0.01" value="0"></label>
+                    <label>Fee included in this return (PHP)<input class="pos-input" type="number" name="fee_returned" min="0" step="0.01" value="0"></label>
+                    <label>Actual return evidence<input class="pos-input" type="text" name="evidence" maxlength="255"></label>
+                </div>
                 <div id="gcash-resolve-auth-group" hidden>
                     <p style="font-size: 0.85rem; color: var(--color-warning, #d97706); margin-bottom: 0.5rem;">
-                        <strong>Administrator authorization required:</strong> Prior money movement will be offset by a linked adjustment.
+                        <strong>Administrator authorization required:</strong> Approval confirms the actual return or recovery you recorded. Cancellation alone moves no money.
                     </p>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-resolve-approver">Administrator username or email</label>
@@ -529,7 +543,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         </dialog>
         <dialog id="gcash-waiver-dialog" aria-labelledby="gcash-waiver-title" aria-describedby="gcash-waiver-summary">
             <form id="gcash-waiver-form">
-                <h2 id="gcash-waiver-title">Waive closing variance</h2>
+                <label class="gcash-confirmation"><input id="gcash-review-cash-checked" name="cash_checked" type="checkbox" required> I checked the physical service cash difference.</label>
+                <div class="gcash-field"><label for="gcash-review-cash-explanation">Physical service cash findings</label><textarea class="pos-input" id="gcash-review-cash-explanation" name="cash_explanation" required maxlength="500" rows="2"></textarea></div>
+                <label class="gcash-confirmation"><input id="gcash-review-wallet-checked" name="wallet_checked" type="checkbox" required> I checked the GCash wallet difference.</label>
+                <div class="gcash-field"><label for="gcash-review-wallet-explanation">Gcash wallet findings</label><textarea class="pos-input" id="gcash-review-wallet-explanation" name="wallet_explanation" required maxlength="500" rows="2"></textarea></div>
+                <h2 id="gcash-waiver-title">Review closing difference</h2>
                 <p id="gcash-waiver-summary" style="font-weight: 600;"></p>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-waiver-notes">Reason (at least 5 characters)</label>
@@ -544,7 +562,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <input class="pos-input" id="gcash-waiver-password" name="approver_password" type="password" required autocomplete="new-password">
                 </div>
                 <div class="gcash-actions">
-                    <button class="btn" type="submit" id="gcash-waiver-submit">Waive variance</button>
+                    <button class="btn" type="submit" id="gcash-waiver-submit">Mark reviewed</button>
                     <button class="btn btn-secondary" type="button" id="gcash-waiver-cancel">Cancel</button>
                 </div>
             </form>

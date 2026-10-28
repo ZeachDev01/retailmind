@@ -11,7 +11,7 @@ try {
     $service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
     $method = $_SERVER['REQUEST_METHOD'];
     if ($method === 'GET') {
-        if (($_GET['action'] ?? '') === 'overview') {
+        if (in_array(($_GET['action'] ?? ''), ['overview', 'follow_up'], true)) {
             $result = $service->cashierOverview((int)$_SESSION['user_id']);
         } elseif (($_GET['action'] ?? '') === 'session_status') {
             $session = $service->getCurrentSession();
@@ -65,6 +65,18 @@ try {
         } elseif (($input['action'] ?? '') === 'record_cash_out') {
             $id = $service->recordCashOut($cashierId, $input);
             $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\GCashReceiptService($pdo))->fetch($id, $cashierId, 'cashier') ? $id : null];
+        } elseif (($input['action'] ?? '') === 'accept_exchange') {
+            $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$txId || ($input['accepted'] ?? false) !== true) throw new DomainException('Choose and explicitly accept this unfinished exchange.');
+            if (is_remote_request()) throw new DomainException('Follow-up acceptance is unavailable remotely.', 403);
+            $result = $service->transferExchangeResponsibility($cashierId, (int)$txId, $cashierId, (string)($input['reason'] ?? ''), true);
+        } elseif (($input['action'] ?? '') === 'record_return') {
+            $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!$txId) throw new DomainException('Choose a valid unfinished exchange.');
+            foreach (['returned_cash', 'returned_wallet', 'fee_returned'] as $field) {
+                if (isset($input[$field]) && !is_scalar($input[$field])) throw new DomainException('Enter valid return amounts.');
+            }
+            $result = $service->recordFailedExchangeReturn($cashierId, (int)$txId, $input);
         } elseif (($input['action'] ?? '') === 'funding_movement') {
             $id = $service->recordFundingMovement($cashierId, 'cashier', $input);
             $result = ['id' => $id, 'movement_id' => $id];
@@ -76,19 +88,19 @@ try {
             $walletDelta = filter_var($input['wallet_delta'] ?? 0, FILTER_VALIDATE_FLOAT);
             $reason = (string)($input['reason'] ?? '');
             $sessionId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
-            $adjId = $service->recordLinkedCorrection($adminId, 'admin', (int)$txId, (float)$cashDelta, (float)$walletDelta, $reason, $sessionId);
+            $adjId = $service->recordLinkedCorrection($adminId, 'admin', (int)$txId, (float)$cashDelta, (float)$walletDelta, $reason, $sessionId, (string)($input['correction_mode'] ?? 'money_movement'), $cashierId);
             $result = ['id' => $adjId, 'adjustment_id' => $adjId];
         } elseif (($input['action'] ?? '') === 'resolve_needs_checking') {
             $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$txId) { throw new DomainException('Invalid transaction ID.'); }
             $resAction = (string)($input['resolve_action'] ?? $input['outcome'] ?? $input['status'] ?? 'complete');
             $result = $service->resolveNeedsChecking($cashierId, (int)$txId, $resAction, $input);
-        } elseif (($input['action'] ?? '') === 'waive_discrepancy') {
+        } elseif (in_array(($input['action'] ?? ''), ['waive_discrepancy', 'mark_reviewed'], true)) {
             $adminId = $service->authorizeAdmin((string)($input['approver_username'] ?? ''), (string)($input['approver_password'] ?? ''));
             $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$sessId) { throw new DomainException('Invalid session ID.'); }
             $waiverNotes = (string)($input['waiver_notes'] ?? $input['notes'] ?? '');
-            $service->waiveDiscrepancy($adminId, 'admin', (int)$sessId, $waiverNotes);
+            $service->markReviewed($adminId, 'admin', (int)$sessId, ['explanation' => $waiverNotes] + $input);
             $result = ['session_id' => $sessId, 'waived' => true];
         } elseif (($input['action'] ?? '') === 'preview') {
             $preview = $service->calculatePreview($input['type'] ?? '', $input['principal'] ?? '', $input['fee_method'] ?? null);

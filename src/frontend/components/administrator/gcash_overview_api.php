@@ -62,15 +62,16 @@ try {
             ]);
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
         } elseif ($action === 'emergency_handover' || $action === 'stop_service') {
-            $countedCash = (float)($input['counted_cash'] ?? -1);
-            $checkedWallet = (float)($input['checked_wallet'] ?? -1);
+            $countedCash = filter_var($input['counted_cash'] ?? null, FILTER_VALIDATE_FLOAT);
+            $checkedWallet = filter_var($input['checked_wallet'] ?? null, FILTER_VALIDATE_FLOAT);
+            if ($countedCash === false || $checkedWallet === false) throw new DomainException('Enter counted service cash and checked wallet balances.');
             $reason = trim((string)($input['reason'] ?? ''));
             $incomingCashierId = filter_var($input['incoming_cashier_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
-            $acceptedTxIds = isset($input['accepted_transactions']) && is_array($input['accepted_transactions']) ? array_map('intval', $input['accepted_transactions']) : null;
+            $acceptedTxIds = []; // Incoming Cashiers accept individual exchanges in their own Workspace.
             $adminId = (int)$_SESSION['user_id'];
             $result = $service->emergencyHandover($adminId, $incomingCashierId, $countedCash, $checkedWallet, $reason, $acceptedTxIds);
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
-        } elseif ($action === 'waive_discrepancy') {
+        } elseif (in_array($action, ['waive_discrepancy', 'mark_reviewed'], true)) {
             $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$sessId) {
                 throw new DomainException('Invalid session ID.');
@@ -78,7 +79,7 @@ try {
             $waiverNotes = trim((string)($input['waiver_notes'] ?? $input['notes'] ?? ''));
             $adminId = (int)$_SESSION['user_id'];
             $adminRole = (string)current_role();
-            $service->waiveDiscrepancy($adminId, $adminRole, (int)$sessId, $waiverNotes);
+            $service->markReviewed($adminId, $adminRole, (int)$sessId, ['explanation' => $waiverNotes] + $input);
             echo json_encode(['success' => true, 'session_id' => $sessId, 'waived' => true], JSON_UNESCAPED_UNICODE);
         } else {
             throw new DomainException('Unsupported action.', 400);

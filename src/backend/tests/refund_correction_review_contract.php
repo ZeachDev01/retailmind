@@ -588,6 +588,27 @@ try {
     $assert(count($pendingIan) === 1, 'Ian has 1 pending review');
     $assert((int)$pendingIan[0]['review_id'] === $newRevId, 'Pending review ID matches');
 
+    // A failed completion must roll back the movement, so retry cannot double it.
+    $beforeMovements = (int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn();
+    $pdo->exec("CREATE TRIGGER fail_review_update BEFORE UPDATE ON refund_correction_reviews BEGIN SELECT RAISE(ABORT, 'injected review update failure'); END");
+    try {
+        $service->executeCashCorrection($newRevId, 2, 'cashier', 10.0, 'Regression rollback check');
+        $assert(false, 'Injected review update failure must fail correction');
+    } catch (PDOException $expected) {}
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn() === $beforeMovements, 'Failed review completion rolls back its cash movement');
+    $assert($service->getReview($newRevId)['cash_status'] === 'pending', 'Failed correction leaves task pending');
+    $pdo->exec('DROP TRIGGER fail_review_update');
+    $service->executeCashCorrection($newRevId, 2, 'cashier', 10.0, 'Regression retry check');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn() === $beforeMovements + 1, 'Retry posts exactly one cash movement');
+    $beforeStock = (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=10')->fetchColumn();
+    $pdo->exec("CREATE TRIGGER fail_stock_review BEFORE UPDATE ON refund_correction_reviews BEGIN SELECT RAISE(ABORT, 'injected stock review failure'); END");
+    try {
+        $service->executeStockCorrection($newRevId, 3, 'inventory_manager', 10, 1, 'Regression stock rollback');
+        $assert(false, 'Injected review update failure must fail stock correction');
+    } catch (PDOException $expected) {}
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=10')->fetchColumn() === $beforeStock, 'Failed review completion rolls back stock');
+    $pdo->exec('DROP TRIGGER fail_stock_review');
+
     $allStoreReviews = $service->listReviews();
     $assert(count($allStoreReviews) >= 4, 'List reviews returns all Store reviews');
 

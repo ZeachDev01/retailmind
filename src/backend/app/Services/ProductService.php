@@ -540,7 +540,8 @@ class ProductService
         $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
         $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
 
-        StoreWriteGate::begin($this->pdo);
+        $started = !$this->pdo->inTransaction();
+        if ($started) StoreWriteGate::begin($this->pdo);
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $beforeStmt = $this->pdo->prepare(
@@ -649,8 +650,8 @@ class ProductService
                 }
             }
 
-            $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, ?, ?)")
-                ->execute([$productId, $qtyChange, $adjustmentReason, $userId]);
+            $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'adjustment', ?)")
+                ->execute([$productId, $qtyChange, $userId]);
 
             $after = $before;
             $after['quantity_on_hand'] = (int)$before['quantity_on_hand'] + $qtyChange;
@@ -667,11 +668,13 @@ class ProductService
             );
 
             $submission->remember(true);
-            $this->pdo->commit();
-            $this->notificationService->checkAndNotifyLowStock();
-            $this->notificationService->checkAndNotifyExpiringStock();
+            if ($started) {
+                $this->pdo->commit();
+                $this->notificationService->checkAndNotifyLowStock();
+                $this->notificationService->checkAndNotifyExpiringStock();
+            }
         } catch (Throwable $e) {
-            if ($this->pdo->inTransaction()) {
+            if ($started && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;

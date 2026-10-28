@@ -239,4 +239,20 @@ $assert((float)$adjs[0]['service_cash_delta'] === -250.00, 'First return deducte
 $assert((int)$adjs[1]['session_id'] === 21, 'Second return posted to current session 21');
 $assert((float)$adjs[1]['service_cash_delta'] === -260.00, 'Second return deducted 260');
 
+// Money sent to a customer must come back before cancellation, too.
+$pdo->exec("INSERT INTO gcash_transactions (transaction_id, session_id, shift_id, transaction_type, amount, principal_amount, fee_amount, fee_method, service_cash_delta, wallet_delta, reference_number, gross_fee, cashier_id, confirmed_cash, confirmed_wallet, verification_status, responsible_user_id, responsible_role) VALUES (99, 21, 11, 'Cash-In', 500, 500, 10, 'cash', 0, -500, '9999999999999', 0, 2, 0, 1, 'Needs checking', 2, 'cashier')");
+$refuse(fn() => $service->resolveNeedsChecking(2, 99, 'cancel', ['reason' => 'Customer has not returned wallet funds']), '/return evidence/i');
+$negativePartial = $service->recordFailedExchangeReturn(2, 99, [
+    'returned_cash' => 0, 'returned_wallet' => 200, 'evidence' => 'Wallet recovery receipt one', 'reason' => 'Customer repaid part of wallet funds',
+    'approver_username' => 'admin_bob', 'approver_password' => 'AdminPass@123',
+]);
+$refuse(fn() => $service->resolveNeedsChecking(2, 99, 'complete', ['reference' => '9999999999999']), '/returns have started/i');
+$assert($negativePartial['completed'] === false && $negativePartial['remaining_obligation'] === 300.0, 'Partial recovery of outgoing wallet money remains pending');
+$negativeFull = $service->recordFailedExchangeReturn(2, 99, [
+    'returned_cash' => 0, 'returned_wallet' => 300, 'evidence' => 'Wallet recovery receipt two', 'reason' => 'Customer repaid remaining wallet funds',
+    'approver_username' => 'admin_bob', 'approver_password' => 'AdminPass@123',
+]);
+$assert($negativeFull['completed'] === true, 'Full outgoing-wallet recovery allows cancellation');
+$assert((float)$pdo->query('SELECT SUM(wallet_delta) FROM gcash_adjustments WHERE transaction_id=99')->fetchColumn() === 500.0, 'Recovery adds funds to the current wallet rather than deducting again');
+
 echo "Failed exchange actual returns contract: passed\n";

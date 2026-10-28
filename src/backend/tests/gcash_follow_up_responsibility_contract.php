@@ -130,6 +130,7 @@ $pdo->exec("
         transaction_id INTEGER,
         session_id INTEGER,
         service_cash_delta REAL DEFAULT 0.00,
+        correction_mode TEXT DEFAULT 'money_movement',
         wallet_delta REAL DEFAULT 0.00,
         reason TEXT,
         authorized_by INTEGER,
@@ -313,7 +314,7 @@ $pdo->exec("UPDATE gcash_service_sessions SET responsible_user_id = NULL, respon
 
 $waiveBlocked = false;
 try {
-    $gcashService->waiveDiscrepancy(1, 'admin', $newSessId, 'Waiving without responsible person');
+    $gcashService->waiveDiscrepancy(1, 'admin', $newSessId, 'Waiving without responsible person', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 } catch (DomainException $e) {
     if (stripos($e->getMessage(), 'responsible') !== false) {
         $waiveBlocked = true;
@@ -328,7 +329,7 @@ $assert((int)$diffRow['responsible_user_id'] === 1, 'Session difference transfer
 $assert($diffRow['responsible_role'] === 'admin', 'Session difference responsible role is admin');
 
 // Now waiving is allowed
-$gcashService->waiveDiscrepancy(1, 'admin', $newSessId, 'Count audited and verified by Admin Bob');
+$gcashService->waiveDiscrepancy(1, 'admin', $newSessId, 'Count audited and verified by Admin Bob', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 $waivedRow = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = {$newSessId}")->fetch(PDO::FETCH_ASSOC);
 $assert($waivedRow['waived_at'] !== null, 'Closing discrepancy waived successfully');
 
