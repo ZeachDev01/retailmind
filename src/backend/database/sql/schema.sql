@@ -295,6 +295,7 @@ CREATE TABLE `cash_refund_exception_access` (
   FOREIGN KEY (`used_refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+DROP TABLE IF EXISTS `refund_correction_reviews`;
 CREATE TABLE `refund_correction_reviews` (
   `review_id` int(11) NOT NULL AUTO_INCREMENT,
   `refund_id` int(11) NOT NULL,
@@ -1758,7 +1759,7 @@ CREATE TABLE `gcash_service_sessions` (
 CREATE TABLE `gcash_funding_movements` (
   `movement_id` int NOT NULL AUTO_INCREMENT,
   `session_id` int NOT NULL,
-  `movement_type` enum('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+  `movement_type` enum('replenishment','withdrawal','product_drawer_transfer','owner_capital','shortage_recovery') NOT NULL,
   `fund_type` enum('cash','wallet') NOT NULL,
   `amount` decimal(12,2) NOT NULL,
   `direction` enum('in','out') NOT NULL,
@@ -1767,6 +1768,9 @@ CREATE TABLE `gcash_funding_movements` (
   `authorized_by` int NOT NULL,
   `recorded_by` int NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `received_by` INT NULL,
+  `receipt_confirmed` TINYINT(1) NOT NULL DEFAULT 0,
+  `linked_session_id` INT NULL,
   PRIMARY KEY (`movement_id`),
   KEY `idx_gcash_funding_session` (`session_id`),
   KEY `idx_gcash_funding_auth` (`authorized_by`),
@@ -1830,6 +1834,10 @@ CREATE TABLE `gcash_adjustments` (
   `reason` varchar(255) NOT NULL,
   `authorized_by` int NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `correction_mode` VARCHAR(30) NOT NULL DEFAULT 'money_movement',
+  `fee_delta` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  `evidence` TEXT NULL,
+  `recorded_by` INT NULL,
   PRIMARY KEY (`adjustment_id`),
   KEY `idx_gcash_adj_tx` (`transaction_id`),
   KEY `idx_gcash_adj_session` (`session_id`),
@@ -2010,3 +2018,28 @@ INSERT INTO schema_migrations (migration_key,description) VALUES
 ('202610250001_store_receipt_print_jobs','Queue saved receipts for the Store PC printer'),
 ('202610250002_inventory_recovery','Private inventory draft keys and committed submission identities (#316)'),
 ('202610270001_starter_product_categories','Add common Product categories when the Store has none');
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280005_gcash_movement_evidence','Persist GCash correction modes, actual return evidence, and funding receipt attribution') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610270002_cashier_shift_variance_reviews','Add accountable review draft, notes, shortage, and history to cashier_shifts (ticket #329)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280001_retire_unusual_discount_and_reversal_attention','Retire unusual discount and legacy reversal attention, notifications, and settings (#330)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+DELETE FROM notifications
+            WHERE attention_key IN ('store.sales.reversals', 'store.sales.unusual-discounts')
+               OR attention_destination LIKE '%/sales.php?tab=reversals%';
+
+DELETE FROM attention_states
+            WHERE attention_key IN ('store.sales.reversals', 'store.sales.unusual-discounts');
+
+DELETE FROM attention_settings
+            WHERE (setting_scope = 'store' AND setting_key IN ('reversal_count', 'unusual_discount_percent', 'inventory_escalation_count', 'inventory_unresolved_hours'))
+               OR (setting_scope = 'platform' AND setting_key IN ('store_reversal_count_max', 'store_unusual_discount_percent_max', 'store_inventory_unresolved_hours_max'));
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280002_gcash_verify_clear_evidence','Add cash and wallet check evidence to gcash_transactions (ticket #331)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280002_refund_correction_reviews','Add refund correction review workflow tables and columns (ticket #343)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280003_gcash_closing_difference_review','Add closing difference review fields to gcash_service_sessions (ticket #332)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);

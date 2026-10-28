@@ -115,6 +115,7 @@ $pdo->exec("
         wallet_delta REAL DEFAULT 0.00,
         reason TEXT,
         evidence TEXT,
+        recorded_by INTEGER,
         authorized_by INTEGER,
         effective_date TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -248,5 +249,10 @@ $refuse(
     fn() => $service->recordLinkedCorrection(1, 'admin', 101, -5.0, 0.0, 'Cannot correct in closed period', null, 'recording_mistake'),
     '/fiscal period/i'
 );
+
+$pdo->exec("UPDATE fiscal_periods SET status='open' WHERE period_id=1");
+$recordedId = $service->recordLinkedCorrection(1, 'admin', 101, -1.0, 0.0, 'Cashier recorded with supervisor approval', null, 'recording_mistake', 2);
+$record = $pdo->query("SELECT recorded_by,authorized_by FROM gcash_adjustments WHERE adjustment_id={$recordedId}")->fetch(PDO::FETCH_ASSOC);
+$assert((int)$record['recorded_by'] === 2 && (int)$record['authorized_by'] === 1, 'Recording Cashier and approving Administrator retain separate attribution');
 
 echo "GCash recording corrections contract: passed\n";

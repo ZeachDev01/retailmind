@@ -39,18 +39,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } elseif ($action === 'save_draft') {
             $shiftId = (int)($_POST['shift_id'] ?? 0);
             $draftNotes = (string)($_POST['draft_notes'] ?? '');
-            $shiftService->saveReviewDraft($shiftId, (int)current_user_id(), (string)current_role(), $draftNotes);
+            $shiftService->saveReviewDraft($shiftId, (int)$_SESSION['user_id'], (string)current_role(), $draftNotes);
             $success = 'Draft investigation notes saved.';
         } elseif ($action === 'mark_reviewed') {
             $shiftId = (int)($_POST['shift_id'] ?? 0);
             $explanation = (string)($_POST['explanation'] ?? '');
             $shortage = isset($_POST['remaining_shortage']) && $_POST['remaining_shortage'] !== '' ? (float)$_POST['remaining_shortage'] : null;
-            $shiftService->markReviewed($shiftId, (int)current_user_id(), (string)current_role(), $explanation, $shortage);
+            $shiftService->markReviewed($shiftId, (int)$_SESSION['user_id'], (string)current_role(), $explanation, $shortage);
             $success = 'Cashier Shift variance marked as reviewed.';
         } elseif ($action === 'reopen_review') {
             $shiftId = (int)($_POST['shift_id'] ?? 0);
             $reason = (string)($_POST['reopen_reason'] ?? '');
-            $shiftService->reopenReview($shiftId, (int)current_user_id(), (string)current_role(), $reason);
+            $shiftService->reopenReview($shiftId, (int)$_SESSION['user_id'], (string)current_role(), $reason);
             $success = 'Cashier Shift review reopened. Attention restored.';
         }
     } catch (Throwable $exception) {

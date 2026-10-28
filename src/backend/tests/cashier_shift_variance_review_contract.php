@@ -256,6 +256,12 @@ $check($reviewedResult['review_notes'] === 'Investigation finished: misplaced dr
 $check((float)$reviewedResult['review_shortage'] === 100.00, 'explicitly records remaining shortage');
 $check($reviewedResult['review_draft_notes'] === 'Checked till roll and CCTV; awaiting cashier interview', 'retains draft notes');
 
+$reportAfterReview = $reportService->report('admin', ['shift_id' => 103]);
+$reviewRow = array_values(array_filter($reportAfterReview['rows'], static fn(array $row): bool => (int)$row['Shift ID'] === 103))[0] ?? [];
+$check(!empty($reviewRow['reviewed_at']) && (int)$reviewRow['reviewed_by'] === 2, 'Report returns saved reviewer and time');
+$check(($reviewRow['review_draft_notes'] ?? '') === 'Checked till roll and CCTV; awaiting cashier interview', 'Report preserves saved investigation draft');
+$check(!empty($reviewRow['review_history']), 'Report exposes review history for reopening');
+
 // Immutable closing evidence
 $check((float)$reviewedResult['expected_cash'] === 200.00 && (float)$reviewedResult['actual_cash'] === 100.00 && (float)$reviewedResult['cash_variance'] === -100.00 && $reviewedResult['closing_notes'] === 'Counted twice, 100 missing', 'closing figures remain immutable after review');
 

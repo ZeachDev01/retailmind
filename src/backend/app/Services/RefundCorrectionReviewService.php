@@ -8,6 +8,8 @@ use DomainException;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
+use Throwable;
+use App\Store\StoreWriteGate;
 
 class RefundCorrectionReviewService
 {
@@ -146,59 +148,75 @@ class RefundCorrectionReviewService
             $stockStatus = 'pending';
         }
 
+        foreach (['cashier' => $cashStatus === 'pending' ? $responsibleCashierId : null, 'inventory_manager' => $stockStatus === 'pending' ? $responsibleInventoryManagerId : null] as $requiredRole => $userId) {
+            if ($userId === null) continue;
+            $stmt = $this->pdo->prepare("SELECT 1 FROM users u JOIN roles r ON r.role_id=u.role_id LEFT JOIN user_roles ur ON ur.user_id=u.user_id LEFT JOIN roles ar ON ar.role_id=ur.role_id WHERE u.user_id=? AND u.status='active' AND (r.role_name=? OR ar.role_name=?)");
+            $stmt->execute([$userId, $requiredRole, $requiredRole]);
+            if (!$stmt->fetchColumn()) throw new DomainException('Select an active responsible person with the required role.');
+        }
+
         $status = self::STATUS_REVIEWED_OUTSTANDING;
         $proposedJson = $proposedCorrection ? json_encode($proposedCorrection, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
 
-        $stmt = $this->pdo->prepare("
-            INSERT INTO refund_correction_reviews (
-                refund_id, correction_type, status, cash_status, stock_status,
-                explanation, proposed_correction, reviewed_by,
-                responsible_cashier_id, responsible_inventory_manager_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $refundId,
-            $correctionType,
-            $status,
-            $cashStatus,
-            $stockStatus,
-            $explanation,
-            $proposedJson,
-            $actorId,
-            $responsibleCashierId ?: null,
-            $responsibleInventoryManagerId ?: null,
-        ]);
+        if (function_exists('is_remote_request') && is_remote_request()) throw new DomainException('Refund corrections are unavailable during remote monitoring.');
+        StoreWriteGate::begin($this->pdo);
+        try {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO refund_correction_reviews (
+                    refund_id, correction_type, status, cash_status, stock_status,
+                    explanation, proposed_correction, reviewed_by,
+                    responsible_cashier_id, responsible_inventory_manager_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $refundId,
+                $correctionType,
+                $status,
+                $cashStatus,
+                $stockStatus,
+                $explanation,
+                $proposedJson,
+                $actorId,
+                $responsibleCashierId ?: null,
+                $responsibleInventoryManagerId ?: null,
+            ]);
 
-        $reviewId = (int)$this->pdo->lastInsertId();
+            $reviewId = (int)$this->pdo->lastInsertId();
 
-        // Audit log
-        $this->pdo->prepare("
-            INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-        ")->execute([
-            $actorId,
-            'Refund correction review approved',
-            AuditRecordCategory::STORE_OPERATION,
-            'Refund Correction Reviews',
-            $reviewId,
-            json_encode([
-                'review_id' => $reviewId,
-                'refund_id' => $refundId,
-                'correction_type' => $correctionType,
-                'status' => $status,
-                'responsible_cashier_id' => $responsibleCashierId,
-                'responsible_inventory_manager_id' => $responsibleInventoryManagerId,
-                'explanation' => $explanation,
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            'system',
-        ]);
+            // Audit log
+            $this->pdo->prepare("
+                INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+            ")->execute([
+                $actorId,
+                'Refund correction review approved',
+                AuditRecordCategory::STORE_OPERATION,
+                'Refund Correction Reviews',
+                $reviewId,
+                json_encode([
+                    'review_id' => $reviewId,
+                    'refund_id' => $refundId,
+                    'correction_type' => $correctionType,
+                    'status' => $status,
+                    'responsible_cashier_id' => $responsibleCashierId,
+                    'responsible_inventory_manager_id' => $responsibleInventoryManagerId,
+                    'explanation' => $explanation,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                'system',
+            ]);
 
-        return $reviewId;
+            $this->pdo->commit();
+            return $reviewId;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
-    public function getReview(int $reviewId): ?array
+    public function getReview(int $reviewId, bool $lock = false): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM refund_correction_reviews WHERE review_id = ?");
+        $suffix = $lock && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+        $stmt = $this->pdo->prepare("SELECT * FROM refund_correction_reviews WHERE review_id = ?" . $suffix);
         $stmt->execute([$reviewId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
@@ -243,61 +261,74 @@ class RefundCorrectionReviewService
             throw new DomainException('Only the Cashier workspace can execute drawer corrections.');
         }
 
-        $review = $this->getReview($reviewId);
-        if (!$review) {
-            throw new DomainException('Refund correction review not found.');
+        if (function_exists('is_remote_request') && is_remote_request()) throw new DomainException('Refund corrections are unavailable during remote monitoring.');
+        StoreWriteGate::begin($this->pdo);
+        try {
+            $review = $this->getReview($reviewId, true);
+            if (!$review) {
+                throw new DomainException('Refund correction review not found.');
+            }
+            if ((int)$review['responsible_cashier_id'] !== $actorId) {
+                throw new DomainException('Only the designated responsible Cashier can execute this drawer correction.');
+            }
+            if ($review['cash_status'] !== 'pending') {
+                throw new DomainException('Cash drawer correction is not pending for this review.');
+            }
+
+            $proposal = json_decode((string)$review['proposed_correction'], true) ?: [];
+            if (isset($proposal['cash_amount']) && round((float)$proposal['cash_amount'], 2) !== $amount) {
+                throw new DomainException('The cash correction must match the approved amount.');
+            }
+
+            // Use CashierShiftService to add drawer movement
+            $shiftService = new CashierShiftService($this->pdo, $this->policy);
+            $movementType = $amount >= 0 ? 'cash_in' : 'cash_out';
+            $movementAmount = abs($amount);
+            $reason = $movementType === 'cash_in' ? 'cash_return' : 'other';
+
+            $movementId = $shiftService->addDrawerMovement(
+                $actorId,
+                $actorRole,
+                $movementType,
+                $movementAmount,
+                $reason,
+                $note
+            );
+
+            // Update review
+            $newCashStatus = 'completed';
+            $isStockComplete = in_array($review['stock_status'], ['completed', 'not_required'], true);
+            $newOverallStatus = $isStockComplete ? self::STATUS_CORRECTED : self::STATUS_REVIEWED_OUTSTANDING;
+            $completedAt = $isStockComplete ? date('Y-m-d H:i:s') : null;
+
+            $stmt = $this->pdo->prepare("
+                UPDATE refund_correction_reviews
+                SET cash_status = ?, status = ?, cash_drawer_movement_id = ?, completed_at = COALESCE(completed_at, ?)
+                WHERE review_id = ?
+            ");
+            $stmt->execute([$newCashStatus, $newOverallStatus, $movementId, $completedAt, $reviewId]);
+
+            // Audit log
+            $this->pdo->prepare("
+                INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([
+                $actorId,
+                'Refund correction drawer task completed',
+                AuditRecordCategory::STORE_OPERATION,
+                'Refund Correction Reviews',
+                $reviewId,
+                json_encode(['status' => $review['status'], 'cash_status' => $review['cash_status']]),
+                json_encode(['status' => $newOverallStatus, 'cash_status' => $newCashStatus, 'drawer_movement_id' => $movementId]),
+                'system',
+            ]);
+
+            $this->pdo->commit();
+            return ['drawer_movement_id' => $movementId, 'review' => $this->getReview($reviewId)];
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
         }
-        if ((int)$review['responsible_cashier_id'] !== $actorId) {
-            throw new DomainException('Only the designated responsible Cashier can execute this drawer correction.');
-        }
-        if ($review['cash_status'] !== 'pending') {
-            throw new DomainException('Cash drawer correction is not pending for this review.');
-        }
-
-        // Use CashierShiftService to add drawer movement
-        $shiftService = new CashierShiftService($this->pdo, $this->policy);
-        $movementType = $amount >= 0 ? 'cash_in' : 'cash_out';
-        $movementAmount = abs($amount);
-        $reason = $movementType === 'cash_in' ? 'cash_return' : 'other';
-
-        $movementId = $shiftService->addDrawerMovement(
-            $actorId,
-            $actorRole,
-            $movementType,
-            $movementAmount,
-            $reason,
-            $note
-        );
-
-        // Update review
-        $newCashStatus = 'completed';
-        $isStockComplete = in_array($review['stock_status'], ['completed', 'not_required'], true);
-        $newOverallStatus = $isStockComplete ? self::STATUS_CORRECTED : self::STATUS_REVIEWED_OUTSTANDING;
-        $completedAt = $isStockComplete ? date('Y-m-d H:i:s') : null;
-
-        $stmt = $this->pdo->prepare("
-            UPDATE refund_correction_reviews
-            SET cash_status = ?, status = ?, cash_drawer_movement_id = ?, completed_at = COALESCE(completed_at, ?)
-            WHERE review_id = ?
-        ");
-        $stmt->execute([$newCashStatus, $newOverallStatus, $movementId, $completedAt, $reviewId]);
-
-        // Audit log
-        $this->pdo->prepare("
-            INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ")->execute([
-            $actorId,
-            'Refund correction drawer task completed',
-            AuditRecordCategory::STORE_OPERATION,
-            'Refund Correction Reviews',
-            $reviewId,
-            json_encode(['status' => $review['status'], 'cash_status' => $review['cash_status']]),
-            json_encode(['status' => $newOverallStatus, 'cash_status' => $newCashStatus, 'drawer_movement_id' => $movementId]),
-            'system',
-        ]);
-
-        return ['drawer_movement_id' => $movementId, 'review' => $this->getReview($reviewId)];
     }
 
     public function executeStockCorrection(
@@ -312,84 +343,97 @@ class RefundCorrectionReviewService
             throw new DomainException('Only the Inventory Manager workspace can execute stock adjustments.');
         }
 
-        $review = $this->getReview($reviewId);
-        if (!$review) {
-            throw new DomainException('Refund correction review not found.');
+        if (function_exists('is_remote_request') && is_remote_request()) throw new DomainException('Refund corrections are unavailable during remote monitoring.');
+        StoreWriteGate::begin($this->pdo);
+        try {
+            $review = $this->getReview($reviewId, true);
+            if (!$review) {
+                throw new DomainException('Refund correction review not found.');
+            }
+            if ((int)$review['responsible_inventory_manager_id'] !== $actorId) {
+                throw new DomainException('Only the designated responsible Inventory Manager can execute this stock correction.');
+            }
+            if ($review['stock_status'] !== 'pending') {
+                throw new DomainException('Stock correction is not pending for this review.');
+            }
+
+            $proposal = json_decode((string)$review['proposed_correction'], true) ?: [];
+            if (isset($proposal['product_id'], $proposal['quantity']) && ((int)$proposal['product_id'] !== $productId || (int)$proposal['quantity'] !== $qtyChange)) {
+                throw new DomainException('The stock correction must match the approved Product and quantity.');
+            }
+
+            // Execute inventory adjustment via ProductService
+            $productService = new \ProductService($this->pdo);
+            $productService->adjustStock([
+                'product_id' => $productId,
+                'qty_change' => $qtyChange,
+                'adjustment_reason' => $reason,
+            ], $actorId);
+
+            // Find created stock movement id
+            $smStmt = $this->pdo->prepare("
+                SELECT movement_id FROM stock_movements
+                WHERE moved_by = ? AND product_id = ?
+                ORDER BY movement_id DESC LIMIT 1
+            ");
+            $smStmt->execute([$actorId, $productId]);
+            $movementId = (int)$smStmt->fetchColumn();
+
+            // Record accountable inventory_adjustment record
+            $this->pdo->prepare("
+                INSERT INTO inventory_adjustments (
+                    product_id, adjustment_qty, adjustment_type, reported_by,
+                    approved_by, approved_at, reason, review_notes, status
+                ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, 'approved')
+            ")->execute([
+                $productId,
+                $qtyChange,
+                'other',
+                $actorId,
+                $actorId,
+                $reason,
+                "Executed for Refund Correction Review #{$reviewId}",
+            ]);
+            $adjustmentId = (int)$this->pdo->lastInsertId();
+
+            if ($movementId > 0) {
+                $this->pdo->prepare("UPDATE stock_movements SET adjustment_id = ? WHERE movement_id = ?")
+                    ->execute([$adjustmentId, $movementId]);
+            }
+
+            // Update review
+            $newStockStatus = 'completed';
+            $isCashComplete = in_array($review['cash_status'], ['completed', 'not_required'], true);
+            $newOverallStatus = $isCashComplete ? self::STATUS_CORRECTED : self::STATUS_REVIEWED_OUTSTANDING;
+            $completedAt = $isCashComplete ? date('Y-m-d H:i:s') : null;
+
+            $stmt = $this->pdo->prepare("
+                UPDATE refund_correction_reviews
+                SET stock_status = ?, status = ?, inventory_adjustment_id = ?, completed_at = COALESCE(completed_at, ?)
+                WHERE review_id = ?
+            ");
+            $stmt->execute([$newStockStatus, $newOverallStatus, $adjustmentId ?: null, $completedAt, $reviewId]);
+
+            // Audit log
+            $this->pdo->prepare("
+                INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ")->execute([
+                $actorId,
+                'Refund correction stock task completed',
+                AuditRecordCategory::STORE_OPERATION,
+                'Refund Correction Reviews',
+                $reviewId,
+                json_encode(['status' => $review['status'], 'stock_status' => $review['stock_status']]),
+                json_encode(['status' => $newOverallStatus, 'stock_status' => $newStockStatus, 'adjustment_id' => $adjustmentId]),
+                'system',
+            ]);
+
+            $this->pdo->commit();
+            return ['adjustment_id' => $adjustmentId, 'review' => $this->getReview($reviewId)];
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
         }
-        if ((int)$review['responsible_inventory_manager_id'] !== $actorId) {
-            throw new DomainException('Only the designated responsible Inventory Manager can execute this stock correction.');
-        }
-        if ($review['stock_status'] !== 'pending') {
-            throw new DomainException('Stock correction is not pending for this review.');
-        }
-
-        // Execute inventory adjustment via ProductService
-        $productService = new \ProductService($this->pdo);
-        $productService->adjustStock([
-            'product_id' => $productId,
-            'qty_change' => $qtyChange,
-            'adjustment_reason' => $reason,
-        ], $actorId);
-
-        // Find created stock movement id
-        $smStmt = $this->pdo->prepare("
-            SELECT movement_id FROM stock_movements
-            WHERE moved_by = ? AND product_id = ?
-            ORDER BY movement_id DESC LIMIT 1
-        ");
-        $smStmt->execute([$actorId, $productId]);
-        $movementId = (int)$smStmt->fetchColumn();
-
-        // Record accountable inventory_adjustment record
-        $this->pdo->prepare("
-            INSERT INTO inventory_adjustments (
-                product_id, adjustment_qty, adjustment_type, reported_by,
-                approved_by, approved_at, reason, review_notes, status
-            ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, 'approved')
-        ")->execute([
-            $productId,
-            $qtyChange,
-            'other',
-            $actorId,
-            $actorId,
-            $reason,
-            "Executed for Refund Correction Review #{$reviewId}",
-        ]);
-        $adjustmentId = (int)$this->pdo->lastInsertId();
-
-        if ($movementId > 0) {
-            $this->pdo->prepare("UPDATE stock_movements SET adjustment_id = ? WHERE movement_id = ?")
-                ->execute([$adjustmentId, $movementId]);
-        }
-
-        // Update review
-        $newStockStatus = 'completed';
-        $isCashComplete = in_array($review['cash_status'], ['completed', 'not_required'], true);
-        $newOverallStatus = $isCashComplete ? self::STATUS_CORRECTED : self::STATUS_REVIEWED_OUTSTANDING;
-        $completedAt = $isCashComplete ? date('Y-m-d H:i:s') : null;
-
-        $stmt = $this->pdo->prepare("
-            UPDATE refund_correction_reviews
-            SET stock_status = ?, status = ?, inventory_adjustment_id = ?, completed_at = COALESCE(completed_at, ?)
-            WHERE review_id = ?
-        ");
-        $stmt->execute([$newStockStatus, $newOverallStatus, $adjustmentId ?: null, $completedAt, $reviewId]);
-
-        // Audit log
-        $this->pdo->prepare("
-            INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ")->execute([
-            $actorId,
-            'Refund correction stock task completed',
-            AuditRecordCategory::STORE_OPERATION,
-            'Refund Correction Reviews',
-            $reviewId,
-            json_encode(['status' => $review['status'], 'stock_status' => $review['stock_status']]),
-            json_encode(['status' => $newOverallStatus, 'stock_status' => $newStockStatus, 'adjustment_id' => $adjustmentId]),
-            'system',
-        ]);
-
-        return ['adjustment_id' => $adjustmentId, 'review' => $this->getReview($reviewId)];
     }
 }

@@ -382,7 +382,9 @@ $check(count($histReReviewed) === 3, 'history retains all 3 events (review, reop
 $pdo->exec("INSERT INTO gcash_service_sessions
     (session_id, shift_id, cashier_id, status, expected_service_cash, closing_service_cash, cash_variance, expected_wallet_balance, closing_wallet_balance, wallet_variance, closing_notes, closed_by)
     VALUES (6, 1, 1, 'closed', 500.00, 450.00, -50.00, 1000.00, 1000.00, 0.00, 'Legacy waive test', 1)");
-$service->waiveDiscrepancy(2, 'admin', 6, 'Legacy waiver notes for session 6');
+$refused(fn() => $service->waiveDiscrepancy(2, 'admin', 6, 'A note is not proof of physical checks'), 'Legacy waiver cannot invent physical checks');
+$refused(fn() => $service->markReviewed(2, 'admin', 6, 'A note is not proof of physical checks'), 'String review cannot invent physical checks');
+$service->waiveDiscrepancy(2, 'admin', 6, 'Legacy waiver notes for session 6', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 $s6Row = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = 6")->fetch(PDO::FETCH_ASSOC);
 $check($s6Row['waived_at'] !== null && (int)$s6Row['waived_by'] === 2, 'waiveDiscrepancy retains backwards-compatible execution');
 

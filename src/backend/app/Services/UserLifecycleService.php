@@ -409,7 +409,14 @@ final class UserLifecycleService
             $statement->execute([(int)$target['user_id']]);
             if ($statement->fetchColumn() !== false) return true;
         }
-        $pattern = '(^|[^0-9])' . (int)$target['user_id'] . '([^0-9]|$)';
+        // Audit payloads contain logical identities, including nested shift/GCash actors.
+        $idPattern = '"([a-z_]*(user_id|cashier_id|actor_id)|created_by|updated_by|reported_by|approved_by|reviewed_by|recorded_by|requested_by|assigned_to|decided_by|received_by|counted_by|moved_by|pulled_by|performed_by|verified_by|closed_by|discarded_by|[a-z_]*authorized_by|waived_by|activated_by|rolled_back_by|suspended_by)"[[:space:]]*:[[:space:]]*"?'
+            . (int)$target['user_id'] . '"?([,}[:space:]]|$)';
+        $identityPatterns = [];
+        foreach (array_filter([$target['username'], $target['email']]) as $identity) {
+            $identityPatterns[] = '"(username|email)"[[:space:]]*:[[:space:]]*' . preg_quote(json_encode($identity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), '~');
+        }
+        $pattern = $idPattern . '|"identity"[[:space:]]*:[[:space:]]*"user:' . (int)$target['user_id'] . '"|' . implode('|', $identityPatterns);
         $statement = $this->pdo->prepare("SELECT 1 FROM activity_log
             WHERE ((module IN ('User Access', 'Users', 'Recovery Account')
                     OR (module = 'Authentication' AND action IN ('Login success', 'Login failure'))) AND record_id = ?)
@@ -517,6 +524,9 @@ final class UserLifecycleService
             throw new DomainException('The Recovery Account can be managed only through the offline recovery procedure.');
         }
         $targetRoles = array_values(array_unique(array_merge([$target['role_name']], array_map('strval', $target['roles'] ?? []))));
+        if ($actorId !== (int)$target['user_id'] && in_array('super_admin', $targetRoles, true)) {
+            throw new DomainException('This privileged account is protected.');
+        }
         if ($actorRole === 'super_admin' && $actorId !== (int)$target['user_id']) {
             if (!in_array('admin', $targetRoles, true)) {
                 throw new DomainException('Super Administrators cannot manage staff accounts without Administrator access.');

@@ -254,7 +254,7 @@ function ensure_operational_updates_schema(PDO $pdo): void
     $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
         movement_id INT AUTO_INCREMENT PRIMARY KEY,
         session_id INT NOT NULL,
-        movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital') NOT NULL,
+        movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital','shortage_recovery') NOT NULL,
         fund_type ENUM('cash','wallet') NOT NULL,
         amount DECIMAL(12,2) NOT NULL,
         direction ENUM('in','out') NOT NULL,
@@ -267,6 +267,14 @@ function ensure_operational_updates_schema(PDO $pdo): void
         INDEX idx_gcash_funding_auth (authorized_by),
         INDEX idx_gcash_funding_rec (recorded_by)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    ensure_table_column($pdo, 'gcash_funding_movements', 'received_by', "INT NULL");
+    ensure_table_column($pdo, 'gcash_funding_movements', 'receipt_confirmed', "TINYINT(1) NOT NULL DEFAULT 0");
+    ensure_table_column($pdo, 'gcash_funding_movements', 'linked_session_id', "INT NULL");
+    $type = $pdo->query("SHOW COLUMNS FROM gcash_funding_movements LIKE 'movement_type'")->fetch(PDO::FETCH_ASSOC);
+    if (!str_contains((string)($type['Type'] ?? ''), 'shortage_recovery')) {
+        $pdo->exec("ALTER TABLE gcash_funding_movements MODIFY movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital','shortage_recovery') NOT NULL");
+    }
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_adjustments (
         adjustment_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -281,6 +289,11 @@ function ensure_operational_updates_schema(PDO $pdo): void
         INDEX idx_gcash_adj_session (session_id),
         INDEX idx_gcash_adj_auth (authorized_by)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    ensure_table_column($pdo, 'gcash_adjustments', 'correction_mode', "VARCHAR(30) NOT NULL DEFAULT 'money_movement'");
+    ensure_table_column($pdo, 'gcash_adjustments', 'fee_delta', "DECIMAL(12,2) NOT NULL DEFAULT 0.00");
+    ensure_table_column($pdo, 'gcash_adjustments', 'evidence', "TEXT NULL");
+    ensure_table_column($pdo, 'gcash_adjustments', 'recorded_by', "INT NULL");
 
     $gcashTableExists = false;
     try {

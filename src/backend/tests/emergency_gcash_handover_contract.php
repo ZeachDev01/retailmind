@@ -144,6 +144,7 @@ $pdo->exec("
         transaction_id INTEGER,
         session_id INTEGER,
         service_cash_delta REAL DEFAULT 0.00,
+        correction_mode TEXT DEFAULT 'money_movement',
         wallet_delta REAL DEFAULT 0.00,
         reason TEXT,
         authorized_by INTEGER,

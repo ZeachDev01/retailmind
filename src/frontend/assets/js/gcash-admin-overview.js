@@ -22,9 +22,12 @@
         if (tabInput) tabInput.value = url.searchParams.get('tab');
         if (focus) tab.focus();
         tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
+        if (target === 'tab-money' && document.getElementById(target).dataset.loaded !== 'true' && focus) window.location.assign(url);
     }
     tabs.forEach((tab, index) => {
-        tab.addEventListener('click', () => selectTab(tab));
+        tab.addEventListener('click', () => {
+            selectTab(tab, true);
+        });
         tab.addEventListener('keydown', event => {
             const next = {ArrowRight: (index + 1) % tabs.length, ArrowLeft: (index + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1}[event.key];
             if (next === undefined) return;
@@ -314,6 +317,7 @@
             document.getElementById('waiver-target-cash-var').textContent = (cashVar > 0 ? '+' : '') + formatMoney(cashVar);
             document.getElementById('waiver-target-wallet-var').textContent = (walletVar > 0 ? '+' : '') + formatMoney(walletVar);
 
+            waiverForm.reset();
             waiverNotes.value = '';
             if (waiverError) {
                 waiverError.hidden = true;
@@ -338,7 +342,7 @@
 
             if (notes.length < 5 || notes.length > 500) {
                 if (waiverError) {
-                    waiverError.textContent = 'Please enter waiver notes between 5 and 500 characters.';
+                    waiverError.textContent = 'Please enter review explanation between 5 and 500 characters.';
                     waiverError.hidden = false;
                 }
                 return;
@@ -355,7 +359,11 @@
                         'X-CSRF-Token': csrf
                     },
                     body: JSON.stringify({
-                        action: 'waive_discrepancy',
+                        action: 'mark_reviewed',
+                        cash_checked: waiverForm.elements.cash_checked.checked,
+                        wallet_checked: waiverForm.elements.wallet_checked.checked,
+                        cash_explanation: waiverForm.elements.cash_explanation.value,
+                        wallet_explanation: waiverForm.elements.wallet_explanation.value,
                         session_id: sessId,
                         waiver_notes: notes
                     })
@@ -363,7 +371,7 @@
 
                 const data = await res.json();
                 if (!res.ok || data.error) {
-                    throw new Error(data.error || 'Failed to record discrepancy waiver.');
+                    throw new Error(data.error || 'Failed to record closing review.');
                 }
 
                 waiverDialog.close();

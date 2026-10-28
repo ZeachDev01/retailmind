@@ -280,4 +280,10 @@ $singleId = $service->recordFundingMovement(2, 'cashier', [
 $countAfter = (float)$service->calculateSessionExpected(2)['expected_service_cash'];
 $assert(round($countAfter - $countBefore, 2) === 100.00, 'Counted exactly once (+100) despite multiple links');
 
+$refuse(fn() => $service->recordShortageRecovery(2, [
+    'session_id' => 1, 'amount' => 50, 'fund_type' => 'cash', 'receipt_confirmed' => true,
+    'evidence_reference' => 'Additional actual receipt', 'reason' => 'Cannot recover more than shortage',
+    'approver_username' => 'admin_bob', 'approver_password' => 'AdminPass@123',
+]), '/remaining|exceeds/i');
+
 echo "GCash Money history and linked shortage recovery contract: passed\n";

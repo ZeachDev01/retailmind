@@ -631,7 +631,6 @@ final class StoreOperationsDashboardWorkspace
             'evaluations' => $evalMetrics ?? [],
             'operational_exceptions' => count($exceptions),
             'exceptions' => $exceptions,
-                'gcash_attention' => $gcashAttention,
         ];
     }
 

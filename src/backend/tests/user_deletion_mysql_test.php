@@ -32,6 +32,11 @@ try {
         catch (DomainException $e) { $assert(str_contains($e->getMessage(), $expected), $e->getMessage()); }
     };
     $auditCount = static fn(): int => (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+    $numberOnlyId = $seed();
+    $pdo->prepare("INSERT INTO activity_log (user_id,action,category,module,record_id,new_value) VALUES (1,'Unrelated amount','store_operation','Inventory',1,?)")
+        ->execute([json_encode(['amount' => $numberOnlyId, 'quantity' => $numberOnlyId])]);
+    $assert($service->deletionRestriction(1, 'admin', $numberOnlyId) === null, 'Amounts and quantities equal to a user ID do not imply identity history');
+    $service->delete(1, 'admin', $numberOnlyId, true);
     // Imported account without history; no audits are removed to make it eligible.
     foreach (['active', 'disabled'] as $status) {
         $id = $seed($status, 1);
@@ -50,7 +55,7 @@ try {
         $audit = $pdo->query("SELECT * FROM activity_log WHERE record_id = $id AND action = 'User permanently deleted'")->fetch(PDO::FETCH_ASSOC);
         $before = json_decode($audit['previous_value'], true, 512, JSON_THROW_ON_ERROR);
         $after = json_decode($audit['new_value'], true, 512, JSON_THROW_ON_ERROR);
-        $assert((int)$audit['user_id'] === 1 && $audit['category'] === 'security' && $after['actor_role'] === 'admin', 'Actor attribution and protected category retained');
+        $assert((int)$audit['user_id'] === 1 && $audit['category'] === 'store_operation' && $after['actor_role'] === 'admin', 'Actor attribution and protected category retained');
         $assert($before['user_id'] === $id && $before['username'] === 'imported_' . $id && $before['full_name'] === 'Imported ' . $id && $before['roles'] === ['admin'], 'Deleted identity retained without target FK');
     }
     $history = App\Services\UserLifecycleService::DELETION_HISTORY_MESSAGE;
@@ -113,10 +118,10 @@ try {
     $protected = $seed();
     $pdo->exec("INSERT INTO user_roles (user_id,role_id,is_primary) VALUES ($protected,2,0)");
     $denied(fn() => $service->delete(2, 'super_admin', $protected, true), 'protected');
-    $recovery = $seed();
-    $pdo->exec("UPDATE users SET is_recovery_account = 1 WHERE user_id = $recovery");
-    $denied(fn() => $service->delete(2, 'super_admin', $recovery, true), 'Recovery Account');
-    $denied(fn() => $service->delete($recovery, 'cashier', $id, true), 'Workspace');
+    $recoveryUserId = $seed();
+    $pdo->exec("UPDATE users SET is_recovery_account = 1 WHERE user_id = $recoveryUserId");
+    $denied(fn() => $service->delete(2, 'super_admin', $recoveryUserId, true), 'Recovery Account');
+    $denied(fn() => $service->delete($recoveryUserId, 'cashier', $id, true), 'Workspace');
     $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 1");
     $denied(fn() => $service->delete(1, 'admin', $id, true), 'Workspace');
     $last = $seed('active', 1);

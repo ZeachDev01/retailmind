@@ -267,6 +267,10 @@ $roleSections = [
     ],
 ];
 
+if (in_array($role, ['admin', 'cashier', 'inventory_manager'], true)) {
+    $roleSections[$role][0]['items'][] = ['path' => 'components/cashier/refund_corrections.php', 'icon' => 'money_transfer', 'label' => 'Refund Correction Reviews'];
+}
+
 $sections = $roleSections[$role] ?? [];
 $GLOBALS['rm_navigation_flash'] = $flashMessages;
 $GLOBALS['rm_navigation_shell'] = [

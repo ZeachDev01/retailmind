@@ -72,7 +72,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.keyboard.press('Home');
             assert.equal(await page.locator('#tab-overview').isVisible(), true);
             await page.keyboard.press('End');
-            assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
+            await page.waitForURL(url => url.searchParams.get('tab') === 'money');
+            await page.locator('#tab-money').waitFor({state: 'visible'});
+            assert.equal(await page.locator('#tab-money').isVisible(), true);
         }
         assert.deepEqual(errors, []);
         console.log('GCash cached-script tab regression: passed');

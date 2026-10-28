@@ -10,7 +10,7 @@
     let saving = false, reviewing = false, checking = false, duplicate = false;
     let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
     let worker, photoUrl, cameraVersion = 0, leaving = false;
-    let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null;
+    let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null, returnToken = null;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
     const updateSave = () => {
@@ -130,12 +130,46 @@
             lastClosedSession = result.last_closed_session || null;
             renderSessionStatus();
             el('session-panel').hidden = false;
+            await loadFollowUp();
         } catch (e) {
             currentSession = null;
             renderSessionStatus();
             el('balances-message').textContent = 'Balances unavailable. Reload to try again.';
             el('session-panel').hidden = true;
             notify(e.message || 'Could not verify GCash session status.', 'error');
+        }
+    }
+    async function loadFollowUp() {
+        const container = el('follow-up');
+        if (!container) return;
+        try {
+            const data = await request({action: 'follow_up'});
+            container.replaceChildren();
+            for (const tx of data.needs_checking || []) {
+                const row = document.createElement('p');
+                row.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · Remaining cash PHP ${tx.remaining_cash}, wallet PHP ${tx.remaining_wallet}. `;
+                const button = document.createElement('button');
+                button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Review / record return';
+                button.addEventListener('click', () => openResolveDialog(tx));
+                row.append(button); container.append(row);
+            }
+            for (const tx of data.unassigned_exchanges || []) {
+                const row = document.createElement('p');
+                row.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} · Needs a responsible Cashier. Original recorder #${tx.cashier_id}. `;
+                const button = document.createElement('button');
+                button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Accept this follow-up';
+                button.addEventListener('click', async () => {
+                    button.disabled = true;
+                    try {
+                        await request(null, {action: 'accept_exchange', transaction_id: tx.transaction_id, accepted: true, reason: 'Cashier explicitly accepted individual unfinished exchange follow-up'});
+                        await loadFollowUp();
+                    } catch (error) { notify(error.message, 'error'); button.disabled = false; }
+                });
+                row.append(button); container.append(row);
+            }
+            if (!container.childNodes.length) container.textContent = 'No unfinished exchanges requiring follow-up.';
+        } catch (error) {
+            container.textContent = 'Follow-up unavailable. Reload GCash to try again.';
         }
     }
     async function request(params, body, signal) {
@@ -1126,6 +1160,7 @@
             try {
                 const body = {
                     action: 'funding_movement',
+                    receipt_confirmed: form.receipt_confirmed.checked,
                     movement_type: form.movement_type.value,
                     fund_type: form.fund_type.value,
                     direction: form.direction.value,
@@ -1150,24 +1185,33 @@
 
     function openResolveDialog(tx) {
         resolveTx = tx;
+        returnToken = Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('');
         el('resolve-form').reset();
         el('resolve-summary').textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} (Cash delta: ${tx.service_cash_delta}, Wallet delta: ${tx.wallet_delta})`;
         el('resolve-ref-group').hidden = false;
         el('resolve-print-choice').hidden = false;
         el('resolve-auth-group').hidden = true;
-        el('resolve-action').value = 'complete';
+        const hasReturns = Boolean(tx.has_returns || tx.adjustments?.some(adjustment => Number(adjustment.service_cash_delta) !== 0 || Number(adjustment.wallet_delta) !== 0));
+        el('resolve-action').querySelector('[value="complete"]').disabled = hasReturns;
+        el('resolve-action').value = hasReturns ? 'return' : 'complete';
         el('resolve-reference').value = tx.reference_number || '';
+        updateResolutionFields();
         el('resolve-dialog').showModal();
     }
-    el('resolve-action')?.addEventListener('change', () => {
-        const isCancel = el('resolve-action').value === 'cancel';
+    function updateResolutionFields() {
+        const action = el('resolve-action').value;
+        const returning = action === 'return';
         const hadMoney = resolveTx && (Number(resolveTx.service_cash_delta || 0) !== 0 || Number(resolveTx.wallet_delta || 0) !== 0);
-        el('resolve-ref-group').hidden = isCancel;
-        el('resolve-print-choice').hidden = isCancel;
-        el('resolve-auth-group').hidden = !isCancel || !hadMoney;
-        el('resolve-approver').required = isCancel && hadMoney;
-        el('resolve-password').required = isCancel && hadMoney;
-    });
+        el('resolve-ref-group').hidden = action !== 'complete';
+        el('resolve-print-choice').hidden = action !== 'complete';
+        el('return-fields').hidden = !returning;
+        el('resolve-form').elements.evidence.required = returning;
+        const needsApproval = returning || (action === 'cancel' && hadMoney);
+        el('resolve-auth-group').hidden = !needsApproval;
+        el('resolve-approver').required = needsApproval;
+        el('resolve-password').required = needsApproval;
+    }
+    el('resolve-action')?.addEventListener('change', updateResolutionFields);
     el('resolve-cancel')?.addEventListener('click', () => el('resolve-dialog').close());
     el('resolve-form')?.addEventListener('submit', async event => {
         event.preventDefault();
@@ -1177,7 +1221,13 @@
         submitBtn.disabled = true;
         try {
             const body = {
-                action: 'resolve_needs_checking',
+                action: form.resolve_action.value === 'return' ? 'record_return' : 'resolve_needs_checking',
+                operation_token: returnToken,
+                returned_cash: form.returned_cash.value,
+                returned_wallet: form.returned_wallet.value,
+                fee_returned: form.fee_returned.value,
+                evidence: form.evidence.value,
+                reason: form.notes.value,
                 transaction_id: resolveTx.transaction_id,
                 resolve_action: form.resolve_action.value,
                 reference: form.reference.value,
@@ -1188,7 +1238,7 @@
             const autoPrint = el('resolve-print-receipt').checked;
             const result = await request(null, body);
             el('resolve-dialog').close();
-            notify('Transaction #' + resolveTx.transaction_id + ' resolved.', 'success');
+            notify(result.completed === false ? 'Partial return recorded. The exchange remains pending.' : 'Transaction #' + resolveTx.transaction_id + ' updated.', 'success');
             await loadSessionStatus();
             await loadHistory();
             if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('tab-history'), autoPrint);
@@ -1254,7 +1304,11 @@
         submitBtn.disabled = true;
         try {
             const body = {
-                action: 'waive_discrepancy',
+                action: 'mark_reviewed',
+                cash_checked: form.cash_checked.checked,
+                wallet_checked: form.wallet_checked.checked,
+                cash_explanation: form.cash_explanation.value,
+                wallet_explanation: form.wallet_explanation.value,
                 session_id: waiverSession.session_id,
                 waiver_notes: form.waiver_notes.value,
                 approver_username: form.approver_username.value,
@@ -1262,7 +1316,7 @@
             };
             await request(null, body);
             el('waiver-dialog').close();
-            notify('Closing variance waived for session #' + waiverSession.session_id + '.', 'success');
+            notify('Closing difference reviewed for session #' + waiverSession.session_id + '.', 'success');
             await loadSessionStatus();
         } catch (err) {
             notify(err.message, 'error');

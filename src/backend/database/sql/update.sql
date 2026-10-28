@@ -449,7 +449,7 @@ PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 UPDATE activity_log a SET category=CASE
-          WHEN LOWER(TRIM(COALESCE(module,''))) IN ('users','user access') THEN CASE WHEN COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.target_role')),'') IN ('super_admin','admin') OR COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.target_role')),'') IN ('super_admin','admin') THEN 'security' WHEN COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.target_role')),'') IN ('cashier','inventory_manager') OR COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.target_role')),'') IN ('cashier','inventory_manager') THEN 'store_operation' ELSE 'security' END
+          WHEN LOWER(TRIM(COALESCE(module,''))) IN ('users','user access') THEN CASE WHEN COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.target_role')),'')='super_admin' OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.roles'),'[]'),'"super_admin"') OR COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.target_role')),'')='super_admin' OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.roles'),'[]'),'"super_admin"') THEN 'security' WHEN COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.target_role')),'') IN ('admin','cashier','inventory_manager') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.roles'),'[]'),'"admin"') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.roles'),'[]'),'"cashier"') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.new_value),a.new_value,'{}'),'$.roles'),'[]'),'"inventory_manager"') OR COALESCE((SELECT r.role_name FROM roles r WHERE r.role_id=JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role_id')) LIMIT 1),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.role')),JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.target_role')),'') IN ('admin','cashier','inventory_manager') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.roles'),'[]'),'"admin"') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.roles'),'[]'),'"cashier"') OR JSON_CONTAINS(COALESCE(JSON_EXTRACT(IF(JSON_VALID(a.previous_value),a.previous_value,'{}'),'$.roles'),'[]'),'"inventory_manager"') THEN 'store_operation' ELSE 'security' END
           WHEN LOWER(CONCAT(COALESCE(module,''),' ',action)) LIKE '%recovery account%' THEN 'recovery_account'
           WHEN LOWER(CONCAT(COALESCE(module,''),' ',action)) LIKE '%backup & restore%' OR LOWER(CONCAT(COALESCE(module,''),' ',action)) REGEXP '(^|[^[:alnum:]_])(database )?(backup|restore)([^[:alnum:]_]|$)' THEN 'recovery'
           WHEN LOWER(CONCAT(COALESCE(module,''),' ',action)) LIKE '%platform setting%' OR LOWER(CONCAT(COALESCE(module,''),' ',action)) LIKE '%ml setting%' OR LOWER(CONCAT(COALESCE(module,''),' ',action)) LIKE '%demand forecasting%' THEN 'platform_setting'
@@ -1653,6 +1653,127 @@ PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='wallet_finding'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `wallet_finding` VARCHAR(255) NULL AFTER `wallet_checked_by`', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description)
-VALUES ('202610280002_gcash_verify_clear_evidence','Add cash and wallet check evidence to gcash_transactions')
+VALUES ('202610280002_gcash_verify_clear_evidence','Add cash and wallet check evidence to gcash_transactions (ticket #331)')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+-- GCash movement evidence (#326)
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_adjustments' AND column_name='correction_mode'), 'ALTER TABLE `gcash_adjustments` ADD COLUMN `correction_mode` VARCHAR(30) NOT NULL DEFAULT ''money_movement''', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_adjustments' AND column_name='fee_delta'), 'ALTER TABLE `gcash_adjustments` ADD COLUMN `fee_delta` DECIMAL(12,2) NOT NULL DEFAULT 0.00', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_adjustments' AND column_name='evidence'), 'ALTER TABLE `gcash_adjustments` ADD COLUMN `evidence` TEXT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_funding_movements' AND column_name='received_by'), 'ALTER TABLE `gcash_funding_movements` ADD COLUMN `received_by` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_funding_movements' AND column_name='receipt_confirmed'), 'ALTER TABLE `gcash_funding_movements` ADD COLUMN `receipt_confirmed` TINYINT(1) NOT NULL DEFAULT 0', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_funding_movements' AND column_name='linked_session_id'), 'ALTER TABLE `gcash_funding_movements` ADD COLUMN `linked_session_id` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+ALTER TABLE gcash_funding_movements MODIFY movement_type ENUM('replenishment','withdrawal','product_drawer_transfer','owner_capital','shortage_recovery') NOT NULL;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280005_gcash_movement_evidence','Persist GCash correction modes, actual return evidence, and funding receipt attribution') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_adjustments' AND column_name='recorded_by'), 'ALTER TABLE `gcash_adjustments` ADD COLUMN `recorded_by` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+CREATE TABLE IF NOT EXISTS `refund_correction_reviews` (
+  `review_id` int(11) NOT NULL AUTO_INCREMENT,
+  `refund_id` int(11) NOT NULL,
+  `correction_type` varchar(50) NOT NULL,
+  `status` varchar(50) NOT NULL,
+  `cash_status` varchar(50) NOT NULL,
+  `stock_status` varchar(50) NOT NULL,
+  `explanation` text NOT NULL,
+  `proposed_correction` text DEFAULT NULL,
+  `reviewed_by` int(11) NOT NULL,
+  `reviewed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `responsible_cashier_id` int(11) DEFAULT NULL,
+  `responsible_inventory_manager_id` int(11) DEFAULT NULL,
+  `cash_drawer_movement_id` int(11) DEFAULT NULL,
+  `inventory_adjustment_id` int(11) DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`review_id`),
+  KEY `idx_rcr_refund` (`refund_id`),
+  KEY `idx_rcr_status` (`status`),
+  KEY `idx_rcr_cashier` (`responsible_cashier_id`),
+  KEY `idx_rcr_inventory` (`responsible_inventory_manager_id`),
+  CONSTRAINT `fk_rcr_refund` FOREIGN KEY (`refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_cashier` FOREIGN KEY (`responsible_cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_inventory` FOREIGN KEY (`responsible_inventory_manager_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610270002_cashier_shift_variance_reviews','Add accountable review draft, notes, shortage, and history to cashier_shifts (ticket #329)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+DELETE FROM notifications
+            WHERE attention_key IN ('store.sales.reversals', 'store.sales.unusual-discounts')
+               OR attention_destination LIKE '%/sales.php?tab=reversals%';
+
+DELETE FROM attention_states
+            WHERE attention_key IN ('store.sales.reversals', 'store.sales.unusual-discounts');
+
+DELETE FROM attention_settings
+            WHERE (setting_scope = 'store' AND setting_key IN ('reversal_count', 'unusual_discount_percent', 'inventory_escalation_count', 'inventory_unresolved_hours'))
+               OR (setting_scope = 'platform' AND setting_key IN ('store_reversal_count_max', 'store_unusual_discount_percent_max', 'store_inventory_unresolved_hours_max'));
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280001_retire_unusual_discount_and_reversal_attention','Retire unusual discount and legacy reversal attention, notifications, and settings (#330)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280002_refund_correction_reviews','Add refund correction review workflow tables and columns (ticket #343)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='reviewed_by'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `reviewed_by` INT NULL AFTER `waived_at`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='reviewed_at'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `reviewed_at` TIMESTAMP NULL AFTER `reviewed_by`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='review_notes'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `review_notes` TEXT NULL AFTER `reviewed_at`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='review_draft_notes'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `review_draft_notes` TEXT NULL AFTER `review_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='review_shortage'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `review_shortage` DECIMAL(12,2) NULL AFTER `review_draft_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='review_history'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `review_history` TEXT NULL AFTER `review_shortage`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='cash_check_explanation'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `cash_check_explanation` TEXT NULL AFTER `review_history`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='wallet_check_explanation'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `wallet_check_explanation` TEXT NULL AFTER `cash_check_explanation`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280003_gcash_closing_difference_review','Add closing difference review fields to gcash_service_sessions (ticket #332)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='responsible_user_id'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `responsible_user_id` INT NULL AFTER `cashier_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='responsible_role'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `responsible_role` VARCHAR(20) NULL AFTER `responsible_user_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='responsibility_notes'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `responsibility_notes` TEXT NULL AFTER `responsible_role`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='responsibility_assigned_at'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `responsibility_assigned_at` DATETIME NULL AFTER `responsibility_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='responsible_user_id'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `responsible_user_id` INT NULL AFTER `waived_at`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='responsible_role'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `responsible_role` VARCHAR(20) NULL AFTER `responsible_user_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='responsibility_notes'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `responsibility_notes` TEXT NULL AFTER `responsible_role`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='responsibility_assigned_at'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `responsibility_assigned_at` DATETIME NULL AFTER `responsibility_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND index_name='idx_gcash_tx_responsible'), 'ALTER TABLE `gcash_transactions` ADD INDEX `idx_gcash_tx_responsible` (responsible_user_id)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND index_name='idx_gcash_session_responsible'), 'ALTER TABLE `gcash_service_sessions` ADD INDEX `idx_gcash_session_responsible` (responsible_user_id)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);
