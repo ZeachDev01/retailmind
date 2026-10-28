@@ -1050,7 +1050,14 @@ final class GCashTransactionService
             $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
             $userStmt->execute([$adminId]);
             $roleName = $userStmt->fetchColumn();
-            if (!in_array($roleName, ['admin', 'super_admin'], true)) {
+            if (function_exists('is_remote_request') && is_remote_request()) {
+                throw new DomainException('Emergency handover is not permitted during remote monitoring.', 403);
+            }
+            $activeRole = function_exists('current_role') ? current_role() : null;
+            if ($activeRole !== null && $activeRole !== 'admin') {
+                throw new DomainException('Only an active Administrator workspace can execute an emergency handover.', 403);
+            }
+            if ($roleName !== 'admin') {
                 throw new DomainException('Only an Administrator can execute an emergency handover.', 403);
             }
 
@@ -1620,7 +1627,10 @@ final class GCashTransactionService
             }
             $sessionId = (int)$session['session_id'];
 
-            $isAdmin = in_array($actorRole, ['admin', 'super_admin'], true);
+            if (function_exists('is_remote_request') && is_remote_request()) {
+                throw new DomainException('Funding movements are not permitted during remote monitoring.', 403);
+            }
+            $isAdmin = $actorRole === 'admin';
             if ($isAdmin) {
                 $authorizedBy = $actorId;
             } elseif ($actorRole === 'cashier') {
@@ -1707,7 +1717,10 @@ final class GCashTransactionService
 
     public function recordLinkedCorrection(int $adminId, string $adminRole, int $transactionId, float $cashDelta, float $walletDelta, string $reason, ?int $sessionId = null): int
     {
-        if (!in_array($adminRole, ['admin', 'super_admin'], true)) {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Linked corrections are not permitted during remote monitoring.', 403);
+        }
+        if ($adminRole !== 'admin') {
             throw new DomainException('Only an Administrator can record linked corrections.', 403);
         }
         $reason = trim($reason);
@@ -1788,6 +1801,9 @@ final class GCashTransactionService
 
     public function resolveNeedsChecking(int $actorId, int $transactionId, string $action, array $data = []): array
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Resolving exchanges is not permitted during remote monitoring.', 403);
+        }
         $action = strtolower(trim($action));
         if (!in_array($action, ['complete', 'cancel', 'reject'], true)) {
             throw new DomainException('Action must be complete or cancel.');
@@ -1971,8 +1987,11 @@ final class GCashTransactionService
 
     public function waiveDiscrepancy(int $adminId, string $adminRole, int $sessionId, string $waiverNotes): void
     {
-        if (!in_array($adminRole, ['admin', 'super_admin'], true)) {
+        if ($adminRole !== 'admin') {
             throw new DomainException('Only an Administrator can waive closing discrepancies.', 403);
+        }
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Discrepancy review is not permitted during remote monitoring.', 403);
         }
         $waiverNotes = trim($waiverNotes);
         if (mb_strlen($waiverNotes) < 5 || mb_strlen($waiverNotes) > 500) {

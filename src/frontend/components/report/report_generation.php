@@ -744,6 +744,7 @@ if ($validationError === null) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
+    require_local_request('Bulk exports are not available during remote monitoring.');
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $exportReport = request_value('report', $selectedReport);
     ReportAccessService::enforceAccess((string)current_role(), $exportReport);

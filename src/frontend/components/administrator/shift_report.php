@@ -29,6 +29,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = (string)($_POST['action'] ?? '');
     try {
         if ($action === 'export_csv') {
+            require_local_request('Bulk exports are not available during remote monitoring.');
             $report = $service->report((string)current_role(), $filters);
             header('Content-Type: text/csv; charset=utf-8');
             header('Content-Disposition: attachment; filename="cashier_shifts_' . date('Ymd_His') . '.csv"');
