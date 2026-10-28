@@ -12,7 +12,7 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 
 foreach ([
     "require_role(['admin'])", 'StoreOperationsDashboardWorkspace',
-    'Needs attention', 'Store status', 'Sales & cash exceptions', 'Current Fiscal Period',
+    'Needs attention', 'Store status', 'Cash variances', 'Current Fiscal Period',
     'data-dashboard-refresh', 'data-stale-after', 'data-dashboard-action', 'aria-live="polite"',
     'name="period"', 'name="range" value="30"', 'method="get"',
     'Gross Sales', 'Net Sales', 'Gross Profit', 'Gross Profit excludes operating expenses',

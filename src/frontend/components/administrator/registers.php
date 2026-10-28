@@ -48,7 +48,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $status = (string)($_POST['status'] ?? RegisterService::STATUS_ACTIVE);
             $registers->setStatus($actorId, $actorRole, $registerId, $status);
             $message = $status === RegisterService::STATUS_DISABLED
-                ? 'Register disabled. It can no longer start a new shift, and its history stays available.'
+                ? 'Register disabled. It blocks new Shifts without shutting down or closing existing open Shifts, and earlier history remains available.'
                 : 'Register enabled. It can be selected for new Cashier Shifts again.';
             $messageClass = 'tag-success';
         } elseif ($action === 'delete') {
@@ -116,6 +116,7 @@ $allRegisters = $registers->all();
 
         <section class="dashboard-section" aria-labelledby="store-registers-heading">
             <h2 id="store-registers-heading">Store Registers <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
+            <p class="section-description">Disabling a Register blocks new Shifts on it while preserving existing open Shifts until normal closure.</p>
 
             <?php if ($allRegisters === []): ?>
                 <p class="section-description">No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
