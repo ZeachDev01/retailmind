@@ -19,6 +19,7 @@ $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_
 
 $filterError = null;
 $overview = null;
+$canMutate = current_role() === 'admin' && !(function_exists('is_remote_request') && is_remote_request());
 
 $filters = [
     'type' => (string)($_GET['type'] ?? 'all'),
@@ -34,6 +35,10 @@ $filters = [
 
 // Reporting owns authorized selection and complete traversal.
 if (($_GET['export'] ?? '') === 'csv') {
+    if (function_exists('is_remote_request') && is_remote_request()) {
+        http_response_code(403);
+        exit('Bulk exports are not available during remote monitoring.');
+    }
     // Stage the complete report before sending headers so failures cannot produce partial downloads.
     $csv = null;
     try {
@@ -111,7 +116,7 @@ function gcash_admin_money(mixed $val): string {
                     <?= $overview === null ? 'Unavailable' : (!empty($overview['session_id']) ? 'Active Session #' . (int)$overview['session_id'] . ' (Open)' : 'No active session') ?>
                 </span>
                 <button type="button" class="btn btn-secondary" id="gcash-refresh"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
-                <a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a>
+                <?php if (!(function_exists('is_remote_request') && is_remote_request())): ?><a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a><?php endif; ?>
                 <?php if (in_array('cashier', current_workspace_roles(), true)): ?>
                     <button type="button" class="btn btn-primary" id="gcash-record">Record Exchange</button>
                 <?php endif; ?>
@@ -474,13 +479,13 @@ function gcash_admin_money(mixed $val): string {
                                     </td>
                                     <td>
                                         <?php if (!$diff['is_waived']): ?>
-                                            <button type="button" class="btn btn-secondary btn-sm admin-btn-waive"
+                                            <?php if ($canMutate): ?><button type="button" class="btn btn-secondary btn-sm admin-btn-waive"
                                                     data-session-id="<?= gcash_admin_e($diff['session_id']) ?>"
                                                     data-cashier="<?= gcash_admin_e($diff['cashier_name']) ?>"
                                                     data-cash-variance="<?= gcash_admin_e($diff['cash_variance']) ?>"
                                                     data-wallet-variance="<?= gcash_admin_e($diff['wallet_variance']) ?>">
                                                 Waive Discrepancy
-                                            </button>
+                                            </button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                         <?php else: ?>
                                             <span class="text-muted gcash-muted-placeholder">—</span>
                                         <?php endif; ?>
@@ -566,7 +571,7 @@ function gcash_admin_money(mixed $val): string {
                                     </td>
                                     <td>
                                         <?php if (!$nc['is_legacy']): ?>
-                                            <button type="button" class="btn btn-primary gcash-verify" data-transaction-id="<?= (int)$nc['transaction_id'] ?>" data-reference="<?= gcash_admin_e($nc['reference_number'] ?? '') ?>">Verify &amp; Clear</button>
+                                            <?php if ($canMutate): ?><button type="button" class="btn btn-primary gcash-verify" data-transaction-id="<?= (int)$nc['transaction_id'] ?>" data-reference="<?= gcash_admin_e($nc['reference_number'] ?? '') ?>">Verify &amp; Clear</button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                         <?php else: ?>
                                             <span class="gcash-badge gcash-badge-legacy">Legacy reference</span>
                                         <?php endif; ?>
