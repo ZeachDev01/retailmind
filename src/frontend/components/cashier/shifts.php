@@ -222,7 +222,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             <dialog id="movement-authorization" aria-labelledby="movement-authorization-title" aria-describedby="movement-authorization-summary">
                                 <h2 id="movement-authorization-title">Authorize drawer movement</h2>
                                 <p id="movement-authorization-summary" class="shift-help"></p>
-                                <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
+                                <label for="movement-approver">Authorizing Administrator username or email</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
                                 <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password" required disabled>
                                 <div class="modal-actions">
                                     <button class="btn btn-secondary" type="button" id="movement-authorization-cancel">Cancel</button>
