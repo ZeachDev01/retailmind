@@ -100,6 +100,23 @@ class Connection:
 
 
 class WorkerEvidenceTests(unittest.TestCase):
+    def test_m5_demo_reads_fifty_products_and_refuses_missing_coverage(self):
+        conn = Connection('retailmind_demo_m5_test')
+        self.addCleanup(conn.db.close)
+        conn.db.execute('CREATE TABLE forecast_sales_imports (product_id INTEGER, sale_date TEXT, quantity INTEGER)')
+        rows = [(pid, '2016-05-22', 2) for pid in range(1, 51)]
+        conn.db.executemany('INSERT INTO forecast_sales_imports VALUES (?,?,?)', rows)
+        source = {'source_kind': 'm5_daily', 'store_id': 'CA_1', 'products_mapped': 50,
+                  'total_records': 50, 'date_window': ['2016-05-22', '2016-05-22']}
+        conn.db.execute("INSERT INTO platform_settings VALUES ('demo_import_metadata', ?)", (json.dumps(source),))
+        context = ml_worker.dataset_context(conn.cursor())
+        data = ml_worker.load_history(conn.cursor(), context)
+        self.assertEqual(set(data.product_id), set(range(1, 51)))
+        self.assertEqual(context['history_cutoff'], '2016-05-22')
+        conn.db.execute('DELETE FROM forecast_sales_imports WHERE product_id=50')
+        with self.assertRaisesRegex(ValueError, 'coverage'):
+            ml_worker.load_history(conn.cursor(), context)
+
     def test_uci_demo_reads_daily_imports_instead_of_fabricated_pos_sales(self):
         conn = Connection()
         self.addCleanup(conn.db.close)

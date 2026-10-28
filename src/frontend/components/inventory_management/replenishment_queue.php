@@ -28,6 +28,8 @@ $isDemo = false;
 $demoSource = '';
 $isProduction = false;
 $queueUnavailable = false;
+$demoReplay = null;
+$isHistoricalDemo = false;
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
 $jobId = null;
@@ -60,6 +62,30 @@ try {
         $queueUnavailable = true;
         $error = OperatorAlert::message($stockError, 'Could not load replenishment recommendations. Reload the page or tell your Administrator.');
     }
+}
+
+try {
+    $demoSettings = $pdo->query("SELECT setting_key,setting_value FROM platform_settings
+        WHERE setting_key IN ('demo_import_metadata','demo_replay_result')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $demoReplay = json_decode($demoSettings['demo_replay_result'] ?? '', true);
+    $demoMetadata = json_decode($demoSettings['demo_import_metadata'] ?? '', true);
+    if ($queue && !$queueUnavailable && ($demoReplay['kind'] ?? null) === 'm5_historical'
+        && ($demoMetadata['source_kind'] ?? null) === 'm5_daily'
+        && preg_match('/^retailmind_demo_[a-z0-9_]+$/D', (string)$pdo->query('SELECT DATABASE()')->fetchColumn())) {
+        $historical = array_column((new ReplenishmentQueueService($pdo))->getReplayPreview((int)$demoReplay['preview_job']), null, 'product_id');
+        foreach ($queue as &$item) {
+            $saved = $historical[$item['product_id']] ?? [];
+            if (empty($saved['complete_forecast'])) continue;
+            $origin = new DateTimeImmutable($saved['forecast_origin']);
+            $item['expected_sales_28_day'] = $saved['forecast_28_day'];
+            $item['expected_sales_period'] = $origin->modify('+1 day')->format('Y-m-d') . ' – ' . $origin->modify('+28 days')->format('Y-m-d');
+            $item['expected_sales_context'] = 'Historical demo · unapproved';
+            $isHistoricalDemo = true;
+        }
+        unset($item);
+    }
+} catch (Throwable $e) {
+    $error = OperatorAlert::message($e, 'Historical preview unavailable. Showing stock-rule guidance.');
 }
 
 $stockPriority = ['Out of stock' => 0, 'Low stock' => 1, 'In stock' => 2];
@@ -100,8 +126,10 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             <?php if ($isDemo): ?>
                 <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
             <?php endif; ?>
-            <?php if ($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_replay_result'")->fetchColumn()): ?>
-                <p class="tag-warning">The train-only replay model is not approved. This page retains normal stock-rule guidance. <a href="../report/forecast_replay.php">Compare test predictions and view experimental buying quantities</a>.</p>
+            <?php if ($isHistoricalDemo): ?>
+                <p class="tag-warning" role="status">Historical M5 demo: expected sales use the original 2016 dates shown in each row. Stock is illustrative. These predictions are unapproved and are not current Store forecasts. <a href="../report/forecast_replay.php">Compare predictions with actual sales</a>.</p>
+            <?php elseif ($demoReplay): ?>
+                <p class="tag-warning">Experimental forecasts are not approved. This page retains stock-rule guidance. <a href="../report/forecast_replay.php">Compare historical predictions and review the Demo</a>.</p>
             <?php endif; ?>
             <section class="queue-panel" id="queue-products" tabindex="-1">
                     <?php if ($queueUnavailable): ?>
@@ -137,9 +165,10 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                         </span>
                                     </th>
                                     <th scope="col">Expected sales (28 days)
+                                        <?php if ($isHistoricalDemo): ?><small class="muted queue-forecast-period">Historical M5 demo</small><?php endif; ?>
                                         <span class="info-tooltip no-print">
                                             <button class="info-tooltip-trigger" type="button" aria-label="About expected sales" aria-describedby="queue-sales-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
-                                            <span class="tooltip-box" id="queue-sales-help" role="tooltip">Estimated customer purchases, not a buying quantity. Requires a complete, current forecast from the approved model. The Inventory Manager decides how much to buy.</span>
+                                            <span class="tooltip-box" id="queue-sales-help" role="tooltip"><?= $isHistoricalDemo ? 'Saved historical M5 predictions for the dates shown, not current or approved Store forecasts.' : 'Estimated customer purchases, not a buying quantity. Requires a complete, current forecast from the approved model.' ?> The Inventory Manager decides how much to buy.</span>
                                         </span>
                                     </th>
                                 </tr></thead>
@@ -158,7 +187,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                             <td><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></td>
                                             <td><?php if ($item['expected_sales_28_day'] !== null): ?>
                                                 <strong class="queue-number"><?= (int)$item['expected_sales_28_day'] ?></strong> <small class="muted">units</small>
-                                                <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['readiness_level']) ?> readiness</small>
+                                                <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['expected_sales_context'] ?? ($item['readiness_level'] . ' readiness')) ?></small>
                                             <?php else: ?><span class="muted">Unavailable</span><?php endif; ?></td>
                                         </tr>
                                     <?php endforeach; ?>

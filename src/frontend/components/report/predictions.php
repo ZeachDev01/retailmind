@@ -31,6 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
 $service = new DemandForecastService($pdo);
 $latestJobId = $service->getLatestSuccessfulJobId();
 $forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
+$displayedForecastModel = $forecasts[0]['model_version'] ?? null;
 
 // Check if there is currently a running or pending job
 $stmt = $pdo->query("SELECT status, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1");
@@ -139,6 +140,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         .readiness-tag-Medium { background: #fef3c7; color: #b45309; }
         .readiness-tag-Low { background: #fee2e2; color: #b91c1c; }
         .readiness-tag-Insufficient { background: #f1f5f9; color: #64748b; }
+        .model-review { display: block; }
     </style>
 </head>
 <body>
@@ -166,6 +168,10 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <?php endif; ?>
         <p>
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a></p>
+
+        <?php if (has_capability(RoleCapabilityPolicy::GENERATE_FORECASTS)): ?>
+            <?php include __DIR__ . '/model_evaluation_summary.php'; ?>
+        <?php endif; ?>
 
         <?php if ($message): ?>
             <div class="alert <?= htmlspecialchars($messageClass) ?>">

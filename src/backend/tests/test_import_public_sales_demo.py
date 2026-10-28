@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -9,11 +10,50 @@ import unittest
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from import_public_sales_demo import read_experiment
+from import_public_sales_demo import read_experiment, import_m5_preview
 from public_sales_experiment import SOURCE_URL
+from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL
 
 
 class PublicDemoImportTests(unittest.TestCase):
+    def test_m5_original_dates_fifty_codes_and_invalid_store_are_checked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            codes = [f'FOODS_1_{i:03}' for i in range(1, 51)]
+            history = pd.MultiIndex.from_product([codes, pd.date_range('2014-03-01', periods=814)],
+                                                 names=['product_id', 'date']).to_frame(index=False).assign(units_sold=2)
+            history.to_csv(directory / 'daily_history.csv', index=False)
+            report = {'source_url': M5_SOURCE_URL, 'store_id': 'CA_1', 'category': 'FOODS',
+                      'products': codes, 'observations': len(history), 'training_start': '2014-03-01',
+                      'data_end': str(history.date.max().date())}
+            (directory / 'metrics.json').write_text(json.dumps(report), encoding='utf-8')
+            loaded, products, evidence = read_experiment(directory)
+            self.assertEqual(len(loaded), 40700)
+            self.assertEqual(products.index.tolist(), codes)
+            self.assertEqual(str(loaded.date.min().date()), '2014-03-01')
+            self.assertEqual(evidence['source_url'], M5_SOURCE_URL)
+            self.assertTrue(products.description.str.startswith('M5 FOODS_').all())
+            evidence['folds'] = [{'fold': number, 'origin': '2016-01-01'} for number in (1, 2, 3)]
+            source = {'source_kind': 'm5_daily', 'prepared_history_sha256': hashlib.sha256((directory / 'daily_history.csv').read_bytes()).hexdigest()}
+            candidate = {'model_version': 'demo_test', 'metrics_json': json.dumps({'metadata': {'dataset_kind': 'demo', 'source': source}})}
+            class ReadOnlyPreviewCursor:
+                def execute(self, sql, params=()):
+                    if not sql.startswith('SELECT '):
+                        raise AssertionError('Invalid predictions must not cause a write')
+                    self.sql = sql
+                def fetchone(self):
+                    if 'demo_replay_result' in self.sql:
+                        return None
+                    return {'setting_value': json.dumps(source)} if 'demo_import_metadata' in self.sql else candidate
+            pd.DataFrame({'product_id': [codes[0]], 'target_date': ['2016-01-02'],
+                          'actual': [2], 'predicted': [-1], 'baseline': [2], 'horizon_day': [1], 'fold': [1]}).to_csv(directory / 'daily_predictions.csv', index=False)
+            with self.assertRaisesRegex(ValueError, 'Invalid or duplicate'):
+                import_m5_preview(ReadOnlyPreviewCursor(), directory, loaded, evidence)
+            report['store_id'] = 'CA_2'
+            (directory / 'metrics.json').write_text(json.dumps(report), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'CA_1'):
+                read_experiment(directory)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

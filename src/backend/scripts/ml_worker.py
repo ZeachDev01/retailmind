@@ -170,9 +170,10 @@ def dataset_context(cursor):
     if imported is not None:
         if not isolated or os.getenv('APP_ENV', '').lower() in ('production', 'live', 'infinityfree'):
             raise ValueError("Demo evidence requires an isolated non-operational database")
-        expected_store = 'UCI_ONLINE_RETAIL' if imported.get('source_kind') == 'uci_online_retail' else 'S001'
-        if imported.get('store_id') != expected_store or imported.get('products_mapped') != 20:
-            raise ValueError("Demo selection must match its declared source and all 20 products")
+        is_m5 = imported.get('source_kind') == 'm5_daily'
+        expected_store = 'CA_1' if is_m5 else ('UCI_ONLINE_RETAIL' if imported.get('source_kind') == 'uci_online_retail' else 'S001')
+        if imported.get('store_id') != expected_store or imported.get('products_mapped') not in ((20, 50) if is_m5 else (20,)):
+            raise ValueError("Demo selection must match its declared source and product count")
     elif any(marker in database.lower() for marker in ('demo', 'kaggle')):
         raise ValueError("Demo database has no imported demand provenance")
     return {
@@ -193,7 +194,7 @@ def artifact_directory(context):
 
 def load_history(cursor, context, training=False):
     if context['dataset_kind'] == 'demo':
-        if context['source'].get('source_kind') == 'uci_online_retail':
+        if context['source'].get('source_kind') in ('uci_online_retail', 'm5_daily'):
             cursor.execute('''SELECT sale_date AS date, product_id, quantity AS units_sold
                 FROM forecast_sales_imports ORDER BY product_id, sale_date''')
         else:
@@ -208,7 +209,7 @@ def load_history(cursor, context, training=False):
         rows = cursor.fetchall()
         data = normalize_history(pd.DataFrame(rows, columns=['date', 'product_id', 'units_sold']))
         source = context['source']
-        if set(data.product_id) != set(range(1, 21)) or len(data) != source.get('total_records'):
+        if set(data.product_id) != set(range(1, source['products_mapped'] + 1)) or len(data) != source.get('total_records'):
             raise ValueError("Imported Demo history does not match its recorded product/row coverage")
         if [str(data.date.min().date()), str(data.date.max().date())] != source.get('date_window'):
             raise ValueError("Imported Demo history does not match its recorded date window")

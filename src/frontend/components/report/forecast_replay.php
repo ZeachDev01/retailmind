@@ -15,6 +15,8 @@ if (!ReplenishmentQueueService::replayDatabaseAllowed($database)
     exit('A prepared, explicitly enabled train/test replay is required.');
 }
 $preview = (new ReplenishmentQueueService($pdo))->getReplayPreview((int)$result['preview_job']);
+$isM5 = ($result['kind'] ?? '') === 'm5_historical' && ($source['source_kind'] ?? '') === 'm5_daily';
+$stockRules = $isM5 ? array_column((new ReplenishmentQueueService($pdo))->getRecommendations(), null, 'product_id') : [];
 $products = $preview;
 $productId = filter_input(INPUT_GET, 'product_id', FILTER_VALIDATE_INT) ?: (int)($products[0]['product_id'] ?? 0);
 if (!in_array($productId, array_map('intval', array_column($products, 'product_id')), true)) {
@@ -23,9 +25,12 @@ if (!in_array($productId, array_map('intval', array_column($products, 'product_i
 }
 $jobs = array_map('intval', $result['jobs']);
 $placeholders = implode(',', array_fill(0, count($jobs), '?'));
+$actualSql = $isM5
+    ? '(SELECT SUM(fsi.quantity) FROM forecast_sales_imports fsi WHERE fsi.product_id=df.product_id AND fsi.sale_date=df.target_date)'
+    : "COALESCE((SELECT SUM(si.quantity) FROM sale_items si JOIN sales s ON s.sale_id=si.sale_id
+        WHERE si.product_id=df.product_id AND DATE(s.sale_date)=df.target_date AND s.payment_reference LIKE 'SIMULATED-UCI-%'),0)";
 $comparison = $pdo->prepare("SELECT df.target_date,df.forecast_origin,df.predicted_units,
-    COALESCE((SELECT SUM(si.quantity) FROM sale_items si JOIN sales s ON s.sale_id=si.sale_id
-        WHERE si.product_id=df.product_id AND DATE(s.sale_date)=df.target_date AND s.payment_reference LIKE 'SIMULATED-UCI-%'),0) AS actual_units
+    $actualSql AS actual_units
     FROM demand_forecasts df JOIN ml_jobs j ON j.job_id=df.job_id
     WHERE df.job_id IN ($placeholders) AND df.product_id=? AND df.model_version=?
       AND j.trigger_type='forecast_observation' AND j.status='succeeded'
@@ -43,25 +48,30 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
 </head><body><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
-    <div class="topbar"><div><h1>Train/test replay</h1><p class="page-subtitle">Simulated recent sales. Real public quantities, shifted dates, illustrative stock.</p></div>
+    <div class="topbar"><div><h1><?= $isM5 ? 'M5 historical demonstration' : 'Train/test replay' ?></h1><p class="page-subtitle"><?= $isM5 ? 'Original Walmart sales dates and measured backtest predictions. Stock is an illustrative scenario.' : 'Simulated recent sales. Real public quantities, shifted dates, illustrative stock.' ?></p></div>
         <a class="btn btn-secondary" href="../system_administrator/ml_settings.php">ML Operation</a></div>
     <p class="tag-warning" role="status">Experimental preview only. Training validation: <?= htmlspecialchars($result['validation_outcome']) ?>. No Store model or purchasing guidance was approved.</p>
     <section class="dashboard-section" aria-labelledby="replay-method">
         <h2 id="replay-method">What was trained and tested</h2>
         <p>Training: <?= htmlspecialchars($source['date_window'][0]) ?> to <?= htmlspecialchars($result['training_end']) ?>
-            (<?= (int)$source['total_records'] ?> daily observations).
+            (<?= $isM5 ? (int)$source['products_mapped'] * (int)$source['experiment']['initial_training_days'] : (int)$source['total_records'] ?> daily observations).
             Test: <?= htmlspecialchars($result['test_start']) ?> to <?= htmlspecialchars($result['test_end']) ?>
-            (<?= (int)$result['test_rows'] ?> observations, 20 products).</p>
+            (<?= (int)$result['test_rows'] ?> observations, <?= (int)$source['products_mapped'] ?> products).</p>
+        <?php if ($isM5): ?>
+        <p>This preview imports the saved M5 experiment's held-out predictions. Each fold fits on earlier sales; earlier completed blocks may be used by later folds. It is historical evaluation evidence, not a current or approved buying forecast.</p>
+        <p>Original dates are unchanged. Imported daily observations create no customer receipts or simulated cashier sales. Product codes are anonymous; they are not mapped to the Store's real products.</p>
+        <?php else: ?>
         <p>Model <code><?= htmlspecialchars($result['model_version']) ?></code> was frozen before testing. Each 28-day prediction block uses only sales available before its origin. Earlier test blocks can supply later lag inputs; test sales never refit this model.</p>
         <p>Dates shifted <?= (int)$source['replay']['shift_days'] ?> days from the original UCI history. Calendar features use the simulated dates, so these scores describe this shifted experiment.</p>
+        <?php endif; ?>
         <p><?= htmlspecialchars($source['replay']['stock_scenario']) ?></p>
         <p><?= htmlspecialchars($source['replay']['money']) ?></p>
         <p><a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Current stock</a>
-            <a class="btn btn-secondary" href="../invoice/sales.php">Simulated sales history</a>
+            <?php if (!$isM5): ?><a class="btn btn-secondary" href="../invoice/sales.php">Simulated sales history</a><?php endif; ?>
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Normal buying guidance</a></p>
     </section>
     <section class="dashboard-section" aria-labelledby="replay-metrics"><h2 id="replay-metrics">How close were the held-out predictions?</h2>
-        <p>Errors pool 60 product/origin totals per horizon. MAE and RMSE are units per horizon total; WAPE is error, not accuracy. Test scores do not override training-validation gates.</p>
+        <p>Errors cover <?= $isM5 ? (int)$source['products_mapped'] : 60 ?> product/origin totals per horizon. MAE and RMSE are units per horizon total; WAPE is error, not accuracy. Test scores do not override training-validation gates.</p>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>Horizon</th><th>MAE</th><th>RMSE</th><th>Model WAPE</th><th>Baseline WAPE</th></tr></thead><tbody>
         <?php foreach ($result['metrics'] as $horizon => $metrics): ?><tr>
             <td><?= (int)$horizon ?> days</td><td><?= number_format((float)$metrics['mae'], 2) ?></td><td><?= number_format((float)$metrics['rmse'], 2) ?></td>
@@ -69,18 +79,26 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
             <td><?= $metrics['baseline_wape'] === null ? 'Unknown' : number_format((float)$metrics['baseline_wape'] * 100, 2) . '%' ?></td>
         </tr><?php endforeach; ?></tbody></table></div>
     </section>
-    <section class="dashboard-section" aria-labelledby="replay-daily"><h2 id="replay-daily">Latest 28 test days: predicted vs simulated sales</h2>
+    <section class="dashboard-section" aria-labelledby="replay-daily"><h2 id="replay-daily">Latest 28 test days: predicted vs <?= $isM5 ? 'actual M5 sales' : 'simulated sales' ?></h2>
         <form method="get"><label for="replay-product">Product</label><select data-search-dropdown name="product_id" id="replay-product">
             <?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>" <?= (int)$product['product_id'] === $productId ? 'selected' : '' ?>><?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name']) ?></option><?php endforeach; ?>
         </select><button class="btn btn-secondary" type="submit">Compare product</button></form>
-        <p>Actual units below come from the seeded simulated sales, including confirmed zero-sales days in this complete replay. Difference is predicted minus actual.</p>
-        <div class="table-wrap"><table class="data-table" id="replay-comparison"><thead><tr><th>Sale date</th><th>Forecast origin</th><th>Predicted</th><th>Simulated actual</th><th>Difference</th></tr></thead><tbody>
-        <?php foreach ($daily as $row): $difference = (int)$row['predicted_units'] - (int)$row['actual_units']; ?><tr>
+        <p><?= $isM5 ? 'Actual units come from original M5 daily totals. Displayed predictions are rounded daily units; the metrics above use the original unrounded predictions.' : 'Actual units below come from the seeded simulated sales, including confirmed zero-sales days in this complete replay.' ?> Difference is predicted minus actual.</p>
+        <div class="table-wrap"><table class="data-table" id="replay-comparison"><thead><tr><th>Sale date</th><th>Forecast origin</th><th>Predicted</th><th><?= $isM5 ? 'Actual M5 sales' : 'Simulated actual' ?></th><th>Difference</th></tr></thead><tbody>
+        <?php foreach ($daily as $row): $difference = $row['actual_units'] === null ? null : (int)$row['predicted_units'] - (int)$row['actual_units']; ?><tr>
             <td><?= htmlspecialchars($row['target_date']) ?></td><td><?= htmlspecialchars($row['forecast_origin']) ?></td>
-            <td><?= (int)$row['predicted_units'] ?></td><td><?= (int)$row['actual_units'] ?></td><td><?= $difference > 0 ? '+' : '' ?><?= $difference ?></td>
+            <td><?= (int)$row['predicted_units'] ?></td><td><?= $row['actual_units'] === null ? 'Unknown' : (int)$row['actual_units'] ?></td><td><?= $difference === null ? 'Unknown' : ($difference > 0 ? '+' : '') . $difference ?></td>
         </tr><?php endforeach; ?></tbody></table></div>
     </section>
-    <section class="dashboard-section" aria-labelledby="replay-stock"><h2 id="replay-stock">Current stock and experimental buying preview</h2>
+    <section class="dashboard-section" aria-labelledby="replay-stock"><h2 id="replay-stock"><?= $isM5 ? 'Stock rules and historical expected sales' : 'Current stock and experimental buying preview' ?></h2>
+        <?php if ($isM5): ?>
+        <p>Expected sales cover <?= htmlspecialchars($result['test_start']) ?> to <?= htmlspecialchars($result['test_end']) ?>. On hand is illustrative Demo stock today, not observed Walmart stock. Stock-rule suggestions are quantities to buy; expected sales are quantities predicted to sell. The Inventory Manager decides how much to buy.</p>
+        <div class="table-wrap"><table class="data-table" id="replay-stock-table"><thead><tr><th>Product</th><th>On hand</th><th>Stock-rule suggestion</th><th>Expected sales (historical 28 days)</th></tr></thead><tbody>
+        <?php foreach ($preview as $item): ?><tr data-product-id="<?= (int)$item['product_id'] ?>">
+            <td><?= htmlspecialchars($item['sku']) ?></td><td><?= (int)$item['current_stock'] ?> units</td>
+            <td><?= (int)$stockRules[$item['product_id']]['stock_rule_quantity'] ?> units</td><td><?= (int)$item['forecast_28_day'] ?> units</td>
+        </tr><?php endforeach; ?></tbody></table></div>
+        <?php else: ?>
         <p>Future preview origin: <?= htmlspecialchars($result['test_end']) ?>. These future dates have no actual sales yet. Quantities reuse the normal lead-time, buffer, minimum-order and package rules, but remain unapproved experiments.</p>
         <div class="table-wrap"><table class="data-table" id="replay-stock-table"><thead><tr><th>Product</th><th>On hand</th><th>Next 7 days</th><th>Next 14 days</th><th>Next 28 days</th><th>Preview buy quantity</th><th>Exposure</th></tr></thead><tbody>
         <?php foreach ($preview as $item): ?><tr data-product-id="<?= (int)$item['product_id'] ?>">
@@ -88,6 +106,7 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
             <td><?= (int)$item['forecast_7_day'] ?></td><td><?= (int)$item['forecast_14_day'] ?></td><td><?= (int)$item['forecast_28_day'] ?></td>
             <td><?= (int)$item['recommended_quantity'] ?></td><td><?= htmlspecialchars($item['urgency_label']) ?></td>
         </tr><?php endforeach; ?></tbody></table></div>
+        <?php endif; ?>
         <?php if ($canReceive): ?><p><a class="btn btn-secondary" href="stock_receiving.php">Record goods bought in the Demo</a></p><?php endif; ?>
     </section>
 </main></div></body></html>
