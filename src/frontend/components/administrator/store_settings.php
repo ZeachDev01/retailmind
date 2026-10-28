@@ -4,14 +4,30 @@ require_role(['admin']);
 
 $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
 $fields = [
-    'reversal_count' => 'Sales reversals',
-    'unusual_discount_percent' => 'Unusual discount (%)',
-    'cash_variance_amount' => 'Cash variance amount',
-    'inventory_escalation_count' => 'Pending Stock Issues',
-    'inventory_overdue_hours' => 'Inventory risk overdue after (hours)',
-    'inventory_high_value_amount' => 'High-value inventory risk amount',
-    'inventory_unresolved_hours' => 'Inventory risk unresolved after (hours)',
-    'fiscal_period_days_to_close' => 'Fiscal Period closing warning (days)',
+    'reversal_count' => [
+        'label' => 'Sales reversals',
+        'help' => 'Threshold for legacy sales reversal attention (cleanup scheduled under Store Overview attention).',
+    ],
+    'unusual_discount_percent' => [
+        'label' => 'Unusual discount (%)',
+        'help' => 'Threshold for legacy discount attention (cleanup scheduled under Store Overview attention).',
+    ],
+    'cash_variance_amount' => [
+        'label' => 'Cash variance review threshold (₱)',
+        'help' => 'Requires Shift variance review and raises Store Overview attention when counted cash difference reaches or exceeds this amount.',
+    ],
+    'inventory_overdue_hours' => [
+        'label' => 'Stock Issue overdue warning (hours)',
+        'help' => 'Raises a Store Overview warning when an open Stock Issue remains pending longer than this duration.',
+    ],
+    'inventory_high_value_amount' => [
+        'label' => 'High-value Stock Issue alert (₱)',
+        'help' => 'Raises a critical Store Overview alert when an open Stock Issue risk value reaches or exceeds this amount.',
+    ],
+    'fiscal_period_days_to_close' => [
+        'label' => 'Fiscal Period closing warning (days)',
+        'help' => 'Raises an upcoming closure warning when an active Fiscal Period has this many or fewer days remaining.',
+    ],
 ];
 $message = '';
 $messageClass = '';
@@ -20,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     try {
         $updates = [];
-        foreach ($fields as $key => $label) {
+        foreach ($fields as $key => $config) {
             $updates[$key] = $_POST[$key] ?? '';
         }
         $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
@@ -49,7 +65,10 @@ $effective = $service->thresholdsFor('admin');
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div><h1>Store Settings</h1></div>
+            <div>
+                <h1>Store Settings</h1>
+                <p class="page-subtitle">Configure thresholds that trigger Store Overview attention and required operational reviews.</p>
+            </div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <section class="dashboard-section">
@@ -57,11 +76,14 @@ $effective = $service->thresholdsFor('admin');
             <form method="post">
                 <?= csrf_field() ?>
                 <div class="form-grid">
-                    <?php foreach ($fields as $key => $label): ?>
+                    <?php foreach ($fields as $key => $config): ?>
                         <div class="form-group">
-                            <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$requested[$key]) ?>" required>
-                            <?php if ($effective[$key] !== $requested[$key]): ?><small>Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small><?php endif; ?>
+                            <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" required>
+                            <small class="muted"><?= htmlspecialchars($config['help']) ?></small>
+                            <?php if (isset($effective[$key]) && isset($requested[$key]) && $effective[$key] !== $requested[$key]): ?>
+                                <small>Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

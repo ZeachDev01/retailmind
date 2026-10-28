@@ -245,7 +245,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <h1>Store Calendar</h1>
+                <h1>Store Calendar</h1><p class="page-subtitle">Calendar status provides Store and forecast context for operational planning. It does not gate checkout or close shifts. In demand forecasts, Holiday represents a closed trading day; choose Open if trading on a holiday.</p>
             </div>
             <button type="button" class="btn" id="record-date-btn">Record date status</button>
         </header>
