@@ -1773,6 +1773,29 @@ final class GCashTransactionService
         );
     }
 
+    public function previewProductDrawerFunding(int $cashierId, float $amount): array
+    {
+        $openShift = (new CashierShiftService($this->pdo()))->getOpenShift($cashierId);
+        if (!$openShift) {
+            throw new DomainException('No open Cashier Shift or Product drawer found for this Cashier.', 422);
+        }
+        $regName = 'Register #' . ($openShift['register_id'] ?? 1);
+        try {
+            $regStmt = $this->pdo()->prepare("SELECT name FROM registers WHERE register_id = ?");
+            $regStmt->execute([$openShift['register_id']]);
+            $rn = $regStmt->fetchColumn();
+            if ($rn) { $regName = (string)$rn; }
+        } catch (Throwable) {}
+
+        return [
+            'cashier_id' => $cashierId,
+            'shift_id' => (int)$openShift['shift_id'],
+            'register_id' => (int)$openShift['register_id'],
+            'register_name' => $regName,
+            'amount' => round($amount, 2),
+        ];
+    }
+
     public function recordFundingMovement(int $actorId, string $actorRole, array $data): int
     {
         $type = (string)($data['movement_type'] ?? '');
@@ -1835,6 +1858,11 @@ final class GCashTransactionService
                 throw new DomainException('Unauthorized role for funding movement.', 403);
             }
 
+            $receiptConfirmed = !empty($data['receipt_confirmed']);
+            if (!$receiptConfirmed) {
+                throw new DomainException('The responsible Cashier must confirm receipt of funds before posting.', 422);
+            }
+
             if ($direction === 'out') {
                 $expected = $this->calculateSessionExpected($sessionId);
                 if ($fundType === 'cash' && $expected['expected_service_cash'] < $amount) {
@@ -1847,32 +1875,63 @@ final class GCashTransactionService
 
             if ($type === 'product_drawer_transfer' && $fundType === 'cash') {
                 $openShift = (new CashierShiftService($this->pdo()))->getOpenShift($actorId);
-                if ($openShift) {
-                    $drawerType = $direction === 'in' ? 'cash_out' : 'cash_in';
-                    $drawerReason = 'other';
-                    $drawerNote = 'GCash funding transfer (Session #' . $sessionId . '): ' . substr($reason, 0, 180);
-                    $this->pdo()->prepare(
-                        'INSERT INTO cash_drawer_movements (shift_id, cashier_id, movement_type, amount, reason, note, recorded_by)
-                         VALUES (?, ?, ?, ?, ?, ?, ?)'
-                    )->execute([$openShift['shift_id'], $actorId, $drawerType, $amount, $drawerReason, $drawerNote, $actorId]);
+                if (!$openShift) {
+                    throw new DomainException('Cannot transfer from product drawer: Cashier has no open drawer / shift.', 422);
                 }
+                $drawerType = $direction === 'in' ? 'cash_out' : 'cash_in';
+                $drawerReason = 'other';
+                $drawerNote = 'GCash funding transfer (Session #' . $sessionId . '): ' . substr($reason, 0, 180);
+                $this->pdo()->prepare(
+                    'INSERT INTO cash_drawer_movements (shift_id, cashier_id, movement_type, amount, reason, note, recorded_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                )->execute([$openShift['shift_id'], $actorId, $drawerType, $amount, $drawerReason, $drawerNote, $actorId]);
             }
 
-            $stmt = $this->pdo()->prepare(
-                'INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $sessionId,
-                $type,
-                $fundType,
-                $amount,
-                $direction,
-                $evidence !== '' ? $evidence : null,
-                $reason,
-                $authorizedBy,
-                $actorId,
-            ]);
+            $hasReceiptCol = false;
+            try {
+                $cols = array_column($this->pdo()->query("PRAGMA table_info(gcash_funding_movements)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+                $hasReceiptCol = in_array('receipt_confirmed', $cols, true);
+            } catch (Throwable) {
+                try {
+                    $cols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_funding_movements")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                    $hasReceiptCol = in_array('receipt_confirmed', $cols, true);
+                } catch (Throwable) {}
+            }
+
+            if ($hasReceiptCol) {
+                $stmt = $this->pdo()->prepare(
+                    'INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by, received_by, receipt_confirmed)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+                );
+                $stmt->execute([
+                    $sessionId,
+                    $type,
+                    $fundType,
+                    $amount,
+                    $direction,
+                    $evidence !== '' ? $evidence : null,
+                    $reason,
+                    $authorizedBy,
+                    $actorId,
+                    $actorId,
+                ]);
+            } else {
+                $stmt = $this->pdo()->prepare(
+                    'INSERT INTO gcash_funding_movements (session_id, movement_type, fund_type, amount, direction, evidence_reference, reason, authorized_by, recorded_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $sessionId,
+                    $type,
+                    $fundType,
+                    $amount,
+                    $direction,
+                    $evidence !== '' ? $evidence : null,
+                    $reason,
+                    $authorizedBy,
+                    $actorId,
+                ]);
+            }
             $movementId = (int)$this->pdo()->lastInsertId();
 
             \log_activity(
