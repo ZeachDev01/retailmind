@@ -567,15 +567,13 @@ class CashierShiftService
 
     private function authorizeDrawerSpending(string $username, string $password): array
     {
-        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
-        $stmt = $this->pdo->prepare("SELECT u.user_id, u.password_hash, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id
-            WHERE u.username=? AND u.status='active' AND u.must_change_password=0 AND r.role_name IN ('admin','super_admin')" . $locking);
-        $stmt->execute([trim($username)]);
-        $approver = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$approver || $password === '' || !password_verify($password, (string)$approver['password_hash'])) {
-            throw new DomainException('Administrator authorization is required for supplier payments and petty cash.');
-        }
-        return ['approved_by' => (int)$approver['user_id']];
+        $approvedBy = SupervisorApprovalService::authorize(
+            $this->pdo,
+            $username,
+            $password,
+            'Administrator authorization is required for supplier payments and petty cash.'
+        );
+        return ['approved_by' => $approvedBy];
     }
 
     public function calculateShift(int $shiftId): array
