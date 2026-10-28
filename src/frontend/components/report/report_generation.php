@@ -369,46 +369,187 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'low_stock':
-        case 'inventory_valuation':
-            $stockCondition = $report === 'low_stock' ? ' AND COALESCE(i.quantity_on_hand, 0) <= COALESCE(p.reorder_level, 0)' : '';
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, COALESCE(p.reorder_level, 0) AS reorder_level,
-                        p.cost_price, p.unit_price, COALESCE(i.quantity_on_hand, 0) * p.cost_price AS inventory_value,
                         CASE WHEN COALESCE(i.quantity_on_hand, 0) = 0 THEN 'Out of stock' ELSE 'Low stock' END AS stock_status
                  FROM products p
                  LEFT JOIN inventory i ON i.product_id = p.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
-                 WHERE 1=1 {$productSql}{$stockCondition}
+                 WHERE COALESCE(i.quantity_on_hand, 0) <= COALESCE(p.reorder_level, 0) {$productSql}
                  ORDER BY quantity_on_hand ASC, p.product_name"
             );
             $stmt->execute($productParams);
-            $headers = $report === 'low_stock'
-                ? ['SKU', 'Product', 'Category', 'Qty On Hand', 'Reorder Level', 'Status']
-                : ['SKU', 'Product', 'Category', 'Qty On Hand', 'Cost Price', 'Retail Price', 'Profit', 'Inventory Value'];
-            $rows = [];
-            foreach ($stmt->fetchAll() as $row) {
-                $rows[] = $report === 'low_stock'
-                    ? [
-                        'SKU' => $row['sku'],
-                        'Product' => $row['product_name'],
-                        'Category' => $row['category_name'],
-                        'Qty On Hand' => (int)$row['quantity_on_hand'],
-                        'Reorder Level' => (int)$row['reorder_level'],
-                        'Status' => $row['stock_status'],
-                    ]
-                    : [
-                        'SKU' => $row['sku'],
-                        'Product' => $row['product_name'],
-                        'Category' => $row['category_name'],
-                        'Qty On Hand' => (int)$row['quantity_on_hand'],
-                        'Cost Price' => money_value($row['cost_price']),
-                        'Retail Price' => money_value($row['unit_price']),
-                        'Profit' => money_value((float)($row['unit_price'] ?? 0) - (float)($row['cost_price'] ?? 0)),
-                        'Inventory Value' => money_value($row['inventory_value']),
-                    ];
+            return [
+                'headers' => ['SKU', 'Product', 'Category', 'Current Stock', 'Reorder Level', 'Status'],
+                'rows' => array_map(static fn($row) => [
+                    'SKU' => $row['sku'],
+                    'Product' => $row['product_name'],
+                    'Category' => $row['category_name'],
+                    'Current Stock' => (int)$row['quantity_on_hand'],
+                    'Reorder Level' => (int)$row['reorder_level'],
+                    'Status' => $row['stock_status'],
+                ], $stmt->fetchAll()),
+            ];
+
+        case 'inventory_valuation':
+            $stmt = $pdo->prepare(
+                "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
+                        COALESCE(c.category_name, 'Uncategorized') AS category_name,
+                        COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+                        p.cost_price, p.unit_price
+                 FROM products p
+                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                 LEFT JOIN categories c ON c.category_id = p.category_id
+                 WHERE 1=1 {$productSql}
+                 ORDER BY p.product_name ASC"
+            );
+            $stmt->execute($productParams);
+            $products = $stmt->fetchAll();
+
+            $batchesByProduct = [];
+            try {
+                $batchStmt = $pdo->query(
+                    "SELECT pb.batch_id, pb.product_id, pb.remaining_quantity, pb.cost_price AS batch_cost,
+                            sr.cost_price AS sr_cost, sr.total_cost, sr.accepted_qty
+                     FROM product_batches pb
+                     LEFT JOIN stock_receiving sr ON sr.receiving_id = pb.receiving_id
+                     WHERE pb.remaining_quantity > 0
+                     ORDER BY pb.batch_id ASC"
+                );
+                if ($batchStmt) {
+                    foreach ($batchStmt->fetchAll() as $b) {
+                        $batchesByProduct[(int)$b['product_id']][] = $b;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $batchesByProduct = [];
             }
-            return ['headers' => $headers, 'rows' => $rows];
+
+            $headers = [
+                'SKU', 'Product', 'Category', 'Current Stock', 'Cost Price', 'Retail Price',
+                'Price minus cost per item', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
+                'Valuation Basis', 'Valuation Status'
+            ];
+
+            $rows = [];
+            $totalRecorded = 0.0;
+            $totalEstimated = 0.0;
+            $totalCostMissing = 0;
+            $hasAnyMismatch = false;
+
+            foreach ($products as $row) {
+                $pId = (int)$row['product_id'];
+                $currentStock = (int)$row['quantity_on_hand'];
+                $catalogCost = $row['cost_price'] !== null ? (float)$row['cost_price'] : null;
+                $unitPrice = $row['unit_price'] !== null ? (float)$row['unit_price'] : 0.0;
+                $batches = $batchesByProduct[$pId] ?? [];
+
+                $recordedVal = 0.0;
+                $estimatedVal = 0.0;
+                $costMissingQty = 0;
+                $status = 'recorded';
+                $basis = 'Recorded batch cost';
+
+                $batchQtySum = 0;
+                foreach ($batches as $b) {
+                    $batchQtySum += (int)$b['remaining_quantity'];
+                }
+
+                if ($currentStock <= 0) {
+                    $basis = 'Zero stock';
+                    $status = 'recorded';
+                } elseif (!empty($batches)) {
+                    $hasMismatch = ($batchQtySum !== $currentStock);
+                    if ($hasMismatch) {
+                        $hasAnyMismatch = true;
+                        $status = 'mismatch';
+                        $basis = 'Quantity mismatch (unbatched stock)';
+                        if ($currentStock > $batchQtySum) {
+                            $costMissingQty += ($currentStock - $batchQtySum);
+                        }
+                    }
+
+                    $hasEstimate = false;
+                    foreach ($batches as $b) {
+                        $bQty = (int)$b['remaining_quantity'];
+                        if ($b['batch_cost'] !== null) {
+                            $recordedVal += $bQty * (float)$b['batch_cost'];
+                        } elseif (!empty($b['total_cost']) && !empty($b['accepted_qty']) && (float)$b['accepted_qty'] > 0) {
+                            $recordedVal += $bQty * ((float)$b['total_cost'] / (float)$b['accepted_qty']);
+                        } elseif ($b['sr_cost'] !== null) {
+                            $recordedVal += $bQty * (float)$b['sr_cost'];
+                        } elseif (!$hasMismatch && $catalogCost !== null && $catalogCost > 0) {
+                            $estimatedVal += $bQty * $catalogCost;
+                            $hasEstimate = true;
+                        } else {
+                            $costMissingQty += $bQty;
+                        }
+                    }
+
+                    if (!$hasMismatch) {
+                        if ($costMissingQty === $currentStock) {
+                            $status = 'missing';
+                            $basis = 'No recorded or estimated cost';
+                        } elseif ($costMissingQty > 0 || $hasEstimate) {
+                            $status = 'estimated';
+                            $basis = $hasEstimate ? 'Current product cost estimate' : 'Partial cost missing';
+                        } else {
+                            $status = 'recorded';
+                            $basis = 'Recorded batch cost';
+                        }
+                    }
+                } else {
+                    if ($catalogCost !== null && $catalogCost > 0) {
+                        $estimatedVal = $currentStock * $catalogCost;
+                        $status = 'estimated';
+                        $basis = 'Current product cost estimate';
+                    } else {
+                        $costMissingQty = $currentStock;
+                        $status = 'missing';
+                        $basis = 'No recorded or estimated cost';
+                    }
+                }
+
+                $totalRecorded += $recordedVal;
+                $totalEstimated += $estimatedVal;
+                $totalCostMissing += $costMissingQty;
+
+                $priceMinusCost = $unitPrice - ($catalogCost ?? 0.0);
+
+                $rows[] = [
+                    'SKU' => $row['sku'],
+                    'Product' => $row['product_name'],
+                    'Category' => $row['category_name'],
+                    'Current Stock' => $currentStock,
+                    'Cost Price' => money_value($catalogCost ?? 0.0),
+                    'Retail Price' => money_value($unitPrice),
+                    'Price minus cost per item' => money_value($priceMinusCost),
+                    'Recorded Value' => money_value($recordedVal),
+                    'Estimated Value' => money_value($estimatedVal),
+                    'Cost Missing Qty' => $costMissingQty,
+                    'Valuation Basis' => $basis,
+                    'Valuation Status' => $status,
+                ];
+            }
+
+            $metrics = [
+                'Total Recorded Value' => money_value($totalRecorded),
+                'Total Estimated Value' => money_value($totalEstimated),
+                'Cost Missing Qty' => (string)$totalCostMissing,
+            ];
+
+            if ($totalCostMissing > 0 || $hasAnyMismatch) {
+                $metrics['Combined (Partial: Recorded + Estimated)'] = money_value($totalRecorded + $totalEstimated);
+            } else {
+                $metrics['Combined Total (Recorded + Estimated)'] = money_value($totalRecorded + $totalEstimated);
+            }
+
+            return [
+                'headers' => $headers,
+                'rows' => $rows,
+                'metrics' => $metrics,
+            ];
 
         case 'stock_movements':
             $stmt = $pdo->prepare(
@@ -570,7 +711,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             return (new GrossProfitService($pdo))->runReport($filters);
 
         case 'expiration':
-            $todayManila = PhilippineTime::today();
+            $todayManila = \App\Services\PhilippineTime::today();
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
@@ -600,6 +741,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         'Status' => $days < 0 ? 'Expired' : ($days <= 30 ? 'Expiring soon' : 'Active'),
                     ];
                 }, $stmt->fetchAll()),
+                'metrics' => [
+                    'Scope' => 'As of Today (' . $todayManila . ')',
+                ],
             ];
 
         case 'count_variance':
@@ -828,11 +972,12 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         </select>
                     </div>
                 <?php endif; ?>
-                <div class="form-group">
+                <?php $hideDates = in_array($selectedReport, ['low_stock', 'inventory_valuation', 'expiration'], true); ?>
+                <div class="form-group" id="from_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="from">From</label>
                     <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="to_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="to">To</label>
                     <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
@@ -1055,7 +1200,13 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         <div>
                             <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
                             <div class="report-meta">
-                                <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>
+                                    <span>Current stock</span>
+                                <?php elseif ($selectedReport === 'expiration'): ?>
+                                    <span>As of Today (<?= htmlspecialchars(\App\Services\PhilippineTime::today()) ?>)</span>
+                                <?php else: ?>
+                                    <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
+                                <?php endif; ?>
                                 <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
                             </div>
                         </div>
@@ -1125,6 +1276,8 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
 const reportSelect = document.getElementById('report');
 const granularityGroup = document.getElementById('granularity_group');
 const periodGroup = document.getElementById('period_group');
+const fromGroup = document.getElementById('from_group');
+const toGroup = document.getElementById('to_group');
 function syncReportControls() {
     if (granularityGroup) {
         granularityGroup.style.display = reportSelect.value === 'sales_period' ? '' : 'none';
@@ -1132,6 +1285,9 @@ function syncReportControls() {
     if (periodGroup) {
         periodGroup.style.display = reportSelect.value === 'gross_profit' ? '' : 'none';
     }
+    const hideDates = ['low_stock', 'inventory_valuation', 'expiration'].includes(reportSelect.value);
+    if (fromGroup) fromGroup.style.display = hideDates ? 'none' : '';
+    if (toGroup) toGroup.style.display = hideDates ? 'none' : '';
 }
 if (reportSelect) {
     reportSelect.addEventListener('change', () => {
