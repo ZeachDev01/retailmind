@@ -1,4 +1,12 @@
 (() => {
+    document.querySelectorAll('.info-tooltip-trigger').forEach(trigger => {
+        trigger.addEventListener('keydown', event => {
+            if (event.key === 'Escape') trigger.parentElement.setAttribute('data-dismissed', '');
+        });
+        trigger.addEventListener('focus', () => trigger.parentElement.removeAttribute('data-dismissed'));
+        trigger.addEventListener('click', () => trigger.parentElement.removeAttribute('data-dismissed'));
+        trigger.parentElement?.addEventListener('mouseleave', () => trigger.parentElement.removeAttribute('data-dismissed'));
+    });
     const table = document.querySelector('.queue-list table');
     if (!table) return;
     let rows = Array.from(table.querySelectorAll('.queue-item'));

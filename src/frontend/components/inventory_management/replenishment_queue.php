@@ -97,14 +97,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 </div>
             <?php endif; ?>
 
-            <script>
-                window.RetailMindUI?.toast(
-                    'Review quantities before buying. Recommendations do not place orders or change stock.',
-                    'info',
-                    'Buying guidance, not a purchase order',
-                    8000
-                );
-            </script>
             <?php if ($isDemo): ?>
                 <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
             <?php endif; ?>
@@ -112,7 +104,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <p class="tag-warning">The train-only replay model is not approved. This page retains normal stock-rule guidance. <a href="../report/forecast_replay.php">Compare test predictions and view experimental buying quantities</a>.</p>
             <?php endif; ?>
             <section class="queue-panel" id="queue-products" tabindex="-1">
-                    <p class="muted">Stock rules suggest how much to buy. Expected sales estimate customer purchases. The Inventory Manager decides how much to buy.</p>
                     <?php if ($queueUnavailable): ?>
                         <p>Recommendations could not be loaded. Reload to try again.</p>
                     <?php elseif (empty($queue)): ?>
@@ -139,8 +130,18 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
                                     <th scope="col">Product</th><th scope="col">On hand</th>
-                                    <th scope="col">Stock-rule suggestion<br><small class="muted">Quantity to buy</small></th>
-                                    <th scope="col">Expected sales<br><small class="muted">28 days · not a buying quantity</small></th>
+                                    <th scope="col">Stock-rule suggestion
+                                        <span class="info-tooltip no-print">
+                                            <button class="info-tooltip-trigger" type="button" aria-label="About stock-rule suggestions" aria-describedby="queue-stock-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                            <span class="tooltip-box" id="queue-stock-help" role="tooltip">Suggested units to buy at or below the reorder level: reorder level + safety stock − on hand, rounded up for the minimum order and package size. Review before buying. Recommendations do not place orders or change stock.</span>
+                                        </span>
+                                    </th>
+                                    <th scope="col">Expected sales (28 days)
+                                        <span class="info-tooltip no-print">
+                                            <button class="info-tooltip-trigger" type="button" aria-label="About expected sales" aria-describedby="queue-sales-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                            <span class="tooltip-box" id="queue-sales-help" role="tooltip">Estimated customer purchases, not a buying quantity. Requires a complete, current forecast from the approved model. The Inventory Manager decides how much to buy.</span>
+                                        </span>
+                                    </th>
                                 </tr></thead>
                                 <tbody>
                                     <?php foreach ($queue as $item):
@@ -164,7 +165,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                 </tbody>
                             </table>
                         </div>
-                        <p class="muted">Stock rules apply at or below the reorder level: reorder level + safety stock − on hand, rounded up for the minimum order and package size. Expected sales require a complete, current forecast from the approved model.</p>
                         <p id="queue-no-results" class="empty-state" hidden>No products match these filters.</p>
                         <footer class="queue-panel-footer">
                             <span id="queue-results" role="status">Showing <?= count($queue) ?> of <?= count($queue) ?> products</span>

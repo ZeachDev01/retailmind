@@ -45,7 +45,7 @@
 .replenishment-page .queue-list table { width: 100%; min-width: 600px; table-layout: auto; }
 .queue-list th:nth-child(1) { width: 40%; }
 .queue-list th:nth-child(2) { width: 15%; }
-.queue-list th:nth-child(3), .queue-list th:nth-child(4) { width: 22.5%; }
+.queue-list th:nth-child(3), .queue-list th:nth-child(4) { width: 22.5%; white-space: nowrap; }
 .queue-list th:not(:first-child), .queue-list td:not(:first-child) { text-align: right; }
 .queue-list .queue-forecast-period { display: block; margin-top: .25rem; }
 .queue-product + .queue-sku { margin-right: .5rem; }
@@ -102,9 +102,8 @@ html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); c
     .replenishment-page .queue-list th { position: static; }
 }
 
-.info-tooltip { position: relative; display: inline-flex; align-items: center; margin-left: .35rem; color: var(--muted); cursor: pointer; vertical-align: middle; }
-.info-tooltip:hover, .info-tooltip:focus, .info-tooltip:focus-within { color: var(--primary); outline: none; }
-.tooltip-box { display: none; position: absolute; top: calc(100% + 6px); right: .5rem; width: 240px; padding: .6rem .75rem; background: var(--card-bg, #ffffff); color: var(--text, #111827); border: 1px solid var(--border, #e5e7eb); border-radius: 8px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); font-size: .75rem; font-weight: 400; line-height: 1.4; white-space: normal; text-transform: none; z-index: 1000; text-align: left; }
-.tooltip-box strong { color: var(--text); font-weight: 700; display: block; margin-bottom: .25rem; }
-.tooltip-box code { display: block; margin: .35rem 0; padding: .25rem .4rem; background: var(--surface-soft, #f3f4f6); border-radius: 4px; font-size: .7rem; font-family: monospace; color: var(--primary); }
-.info-tooltip:hover .tooltip-box, .info-tooltip:focus .tooltip-box, .info-tooltip:focus-within .tooltip-box { display: block; }
+.info-tooltip { position: relative; display: inline-flex; vertical-align: middle; }
+.info-tooltip-trigger { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.info-tooltip-trigger:hover, .info-tooltip-trigger:focus-visible { color: var(--primary); }
+.tooltip-box { display: none; position: absolute; top: 100%; right: 0; width: 240px; padding: .6rem .75rem; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, .07); font-size: .75rem; font-weight: 400; line-height: 1.5; white-space: normal; text-transform: none; z-index: 3; text-align: left; }
+.info-tooltip:not([data-dismissed]):hover .tooltip-box, .info-tooltip:not([data-dismissed]):focus-within .tooltip-box { display: block; }
