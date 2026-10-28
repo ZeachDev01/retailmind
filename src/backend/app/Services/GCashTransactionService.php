@@ -577,6 +577,28 @@ final class GCashTransactionService
         $grossFeesWallet = round((float)$activity['gross_fees_wallet'], 2);
         $totalTransactions = (int)($totals['total_transactions'] ?? 0);
 
+        // Explicit fee returns calculation in reporting period
+        $startBound = PhilippineTime::dayStart($startDate);
+        $endBound = PhilippineTime::dayAfter($endDate);
+        $hasFeeDelta = false;
+        try {
+            $cols = array_column($this->pdo()->query("PRAGMA table_info(gcash_adjustments)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+            $hasFeeDelta = in_array('fee_delta', $cols, true);
+        } catch (Throwable) {
+            try {
+                $cols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_adjustments")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                $hasFeeDelta = in_array('fee_delta', $cols, true);
+            } catch (Throwable) {}
+        }
+        $feesReturned = 0.00;
+        if ($hasFeeDelta) {
+            $retStmt = $this->pdo()->prepare("SELECT COALESCE(SUM(-fee_delta), 0) FROM gcash_adjustments WHERE fee_delta < 0 AND created_at >= ? AND created_at < ?");
+            $retStmt->execute([$startBound, $endBound]);
+            $feesReturned = round((float)$retStmt->fetchColumn(), 2);
+        }
+        $feesCharged = round($grossFeesCash + $grossFeesWallet, 2);
+        $feesAfterReturns = round($feesCharged - $feesReturned, 2);
+
         $ncSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username,
                          ru.full_name AS responsible_user_name, ru.username AS responsible_username
                   FROM gcash_transactions t
@@ -757,6 +779,9 @@ final class GCashTransactionService
             'gross_fees_wallet' => $grossFeesWallet,
             'gross_fees_total' => round($grossFeesCash + $grossFeesWallet, 2),
             'total_transactions' => $totalTransactions,
+            'fees_charged' => $feesCharged,
+            'fees_returned' => $feesReturned,
+            'fees_after_returns' => $feesAfterReturns,
 
             'unresolved_activity' => $unresolved,
             'needs_checking' => $unresolved,
@@ -3117,7 +3142,34 @@ final class GCashTransactionService
                 $hasEvidenceCol = in_array('evidence', $cols, true);
             }
 
-            if ($hasEvidenceCol) {
+            $feeReturned = isset($data['fee_returned']) ? round((float)$data['fee_returned'], 2) : 0.00;
+            $hasFeeDeltaCol = false;
+            try {
+                $cols = array_column($this->pdo()->query("PRAGMA table_info(gcash_adjustments)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+                $hasFeeDeltaCol = in_array('fee_delta', $cols, true);
+            } catch (Throwable) {
+                try {
+                    $cols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_adjustments")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                    $hasFeeDeltaCol = in_array('fee_delta', $cols, true);
+                } catch (Throwable) {}
+            }
+
+            if ($hasEvidenceCol && $hasFeeDeltaCol) {
+                $insAdj = $this->pdo()->prepare(
+                    "INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, fee_delta, reason, evidence, authorized_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $insAdj->execute([
+                    $transactionId,
+                    $currentSessionId,
+                    -$returnedCash,
+                    -$returnedWallet,
+                    -$feeReturned,
+                    'Return for #' . $transactionId . ': ' . $reason,
+                    $evidence,
+                    $authorizedBy,
+                ]);
+            } elseif ($hasEvidenceCol) {
                 $insAdj = $this->pdo()->prepare(
                     "INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, evidence, authorized_by)
                      VALUES (?, ?, ?, ?, ?, ?, ?)"
