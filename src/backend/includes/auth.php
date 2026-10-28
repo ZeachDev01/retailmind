@@ -361,9 +361,37 @@ function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
     return $policy ??= new App\Authorization\RoleCapabilityPolicy();
 }
 
-function current_authorization_context(PDO $pdo): App\Authorization\AuthorizationContext
+function is_remote_request(): bool
 {
-    return App\Authorization\AuthorizationContext::standard();
+    if (!empty($_SESSION['is_remote'])) {
+        return true;
+    }
+    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_SERVER['HTTP_X_RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
+        return true;
+    }
+    if (!empty($_SERVER['HTTP_CF_RAY']) || !empty($_SERVER['HTTP_CF_CONNECTING_IP']) || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])) {
+        return true;
+    }
+    return false;
+}
+
+function require_local_request(string $message = 'This action is not available during remote monitoring.'): void
+{
+    if (is_remote_request()) {
+        http_response_code(403);
+        if (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => $message]);
+        } else {
+            echo $message;
+        }
+        exit;
+    }
+}
+
+function current_authorization_context(?PDO $pdo = null): App\Authorization\AuthorizationContext
+{
+    return App\Authorization\AuthorizationContext::standard(is_remote_request());
 }
 
 function has_capability(

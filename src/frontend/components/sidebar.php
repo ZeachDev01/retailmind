@@ -164,6 +164,7 @@ $superAdministratorSystemItems = [
     ['path' => 'components/administrator/reset_data.php', 'icon' => 'delete_database', 'label' => 'Reset Data'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'data_recovery', 'label' => 'Backup & Restore'],
     ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'data_configuration', 'label' => 'Platform Settings'],
+    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Model Governance'],
 ];
 
 $administratorSystemItems = [
@@ -181,7 +182,7 @@ $managerInventoryItems = [];
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'overtime', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
-    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Analytics'],
+
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Report Generation'],
@@ -233,7 +234,7 @@ $roleSections = [
         [
             'items' => [
                 ['icon' => 'statistics', 'label' => 'Reports', 'items' => [
-                    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Analytics'],
+
                     ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
                     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
                     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],

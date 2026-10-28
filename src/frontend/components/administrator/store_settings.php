@@ -5,20 +5,20 @@ require_role(['admin']);
 $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
 $fields = [
     'cash_variance_amount' => [
-        'label' => 'Cash variance review threshold (PHP)',
-        'description' => 'Closed Cashier Shifts with absolute cash differences equal to or exceeding this threshold require Administrator review.',
+        'label' => 'Cash variance review threshold (₱)',
+        'help' => 'Requires Shift variance review and raises Store Overview attention when counted cash difference reaches or exceeds this amount.',
     ],
     'inventory_overdue_hours' => [
-        'label' => 'Stock Issue overdue threshold (hours)',
-        'description' => 'Pending Stock Issues waiting longer than this threshold require Administrator follow-up with the Inventory Manager.',
+        'label' => 'Stock Issue overdue warning (hours)',
+        'help' => 'Raises a Store Overview warning when an open Stock Issue remains pending longer than this duration.',
     ],
     'inventory_high_value_amount' => [
-        'label' => 'High-value Stock Issue threshold (PHP)',
-        'description' => 'Pending Stock Issues with total value equal to or exceeding this threshold require Administrator follow-up with the Inventory Manager.',
+        'label' => 'High-value Stock Issue alert (₱)',
+        'help' => 'Raises a critical Store Overview alert when an open Stock Issue risk value reaches or exceeds this amount.',
     ],
     'fiscal_period_days_to_close' => [
         'label' => 'Fiscal Period closing warning (days)',
-        'description' => 'Warns in Store Overview when the active Fiscal Period is approaching closure within this number of days.',
+        'help' => 'Raises an upcoming closure warning when an active Fiscal Period has this many or fewer days remaining.',
     ],
 ];
 $message = '';
@@ -57,7 +57,10 @@ $effective = $service->thresholdsFor('admin');
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div><h1>Store Settings</h1></div>
+            <div>
+                <h1>Store Settings</h1>
+                <p class="page-subtitle">Configure thresholds that trigger Store Overview attention and required operational reviews.</p>
+            </div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <section class="dashboard-section">
@@ -68,9 +71,11 @@ $effective = $service->thresholdsFor('admin');
                     <?php foreach ($fields as $key => $config): ?>
                         <div class="form-group">
                             <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? '')) ?>" required>
-                            <small class="form-text"><?= htmlspecialchars($config['description']) ?></small>
-                            <?php if (($effective[$key] ?? null) !== ($requested[$key] ?? null)): ?><small class="form-text">Effective Platform-limited value: <?= htmlspecialchars((string)($effective[$key] ?? '')) ?></small><?php endif; ?>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" required>
+                            <small class="muted"><?= htmlspecialchars($config['help']) ?></small>
+                            <?php if (isset($effective[$key]) && isset($requested[$key]) && $effective[$key] !== $requested[$key]): ?>
+                                <small>Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

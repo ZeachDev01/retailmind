@@ -18,6 +18,7 @@ $isExport = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
     && ($_POST['action'] ?? '') === 'export_csv';
 
 if ($isExport) {
+    require_local_request('Bulk exports are not available during remote monitoring.');
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $userFilter = trim((string)($_POST['user_id'] ?? ''));
     $actionFilter = trim((string)($_POST['action_filter'] ?? ''));
@@ -175,6 +176,7 @@ if ($isTableRequest) {
 $logs = $isExport ? $protectedAuditRecords->exportRows($actorRole, $auditFilters) : [];
 
 if ($isExport) {
+    require_local_request('Bulk exports are not available during remote monitoring.');
     $rows = array_map(static function (array $log): array {
         return [
             format_display_datetime($log['created_at']),
