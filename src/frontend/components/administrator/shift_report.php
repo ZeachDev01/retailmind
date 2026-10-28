@@ -32,6 +32,7 @@ try {
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
     if (($_POST['action'] ?? '') === 'export_csv' && $error === '') {
+    require_local_request('Bulk exports are not available during remote monitoring.');
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="cashier_shifts_' . date('Ymd_His') . '.csv"');
         header('X-Content-Type-Options: nosniff');

@@ -141,6 +141,9 @@ class CashierShiftService
      */
     public function openShift(int $actorId, string $actorRole, int $registerId, float $openingFloat): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Shift operations are not permitted during remote monitoring.', 403);
+        }
         $this->requireCashierWorkspace($actorRole);
         if ($openingFloat < 0) {
             throw new InvalidArgumentException('The opening float cannot be negative.');
@@ -496,6 +499,9 @@ class CashierShiftService
     /** Record an accountable movement in the signed-in Cashier's open drawer. */
     public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null, string $approverUsername = '', string $approverPassword = ''): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Drawer movements are not permitted during remote monitoring.', 403);
+        }
         $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can record a drawer movement.');
         if (!isset(self::DRAWER_REASONS[$type][$reason])) {
             throw new InvalidArgumentException('Choose a valid movement type and reason.');

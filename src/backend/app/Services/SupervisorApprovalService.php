@@ -24,6 +24,10 @@ final class SupervisorApprovalService
         string $failureMessage = 'Administrator authorization failed: invalid credentials.',
         int $errorCode = 0
     ): int {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Supervisor approval is not permitted during remote monitoring.', 403);
+        }
+
         $identifier = trim($identifier);
         if ($identifier === '' || $password === '') {
             throw new DomainException($failureMessage, $errorCode);

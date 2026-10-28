@@ -25,6 +25,12 @@ try {
         $result = $service->adminOverview($filters);
         echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
     } elseif ($method === 'POST') {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Operational mutations are not permitted during remote monitoring.', 403);
+        }
+        if (current_role() !== 'admin') {
+            throw new DomainException('Operational mutations require the active Administrator Workspace.', 403);
+        }
         if (!csrf_token_is_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
             throw new DomainException('Security check failed. Reload the page and try again.', 403);
         }

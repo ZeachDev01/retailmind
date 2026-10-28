@@ -21,6 +21,7 @@ $actorUserId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_local_request('Database backup is not available during remote monitoring.');
     csrf_verify();
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'backup') {
