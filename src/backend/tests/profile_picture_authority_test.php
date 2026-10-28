@@ -46,7 +46,7 @@ try {
     foreach ([1 => 'cashier', 2 => 'inventory_manager', 3 => 'admin', 4 => 'super_admin'] as $actor => $role) {
         foreach (range(1, 8) as $targetId) {
             $allowed = ($actor === 3 && in_array($targetId, [1, 2, 3, 7], true))
-                || ($actor === 4 && in_array($targetId, [1, 2, 3, 4, 7], true));
+                || ($actor === 4 && in_array($targetId, [3, 4, 7], true));
             $target = $service->get($targetId);
             check($service->canManageAccount($actor, $role, $target) === $allowed, "Removal authority {$role} -> {$targetId}");
             check($service->canViewPicture($actor, $role, $target) === ($allowed || $actor === $targetId), "Read authority {$role} -> {$targetId}");

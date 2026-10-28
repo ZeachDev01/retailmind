@@ -294,6 +294,33 @@ CREATE TABLE `cash_refund_exception_access` (
   FOREIGN KEY (`approved_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
   FOREIGN KEY (`used_refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `refund_correction_reviews` (
+  `review_id` int(11) NOT NULL AUTO_INCREMENT,
+  `refund_id` int(11) NOT NULL,
+  `correction_type` varchar(50) NOT NULL,
+  `status` varchar(50) NOT NULL,
+  `cash_status` varchar(50) NOT NULL,
+  `stock_status` varchar(50) NOT NULL,
+  `explanation` text NOT NULL,
+  `proposed_correction` text DEFAULT NULL,
+  `reviewed_by` int(11) NOT NULL,
+  `reviewed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `responsible_cashier_id` int(11) DEFAULT NULL,
+  `responsible_inventory_manager_id` int(11) DEFAULT NULL,
+  `cash_drawer_movement_id` int(11) DEFAULT NULL,
+  `inventory_adjustment_id` int(11) DEFAULT NULL,
+  `completed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`review_id`),
+  KEY `idx_rcr_refund` (`refund_id`),
+  KEY `idx_rcr_status` (`status`),
+  KEY `idx_rcr_cashier` (`responsible_cashier_id`),
+  KEY `idx_rcr_inventory` (`responsible_inventory_manager_id`),
+  CONSTRAINT `fk_rcr_refund` FOREIGN KEY (`refund_id`) REFERENCES `cash_refunds` (`refund_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_cashier` FOREIGN KEY (`responsible_cashier_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_rcr_inventory` FOREIGN KEY (`responsible_inventory_manager_id`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1767,6 +1794,10 @@ CREATE TABLE `gcash_transactions` (
   `reviewed_at` datetime DEFAULT NULL,
   `receipt_details_json` longtext DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
+  `cash_checked_by` int DEFAULT NULL,
+  `cash_finding` varchar(255) DEFAULT NULL,
+  `wallet_checked_by` int DEFAULT NULL,
+  `wallet_finding` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`transaction_id`),
   UNIQUE KEY `uq_gcash_reference` (`reference_number`),

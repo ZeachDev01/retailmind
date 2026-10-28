@@ -1853,6 +1853,39 @@ final class GCashTransactionService
             $priorConfirmedCash = (bool)$tx['confirmed_cash'];
 
             if ($action === 'complete') {
+                if (isset($data['confirmed_cash']) && $data['confirmed_cash'] === false) {
+                    throw new DomainException('Uncertain cash evidence leaves the exchange pending. Both physical cash and wallet checks must be confirmed.');
+                }
+                if (isset($data['confirmed_wallet']) && $data['confirmed_wallet'] === false) {
+                    throw new DomainException('Uncertain wallet evidence leaves the exchange pending. Both physical cash and wallet checks must be confirmed.');
+                }
+
+                $cashFinding = trim((string)($data['cash_finding'] ?? ''));
+                $walletFinding = trim((string)($data['wallet_finding'] ?? ''));
+
+                $isUncertain = static function (string $text): bool {
+                    return (bool)preg_match('/\b(uncertain|unconfirmed|unverified|discrepancy|not found|missing|unchecked|doubtful|unknown|unproven|offline)\b/i', $text);
+                };
+                if ($isUncertain($cashFinding) || $isUncertain($walletFinding)) {
+                    throw new DomainException('Uncertain cash or wallet evidence leaves the exchange pending. Both physical cash and wallet checks must be confirmed.');
+                }
+
+                if ($cashFinding === '' && $walletFinding === '') {
+                    $noteStr = (string)($data['notes'] ?? $data['note'] ?? '');
+                    if (preg_match('/expected.*balance|system.*balance/i', $noteStr)) {
+                        throw new DomainException('Expected system balances alone are insufficient evidence. Physical cash and wallet check findings required.');
+                    }
+                }
+
+                if ($cashFinding === '') {
+                    $cashFinding = $priorConfirmedCash ? 'Physical service cash confirmed by Cashier at entry' : 'Physical service cash confirmed';
+                }
+                if ($walletFinding === '') {
+                    $walletFinding = $priorConfirmedWallet ? 'Wallet transfer confirmed in GCash app at entry' : 'Wallet transfer confirmed in GCash app';
+                }
+
+                $cashCheckedBy = !empty($data['cash_checked_by']) ? (int)$data['cash_checked_by'] : ($priorConfirmedCash ? (int)$tx['cashier_id'] : $actorId);
+                $walletCheckedBy = !empty($data['wallet_checked_by']) ? (int)$data['wallet_checked_by'] : ($priorConfirmedWallet ? (int)$tx['cashier_id'] : $actorId);
                 $refRaw = trim((string)($data['reference'] ?? $data['reference_number'] ?? ''));
                 if (!$priorConfirmedWallet) {
                     if ($refRaw === '') {
@@ -1884,18 +1917,29 @@ final class GCashTransactionService
                 $updateStmt = $this->pdo()->prepare(
                     "UPDATE gcash_transactions
                      SET verification_status = 'Completed',
+                         verified_by = ?,
                          reference_number = ?,
                          confirmed_wallet = 1,
                          confirmed_cash = 1,
+                         cash_checked_by = ?,
+                         cash_finding = ?,
+                         wallet_checked_by = ?,
+                         wallet_finding = ?,
                          service_cash_delta = ?,
                          wallet_delta = ?,
                          gross_fee = ?,
                          completed_at = CURRENT_TIMESTAMP,
+                         reviewed_at = CURRENT_TIMESTAMP,
                          notes = ?
                      WHERE transaction_id = ? AND verification_status = 'Needs checking'"
                 );
                 $updateStmt->execute([
+                    $actorId,
                     $reference,
+                    $cashCheckedBy,
+                    $cashFinding,
+                    $walletCheckedBy,
+                    $walletFinding,
                     $targetCashDelta,
                     $targetWalletDelta,
                     $targetFee,
@@ -1910,7 +1954,18 @@ final class GCashTransactionService
                     'GCash',
                     $transactionId,
                     ['verification_status' => 'Needs checking', 'confirmed_cash' => $tx['confirmed_cash'], 'confirmed_wallet' => $tx['confirmed_wallet']],
-                    ['verification_status' => 'Completed', 'reference_number' => $reference, 'service_cash_delta' => $targetCashDelta, 'wallet_delta' => $targetWalletDelta, 'gross_fee' => $targetFee],
+                    [
+                        'verification_status' => 'Completed',
+                        'verified_by' => $actorId,
+                        'reference_number' => $reference,
+                        'cash_checked_by' => $cashCheckedBy,
+                        'cash_finding' => $cashFinding,
+                        'wallet_checked_by' => $walletCheckedBy,
+                        'wallet_finding' => $walletFinding,
+                        'service_cash_delta' => $targetCashDelta,
+                        'wallet_delta' => $targetWalletDelta,
+                        'gross_fee' => $targetFee,
+                    ],
                     null,
                     AuditRecordCategory::STORE_OPERATION
                 );
@@ -1926,6 +1981,13 @@ final class GCashTransactionService
                     'verification_status' => 'Completed',
                 ];
             } else {
+                $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
+                $userStmt->execute([$actorId]);
+                $actorRole = (string)$userStmt->fetchColumn();
+                if ($actorRole === 'admin' || $actorRole === 'super_admin') {
+                    throw new DomainException('Cancellation authority belongs to the responsible Cashier in Cashier Workspace; Administrator has no cancellation authority.');
+                }
+
                 $reason = trim((string)($data['reason'] ?? $data['notes'] ?? $data['note'] ?? ''));
                 if (mb_strlen($reason) < 5) {
                     throw new DomainException('Enter a cancellation reason of at least 5 characters.');

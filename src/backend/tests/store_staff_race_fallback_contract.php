@@ -144,7 +144,7 @@ try {
             'username' => 'race_user',
             'email' => 'super_race@example.test',
             'password_hash' => password_hash('SuperRace123', PASSWORD_DEFAULT),
-            'role' => 'cashier',
+            'role' => 'admin',
         ]),
         'Super Administrator duplicate username must be rejected server-side'
     );
@@ -154,7 +154,7 @@ try {
             'username' => 'super_email_race',
             'email' => 'race@example.test',
             'password_hash' => password_hash('SuperEmail123', PASSWORD_DEFAULT),
-            'role' => 'cashier',
+            'role' => 'admin',
         ]),
         'Super Administrator duplicate email must be rejected server-side'
     );

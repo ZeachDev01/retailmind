@@ -42,12 +42,17 @@ final class AuditRecordCategory
                 }
                 if (is_array($snapshot)) {
                     $roles[] = (string)($snapshot['role'] ?? $snapshot['target_role'] ?? '');
+                    if (isset($snapshot['roles']) && is_array($snapshot['roles'])) {
+                        foreach ($snapshot['roles'] as $r) {
+                            $roles[] = (string)$r;
+                        }
+                    }
                 }
             }
-            if (array_intersect($roles, ['super_admin', 'admin']) !== []) {
+            if (in_array('super_admin', $roles, true)) {
                 return self::SECURITY;
             }
-            return array_intersect($roles, ['cashier', 'inventory_manager']) !== []
+            return array_intersect($roles, ['admin', 'cashier', 'inventory_manager']) !== []
                 ? self::STORE_OPERATION
                 : self::SECURITY;
         }

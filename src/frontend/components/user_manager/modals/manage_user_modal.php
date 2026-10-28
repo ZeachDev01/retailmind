@@ -48,6 +48,10 @@
                         <select id="drawerStatus" name="status" aria-describedby="drawerStatusHelp drawerDormancyHelp"><option value="active">Active</option><option value="disabled">Disabled</option></select>
                         <small class="field-help" id="drawerStatusHelp">Disabling retains historical attribution and revokes active sessions.</small>
                     </div>
+                    <div id="drawerPendingDuties" hidden class="alert tag-warning" role="alert" style="margin-top: 10px;">
+                        <p><strong>Unfinished duties pending:</strong> This account has open cash or GCash duties that require operational handover.</p>
+                        <div id="drawerPendingLinks" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px;"></div>
+                    </div>
                     <div class="form-group" id="drawerLastLoginRow">
                         <span class="field-static-label" id="drawerLastLoginLabel">Last login</span>
                         <strong id="drawerLastLogin" aria-labelledby="drawerLastLoginLabel">Never</strong>
