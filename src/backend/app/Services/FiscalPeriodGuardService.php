@@ -137,9 +137,11 @@ class FiscalPeriodGuardService
                 $blockers[] = 'open Cashier Shifts';
             }
             if ($this->tableExists('gcash_service_sessions')) {
-                $open = $this->count("SELECT COUNT(*) FROM gcash_service_sessions
-                    WHERE status = 'open' OR COALESCE(unresolved_carryover_count, 0) <> 0");
-                if ($open > 0) {
+                $openSessions = $this->count("SELECT COUNT(*) FROM gcash_service_sessions WHERE status = 'open'");
+                $unassignedPending = $this->tableExists('gcash_transactions')
+                    ? $this->count("SELECT COUNT(*) FROM gcash_transactions WHERE verification_status = 'Needs checking' AND responsible_user_id IS NULL")
+                    : 0;
+                if ($openSessions > 0 || $unassignedPending > 0) {
                     $blockers[] = 'open or unreconciled GCash sessions';
                 }
             }
@@ -176,6 +178,64 @@ class FiscalPeriodGuardService
         $stmt->execute([$periodId]);
         if ($stmt->rowCount() !== 1) {
             throw new RuntimeException('Only a closed fiscal period can be locked.');
+        }
+    }
+
+    public function openNextPeriod(int $predecessorPeriodId, string $periodName, string $endDate, int $actorId): int
+    {
+        $periodName = trim($periodName);
+        if ($periodName === '') {
+            throw new InvalidArgumentException('Fiscal period name is required.');
+        }
+        $end = $this->date($endDate, 'end date');
+        \App\Store\StoreWriteGate::begin($this->pdo);
+        try {
+            $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?' . $lock);
+            $stmt->execute([$predecessorPeriodId]);
+            $pred = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$pred || !in_array($pred['status'], ['closed', 'locked'], true)) {
+                throw new RuntimeException('Only a closed or locked fiscal period can have a successor opened.');
+            }
+            $nextStart = date('Y-m-d', strtotime($pred['end_date'] . ' +1 day'));
+            if ($end < $nextStart) {
+                throw new InvalidArgumentException('End date must not be before the start date (' . $nextStart . ').');
+            }
+
+            // Check overlap
+            $overlap = $this->pdo->prepare('SELECT COUNT(*) FROM fiscal_periods WHERE start_date <= ? AND end_date >= ?');
+            $overlap->execute([$end, $nextStart]);
+            if ((int)$overlap->fetchColumn() > 0) {
+                throw new RuntimeException('The next fiscal period interval overlaps an existing fiscal period.');
+            }
+
+            $hasCreatedBy = $this->columnExists('fiscal_periods', 'created_by');
+            if ($hasCreatedBy) {
+                $ins = $this->pdo->prepare('INSERT INTO fiscal_periods (period_name, start_date, end_date, created_by, status) VALUES (?, ?, ?, ?, "open")');
+                $ins->execute([$periodName, $nextStart, $end, $actorId]);
+            } else {
+                $ins = $this->pdo->prepare('INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES (?, ?, ?, "open")');
+                $ins->execute([$periodName, $nextStart, $end]);
+            }
+            $newId = (int)$this->pdo->lastInsertId();
+
+            if (function_exists('log_activity')) {
+                log_activity($this->pdo, $actorId, 'Next fiscal period opened', 'Fiscal Periods', $newId, null, [
+                    'period_id' => $newId,
+                    'period_name' => $periodName,
+                    'start_date' => $nextStart,
+                    'end_date' => $end,
+                    'predecessor_id' => $predecessorPeriodId,
+                ]);
+            }
+
+            $this->pdo->commit();
+            return $newId;
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
     }
 
