@@ -241,6 +241,15 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'gcash_service_sessions', 'review_history', 'TEXT NULL AFTER review_shortage');
     ensure_table_column($pdo, 'gcash_service_sessions', 'cash_check_explanation', 'TEXT NULL AFTER review_history');
     ensure_table_column($pdo, 'gcash_service_sessions', 'wallet_check_explanation', 'TEXT NULL AFTER cash_check_explanation');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsible_user_id', 'INT NULL AFTER wallet_check_explanation');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsible_role', 'VARCHAR(20) NULL AFTER responsible_user_id');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsibility_notes', 'TEXT NULL AFTER responsible_role');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsibility_assigned_at', 'DATETIME NULL AFTER responsibility_notes');
+
+    ensure_table_column($pdo, 'gcash_transactions', 'responsible_user_id', 'INT NULL AFTER cashier_id');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsible_role', 'VARCHAR(20) NULL AFTER responsible_user_id');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsibility_notes', 'TEXT NULL AFTER responsible_role');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsibility_assigned_at', 'DATETIME NULL AFTER responsibility_notes');
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
         movement_id INT AUTO_INCREMENT PRIMARY KEY,

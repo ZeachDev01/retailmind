@@ -100,6 +100,10 @@ $pdo->exec("
         reviewed_at TEXT,
         receipt_details_json TEXT,
         completed_at TEXT,
+        cash_checked_by INTEGER,
+        cash_finding TEXT,
+        wallet_checked_by INTEGER,
+        wallet_finding TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         responsible_user_id INTEGER,
         responsible_role TEXT,
@@ -223,6 +227,7 @@ foreach ($auditRows as $ar) {
 $assert($auditFound, 'Audit log clarifies that handover transfers investigation responsibility, not ownership of underlying shortage');
 
 // 4. Visible responsibility in overview and queues
+$_SESSION['role'] = 'admin';
 $overview = $gcashService->overview();
 $unresolvedItems = $overview['unresolved_activity'];
 $tx1Overview = null;
