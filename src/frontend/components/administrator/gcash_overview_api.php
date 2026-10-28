@@ -49,7 +49,17 @@ try {
             if (!$txId || ($input['confirmed_wallet'] ?? false) !== true || ($input['confirmed_cash'] ?? false) !== true) {
                 throw new DomainException('Confirm both the wallet transfer and physical service cash exchange.');
             }
+            $cashFinding = trim((string)($input['cash_finding'] ?? 'Physical service cash confirmed'));
+            $walletFinding = trim((string)($input['wallet_finding'] ?? 'Wallet transfer confirmed in GCash app'));
+            $cashCheckedBy = filter_var($input['cash_checked_by'] ?? null, FILTER_VALIDATE_INT) ?: null;
             $result = $service->resolveNeedsChecking((int)$_SESSION['user_id'], (int)$txId, 'complete', [
+                'reference' => (string)($input['reference'] ?? ''),
+                'cash_checked_by' => $cashCheckedBy,
+                'cash_finding' => $cashFinding,
+                'wallet_checked_by' => (int)$_SESSION['user_id'],
+                'wallet_finding' => $walletFinding,
+                'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
+            ]);
                 'reference' => (string)($input['reference'] ?? ''),
                 'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
             ]);

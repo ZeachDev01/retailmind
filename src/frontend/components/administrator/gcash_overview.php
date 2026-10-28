@@ -484,7 +484,7 @@ function gcash_admin_money(mixed $val): string {
                                                     data-cashier="<?= gcash_admin_e($diff['cashier_name']) ?>"
                                                     data-cash-variance="<?= gcash_admin_e($diff['cash_variance']) ?>"
                                                     data-wallet-variance="<?= gcash_admin_e($diff['wallet_variance']) ?>">
-                                                Waive Discrepancy
+                                                Mark reviewed
                                             </button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                         <?php else: ?>
                                             <span class="text-muted gcash-muted-placeholder">—</span>
@@ -571,7 +571,7 @@ function gcash_admin_money(mixed $val): string {
                                     </td>
                                     <td>
                                         <?php if (!$nc['is_legacy']): ?>
-                                            <?php if ($canMutate): ?><button type="button" class="btn btn-primary gcash-verify" data-transaction-id="<?= (int)$nc['transaction_id'] ?>" data-reference="<?= gcash_admin_e($nc['reference_number'] ?? '') ?>">Verify &amp; Clear</button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
+                                            <?php if ($canMutate): ?><button type="button" class="btn btn-primary gcash-verify" data-transaction-id="<?= (int)$nc['transaction_id'] ?>" data-reference="<?= gcash_admin_e($nc['reference_number'] ?? '') ?>" data-cashier-id="<?= (int)$nc['cashier_id'] ?>" data-confirmed-cash="<?= (int)$nc['confirmed_cash'] ?>" data-confirmed-wallet="<?= (int)$nc['confirmed_wallet'] ?>">Verify &amp; Clear</button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                         <?php else: ?>
                                             <span class="gcash-badge gcash-badge-legacy">Legacy reference</span>
                                         <?php endif; ?>
@@ -588,12 +588,16 @@ function gcash_admin_money(mixed $val): string {
 
         <dialog id="gcash-verify-dialog" aria-labelledby="gcash-verify-title">
             <h2 id="gcash-verify-title">Verify &amp; Clear Exchange</h2>
-            <p>Confirm the actual exchange against the GCash app and service cash before completing transaction #<strong id="gcash-verify-id"></strong>. This completes the exchange, posts only the remaining movements, and creates an audit record. Previously posted partial movements stay recorded and are not posted again.</p>
+            <p>Verify &amp; Clear confirms an actually completed exchange and posts only applicable remaining movements. It cannot dismiss or cancel a failed exchange. Uncertain evidence leaves the exchange pending; expected system balances alone are insufficient.</p>
+            <p class="gcash-dialog-routing text-muted">Failed exchange? Cancellation and returns must be handled in the Cashier Workspace by the responsible Cashier. <a href="<?= gcash_admin_e(app_url('components/cashier/gcash.php')) ?>" class="gcash-switch-link">Switch to Cashier Workspace</a></p>
             <form id="gcash-verify-form">
                 <input type="hidden" id="gcash-verify-tx">
+                <input type="hidden" id="gcash-verify-cashier-id">
                 <div class="gcash-field"><label for="gcash-verify-reference">GCash reference number</label><input class="form-control" id="gcash-verify-reference" required inputmode="numeric" pattern="[0-9]{13}" minlength="13" maxlength="13"></div>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-wallet" required> Wallet transfer confirmed in the GCash app</label>
+                <div class="gcash-field"><label for="gcash-verify-cash-finding">Cash check evidence &amp; finding</label><input class="form-control" id="gcash-verify-cash-finding" required placeholder="Describe physical service cash check and finding" value="Physical service cash verified"></div>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-cash" required> Physical service cash exchange confirmed</label>
+                <div class="gcash-field"><label for="gcash-verify-wallet-finding">Wallet check evidence &amp; finding</label><input class="form-control" id="gcash-verify-wallet-finding" required placeholder="Describe GCash app wallet check and finding" value="Wallet transfer verified in GCash app"></div>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-print-receipt"> Print receipt automatically</label>
                 <p id="gcash-verify-error" role="alert"></p>
                 <div class="gcash-actions"><button type="button" class="btn btn-secondary" data-close-dialog>Cancel</button><button type="submit" class="btn btn-primary">Verify &amp; Clear</button></div>
@@ -615,7 +619,7 @@ function gcash_admin_money(mixed $val): string {
         </dialog>
         <!-- Discrepancy Waiver Dialog -->
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
-            <h2 id="waiver-dialog-title" class="gcash-dialog-title">Waive Closing Discrepancy</h2>
+            <h2 id="waiver-dialog-title" class="gcash-dialog-title">Mark Closing Difference Reviewed</h2>
             <p>The counted variance stays on record. This waiver records your approval and reason.</p>
             <div id="admin-waiver-summary" class="gcash-waiver-summary">
                 <p class="gcash-waiver-session"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
@@ -626,12 +630,12 @@ function gcash_admin_money(mixed $val): string {
             <form id="admin-waiver-form">
                 <input type="hidden" id="waiver-session-id" name="session_id" value="">
                 <div class="gcash-field">
-                    <label for="admin-waiver-notes" class="gcash-waiver-label">Reason for waiver (5–500 characters)</label>
-                    <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain why this closing discrepancy was approved or resolved without modifying recorded cash."></textarea>
+                    <label for="admin-waiver-notes" class="gcash-waiver-label">Investigation explanation (5–500 characters)</label>
+                    <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain the conclusion of the physical cash and wallet checks."></textarea>
                 </div>
                 <div class="gcash-actions gcash-waiver-actions">
                     <button type="button" class="btn btn-secondary" id="admin-waiver-cancel-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="admin-waiver-confirm-btn">Confirm Waiver</button>
+                    <button type="submit" class="btn btn-primary" id="admin-waiver-confirm-btn">Mark reviewed</button>
                 </div>
             </form>
         </dialog>
