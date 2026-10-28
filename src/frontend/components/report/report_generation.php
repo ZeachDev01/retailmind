@@ -50,7 +50,10 @@ function send_csv(string $filename, array $rows, array $headers): void
     $output = fopen('php://output', 'w');
     fputcsv($output, $headers);
     foreach ($rows as $row) {
-        fputcsv($output, array_map(static fn($header) => (string)($row[$header] ?? ''), $headers));
+        fputcsv($output, array_map(static function ($header) use ($row): string {
+            $value = (string)($row[$header] ?? '');
+            return !is_numeric($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value) ? "'" . $value : $value;
+        }, $headers));
     }
     fclose($output);
     exit;
@@ -124,33 +127,128 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
         case 'sales_period':
             $granularity = in_array($filters['granularity'], ['daily', 'weekly', 'monthly'], true) ? $filters['granularity'] : 'daily';
-            $periodExpr = [
-                'daily' => 'DATE(s.sale_date)',
-                'weekly' => "CONCAT(YEAR(s.sale_date), '-W', LPAD(WEEK(s.sale_date, 1), 2, '0'))",
-                'monthly' => "DATE_FORMAT(s.sale_date, '%Y-%m')",
-            ][$granularity];
-            $stmt = $pdo->prepare(
-                "SELECT {$periodExpr} AS period_label, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
-                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
+            $isSqlite = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+            if ($isSqlite) {
+                $periodExprSales = [
+                    'daily' => 'DATE(s.sale_date)',
+                    'weekly' => "strftime('%Y-W%W', s.sale_date)",
+                    'monthly' => "strftime('%Y-%m', s.sale_date)",
+                ][$granularity];
+                $periodExprRefunds = [
+                    'daily' => 'DATE(cr.created_at)',
+                    'weekly' => "strftime('%Y-W%W', cr.created_at)",
+                    'monthly' => "strftime('%Y-%m', cr.created_at)",
+                ][$granularity];
+            } else {
+                $periodExprSales = [
+                    'daily' => 'DATE(s.sale_date)',
+                    'weekly' => "CONCAT(YEAR(s.sale_date), '-W', LPAD(WEEK(s.sale_date, 1), 2, '0'))",
+                    'monthly' => "DATE_FORMAT(s.sale_date, '%Y-%m')",
+                ][$granularity];
+                $periodExprRefunds = [
+                    'daily' => 'DATE(cr.created_at)',
+                    'weekly' => "CONCAT(YEAR(cr.created_at), '-W', LPAD(WEEK(cr.created_at, 1), 2, '0'))",
+                    'monthly' => "DATE_FORMAT(cr.created_at, '%Y-%m')",
+                ][$granularity];
+            }
+
+            $salesStmt = $pdo->prepare(
+                "SELECT {$periodExprSales} AS period_label,
+                        COUNT(DISTINCT s.sale_id) AS receipts,
+                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold,
+                        COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        MIN(s.sale_date) AS min_date
                  FROM sales s
                  JOIN sale_items si ON si.sale_id = s.sale_id
-                 {$refundJoin}
                  JOIN products p ON p.product_id = si.product_id
                  WHERE s.sale_date BETWEEN ? AND ? {$productSql}
-                 GROUP BY period_label
-                 ORDER BY MIN(s.sale_date) DESC"
+                 GROUP BY period_label"
             );
-            $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+            $salesStmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+
+            $refundsStmt = $pdo->prepare(
+                "SELECT {$periodExprRefunds} AS period_label,
+                        COALESCE(SUM(cri.subtotal), 0) AS refunds,
+                        MIN(cr.created_at) AS min_date
+                 FROM cash_refunds cr
+                 JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
+                 JOIN products p ON p.product_id = cri.product_id
+                 WHERE cr.created_at BETWEEN ? AND ? {$productSql}
+                 GROUP BY period_label"
+            );
+            $refundsStmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+
+            $periodMap = [];
+            foreach ($salesStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $label = (string)$row['period_label'];
+                $periodMap[$label] = [
+                    'period' => $label,
+                    'receipts' => (int)$row['receipts'],
+                    'units_sold' => (int)$row['units_sold'],
+                    'total_sales' => (float)$row['total_sales'],
+                    'refunds' => 0.0,
+                    'min_date' => (string)$row['min_date'],
+                ];
+            }
+            foreach ($refundsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $label = (string)$row['period_label'];
+                if (!isset($periodMap[$label])) {
+                    $periodMap[$label] = [
+                        'period' => $label,
+                        'receipts' => 0,
+                        'units_sold' => 0,
+                        'total_sales' => 0.0,
+                        'refunds' => (float)$row['refunds'],
+                        'min_date' => (string)$row['min_date'],
+                    ];
+                } else {
+                    $periodMap[$label]['refunds'] = (float)$row['refunds'];
+                    if (strcmp((string)$row['min_date'], $periodMap[$label]['min_date']) < 0) {
+                        $periodMap[$label]['min_date'] = (string)$row['min_date'];
+                    }
+                }
+            }
+
+            uasort($periodMap, static function (array $a, array $b): int {
+                $cmp = strcmp($b['min_date'], $a['min_date']);
+                return $cmp !== 0 ? $cmp : strcmp($b['period'], $a['period']);
+            });
+
+            $rows = [];
+            $sumReceipts = 0;
+            $sumUnits = 0;
+            $sumTotalSales = 0.0;
+            $sumRefunds = 0.0;
+            $sumNetSales = 0.0;
+
+            foreach ($periodMap as $item) {
+                $netSales = round($item['total_sales'] - $item['refunds'], 2);
+                $sumReceipts += $item['receipts'];
+                $sumUnits += $item['units_sold'];
+                $sumTotalSales += $item['total_sales'];
+                $sumRefunds += $item['refunds'];
+                $sumNetSales += $netSales;
+
+                $rows[] = [
+                    'Period' => $item['period'],
+                    'Receipts' => $item['receipts'],
+                    'Units Sold' => $item['units_sold'],
+                    'Total Sales' => money_value($item['total_sales']),
+                    'Refunds' => money_value($item['refunds']),
+                    'Net Sales' => money_value($netSales),
+                ];
+            }
+
             return [
-                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
-                'rows' => array_map(static fn($row) => [
-                    'Period' => $row['period_label'],
-                    'Receipts' => (int)$row['receipts'],
-                    'Units Sold' => (int)$row['units_sold'],
-                    'Total Sales' => money_value($row['total_sales']),
-                    'Refunds' => money_value($row['refunds']),
-                ], $stmt->fetchAll()),
+                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds', 'Net Sales'],
+                'rows' => $rows,
+                'metrics' => [
+                    'Receipts' => number_format($sumReceipts),
+                    'Units Sold' => number_format($sumUnits),
+                    'Total Sales' => money_value($sumTotalSales),
+                    'Refunds' => money_value($sumRefunds),
+                    'Net Sales' => money_value($sumNetSales),
+                ],
             ];
 
         case 'sales_product':
@@ -947,8 +1045,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn" id="export-csv-btn">Export CSV</button>
                         </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
                     </div>
                 </div>
             <?php else: ?>
@@ -965,7 +1062,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                     </div>
                     <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
                     <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
-                        <p class="section-description">Refunds are separate from sales and grouped by sale date.</p>
+                        <p class="section-description">Refunds are counted on the refund issue date and linked to the original sale.</p>
                     <?php elseif ($selectedReport === 'refunds'): ?>
                         <p class="section-description">Refunds are grouped by issue date.</p>
                     <?php endif; ?>
@@ -1017,8 +1114,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn">Export CSV</button>
                         </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
                     </div>
                 </div>
             <?php endif; ?>

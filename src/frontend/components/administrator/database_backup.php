@@ -55,6 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ensure_backup_schema($pdo);
 $history = $service->history($actorRole);
 $restoreCapability = role_capability_policy()->allows($actorRole, RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+$restoreService = new \App\Backup\DatabaseRestoreService($pdo, role_capability_policy(), $service);
+$restoreGuidance = $restoreService->workflowGuidance();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
@@ -86,6 +88,19 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                     <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
+
+            <section class="dashboard-section restore-guidance" data-restore-guidance>
+                <h2>Protected restore guidance</h2>
+                <div class="guidance-banner">
+                    <p><strong>Current stage:</strong> <span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
+                    <p><strong>Next permitted action:</strong> <span data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></span></p>
+                </div>
+                <?php if ($restoreGuidance['stage'] === 'technical_approval_waiting'): ?>
+                    <p class="backup-hint">Technical identity approval from a Super Administrator is required before database replacement.</p>
+                <?php elseif (\App\Backup\RecoveryStore::isPaused()): ?>
+                    <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Open Database Recovery Console</a></p>
+                <?php endif; ?>
+            </section>
 
             <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
 

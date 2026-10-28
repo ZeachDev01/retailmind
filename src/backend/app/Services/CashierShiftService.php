@@ -840,7 +840,7 @@ class CashierShiftService
             'expected_cash' => $expected,
             'cash_variance' => $variance,
             'variance_threshold' => $threshold,
-            'variance_review_required' => abs($variance) > $threshold,
+            'variance_review_required' => round($variance, 2) != 0.0 && round(abs($variance), 2) >= round($threshold, 2),
         ];
     }
 
@@ -924,5 +924,141 @@ class CashierShiftService
         );
         $stmt->execute([$shiftId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function saveReviewDraft(int $shiftId, int $actorId, string $role, string $notes): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can review Cashier Shift variances.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reviewed.');
+        }
+        $stmt = $this->pdo->prepare('UPDATE cashier_shifts SET review_draft_notes = ? WHERE shift_id = ?');
+        $stmt->execute([$notes, $shiftId]);
+        return $this->calculateShift($shiftId);
+    }
+
+    public function markReviewed(int $shiftId, int $reviewerId, string $role, string $explanation, ?float $remainingShortage = null): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can review Cashier Shift variances.');
+        }
+        $explanation = trim($explanation);
+        if ($explanation === '') {
+            throw new DomainException('Enter an explanation for the Cashier Shift review.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reviewed.');
+        }
+        if ($shift['reviewed_at'] !== null) {
+            throw new DomainException('This Cashier Shift has already been reviewed.');
+        }
+
+        $variance = (float)$shift['cash_variance'];
+        if ($remainingShortage === null) {
+            $shortage = $variance < 0 ? abs($variance) : 0.00;
+        } else {
+            $shortage = round($remainingShortage, 2);
+            if ($shortage < 0) {
+                throw new InvalidArgumentException('Remaining shortage cannot be negative.');
+            }
+        }
+
+        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt->execute([$reviewerId]);
+        $reviewerName = (string)($uStmt->fetchColumn() ?: "User #{$reviewerId}");
+
+        $history = json_decode((string)($shift['review_history'] ?? '[]'), true) ?: [];
+        $now = date('Y-m-d H:i:s');
+        $history[] = [
+            'action' => 'reviewed',
+            'reviewed_by' => $reviewerId,
+            'reviewer_name' => $reviewerName,
+            'reviewed_at' => $now,
+            'explanation' => $explanation,
+            'remaining_shortage' => $shortage,
+            'disclaimer' => 'Implies neither recovery, debt assignment nor wage-deduction permission.',
+        ];
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE cashier_shifts
+             SET reviewed_by = ?, reviewed_at = NOW(), review_notes = ?, review_shortage = ?, review_history = ?
+             WHERE shift_id = ?'
+        );
+        $stmt->execute([$reviewerId, $explanation, $shortage, json_encode($history, JSON_THROW_ON_ERROR), $shiftId]);
+
+        $this->auditShiftEvent(
+            $reviewerId,
+            'Cashier Shift variance reviewed',
+            $shiftId,
+            $shift,
+            [
+                'reviewed_by' => $reviewerId,
+                'review_notes' => $explanation,
+                'remaining_shortage' => $shortage,
+                'disclaimer' => 'Implies neither recovery, debt assignment nor wage-deduction permission.',
+            ]
+        );
+        StoreOperationsDashboardWorkspace::invalidateCache();
+        return $this->calculateShift($shiftId);
+    }
+
+    public function reopenReview(int $shiftId, int $actorId, string $role, string $reason): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can reopen Cashier Shift reviews.');
+        }
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new DomainException('A reason is required to reopen a Cashier Shift review.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reopened.');
+        }
+        if ($shift['reviewed_at'] === null) {
+            throw new DomainException('Only reviewed Cashier Shifts can be reopened.');
+        }
+
+        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt->execute([$actorId]);
+        $actorName = (string)($uStmt->fetchColumn() ?: "User #{$actorId}");
+
+        $history = json_decode((string)($shift['review_history'] ?? '[]'), true) ?: [];
+        $now = date('Y-m-d H:i:s');
+        $history[] = [
+            'action' => 'reopened',
+            'reopened_by' => $actorId,
+            'reopener_name' => $actorName,
+            'reopened_at' => $now,
+            'reason' => $reason,
+            'previous_reviewed_by' => (int)$shift['reviewed_by'],
+            'previous_reviewed_at' => $shift['reviewed_at'],
+            'previous_review_notes' => $shift['review_notes'],
+            'previous_shortage' => $shift['review_shortage'] !== null ? (float)$shift['review_shortage'] : null,
+        ];
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE cashier_shifts
+             SET reviewed_by = NULL, reviewed_at = NULL, variance_review_required = 1, review_history = ?
+             WHERE shift_id = ?'
+        );
+        $stmt->execute([json_encode($history, JSON_THROW_ON_ERROR), $shiftId]);
+
+        $this->auditShiftEvent(
+            $actorId,
+            'Cashier Shift review reopened',
+            $shiftId,
+            $shift,
+            [
+                'reopened_by' => $actorId,
+                'reopen_reason' => $reason,
+            ]
+        );
+        StoreOperationsDashboardWorkspace::invalidateCache();
+        return $this->calculateShift($shiftId);
     }
 }

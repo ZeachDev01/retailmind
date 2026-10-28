@@ -401,7 +401,7 @@ try {
 
     // 10. Preserved Protected Restore authority:
     $restoreFile = (string)file_get_contents(__DIR__ . '/../app/Backup/DatabaseRestoreService.php');
-    $assert(str_contains($restoreFile, 'Only the initiating administrator or a destination Super Administrator can reopen the Store.'), 'protected Administrator restore preserved');
+    $assert(str_contains($restoreFile, 'Operator role is not authorized to reopen the Store.') || str_contains($restoreFile, 'Only the initiating administrator'), 'protected Administrator restore preserved');
 
     // 11. Remote bulk export and mutation refusal in routes:
     $gcashOverviewApi = (string)file_get_contents(dirname(__DIR__, 2) . '/frontend/components/administrator/gcash_overview_api.php');

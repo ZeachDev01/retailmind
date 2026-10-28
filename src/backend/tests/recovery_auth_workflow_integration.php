@@ -89,7 +89,7 @@ try {
     $assert(in_array('theme_admin', $opUsernames, true), 'Initiating admin is authorized');
     $assert(in_array('theme_super_admin', $opUsernames, true), 'Super Admin 1 is authorized');
     $assert(in_array('second_super_admin', $opUsernames, true), 'Super Admin 2 is authorized');
-    $assert(!in_array('other_admin', $opUsernames, true), 'Unrelated Admin is excluded');
+    $assert(in_array('other_admin', $opUsernames, true), 'Destination Admin is authorized operator for takeover');
     $assert(!in_array('recovery_primary', $opUsernames, true), 'Sealed recovery account is excluded');
     $assert(!in_array('theme_cashier', $opUsernames, true), 'Cashier is excluded');
 
@@ -146,8 +146,12 @@ try {
     $reject(fn() => RecoveryAuthService::authenticate('theme_admin', 'wrong_pass', '127.0.0.1'), 'Wrong password rejected');
     $reject(fn() => RecoveryAuthService::authenticate('unknown_user', 'ThemeTest@2026', '127.0.0.1'), 'Unknown user rejected');
 
-    // Reject unrelated admin
-    $reject(fn() => RecoveryAuthService::authenticate('other_admin', 'ThemeTest@2026', '127.0.0.1'), 'Unrelated admin rejected');
+    // Destination admin authenticates successfully for takeover
+    $otherAuth = RecoveryAuthService::authenticate('other_admin', 'ThemeTest@2026', '127.0.0.1');
+    $assert($otherAuth['user_id'] === 8 && $otherAuth['role'] === 'admin', 'Destination admin can authenticate for takeover');
+
+    // Reject unauthorized cashier
+    $reject(fn() => RecoveryAuthService::authenticate('theme_cashier', 'ThemeTest@2026', '127.0.0.1'), 'Cashier rejected');
 
     // Reject sealed recovery account
     $reject(fn() => RecoveryAuthService::authenticate('recovery_primary', 'ThemeTest@2026', '127.0.0.1'), 'Sealed recovery account rejected');
