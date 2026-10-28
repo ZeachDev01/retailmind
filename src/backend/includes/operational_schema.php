@@ -279,6 +279,10 @@ function ensure_operational_updates_schema(PDO $pdo): void
         ensure_table_column($pdo, 'gcash_transactions', 'confirmed_cash', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER confirmed_wallet');
         ensure_table_column($pdo, 'gcash_transactions', 'notes', 'TEXT NULL AFTER confirmed_cash');
         ensure_table_column($pdo, 'gcash_transactions', 'completed_at', 'DATETIME NULL AFTER reviewed_at');
+        ensure_table_column($pdo, 'gcash_transactions', 'cash_checked_by', 'INT NULL AFTER verified_by');
+        ensure_table_column($pdo, 'gcash_transactions', 'cash_finding', 'VARCHAR(255) NULL AFTER cash_checked_by');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_checked_by', 'INT NULL AFTER cash_finding');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_finding', 'VARCHAR(255) NULL AFTER wallet_checked_by');
         if ($driver !== 'sqlite') {
             $pdo->exec("ALTER TABLE gcash_transactions
                 MODIFY COLUMN reference_number VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,
