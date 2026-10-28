@@ -186,7 +186,6 @@ class CashRefundService
             if ($exception !== null) {
                 $access = $exceptionService->access((string)($exception['token'] ?? ''), $cashierId, $saleId, $shiftId);
                 $approval = $exceptionService->authorize((string)($exception['username'] ?? ''), (string)($exception['password'] ?? ''));
-                if ($approval['approved_by'] !== (int)$access['approved_by']) throw new DomainException('The Administrator who opened this sale must approve this specific refund.');
             }
             $sale = $this->lockAuthorizedSale($cashierId, $saleId, $access !== null);
             // Historical sales remain immutable: only today's affected ledgers must be open.

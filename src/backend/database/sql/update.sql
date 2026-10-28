@@ -1635,3 +1635,12 @@ WHERE NOT EXISTS (SELECT 1 FROM categories);
 INSERT INTO schema_migrations (migration_key,description)
 VALUES ('202610270001_starter_product_categories','Add common Product categories when the Store has none')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_draft_notes'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_draft_notes` TEXT NULL AFTER `reviewed_at`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_notes'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_notes` TEXT NULL AFTER `review_draft_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_shortage'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_shortage` DECIMAL(12,2) NULL AFTER `review_notes`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_history'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_history` TEXT NULL AFTER `review_shortage`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
