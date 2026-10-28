@@ -261,6 +261,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                         $canViewImage = $hasImage && $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget);
                         $statusView = $dormancyStatusTab->view($user);
                         $displayName = display_person_name((string)$user['full_name']);
+                        $pendingDuties = $lifecycle->pendingDuties((int)$user['user_id']);
                     ?>
                         <tr>
                             <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
@@ -290,7 +291,8 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                         data-is-self="<?= $isSelf ? '1' : '0' ?>" data-is-super-admin="<?= $isSuper ? '1' : '0' ?>"
                                         data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['full_name'])) ?>"
                                         data-profile-url="<?= $canViewImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
-                                        data-has-profile-image="<?= $hasImage ? '1' : '0' ?>">Manage</button>
+                                        data-has-profile-image="<?= $hasImage ? '1' : '0' ?>"
+                                        data-pending-duties="<?= htmlspecialchars(json_encode($pendingDuties), ENT_QUOTES, 'UTF-8') ?>">Manage</button>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -454,7 +456,31 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
         const remove = document.getElementById('drawerRemoveProfileImage');
         remove.disabled = button.dataset.hasProfileImage !== '1';
-        selectDrawerTab('user');
+        const pendingDuties = JSON.parse(button.dataset.pendingDuties || '{}');
+        const pendingBox = document.getElementById('drawerPendingDuties');
+        const pendingLinks = document.getElementById('drawerPendingLinks');
+        if (pendingBox && pendingLinks) {
+            if (pendingDuties.has_pending_duties) {
+                pendingBox.hidden = false;
+                pendingLinks.innerHTML = (pendingDuties.handover_links || []).map(l => `<a href="${l.url}" class="btn btn-small btn-secondary" style="margin-right: 8px; margin-top: 4px;">${l.label}</a>`).join('');
+            } else {
+                pendingBox.hidden = true;
+                pendingLinks.innerHTML = '';
+            }
+        }
+        if (<?= json_encode($actorRole === 'super_admin') ?> && !isSelf) {
+            document.querySelectorAll('#drawerPanelUser input, #drawerPanelSecurity input').forEach(input => { input.disabled = true; });
+            document.getElementById('drawerTabUser').hidden = true;
+            document.getElementById('drawerTabSecurity').hidden = true;
+            document.querySelector('#drawerStatus option[value="active"]').disabled = true;
+            selectDrawerTab('status');
+        } else {
+            document.querySelectorAll('#drawerPanelUser input, #drawerPanelSecurity input').forEach(input => { input.disabled = false; });
+            document.getElementById('drawerTabUser').hidden = false;
+            document.getElementById('drawerTabSecurity').hidden = false;
+            document.querySelector('#drawerStatus option[value="active"]').disabled = false;
+            selectDrawerTab('user');
+        }
         setOpen(drawerOverlay, true);
     }));
 
