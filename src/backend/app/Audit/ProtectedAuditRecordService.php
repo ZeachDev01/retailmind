@@ -85,8 +85,37 @@ final class ProtectedAuditRecordService
                     unset($record);
                 }
             }
+            foreach ($records as &$record) {
+                self::maskSensitiveRecord($record);
+            }
+            unset($record);
         }
         return $records;
+    }
+
+    public static function maskSensitiveRecord(array &$record): void
+    {
+        foreach (['previous_value', 'new_value', 'metadata'] as $field) {
+            if (empty($record[$field]) || !is_string($record[$field])) {
+                continue;
+            }
+            $val = $record[$field];
+            $decoded = json_decode($val, true);
+            if (is_array($decoded)) {
+                array_walk_recursive($decoded, static function (&$v, $k): void {
+                    if (is_string($k) && preg_match('/password|passphrase|token|secret/i', $k)) {
+                        $v = '***';
+                    }
+                });
+                $record[$field] = json_encode($decoded, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            } else {
+                $record[$field] = preg_replace(
+                    '/"(password|password_hash|new_password|current_password|passphrase|secret)"\s*:\s*"(?:\\\\"|[^"])*"/i',
+                    '"$1":"***"',
+                    $val
+                );
+            }
+        }
     }
 
     public function count(string $actorRole, array $filters = []): int
@@ -124,6 +153,9 @@ final class ProtectedAuditRecordService
             }
             $clauses[] = 'al.category = ?';
             $params[] = AuditRecordCategory::STORE_OPERATION;
+            $clauses[] = 'COALESCE(u.is_recovery_account, 0) = 0';
+            $clauses[] = "COALESCE(al.module, '') <> 'Recovery Account'";
+            $clauses[] = "al.category <> '" . AuditRecordCategory::RECOVERY_ACCOUNT . "'";
         }
 
         $this->exactFilter($clauses, $params, 'al.user_id', $filters['user_id'] ?? null, true);
