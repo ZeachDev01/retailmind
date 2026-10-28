@@ -17,32 +17,22 @@ final class AttentionSettingsService
         'ml_model_age_days' => 7.0,
         'platform_setting_change_count' => 1.0,
         'recovery_account_active_count' => 1.0,
-        'store_reversal_count_max' => 10.0,
-        'store_unusual_discount_percent_max' => 50.0,
         'store_cash_variance_amount_max' => 1000.0,
         'store_inventory_overdue_hours_max' => 72.0,
         'store_inventory_high_value_amount_max' => 20000.0,
-        'store_inventory_unresolved_hours_max' => 168.0,
     ];
 
     private const STORE_DEFAULTS = [
-        'reversal_count' => 1.0,
-        'unusual_discount_percent' => 20.0,
         'cash_variance_amount' => 100.0,
-        'inventory_escalation_count' => 1.0,
         'inventory_overdue_hours' => 24.0,
         'inventory_high_value_amount' => 5000.0,
-        'inventory_unresolved_hours' => 72.0,
         'fiscal_period_days_to_close' => 3.0,
     ];
 
     private const STORE_LIMITS = [
-        'reversal_count' => 'store_reversal_count_max',
-        'unusual_discount_percent' => 'store_unusual_discount_percent_max',
         'cash_variance_amount' => 'store_cash_variance_amount_max',
         'inventory_overdue_hours' => 'store_inventory_overdue_hours_max',
         'inventory_high_value_amount' => 'store_inventory_high_value_amount_max',
-        'inventory_unresolved_hours' => 'store_inventory_unresolved_hours_max',
     ];
 
     public function __construct(private PDO $pdo, private Clock $clock)

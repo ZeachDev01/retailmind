@@ -64,14 +64,12 @@ $formatProfit = static fn(mixed $value, string $status): string => in_array($sta
     ? ucfirst($status) : $formatFinancial($value);
 $history = $dashboard['financial_history'] ?? null;
 $headlineOrder = [
-    'sales_cash_exceptions' => ['Sales & cash exceptions', 'bi-exclamation-diamond', ['View sales exceptions' => 'components/invoice/sales.php?tab=reversals', 'View cash variances' => 'components/administrator/shift_report.php']],
+    'sales_cash_exceptions' => ['Cash variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam', ['View Stock Issues' => 'components/administrator/stock_issues.php']],
     'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check', ['View Fiscal Periods' => 'components/system_administrator/fiscal_periods.php']],
 ];
 $comparisonOrder = [
     'transactions' => ['Transactions', false],
-    'unusual_discounts' => ['Unusual discounts', false],
-    'reversals' => ['Reversals', false],
 ];
 $currentUrl = app_url('components/administrator/dashboard.php') . '?range=' . $selectedRange . '&period=' . $selectedPeriod;
 $rangeUrl = $currentUrl;
@@ -101,16 +99,52 @@ $rangeUrl = $currentUrl;
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
+            <?php
+            $gcash = $dashboard['gcash_attention'] ?? ['visible' => false, 'status' => 'ready', 'unresolved_count' => 0, 'differences_count' => 0];
+            $hasExceptions = !empty($dashboard['exceptions']);
+            $hasGcash = !empty($gcash['visible']);
+            ?>
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
                     <div><h2 id="store-attention-title">Needs attention</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
-                <?php elseif ($dashboard['exceptions'] === []): ?>
+                <?php elseif (!$hasExceptions && !$hasGcash): ?>
                     <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong></div></div>
                 <?php else: ?>
                     <div class="attention-list" aria-live="polite">
+                        <?php if ($hasGcash): ?>
+                            <article class="attention-item attention-warning attention-gcash" id="gcash-attention-row">
+                                <span class="attention-icon"><i class="bi bi-phone" aria-hidden="true"></i></span>
+                                <div class="attention-copy">
+                                    <span class="severity-label">Warning</span>
+                                    <strong>GCash Needs attention</strong>
+                                    <?php if ($gcash['status'] === 'unavailable'): ?>
+                                        <span>GCash review status unavailable. Could not load Store-wide counts.</span>
+                                    <?php elseif ($gcash['status'] === 'partial_failure'): ?>
+                                        <span>
+                                            <?= $gcash['unresolved_count'] !== null ? (int)$gcash['unresolved_count'] . ' unresolved exchange' . ((int)$gcash['unresolved_count'] === 1 ? '' : 's') : 'Unresolved exchanges unavailable' ?> ·
+                                            <?= $gcash['differences_count'] !== null ? (int)$gcash['differences_count'] . ' unreviewed closing difference' . ((int)$gcash['differences_count'] === 1 ? '' : 's') : 'Closing differences unavailable' ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span><?= (int)$gcash['unresolved_count'] ?> unresolved exchange<?= (int)$gcash['unresolved_count'] === 1 ? '' : 's' ?> · <?= (int)$gcash['differences_count'] ?> unreviewed closing difference<?= (int)$gcash['differences_count'] === 1 ? '' : 's' ?> (Store-wide)</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="attention-actions">
+                                    <?php if ($gcash['status'] === 'unavailable'): ?>
+                                        <a class="btn btn-small" href="<?= $escape(app_url('components/administrator/gcash_overview.php')) ?>" data-dashboard-action aria-label="Open GCash Overview">Open GCash Overview</a>
+                                    <?php else: ?>
+                                        <?php if (($gcash['unresolved_count'] ?? 0) > 0 || $gcash['unresolved_count'] === null): ?>
+                                            <a class="btn btn-small" href="<?= $escape(app_url($gcash['unresolved_destination'])) ?>" data-dashboard-action aria-label="Review unresolved exchanges">Exchanges (<?= $gcash['unresolved_count'] !== null ? (int)$gcash['unresolved_count'] : '?' ?>)</a>
+                                        <?php endif; ?>
+                                        <?php if (($gcash['differences_count'] ?? 0) > 0 || $gcash['differences_count'] === null): ?>
+                                            <a class="btn btn-small" href="<?= $escape(app_url($gcash['differences_destination'])) ?>" data-dashboard-action aria-label="Review closing differences">Differences (<?= $gcash['differences_count'] !== null ? (int)$gcash['differences_count'] : '?' ?>)</a>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endif; ?>
                         <?php foreach ($dashboard['exceptions'] as $item): ?>
                             <article class="attention-item attention-<?= $escape($item['severity']) ?>">
                                 <span class="attention-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>

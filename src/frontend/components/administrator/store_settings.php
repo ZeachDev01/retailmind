@@ -4,14 +4,22 @@ require_role(['admin']);
 
 $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
 $fields = [
-    'reversal_count' => 'Sales reversals',
-    'unusual_discount_percent' => 'Unusual discount (%)',
-    'cash_variance_amount' => 'Cash variance amount',
-    'inventory_escalation_count' => 'Pending Stock Issues',
-    'inventory_overdue_hours' => 'Inventory risk overdue after (hours)',
-    'inventory_high_value_amount' => 'High-value inventory risk amount',
-    'inventory_unresolved_hours' => 'Inventory risk unresolved after (hours)',
-    'fiscal_period_days_to_close' => 'Fiscal Period closing warning (days)',
+    'cash_variance_amount' => [
+        'label' => 'Cash variance review threshold (PHP)',
+        'description' => 'Closed Cashier Shifts with absolute cash differences equal to or exceeding this threshold require Administrator review.',
+    ],
+    'inventory_overdue_hours' => [
+        'label' => 'Stock Issue overdue threshold (hours)',
+        'description' => 'Pending Stock Issues waiting longer than this threshold require Administrator follow-up with the Inventory Manager.',
+    ],
+    'inventory_high_value_amount' => [
+        'label' => 'High-value Stock Issue threshold (PHP)',
+        'description' => 'Pending Stock Issues with total value equal to or exceeding this threshold require Administrator follow-up with the Inventory Manager.',
+    ],
+    'fiscal_period_days_to_close' => [
+        'label' => 'Fiscal Period closing warning (days)',
+        'description' => 'Warns in Store Overview when the active Fiscal Period is approaching closure within this number of days.',
+    ],
 ];
 $message = '';
 $messageClass = '';
@@ -20,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     try {
         $updates = [];
-        foreach ($fields as $key => $label) {
+        foreach ($fields as $key => $config) {
             $updates[$key] = $_POST[$key] ?? '';
         }
         $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
@@ -57,11 +65,12 @@ $effective = $service->thresholdsFor('admin');
             <form method="post">
                 <?= csrf_field() ?>
                 <div class="form-grid">
-                    <?php foreach ($fields as $key => $label): ?>
+                    <?php foreach ($fields as $key => $config): ?>
                         <div class="form-group">
-                            <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$requested[$key]) ?>" required>
-                            <?php if ($effective[$key] !== $requested[$key]): ?><small>Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small><?php endif; ?>
+                            <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? '')) ?>" required>
+                            <small class="form-text"><?= htmlspecialchars($config['description']) ?></small>
+                            <?php if (($effective[$key] ?? null) !== ($requested[$key] ?? null)): ?><small class="form-text">Effective Platform-limited value: <?= htmlspecialchars((string)($effective[$key] ?? '')) ?></small><?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

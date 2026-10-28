@@ -20,11 +20,9 @@ final class AttentionRuleService
     ];
 
     private const STORE_RULES = [
-        ['key' => 'store.sales.reversals', 'signal' => 'reversal_count', 'threshold' => 'reversal_count', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Sales reversals require review', 'destination' => 'components/invoice/sales.php?tab=reversals'],
-        ['key' => 'store.sales.unusual-discounts', 'signal' => 'max_discount_percent', 'threshold' => 'unusual_discount_percent', 'severity' => 'warning', 'category' => 'sales', 'title' => 'Unusual discounts require review', 'destination' => 'components/invoice/sales.php?tab=transactions'],
         ['key' => 'store.cash.variance', 'signal' => 'cash_variance_amount', 'threshold' => 'cash_variance_amount', 'severity' => 'critical', 'category' => 'cash', 'title' => 'Cash variance exceeds tolerance', 'destination' => 'components/report/report_generation.php', 'absolute' => true],
-        ['key' => 'store.inventory.overdue', 'signal' => 'oldest_inventory_risk_hours', 'threshold' => 'inventory_overdue_hours', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Stock Issue review is overdue', 'destination' => 'components/administrator/stock_issues.php'],
-        ['key' => 'store.inventory.high-value', 'signal' => 'inventory_risk_value', 'threshold' => 'inventory_high_value_amount', 'severity' => 'critical', 'category' => 'inventory', 'title' => 'High-value Stock Issue awaits review', 'destination' => 'components/administrator/stock_issues.php'],
+        ['key' => 'store.inventory.overdue', 'signal' => 'oldest_inventory_risk_hours', 'threshold' => 'inventory_overdue_hours', 'severity' => 'warning', 'category' => 'inventory', 'title' => 'Follow up with Inventory Manager', 'destination' => 'components/administrator/stock_issues.php'],
+        ['key' => 'store.inventory.high-value', 'signal' => 'inventory_risk_value', 'threshold' => 'inventory_high_value_amount', 'severity' => 'critical', 'category' => 'inventory', 'title' => 'Follow up with Inventory Manager', 'destination' => 'components/administrator/stock_issues.php'],
         ['key' => 'store.fiscal-period.closing', 'signal' => 'fiscal_period_days_remaining', 'threshold' => 'fiscal_period_days_to_close', 'severity' => 'warning', 'category' => 'fiscal_period', 'title' => 'Fiscal Period is approaching closure', 'destination' => 'components/system_administrator/fiscal_periods.php', 'comparison' => 'at_most'],
         ['key' => 'store.fiscal-period.overdue', 'signal' => 'fiscal_period_overdue_count', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'fiscal_period', 'title' => 'Fiscal Period action is overdue', 'destination' => 'components/system_administrator/fiscal_periods.php'],
     ];
@@ -49,7 +47,7 @@ final class AttentionRuleService
                 $items[] = new AttentionItem('store.inventory.issue.' . $issue['adjustment_id'],
                     $highValue ? 'critical' : 'warning', 'inventory',
                     ($highValue ? 'High-value Stock Issue #' : 'Overdue Stock Issue #') . $issue['adjustment_id'],
-                    'Inventory Manager review is required. Administrator oversight is read-only. Report value: PHP '
+                    'Follow up with Inventory Manager. Administrator oversight is read-only. Report value: PHP '
                         . $this->number((float)$issue['risk_value']) . '. Hours pending: ' . $this->number((float)$issue['age_hours']) . '.',
                     $this->date($issue['reported_at']), 'components/administrator/stock_issues.php?detail=' . $issue['adjustment_id']);
             }
@@ -118,9 +116,9 @@ final class AttentionRuleService
         $limit = $this->number($threshold);
 
         return match ($signal) {
-            'inventory_escalated_count' => $current . ' pending Stock Issues await Inventory Manager review. Administrator oversight is read-only.',
-            'oldest_inventory_risk_hours', 'oldest_unresolved_inventory_hours' => 'The oldest pending Stock Issue has waited ' . $current . ' hours for Inventory Manager review. Review threshold: ' . $limit . ' hours. Administrator oversight is read-only.',
-            'inventory_risk_value' => 'Pending Stock Issue value reaches ' . $current . '. Review threshold: ' . $limit . '. Inventory Manager review is required; Administrator oversight is read-only.',
+            'inventory_escalated_count' => 'Follow up with Inventory Manager. ' . $current . ' pending Stock Issues. Administrator oversight is read-only.',
+            'oldest_inventory_risk_hours', 'oldest_unresolved_inventory_hours' => 'Follow up with Inventory Manager. Oldest pending Stock Issue has waited ' . $current . ' hours. Review threshold: ' . $limit . ' hours. Administrator oversight is read-only.',
+            'inventory_risk_value' => 'Follow up with Inventory Manager. Pending Stock Issue value reaches ' . $current . '. Review threshold: ' . $limit . '. Administrator oversight is read-only.',
             'failed_login_count' => $current . ' unreviewed failed sign-ins in the last 24 hours. Review threshold: ' . $limit . '. Review and clear in Protected Audit Records.',
             'locked_account_count' => $current . ' locked ' . ($value === 1.0 ? 'account requires' : 'accounts require') . ' review. Review threshold: ' . $limit . '.',
             'backup_age_days' => $value >= 9999
