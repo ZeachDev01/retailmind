@@ -849,7 +849,7 @@ final class GCashTransactionService
         }
 
         $adjStmt = $this->pdo()->prepare(
-            "SELECT service_cash_delta, wallet_delta FROM gcash_adjustments WHERE session_id = ?"
+            "SELECT service_cash_delta, wallet_delta FROM gcash_adjustments WHERE session_id = ? AND (correction_mode = 'money_movement' OR correction_mode IS NULL)"
         );
         $adjStmt->execute([$sessionId]);
         foreach ($adjStmt->fetchAll(PDO::FETCH_ASSOC) as $adj) {
@@ -1908,7 +1908,32 @@ final class GCashTransactionService
         }
     }
 
-    public function recordLinkedCorrection(int $adminId, string $adminRole, int $transactionId, float $cashDelta, float $walletDelta, string $reason, ?int $sessionId = null): int
+    public function previewLinkedCorrection(int $transactionId, string $mode, float $cashDelta, float $walletDelta): array
+    {
+        $mode = in_array($mode, ['recording_mistake', 'money_movement'], true) ? $mode : 'money_movement';
+        $tx = $this->pdo()->query("SELECT * FROM gcash_transactions WHERE transaction_id = " . (int)$transactionId)->fetch(PDO::FETCH_ASSOC);
+        if (!$tx) {
+            throw new DomainException('Transaction not found.', 404);
+        }
+        $targetSessionId = null;
+        $responsibleCashierId = $tx['responsible_user_id'] !== null ? (int)$tx['responsible_user_id'] : (int)$tx['cashier_id'];
+        if ($mode === 'money_movement') {
+            $stmt = $this->pdo()->prepare("SELECT session_id FROM gcash_service_sessions WHERE cashier_id = ? AND status = 'open' ORDER BY session_id DESC LIMIT 1");
+            $stmt->execute([$responsibleCashierId]);
+            $targetSessionId = $stmt->fetchColumn() ?: null;
+        }
+        return [
+            'transaction_id' => $transactionId,
+            'mode' => $mode,
+            'cash_delta' => round($cashDelta, 2),
+            'wallet_delta' => round($walletDelta, 2),
+            'affects_present_money' => ($mode === 'money_movement'),
+            'target_session_id' => $targetSessionId ? (int)$targetSessionId : null,
+            'responsible_cashier_id' => $responsibleCashierId,
+        ];
+    }
+
+    public function recordLinkedCorrection(int $adminId, string $adminRole, int $transactionId, float $cashDelta, float $walletDelta, string $reason, ?int $sessionId = null, string $mode = 'money_movement'): int
     {
         if (function_exists('is_remote_request') && is_remote_request()) {
             throw new DomainException('Linked corrections are not permitted during remote monitoring.', 403);
@@ -1940,26 +1965,69 @@ final class GCashTransactionService
                 throw new DomainException('Linked corrections may only be recorded against Completed transactions.', 422);
             }
 
-            if ($sessionId === null) {
-                $openSession = $this->pdo()->query("SELECT session_id FROM gcash_service_sessions WHERE status = 'open' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-                $sessionId = $openSession ? (int)$openSession['session_id'] : (int)($tx['session_id'] ?? 0);
-            }
-            if ($sessionId <= 0) {
-                throw new DomainException('A valid session is required for linked adjustments.');
+            $mode = in_array($mode, ['recording_mistake', 'money_movement'], true) ? $mode : 'money_movement';
+            $responsibleUser = $tx['responsible_user_id'] !== null ? (int)$tx['responsible_user_id'] : (int)$tx['cashier_id'];
+
+            if ($mode === 'money_movement') {
+                if ($sessionId === null) {
+                    $sessStmt = $this->pdo()->prepare("SELECT session_id FROM gcash_service_sessions WHERE cashier_id = ? AND status = 'open' ORDER BY session_id DESC LIMIT 1");
+                    $sessStmt->execute([$responsibleUser]);
+                    $sessionId = $sessStmt->fetchColumn() ?: null;
+                }
+                if (!$sessionId) {
+                    throw new DomainException('Cannot record money movement: responsible Cashier must have an eligible open GCash session in an open Fiscal Period.', 422);
+                }
+                $sessionId = (int)$sessionId;
+            } else {
+                // Recording mistake: links to original historical session without moving present money
+                if ($sessionId === null) {
+                    $sessionId = (int)($tx['session_id'] ?? 0);
+                }
+                if ($sessionId <= 0) {
+                    $openSession = $this->pdo()->query("SELECT session_id FROM gcash_service_sessions WHERE status = 'open' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                    $sessionId = $openSession ? (int)$openSession['session_id'] : 1;
+                }
             }
 
-            $stmt = $this->pdo()->prepare(
-                'INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, authorized_by)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $transactionId,
-                $sessionId,
-                $cashDelta,
-                $walletDelta,
-                $reason,
-                $adminId,
-            ]);
+            $hasModeCol = false;
+            try {
+                $cols = array_column($this->pdo()->query("PRAGMA table_info(gcash_adjustments)")->fetchAll(PDO::FETCH_ASSOC), 'name');
+                $hasModeCol = in_array('correction_mode', $cols, true);
+            } catch (Throwable) {
+                try {
+                    $cols = array_column($this->pdo()->query("SHOW COLUMNS FROM gcash_adjustments")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+                    $hasModeCol = in_array('correction_mode', $cols, true);
+                } catch (Throwable) {}
+            }
+
+            if ($hasModeCol) {
+                $stmt = $this->pdo()->prepare(
+                    'INSERT INTO gcash_adjustments (transaction_id, session_id, correction_mode, service_cash_delta, wallet_delta, reason, authorized_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $transactionId,
+                    $sessionId,
+                    $mode,
+                    $cashDelta,
+                    $walletDelta,
+                    $reason,
+                    $adminId,
+                ]);
+            } else {
+                $stmt = $this->pdo()->prepare(
+                    'INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, authorized_by)
+                     VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $transactionId,
+                    $sessionId,
+                    $cashDelta,
+                    $walletDelta,
+                    $reason,
+                    $adminId,
+                ]);
+            }
             $adjId = (int)$this->pdo()->lastInsertId();
 
             \log_activity(
