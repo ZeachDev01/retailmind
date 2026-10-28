@@ -214,6 +214,14 @@ function ensure_operational_updates_schema(PDO $pdo): void
         waiver_notes TEXT NULL,
         waived_by INT NULL,
         waived_at TIMESTAMP NULL,
+        reviewed_by INT NULL,
+        reviewed_at TIMESTAMP NULL,
+        review_notes TEXT NULL,
+        review_draft_notes TEXT NULL,
+        review_shortage DECIMAL(12,2) NULL,
+        review_history TEXT NULL,
+        cash_check_explanation TEXT NULL,
+        wallet_check_explanation TEXT NULL,
         is_open INT GENERATED ALWAYS AS (IF(status = 'open', 1, NULL)) STORED,
         UNIQUE KEY uq_gcash_open_session (is_open),
         INDEX idx_gcash_sessions_shift (shift_id),
@@ -225,6 +233,14 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'gcash_service_sessions', 'waiver_notes', 'TEXT NULL AFTER unresolved_carryover_count');
     ensure_table_column($pdo, 'gcash_service_sessions', 'waived_by', 'INT NULL AFTER waiver_notes');
     ensure_table_column($pdo, 'gcash_service_sessions', 'waived_at', 'TIMESTAMP NULL AFTER waived_by');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'reviewed_by', 'INT NULL AFTER waived_at');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'reviewed_at', 'TIMESTAMP NULL AFTER reviewed_by');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_notes', 'TEXT NULL AFTER reviewed_at');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_draft_notes', 'TEXT NULL AFTER review_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_shortage', 'DECIMAL(12,2) NULL AFTER review_draft_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_history', 'TEXT NULL AFTER review_shortage');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'cash_check_explanation', 'TEXT NULL AFTER review_history');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'wallet_check_explanation', 'TEXT NULL AFTER cash_check_explanation');
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
         movement_id INT AUTO_INCREMENT PRIMARY KEY,

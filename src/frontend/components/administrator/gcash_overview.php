@@ -484,7 +484,7 @@ function gcash_admin_money(mixed $val): string {
                                                     data-cashier="<?= gcash_admin_e($diff['cashier_name']) ?>"
                                                     data-cash-variance="<?= gcash_admin_e($diff['cash_variance']) ?>"
                                                     data-wallet-variance="<?= gcash_admin_e($diff['wallet_variance']) ?>">
-                                                Waive Discrepancy
+                                                Mark reviewed
                                             </button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                         <?php else: ?>
                                             <span class="text-muted gcash-muted-placeholder">—</span>
@@ -615,7 +615,7 @@ function gcash_admin_money(mixed $val): string {
         </dialog>
         <!-- Discrepancy Waiver Dialog -->
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
-            <h2 id="waiver-dialog-title" class="gcash-dialog-title">Waive Closing Discrepancy</h2>
+            <h2 id="waiver-dialog-title" class="gcash-dialog-title">Mark Closing Difference Reviewed</h2>
             <p>The counted variance stays on record. This waiver records your approval and reason.</p>
             <div id="admin-waiver-summary" class="gcash-waiver-summary">
                 <p class="gcash-waiver-session"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
@@ -626,12 +626,12 @@ function gcash_admin_money(mixed $val): string {
             <form id="admin-waiver-form">
                 <input type="hidden" id="waiver-session-id" name="session_id" value="">
                 <div class="gcash-field">
-                    <label for="admin-waiver-notes" class="gcash-waiver-label">Reason for waiver (5–500 characters)</label>
-                    <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain why this closing discrepancy was approved or resolved without modifying recorded cash."></textarea>
+                    <label for="admin-waiver-notes" class="gcash-waiver-label">Investigation explanation (5–500 characters)</label>
+                    <textarea id="admin-waiver-notes" name="waiver_notes" class="form-control" rows="3" required minlength="5" maxlength="500" placeholder="Explain the conclusion of the physical cash and wallet checks."></textarea>
                 </div>
                 <div class="gcash-actions gcash-waiver-actions">
                     <button type="button" class="btn btn-secondary" id="admin-waiver-cancel-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="admin-waiver-confirm-btn">Confirm Waiver</button>
+                    <button type="submit" class="btn btn-primary" id="admin-waiver-confirm-btn">Mark reviewed</button>
                 </div>
             </form>
         </dialog>

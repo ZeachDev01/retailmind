@@ -617,6 +617,12 @@ final class GCashTransactionService
         $diffStmt->execute();
         $differences = [];
         foreach ($diffStmt->fetchAll(PDO::FETCH_ASSOC) as $d) {
+            $isWaived = !empty($d['waived_at']);
+            $isReviewed = !empty($d['reviewed_at']) || $isWaived;
+            $reviewedBy = $d['reviewed_by'] !== null ? (int)$d['reviewed_by'] : ($d['waived_by'] !== null ? (int)$d['waived_by'] : null);
+            $reviewedAt = $d['reviewed_at'] ?? $d['waived_at'];
+            $reviewNotes = $d['review_notes'] ?? $d['waiver_notes'];
+
             $differences[] = [
                 'session_id' => (int)$d['session_id'],
                 'shift_id' => (int)$d['shift_id'],
@@ -639,7 +645,18 @@ final class GCashTransactionService
                 'waived_by_name' => $d['waived_by_name'] ?? null,
                 'waived_at' => $d['waived_at'],
                 'waived_at_formatted' => $d['waived_at'] ? PhilippineTime::format($d['waived_at']) : null,
-                'is_waived' => $d['waived_at'] !== null,
+                'is_waived' => $isWaived,
+                'is_reviewed' => $isReviewed,
+                'reviewed_by' => $reviewedBy,
+                'reviewed_by_name' => $d['waived_by_name'] ?? null,
+                'reviewed_at' => $reviewedAt,
+                'reviewed_at_formatted' => $reviewedAt ? PhilippineTime::format($reviewedAt) : null,
+                'review_notes' => $reviewNotes,
+                'review_draft_notes' => $d['review_draft_notes'] ?? null,
+                'review_shortage' => isset($d['review_shortage']) && $d['review_shortage'] !== null ? (float)$d['review_shortage'] : null,
+                'review_history' => isset($d['review_history']) ? (json_decode((string)$d['review_history'], true) ?: []) : [],
+                'cash_check_explanation' => $d['cash_check_explanation'] ?? null,
+                'wallet_check_explanation' => $d['wallet_check_explanation'] ?? null,
             ];
         }
 
@@ -721,7 +738,7 @@ final class GCashTransactionService
             'needs_checking_count' => count($unresolved),
 
             'reconciliation_differences' => $differences,
-            'differences_count' => count(array_filter($differences, static fn(array $difference): bool => !$difference['is_waived'])),
+            'differences_count' => count(array_filter($differences, static fn(array $difference): bool => empty($difference['is_reviewed']))),
 
             'transactions' => $txs,
             'has_next' => $hasNext,
@@ -1988,17 +2005,85 @@ final class GCashTransactionService
         }
     }
 
-    public function waiveDiscrepancy(int $adminId, string $adminRole, int $sessionId, string $waiverNotes): void
+    private function getSessionColumns(): array
+    {
+        $driver = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $stmt = $this->pdo()->query("PRAGMA table_info(gcash_service_sessions)");
+            return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'name');
+        }
+        $stmt = $this->pdo()->query("SHOW COLUMNS FROM gcash_service_sessions");
+        return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    }
+
+    public function getSession(int $sessionId): array
+    {
+        $stmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE session_id = ?");
+        $stmt->execute([$sessionId]);
+        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$session) {
+            throw new DomainException('GCash service session not found.', 404);
+        }
+        return $session;
+    }
+
+    public function saveReviewDraft(int $adminId, string $adminRole, int $sessionId, string $draftNotes): array
     {
         if ($adminRole !== 'admin') {
-            throw new DomainException('Only an Administrator can waive closing discrepancies.', 403);
+            throw new DomainException('Only an Administrator can save review drafts.', 403);
+        }
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Review drafts are not permitted during remote monitoring.', 403);
+        }
+        $session = $this->getSession($sessionId);
+        if ($session['status'] !== 'closed') {
+            throw new DomainException('Only closed sessions can have review drafts.', 422);
+        }
+        $cols = $this->getSessionColumns();
+        if (in_array('review_draft_notes', $cols, true)) {
+            $stmt = $this->pdo()->prepare("UPDATE gcash_service_sessions SET review_draft_notes = ? WHERE session_id = ?");
+            $stmt->execute([$draftNotes, $sessionId]);
+        }
+        return $this->getSession($sessionId);
+    }
+
+    public function markReviewed(int $adminId, string $adminRole, int $sessionId, array|string $reviewData, ?float $remainingShortage = null): array
+    {
+        if ($adminRole !== 'admin') {
+            throw new DomainException('Only an Administrator can review closing differences.', 403);
         }
         if (function_exists('is_remote_request') && is_remote_request()) {
             throw new DomainException('Discrepancy review is not permitted during remote monitoring.', 403);
         }
-        $waiverNotes = trim($waiverNotes);
-        if (mb_strlen($waiverNotes) < 5 || mb_strlen($waiverNotes) > 500) {
-            throw new DomainException('Enter discrepancy waiver notes between 5 and 500 characters.');
+
+        if (is_string($reviewData)) {
+            $explanation = trim($reviewData);
+            $cashChecked = true;
+            $walletChecked = true;
+            $cashExplanation = 'Physical cash verified';
+            $walletExplanation = 'GCash wallet verified';
+        } else {
+            $explanation = trim((string)($reviewData['explanation'] ?? $reviewData['review_notes'] ?? ''));
+            $cashChecked = !empty($reviewData['cash_checked']);
+            $walletChecked = !empty($reviewData['wallet_checked']);
+            $cashExplanation = trim((string)($reviewData['cash_explanation'] ?? ''));
+            $walletExplanation = trim((string)($reviewData['wallet_explanation'] ?? ''));
+            if (isset($reviewData['remaining_shortage']) && $remainingShortage === null) {
+                $remainingShortage = (float)$reviewData['remaining_shortage'];
+            }
+        }
+
+        if (mb_strlen($explanation) < 5 || mb_strlen($explanation) > 500) {
+            throw new DomainException('Enter review explanation between 5 and 500 characters.');
+        }
+        if (!$cashChecked || !$walletChecked) {
+            throw new DomainException('Physical cash and wallet checks must both be confirmed before completing review.');
+        }
+        if ($cashExplanation === '') {
+            throw new DomainException('Enter an explanation for the physical cash check.');
+        }
+        if ($walletExplanation === '') {
+            throw new DomainException('Enter an explanation for the wallet check.');
         }
 
         try {
@@ -2011,44 +2096,246 @@ final class GCashTransactionService
                 throw new DomainException('GCash service session not found.', 404);
             }
             if ($session['status'] !== 'closed') {
-                throw new DomainException('Only closed sessions with discrepancies can be waived.', 422);
+                throw new DomainException('Only closed sessions with differences can be reviewed.', 422);
             }
-            if ($session['waived_at'] !== null) {
-                throw new DomainException('This session discrepancy has already been approved/waived.', 409);
+            if ($session['waived_at'] !== null || !empty($session['reviewed_at'])) {
+                throw new DomainException('This session difference has already been reviewed.', 409);
+            }
+            if ((float)$session['cash_variance'] == 0.0 && (float)$session['wallet_variance'] == 0.0) {
+                throw new DomainException('This session has no closing differences to review.', 422);
             }
 
-            $update = $this->pdo()->prepare(
-                'UPDATE gcash_service_sessions
-                 SET waiver_notes = ?, waived_by = ?, waived_at = CURRENT_TIMESTAMP
-                 WHERE session_id = ?'
-            );
-            $update->execute([$waiverNotes, $adminId, $sessionId]);
+            if ($remainingShortage === null) {
+                $cashShortage = (float)$session['cash_variance'] < 0 ? abs((float)$session['cash_variance']) : 0.00;
+                $walletShortage = (float)$session['wallet_variance'] < 0 ? abs((float)$session['wallet_variance']) : 0.00;
+                $shortage = round($cashShortage + $walletShortage, 2);
+            } else {
+                $shortage = round($remainingShortage, 2);
+                if ($shortage < 0) {
+                    throw new \InvalidArgumentException('Remaining shortage cannot be negative.');
+                }
+            }
+
+            $uStmt = $this->pdo()->prepare('SELECT full_name FROM users WHERE user_id = ?');
+            $uStmt->execute([$adminId]);
+            $adminName = (string)($uStmt->fetchColumn() ?: "User #{$adminId}");
+
+            $history = json_decode((string)($session['review_history'] ?? '[]'), true) ?: [];
+            $now = date('Y-m-d H:i:s');
+            $disclaimer = 'Implies neither recovery, debt assignment nor wage-deduction permission.';
+            $history[] = [
+                'action' => 'reviewed',
+                'reviewed_by' => $adminId,
+                'reviewer_name' => $adminName,
+                'reviewed_at' => $now,
+                'explanation' => $explanation,
+                'cash_checked' => true,
+                'cash_explanation' => $cashExplanation,
+                'wallet_checked' => true,
+                'wallet_explanation' => $walletExplanation,
+                'remaining_shortage' => $shortage,
+                'disclaimer' => $disclaimer,
+            ];
+
+            $cols = $this->getSessionColumns();
+            $fields = [
+                'waiver_notes = ?',
+                'waived_by = ?',
+                'waived_at = CURRENT_TIMESTAMP',
+            ];
+            $params = [$explanation, $adminId];
+
+            if (in_array('reviewed_by', $cols, true)) {
+                $fields[] = 'reviewed_by = ?';
+                $params[] = $adminId;
+            }
+            if (in_array('reviewed_at', $cols, true)) {
+                $fields[] = 'reviewed_at = CURRENT_TIMESTAMP';
+            }
+            if (in_array('review_notes', $cols, true)) {
+                $fields[] = 'review_notes = ?';
+                $params[] = $explanation;
+            }
+            if (in_array('review_shortage', $cols, true)) {
+                $fields[] = 'review_shortage = ?';
+                $params[] = $shortage;
+            }
+            if (in_array('review_history', $cols, true)) {
+                $fields[] = 'review_history = ?';
+                $params[] = json_encode($history, JSON_THROW_ON_ERROR);
+            }
+            if (in_array('cash_check_explanation', $cols, true)) {
+                $fields[] = 'cash_check_explanation = ?';
+                $params[] = $cashExplanation;
+            }
+            if (in_array('wallet_check_explanation', $cols, true)) {
+                $fields[] = 'wallet_check_explanation = ?';
+                $params[] = $walletExplanation;
+            }
+
+            $params[] = $sessionId;
+            $update = $this->pdo()->prepare('UPDATE gcash_service_sessions SET ' . implode(', ', $fields) . ' WHERE session_id = ?');
+            $update->execute($params);
 
             \log_activity(
                 $this->pdo(),
                 $adminId,
-                'GCash discrepancy waived',
+                'GCash closing difference reviewed',
                 'GCash',
                 $sessionId,
                 null,
+                null,
+                null,
+                AuditRecordCategory::STORE_OPERATION,
                 [
                     'session_id' => $sessionId,
-                    'waiver_notes' => $waiverNotes,
-                    'waived_by' => $adminId,
-                    'cash_variance' => $session['cash_variance'],
-                    'wallet_variance' => $session['wallet_variance'],
-                ],
-                null,
-                AuditRecordCategory::STORE_OPERATION
+                    'reviewed_by' => $adminId,
+                    'explanation' => $explanation,
+                    'remaining_shortage' => $shortage,
+                    'cash_variance' => (float)$session['cash_variance'],
+                    'wallet_variance' => (float)$session['wallet_variance'],
+                    'cash_explanation' => $cashExplanation,
+                    'wallet_explanation' => $walletExplanation,
+                    'disclaimer' => $disclaimer,
+                ]
             );
 
             $this->pdo()->commit();
             \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
+
+            return $this->getSession($sessionId);
         } catch (Throwable $e) {
             if ($this->pdo && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
         }
+    }
+
+    public function reopenReview(int $adminId, string $adminRole, int $sessionId, string $reason): array
+    {
+        if ($adminRole !== 'admin') {
+            throw new DomainException('Only an Administrator can reopen closing difference reviews.', 403);
+        }
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Reopening reviews is not permitted during remote monitoring.', 403);
+        }
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 5 || mb_strlen($reason) > 500) {
+            throw new DomainException('Enter a reason for reopening the review between 5 and 500 characters.');
+        }
+
+        try {
+            StoreWriteGate::begin($this->pdo());
+            $lock = $this->pdo()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->pdo()->prepare("SELECT * FROM gcash_service_sessions WHERE session_id = ?" . $lock);
+            $stmt->execute([$sessionId]);
+            $session = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$session) {
+                throw new DomainException('GCash service session not found.', 404);
+            }
+            if ($session['status'] !== 'closed') {
+                throw new DomainException('Only closed sessions can be reopened.', 422);
+            }
+            if ($session['waived_at'] === null && empty($session['reviewed_at'])) {
+                throw new DomainException('Only reviewed sessions can be reopened.', 422);
+            }
+
+            $uStmt = $this->pdo()->prepare('SELECT full_name FROM users WHERE user_id = ?');
+            $uStmt->execute([$adminId]);
+            $adminName = (string)($uStmt->fetchColumn() ?: "User #{$adminId}");
+
+            $history = json_decode((string)($session['review_history'] ?? '[]'), true) ?: [];
+            $now = date('Y-m-d H:i:s');
+            $prevReviewedBy = (int)($session['reviewed_by'] ?? $session['waived_by']);
+            $prevReviewedAt = $session['reviewed_at'] ?? $session['waived_at'];
+            $prevNotes = $session['review_notes'] ?? $session['waiver_notes'];
+            $prevShortage = isset($session['review_shortage']) && $session['review_shortage'] !== null ? (float)$session['review_shortage'] : null;
+
+            $history[] = [
+                'action' => 'reopened',
+                'reopened_by' => $adminId,
+                'reopener_name' => $adminName,
+                'reopened_at' => $now,
+                'reason' => $reason,
+                'previous_reviewed_by' => $prevReviewedBy,
+                'previous_reviewed_at' => $prevReviewedAt,
+                'previous_review_notes' => $prevNotes,
+                'previous_shortage' => $prevShortage,
+                'previous_cash_explanation' => $session['cash_check_explanation'] ?? null,
+                'previous_wallet_explanation' => $session['wallet_check_explanation'] ?? null,
+            ];
+
+            $cols = $this->getSessionColumns();
+            $fields = [
+                'waiver_notes = NULL',
+                'waived_by = NULL',
+                'waived_at = NULL',
+            ];
+            $params = [];
+
+            if (in_array('reviewed_by', $cols, true)) {
+                $fields[] = 'reviewed_by = NULL';
+            }
+            if (in_array('reviewed_at', $cols, true)) {
+                $fields[] = 'reviewed_at = NULL';
+            }
+            if (in_array('review_history', $cols, true)) {
+                $fields[] = 'review_history = ?';
+                $params[] = json_encode($history, JSON_THROW_ON_ERROR);
+            }
+
+            $params[] = $sessionId;
+            $update = $this->pdo()->prepare('UPDATE gcash_service_sessions SET ' . implode(', ', $fields) . ' WHERE session_id = ?');
+            $update->execute($params);
+
+            \log_activity(
+                $this->pdo(),
+                $adminId,
+                'GCash closing difference review reopened',
+                'GCash',
+                $sessionId,
+                null,
+                null,
+                null,
+                AuditRecordCategory::STORE_OPERATION,
+                [
+                    'session_id' => $sessionId,
+                    'reopened_by' => $adminId,
+                    'reopen_reason' => $reason,
+                ]
+            );
+
+            $this->pdo()->commit();
+            \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
+
+            return $this->getSession($sessionId);
+        } catch (Throwable $e) {
+            if ($this->pdo && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function markClosingDifferenceReviewed(int $adminId, string $adminRole, int $sessionId, array|string $reviewData, ?float $remainingShortage = null): array
+    {
+        return $this->markReviewed($adminId, $adminRole, $sessionId, $reviewData, $remainingShortage);
+    }
+
+    public function reopenClosingDifferenceReview(int $adminId, string $adminRole, int $sessionId, string $reason): array
+    {
+        return $this->reopenReview($adminId, $adminRole, $sessionId, $reason);
+    }
+
+    public function waiveDiscrepancy(int $adminId, string $adminRole, int $sessionId, string $waiverNotes): void
+    {
+        $this->markReviewed($adminId, $adminRole, $sessionId, [
+            'explanation' => $waiverNotes,
+            'cash_checked' => true,
+            'wallet_checked' => true,
+            'cash_explanation' => 'Physical cash counted and verified: ' . $waiverNotes,
+            'wallet_explanation' => 'Wallet balance checked: ' . $waiverNotes,
+        ]);
     }
 }
