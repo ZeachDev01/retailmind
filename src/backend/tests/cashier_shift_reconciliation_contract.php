@@ -51,7 +51,7 @@ $refused(fn() => $service->closeShift(1, 319, 'Count', $denominations, 20), 'tam
 $summary = $service->closeShift(1, 320, 'Drawer was short after count', $denominations, 20);
 $check((float)$summary['expected_cash'] === $expected && (float)$summary['cash_variance'] === -100.00,
     'Cashier receives expected cash and variance after submission');
-$check((int)$summary['variance_review_required'] === 0, 'exactly PHP 100 needs no review');
+$check((int)$summary['variance_review_required'] === 1, 'exactly PHP 100 needs review');
 $totals = json_decode((string)$summary['payment_totals'], true);
 $check($totals === ['cash' => 250, 'card' => 75, 'ewallet' => 50], 'closure stores payment-method totals');
 $audit = $pdo->query("SELECT * FROM activity_log WHERE action='Cashier Shift closed'")->fetch(PDO::FETCH_ASSOC);
