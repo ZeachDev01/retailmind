@@ -30,6 +30,10 @@ final class RecoveryAuthService
             throw new DomainException('Only an authorized administrator may initiate recovery preparation.');
         }
 
+        if (empty($reconciliationApproval['package_id']) || ($reconciliationApproval['stage'] ?? '') !== 'reconciliation_approved') {
+            throw new DomainException('Invalid or stale reconciliation approval. Technical identity approval from a Super Administrator is required.');
+        }
+
         // Validate initiator credentials against current live database
         $initiatorStmt = $pdo->prepare(
             "SELECT u.user_id, u.username, u.password_hash, u.status, u.is_recovery_account
@@ -45,19 +49,22 @@ final class RecoveryAuthService
             throw new DomainException('Your current destination login password is incorrect.');
         }
 
-        // Collect all active destination Super Administrators (excluding sealed recovery accounts)
-        $superAdminsStmt = $pdo->query(
-            "SELECT DISTINCT u.user_id, u.username, u.password_hash
+        // Collect all active destination Administrators and Super Administrators (excluding sealed recovery accounts)
+        $authorizedUsersStmt = $pdo->query(
+            "SELECT u.user_id, u.username, u.password_hash,
+                    MAX(CASE WHEN r.role_name = 'super_admin' OR secondary_role.role_name = 'super_admin' THEN 1 ELSE 0 END) as has_super_admin,
+                    MAX(CASE WHEN r.role_name = 'admin' OR secondary_role.role_name = 'admin' THEN 1 ELSE 0 END) as has_admin
              FROM users u
              LEFT JOIN roles r ON r.role_id = u.role_id
              LEFT JOIN user_roles ur ON ur.user_id = u.user_id
              LEFT JOIN roles secondary_role ON secondary_role.role_id = ur.role_id
-             WHERE (r.role_name = 'super_admin' OR secondary_role.role_name = 'super_admin')
+             WHERE (r.role_name IN ('admin', 'super_admin') OR secondary_role.role_name IN ('admin', 'super_admin'))
                AND u.status = 'active'
                AND u.is_recovery_account = 0
-               AND NOT EXISTS (SELECT 1 FROM recovery_accounts ra WHERE ra.user_id = u.user_id)"
+               AND NOT EXISTS (SELECT 1 FROM recovery_accounts ra WHERE ra.user_id = u.user_id)
+             GROUP BY u.user_id, u.username, u.password_hash"
         );
-        $superAdmins = $superAdminsStmt->fetchAll(PDO::FETCH_ASSOC);
+        $authorizedUsers = $authorizedUsersStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $operators = [];
         $operators[] = [
@@ -68,16 +75,17 @@ final class RecoveryAuthService
             'is_initiator' => true,
         ];
 
-        foreach ($superAdmins as $sa) {
-            $saId = (int)$sa['user_id'];
-            if ($saId === $initiatorId) {
+        foreach ($authorizedUsers as $au) {
+            $auId = (int)$au['user_id'];
+            if ($auId === $initiatorId) {
                 continue;
             }
+            $role = !empty($au['has_super_admin']) ? 'super_admin' : 'admin';
             $operators[] = [
-                'user_id' => $saId,
-                'username' => (string)$sa['username'],
-                'role' => 'super_admin',
-                'password_hash' => (string)$sa['password_hash'],
+                'user_id' => $auId,
+                'username' => (string)$au['username'],
+                'role' => $role,
+                'password_hash' => (string)$au['password_hash'],
                 'is_initiator' => false,
             ];
         }
@@ -246,17 +254,55 @@ final class RecoveryAuthService
             return [
                 'paused' => false,
                 'stage' => 'idle',
+                'workflow_stage' => 'idle',
+                'workflow_stage_label' => 'Store Online',
+                'next_permitted_action' => 'Create backup or request identity review for incoming package.',
                 'message' => 'No database recovery operation is active.',
             ];
         }
 
         $state = RecoveryStore::state();
+        $rawStage = (string)($state['stage'] ?? '');
+        if ($rawStage === RecoveryStore::STAGE_RECOVERY_REQUIRED) {
+            $guidanceStage = 'actionable_failure';
+            $guidanceLabel = 'Actionable failure (Recovery required)';
+            $nextAction = 'Execute Complete Safety Recovery (rollback to destination safety copy) or Restart Approved Incoming Replacement.';
+        } elseif ($rawStage === RecoveryStore::STAGE_SAFETY_VERIFIED) {
+            $guidanceStage = 'ready_to_restore';
+            $guidanceLabel = 'Ready to restore';
+            $nextAction = 'Authenticate with destination credentials and start encrypted replacement or restart incoming replacement.';
+        } elseif ($rawStage === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+            $human = $state['review_checks']['human_confirmations'] ?? [];
+            $auto = $state['review_checks']['automated'] ?? [];
+            $allAutoPassed = !empty($auto) && count(array_filter($auto, static fn($c): bool => ($c['status'] ?? '') === 'passed')) >= 4;
+            $allHumanConfirmed = !empty($human['stock']['confirmed']) && !empty($human['receipt']['confirmed']) && !empty($human['upload']['confirmed']) && !empty($human['attribution']['confirmed']);
+            if ($allAutoPassed && $allHumanConfirmed) {
+                $guidanceStage = 'ready_to_reopen';
+                $guidanceLabel = 'Ready to reopen';
+                $nextAction = 'Authorized operator must confirm single active Store and re-enter destination password to explicitly reopen Store access.';
+            } else {
+                $guidanceStage = 'verification_needed';
+                $guidanceLabel = 'Verification needed';
+                $nextAction = 'Run automated verification checks and confirm all human checklist items (stock, receipt, upload, attribution) before reopening.';
+            }
+        } elseif ($rawStage === RecoveryStore::STAGE_REOPENED_COMPLETED) {
+            $guidanceStage = 'reopened_completed';
+            $guidanceLabel = 'Reopened';
+            $nextAction = 'Store online. Ordinary requests admitted.';
+        } else {
+            $guidanceStage = $rawStage ?: 'in_progress';
+            $guidanceLabel = ucwords(str_replace('_', ' ', $guidanceStage));
+            $nextAction = 'Wait for stage completion. Automated recovery process is running.';
+        }
 
         if (!$recoverySession) {
             return [
                 'paused' => true,
                 'requires_auth' => true,
-                'stage' => (string)($state['stage'] ?? 'unknown'),
+                'stage' => $rawStage ?: 'unknown',
+                'workflow_stage' => $guidanceStage,
+                'workflow_stage_label' => $guidanceLabel,
+                'next_permitted_action' => $nextAction,
                 'operation_id' => substr((string)($state['operation_id'] ?? ''), 0, 8) . '...',
                 'message' => 'Database recovery is in progress. Store access is paused.',
             ];
@@ -271,12 +317,15 @@ final class RecoveryAuthService
             'is_initiator' => (bool)($recoverySession['is_initiator'] ?? false),
             'operation_id' => (string)($state['operation_id'] ?? ''),
             'package_id' => (string)($state['package_id'] ?? ''),
-            'stage' => (string)($state['stage'] ?? ''),
+            'stage' => $rawStage,
+            'workflow_stage' => $guidanceStage,
+            'workflow_stage_label' => $guidanceLabel,
+            'next_permitted_action' => $nextAction,
             'stages' => $state['stages'] ?? [],
             'safety_operation_id' => (string)($state['safety_operation_id'] ?? ''),
             'replacement_started' => (bool)($state['replacement_started'] ?? false),
             'review_checks' => $state['review_checks'] ?? [],
-            'message' => 'Database recovery in progress. Stage: ' . ($state['stage'] ?? ''),
+            'message' => 'Database recovery in progress. Stage: ' . $rawStage,
         ];
 
         if ($isSuper) {
