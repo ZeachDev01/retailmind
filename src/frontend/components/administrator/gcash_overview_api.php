@@ -60,9 +60,15 @@ try {
                 'wallet_finding' => $walletFinding,
                 'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
             ]);
-                'reference' => (string)($input['reference'] ?? ''),
-                'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
-            ]);
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
+        } elseif ($action === 'emergency_handover' || $action === 'stop_service') {
+            $countedCash = (float)($input['counted_cash'] ?? -1);
+            $checkedWallet = (float)($input['checked_wallet'] ?? -1);
+            $reason = trim((string)($input['reason'] ?? ''));
+            $incomingCashierId = filter_var($input['incoming_cashier_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+            $acceptedTxIds = isset($input['accepted_transactions']) && is_array($input['accepted_transactions']) ? array_map('intval', $input['accepted_transactions']) : null;
+            $adminId = (int)$_SESSION['user_id'];
+            $result = $service->emergencyHandover($adminId, $incomingCashierId, $countedCash, $checkedWallet, $reason, $acceptedTxIds);
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
         } elseif ($action === 'waive_discrepancy') {
             $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
