@@ -25,6 +25,12 @@ try {
         $result = $service->adminOverview($filters);
         echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
     } elseif ($method === 'POST') {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Operational mutations are not permitted during remote monitoring.', 403);
+        }
+        if (current_role() !== 'admin') {
+            throw new DomainException('Operational mutations require the active Administrator Workspace.', 403);
+        }
         if (!csrf_token_is_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {
             throw new DomainException('Security check failed. Reload the page and try again.', 403);
         }
@@ -43,10 +49,26 @@ try {
             if (!$txId || ($input['confirmed_wallet'] ?? false) !== true || ($input['confirmed_cash'] ?? false) !== true) {
                 throw new DomainException('Confirm both the wallet transfer and physical service cash exchange.');
             }
+            $cashFinding = trim((string)($input['cash_finding'] ?? 'Physical service cash confirmed'));
+            $walletFinding = trim((string)($input['wallet_finding'] ?? 'Wallet transfer confirmed in GCash app'));
+            $cashCheckedBy = filter_var($input['cash_checked_by'] ?? null, FILTER_VALIDATE_INT) ?: null;
             $result = $service->resolveNeedsChecking((int)$_SESSION['user_id'], (int)$txId, 'complete', [
                 'reference' => (string)($input['reference'] ?? ''),
+                'cash_checked_by' => $cashCheckedBy,
+                'cash_finding' => $cashFinding,
+                'wallet_checked_by' => (int)$_SESSION['user_id'],
+                'wallet_finding' => $walletFinding,
                 'notes' => 'Administrator verified wallet transfer and physical service cash exchange.',
             ]);
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
+        } elseif ($action === 'emergency_handover' || $action === 'stop_service') {
+            $countedCash = (float)($input['counted_cash'] ?? -1);
+            $checkedWallet = (float)($input['checked_wallet'] ?? -1);
+            $reason = trim((string)($input['reason'] ?? ''));
+            $incomingCashierId = filter_var($input['incoming_cashier_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
+            $acceptedTxIds = isset($input['accepted_transactions']) && is_array($input['accepted_transactions']) ? array_map('intval', $input['accepted_transactions']) : null;
+            $adminId = (int)$_SESSION['user_id'];
+            $result = $service->emergencyHandover($adminId, $incomingCashierId, $countedCash, $checkedWallet, $reason, $acceptedTxIds);
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
         } elseif ($action === 'waive_discrepancy') {
             $sessId = filter_var($input['session_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

@@ -214,6 +214,14 @@ function ensure_operational_updates_schema(PDO $pdo): void
         waiver_notes TEXT NULL,
         waived_by INT NULL,
         waived_at TIMESTAMP NULL,
+        reviewed_by INT NULL,
+        reviewed_at TIMESTAMP NULL,
+        review_notes TEXT NULL,
+        review_draft_notes TEXT NULL,
+        review_shortage DECIMAL(12,2) NULL,
+        review_history TEXT NULL,
+        cash_check_explanation TEXT NULL,
+        wallet_check_explanation TEXT NULL,
         is_open INT GENERATED ALWAYS AS (IF(status = 'open', 1, NULL)) STORED,
         UNIQUE KEY uq_gcash_open_session (is_open),
         INDEX idx_gcash_sessions_shift (shift_id),
@@ -225,6 +233,23 @@ function ensure_operational_updates_schema(PDO $pdo): void
     ensure_table_column($pdo, 'gcash_service_sessions', 'waiver_notes', 'TEXT NULL AFTER unresolved_carryover_count');
     ensure_table_column($pdo, 'gcash_service_sessions', 'waived_by', 'INT NULL AFTER waiver_notes');
     ensure_table_column($pdo, 'gcash_service_sessions', 'waived_at', 'TIMESTAMP NULL AFTER waived_by');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'reviewed_by', 'INT NULL AFTER waived_at');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'reviewed_at', 'TIMESTAMP NULL AFTER reviewed_by');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_notes', 'TEXT NULL AFTER reviewed_at');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_draft_notes', 'TEXT NULL AFTER review_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_shortage', 'DECIMAL(12,2) NULL AFTER review_draft_notes');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'review_history', 'TEXT NULL AFTER review_shortage');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'cash_check_explanation', 'TEXT NULL AFTER review_history');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'wallet_check_explanation', 'TEXT NULL AFTER cash_check_explanation');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsible_user_id', 'INT NULL AFTER wallet_check_explanation');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsible_role', 'VARCHAR(20) NULL AFTER responsible_user_id');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsibility_notes', 'TEXT NULL AFTER responsible_role');
+    ensure_table_column($pdo, 'gcash_service_sessions', 'responsibility_assigned_at', 'DATETIME NULL AFTER responsibility_notes');
+
+    ensure_table_column($pdo, 'gcash_transactions', 'responsible_user_id', 'INT NULL AFTER cashier_id');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsible_role', 'VARCHAR(20) NULL AFTER responsible_user_id');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsibility_notes', 'TEXT NULL AFTER responsible_role');
+    ensure_table_column($pdo, 'gcash_transactions', 'responsibility_assigned_at', 'DATETIME NULL AFTER responsibility_notes');
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS gcash_funding_movements (
         movement_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -279,6 +304,10 @@ function ensure_operational_updates_schema(PDO $pdo): void
         ensure_table_column($pdo, 'gcash_transactions', 'confirmed_cash', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER confirmed_wallet');
         ensure_table_column($pdo, 'gcash_transactions', 'notes', 'TEXT NULL AFTER confirmed_cash');
         ensure_table_column($pdo, 'gcash_transactions', 'completed_at', 'DATETIME NULL AFTER reviewed_at');
+        ensure_table_column($pdo, 'gcash_transactions', 'cash_checked_by', 'INT NULL AFTER verified_by');
+        ensure_table_column($pdo, 'gcash_transactions', 'cash_finding', 'VARCHAR(255) NULL AFTER cash_checked_by');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_checked_by', 'INT NULL AFTER cash_finding');
+        ensure_table_column($pdo, 'gcash_transactions', 'wallet_finding', 'VARCHAR(255) NULL AFTER wallet_checked_by');
         if ($driver !== 'sqlite') {
             $pdo->exec("ALTER TABLE gcash_transactions
                 MODIFY COLUMN reference_number VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NULL,

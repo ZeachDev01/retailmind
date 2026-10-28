@@ -67,12 +67,6 @@ final class DatabaseAttentionSignalSource
     public function store(): array
     {
         $now = $this->clock->now();
-        $reversals = $this->scalar("SELECT COUNT(*) FROM sale_reversals WHERE status = 'pending'");
-        $discount = $this->row(
-            "SELECT COALESCE(MAX(discount_value), 0) AS value, COUNT(*) AS item_count
-             FROM sales WHERE discount_type = 'percentage' AND sale_date >= ?",
-            [$now->modify('-24 hours')->format('Y-m-d H:i:s')]
-        );
         $cash = $this->row(
             "SELECT COALESCE(MAX(ABS(cash_variance)), 0) AS value, COUNT(*) AS item_count
              FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL"
@@ -103,8 +97,6 @@ final class DatabaseAttentionSignalSource
             : 9999;
 
         return [
-            'reversal_count' => $this->signal($reversals, (int)$reversals),
-            'max_discount_percent' => $this->signal((float)($discount['value'] ?? 0)),
             'cash_variance_amount' => $this->signal((float)($cash['value'] ?? 0)),
             // Stock Issues remain Inventory Manager decisions; administrators inspect them read-only.
             'stock_issues' => $stockIssues,

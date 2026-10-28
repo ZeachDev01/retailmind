@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
             $messageClass = 'tag-warning';
         }
     } else {
+        http_response_code(403);
         $message = 'You do not have permission to generate forecasts.';
         $messageClass = 'tag-warning';
     }
@@ -36,6 +37,28 @@ $stmt = $pdo->query("SELECT status, operator_message, queued_at, completed_at FR
 $latestJob = $stmt->fetch(PDO::FETCH_ASSOC);
 $latestJobStatus = $latestJob['status'] ?? 'none';
 $isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], true);
+$forecastOrigin = !empty($forecasts[0]['forecast_origin']) ? $forecasts[0]['forecast_origin'] : null;
+$originTimestamp = $forecastOrigin ? strtotime($forecastOrigin) : null;
+$now = time();
+$originAgeDays = $originTimestamp ? (int)floor(($now - $originTimestamp) / 86400) : null;
+$originAgeText = $originAgeDays !== null ? ($originAgeDays === 0 ? 'Today' : ($originAgeDays === 1 ? '1 day old' : "{$originAgeDays} days old")) : 'Unavailable';
+if ($isGenerating) {
+    $generationStatus = 'updating';
+    $statusBadgeClass = 'tag-info';
+    $statusBadgeLabel = 'Updating';
+} elseif (empty($forecasts) || !$latestJobId) {
+    $generationStatus = 'unavailable';
+    $statusBadgeClass = 'tag-danger';
+    $statusBadgeLabel = 'Unavailable';
+} elseif ($originAgeDays !== null && $originAgeDays > 7) {
+    $generationStatus = 'old';
+    $statusBadgeClass = 'tag-warning';
+    $statusBadgeLabel = 'Old';
+} else {
+    $generationStatus = 'ready';
+    $statusBadgeClass = 'tag-success';
+    $statusBadgeLabel = 'Ready';
+}
 
 // Enrich forecasts with product details & stock
 $productMap = [];
@@ -141,7 +164,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <?php if ($isDemoMode): ?>
             <p class="muted">Historical external data. The origin below stays on the dataset's final date; these results do not measure this Store's accuracy.</p>
         <?php endif; ?>
-        <p><a class="btn btn-secondary" href="forecast_analytics.php">Forecast Analytics</a>
+        <p>
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a></p>
 
         <?php if ($message): ?>
@@ -158,7 +181,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
 
         <div class="forecast-header-card">
             <div>
-                <strong>Active Run:</strong> Job #<?= htmlspecialchars((string)($latestJobId ?? 'None')) ?> 
+                <strong>Generation Status:</strong> <span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span> &middot; <strong>Origin:</strong> <?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?> &middot; <strong>Age:</strong> <?= htmlspecialchars($originAgeText) ?> &middot; <strong>Products:</strong> <?= count($forecasts) ?> distinct products &middot; <strong>Run:</strong> Job #<?= htmlspecialchars((string)($latestJobId ?? 'None')) ?> 
                 <?php if (!empty($forecasts[0]['forecast_origin'])): ?>
                     &middot; Origin: <?= htmlspecialchars($forecasts[0]['forecast_origin']) ?>
                 <?php endif; ?>

@@ -195,7 +195,7 @@ if ($receiptId > 0 && $receipt === null) {
                         <input type="hidden" name="action" value="exception_lookup">
                         <label for="exception-sale">Receipt number</label><input id="exception-sale" name="sale_id" type="number" min="1" required>
                         <label for="exception-reason">Why is the original Cashier absent or disabled?</label><input id="exception-reason" name="exception_reason" maxlength="255" required>
-                        <label for="lookup-approver">Administrator username</label><input id="lookup-approver" name="approver_username" autocomplete="off" required>
+                        <label for="lookup-approver">Administrator username or email</label><input id="lookup-approver" name="approver_username" autocomplete="off" required>
                         <label for="lookup-password">Administrator password</label><input id="lookup-password" name="approver_password" type="password" autocomplete="new-password" required>
                         <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Open sale with Administrator approval</button>
                     </form>
@@ -299,8 +299,8 @@ if ($receiptId > 0 && $receipt === null) {
                             </fieldset>
                             <?php endif; ?>
                             <?php if ($exceptionToken !== ''): ?>
-                            <fieldset><legend>Refund approval from the same Administrator</legend>
-                                <label for="refund-approver">Administrator username</label><input id="refund-approver" name="approver_username" autocomplete="off" required>
+                            <fieldset><legend>Administrator refund approval</legend>
+                                <label for="refund-approver">Administrator username or email</label><input id="refund-approver" name="approver_username" autocomplete="off" required>
                                 <label for="refund-password">Administrator password</label><input id="refund-password" name="approver_password" type="password" autocomplete="new-password" required>
                             </fieldset>
                             <?php endif; ?>

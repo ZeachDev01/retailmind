@@ -369,7 +369,8 @@ final class DatabaseBackupService
 
     public function authorize(string $actorRole): void
     {
-        if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)) {
+        $context = function_exists('current_authorization_context') ? current_authorization_context() : null;
+        if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP, null, $context)) {
             throw new DomainException('Your role cannot create or download a Database Backup.');
         }
     }

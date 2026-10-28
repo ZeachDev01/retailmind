@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ];
                 }
                 $countedCash = (float)$pendingCount['counted_cash'];
-                $countPreview = $service->previewReconciliation($targetCashierId, $countedCash);
+                $countPreview = $service->previewReconciliation($targetCashierId, $countedCash, !$isCashier);
                 $_SESSION['cashier_shift_count'] = $pendingCount;
                 $message = 'Cash count submitted. Review the totals before closing.';
             } else {
@@ -101,7 +101,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $closedSummary = $isCashier
                     ? $service->closeShift($actorId, $countedCash, (string)($_POST['closing_notes'] ?? ''), $pendingCount['denominations'], (int)$pendingCount['shift_id'])
                     : $service->closeAbandonedShift($actorId, $actorRole, $targetCashierId, $countedCash,
-                        (string)($_POST['closing_notes'] ?? ''), (string)($_POST['intervention_reason'] ?? ''), $pendingCount['denominations'], (int)$pendingCount['shift_id']);
+                        (string)($_POST['closing_notes'] ?? ''), (string)($_POST['intervention_reason'] ?? ''), $pendingCount['denominations'], (int)$pendingCount['shift_id'],
+                        isset($_POST['cancel_held_sales_reason']) ? (string)$_POST['cancel_held_sales_reason'] : null);
                 unset($_SESSION['cashier_shift_count']);
                 $message = 'Cashier Shift closed and reconciled.';
             }
@@ -124,7 +125,7 @@ if ($countPreview === null && $openShift && is_array($pendingCount)
     && (int)($pendingCount['actor_id'] ?? 0) === $actorId
     && ($pendingCount['actor_role'] ?? '') === $actorRole) {
     try {
-        $countPreview = $service->previewReconciliation($targetCashierId, (float)$pendingCount['counted_cash']);
+        $countPreview = $service->previewReconciliation($targetCashierId, (float)$pendingCount['counted_cash'], !$isCashier);
     } catch (Throwable $e) {
         $error = \App\Support\OperatorAlert::message($e, 'The shift count could not be shown. Check unresolved held sales and try again.');
     }
@@ -222,7 +223,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             <dialog id="movement-authorization" aria-labelledby="movement-authorization-title" aria-describedby="movement-authorization-summary">
                                 <h2 id="movement-authorization-title">Authorize drawer movement</h2>
                                 <p id="movement-authorization-summary" class="shift-help"></p>
-                                <label for="movement-approver">Authorizing Administrator username</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
+                                <label for="movement-approver">Authorizing Administrator username or email</label><input id="movement-approver" name="approver_username" autocomplete="off" required disabled autofocus>
                                 <label for="movement-approval-password">Administrator password</label><input id="movement-approval-password" name="approver_password" type="password" autocomplete="new-password" required disabled>
                                 <div class="modal-actions">
                                     <button class="btn btn-secondary" type="button" id="movement-authorization-cancel">Cancel</button>
@@ -235,7 +236,11 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <h2><?= $countPreview ? 'Review count and close shift' : 'Count cash to close shift' ?></h2>
                         <?php if (!$isCashier): ?><p class="shift-help">Closing for <?= htmlspecialchars($openShift['full_name']) ?>.</p><?php endif; ?>
                         <?php if ($unresolvedHeldSales): ?><div class="message error" role="note" data-rm-alert-processed="1">
-                            This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
+                            <?php if ($isCashier): ?>
+                                This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
+                            <?php else: ?>
+                                This shift still has <?= count($unresolvedHeldSales) ?> unpaid held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Closing this abandoned shift will cancel <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> with the required reason below.
+                            <?php endif; ?>
                             <ul><?php foreach ($unresolvedHeldSales as $unresolved): ?>
                                     <li><?= htmlspecialchars($unresolved['reference_no']) ?> &middot; <?= (int)$unresolved['item_count'] ?> item(s) &middot; &#8369;<?= number_format((float)$unresolved['total_amount'], 2) ?> &middot; <?= $unresolved['status'] === 'resumed' ? 'resumed' : 'held' ?> since <?= htmlspecialchars(format_display_datetime($unresolved['created_at'])) ?> Philippine time</li>
                                 <?php endforeach; ?></ul>
@@ -264,7 +269,8 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <input type="hidden" name="shift_id" value="<?= (int)$openShift['shift_id'] ?>">
                                 <label for="closing-notes">Closing reason or notes<?= $countPreview['variance_review_required'] ? ' (required)' : ' (optional)' ?></label>
                                 <textarea id="closing-notes" name="closing_notes" <?= $countPreview['variance_review_required'] ? 'required' : '' ?>></textarea>
-                                <?php if (!$isCashier): ?><label for="intervention-reason">Intervention reason (required)</label><textarea id="intervention-reason" name="intervention_reason" required></textarea><?php endif; ?>
+                                <?php if (!$isCashier): ?><label for="intervention-reason">Intervention reason (required)</label><textarea id="intervention-reason" name="intervention_reason" required></textarea>
+                                <?php if ($unresolvedHeldSales): ?><label for="cancel-held-sales-reason">Reason to cancel unpaid held sales (required)</label><textarea id="cancel-held-sales-reason" name="cancel_held_sales_reason" required></textarea><?php endif; ?><?php endif; ?>
                                 <button class="btn" type="submit">Close shift</button>
                             </form>
                         <?php else: ?>

@@ -9,29 +9,13 @@ require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\GrossProfitService;
 use App\Services\PhilippineTime;
+use App\Services\ReportAccessService;
+
+require_once __DIR__ . '/../../../backend/app/Services/ReportAccessService.php';
 
 require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
-$reportCatalog = [
-    'sales_period' => 'Daily, Weekly and Monthly Sales',
-    'sales_product' => 'Sales by Product',
-    'sales_category' => 'Sales by Category',
-    'sales_cashier' => 'Sales by Cashier',
-    'refunds' => 'Refund History',
-    'fast_moving' => 'Fast-Moving Products',
-    'slow_moving' => 'Slow-Moving Products',
-    'low_stock' => 'Low-Stock and Out-of-Stock Products',
-    'inventory_valuation' => 'Inventory Valuation',
-    'stock_movements' => 'Stock Movement History',
-    'adjustments' => 'Damaged, Missing and Expired Items',
-    'forecast_actual' => 'Forecast Versus Actual Demand',
-    'expiration' => 'Expiration Report',
-    'count_variance' => 'Physical-Count Variance Report',
-];
-
-if (current_role() === 'admin') {
-    $reportCatalog['gross_profit'] = 'Gross Profit Report';
-}
+$reportCatalog = ReportAccessService::catalogForRole((string)current_role());
 
 function normalize_date(string $value, string $default): string
 {
@@ -66,7 +50,10 @@ function send_csv(string $filename, array $rows, array $headers): void
     $output = fopen('php://output', 'w');
     fputcsv($output, $headers);
     foreach ($rows as $row) {
-        fputcsv($output, array_map(static fn($header) => (string)($row[$header] ?? ''), $headers));
+        fputcsv($output, array_map(static function ($header) use ($row): string {
+            $value = (string)($row[$header] ?? '');
+            return !is_numeric($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value) ? "'" . $value : $value;
+        }, $headers));
     }
     fclose($output);
     exit;
@@ -92,6 +79,9 @@ function product_filters(array $filters, string $alias = 'p'): array
 
 function run_report(PDO $pdo, string $report, array $filters): array
 {
+    if (class_exists(\App\Services\ReportAccessService::class)) {
+        \App\Services\ReportAccessService::enforceAccess(function_exists('current_role') ? current_role() : null, $report);
+    }
     $fromStart = $filters['from'] . ' 00:00:00';
     $toEnd = $filters['to'] . ' 23:59:59';
     [$productWhere, $productParams] = product_filters($filters);
@@ -137,33 +127,128 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
         case 'sales_period':
             $granularity = in_array($filters['granularity'], ['daily', 'weekly', 'monthly'], true) ? $filters['granularity'] : 'daily';
-            $periodExpr = [
-                'daily' => 'DATE(s.sale_date)',
-                'weekly' => "CONCAT(YEAR(s.sale_date), '-W', LPAD(WEEK(s.sale_date, 1), 2, '0'))",
-                'monthly' => "DATE_FORMAT(s.sale_date, '%Y-%m')",
-            ][$granularity];
-            $stmt = $pdo->prepare(
-                "SELECT {$periodExpr} AS period_label, COUNT(DISTINCT s.sale_id) AS receipts,
-                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
-                        COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
+            $isSqlite = (string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+            if ($isSqlite) {
+                $periodExprSales = [
+                    'daily' => 'DATE(s.sale_date)',
+                    'weekly' => "strftime('%Y-W%W', s.sale_date)",
+                    'monthly' => "strftime('%Y-%m', s.sale_date)",
+                ][$granularity];
+                $periodExprRefunds = [
+                    'daily' => 'DATE(cr.created_at)',
+                    'weekly' => "strftime('%Y-W%W', cr.created_at)",
+                    'monthly' => "strftime('%Y-%m', cr.created_at)",
+                ][$granularity];
+            } else {
+                $periodExprSales = [
+                    'daily' => 'DATE(s.sale_date)',
+                    'weekly' => "CONCAT(YEAR(s.sale_date), '-W', LPAD(WEEK(s.sale_date, 1), 2, '0'))",
+                    'monthly' => "DATE_FORMAT(s.sale_date, '%Y-%m')",
+                ][$granularity];
+                $periodExprRefunds = [
+                    'daily' => 'DATE(cr.created_at)',
+                    'weekly' => "CONCAT(YEAR(cr.created_at), '-W', LPAD(WEEK(cr.created_at, 1), 2, '0'))",
+                    'monthly' => "DATE_FORMAT(cr.created_at, '%Y-%m')",
+                ][$granularity];
+            }
+
+            $salesStmt = $pdo->prepare(
+                "SELECT {$periodExprSales} AS period_label,
+                        COUNT(DISTINCT s.sale_id) AS receipts,
+                        COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold,
+                        COALESCE(SUM(si.subtotal), 0) AS total_sales,
+                        MIN(s.sale_date) AS min_date
                  FROM sales s
                  JOIN sale_items si ON si.sale_id = s.sale_id
-                 {$refundJoin}
                  JOIN products p ON p.product_id = si.product_id
                  WHERE s.sale_date BETWEEN ? AND ? {$productSql}
-                 GROUP BY period_label
-                 ORDER BY MIN(s.sale_date) DESC"
+                 GROUP BY period_label"
             );
-            $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+            $salesStmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+
+            $refundsStmt = $pdo->prepare(
+                "SELECT {$periodExprRefunds} AS period_label,
+                        COALESCE(SUM(cri.subtotal), 0) AS refunds,
+                        MIN(cr.created_at) AS min_date
+                 FROM cash_refunds cr
+                 JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
+                 JOIN products p ON p.product_id = cri.product_id
+                 WHERE cr.created_at BETWEEN ? AND ? {$productSql}
+                 GROUP BY period_label"
+            );
+            $refundsStmt->execute(array_merge([$fromStart, $toEnd], $productParams));
+
+            $periodMap = [];
+            foreach ($salesStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $label = (string)$row['period_label'];
+                $periodMap[$label] = [
+                    'period' => $label,
+                    'receipts' => (int)$row['receipts'],
+                    'units_sold' => (int)$row['units_sold'],
+                    'total_sales' => (float)$row['total_sales'],
+                    'refunds' => 0.0,
+                    'min_date' => (string)$row['min_date'],
+                ];
+            }
+            foreach ($refundsStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $label = (string)$row['period_label'];
+                if (!isset($periodMap[$label])) {
+                    $periodMap[$label] = [
+                        'period' => $label,
+                        'receipts' => 0,
+                        'units_sold' => 0,
+                        'total_sales' => 0.0,
+                        'refunds' => (float)$row['refunds'],
+                        'min_date' => (string)$row['min_date'],
+                    ];
+                } else {
+                    $periodMap[$label]['refunds'] = (float)$row['refunds'];
+                    if (strcmp((string)$row['min_date'], $periodMap[$label]['min_date']) < 0) {
+                        $periodMap[$label]['min_date'] = (string)$row['min_date'];
+                    }
+                }
+            }
+
+            uasort($periodMap, static function (array $a, array $b): int {
+                $cmp = strcmp($b['min_date'], $a['min_date']);
+                return $cmp !== 0 ? $cmp : strcmp($b['period'], $a['period']);
+            });
+
+            $rows = [];
+            $sumReceipts = 0;
+            $sumUnits = 0;
+            $sumTotalSales = 0.0;
+            $sumRefunds = 0.0;
+            $sumNetSales = 0.0;
+
+            foreach ($periodMap as $item) {
+                $netSales = round($item['total_sales'] - $item['refunds'], 2);
+                $sumReceipts += $item['receipts'];
+                $sumUnits += $item['units_sold'];
+                $sumTotalSales += $item['total_sales'];
+                $sumRefunds += $item['refunds'];
+                $sumNetSales += $netSales;
+
+                $rows[] = [
+                    'Period' => $item['period'],
+                    'Receipts' => $item['receipts'],
+                    'Units Sold' => $item['units_sold'],
+                    'Total Sales' => money_value($item['total_sales']),
+                    'Refunds' => money_value($item['refunds']),
+                    'Net Sales' => money_value($netSales),
+                ];
+            }
+
             return [
-                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds'],
-                'rows' => array_map(static fn($row) => [
-                    'Period' => $row['period_label'],
-                    'Receipts' => (int)$row['receipts'],
-                    'Units Sold' => (int)$row['units_sold'],
-                    'Total Sales' => money_value($row['total_sales']),
-                    'Refunds' => money_value($row['refunds']),
-                ], $stmt->fetchAll()),
+                'headers' => ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds', 'Net Sales'],
+                'rows' => $rows,
+                'metrics' => [
+                    'Receipts' => number_format($sumReceipts),
+                    'Units Sold' => number_format($sumUnits),
+                    'Total Sales' => money_value($sumTotalSales),
+                    'Refunds' => money_value($sumRefunds),
+                    'Net Sales' => money_value($sumNetSales),
+                ],
             ];
 
         case 'sales_product':
@@ -284,46 +369,187 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'low_stock':
-        case 'inventory_valuation':
-            $stockCondition = $report === 'low_stock' ? ' AND COALESCE(i.quantity_on_hand, 0) <= COALESCE(p.reorder_level, 0)' : '';
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name, COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, COALESCE(p.reorder_level, 0) AS reorder_level,
-                        p.cost_price, p.unit_price, COALESCE(i.quantity_on_hand, 0) * p.cost_price AS inventory_value,
                         CASE WHEN COALESCE(i.quantity_on_hand, 0) = 0 THEN 'Out of stock' ELSE 'Low stock' END AS stock_status
                  FROM products p
                  LEFT JOIN inventory i ON i.product_id = p.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
-                 WHERE 1=1 {$productSql}{$stockCondition}
+                 WHERE COALESCE(i.quantity_on_hand, 0) <= COALESCE(p.reorder_level, 0) {$productSql}
                  ORDER BY quantity_on_hand ASC, p.product_name"
             );
             $stmt->execute($productParams);
-            $headers = $report === 'low_stock'
-                ? ['SKU', 'Product', 'Category', 'Qty On Hand', 'Reorder Level', 'Status']
-                : ['SKU', 'Product', 'Category', 'Qty On Hand', 'Cost Price', 'Retail Price', 'Profit', 'Inventory Value'];
-            $rows = [];
-            foreach ($stmt->fetchAll() as $row) {
-                $rows[] = $report === 'low_stock'
-                    ? [
-                        'SKU' => $row['sku'],
-                        'Product' => $row['product_name'],
-                        'Category' => $row['category_name'],
-                        'Qty On Hand' => (int)$row['quantity_on_hand'],
-                        'Reorder Level' => (int)$row['reorder_level'],
-                        'Status' => $row['stock_status'],
-                    ]
-                    : [
-                        'SKU' => $row['sku'],
-                        'Product' => $row['product_name'],
-                        'Category' => $row['category_name'],
-                        'Qty On Hand' => (int)$row['quantity_on_hand'],
-                        'Cost Price' => money_value($row['cost_price']),
-                        'Retail Price' => money_value($row['unit_price']),
-                        'Profit' => money_value((float)($row['unit_price'] ?? 0) - (float)($row['cost_price'] ?? 0)),
-                        'Inventory Value' => money_value($row['inventory_value']),
-                    ];
+            return [
+                'headers' => ['SKU', 'Product', 'Category', 'Current Stock', 'Reorder Level', 'Status'],
+                'rows' => array_map(static fn($row) => [
+                    'SKU' => $row['sku'],
+                    'Product' => $row['product_name'],
+                    'Category' => $row['category_name'],
+                    'Current Stock' => (int)$row['quantity_on_hand'],
+                    'Reorder Level' => (int)$row['reorder_level'],
+                    'Status' => $row['stock_status'],
+                ], $stmt->fetchAll()),
+            ];
+
+        case 'inventory_valuation':
+            $stmt = $pdo->prepare(
+                "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
+                        COALESCE(c.category_name, 'Uncategorized') AS category_name,
+                        COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
+                        p.cost_price, p.unit_price
+                 FROM products p
+                 LEFT JOIN inventory i ON i.product_id = p.product_id
+                 LEFT JOIN categories c ON c.category_id = p.category_id
+                 WHERE 1=1 {$productSql}
+                 ORDER BY p.product_name ASC"
+            );
+            $stmt->execute($productParams);
+            $products = $stmt->fetchAll();
+
+            $batchesByProduct = [];
+            try {
+                $batchStmt = $pdo->query(
+                    "SELECT pb.batch_id, pb.product_id, pb.remaining_quantity, pb.cost_price AS batch_cost,
+                            sr.cost_price AS sr_cost, sr.total_cost, sr.accepted_qty
+                     FROM product_batches pb
+                     LEFT JOIN stock_receiving sr ON sr.receiving_id = pb.receiving_id
+                     WHERE pb.remaining_quantity > 0
+                     ORDER BY pb.batch_id ASC"
+                );
+                if ($batchStmt) {
+                    foreach ($batchStmt->fetchAll() as $b) {
+                        $batchesByProduct[(int)$b['product_id']][] = $b;
+                    }
+                }
+            } catch (\Throwable $e) {
+                $batchesByProduct = [];
             }
-            return ['headers' => $headers, 'rows' => $rows];
+
+            $headers = [
+                'SKU', 'Product', 'Category', 'Current Stock', 'Cost Price', 'Retail Price',
+                'Price minus cost per item', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
+                'Valuation Basis', 'Valuation Status'
+            ];
+
+            $rows = [];
+            $totalRecorded = 0.0;
+            $totalEstimated = 0.0;
+            $totalCostMissing = 0;
+            $hasAnyMismatch = false;
+
+            foreach ($products as $row) {
+                $pId = (int)$row['product_id'];
+                $currentStock = (int)$row['quantity_on_hand'];
+                $catalogCost = $row['cost_price'] !== null ? (float)$row['cost_price'] : null;
+                $unitPrice = $row['unit_price'] !== null ? (float)$row['unit_price'] : 0.0;
+                $batches = $batchesByProduct[$pId] ?? [];
+
+                $recordedVal = 0.0;
+                $estimatedVal = 0.0;
+                $costMissingQty = 0;
+                $status = 'recorded';
+                $basis = 'Recorded batch cost';
+
+                $batchQtySum = 0;
+                foreach ($batches as $b) {
+                    $batchQtySum += (int)$b['remaining_quantity'];
+                }
+
+                if ($currentStock <= 0) {
+                    $basis = 'Zero stock';
+                    $status = 'recorded';
+                } elseif (!empty($batches)) {
+                    $hasMismatch = ($batchQtySum !== $currentStock);
+                    if ($hasMismatch) {
+                        $hasAnyMismatch = true;
+                        $status = 'mismatch';
+                        $basis = 'Quantity mismatch (unbatched stock)';
+                        if ($currentStock > $batchQtySum) {
+                            $costMissingQty += ($currentStock - $batchQtySum);
+                        }
+                    }
+
+                    $hasEstimate = false;
+                    foreach ($batches as $b) {
+                        $bQty = (int)$b['remaining_quantity'];
+                        if ($b['batch_cost'] !== null) {
+                            $recordedVal += $bQty * (float)$b['batch_cost'];
+                        } elseif (!empty($b['total_cost']) && !empty($b['accepted_qty']) && (float)$b['accepted_qty'] > 0) {
+                            $recordedVal += $bQty * ((float)$b['total_cost'] / (float)$b['accepted_qty']);
+                        } elseif ($b['sr_cost'] !== null) {
+                            $recordedVal += $bQty * (float)$b['sr_cost'];
+                        } elseif (!$hasMismatch && $catalogCost !== null && $catalogCost > 0) {
+                            $estimatedVal += $bQty * $catalogCost;
+                            $hasEstimate = true;
+                        } else {
+                            $costMissingQty += $bQty;
+                        }
+                    }
+
+                    if (!$hasMismatch) {
+                        if ($costMissingQty === $currentStock) {
+                            $status = 'missing';
+                            $basis = 'No recorded or estimated cost';
+                        } elseif ($costMissingQty > 0 || $hasEstimate) {
+                            $status = 'estimated';
+                            $basis = $hasEstimate ? 'Current product cost estimate' : 'Partial cost missing';
+                        } else {
+                            $status = 'recorded';
+                            $basis = 'Recorded batch cost';
+                        }
+                    }
+                } else {
+                    if ($catalogCost !== null && $catalogCost > 0) {
+                        $estimatedVal = $currentStock * $catalogCost;
+                        $status = 'estimated';
+                        $basis = 'Current product cost estimate';
+                    } else {
+                        $costMissingQty = $currentStock;
+                        $status = 'missing';
+                        $basis = 'No recorded or estimated cost';
+                    }
+                }
+
+                $totalRecorded += $recordedVal;
+                $totalEstimated += $estimatedVal;
+                $totalCostMissing += $costMissingQty;
+
+                $priceMinusCost = $unitPrice - ($catalogCost ?? 0.0);
+
+                $rows[] = [
+                    'SKU' => $row['sku'],
+                    'Product' => $row['product_name'],
+                    'Category' => $row['category_name'],
+                    'Current Stock' => $currentStock,
+                    'Cost Price' => money_value($catalogCost ?? 0.0),
+                    'Retail Price' => money_value($unitPrice),
+                    'Price minus cost per item' => money_value($priceMinusCost),
+                    'Recorded Value' => money_value($recordedVal),
+                    'Estimated Value' => money_value($estimatedVal),
+                    'Cost Missing Qty' => $costMissingQty,
+                    'Valuation Basis' => $basis,
+                    'Valuation Status' => $status,
+                ];
+            }
+
+            $metrics = [
+                'Total Recorded Value' => money_value($totalRecorded),
+                'Total Estimated Value' => money_value($totalEstimated),
+                'Cost Missing Qty' => (string)$totalCostMissing,
+            ];
+
+            if ($totalCostMissing > 0 || $hasAnyMismatch) {
+                $metrics['Combined (Partial: Recorded + Estimated)'] = money_value($totalRecorded + $totalEstimated);
+            } else {
+                $metrics['Combined Total (Recorded + Estimated)'] = money_value($totalRecorded + $totalEstimated);
+            }
+
+            return [
+                'headers' => $headers,
+                'rows' => $rows,
+                'metrics' => $metrics,
+            ];
 
         case 'stock_movements':
             $stmt = $pdo->prepare(
@@ -485,7 +711,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             return (new GrossProfitService($pdo))->runReport($filters);
 
         case 'expiration':
-            $todayManila = PhilippineTime::today();
+            $todayManila = \App\Services\PhilippineTime::today();
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
@@ -515,6 +741,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         'Status' => $days < 0 ? 'Expired' : ($days <= 30 ? 'Expiring soon' : 'Active'),
                     ];
                 }, $stmt->fetchAll()),
+                'metrics' => [
+                    'Scope' => 'As of Today (' . $todayManila . ')',
+                ],
             ];
 
         case 'count_variance':
@@ -554,12 +783,14 @@ function run_report(PDO $pdo, string $report, array $filters): array
     return ['headers' => [], 'rows' => []];
 }
 
-$selectedReport = request_value('report', 'sales_period');
-if ($selectedReport === 'gross_profit') {
-    GrossProfitService::enforceAdministratorWorkspace(current_role());
+$selectedReport = request_value('report', '');
+if ($selectedReport !== '') {
+    ReportAccessService::enforceAccess((string)current_role(), $selectedReport);
+} else {
+    $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
 }
 if (!array_key_exists($selectedReport, $reportCatalog)) {
-    $selectedReport = 'sales_period';
+    $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
 }
 
 $tz = new DateTimeZone(PhilippineTime::ZONE);
@@ -657,11 +888,10 @@ if ($validationError === null) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
+    require_local_request('Bulk exports are not available during remote monitoring.');
     verify_csrf_token($_POST['csrf_token'] ?? '');
-    $exportReport = request_value('report', 'sales_period');
-    if ($exportReport === 'gross_profit') {
-        GrossProfitService::enforceAdministratorWorkspace(current_role());
-    }
+    $exportReport = request_value('report', $selectedReport);
+    ReportAccessService::enforceAccess((string)current_role(), $exportReport);
     if ($validationError === null && !empty($reportData['rows'])) {
         log_activity(
             $pdo,
@@ -742,11 +972,12 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                         </select>
                     </div>
                 <?php endif; ?>
-                <div class="form-group" id="from_group">
+                <?php $hideDates = in_array($selectedReport, ['low_stock', 'inventory_valuation', 'expiration'], true); ?>
+                <div class="form-group" id="from_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="from">From</label>
                     <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
                 </div>
-                <div class="form-group" id="to_group">
+                <div class="form-group" id="to_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="to">To</label>
                     <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
@@ -959,8 +1190,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn" id="export-csv-btn">Export CSV</button>
                         </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
                     </div>
                 </div>
             <?php else: ?>
@@ -983,7 +1213,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                     </div>
                     <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
                     <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
-                        <p class="section-description">Refunds are separate from sales and grouped by sale date.</p>
+                        <p class="section-description">Refunds are counted on the refund issue date and linked to the original sale.</p>
                     <?php elseif ($selectedReport === 'refunds'): ?>
                         <p class="section-description">Refunds are grouped by issue date.</p>
                     <?php endif; ?>
@@ -1035,8 +1265,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Repor
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
                             <button type="submit" class="btn">Export CSV</button>
                         </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Print</button>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
                     </div>
                 </div>
             <?php endif; ?>
@@ -1059,6 +1288,9 @@ function syncReportControls() {
     if (periodGroup) {
         periodGroup.style.display = reportSelect.value === 'gross_profit' ? '' : 'none';
     }
+    const hideDates = ['low_stock', 'inventory_valuation', 'expiration'].includes(reportSelect.value);
+    if (fromGroup) fromGroup.style.display = hideDates ? 'none' : '';
+    if (toGroup) toGroup.style.display = hideDates ? 'none' : '';
 }
 if (reportSelect) {
     reportSelect.addEventListener('change', () => {

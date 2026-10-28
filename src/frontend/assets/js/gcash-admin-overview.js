@@ -247,6 +247,20 @@
         if (!button) return;
         verifyForm.reset();
         document.getElementById('gcash-verify-tx').value = button.dataset.transactionId;
+        const cidEl = document.getElementById('gcash-verify-cashier-id');
+        if (cidEl) cidEl.value = button.dataset.cashierId || '';
+        if (button.dataset.confirmedCash === '1') {
+            const cCb = document.getElementById('gcash-verify-cash');
+            if (cCb) cCb.checked = true;
+            const cFind = document.getElementById('gcash-verify-cash-finding');
+            if (cFind) cFind.value = 'Physical service cash confirmed by responsible Cashier';
+        }
+        if (button.dataset.confirmedWallet === '1') {
+            const wCb = document.getElementById('gcash-verify-wallet');
+            if (wCb) wCb.checked = true;
+            const wFind = document.getElementById('gcash-verify-wallet-finding');
+            if (wFind) wFind.value = 'Wallet transfer confirmed in GCash app';
+        }
         document.getElementById('gcash-verify-id').textContent = button.dataset.transactionId;
         document.getElementById('gcash-verify-reference').value = button.dataset.reference;
         document.getElementById('gcash-verify-error').textContent = '';
@@ -261,7 +275,16 @@
             const response = await fetch(api, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf},
-                body: JSON.stringify({action: 'resolve_exchange', transaction_id: Number(document.getElementById('gcash-verify-tx').value), reference: document.getElementById('gcash-verify-reference').value, confirmed_wallet: document.getElementById('gcash-verify-wallet').checked, confirmed_cash: document.getElementById('gcash-verify-cash').checked})
+                body: JSON.stringify({
+                    action: 'resolve_exchange',
+                    transaction_id: Number(document.getElementById('gcash-verify-tx').value),
+                    reference: document.getElementById('gcash-verify-reference').value,
+                    confirmed_wallet: document.getElementById('gcash-verify-wallet').checked,
+                    confirmed_cash: document.getElementById('gcash-verify-cash').checked,
+                    cash_finding: document.getElementById('gcash-verify-cash-finding') ? document.getElementById('gcash-verify-cash-finding').value : '',
+                    wallet_finding: document.getElementById('gcash-verify-wallet-finding') ? document.getElementById('gcash-verify-wallet-finding').value : '',
+                    cash_checked_by: document.getElementById('gcash-verify-cashier-id') && document.getElementById('gcash-verify-cashier-id').value ? Number(document.getElementById('gcash-verify-cashier-id').value) : undefined
+                })
             });
             const result = await response.json();
             if (!response.ok || result.error) throw new Error(result.error || 'Unable to verify the exchange. Try again.');

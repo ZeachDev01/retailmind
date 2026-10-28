@@ -103,6 +103,36 @@ final class RoleCapabilityPolicy
             return false;
         }
 
+        if ($context !== null && $context->isRemote()) {
+            if (in_array($capability, [
+                self::MANAGE_DATABASE_BACKUP,
+                self::MUTATE_INVENTORY,
+                self::OPERATE_POINT_OF_SALE,
+                self::RESET_OPERATIONAL_DATA,
+                self::MANAGE_SALE_REVERSALS,
+                self::MANAGE_USERS,
+                self::ASSIGN_ROLES,
+                self::ASSIGN_PRIVILEGES,
+                self::MANAGE_REGISTERS,
+                self::IMPORT_FORECAST_HISTORY,
+                self::GENERATE_FORECASTS,
+                self::RETRAIN_MODELS,
+                self::CONFIGURE_MODELS,
+                self::APPROVE_MODELS,
+                self::REPLACE_MODELS,
+                self::ROLL_BACK_MODELS,
+            ], true)) {
+                return false;
+            }
+        }
+
+        if ($actorRole === 'super_admin'
+            && $targetRole !== null
+            && $capability === self::MANAGE_USERS
+        ) {
+            return in_array($targetRole, ['admin', 'super_admin'], true);
+        }
+
         if ($actorRole === 'admin'
             && $targetRole !== null
             && in_array($capability, [self::MANAGE_USERS, self::ASSIGN_ROLES], true)

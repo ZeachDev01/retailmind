@@ -15,7 +15,10 @@ require_once __DIR__ . '/../app/Services/PhilippineTime.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 
 use App\Services\PhilippineTime;
+use App\Services\ReportAccessService;
 use App\Authorization\RoleCapabilityPolicy;
+require_once __DIR__ . "/../app/Services/ReportAccessService.php";
+class_alias(ReportAccessService::class, "ReportAccessService");
 
 if (!class_exists('PhilippineTime', false)) {
     class_alias(PhilippineTime::class, 'PhilippineTime');

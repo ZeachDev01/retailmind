@@ -44,6 +44,7 @@ class HeldSaleService
 {
     public const AUDIT_MODULE = 'Held Sales';
     public const AUDIT_ACTION_DISCARDED = 'Held sale discarded';
+    public const AUDIT_ACTION_CANCELLED = 'Held sale cancelled';
 
     /**
      * The statuses that mean "this held sale is still owed a decision".
@@ -233,6 +234,102 @@ class HeldSaleService
                 'item_count' => (int)$heldSale['item_count'],
                 'total_amount' => round((float)$heldSale['total_amount'], 2),
             ]);
+        });
+    }
+
+    /**
+     * Cancels unpaid held sales during Administrator closure of an abandoned shift.
+     *
+     * Retains original saver attribution (cashier_id), sets discarded_by to the
+     * Administrator, writes cancellation reason to discard_note, and logs
+     * Protected Audit Record for each cancelled cart.
+     */
+    public function cancelForAbandonedShift(int $actorId, string $actorRole, int $shiftId, string $reason): int
+    {
+        return $this->transaction(function () use ($actorId, $actorRole, $shiftId, $reason): int {
+            if ($actorRole !== 'admin') {
+                throw new DomainException('Only an Administrator can cancel held sales for an abandoned shift.');
+            }
+            $reason = trim($reason);
+            if ($reason === '') {
+                throw new DomainException('Enter a reason before cancelling unpaid held sales for this abandoned shift.');
+            }
+
+            $stmt = $this->pdo->prepare("SELECT shift_id, cashier_id, status FROM cashier_shifts WHERE shift_id = ?");
+            $stmt->execute([$shiftId]);
+            $shift = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$shift || $shift['status'] !== 'open') {
+                throw new DomainException('Open Cashier Shift not found.');
+            }
+            if ((int)$shift['cashier_id'] === $actorId) {
+                throw new DomainException('An Administrator cannot treat their own shift as an abandoned shift.');
+            }
+
+            $placeholders = implode(',', array_fill(0, count(self::UNRESOLVED_STATUSES), '?'));
+            $heldStmt = $this->pdo->prepare(
+                "SELECT held_sale_id, cashier_id, shift_id, reference_no, item_count, total_amount
+                 FROM held_sales
+                 WHERE shift_id = ? AND status IN ({$placeholders})
+                 ORDER BY held_sale_id" . $this->rowLock()
+            );
+            $heldStmt->execute(array_merge([$shiftId], self::UNRESOLVED_STATUSES));
+            $heldSales = $heldStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($heldSales === []) {
+                return 0;
+            }
+
+            $updateStmt = $this->pdo->prepare(
+                "UPDATE held_sales
+                 SET status = 'discarded', resolved_at = NOW(), discard_reason = 'abandoned_shift', discard_note = ?, discarded_by = ?
+                 WHERE held_sale_id = ?"
+            );
+
+            $now = date('Y-m-d H:i:s');
+            foreach ($heldSales as $heldSale) {
+                $heldSaleId = (int)$heldSale['held_sale_id'];
+                $originalSaverId = (int)$heldSale['cashier_id'];
+
+                $updateStmt->execute([
+                    mb_substr($reason, 0, 255),
+                    $actorId,
+                    $heldSaleId,
+                ]);
+
+                $payload = [
+                    'held_sale_id' => $heldSaleId,
+                    'reference_no' => (string)$heldSale['reference_no'],
+                    'shift_id' => $shiftId,
+                    'cashier_id' => $originalSaverId,
+                    'original_saver_id' => $originalSaverId,
+                    'cancelled_by' => $actorId,
+                    'cancelling_admin_id' => $actorId,
+                    'discarded_by' => $actorId,
+                    'reason' => $reason,
+                    'cancellation_reason' => $reason,
+                    'discard_reason' => 'abandoned_shift',
+                    'discard_note' => $reason,
+                    'item_count' => (int)$heldSale['item_count'],
+                    'total_amount' => round((float)$heldSale['total_amount'], 2),
+                    'cancelled_at' => $now,
+                    'timestamp' => $now,
+                ];
+
+                $this->pdo->prepare(
+                    'INSERT INTO activity_log (user_id, action, category, module, record_id, previous_value, new_value, ip_address)
+                     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
+                )->execute([
+                    $actorId,
+                    self::AUDIT_ACTION_CANCELLED,
+                    AuditRecordCategory::STORE_OPERATION,
+                    self::AUDIT_MODULE,
+                    $heldSaleId,
+                    json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                    'system',
+                ]);
+            }
+
+            return count($heldSales);
         });
     }
 

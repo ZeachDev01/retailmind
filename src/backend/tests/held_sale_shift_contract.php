@@ -236,6 +236,7 @@ try {
         ends_at TEXT NULL
     )");
     $pdo->exec("CREATE TABLE fiscal_periods (period_id INTEGER PRIMARY KEY AUTOINCREMENT, period_name TEXT NOT NULL, start_date TEXT, end_date TEXT, status TEXT NOT NULL DEFAULT 'open')");
+    $pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES ('FY2026', '2020-01-01', '2099-12-31', 'open')");
     $pdo->exec('CREATE TABLE fiscal_period_locks (lock_id INTEGER PRIMARY KEY AUTOINCREMENT, period_id INTEGER NOT NULL, table_name TEXT NULL)');
     $pdo->exec("CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,

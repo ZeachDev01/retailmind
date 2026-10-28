@@ -876,6 +876,144 @@ final class DatabaseRestoreService
         ];
     }
 
+    public function workflowGuidance(?array $state = null): array
+    {
+        $state ??= (RecoveryStore::isAvailable() ? RecoveryStore::state() : null);
+        $isPaused = RecoveryStore::isAvailable() && RecoveryStore::isPaused();
+
+        if (!$isPaused) {
+            $approval = (new IdentityReconciliationService($this->pdo, $this->policy))->latestApproval();
+            if ($approval === null) {
+                return [
+                    'stage' => 'technical_approval_waiting',
+                    'stage_label' => 'Waiting for technical approval',
+                    'next_permitted_action' => 'Super Administrator must review and approve Identity Reconciliation in platform governance workspace before replacement can proceed.',
+                    'ready' => false,
+                    'missing' => ['Identity Reconciliation has not been approved by a Super Administrator.'],
+                ];
+            }
+
+            return [
+                'stage' => 'ready_to_restore',
+                'stage_label' => 'Ready to restore',
+                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with verified passphrases.',
+                'ready' => true,
+                'missing' => [],
+            ];
+        }
+
+        $currentStage = $state['stage'] ?? '';
+
+        if ($currentStage === RecoveryStore::STAGE_RECOVERY_REQUIRED) {
+            return [
+                'stage' => 'actionable_failure',
+                'stage_label' => 'Actionable failure (Recovery required)',
+                'next_permitted_action' => 'Execute an alternative recovery action: Complete Safety Recovery (rollback to verified destination safety copy) or Restart Approved Incoming Replacement.',
+                'ready' => false,
+                'missing' => ['Recovery operation encountered a failure.'],
+            ];
+        }
+
+        if ($currentStage === RecoveryStore::STAGE_SAFETY_VERIFIED) {
+            return [
+                'stage' => 'ready_to_restore',
+                'stage_label' => 'Ready to restore',
+                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with verified passphrases.',
+                'ready' => true,
+                'missing' => [],
+            ];
+        }
+
+        if ($currentStage === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
+            $readiness = $this->validateReopeningReadiness();
+            if (!$readiness['ready']) {
+                return [
+                    'stage' => 'verification_needed',
+                    'stage_label' => 'Verification needed',
+                    'next_permitted_action' => 'Run automated verification checks and confirm all human checklist items (stock, receipt, upload, attribution) before reopening.',
+                    'ready' => false,
+                    'missing' => $readiness['missing'],
+                ];
+            }
+
+            return [
+                'stage' => 'ready_to_reopen',
+                'stage_label' => 'Ready to reopen',
+                'next_permitted_action' => 'Authorized operator must confirm single active Store and re-enter destination password to explicitly reopen Store access.',
+                'ready' => true,
+                'missing' => [],
+            ];
+        }
+
+        if ($currentStage === RecoveryStore::STAGE_REOPENED_COMPLETED) {
+            return [
+                'stage' => 'reopened_completed',
+                'stage_label' => 'Reopening completed',
+                'next_permitted_action' => 'Store is online. Ordinary requests admitted.',
+                'ready' => true,
+                'missing' => [],
+            ];
+        }
+
+        return [
+            'stage' => $currentStage ?: 'idle',
+            'stage_label' => ucwords(str_replace('_', ' ', $currentStage ?: 'idle')),
+            'next_permitted_action' => 'Wait for stage completion. Automated recovery process is running.',
+            'ready' => false,
+            'missing' => [],
+        ];
+    }
+
+    public function takeover(
+        int $actorId,
+        string $actorRole,
+        #[\SensitiveParameter] string $actorPassword
+    ): array {
+        if (!RecoveryStore::isPaused()) {
+            throw new \DomainException('No active recovery operation.');
+        }
+
+        $state = RecoveryStore::state();
+        $operators = $state['authorized_operators'] ?? [];
+        $matched = null;
+        foreach ($operators as $op) {
+            if ((int)$op['user_id'] === $actorId) {
+                $matched = $op;
+                break;
+            }
+        }
+
+        if (!$matched || !in_array($matched['role'] ?? '', ['admin', 'super_admin'], true)) {
+            throw new \DomainException('Operator is not authorized for this recovery operation.');
+        }
+
+        if ($actorPassword === '' || !password_verify($actorPassword, (string)$matched['password_hash'])) {
+            throw new \DomainException('Operator password verification failed. Fresh authentication required to take over recovery.');
+        }
+
+        $isTakeover = empty($matched['is_initiator']);
+        $takeoverInfo = [
+            'taken_over' => $isTakeover,
+            'taken_over_by' => $actorId,
+            'taken_over_by_username' => (string)$matched['username'],
+            'taken_over_by_role' => (string)$matched['role'],
+            'original_initiator_id' => (int)($state['actor_id'] ?? 0),
+            'taken_over_at' => gmdate('c'),
+        ];
+
+        RecoveryStore::write('recovery-takeover.json', json_encode($takeoverInfo, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+        RecoveryStore::log($actorId, 'takeover-' . ($state['operation_id'] ?? ''), 'recovery_takeover_recorded', 0);
+
+        return [
+            'success' => true,
+            'is_takeover' => $isTakeover,
+            'operator' => $matched,
+            'message' => $isTakeover
+                ? "Recovery taken over by authorized {$matched['role']} {$matched['username']}."
+                : 'Initiating administrator active.',
+        ];
+    }
+
     public function reopenStore(
         int $actorId,
         string $actorRole,
@@ -909,8 +1047,8 @@ final class DatabaseRestoreService
             throw new \DomainException('Operator is not authorized for this recovery operation.');
         }
 
-        if (empty($matched['is_initiator']) && ($matched['role'] ?? '') !== 'super_admin') {
-            throw new \DomainException('Only the initiating administrator or a destination Super Administrator can reopen the Store.');
+        if (!in_array($matched['role'] ?? '', ['admin', 'super_admin'], true)) {
+            throw new \DomainException('Operator role is not authorized to reopen the Store.');
         }
 
         if ($actorPassword === '' || !password_verify($actorPassword, (string)$matched['password_hash'])) {
@@ -948,6 +1086,16 @@ final class DatabaseRestoreService
             $this->pdo->exec("UPDATE model_training_runs SET status = 'failed' WHERE status IN ('queued', 'training')");
         }
 
+        $isTakeover = empty($matched['is_initiator']);
+        $takeoverData = $isTakeover ? [
+            'taken_over' => true,
+            'original_initiator_id' => (int)($state['actor_id'] ?? 0),
+            'taken_over_by' => (int)$matched['user_id'],
+            'taken_over_by_username' => (string)$matched['username'],
+            'taken_over_by_role' => (string)$matched['role'],
+            'taken_over_at' => gmdate('c'),
+        ] : null;
+
         $reopenedData = [
             'operation_id' => $operationId,
             'stage' => RecoveryStore::STAGE_REOPENED_COMPLETED,
@@ -958,6 +1106,7 @@ final class DatabaseRestoreService
                 'role' => (string)$matched['role'],
                 'is_initiator' => (bool)($matched['is_initiator'] ?? false),
             ],
+            'takeover' => $takeoverData,
             'path_completed' => $pathCompleted,
             'verified_checks' => $state['review_checks'] ?? [],
             'session_epoch' => $newEpoch,
@@ -966,8 +1115,20 @@ final class DatabaseRestoreService
             'notes' => $notes,
         ];
         RecoveryStore::write('recovery-reopened.json', json_encode($reopenedData, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
-        RecoveryStore::log($actorId, 'reopen-' . $operationId, 'reopened_completed', 0);
+        RecoveryStore::log($actorId, 'reopen-' . $operationId, $isTakeover ? 'takeover_reopened_completed' : 'reopened_completed', 0);
         RecoveryStore::transitionStage(RecoveryStore::STAGE_REOPENED_COMPLETED);
+
+        if (\App\Database\Schema::tableExists($this->pdo, 'activity_log')) {
+            try {
+                $action = $isTakeover ? 'Recovery store reopened (takeover)' : 'Recovery store reopened';
+                $stmt = $this->pdo->prepare("INSERT INTO activity_log (user_id, action, category, module, metadata) VALUES (?, ?, 'security', 'Database Restore', ?)");
+                $stmt->execute([
+                    $actorId,
+                    $action,
+                    json_encode($reopenedData, JSON_THROW_ON_ERROR),
+                ]);
+            } catch (\PDOException) {}
+        }
 
         return [
             'success' => true,

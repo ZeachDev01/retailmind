@@ -141,6 +141,9 @@ class CashierShiftService
      */
     public function openShift(int $actorId, string $actorRole, int $registerId, float $openingFloat): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Shift operations are not permitted during remote monitoring.', 403);
+        }
         $this->requireCashierWorkspace($actorRole);
         if ($openingFloat < 0) {
             throw new InvalidArgumentException('The opening float cannot be negative.');
@@ -496,6 +499,9 @@ class CashierShiftService
     /** Record an accountable movement in the signed-in Cashier's open drawer. */
     public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null, string $approverUsername = '', string $approverPassword = ''): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Drawer movements are not permitted during remote monitoring.', 403);
+        }
         $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can record a drawer movement.');
         if (!isset(self::DRAWER_REASONS[$type][$reason])) {
             throw new InvalidArgumentException('Choose a valid movement type and reason.');
@@ -567,15 +573,13 @@ class CashierShiftService
 
     private function authorizeDrawerSpending(string $username, string $password): array
     {
-        $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
-        $stmt = $this->pdo->prepare("SELECT u.user_id, u.password_hash, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id
-            WHERE u.username=? AND u.status='active' AND u.must_change_password=0 AND r.role_name IN ('admin','super_admin')" . $locking);
-        $stmt->execute([trim($username)]);
-        $approver = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$approver || $password === '' || !password_verify($password, (string)$approver['password_hash'])) {
-            throw new DomainException('Administrator authorization is required for supplier payments and petty cash.');
-        }
-        return ['approved_by' => (int)$approver['user_id']];
+        $approvedBy = SupervisorApprovalService::authorize(
+            $this->pdo,
+            $username,
+            $password,
+            'Administrator authorization is required for supplier payments and petty cash.'
+        );
+        return ['approved_by' => $approvedBy];
     }
 
     public function calculateShift(int $shiftId): array
@@ -700,7 +704,7 @@ class CashierShiftService
     }
 
     /** An Administrator intervenes without taking ownership of the shift. */
-    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason, ?array $denominations = null, ?int $countedShiftId = null): array
+    public function closeAbandonedShift(int $actorId, string $actorRole, int $cashierId, float $actualCash, string $notes, string $interventionReason, ?array $denominations = null, ?int $countedShiftId = null, ?string $cancelHeldSalesReason = null): array
     {
         if ($actorRole !== 'admin' || $actorId === $cashierId) {
             throw new DomainException('Only an Administrator can close another Cashier\'s Shift.');
@@ -709,17 +713,17 @@ class CashierShiftService
         if ($interventionReason === '') {
             throw new DomainException('Enter an intervention reason before closing another Cashier\'s Shift.');
         }
-        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason, $denominations, $countedShiftId);
+        return $this->reconcileShift($cashierId, $actorId, $actualCash, $notes, $interventionReason, $denominations, $countedShiftId, $cancelHeldSalesReason);
     }
 
-    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId): array
+    private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId, ?string $cancelHeldSalesReason = null): array
     {
         $this->validateCountedCash($actualCash);
         $breakdown = $denominations === null ? null : CashDenominationCounter::count($denominations);
         if ($breakdown !== null && (int)round($actualCash * 100) !== $breakdown['total_cents']) {
             throw new InvalidArgumentException('Cash counted must match the bill and coin total.');
         }
-        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason, $breakdown, $countedShiftId): array {
+        return $this->transaction(function () use ($cashierId, $closingActorId, $actualCash, $notes, $interventionReason, $breakdown, $countedShiftId, $cancelHeldSalesReason): array {
             $locking = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $lock = $this->pdo->prepare("SELECT shift_id FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'" . $locking);
             $lock->execute([$cashierId]);
@@ -736,8 +740,19 @@ class CashierShiftService
             if ($countedShiftId !== null && (int)$shift['shift_id'] !== $countedShiftId) {
                 throw new DomainException('This count belongs to a different shift. Count the current drawer first.');
             }
-            $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
-            $summary = $this->calculateShift((int)$shift['shift_id']);
+            $shiftId = (int)$shift['shift_id'];
+            $unresolved = $this->unresolvedHeldSales($shiftId);
+            if ($unresolved !== []) {
+                if ($interventionReason === null || $cancelHeldSalesReason === null) {
+                    $this->requireNoUnresolvedHeldSales($shiftId);
+                }
+                $trimmedCancelReason = trim((string)$cancelHeldSalesReason);
+                if ($trimmedCancelReason === '') {
+                    throw new DomainException('Enter a reason before cancelling unpaid held sales for this abandoned shift.');
+                }
+                $this->cancelAbandonedShiftHeldSales($closingActorId, $shiftId, $trimmedCancelReason);
+            }
+            $summary = $this->calculateShift($shiftId);
             $reconciliation = $this->reconciliationResult($summary, $actualCash);
             $expected = $reconciliation['expected_cash'];
             $variance = $reconciliation['cash_variance'];
@@ -794,17 +809,25 @@ class CashierShiftService
     }
 
     /** Reveals the drawer balance only after a count has been submitted. */
-    public function previewReconciliation(int $cashierId, float $countedCash): array
+    public function previewReconciliation(int $cashierId, float $countedCash, bool $allowUnresolvedHeldSales = false): array
     {
         $this->validateCountedCash($countedCash);
         $shift = $this->getOpenShift($cashierId);
         if ($shift === null) {
             throw new DomainException('No open Cashier Shift was found.');
         }
-        $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+        if (!$allowUnresolvedHeldSales) {
+            $this->requireNoUnresolvedHeldSales((int)$shift['shift_id']);
+        }
         $summary = $this->calculateShift((int)$shift['shift_id']);
         return ['shift_id' => (int)$shift['shift_id']]
             + $this->reconciliationResult($summary, $countedCash);
+    }
+
+    public function cancelAbandonedShiftHeldSales(int $actorId, int $shiftId, string $reason): int
+    {
+        $held = new HeldSaleService($this->pdo, $this);
+        return $held->cancelForAbandonedShift($actorId, 'admin', $shiftId, $reason);
     }
 
     private function reconciliationResult(array $summary, float $countedCash): array
@@ -817,7 +840,7 @@ class CashierShiftService
             'expected_cash' => $expected,
             'cash_variance' => $variance,
             'variance_threshold' => $threshold,
-            'variance_review_required' => abs($variance) > $threshold,
+            'variance_review_required' => round($variance, 2) != 0.0 && round(abs($variance), 2) >= round($threshold, 2),
         ];
     }
 
@@ -901,5 +924,141 @@ class CashierShiftService
         );
         $stmt->execute([$shiftId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function saveReviewDraft(int $shiftId, int $actorId, string $role, string $notes): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can review Cashier Shift variances.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reviewed.');
+        }
+        $stmt = $this->pdo->prepare('UPDATE cashier_shifts SET review_draft_notes = ? WHERE shift_id = ?');
+        $stmt->execute([$notes, $shiftId]);
+        return $this->calculateShift($shiftId);
+    }
+
+    public function markReviewed(int $shiftId, int $reviewerId, string $role, string $explanation, ?float $remainingShortage = null): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can review Cashier Shift variances.');
+        }
+        $explanation = trim($explanation);
+        if ($explanation === '') {
+            throw new DomainException('Enter an explanation for the Cashier Shift review.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reviewed.');
+        }
+        if ($shift['reviewed_at'] !== null) {
+            throw new DomainException('This Cashier Shift has already been reviewed.');
+        }
+
+        $variance = (float)$shift['cash_variance'];
+        if ($remainingShortage === null) {
+            $shortage = $variance < 0 ? abs($variance) : 0.00;
+        } else {
+            $shortage = round($remainingShortage, 2);
+            if ($shortage < 0) {
+                throw new InvalidArgumentException('Remaining shortage cannot be negative.');
+            }
+        }
+
+        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt->execute([$reviewerId]);
+        $reviewerName = (string)($uStmt->fetchColumn() ?: "User #{$reviewerId}");
+
+        $history = json_decode((string)($shift['review_history'] ?? '[]'), true) ?: [];
+        $now = date('Y-m-d H:i:s');
+        $history[] = [
+            'action' => 'reviewed',
+            'reviewed_by' => $reviewerId,
+            'reviewer_name' => $reviewerName,
+            'reviewed_at' => $now,
+            'explanation' => $explanation,
+            'remaining_shortage' => $shortage,
+            'disclaimer' => 'Implies neither recovery, debt assignment nor wage-deduction permission.',
+        ];
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE cashier_shifts
+             SET reviewed_by = ?, reviewed_at = NOW(), review_notes = ?, review_shortage = ?, review_history = ?
+             WHERE shift_id = ?'
+        );
+        $stmt->execute([$reviewerId, $explanation, $shortage, json_encode($history, JSON_THROW_ON_ERROR), $shiftId]);
+
+        $this->auditShiftEvent(
+            $reviewerId,
+            'Cashier Shift variance reviewed',
+            $shiftId,
+            $shift,
+            [
+                'reviewed_by' => $reviewerId,
+                'review_notes' => $explanation,
+                'remaining_shortage' => $shortage,
+                'disclaimer' => 'Implies neither recovery, debt assignment nor wage-deduction permission.',
+            ]
+        );
+        StoreOperationsDashboardWorkspace::invalidateCache();
+        return $this->calculateShift($shiftId);
+    }
+
+    public function reopenReview(int $shiftId, int $actorId, string $role, string $reason): array
+    {
+        if ($role !== 'admin') {
+            throw new DomainException('Only an Administrator can reopen Cashier Shift reviews.');
+        }
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new DomainException('A reason is required to reopen a Cashier Shift review.');
+        }
+        $shift = $this->calculateShift($shiftId);
+        if ($shift['status'] !== 'closed') {
+            throw new DomainException('Only closed Cashier Shifts can be reopened.');
+        }
+        if ($shift['reviewed_at'] === null) {
+            throw new DomainException('Only reviewed Cashier Shifts can be reopened.');
+        }
+
+        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt->execute([$actorId]);
+        $actorName = (string)($uStmt->fetchColumn() ?: "User #{$actorId}");
+
+        $history = json_decode((string)($shift['review_history'] ?? '[]'), true) ?: [];
+        $now = date('Y-m-d H:i:s');
+        $history[] = [
+            'action' => 'reopened',
+            'reopened_by' => $actorId,
+            'reopener_name' => $actorName,
+            'reopened_at' => $now,
+            'reason' => $reason,
+            'previous_reviewed_by' => (int)$shift['reviewed_by'],
+            'previous_reviewed_at' => $shift['reviewed_at'],
+            'previous_review_notes' => $shift['review_notes'],
+            'previous_shortage' => $shift['review_shortage'] !== null ? (float)$shift['review_shortage'] : null,
+        ];
+
+        $stmt = $this->pdo->prepare(
+            'UPDATE cashier_shifts
+             SET reviewed_by = NULL, reviewed_at = NULL, variance_review_required = 1, review_history = ?
+             WHERE shift_id = ?'
+        );
+        $stmt->execute([json_encode($history, JSON_THROW_ON_ERROR), $shiftId]);
+
+        $this->auditShiftEvent(
+            $actorId,
+            'Cashier Shift review reopened',
+            $shiftId,
+            $shift,
+            [
+                'reopened_by' => $actorId,
+                'reopen_reason' => $reason,
+            ]
+        );
+        StoreOperationsDashboardWorkspace::invalidateCache();
+        return $this->calculateShift($shiftId);
     }
 }

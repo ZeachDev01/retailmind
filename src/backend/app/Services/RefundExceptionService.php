@@ -15,15 +15,13 @@ final class RefundExceptionService
 
     public function authorize(string $username, string $password): array
     {
-        $stmt = $this->pdo->prepare("SELECT u.user_id, u.password_hash, r.role_name FROM users u
-            JOIN roles r ON r.role_id=u.role_id WHERE u.username=? AND u.status='active'
-            AND u.must_change_password=0 AND r.role_name IN ('admin','super_admin')" . $this->lock());
-        $stmt->execute([trim($username)]);
-        $actor = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$actor || $password === '' || !password_verify($password, (string)$actor['password_hash'])) {
-            throw new DomainException('An Administrator must authorize this specific refund.');
-        }
-        return ['approved_by' => (int)$actor['user_id']];
+        $approvedBy = SupervisorApprovalService::authorize(
+            $this->pdo,
+            $username,
+            $password,
+            'An Administrator must authorize this specific refund.'
+        );
+        return ['approved_by' => $approvedBy];
     }
 
     public function openSale(int $cashierId, string $workspace, int $saleId, string $username, string $password, string $reason): string

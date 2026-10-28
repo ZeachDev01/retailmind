@@ -170,7 +170,7 @@ try {
     $assert($m['points'][16]['net_sales'] === 350.00, 'Day 17 net sales must be 350.00');
     $assert($m['points'][17]['net_sales'] === 305.25, 'Day 18 net sales must be 305.25');
 
-    $assert(($view['headline']['sales_cash_exceptions']['value'] ?? 0) === 4, 'Headline must combine reversal, cash-variance, and unusual-discount exceptions');
+    $assert(($view['headline']['sales_cash_exceptions']['value'] ?? 0) === 1, 'Headline must show unreviewed cash variances');
     $assert(!isset($view['headline']['pending_approvals']), 'Retired purchasing approvals must not become a second Stock Issue count');
     $assert($view['headline']['inventory_risks']['label'] === 'Pending Stock Issues', 'Inventory headline must describe retained Stock Issue oversight');
     $actions = array_column($view['actions'], null, 'label');
@@ -180,7 +180,7 @@ try {
     $assert(($view['headline']['fiscal_period']['value'] ?? '') === 'September 2026', 'Headline must show the current Fiscal Period');
     $assert(($view['comparison']['sales']['current'] ?? 0) === 725.25, 'Comparison must total the selected period');
     $assert(($view['comparison']['sales']['previous'] ?? 0) === 80.0, 'Comparison must use the immediately preceding equivalent period');
-    $assert(count($view['exceptions']) >= 4, 'Action queue must contain operational exceptions instead of ordinary transactions');
+    $assert(count($view['exceptions']) >= 2, 'Action queue must contain operational exceptions instead of ordinary transactions');
     $assert(($view['staff']['active_cashiers'] ?? 0) === 1, 'Staff oversight must show active Cashiers');
     $assert(($view['staff']['disabled_staff'] ?? 0) === 1, 'Staff oversight must show Disabled Accounts');
     $assert(($view['shifts']['open'] ?? 0) === 1, 'Cashier-shift oversight must show open shifts');

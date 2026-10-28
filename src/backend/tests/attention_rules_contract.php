@@ -75,17 +75,15 @@ try {
     $settings->updatePlatform('super_admin', [
         'failed_login_count' => 4,
         'store_cash_variance_amount_max' => 500,
-        'store_unusual_discount_percent_max' => 35,
+        'store_inventory_overdue_hours_max' => 72,
     ], 1);
     $settings->updateStore('admin', [
         'cash_variance_amount' => 900,
-        'unusual_discount_percent' => 50,
-        'reversal_count' => 2,
+        'inventory_overdue_hours' => 24,
     ], 7);
     $storeThresholds = $settings->thresholdsFor('admin');
     $assert($storeThresholds['cash_variance_amount'] === 500.0, 'Store cash threshold should be capped by the Platform safety limit');
-    $assert($storeThresholds['unusual_discount_percent'] === 35.0, 'Store discount threshold should be capped by the Platform safety limit');
-    $assert($storeThresholds['reversal_count'] === 2.0, 'Permitted Store threshold should remain Administrator-owned');
+    $assert($storeThresholds['inventory_overdue_hours'] === 24.0, 'Store overdue hours threshold should be Administrator-owned');
 
     $rules = new AttentionRuleService($settings, $clock);
     $notifications = new AttentionNotificationService($pdo, $clock);
@@ -127,8 +125,6 @@ try {
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $firstNotificationCount, 'Unchanged active conditions must not create duplicate notifications');
 
     $storeSignals = [
-        'reversal_count' => ['value' => 3, 'count' => 3],
-        'max_discount_percent' => ['value' => 40, 'count' => 2],
         'cash_variance_amount' => ['value' => 600, 'count' => 1],
         'oldest_approval_hours' => ['value' => 30, 'count' => 4],
         'inventory_escalated_count' => ['value' => 2, 'count' => 2],
@@ -137,8 +133,8 @@ try {
     ];
     $storeItems = $center->refresh(7, 'admin', $storeSignals);
     $storeKeys = array_column($storeItems, 'key');
-    $assert(in_array('store.sales.reversals', $storeKeys, true), 'Reversals should produce Store attention');
-    $assert(in_array('store.sales.unusual-discounts', $storeKeys, true), 'Unusual discounts should produce Store attention');
+    $assert(!in_array('store.sales.reversals', $storeKeys, true), 'Retired reversals must not produce attention');
+    $assert(!in_array('store.sales.unusual-discounts', $storeKeys, true), 'Retired unusual discounts must not produce attention');
     $assert(in_array('store.cash.variance', $storeKeys, true), 'Cash variance should produce Store attention');
     $assert(!in_array('store.approvals.overdue', $storeKeys, true), 'Retired purchasing approval signals must not produce attention');
     foreach ($storeItems as $item) {
@@ -182,7 +178,7 @@ try {
 
     $pdo->exec("CREATE TRIGGER fail_attention_state BEFORE INSERT ON attention_states BEGIN SELECT RAISE(ABORT, 'state failure'); END");
     try {
-        $center->refresh(99, 'admin', ['reversal_count' => ['value' => 3, 'count' => 3]]);
+        $center->refresh(99, 'admin', ['cash_variance_amount' => ['value' => 600, 'count' => 1]]);
         $assert(false, 'Attention synchronization should surface persistence failures');
     } catch (PDOException $exception) {
         $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 99')->fetchColumn() === 0, 'Notification and deduplication state must commit atomically');
@@ -204,7 +200,7 @@ try {
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $retainedCount, 'Upgrade removes only obsolete purchasing notifications and is repeatable');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE attention_key = 'store.approvals.overdue'")->fetchColumn() === 0, 'Upgrade removes retired approval deduplication state');
     $assert($settings->thresholdsFor('admin') === $settingsBefore, 'Upgrade preserves unrelated operational thresholds');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.sales.reversals'")->fetchColumn() > 0, 'Upgrade preserves Administrator sales reviews');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.cash.variance'")->fetchColumn() > 0, 'Upgrade preserves Administrator cash reviews');
 
     // Issue #264: per-report Stock Issue escalation boundaries via the stock_issues signal array.
     $belowBothStockIssue = $rules->evaluate('admin', ['stock_issues' => [

@@ -1255,7 +1255,7 @@ foreach ($products as $product) {
                                     <th class="sortable" data-sort="name">Product <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-cost sortable" data-sort="cost">Cost Price <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="column-price sortable" data-sort="price">Selling Price <i class="bi bi-arrow-down-up"></i></th>
-                                    <th class="column-profit sortable" data-sort="profit">Profit <i class="bi bi-arrow-down-up"></i></th>
+                                    <th class="column-profit sortable" data-sort="profit">Price minus cost per item <i class="bi bi-arrow-down-up"></i></th>
                                     <th class="sortable" data-sort="stock">Current Stock <i class="bi bi-arrow-down-up"></i></th>
                                     <th>Status</th>
                                     <th class="u-text-right">Actions</th>
@@ -1624,7 +1624,7 @@ foreach ($products as $product) {
                     <p>Choose which optional columns appear in the table.</p>
                 </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
             </header>
-            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="profit" checked> Profit</label></div>
+            <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="profit" checked> Price minus cost per item</label></div>
             <footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer>
         </section>
     </div>
@@ -2740,7 +2740,7 @@ foreach ($products as $product) {
             return `"${String(value ?? '').replace(/"/g, '""')}"`;
         }
         document.getElementById('export-products').addEventListener('click', () => {
-            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Cost Price', 'Selling Price', 'Profit', 'Current Stock', 'Next Expiration', 'Status'];
+            const header = ['Product', 'SKU', 'Barcode', 'Brand', 'Category', 'Cost Price', 'Selling Price', 'Price minus cost per item', 'Current Stock', 'Next Expiration', 'Status'];
             const lines = [header.map(csvCell).join(',')];
             filteredRows.forEach(row => {
                 const product = productsById[Number(row.dataset.productId)];
