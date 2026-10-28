@@ -354,12 +354,13 @@ final class GCashTransactionService
         $whereConditions = [];
         $whereParams = [];
 
+        $effectiveExpr = "(CASE WHEN t.verification_status = 'Completed' AND t.completed_at IS NOT NULL THEN t.completed_at ELSE t.created_at END)";
         if ($startDate !== null) {
-            $whereConditions[] = 't.created_at >= ?';
+            $whereConditions[] = "{$effectiveExpr} >= ?";
             $whereParams[] = $startBound;
         }
         if ($endDate !== null) {
-            $whereConditions[] = 't.created_at < ?';
+            $whereConditions[] = "{$effectiveExpr} < ?";
             $whereParams[] = $endBound;
         }
         if ($cashierId !== null) {
@@ -399,7 +400,7 @@ final class GCashTransactionService
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   {$whereSql}
-                  ORDER BY t.transaction_id DESC
+                  ORDER BY (CASE WHEN t.verification_status = 'Completed' AND t.completed_at IS NOT NULL THEN t.completed_at ELSE t.created_at END) DESC, t.transaction_id DESC
                   LIMIT " . $limit . " OFFSET {$offset}";
         $txStmt = $this->pdo()->prepare($txSql);
         $txStmt->execute($whereParams);
