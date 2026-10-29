@@ -428,7 +428,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
             $headers = [
                 'SKU', 'Product', 'Category', 'Current Stock', 'Cost Price', 'Retail Price',
-                'Price minus cost per item', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
+                'Profit', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
                 'Valuation Basis', 'Valuation Status'
             ];
 
@@ -524,7 +524,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                     'Current Stock' => $currentStock,
                     'Cost Price' => money_value($catalogCost ?? 0.0),
                     'Retail Price' => money_value($unitPrice),
-                    'Price minus cost per item' => money_value($priceMinusCost),
+                    'Profit' => money_value($priceMinusCost),
                     'Recorded Value' => money_value($recordedVal),
                     'Estimated Value' => money_value($estimatedVal),
                     'Cost Missing Qty' => $costMissingQty,

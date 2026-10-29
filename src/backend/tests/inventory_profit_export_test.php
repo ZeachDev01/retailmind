@@ -18,10 +18,10 @@ $result = run_report($pdo, 'inventory_valuation', [
     'store_id' => 1, 'product_id' => 0, 'category_id' => 0,
     'from' => '2026-10-01', 'to' => '2026-10-21',
 ]);
-if (array_slice($result['headers'], array_search('Cost Price', $result['headers'], true), 3) !== ['Cost Price', 'Retail Price', 'Price minus cost per item']) {
+if (array_slice($result['headers'], array_search('Cost Price', $result['headers'], true), 3) !== ['Cost Price', 'Retail Price', 'Profit']) {
     throw new RuntimeException('Inventory valuation must export cost, sale, then price minus cost per item');
 }
-$profits = array_column($result['rows'], 'Price minus cost per item', 'Product');
+$profits = array_column($result['rows'], 'Profit', 'Product');
 foreach (['Gain' => '20.00', 'Loss' => '-20.00', 'Equal' => '0.00', 'Unknown cost' => '100.00'] as $product => $profit) {
     if (($profits[$product] ?? null) !== $profit) {
         throw new RuntimeException("Incorrect exported price minus cost per item for {$product}");

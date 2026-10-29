@@ -72,10 +72,10 @@ $valResult = run_report($pdo, 'inventory_valuation', [
 
 $expectedHeaders = [
     'SKU', 'Product', 'Category', 'Current Stock', 'Cost Price', 'Retail Price',
-    'Price minus cost per item', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
+    'Profit', 'Recorded Value', 'Estimated Value', 'Cost Missing Qty',
     'Valuation Basis', 'Valuation Status'
 ];
-$assert($valResult['headers'] === $expectedHeaders, 'Valuation headers reflect Price minus cost per item, Current Stock, Recorded Value, Estimated Value, Cost Missing Qty, Valuation Basis, and Valuation Status');
+$assert($valResult['headers'] === $expectedHeaders, 'Valuation headers reflect Profit, Current Stock, Recorded Value, Estimated Value, Cost Missing Qty, Valuation Basis, and Valuation Status');
 
 $row1 = null;
 foreach ($valResult['rows'] as $r) {
@@ -88,7 +88,7 @@ $assert($row1 !== null, 'Row for Multi-Batch Item found');
 $assert(($row1['Recorded Value'] ?? '') === '110.00', '10 units at PHP 5 + 10 units at PHP 6 yields Recorded Value PHP 110.00 (not 20 * 10 = 200)');
 $assert(($row1['Estimated Value'] ?? '') === '0.00', 'Estimated value is 0.00 when all units have recorded batch costs');
 $assert(($row1['Cost Missing Qty'] ?? 0) === 0, 'Cost missing qty is 0');
-$assert(($row1['Price minus cost per item'] ?? '') === '5.00', 'Price minus cost per item is retail minus catalog cost (15 - 10 = 5)');
+$assert(($row1['Profit'] ?? '') === '5.00', 'Profit is retail minus catalog cost (15 - 10 = 5)');
 $assert(($row1['Current Stock'] ?? 0) === 20, 'Current Stock is 20');
 $assert(($row1['Valuation Status'] ?? '') === 'recorded', 'Valuation status is recorded');
 
@@ -219,10 +219,10 @@ $assert(str_contains($rgSource, "reportSelect.value === 'low_stock'") || str_con
 
 // Verify products.php / inventory_overview.php column renaming
 $prodSource = file_get_contents(__DIR__ . '/../../frontend/components/inventory_management/products.php');
-$assert(str_contains($prodSource, 'Price minus cost per item'), 'products.php table or column headers include "Price minus cost per item"');
+$assert(str_contains($prodSource, 'Profit'), 'products.php table or column headers include "Profit"');
 
 $imOverviewSource = file_get_contents(__DIR__ . '/../../frontend/components/inventory_management/inventory_overview.php');
-$assert(str_contains($imOverviewSource, 'Price minus cost per item'), 'inventory_overview.php table or column headers include "Price minus cost per item"');
+$assert(str_contains($imOverviewSource, 'Profit'), 'inventory_overview.php table or column headers include "Profit"');
 
 if (!empty($failures)) {
     echo "\nFailed assertions (" . count($failures) . "):\n";

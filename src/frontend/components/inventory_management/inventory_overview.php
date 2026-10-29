@@ -287,7 +287,7 @@ $chartDataJson = json_encode([
                             <th aria-sort="none"><button type="button" data-sort-column="4">Category <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="5" data-sort-type="number">Cost Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="6" data-sort-type="number">Selling Price <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">Price minus cost per item <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                            <th aria-sort="none"><button type="button" data-sort-column="7" data-sort-type="number">Profit <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="8" data-sort-type="number">On Hand <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th aria-sort="none"><button type="button" data-sort-column="9" data-sort-type="number">Expired Qty <i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                             <th class="overview-col-undated" style="display:none;">Qty Without Date</th>
