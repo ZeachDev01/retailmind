@@ -144,9 +144,9 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#gcash-session-banner').isVisible(), false, 'Active status does not repeat responsibility instructions');
         assert.equal(await page.locator('#gcash-scan-status').isVisible(), false, 'Idle scanner has no helper text');
         assert.equal(await page.locator('#gcash-cash-checked').isVisible(), false, 'Balance notes are collapsed initially');
-        await page.getByText('About these balances', {exact: true}).click();
+        await page.getByText('Last balance check', {exact: true}).click();
         assert.equal(await page.locator('#gcash-cash-checked').isVisible(), true, 'Balance check time remains available');
-        await page.getByText('About these balances', {exact: true}).click();
+        await page.getByText('Last balance check', {exact: true}).click();
         assert.match(await page.locator('#gcash-balances').textContent(), /Physical Service Cash/);
         assert.match(await page.locator('#gcash-balances').textContent(), /GCash App Wallet/);
         assert.doesNotMatch(await page.locator('#gcash-cash-checked').textContent(), /Invalid Date|Last check: —/);
@@ -208,9 +208,6 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.getByText('Exchange instructions', {exact: true}).click();
             assert.deepEqual(await page.locator('.gcash-preview-grid .gcash-preview-item:visible .gcash-preview-label').allTextContents(), labels);
             assert.equal(await page.locator('.gcash-preview-grid .gcash-preview-item:visible .gcash-preview-label .bi[aria-hidden="true"]').count(), labels.length, 'Every movement and fee has a decorative icon');
-            for (const field of ['gcash-type', 'gcash-fee-method']) {
-                assert.equal(await page.locator('label[for="' + field + '"] .bi[aria-hidden="true"]').count(), 1);
-            }
             for (const width of [1440, 390]) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Summary has no overflow at ' + width);

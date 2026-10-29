@@ -1,0 +1,165 @@
+set -euo pipefail
+python -m py_compile src/backend/scripts/ml_worker.py src/backend/scripts/ml_evaluation.py src/backend/scripts/ml_cv.py src/backend/scripts/feature_pipeline.py
+bash src/backend/tests/javascript_syntax_check.sh
+python src/backend/tests/css_balance_check.py
+python src/backend/tests/infinityfree_deploy_contract.py
+php src/backend/tests/smoke_checks.php
+php src/backend/tests/daily_sales_range_contract.php
+php src/backend/tests/environment_loading_test.php
+php -d disable_functions=putenv src/backend/tests/environment_loading_test.php
+php src/backend/tests/fresh_schema_contract.php
+php src/backend/tests/consolidated_sql_integration.php
+php src/backend/tests/procurement_schema_integration.php
+php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
+php src/backend/tests/role_capability_policy_contract.php
+php src/backend/tests/backup_workflow_route_contract.php
+php src/backend/tests/identity_reconciliation_mysql_test.php
+node src/backend/tests/backup_package_browser_test.js
+php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php
+node src/backend/tests/safety_copy_browser_test.js
+php src/backend/tests/backup_unavailable_navigation_test.php
+php src/backend/tests/sql_backup_format_test.php
+php -d memory_limit=512M src/backend/tests/store_package_format_test.php
+php src/backend/tests/session_policy_test.php
+node src/backend/tests/session_policy_browser_test.js
+node src/backend/tests/session_activity_http_test.js
+php src/backend/tests/recovery_store_restricted_host_contract.php
+php src/backend/tests/backup_unavailable_status_test.php
+php src/backend/tests/recovery_account_lifecycle_test.php
+php src/backend/tests/attention_rules_contract.php
+php src/backend/tests/role_notification_routing_contract.php
+php src/backend/tests/dormancy_policy_settings_contract.php
+php src/backend/tests/dormancy_runner_contract.php
+php src/backend/tests/dormancy_status_tab_contract.php
+php src/backend/tests/super_administrator_dashboard_workspace_test.php
+php src/backend/tests/super_administrator_dashboard_route_test.php
+php src/backend/tests/administrator_dashboard_workspace_test.php
+php src/backend/tests/administrator_dashboard_route_test.php
+php src/backend/tests/workspace_routing_contract.php
+node src/backend/tests/login_redirect_test.js
+php src/backend/tests/workspace_switching_contract.php
+node src/backend/tests/workspace_switching_browser_test.js
+php src/backend/tests/cashier_workspace_authorization_contract.php
+php src/backend/tests/store_scope_contract.php
+php src/backend/tests/inventory_load_contract.php
+php src/backend/tests/user_lifecycle_contract.php
+php src/backend/tests/user_deletion_mysql_test.php
+php src/backend/tests/administrator_minimum_mysql_test.php
+node src/backend/tests/administrator_minimum_browser_test.js
+node src/backend/tests/administrator_management_browser_test.js
+node src/backend/tests/user_deletion_browser_test.js
+php src/backend/tests/register_administration_contract.php
+php src/backend/tests/register_schema_parity_contract.php
+php src/backend/tests/register_legacy_upgrade_integration.php
+php src/backend/tests/cashier_shift_opening_contract.php
+php src/backend/tests/drawer_movement_contract.php
+node src/backend/tests/drawer_movement_browser_test.js
+php src/backend/tests/cashier_shift_schema_parity_contract.php
+php src/backend/tests/sale_shift_attribution_contract.php
+php src/backend/tests/checkout_attempt_integration.php
+php src/backend/tests/checkout_quote_integration.php
+php src/backend/tests/cashier_operation_serialization_integration.php
+node src/backend/tests/checkout_attempt_behavior_test.js
+node src/backend/tests/checkout_attempt_browser_test.js
+node src/backend/tests/checkout_quote_browser_test.js
+node src/backend/tests/cart_workspace_browser_test.js
+php src/backend/tests/sale_shift_schema_parity_contract.php
+php src/backend/tests/cashier_shift_register_lock_contract.php
+php src/backend/tests/register_lock_schema_parity_contract.php
+php src/backend/tests/gcash_movement_schema_contract.php
+php src/backend/tests/failed_exchange_actual_returns_contract.php
+php src/backend/tests/gcash_closing_difference_review_contract.php
+php src/backend/tests/refund_correction_review_contract.php
+php src/backend/tests/cashier_shift_variance_review_contract.php
+node src/backend/tests/integration_326_browser_test.js
+php src/backend/tests/held_sale_shift_contract.php
+php src/backend/tests/held_sale_schema_parity_contract.php
+php src/backend/tests/cash_refund_contract.php
+php src/backend/tests/cash_refund_concurrency_integration.php
+php src/backend/tests/legacy_reversal_transition_integration.php
+node src/backend/tests/safe_refund_browser_test.js
+node src/backend/tests/refund_completion_browser_test.js
+php src/backend/tests/cash_refund_schema_parity_contract.php
+php src/backend/tests/store_staff_availability_contract.php
+php src/backend/tests/store_staff_username_notice_contract.php
+php src/backend/tests/store_staff_email_notice_contract.php
+php src/backend/tests/store_staff_race_fallback_contract.php
+php src/backend/tests/store_staff_account_rules_contract.php
+php src/backend/tests/staff_login_identifier_contract.php
+php src/backend/tests/staff_login_parity_contract.php
+php src/backend/tests/password_policy_contract.php
+php src/backend/tests/password_change_modes_contract.php
+php src/backend/tests/recovery_exclusion_reset_audit_contract.php
+php src/backend/tests/profile_image_storage_test.php
+php src/backend/tests/profile_picture_self_service_test.php
+node src/backend/tests/profile_picture_crop_browser_test.js
+php src/backend/tests/profile_picture_management_test.php
+php src/backend/tests/profile_picture_authority_test.php
+node src/backend/tests/profile_picture_visibility_http_test.js
+php src/backend/tests/operator_alert_test.php
+php src/backend/tests/operator_alert_ui_contract.php
+node src/backend/tests/operator_alert_wrapper_behavior_test.js
+node src/backend/tests/backup_status_alert_behavior_test.js
+node src/backend/tests/inventory_counts_scan_browser_test.js
+node src/backend/tests/inventory_private_recovery_browser_test.js
+node src/backend/tests/administrator_mobile_monitoring_browser_test.js
+node src/backend/tests/products_keyboard_scan_browser_test.js
+node src/backend/tests/stock_receiving_keyboard_scan_browser_test.js
+node src/backend/tests/stock_issues_keyboard_scan_browser_test.js
+node src/backend/tests/stock_receiving_scan_browser_test.js
+node src/backend/tests/stock_receiving_empty_catalog_browser_test.js
+node src/backend/tests/forecast_decision_browser_test.js
+php src/backend/tests/replenishment_queue_contract.php
+php src/backend/tests/procurement_retirement_contract.php
+php src/backend/tests/replenishment_metadata_contract.php
+php src/backend/tests/replenishment_supplier_integration.php
+php src/backend/tests/demand_forecast_service_test.php
+php src/backend/tests/operator_alert_fallback_contract.php
+php src/backend/tests/cashier_alert_contract.php
+php src/backend/tests/inventory_alert_contract.php
+php src/backend/tests/product_code_lookup_contract.php
+php src/backend/tests/inventory_counts_scan_contract.php
+php src/backend/tests/admin_alert_contract.php
+php src/backend/tests/friendly_alerts_verification_contract.php
+php src/backend/tests/product_seed_checks.php
+php src/backend/tests/stock_issue_contract.php
+php src/backend/tests/stock_issue_correction_contract.php
+php src/backend/tests/stock_issue_oversight_contract.php
+php src/backend/tests/database_integration.php
+php src/backend/tests/user_password_reset_integration.php
+php src/backend/tests/audit_visibility_integration.php
+php src/backend/tests/database_backup_workflow_integration.php
+php src/backend/tests/philippine_time_contract.php
+php src/backend/tests/philippine_time_mysql_integration.php
+php src/backend/tests/receipt_history_integration.php
+php src/backend/tests/receipt_table_contract.php
+php src/backend/tests/receipt_attribution_contract.php
+node src/backend/tests/sale_receipt_browser_test.js
+node src/backend/tests/sale_receipt_dialog_browser_test.js
+node src/backend/tests/receipt_history_browser_test.js
+node src/backend/tests/refund_receipt_browser_test.js
+node src/backend/tests/refund_reprint_browser_test.js
+node src/backend/tests/theme_login_browser_test.js
+node src/backend/tests/sidebar_theme_browser_test.js
+node src/backend/tests/fullscreen_preferences_browser_test.js
+node src/backend/tests/notification_list_browser_test.js
+php src/backend/tests/development_notification_rebuild_test.php
+node src/backend/tests/responsive_system_browser_test.js
+node src/backend/tests/superadmin_ui_browser_test.js
+node src/backend/tests/cashier_ui_browser_test.js
+node src/backend/tests/superadmin_ui_browser_test.js --inventory
+  node src/backend/tests/superadmin_ui_browser_test.js --admin
+php src/backend/tests/cashier_operational_history_contract.php
+php src/backend/tests/sales_trend_integration.php
+python src/backend/tests/test_feature_pipeline.py
+python src/backend/tests/test_observed_demand.py
+python src/backend/tests/test_observed_worker.py
+python src/backend/tests/observed_demand_mysql_test.py
+if [[ -n "${WHITESPACE_BASE:-}" ]] && git cat-file -e "${WHITESPACE_BASE}^{commit}" 2>/dev/null; then
+  git diff --check "$WHITESPACE_BASE" HEAD
+fi
+git diff --check
+printf 'Git whitespace: passed\n'
+bash src/backend/tests/release_package_check.sh
+printf 'PHP files linted: %s\n' "$(grep -c 'No syntax errors' /tmp/retailmind_php_lint.log)"
+printf 'Python compile: passed\n'

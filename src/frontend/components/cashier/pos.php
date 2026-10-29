@@ -501,20 +501,13 @@ $quickCategoryIcon = static function (string $categoryName): string {
                 <div class="pos-lock-card">
                     <div class="pos-lock-icon"><i class="bi bi-lock-fill" aria-hidden="true"></i></div>
                     <h2 id="pos-lock-title">Register locked</h2>
-                    <p class="pos-lock-lede">
-                        <strong><?= htmlspecialchars((string)($openShift['register_name'] ?? 'Unassigned')) ?></strong>
-                        &middot; Shift #<?= (int)$openShift['shift_id'] ?>
-                        &middot; locked <?= htmlspecialchars(format_display_datetime((string)$openShift['locked_at'])) ?>
-                    </p>
                     <form method="post" class="pos-lock-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="unlock_register">
-                        <label class="pos-field-label" for="pos-unlock-password">Your account password</label>
+                        <label class="pos-field-label" for="pos-unlock-password">Account password</label>
                         <input class="pos-input" type="password" id="pos-unlock-password" name="pos_unlock_password" autocomplete="current-password" required autofocus>
-                        <p class="pos-lock-note">Your Cashier Shift is still open on this Register. No sale can be recorded until you unlock it.</p>
-                        <button class="btn btn-block" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unlock and resume</button>
+                        <button class="btn btn-block" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unlock register</button>
                     </form>
-                    <p class="pos-lock-note">Logging out keeps the shift open too, so you can unlock and resume this same shift whenever you are back.</p>
                 </div>
             </section>
         <?php else: ?>
@@ -524,8 +517,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <?php if (!$posShiftOpen): ?>
             <div class="workflow-notice" role="note" data-rm-alert-processed="1">
                 <div>
-                    <h2>Cashier Shift required</h2>
-                    <p>Open a Cashier Shift before checkout.</p>
+                    <h2>Open a Cashier Shift to check out</h2>
                 </div>
                 <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a>
             </div>
@@ -575,13 +567,11 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <button type="button" class="quick-category-filter active" aria-pressed="true" data-quick-category="all">
                             <span class="quick-category-icon"><i class="bi bi-grid" aria-hidden="true"></i></span>
                             <strong>All</strong>
-                            <small><?= count($quickProducts) ?> items</small>
                         </button>
                         <?php foreach ($quickCategories as $categoryId => $category): ?>
                             <button type="button" class="quick-category-filter" aria-pressed="false" data-quick-category="<?= (int)$categoryId ?>">
                                 <span class="quick-category-icon"><i class="bi <?= htmlspecialchars($quickCategoryIcon($category['name'])) ?>" aria-hidden="true"></i></span>
                                 <strong><?= htmlspecialchars($category['name']) ?></strong>
-                                <small><?= (int)$category['count'] ?> item<?= (int)$category['count'] === 1 ? '' : 's' ?></small>
                             </button>
                         <?php endforeach; ?>
                     </div>
@@ -598,7 +588,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <h2>Current sale</h2>
                             <span class="count-badge" id="cart-line-count">0</span>
                         </div>
-                        <p class="muted u-pos-hint">Review quantities before accepting payment.</p>
                     </div>
                     <button type="button" class="btn btn-small btn-secondary" id="clear-cart-btn" title="Clear current sale" aria-label="Clear current sale" disabled>
                         <i class="bi bi-trash3" aria-hidden="true"></i>
@@ -682,7 +671,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <div class="payment-field" id="discount-panel">
                         <label class="pos-field-label" for="promotion-id">Promotion</label>
                         <select name="promotion_id" id="promotion-id" class="pos-select" aria-describedby="promotion-status"><option value="">No promotion</option></select>
-                        <small id="promotion-status" class="muted" role="status" aria-live="polite">Add items to see eligible promotions.</small>
+                        <small id="promotion-status" class="muted" role="status" aria-live="polite"></small>
                     </div>
 
                     <button class="btn btn-block checkout-primary" id="checkout-button" type="button" title="Checkout (Ctrl+Enter)" disabled>
@@ -722,7 +711,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <div class="checkout-dialog-header">
             <div>
                 <h3 id="checkout-title">Review sale before payment</h3>
-                <p>Verify the payment details before completing the sale.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeCheckoutConfirm()" aria-label="Close checkout confirmation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
         </div>
@@ -760,7 +748,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <div class="checkout-dialog-header">
             <div>
                 <h3 id="void-title">Void current sale</h3>
-                <p>The reason will be saved in the audit log.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeVoidModal()" aria-label="Close void dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
         </div>
@@ -1008,7 +995,6 @@ function renderQuickProducts() {
             <div class="quick-product-image">${quickProductMedia(product)}${warning}</div>
             <div class="quick-product-details">
                 <strong class="quick-product-name" title="${escapeHtml(product.name)}">${escapeHtml(product.name)}</strong>
-                <span class="quick-product-sku">${escapeHtml(product.category_name)} &middot; ${escapeHtml(product.sku || product.barcode || 'No SKU')}</span>
                 <div class="quick-product-meta">
                     ${priceLabel}
                     <span class="quick-product-stock ${stockState}"><i class="bi bi-circle-fill" aria-hidden="true"></i>${stockLabel}</span>

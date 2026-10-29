@@ -147,7 +147,9 @@
             container.replaceChildren();
             for (const tx of data.needs_checking || []) {
                 const row = document.createElement('p');
-                row.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · Remaining cash PHP ${tx.remaining_cash}, wallet PHP ${tx.remaining_wallet}. `;
+                const details = document.createElement('span');
+                details.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · Remaining cash PHP ${tx.remaining_cash}, wallet PHP ${tx.remaining_wallet}. `;
+                row.append(details);
                 const button = document.createElement('button');
                 button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Review / record return';
                 button.addEventListener('click', () => openResolveDialog(tx));
@@ -155,7 +157,9 @@
             }
             for (const tx of data.unassigned_exchanges || []) {
                 const row = document.createElement('p');
-                row.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} · Needs a responsible Cashier. Original recorder #${tx.cashier_id}. `;
+                const details = document.createElement('span');
+                details.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} · Needs a responsible Cashier. Original recorder #${tx.cashier_id}. `;
+                row.append(details);
                 const button = document.createElement('button');
                 button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Accept this follow-up';
                 button.addEventListener('click', async () => {

@@ -121,14 +121,14 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
     <title>Cashier Shift Report</title>
     <link rel="stylesheet" href="<?= shift_report_e(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/shift-report.css')) ?>">
 </head>
-<body><div class="app-shell">
+<body class="shift-report-page"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
-    <header class="page-heading"><h1>Cashier Shift Report</h1>
-        <p class="page-subtitle">Review Store-wide drawer activity. Dates use each shift's opening date; unassigned sales use their sale date.</p></header>
-    <?php if ($error !== ''): ?><div class="alert tag-warning"><?= shift_report_e($error) ?></div><?php endif; ?>
-    <?php if ($success !== ''): ?><div class="alert tag-success"><?= shift_report_e($success) ?></div><?php endif; ?>
+    <header class="page-heading"><h1>Cashier Shift Report</h1></header>
+    <?php if ($error !== ''): ?><div class="alert tag-warning" role="alert"><?= shift_report_e($error) ?></div><?php endif; ?>
+    <?php if ($success !== ''): ?><div class="alert tag-success" role="status"><?= shift_report_e($success) ?></div><?php endif; ?>
 
     <?php if ($targetedShift !== null): ?>
         <?php
@@ -139,8 +139,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
         <section class="dashboard-section shift-investigation-card u-mb-15">
             <div class="section-header">
                 <div>
-                    <h2>Shift #<?= (int)$targetedShift['Shift ID'] ?> Investigation &amp; Variance Review</h2>
-                    <p>Accountable supervisor review for drawer cash variances.</p>
+                    <h2>Shift #<?= (int)$targetedShift['Shift ID'] ?> Review</h2>
                 </div>
                 <div>
                     <?php if ($isReviewed): ?>
@@ -152,98 +151,101 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
                     <?php endif; ?>
                 </div>
             </div>
-            <div class="card-grid u-mt-10">
-                <div class="stat-card">
-                    <div class="label">Cashier</div>
-                    <div class="value-sub"><?= shift_report_e($targetedShift['Cashier']) ?> (#<?= shift_report_e($targetedShift['Cashier ID']) ?>)</div>
+            <dl class="shift-details">
+                <div>
+                    <dt>Cashier</dt>
+                    <dd><?= shift_report_e($targetedShift['Cashier']) ?> <span class="shift-record-id">#<?= shift_report_e($targetedShift['Cashier ID']) ?></span></dd>
                 </div>
-                <div class="stat-card">
-                    <div class="label">Register</div>
-                    <div class="value-sub"><?= shift_report_e($targetedShift['Register']) ?> (#<?= shift_report_e($targetedShift['Register ID']) ?>)</div>
+                <div>
+                    <dt>Register</dt>
+                    <dd><?= shift_report_e($targetedShift['Register']) ?> <span class="shift-record-id">#<?= shift_report_e($targetedShift['Register ID']) ?></span></dd>
                 </div>
-                <div class="stat-card">
-                    <div class="label">Shift Timing</div>
-                    <div class="value-sub">Opened: <?= shift_report_e($targetedShift['Opened At']) ?><br>Closed: <?= shift_report_e($targetedShift['Closed At']) ?></div>
+                <div>
+                    <dt>Opened</dt>
+                    <dd><?= shift_report_e($targetedShift['Opened At']) ?></dd>
                 </div>
-                <div class="stat-card">
-                    <div class="label">Cash Reconciliation</div>
-                    <div class="value-sub">
-                        Expected: ₱<?= shift_report_e($targetedShift['Expected Cash']) ?><br>
-                        Counted: <?= $targetedShift['Counted Cash'] !== '' ? '₱' . shift_report_e($targetedShift['Counted Cash']) : 'None' ?><br>
-                        <strong>Difference: ₱<?= shift_report_e($targetedShift['Variance']) ?></strong>
-                    </div>
+                <div>
+                    <dt>Closed</dt>
+                    <dd><?= shift_report_e($targetedShift['Closed At']) ?></dd>
                 </div>
-                <div class="stat-card">
-                    <div class="label">Variance Explanation</div>
-                    <div class="value-sub"><strong><?= shift_report_e($targetedShift['Variance Explanation']) ?></strong></div>
-                    <?php if (!empty($targetedShift['variance_threshold'])): ?><div class="hint">Store limit at closure: ₱<?= shift_report_e(number_format((float)$targetedShift['variance_threshold'], 2)) ?></div><?php endif; ?>
+            </dl>
+            <div class="shift-reconciliation">
+                <h3>Cash Reconciliation</h3>
+                <dl class="shift-cash-grid">
+                    <div><dt>Expected Cash</dt><dd>₱<?= shift_report_e($targetedShift['Expected Cash']) ?></dd></div>
+                    <div><dt>Counted Cash</dt><dd><?= $targetedShift['Counted Cash'] !== '' ? '₱' . shift_report_e($targetedShift['Counted Cash']) : 'None' ?></dd></div>
+                    <div><dt>Difference</dt><dd>₱<?= shift_report_e($targetedShift['Variance']) ?></dd></div>
+                </dl>
+                <div class="shift-variance-context">
+                    <strong><?= shift_report_e($targetedShift['Variance Explanation']) ?></strong>
+                    <?php if (!empty($targetedShift['variance_threshold'])): ?><span>Store limit at closure: ₱<?= shift_report_e(number_format((float)$targetedShift['variance_threshold'], 2)) ?></span><?php endif; ?>
                 </div>
-                <div class="stat-card">
-                    <div class="label">Closing Notes</div>
-                    <div class="value-sub"><?= shift_report_e($targetedShift['Closing Notes'] !== '' ? $targetedShift['Closing Notes'] : 'None provided') ?></div>
-                </div>
+            </div>
+            <div class="shift-closing-notes">
+                <h3>Closing Notes</h3>
+                <p><?= shift_report_e($targetedShift['Closing Notes'] !== '' ? $targetedShift['Closing Notes'] : 'None provided') ?></p>
             </div>
 
             <?php if (!$isReviewed): ?>
-                <div class="investigation-forms u-mt-15" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
-                    <form method="post" class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px;">
+                <div class="investigation-forms">
+                    <form method="post" class="shift-review-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="save_draft">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
-                        <h3>Investigation Draft Notes</h3>
-                        <p class="hint">Save investigation progress without completing or clearing pending attention.</p>
+                        <h3>Investigation Notes</h3>
                         <div class="form-group u-mt-10">
-                            <textarea name="draft_notes" rows="4" style="width: 100%;" placeholder="e.g. CCTV reviewed, float envelopes verified..."><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
+                            <label for="draft_notes">Draft notes</label>
+                            <textarea id="draft_notes" name="draft_notes" rows="6"><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
                         </div>
-                        <button type="submit" class="btn btn-secondary u-mt-10">Save Draft Notes</button>
+                        <button type="submit" class="btn btn-secondary u-mt-10">Save Draft</button>
                     </form>
 
-                    <form method="post" class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px;">
+                    <form method="post" class="shift-review-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="mark_reviewed">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                         <h3>Complete Review</h3>
-                        <p class="hint">Finished investigation conclusion and final explanation.</p>
                         <div class="form-group u-mt-10">
                             <label for="explanation">Explanation (Required)</label>
-                            <textarea id="explanation" name="explanation" rows="3" style="width: 100%;" required placeholder="Explain findings and cause of difference..."></textarea>
+                            <textarea id="explanation" name="explanation" rows="3" required></textarea>
                         </div>
                         <div class="form-group u-mt-10">
-                            <label for="remaining_shortage">Explicit Remaining Shortage (PHP)</label>
-                            <input id="remaining_shortage" name="remaining_shortage" type="number" step="0.01" min="0" value="<?= shift_report_e($targetedShift['review_shortage'] ?? (floatval($targetedShift['Variance']) < 0 ? abs(floatval($targetedShift['Variance'])) : 0)) ?>">
+                            <label for="remaining_shortage">Remaining Shortage (PHP)</label>
+                            <input id="remaining_shortage" name="remaining_shortage" type="number" step="0.01" min="0" aria-describedby="review-notice" value="<?= shift_report_e($targetedShift['review_shortage'] ?? (floatval($targetedShift['Variance']) < 0 ? abs(floatval($targetedShift['Variance'])) : 0)) ?>">
                         </div>
-                        <p class="hint" style="font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem;">
-                            <em>Notice: Marking reviewed explicitly records remaining shortage. It implies neither recovery, debt assignment nor wage-deduction permission.</em>
-                        </p>
+                        <details class="shift-review-notice">
+                            <summary>Review terms</summary>
+                            <p id="review-notice">Marking reviewed explicitly records remaining shortage. It implies neither recovery, debt assignment nor wage-deduction permission.</p>
+                        </details>
                         <button type="submit" class="btn btn-primary u-mt-10">Mark Reviewed</button>
                     </form>
                 </div>
             <?php else: ?>
-                <div class="reviewed-summary card u-mt-15" style="padding: 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface-soft, #f8fafc);">
+                <div class="reviewed-summary">
                     <h3>Review Completed</h3>
                     <p><strong>Reviewed at:</strong> <?= shift_report_e($targetedShift['reviewed_at']) ?> by user #<?= shift_report_e($targetedShift['reviewed_by']) ?></p>
                     <p><strong>Explanation:</strong> <?= shift_report_e($targetedShift['review_notes']) ?></p>
                     <p><strong>Remaining Shortage:</strong> ₱<?= shift_report_e(number_format((float)($targetedShift['review_shortage'] ?? 0), 2)) ?></p>
-                    <p class="hint" style="font-size: 0.8rem; color: var(--muted);"><em>Implies neither recovery, debt assignment nor wage-deduction permission.</em></p>
+                    <details class="shift-review-notice"><summary>Review terms</summary><p>Implies neither recovery, debt assignment nor wage-deduction permission.</p></details>
 
-                    <form method="post" class="u-mt-10" style="border-top: 1px solid var(--border); padding-top: 1rem;">
+                    <form method="post" class="shift-reopen-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="reopen_review">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                         <h4>Reopen Review</h4>
-                        <p class="hint">Requires a reason. Restores shift attention while preserving review history.</p>
-                        <div class="form-group" style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input name="reopen_reason" type="text" style="flex: 1;" placeholder="Reason to reopen..." required>
-                            <button type="submit" class="btn btn-warning">Reopen Review</button>
+                        <div class="form-group">
+                            <label for="reopen_reason">Reason to reopen (Required)</label>
+                            <input id="reopen_reason" name="reopen_reason" type="text" required>
                         </div>
+                        <button type="submit" class="btn btn-secondary">Reopen Review</button>
                     </form>
                 </div>
             <?php endif; ?>
 
             <?php if (!empty($history)): ?>
                 <div class="review-history-log u-mt-15">
-                    <h4>Review &amp; Reopen History</h4>
-                    <ul style="font-size: 0.85rem; line-height: 1.6; margin-left: 1.5rem;">
+                    <h4>Review History</h4>
+                    <ul>
                         <?php foreach ($history as $h): ?>
                             <li>
                                 <strong><?= shift_report_e(ucfirst($h['action'] ?? 'event')) ?></strong>
@@ -274,15 +276,17 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
             </select></div><button type="submit" class="btn">Run Report</button>
         </form>
     </section>
-    <section class="dashboard-section u-mt-15"><div class="section-header"><div><h2>Results</h2><p><?= count($report['rows']) ?> rows</p></div></div>
-        <p class="section-description">Payment totals differ from physical drawer cash. Expected cash is the closing snapshot; a blank counted cash value means no reconciliation was recorded. Older reversals without a Shift are Legacy / Unassigned.</p>
-        <div class="table-wrap"><table><thead><tr><?php foreach ($report['headers'] as $header): ?><th><?= shift_report_e($header) ?></th><?php endforeach; ?></tr></thead>
+    <section class="dashboard-section u-mt-15"><div class="section-header"><h2>Results (<?= count($report['rows']) ?>)</h2></div>
+        <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0"><table><thead><tr><?php foreach ($report['headers'] as $header): ?><th scope="col"><?= shift_report_e($header) ?></th><?php endforeach; ?></tr></thead>
             <tbody><?php foreach ($report['rows'] as $row): ?><tr><?php foreach ($report['headers'] as $header): ?><td><?= shift_report_e($row[$header] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?>
             <?php if (!$report['rows']): ?><tr><td colspan="<?= count($report['headers']) ?>">No records match these filters.</td></tr><?php endif; ?>
             <?php if ($report['rows']): ?><tr><th>TOTAL</th><?php foreach (array_slice($report['headers'], 1) as $header): ?><td><?= shift_report_e($report['totals'][$header] ?? '') ?></td><?php endforeach; ?></tr><?php endif; ?></tbody></table></div>
         <form method="post" class="report-actions"><?= csrf_field() ?><input type="hidden" name="action" value="export_csv">
             <?php foreach ($filters as $name => $value): ?><input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>"><?php endforeach; ?>
-            <button class="btn" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export report CSV</button>
+            <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export CSV</button>
         </form>
+        <details class="shift-report-definitions"><summary>Report definitions</summary>
+            <p>Dates use each shift's opening date; unassigned sales use their sale date. Payment totals differ from physical drawer cash. Expected cash is the closing snapshot; a blank counted cash value means no reconciliation was recorded. Older reversals without a Shift are Legacy / Unassigned.</p>
+        </details>
     </section>
 </main></div></body></html>

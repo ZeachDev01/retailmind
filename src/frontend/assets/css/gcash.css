@@ -12,6 +12,13 @@
 #gcash-workspace .gcash-session-banner.active { color: var(--theme-success-text, #15803d); }
 #gcash-workspace .gcash-session-banner.locked { color: var(--theme-danger-text, #b91c1c); }
 .gcash-session-logo { display: block; flex-shrink: 0; width: 88px; height: auto; }
+.gcash-follow-up-panel { margin-bottom: 1rem; box-shadow: none; }
+.gcash-follow-up-panel .pos-panel-title { align-items: center; }
+#gcash-follow-up { display: grid; gap: .75rem; padding: .875rem 1rem; border-radius: 10px; background: var(--surface-soft); color: var(--text); font-size: .95rem; line-height: 1.5; overflow-wrap: anywhere; }
+#gcash-follow-up > p { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; margin: 0; }
+#gcash-follow-up > p + p { padding-top: .75rem; border-top: 1px solid var(--border); }
+#gcash-follow-up > p > span { flex: 1 1 30ch; min-width: 0; }
+#gcash-follow-up .btn { flex: 0 0 auto; max-width: 100%; white-space: normal; }
 #gcash-session-message { margin: 0; }
 #gcash-scan-status:empty, #gcash-balances-message:empty { display: none; }
 #gcash-history-status:empty { display: none; }

@@ -1,0 +1,41 @@
+.refund-corrections-page .main-content { max-width: 1200px; }
+.correction-heading { margin-bottom: 1.5rem; }
+.correction-heading h1 { font-size: clamp(1.4rem, 2vw, 1.8rem); line-height: 1.2; letter-spacing: -.02em; }
+.refund-corrections-page .pos-panel { margin-bottom: 1.5rem; border-radius: 14px; background: var(--theme-surface, #fff); box-shadow: none; }
+.refund-corrections-page h2 { margin-bottom: 1.25rem; font-size: 1.05rem; font-weight: 700; }
+.correction-form { display: grid; gap: 1.5rem; }
+.correction-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.correction-stock-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.correction-form label { display: grid; gap: .5rem; min-width: 0; font-size: .95rem; font-weight: 600; }
+.correction-form .pos-input { min-width: 0; font-size: 1rem; font-weight: 400; }
+.correction-form textarea { resize: vertical; }
+.correction-form fieldset { min-width: 0; padding: 1.25rem 0 0; border: 0; border-top: 1px solid var(--border); }
+.correction-form legend { padding-right: .75rem; font-size: 1rem; font-weight: 600; }
+.correction-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.correction-form .correction-confirm { display: flex; align-items: center; gap: .65rem; min-height: 44px; font-weight: 400; cursor: pointer; }
+.correction-confirm input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--primary); }
+.correction-actions .btn { flex-shrink: 0; min-height: 44px; }
+.correction-empty { padding: 1.5rem 0; color: var(--muted); text-align: center; }
+.correction-review + .correction-review { border-top: 1px solid var(--border); }
+.correction-review summary { min-height: 56px; padding: .75rem 0; cursor: pointer; font-weight: 600; }
+.correction-review summary > span:first-child { flex: 1; }
+.correction-status { margin-left: auto; color: var(--muted); font-size: .95rem; font-weight: 400; }
+.correction-review-body { display: grid; gap: 1.25rem; padding: .5rem 0 1.25rem; overflow-wrap: anywhere; }
+.correction-review-body > p { max-width: 70ch; white-space: pre-wrap; }
+.correction-record { display: grid; gap: .75rem; font-size: .95rem; font-variant-numeric: tabular-nums; }
+.correction-record > div { display: grid; grid-template-columns: 8rem minmax(0, 1fr); gap: 1rem; }
+.correction-record dt { color: var(--muted); }
+.refund-corrections-page :is(summary, input[type="checkbox"]):focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.refund-corrections-page .alert-danger { color: var(--theme-danger-text, #991b1b); background: var(--theme-danger-surface, #fee2e2); }
+@media (max-width: 1000px) {
+    .correction-stock-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .correction-stock-fields label:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+    .correction-fields { grid-template-columns: minmax(0, 1fr); }
+    .correction-actions { align-items: stretch; flex-direction: column; }
+    .correction-review summary { flex-wrap: wrap; }
+    .correction-review summary > span:first-child { flex-basis: calc(100% - 2rem); }
+    .correction-status { width: 100%; margin-left: 1rem; }
+    .correction-record > div { grid-template-columns: minmax(0, 1fr); gap: .2rem; }
+}

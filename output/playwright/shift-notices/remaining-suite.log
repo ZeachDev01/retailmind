@@ -1,0 +1,8 @@
+CSS balance: passed (43 files)
+Hostinger deployment contract: passed
+Smoke checks failed:
+- Discount authorization recorded: missing authorizeSupervisor
+- Dedicated system health page present: missing Recommended maintenance commands
+- Manager review queue guards approvals and requires rejection reasons: missing required to reject
+- Register administration stays with the Administrator workspace: forbidden register-actions
+- Cashier Shift opening is owned by the Cashier workspace: missing A Cashier Shift is opened and owned by the Cashier who sells

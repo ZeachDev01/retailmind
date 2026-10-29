@@ -1,0 +1,14 @@
+Stylesheet bundle: passed (9 sources, no CSS imports)
+Stylesheet bundle browser check: passed (10 → 1 requests; simulated 100 ms network: 381 → 153 ms)
+Product drawer layers browser: passed (desktop/mobile/tablet, light/dark, touch swipes, rotation, scrolling, stacking, visibility, focus and fades; screenshots: C:\Users\Mike\AppData\Local\Temp\product-drawer-layers-WNgsOe)
+Responsive components browser: passed (320, 375, 425, 768, 1024, 1440px; normal/short viewports; tables, filtering, pagination, five overlay families, form actions, scroll restoration)
+Page responsive components: passed (204 checks; production markup, desktop/touch, mobile/tablet/desktop widths and sidebar breakpoint boundaries)
+Overlay lifecycle: passed (320/375/425/768/1024/1440px, repeated initialization, confirm/cancel/retry, topmost dismissal, payment/native dialog ownership, focus trap/restore, scroll stability)
+Account menu positioning: passed (320/375/425/768/1024/1440px and short mobile viewport, workspace/preferences bounds, hit-testing and toggle close)
+Notification rows: passed (320–1440px; field order, quantities, safe text, fallback messages, read actions, static reminders). Screenshots: C:\Users\Mike\AppData\Local\Temp/retailmind-notification-rows
+Checking navigation in chromium
+Fetch navigation: passed (fullscreen, persistent shell, scripts, history, forms/uploads, CSS, downloads, errors, authentication redirect, competing requests)
+PHP Warning:  The use statement with non-compound name 'DomainException' has no effect in ./.worktrees/integration-326/src/frontend/components/backup/recovery.php on line 12
+PHP Warning:  The use statement with non-compound name 'RuntimeException' has no effect in ./.worktrees/integration-326/src/frontend/components/backup/recovery.php on line 13
+PHP Warning:  The use statement with non-compound name 'DomainException' has no effect in ./src/frontend/components/backup/recovery.php on line 12
+PHP Warning:  The use statement with non-compound name 'RuntimeException' has no effect in ./src/frontend/components/backup/recovery.php on line 13

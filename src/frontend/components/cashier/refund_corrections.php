@@ -61,52 +61,63 @@ function correction_e(mixed $value): string { return htmlspecialchars((string)$v
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Refund Correction Reviews</title>
+<head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Refund corrections</title>
     <link rel="stylesheet" href="<?= correction_e(app_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= correction_e(app_url('assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= correction_e(app_url('assets/css/refund-corrections.css')) ?>">
 </head>
-<body><div class="app-shell">
+<body class="cashier-page refund-corrections-page"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
-    <h1>Refund Correction Reviews</h1>
-    <p>Approval records the intended correction. The responsible Cashier records actual drawer money; the Inventory Manager records stock changes. Original receipts remain unchanged.</p>
+    <header class="correction-heading"><h1>Refund corrections</h1></header>
     <?php if ($error !== ''): ?><p class="alert alert-danger" role="alert"><?= correction_e($error) ?></p><?php endif; ?>
     <?php if ($role === 'admin' && !$remote): ?>
     <section class="pos-panel" aria-labelledby="approve-correction-title">
         <h2 id="approve-correction-title">Approve a correction</h2>
-        <form method="post">
+        <form method="post" class="correction-form">
             <input type="hidden" name="csrf_token" value="<?= correction_e(generate_csrf_token()) ?>"><input type="hidden" name="action" value="approve">
-            <div class="form-row">
+            <div class="correction-fields">
                 <label>Refund ID<input class="pos-input" name="refund_id" type="number" min="1" required></label>
                 <label>Correction type<select class="pos-input" name="correction_type"><option value="cash_drawer">Cash drawer</option><option value="stock_only">Stock only</option><option value="combined">Cash drawer and stock</option></select></label>
-                <label>Responsible Cashier<select class="pos-input" name="cashier_id"><option value="">No cash task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'cashier') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
-                <label>Cash correction (PHP)<input class="pos-input" name="cash_amount" type="number" step="0.01" aria-describedby="correction-sign-help"></label>
-                <label>Responsible Inventory Manager<select class="pos-input" name="inventory_manager_id"><option value="">No stock task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'inventory_manager') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
-                <label>Product<select class="pos-input" name="product_id"><option value="">No stock task</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= correction_e($product['product_name']) ?></option><?php endforeach; ?></select></label>
-                <label>Stock correction (units)<input class="pos-input" name="quantity" type="number" step="1" aria-describedby="correction-sign-help"></label>
             </div>
-            <p id="correction-sign-help">Positive amounts add to the drawer or stock; negative amounts take money or stock out. Leave fields for unneeded tasks empty.</p>
-            <label>Investigation and approved correction<textarea class="pos-input" name="explanation" required minlength="8" maxlength="2000" rows="3"></textarea></label>
-            <label><input type="checkbox" required> I approve these exact changes and the responsible people.</label>
-            <p><button class="btn btn-primary" type="submit">Approve correction</button></p>
+            <fieldset><legend>Cash drawer</legend><div class="correction-fields">
+                <label>Cashier<select class="pos-input" name="cashier_id"><option value="">No cash task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'cashier') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                <label>Amount (PHP; + add / − remove)<input class="pos-input" name="cash_amount" type="number" step="0.01"></label>
+            </div></fieldset>
+            <fieldset><legend>Stock</legend><div class="correction-fields correction-stock-fields">
+                <label>Inventory Manager<select class="pos-input" name="inventory_manager_id"><option value="">No stock task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'inventory_manager') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                <label>Product<select class="pos-input" name="product_id"><option value="">No stock task</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= correction_e($product['product_name']) ?></option><?php endforeach; ?></select></label>
+                <label>Units (+ add / − remove)<input class="pos-input" name="quantity" type="number" step="1"></label>
+            </div></fieldset>
+            <label>Reason and approved changes<textarea class="pos-input" name="explanation" required minlength="8" maxlength="2000" rows="3"></textarea></label>
+            <div class="correction-actions">
+                <label class="correction-confirm"><input type="checkbox" required> I approve these exact changes and assigned staff.</label>
+                <button class="btn btn-primary" type="submit">Approve correction</button>
+            </div>
         </form>
     </section>
     <?php endif; ?>
-    <section class="pos-panel" aria-labelledby="correction-tasks-title"><h2 id="correction-tasks-title"><?= $role === 'admin' ? 'Review history and tasks' : 'Your pending correction tasks' ?></h2>
-    <?php if (!$reviews): ?><p>No correction tasks found.</p><?php endif; ?>
+    <section class="pos-panel" aria-labelledby="correction-tasks-title"><h2 id="correction-tasks-title"><?= $role === 'admin' ? 'Correction history' : 'Your pending corrections' ?></h2>
+    <?php if (!$reviews): ?><p class="correction-empty">No <?= $role === 'admin' ? '' : 'pending ' ?>corrections.</p><?php endif; ?>
     <?php foreach ($reviews as $review): $proposal = json_decode((string)$review['proposed_correction'], true) ?: []; ?>
-        <details><summary>Review #<?= (int)$review['review_id'] ?> · Refund #<?= (int)$review['refund_id'] ?> · <?= correction_e($review['status']) ?></summary>
+        <details class="correction-review"><summary><span>Review #<?= (int)$review['review_id'] ?> · Refund #<?= (int)$review['refund_id'] ?></span><span class="correction-status"><?= correction_e($review['status']) ?></span></summary>
+            <div class="correction-review-body">
             <p><?= correction_e($review['explanation']) ?></p>
-            <p>Approved by user #<?= (int)$review['reviewed_by'] ?> at <?= correction_e($review['reviewed_at']) ?>.</p>
-            <p>Cash: <?= correction_e($review['cash_status']) ?> · PHP <?= correction_e($proposal['cash_amount'] ?? 'Not recorded') ?> · Cashier #<?= (int)$review['responsible_cashier_id'] ?>.</p>
-            <p>Stock: <?= correction_e($review['stock_status']) ?> · Product #<?= (int)($proposal['product_id'] ?? 0) ?> · <?= correction_e($proposal['quantity'] ?? 'Not recorded') ?> units · Inventory Manager #<?= (int)$review['responsible_inventory_manager_id'] ?>.</p>
+            <dl class="correction-record">
+                <div><dt>Approved</dt><dd>User #<?= (int)$review['reviewed_by'] ?> · <?= correction_e($review['reviewed_at']) ?></dd></div>
+                <div><dt>Cash drawer</dt><dd><?= correction_e(str_replace('_', ' ', $review['cash_status'])) ?> · PHP <?= correction_e($proposal['cash_amount'] ?? 'Not recorded') ?> · Cashier #<?= (int)$review['responsible_cashier_id'] ?></dd></div>
+                <div><dt>Stock</dt><dd><?= correction_e(str_replace('_', ' ', $review['stock_status'])) ?> · Product #<?= (int)($proposal['product_id'] ?? 0) ?> · <?= correction_e($proposal['quantity'] ?? 'Not recorded') ?> units · Inventory Manager #<?= (int)$review['responsible_inventory_manager_id'] ?></dd></div>
+            </dl>
             <?php if (!$remote && in_array($role, ['cashier', 'inventory_manager'], true)): ?>
-            <form method="post"><input type="hidden" name="csrf_token" value="<?= correction_e(generate_csrf_token()) ?>"><input type="hidden" name="review_id" value="<?= (int)$review['review_id'] ?>"><input type="hidden" name="action" value="<?= $role === 'cashier' ? 'cash' : 'stock' ?>">
-                <label>Actual movement evidence and reason<textarea class="pos-input" name="note" required minlength="8" maxlength="255" rows="2"></textarea></label>
-                <label><input type="checkbox" required> I confirm the exact approved <?= $role === 'cashier' ? 'money movement occurred in my open drawer' : 'stock change was physically checked' ?>.</label>
-                <p><button class="btn btn-primary" type="submit">Record <?= $role === 'cashier' ? 'drawer' : 'stock' ?> correction</button></p>
+            <form method="post" class="correction-form"><input type="hidden" name="csrf_token" value="<?= correction_e(generate_csrf_token()) ?>"><input type="hidden" name="review_id" value="<?= (int)$review['review_id'] ?>"><input type="hidden" name="action" value="<?= $role === 'cashier' ? 'cash' : 'stock' ?>">
+                <label>Evidence and reason<textarea class="pos-input" name="note" required minlength="8" maxlength="255" rows="2"></textarea></label>
+                <div class="correction-actions">
+                    <label class="correction-confirm"><input type="checkbox" required> I confirm the exact approved <?= $role === 'cashier' ? 'money movement occurred in my open drawer' : 'stock change was physically checked' ?>.</label>
+                    <button class="btn btn-primary" type="submit">Record <?= $role === 'cashier' ? 'drawer' : 'stock' ?> correction</button>
+                </div>
             </form>
             <?php endif; ?>
+            </div>
         </details>
     <?php endforeach; ?>
     </section>
