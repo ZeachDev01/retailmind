@@ -106,6 +106,8 @@ const { chromium } = require('playwright');
 
         const line = page.locator('#receiving_lines .receiving-line').first();
         assert.ok(await line.isVisible(), 'Receiving line is added');
+        const costInput = line.locator('[data-field="cost_price"]');
+        assert.equal(await costInput.inputValue(), '10.00', 'New receiving line shows the saved product cost');
         assert.equal(await line.locator('[data-field="quantity_mode"]').inputValue(), 'packs', 'Default mode for pack-enabled product is packs');
 
         // 2. Enter 2 packs and 4 loose pieces
@@ -126,6 +128,12 @@ const { chromium } = require('playwright');
         // 4. Verify delivery summary reflects 28 accepted units and 28 received units
         assert.equal(await page.locator('#summary_accepted').textContent(), '28', 'Delivery summary shows 28 accepted units');
         assert.equal(await page.locator('#summary_received').textContent(), '28', 'Delivery summary shows 28 received units');
+        await costInput.fill('');
+        assert.equal(await page.locator('#summary_cost').textContent(), '₱280.00', 'Blank cost uses product cost for accepted units');
+        await page.evaluate(() => renderReview());
+        assert.match(await page.locator('#receiving_review').textContent(), /Cost: ₱10\.00 per unit/, 'Review shows the cost used for the batch');
+        await costInput.fill('7.50');
+        assert.equal(await page.locator('#summary_cost').textContent(), '₱210.00', 'Entered cost overrides product cost');
 
         // 5. Test rejected and damaged fields
         const damagedPacks = line.locator('[data-field="damaged_packs"]');

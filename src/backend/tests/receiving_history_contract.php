@@ -64,7 +64,7 @@ try {
             'quantity_mode' => 'packages',
             'received_packages' => 2,
             'damaged_qty' => 0,
-            'cost_price' => '', // Unknown cost
+            'cost_price' => '', // Uses the saved product cost
             'batch_number' => 'BATCH-B-' . $token,
         ],
     ];
@@ -168,7 +168,7 @@ try {
 
     $assert($packLine !== null && $packLine['units_per_package_used'] === 24,
         'history uses recorded pack conversion 24 even after product pack config changed to 48');
-    $assert($packLine['cost_price'] === null, 'omitted cost remains strictly null (visibly unknown)');
+    $assert($packLine['cost_price'] === 5.00, 'omitted cost snapshots the saved product cost');
     $assert($unitLine !== null && $unitLine['cost_price'] === 7.50, 'supplied cost persists correctly');
     $assert($unitLine['accepted_qty'] === 4 && $unitLine['damaged_qty'] === 1, 'accepted and damaged quantities match');
 

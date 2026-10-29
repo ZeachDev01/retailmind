@@ -401,7 +401,7 @@ $damagedReceipt = $receivingService->receiveStock([
     'damaged_packs' => 1,
     'received_loose' => 5,
     'damaged_loose' => 1,
-    'cost_price' => '', // blank = unknown cost
+    'cost_price' => '', // blank uses the product's saved cost
     'supplier' => 'Mega Mart',
     'invoice_number' => 'INV-2026-002',
     'batch_number' => 'BATCH-RCV-002',
@@ -564,7 +564,7 @@ foreach ($history as $entry) {
     }
 }
 $assert($unknownCostLine !== null, 'Found unknown cost line in history');
-$assert($unknownCostLine['cost_price'] === null, 'Omitted cost remains strictly null (unknown)');
+$assert($unknownCostLine['cost_price'] === 8.00, 'Omitted receiving cost uses the product cost saved at creation');
 $assert($unknownCostLine['damaged_packs'] === 1, 'History has damaged_packs = 1');
 $assert($unknownCostLine['damaged_loose'] === 1, 'History has damaged_loose = 1');
 
@@ -695,5 +695,30 @@ $rejects(function () use ($receivingService, $productId) {
 }, 'too large');
 
 echo "AC 7 passed.\n";
+
+echo "Testing receiving cost defaults, overrides, and historical snapshots...\n";
+foreach ([['8.00', [], 8.00], ['8.00', ['cost_price' => ''], 8.00],
+    ['8.00', ['cost_price' => '6.50'], 6.50], ['8.00', ['cost_price' => '0'], 0.00],
+    ['0.00', ['cost_price' => ''], null]] as [$savedCost, $input, $expectedCost]) {
+    $pdo->prepare('UPDATE products SET cost_price = ? WHERE product_id = ?')->execute([$savedCost, $productId]);
+    $result = $receivingService->receiveStock($input + [
+        'product_id' => $productId, 'received_qty' => 3, 'damaged_qty' => 1,
+    ], 1);
+    $record = $pdo->query('SELECT cost_price, total_cost FROM stock_receiving WHERE receiving_id = ' . $result['receiving_id'])->fetch();
+    $batchCost = $pdo->query('SELECT cost_price FROM product_batches WHERE receiving_id = ' . $result['receiving_id'])->fetchColumn();
+    $assert(($record['cost_price'] === null ? null : (float)$record['cost_price']) === $expectedCost, 'Receiving record uses the effective cost');
+    $assert(($batchCost === null ? null : (float)$batchCost) === $expectedCost, 'New batch stores the same effective cost');
+    $assert((float)$record['total_cost'] === ($expectedCost ?? 0.0) * 2, 'Total cost covers only accepted units');
+}
+$snapshot = $pdo->query('SELECT cost_price FROM product_batches WHERE receiving_id = ' . $damagedReceipt['receiving_id'])->fetchColumn();
+$assert((float)$snapshot === 8.00, 'Later product cost changes preserve the earlier batch cost');
+$history = $receivingService->getGroupedReceivingHistory(1, 1);
+foreach ($history as $entry) {
+    foreach ($entry['lines'] as $line) {
+        if ($line['receiving_id'] === $result['receiving_id']) {
+            $assert($line['cost_price'] === null, 'No usable saved cost remains unknown in history');
+        }
+    }
+}
 
 echo "\nAll sales pack receiving integration and contract checks PASSED!\n";

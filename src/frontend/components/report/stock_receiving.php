@@ -328,8 +328,8 @@ $categoryIcon = static function (string $categoryName): string {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="cost_price">Purchase cost per base unit (optional)</label>
-                                    <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Leave blank if unknown">
-                                    <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank preserves the current product cost.</small>
+                                    <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
+                                    <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank uses the saved product cost for this batch; edit if different.</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="batch_number">Batch/Lot Number</label>
@@ -363,7 +363,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <div class="receiving-summary-body">
                     <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products</span></div>
                     <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted" class="receiving-total-accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received" class="receiving-total-received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged" class="receiving-total-damaged">0</dd></div><div><dt>Known cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
-                    <p class="receiving-summary-note">Damaged units do not increase stock. Blank costs are unknown.</p>
+                    <p class="receiving-summary-note">Damaged units do not increase stock. Blank costs use the saved product cost, when available.</p>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div class="form-section receiving-quantity">
                     <h3>Receipt details</h3>
@@ -715,7 +715,7 @@ function refreshDelivery() {
         received += quantities.total;
         damaged += quantities.damaged;
         accepted += quantities.accepted;
-        const price = field('cost_price').value.trim();
+        const price = field('cost_price').value.trim() || (Number(prod.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '');
         if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * quantities.accepted;
     }
     for (const [name, value] of Object.entries({products, received, damaged, accepted})) {
@@ -1088,6 +1088,9 @@ function addReceivingLine(values = {}) {
     const row = lineTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.productId = productId;
     row.querySelector('[data-field="product_id"]').value = productId;
+    if (Number(product.cost_price) > 0) {
+        row.querySelector('[data-field="cost_price"]').value = Number(product.cost_price).toFixed(2);
+    }
 
     const hasSalesPack = Number(product.pack_size || 0) > 1;
     const unitsPerPkg = Number(product.units_per_package || 1);
@@ -1370,8 +1373,9 @@ function renderReview() {
             pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
             section.append(pulloutInfo);
         }
+        const price = field('cost_price').value.trim() || (Number(prod?.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '');
         const details = [
-            field('cost_price').value && 'Cost: ₱' + field('cost_price').value + ' per unit',
+            price ? 'Cost: ₱' + price + ' per unit' : 'Cost: unknown',
             field('batch_number').value && 'Batch: ' + field('batch_number').value,
             field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
             field('discrepancy_notes').value,
