@@ -912,7 +912,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'expor
 }
 
 $totalRows = count($reportData['rows']);
-$pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Report Generation';
+$pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Generate Report';
 ?>
 <!DOCTYPE html>
 <html lang="en">

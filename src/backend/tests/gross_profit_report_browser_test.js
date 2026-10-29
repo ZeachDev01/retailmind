@@ -50,7 +50,7 @@ const {chromium} = require('playwright');
                     'metrics' => [],
                 ];
                 $totalRows = count($reportData['rows']);
-                $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Report Generation';
+                $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Generate Report';
 
                 eval('?>'.stream_get_contents(STDIN));
             `, JSON.stringify(state)],
