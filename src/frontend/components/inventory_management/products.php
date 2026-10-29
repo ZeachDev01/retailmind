@@ -2,6 +2,7 @@
 // components/inventory_management/products.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
+require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
@@ -148,6 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $updated = $productService->updateProductCatalogDetails($productId, $updateData, (int)$_SESSION['user_id']);
             $warning = $updated['warning'] ?? null;
+            $updated['product_image'] = product_image_url($updated['product_image'] ?? null);
 
             if ($isAjax) {
                 header('Content-Type: application/json; charset=UTF-8');
@@ -315,6 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
             if ($isAjax) {
                 header('Content-Type: application/json; charset=UTF-8');
+                $result['product_image'] = product_image_url($result['product_image'] ?? null);
                 echo json_encode(['success' => true, 'product' => $result]);
                 exit;
             }
@@ -369,6 +372,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $categories = $productService->getCategories();
 $products = $productService->getProductsForManagement();
+foreach ($products as &$product) {
+    $product['product_image'] = product_image_url($product['product_image'] ?? null);
+}
+unset($product);
 $existingBrands = $pdo->query("SELECT DISTINCT TRIM(brand) AS brand FROM products WHERE brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand")->fetchAll(PDO::FETCH_COLUMN);
 $knownBrands = [
     "JACK'nJILL", 'Oishi', 'Piattos', 'Nova', 'Chippy', 'Clover', 'Rebisco',
@@ -1297,7 +1304,7 @@ foreach ($products as $product) {
                                         <td class="product-cell">
                                             <div class="product-name-line">
                                                 <span class="product-thumb">
-                                                    <?php if (!empty($product['product_image'])): ?><img src="<?= htmlspecialchars($product['product_image']) ?>" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot;></i>'"><?php else: ?><i class="bi bi-box-seam"></i><?php endif; ?>
+                                                    <?php if (!empty($product['product_image'])): ?><img src="<?= htmlspecialchars($product['product_image']) ?>" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'"><?php else: ?><i class="bi bi-box-seam" aria-hidden="true"></i><?php endif; ?>
                                                 </span>
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
@@ -2071,6 +2078,10 @@ foreach ($products as $product) {
             }
         }
 
+        function productPhotoPreview(product) {
+            return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>`;
+        }
+
         function renderProductDrawerReadOnly(product) {
             isEditingProduct = false;
             isDrawerDirty = false;
@@ -2086,7 +2097,7 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
-        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${safeLink(product.product_image) ? `<a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open product image</a>` : 'No image assigned'}</strong></div>
+        <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${productPhotoPreview(product)}</strong></div>
     </div>`;
             renderProductDrawerQuantity(product);
         }
@@ -2149,7 +2160,7 @@ foreach ($products as $product) {
                         </div>
                         <div class="form-field">
                             <label for="edit-product-image">Product Image <small>(JPEG, PNG, GIF, WebP, max 5MB)</small></label>
-                            ${safeLink(product.product_image) ? `<div>Current: <a href="${escapeHtml(safeLink(product.product_image))}" target="_blank" rel="noopener">Open image</a></div>` : ''}
+                            <div id="edit-product-photo-preview">${productPhotoPreview(product)}</div>
                             <input type="file" name="product_image" id="edit-product-image" accept="image/jpeg,image/png,image/gif,image/webp" class="form-input">
                         </div>
                     </fieldset>
@@ -2245,6 +2256,17 @@ foreach ($products as $product) {
             const form = document.getElementById('product-edit-form');
             form.addEventListener('input', () => { isDrawerDirty = true; });
             form.addEventListener('change', () => { isDrawerDirty = true; });
+            document.getElementById('edit-product-image').addEventListener('change', event => {
+                const file = event.target.files[0];
+                const preview = document.getElementById('edit-product-photo-preview');
+                preview.innerHTML = productPhotoPreview(product);
+                if (!file || !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                    if (event.target.files[0] === file) preview.innerHTML = productPhotoPreview({...product, product_image: reader.result});
+                };
+                reader.readAsDataURL(file);
+            });
 
             document.getElementById('product-cancel-btn').addEventListener('click', cancelProductEdit);
             form.addEventListener('submit', saveProductCatalogDetails);
@@ -2452,9 +2474,9 @@ foreach ($products as $product) {
             const thumb = row.querySelector('.product-thumb');
             if (thumb) {
                 if (product.product_image) {
-                    thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot;></i>'">`;
+                    thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'">`;
                 } else {
-                    thumb.innerHTML = '<i class="bi bi-box-seam"></i>';
+                    thumb.innerHTML = '<i class="bi bi-box-seam" aria-hidden="true"></i>';
                 }
             }
             const priceCell = row.querySelector('.column-price');

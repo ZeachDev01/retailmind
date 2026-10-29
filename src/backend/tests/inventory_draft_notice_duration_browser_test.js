@@ -44,6 +44,21 @@ const { chromium } = require('playwright');
         await page.waitForTimeout(4200);
         assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Status notice must be removed after ~4 seconds');
 
+        await page.locator('[name="item_name"]').fill('second product');
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Later receiving entries must not repeat the draft notice');
+
+        await page.reload();
+        await page.addScriptTag({ content: draftsJs });
+        await page.evaluate(key => {
+            RetailMindInventoryDrafts.start({key, user: '1', confirmed: false});
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+        }, encodedKey);
+        await page.waitForSelector('.inventory-recovery-alert');
+        await page.locator('[name="item_name"]').fill('third product');
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Receiving notice must stay suppressed after reload');
+
         // 2. Trigger "Draft restored. Review items and quantities before saving." and verify auto-removal
         await page.evaluate(async () => {
             const rawKey = new Uint8Array(32);

@@ -47,6 +47,7 @@ self.addEventListener('fetch', (event) => {
   // Exclude authentication state mutations and dynamic API endpoints
   if (
     url.pathname.endsWith('/logout.php') ||
+    url.pathname.endsWith('/product_image.php') ||
     url.pathname.includes('/barcodeScanner/apiScanner/') ||
     url.pathname.includes('/api/') ||
     url.searchParams.has('csrf_refresh') ||

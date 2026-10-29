@@ -2,6 +2,7 @@
 // cashier/pos.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
+require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/app/Services/SalesWorkflowService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
 
@@ -103,12 +104,7 @@ $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogPara
     );
     $catalogStmt->execute(array_merge([\App\Services\PhilippineTime::today()], $catalogParams));
     return $products = array_map(static function (array $row): array {
-        $image = trim((string)($row['product_image'] ?? ''));
-        if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
-            $image = strpos($image, 'storage/images/') === 0
-                ? rtrim(dirname(app_base_url()), '/') . '/backend/' . $image
-                : app_url($image);
-        }
+        $image = product_image_url($row['product_image'] ?? null);
         return [
             'product_id' => (int)$row['product_id'],
             'sku' => (string)($row['sku'] ?? ''),
@@ -198,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
         $todayManila = App\Services\PhilippineTime::today();
         $statement = $pdo->prepare(
             "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name, p.unit_price,
-                    p.reorder_level, p.safety_stock,
+                    p.reorder_level, p.safety_stock, p.product_image,
                     LEAST(COALESCE(i.quantity_on_hand, 0), COALESCE((
                         SELECT SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ?
                                         THEN remaining_quantity ELSE 0 END)
@@ -272,6 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
         $product['price'] = $formPrice;
         $product['pack_size'] = $packSize;
         $product['available_stock'] = $availableStock;
+        $product['product_image'] = product_image_url($product['product_image'] ?? null);
 
         echo json_encode(['success' => true, 'product' => $product], JSON_THROW_ON_ERROR);
     } catch (InvalidArgumentException $e) {
@@ -431,13 +428,6 @@ $quickProductRows = ($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProduct
 usort($quickProductRows, static fn(array $left, array $right): int =>
     ($right['quantity_sold'] <=> $left['quantity_sold']) ?: strcasecmp($left['product_name'], $right['product_name']));
 $quickProducts = array_map(static function (array $product): array {
-    $image = trim((string)($product['product_image'] ?? ''));
-    if ($image !== '' && !preg_match('#^(?:https?://|data:image/|/)#i', $image)) {
-        $image = strpos($image, 'storage/images/') === 0
-            ? rtrim(dirname(app_base_url()), '/') . '/backend/' . $image
-            : app_url($image);
-    }
-
     return [
         'product_id' => (int)$product['product_id'],
         'name' => (string)$product['product_name'] . (!empty($product['variant_label']) ? ' - ' . $product['variant_label'] : ''),
@@ -454,7 +444,7 @@ $quickProducts = array_map(static function (array $product): array {
         'quantity_sold' => (int)$product['quantity_sold'],
         'category_id' => (int)($product['category_id'] ?? 0),
         'category_name' => (string)($product['category_name'] ?: 'Uncategorized'),
-        'product_image' => $image,
+        'product_image' => (string)($product['product_image'] ?? ''),
     ];
 }, array_slice($quickProductRows, 0, 120));
 
@@ -894,20 +884,9 @@ function setTextIfPresent(id, value) {
 
 function quickProductMedia(product) {
     if (product.product_image) {
-        return `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><i class="bi ${quickProductIcon(product)}" aria-hidden="true" hidden></i>`;
+        return `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><i class="bi bi-box-seam" aria-hidden="true" hidden></i>`;
     }
-    return `<i class="bi ${quickProductIcon(product)}" aria-hidden="true"></i>`;
-}
-
-function quickProductIcon(product) {
-    const category = String(product.category_name || '').toLowerCase();
-    if (category.includes('beverage') || category.includes('drink')) return 'bi-cup-straw';
-    if (category.includes('snack') || category.includes('biscuit')) return 'bi-cookie';
-    if (category.includes('personal') || category.includes('health')) return 'bi-heart-pulse';
-    if (category.includes('school') || category.includes('office')) return 'bi-pencil';
-    if (category.includes('electronic')) return 'bi-battery-charging';
-    if (category.includes('baking') || category.includes('grocery')) return 'bi-basket2';
-    return 'bi-bag';
+    return `<i class="bi bi-box-seam" aria-hidden="true"></i>`;
 }
 
 function quickProductStockState(product) {
@@ -929,7 +908,7 @@ function addQuickProduct(productId, sellingForm = 'piece') {
     const price = isPack && product.pack_price ? product.pack_price : product.price;
     const packSize = isPack ? product.pack_size : null;
     const availableStock = isPack ? Number(product.sealed_packs || 0) : Number(product.quantity_on_hand);
-    addToCart(product.product_id, product.name, price, availableStock, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize);
+    addToCart(product.product_id, product.name, price, availableStock, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize, product.product_image);
 }
 
 function updateQuickProductAvailability() {
@@ -1415,6 +1394,7 @@ async function fetchProductByCode(code) {
                     barcode: localProduct.barcode,
                     case_barcode: localProduct.case_barcode,
                     name: localProduct.product_name,
+                    product_image: localProduct.product_image || '',
                     price: Number(localProduct.unit_price),
                     quantity_on_hand: initialStock,
                     reorder_level: Number(localProduct.reorder_level || 0),
@@ -1440,6 +1420,7 @@ async function fetchProductByCode(code) {
                 sku: data.product.sku,
                 barcode: data.product.barcode,
                 name: data.product.product_name,
+                product_image: data.product.product_image || '',
                 price: Number(data.product.price !== undefined ? data.product.price : data.product.unit_price),
                 quantity_on_hand: Number(data.product.available_stock !== undefined ? data.product.available_stock : data.product.quantity_on_hand),
                 reorder_level: Number(data.product.reorder_level || 0),
@@ -1483,7 +1464,7 @@ async function addScannedCode(code) {
     const product = await fetchProductByCode(code);
     if (!product) return;
 
-    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, product.selling_form, product.pack_size)) return;
+    if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, product.selling_form, product.pack_size, product.product_image)) return;
     showRecentScan(product, code);
 }
 
@@ -1533,7 +1514,7 @@ function cartItemProductId(key, item = null) {
     return Number(String(key).split(':')[0]) || 0;
 }
 
-function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '', sellingForm = 'piece', packSize = null) {
+function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '', sellingForm = 'piece', packSize = null, productImage = '') {
     if (!cartChangesAllowed()) return false;
     const productId = Number(id);
     const form = sellingForm === 'pack' ? 'pack' : 'piece';
@@ -1557,7 +1538,8 @@ function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetySt
         reorder_level: Number(reorderLevel || 0),
         safety_stock: Number(safetyStock || 0),
         sku,
-        barcode
+        barcode,
+        product_image: productImage || cart[currentKey]?.product_image || ''
     };
     if (currentKey !== lineKey && cart[currentKey]) {
         delete cart[currentKey];
@@ -1674,6 +1656,8 @@ function renderCart() {
     } else {
         for (const id in cart) {
             const item = cart[id];
+            const productId = Number(item.product_id || String(id).split(':')[0]);
+            const product = (typeof catalogProductMap !== 'undefined' && catalogProductMap.get(productId)) || quickProductById.get(productId) || item;
             const subtotal = item.price * item.qty;
             const remaining = item.stock !== undefined ? item.stock - item.qty : null;
             const threshold = getLowStockThreshold(item);
@@ -1688,7 +1672,7 @@ function renderCart() {
             const escapedId = escapeHtml(String(id));
 
             rows += `<tr role="row">
-                <td role="cell"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</td>
+                <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
                 <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
                 <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
                 <td role="cell"><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>

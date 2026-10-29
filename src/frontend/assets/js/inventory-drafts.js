@@ -79,8 +79,10 @@ window.RetailMindInventoryDrafts = (() => {
         prepare(form);
         const id = identity(form);
         busy++;
-        if (form.id !== 'add-product-form') notice('Keeping unsaved values...');
         try {
+            const noticeKey = form.id === 'receiving_form' ? 'retailmind:inventory-notice:v1:' + config.user + ':' + location.pathname : null;
+            const showNotice = form.id !== 'add-product-form' && (!noticeKey || !localStorage.getItem(noticeKey));
+            if (showNotice) notice('Keeping unsaved values...');
             const prior = snapshots.get(id) || Promise.resolve();
             const next = prior.catch(() => {}).then(async () => {
                 const draft = await capture(form);
@@ -96,7 +98,10 @@ window.RetailMindInventoryDrafts = (() => {
             });
             snapshots.set(id, next);
             await next;
-            if (busy === 1 && form.id !== 'add-product-form') notice('Unsaved values kept on this device. Inventory changes only after server confirmation.');
+            if (busy === 1 && showNotice && (!noticeKey || !localStorage.getItem(noticeKey))) {
+                notice('Unsaved values kept on this device. Inventory changes only after server confirmation.');
+                if (noticeKey) localStorage.setItem(noticeKey, '1');
+            }
         } catch (_) { notice('Draft could not be kept. Keep this page open; these values may be lost if you close it.', true); }
         finally { busy--; }
     }

@@ -2,6 +2,7 @@
 // cashier/stock_receiving.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
+require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/ReceivingService.php';
 require_once __DIR__ . '/../../../backend/app/Services/SupplierPulloutService.php';
@@ -117,6 +118,10 @@ $_SESSION['receiving_nonces'][$receivingNonce] = true;
 $_SESSION['receiving_nonces'] = array_slice($_SESSION['receiving_nonces'], -20, null, true);
 
 $products = $receivingService->getActiveProducts();
+foreach ($products as &$product) {
+    $product['product_image'] = product_image_url($product['product_image'] ?? null);
+}
+unset($product);
 
 $categories = [];
 foreach ($products as $p) {
@@ -168,7 +173,6 @@ $categoryIcon = static function (string $categoryName): string {
     <main class="main-content" id="receiving_main" tabindex="-1">
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
-            <p>Stock is updated. <a href="../inventory_management/replenishment_queue.php">Review replenishment recommendations</a> or <a href="receiving_history.php">view receiving history</a>.</p>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -754,18 +758,6 @@ function getStockState(quantityOnHand, reorderLevel, safetyStock) {
     return { state: 'available', label: `${stock} in stock`, isLow: false };
 }
 
-function getCategoryIcon(categoryName) {
-    const name = String(categoryName || '').toLowerCase();
-    if (name.includes('beverage') || name.includes('drink')) return 'bi-cup-straw';
-    if (name.includes('snack') || name.includes('biscuit')) return 'bi-cookie';
-    if (name.includes('personal') || name.includes('health')) return 'bi-heart-pulse';
-    if (name.includes('school') || name.includes('office')) return 'bi-pencil';
-    if (name.includes('electronic')) return 'bi-battery-charging';
-    if (name.includes('baking') || name.includes('grocery')) return 'bi-basket2';
-    if (name.includes('canned') || name.includes('condiment')) return 'bi-box2-heart';
-    return 'bi-bag';
-}
-
 function renderCatalog() {
     const query = productSearchScan.value.trim().toLowerCase();
     const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
@@ -786,7 +778,7 @@ function renderCatalog() {
     for (const p of matches.slice(0, 24)) {
         const isAdded = selected.has(String(p.product_id));
         const stockInfo = getStockState(p.quantity_on_hand, p.reorder_level, p.safety_stock);
-        const iconClass = getCategoryIcon(p.category_name);
+        const iconClass = 'bi-box-seam';
 
         const card = document.createElement('article');
         card.className = 'receiving-card' + (stockInfo.state === 'out' ? ' out-of-stock' : '');
@@ -1478,7 +1470,5 @@ const hasQuantities = linesToRestore.some(line =>
 showStep(hasQuantities ? 2 : 1);
 
 </script>
-<?php if ($message): ?><script>RetailMindUI.toast(<?= json_encode($message, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'success');</script><?php endif; ?>
-<?php if ($error): ?><script>RetailMindUI.toast(<?= json_encode($error, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'error');</script><?php endif; ?>
 </body>
 </html>

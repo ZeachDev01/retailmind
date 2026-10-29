@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
     const frontend = path.resolve(__dirname, '../../frontend');
     const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/products.php'), 'utf8');
     const tabs = source.slice(source.indexOf('function setProductDrawerTab('), source.indexOf("        document.querySelectorAll('[data-product-tab]').forEach(tab => {", source.indexOf("document.getElementById('product-drawer-footer').hidden")));
+    const photo = source.slice(source.indexOf('function productPhotoPreview('), source.indexOf('function renderProductDrawerReadOnly('));
     const editor = source.slice(source.indexOf('function enterProductEditMode()'), source.indexOf('async function cancelProductEdit()'));
     const css = ['style', 'theme', 'inventory'].map(name => fs.readFileSync(path.join(frontend, `assets/css/${name}.css`), 'utf8')).join('\n') + source.match(/<style>([\s\S]*?)<\/style>/)[1];
     const output = fs.mkdtempSync(path.join(os.tmpdir(), 'product-edit-layout-'));
@@ -32,6 +33,7 @@ const { chromium } = require('playwright');
                     ${tabs}
                     const cancelProductEdit = () => { window.cancelled = true; };
                     const saveProductCatalogDetails = event => { event.preventDefault(); window.saved = Object.fromEntries(new FormData(event.target)); };
+                    ${photo}
                     ${editor}
 
                 ` });

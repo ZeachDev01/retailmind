@@ -10,6 +10,31 @@ const {chromium} = require('playwright');
         const page = await browser.newPage();
         page.setDefaultTimeout(5000);
         const frontend = path.resolve(__dirname, '../../frontend');
+        const receivingSource = fs.readFileSync(path.join(frontend, 'components/report/stock_receiving.php'), 'utf8');
+        for (const type of ['success', 'error']) {
+            const receivingPage = await browser.newPage();
+            await receivingPage.setContent('<main></main>');
+            await receivingPage.addScriptTag({path: path.join(frontend, 'assets/js/ui.js')});
+            const message = type === 'success' ? 'Receiving entry saved. Baby Flo: 1 accepted units.' : 'The receiving record could not be saved.';
+            const variable = type === 'success' ? 'message' : 'error';
+            const blocks = [...receivingSource.matchAll(/<\?php if \(\$(message|error)\): \?>([\s\S]*?)<\?php endif; \?>/g)]
+                .filter(match => match[1] === variable)
+                .map(match => match[2]
+                    .replace(/<\?= htmlspecialchars\(\$\w+\) \?>/g, message)
+                    .replace(/<\?= json_encode\([\s\S]*?\?>/g, JSON.stringify(message)));
+            assert.ok(blocks.length, `Receiving ${type} feedback is covered`);
+            await receivingPage.locator('main').evaluate((main, html) => { main.innerHTML = html; }, blocks.join('\n'));
+            for (const script of await receivingPage.locator('main script').allTextContents()) {
+                await receivingPage.addScriptTag({content: script});
+            }
+            await receivingPage.evaluate(() => {
+                RetailMindUI.initPageContent();
+                RetailMindUI.initPageContent();
+            });
+            assert.deepEqual(await receivingPage.locator(`.rm-toast.${type} .rm-toast-copy > span`).allTextContents(), [message], `Receiving ${type} feedback appears exactly once`);
+            assert.equal(await receivingPage.getByText('Stock is updated.', {exact: false}).count(), 0, 'Receiving leaves no separate stock-update banner');
+            await receivingPage.close();
+        }
         const productSource = fs.readFileSync(path.join(frontend, 'components/inventory_management/products.php'), 'utf8');
         const productNoticeScript = productSource.match(/<script>\s*([\s\S]*?)const PRODUCT_PHOTO_LIMIT_MESSAGE/)[1];
         for (const type of ['success', 'warning', 'error']) {
