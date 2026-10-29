@@ -4,7 +4,6 @@ namespace App\Forecasting;
 
 use PDO;
 use DateTime;
-use Exception;
 use App\Services\MlJobService;
 
 class ForecastingSchedulerService {
@@ -66,17 +65,26 @@ class ForecastingSchedulerService {
             }
         }
         
-        // Check if weekly retrain should be queued
-        if (strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime) {
+        $latestTraining = $this->pdo->query("SELECT metrics_json FROM model_training_runs
+            WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetchColumn();
+        $firstTrainingDue = $latestTraining === false && $currentTime >= $dailyTime;
+        $weeklyTrainingDue = strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime;
+        if ($firstTrainingDue || $weeklyTrainingDue) {
             $alreadyQueued = $this->checkIfJobQueuedToday('model_retraining', $currentDate);
-            if (!$alreadyQueued) {
+            $trainingPending = (bool)$this->pdo->query("SELECT 1 FROM ml_jobs
+                WHERE trigger_type = 'model_retraining' AND status IN ('queued', 'running') LIMIT 1")->fetchColumn();
+            if (!$alreadyQueued && !$trainingPending) {
                 $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
-                if (!$isDemo) {
+                $cutoff = (clone $now)->modify('-1 day')->format('Y-m-d');
+                $lastEvidence = json_decode((string)$latestTraining, true)['metadata']['data_window_end'] ?? null;
+                $hasNewHistory = $lastEvidence === null || $lastEvidence < $cutoff;
+                if (!$isDemo && $hasNewHistory) {
                     $history = (new DemandHistoryService())->getTrainingHistory($this->pdo,
-                        (clone $now)->modify('-1 day')->format('Y-m-d'));
+                        $cutoff);
                     $result['training_eligibility'] = $history['eligibility'];
                 }
-                if ($isDemo || $history['history']) {
+                // Demo history is frozen; only its existing weekly schedule applies.
+                if (($isDemo && $weeklyTrainingDue) || (!$isDemo && $hasNewHistory && $history['history'])) {
                     $jobService->enqueueSystem('model_retraining');
                     $result['retrain_jobs_queued']++;
                 }
@@ -91,7 +99,6 @@ class ForecastingSchedulerService {
             SELECT COUNT(*) FROM ml_jobs 
             WHERE trigger_type = ? 
             AND DATE(queued_at) = ? 
-            AND requester_id IS NULL
         ");
         $stmt->execute([$triggerType, $dateStr]);
         return (int)$stmt->fetchColumn() > 0;

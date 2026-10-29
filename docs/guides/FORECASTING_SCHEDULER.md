@@ -4,6 +4,15 @@ This document provides operational instructions for deploying and maintaining th
 
 The commands below run forecasting only. Also configure the independent [daily notification job](DAILY_NOTIFICATIONS.md) for Product-aware expiry reminders, including on days without transactions. The full-source maintenance wrappers already call both scripts.
 
+## Automatic training rules
+
+- After the configured daily forecast time (default 23:00), a Store with no completed training candidate is checked for its first training run. It does not have to wait for the weekly training day.
+- The existing history reader requires at least one active product with **140 consecutive usable daily observations through yesterday**. This includes genuine zero-sales days; it is not a minimum sales volume or a promise of accuracy. Missing evidence, closures, and stockout exclusions can prevent qualification.
+- Once a completed candidate exists, retraining follows the configured weekly day/time (default Sunday 01:00). It requires newer eligible history than the last completed candidate's recorded data window. Unchanged or stale Store history is skipped.
+- A queued/running training job blocks another automatic training job, including manual jobs and jobs from a previous day. Any training attempt on the same calendar day prevents repeated automatic attempts that day. The CLI also takes a local filesystem lock against overlapping scheduler ticks.
+- Training and evaluation run in the background. Passing tests never automatically approves a model, replaces the approved model, or enables routine purchasing. Review the results in Demand Forecast and ML Operation.
+- Isolated Demo databases retain their weekly training behavior; the new first-training trigger applies to Store history.
+
 ## Supported Deployment Topologies
 
 The scheduled worker requires reliable execution and must not be interrupted by desktop power savings or employee workstation restarts.
@@ -18,11 +27,26 @@ The scheduled worker requires reliable execution and must not be interrupted by 
 
 ## Windows Store-PC Scheduling (Task Scheduler)
 
+From a PowerShell terminal at the repository root, with PHP and Python available:
+
+```powershell
+./src/backend/scripts/install_forecasting_scheduler.ps1 -WhatIf
+./src/backend/scripts/install_forecasting_scheduler.ps1
+Get-ScheduledTask -TaskName 'RetailMind ML Scheduler'
+Get-ScheduledTaskInfo -TaskName 'RetailMind ML Scheduler'
+```
+
+The installer creates a hidden task every five minutes under the current Windows account, with no administrator elevation or password stored by RetailMind. **This setup runs only while that user is signed in.** The PC must be awake, and the application's database must be running. Closing the browser does not stop scheduling. The installer refuses to overwrite an existing task.
+
+Scheduler output is appended to `src/backend/storage/logs/forecasting-scheduler.log`. Database connection failures return a nonzero task result. The task uses the installation's `.env`; isolated Demo launch settings from another terminal do not carry over. No successful task run or model training is implied by the task's `Ready` status.
+
+For an installation that must run after Windows sign-out, configure a suitable task account and its access in Task Scheduler. The manual alternative below requires that account's credentials and local security permissions:
+
 1. Open **Task Scheduler** (`taskschd.msc`).
 2. Click **Create Task...** (not Basic Task).
 3. **General Tab:**
    - Name: `RetailMind ML Scheduler`
-   - Security options: Select **Run whether user is logged on or not** and check **Run with highest privileges**.
+   - Security options: Select **Run whether user is logged on or not** with an account allowed to read the application, access its database, and write its logs/artifacts. Administrator elevation is not required for ordinary forecasting.
 4. **Triggers Tab:**
    - New Trigger -> Begin the task: **On a schedule** -> **Daily**
    - Set the time to after Store close (e.g., `11:00 PM`) and recur every `1` days.

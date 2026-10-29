@@ -16,6 +16,24 @@ from feature_pipeline import train_and_evaluate
 
 
 class StoreTrainingEligibilityTests(unittest.TestCase):
+    def test_overlapping_scheduler_tick_exits_before_database_access(self):
+        lock_path = json.dumps(str(BACKEND / 'storage' / 'logs' / 'ml_scheduler.lock'))
+        holder = subprocess.Popen(
+            ['php', '-r', f'$lock = fopen({lock_path}, "c"); '
+             'if (!flock($lock, LOCK_EX | LOCK_NB)) exit(1); '
+             'echo "locked\\n"; fflush(STDOUT); fgets(STDIN);'],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), 'locked')
+            tick = subprocess.run(['php', str(BACKEND / 'scripts' / 'run_scheduler.php')],
+                                  capture_output=True, text=True, timeout=15)
+            self.assertEqual(tick.returncode, 0, tick.stderr)
+            self.assertEqual(tick.stdout, '')
+            self.assertEqual(tick.stderr, '')
+        finally:
+            holder.communicate('\n', timeout=5)
+
     def test_real_reader_scheduler_and_worker_use_the_same_eligible_history(self):
         php = r'''<?php
 require 'bootstrap/app.php';
@@ -32,6 +50,7 @@ $pdo->exec("CREATE TABLE products (product_id INT, status TEXT);
     CREATE TABLE sale_reversals (reversal_id INT, status TEXT, approved_at TEXT);
     CREATE TABLE sale_reversal_items (reversal_id INT, sale_item_id INT, product_id INT, quantity INT);
     CREATE TABLE platform_settings (setting_key TEXT, setting_value TEXT);
+    CREATE TABLE model_training_runs (training_run_id INTEGER PRIMARY KEY, status TEXT, metrics_json TEXT);
     CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT, requester_id INT, queued_at TEXT);
     CREATE TABLE activity_log (user_id INT, action TEXT, category TEXT, module TEXT, record_id INT, new_value TEXT, ip_address TEXT, created_at TEXT);
     INSERT INTO products VALUES (1,'active'),(2,'active'),(3,'active'),(4,'active'),(5,'inactive'),(6,'active'),(7,'active')");

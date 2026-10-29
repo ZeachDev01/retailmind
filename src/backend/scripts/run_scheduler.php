@@ -5,16 +5,23 @@
  */
 
 require_once dirname(__DIR__) . '/bootstrap/app.php';
-require_once dirname(__DIR__) . '/config/db.php';
 
 use App\Forecasting\ForecastingSchedulerService;
-use App\Services\MlJobService;
 
 // Prevent HTTP execution, CLI only
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
     die("Forbidden: Scheduler must be run from the command line.");
 }
+
+$lock = fopen(dirname(__DIR__) . '/storage/logs/ml_scheduler.lock', 'c');
+if ($lock === false) {
+    throw new RuntimeException('Could not open the forecasting scheduler lock.');
+}
+if (!flock($lock, LOCK_EX | LOCK_NB)) {
+    exit(0);
+}
+$pdo = \App\Core\Database::connection();
 
 $scheduler = new ForecastingSchedulerService($pdo);
 $result = $scheduler->runScheduler();
