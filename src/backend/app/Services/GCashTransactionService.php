@@ -1035,6 +1035,24 @@ final class GCashTransactionService
         }
     }
 
+    public function eligibleHandoverRecipients(): array
+    {
+        return $this->pdo()->query(
+            "SELECT DISTINCT u.user_id, u.full_name, u.username, r.role_name
+             FROM users u
+             JOIN roles r ON r.role_id = u.role_id
+             JOIN cashier_shifts cs ON cs.cashier_id = u.user_id
+             WHERE u.status = 'active' AND u.must_change_password = 0
+               AND r.role_name IN ('admin', 'cashier', 'inventory_manager')
+               AND cs.status = 'open' AND cs.locked_at IS NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM user_roles ur JOIN roles assigned ON assigned.role_id = ur.role_id
+                   WHERE ur.user_id = u.user_id AND assigned.role_name = 'super_admin'
+               )
+             ORDER BY u.full_name, u.user_id"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function handoverSession(int $outgoingCashierId, int $incomingCashierId, float $countedCash, float $checkedWallet, string $notes, ?array $acceptedTransactionIds = null, ?int $differenceResponsibleUserId = null): array
     {
         if ($outgoingCashierId === $incomingCashierId) {
@@ -1053,15 +1071,21 @@ final class GCashTransactionService
             if (!$session) {
                 throw new DomainException('No open GCash service session found to hand over.', 404);
             }
-            if ((int)$session['cashier_id'] !== $outgoingCashierId) {
-                $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
-                $userStmt->execute([$outgoingCashierId]);
-                $roleName = $userStmt->fetchColumn();
-                if (!in_array($roleName, ['admin', 'super_admin'], true)) {
-                    throw new DomainException('Only the responsible Cashier or an Administrator can hand over GCash responsibility.', 403);
-                }
+            $userStmt = $this->pdo()->prepare("SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id
+                WHERE u.user_id = ? AND u.status = 'active' AND r.role_name <> 'super_admin'
+                  AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles assigned ON assigned.role_id = ur.role_id
+                                  WHERE ur.user_id = u.user_id AND assigned.role_name = 'super_admin')");
+            $userStmt->execute([$outgoingCashierId]);
+            $roleName = $userStmt->fetchColumn();
+            if (!$roleName || ((int)$session['cashier_id'] !== $outgoingCashierId && $roleName !== 'admin')) {
+                throw new DomainException('Only the responsible Cashier or an Administrator can hand over GCash responsibility.', 403);
             }
 
+            $recipientRoles = array_column($this->eligibleHandoverRecipients(), 'role_name', 'user_id');
+            if (!isset($recipientRoles[$incomingCashierId])) {
+                throw new DomainException('Select an eligible staff member with an active open shift before handover.');
+            }
+            $incomingRole = $recipientRoles[$incomingCashierId];
             $shiftService = new CashierShiftService($this->pdo());
             $shiftService->requireUnlockedRegister($incomingCashierId);
             $incomingShift = $shiftService->getOpenShift($incomingCashierId);
@@ -1125,14 +1149,14 @@ final class GCashTransactionService
                     if (in_array($ptxId, $acceptedTransactionIds, true)) {
                         $updateTxStmt->execute([
                             $incomingCashierId,
-                            'cashier',
+                            $incomingRole,
                             'Accepted follow-up investigation responsibility via handover',
                             date('Y-m-d H:i:s'),
                             $ptxId
                         ]);
                         \log_activity($this->pdo(), $incomingCashierId, 'GCash exchange follow-up responsibility accepted', 'GCash', $ptxId,
                             ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => 'cashier', 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
+                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => $incomingRole, 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
                             null,
                             AuditRecordCategory::STORE_OPERATION);
                     } else {
@@ -1195,7 +1219,10 @@ final class GCashTransactionService
         }
         try {
             StoreWriteGate::begin($this->pdo());
-            $userStmt = $this->pdo()->prepare('SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id WHERE u.user_id = ?');
+            $userStmt = $this->pdo()->prepare("SELECT r.role_name FROM users u JOIN roles r ON u.role_id = r.role_id
+                WHERE u.user_id = ? AND u.status = 'active'
+                  AND NOT EXISTS (SELECT 1 FROM user_roles ur JOIN roles assigned ON assigned.role_id = ur.role_id
+                                  WHERE ur.user_id = u.user_id AND assigned.role_name = 'super_admin')");
             $userStmt->execute([$adminId]);
             $roleName = $userStmt->fetchColumn();
             if (function_exists('is_remote_request') && is_remote_request()) {
@@ -1219,6 +1246,11 @@ final class GCashTransactionService
 
             $incomingShiftId = null;
             if ($incomingCashierId !== null && $incomingCashierId > 0) {
+                $recipientRoles = array_column($this->eligibleHandoverRecipients(), 'role_name', 'user_id');
+                if (!isset($recipientRoles[$incomingCashierId])) {
+                    throw new DomainException('Select an eligible staff member with an active open shift before handover.');
+                }
+                $incomingRole = $recipientRoles[$incomingCashierId];
                 $shiftService = new CashierShiftService($this->pdo());
                 $shiftService->requireUnlockedRegister($incomingCashierId);
                 $incomingShift = $shiftService->getOpenShift($incomingCashierId);
@@ -1285,14 +1317,14 @@ final class GCashTransactionService
                     if ($incomingCashierId !== null && in_array($ptxId, $acceptedTransactionIds ?? [], true)) {
                         $updateTxStmt->execute([
                             $incomingCashierId,
-                            'cashier',
+                            $incomingRole,
                             'Accepted follow-up investigation responsibility via emergency handover',
                             date('Y-m-d H:i:s'),
                             $ptxId
                         ]);
                         \log_activity($this->pdo(), $incomingCashierId, 'GCash exchange follow-up responsibility accepted', 'GCash', $ptxId,
                             ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => 'cashier', 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
+                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => $incomingRole, 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
                             null,
                             AuditRecordCategory::STORE_OPERATION);
                     } else {

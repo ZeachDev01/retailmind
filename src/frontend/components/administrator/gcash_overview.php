@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($cash === false || $wallet === false) throw new DomainException('Enter the counted service cash and checked wallet balance.');
         $incoming = filter_var($_POST['incoming_cashier_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
         $service->emergencyHandover((int)$_SESSION['user_id'], $incoming, $cash, $wallet, (string)($_POST['reason'] ?? ''), []);
-        $_SESSION['_flash_success'] = $incoming ? 'Custody handed over. Incoming Cashier must accept each unfinished exchange in GCash.' : 'GCash service stopped. Unfinished exchanges remain visible and unsettled.';
+        $_SESSION['_flash_success'] = $incoming ? 'Custody handed over. Incoming staff member must accept each unfinished exchange in GCash.' : 'GCash service stopped. Unfinished exchanges remain visible and unsettled.';
         header('Location: ' . app_url('components/administrator/gcash_overview.php?tab=unresolved'));
         exit;
     } catch (DomainException $e) {
@@ -45,7 +45,7 @@ $moneyHistory = null;
 $eligibleCashiers = [];
 try {
     if (($_GET['tab'] ?? '') === 'money') $moneyHistory = $service->getMoneyHistory(['session_id' => $_GET['session_id'] ?? null]);
-    if ($canMutate) $eligibleCashiers = $pdo->query("SELECT DISTINCT u.user_id,u.full_name FROM users u JOIN cashier_shifts cs ON cs.cashier_id=u.user_id WHERE u.status='active' AND cs.status='open' AND cs.locked_at IS NULL ORDER BY u.full_name")->fetchAll(PDO::FETCH_ASSOC);
+    if ($canMutate) $eligibleCashiers = $service->eligibleHandoverRecipients();
 } catch (Throwable $e) {
     error_log((string)$e);
 }
@@ -158,12 +158,12 @@ function gcash_admin_money(mixed $val): string {
         <?php if ($interventionError !== ''): ?><p class="alert alert-danger" role="alert"><?= gcash_admin_e($interventionError) ?></p><?php endif; ?>
         <?php if ($canMutate && !empty($overview['session_id'])): ?>
         <details class="pos-panel"><summary>Emergency handover / Stop service</summary>
-            <p>Count the physical service cash and check the GCash wallet. This closes custody without settling unfinished exchanges or shortages. Each incoming Cashier must accept unfinished exchanges separately.</p>
+            <p>Count the physical service cash and check the GCash wallet. This closes custody without settling unfinished exchanges or shortages. Each incoming staff member must accept unfinished exchanges separately.</p>
             <form method="post"><input type="hidden" name="csrf_token" value="<?= gcash_admin_e(generate_csrf_token()) ?>"><input type="hidden" name="action" value="emergency_handover">
                 <div class="form-row">
                     <label>Counted service cash (PHP)<input class="pos-input" name="counted_cash" type="number" min="0" step="0.01" required></label>
                     <label>Checked wallet balance (PHP)<input class="pos-input" name="checked_wallet" type="number" min="0" step="0.01" required></label>
-                    <label>Incoming Cashier<select class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                    <label>Incoming staff member (open shift required)<select class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
                 </div>
                 <label>Reason<textarea class="pos-input" name="reason" required minlength="5" maxlength="255" rows="2"></textarea></label>
                 <label><input name="checked" type="checkbox" value="yes" required> I checked both balances and confirm this emergency custody change.</label>

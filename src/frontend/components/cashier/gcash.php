@@ -333,13 +333,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             <form id="gcash-handover-form">
                 <h2 id="gcash-handover-title">Hand over GCash responsibility</h2>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-handover-incoming">Incoming Cashier</label>
+                    <label class="pos-field-label" for="gcash-handover-incoming">Incoming staff member</label>
                     <select class="pos-input" id="gcash-handover-incoming" name="incoming_cashier_id" required>
-                        <option value="">Select Cashier…</option>
+                        <option value="">Select staff member with an open shift…</option>
                         <?php
-                        $cashiersStmt = $pdo->prepare("SELECT u.user_id, u.full_name, u.username FROM users u JOIN roles r ON u.role_id = r.role_id WHERE r.role_name = 'cashier' AND u.status = 'active' AND u.user_id <> ? ORDER BY u.full_name");
-                        $cashiersStmt->execute([(int)$_SESSION['user_id']]);
-                        foreach ($cashiersStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                        $handoverService = new \App\Services\GCashTransactionService($pdo, $gcashRules);
+                        foreach ($handoverService->eligibleHandoverRecipients() as $c) {
+                            if ((int)$c['user_id'] === (int)$_SESSION['user_id']) continue;
                             echo '<option value="' . (int)$c['user_id'] . '">' . htmlspecialchars($c['full_name'] . ' (' . $c['username'] . ')') . '</option>';
                         }
                         ?>

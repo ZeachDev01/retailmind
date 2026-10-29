@@ -1123,7 +1123,7 @@
             const cash = Number(el('handover-cash').value);
             const wallet = Number(el('handover-wallet').value);
             if (!incomingId) {
-                notify('Select an incoming Cashier.', 'warning');
+                notify('Select an incoming staff member.', 'warning');
                 return;
             }
             if (isNaN(cash) || cash < 0 || isNaN(wallet) || wallet < 0) {

@@ -272,4 +272,57 @@ $assert((int)$newSess['cashier_id'] === 2, 'New session cashier is Alice');
 $tx2Row = $pdo->query("SELECT * FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetch(PDO::FETCH_ASSOC);
 $assert((int)$tx2Row['responsible_user_id'] === 2, 'Tx2 follow-up assigned to Alice');
 
+// Super Administrator identities cannot receive custody, even with an open shift.
+$pdo->exec("INSERT INTO users VALUES (5, 'Super Charlie', 'super_charlie', 3, 'active', 0)");
+$pdo->exec("INSERT INTO cashier_shifts (cashier_id, register_id, status) VALUES (5, 10, 'open')");
+$refuse(fn() => $gcashService->handoverSession(2, 5, 2500.00, 4800.00, 'Exclude platform governance'), '/eligible|super administrator/i');
+$refuse(fn() => $gcashService->emergencyHandover(1, 5, 2500.00, 4800.00, 'Exclude platform governance'), '/eligible|super administrator/i');
+
+$pdo->exec("INSERT INTO roles VALUES (4, 'inventory_manager')");
+$pdo->exec("INSERT INTO users VALUES
+    (6, 'Inventory Eve', 'inventory_eve', 4, 'active', 0),
+    (7, 'Protected Admin', 'protected_admin', 1, 'active', 0),
+    (8, 'Password Change', 'password_change', 2, 'active', 1),
+    (9, 'No Shift', 'no_shift', 2, 'active', 0)");
+$pdo->exec("INSERT INTO user_roles VALUES (7, 3)");
+$pdo->exec("INSERT INTO user_roles VALUES (1, 2)");
+$pdo->exec("INSERT INTO registers VALUES (12, 'Admin Cashier Register', 'active')");
+$adminShiftId = $shiftService->openShift(1, 'cashier', 12, 1000.00);
+$assert($adminShiftId > 0, 'An Administrator with additional Cashier access can open a shift in the Cashier workspace');
+$pdo->exec("INSERT INTO cashier_shifts (cashier_id, register_id, status) VALUES
+    (4, 10, 'open'), (6, 10, 'open'), (7, 10, 'open'), (8, 10, 'open')");
+$recipientIds = array_map('intval', array_column($gcashService->eligibleHandoverRecipients(), 'user_id'));
+sort($recipientIds);
+$assert($recipientIds === [1, 2, 3, 6], 'Both handover screens offer active operational staff with unlocked shifts, excluding protected identities');
+
+foreach ([4, 7, 8, 9] as $ineligibleId) {
+    $refuse(fn() => $gcashService->handoverSession(2, $ineligibleId, 2500.00, 4800.00, 'Invalid recipient'), '/eligible/i');
+    $refuse(fn() => $gcashService->emergencyHandover(1, $ineligibleId, 2500.00, 4800.00, 'Invalid recipient'), '/eligible/i');
+}
+$pdo->exec("UPDATE cashier_shifts SET locked_at = CURRENT_TIMESTAMP WHERE cashier_id = 6");
+$refuse(fn() => $gcashService->handoverSession(2, 6, 2500.00, 4800.00, 'Locked recipient'), '/eligible/i');
+$pdo->exec("UPDATE cashier_shifts SET locked_at = NULL WHERE cashier_id = 6");
+
+$refuse(fn() => $gcashService->handoverSession(5, 6, 2500.00, 4800.00, 'Super admin cannot initiate'), '/responsible Cashier or an Administrator/i');
+$refuse(fn() => $gcashService->emergencyHandover(7, 6, 2500.00, 4800.00, 'Protected admin cannot initiate'), '/Only an Administrator/i');
+
+// Each operational role can receive custody through either handover path.
+$outgoingId = 2;
+foreach ([1 => 'admin', 6 => 'inventory_manager', 3 => 'cashier'] as $recipientId => $recipientRole) {
+    $result = $gcashService->handoverSession($outgoingId, $recipientId, 2500.00, 4800.00, 'Routine staff handover', [$txId2]);
+    $assert((int)$gcashService->getCurrentSession()['cashier_id'] === $recipientId, "Routine custody assigned to {$recipientRole}");
+    if ($recipientId === 1) {
+        $adminOverview = $gcashService->cashierOverview(1);
+        $assert($adminOverview['is_controlling_cashier'] === true, 'Multi-role Administrator controls GCash in the Cashier workspace');
+        $assert((int)$gcashService->getCurrentSession()['shift_id'] === $adminShiftId, 'Multi-role Administrator custody uses their own Cashier shift');
+    }
+    $assert($pdo->query("SELECT responsible_role FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetchColumn() === $recipientRole, 'Accepted follow-up records the actual recipient role');
+    $outgoingId = $recipientId;
+}
+foreach ([1 => 'admin', 6 => 'inventory_manager', 2 => 'cashier'] as $recipientId => $recipientRole) {
+    $result = $gcashService->emergencyHandover(1, $recipientId, 2500.00, 4800.00, 'Emergency staff handover', [$txId2]);
+    $assert((int)$gcashService->getCurrentSession()['cashier_id'] === $recipientId, "Emergency custody assigned to {$recipientRole}");
+    $assert($pdo->query("SELECT responsible_role FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetchColumn() === $recipientRole, 'Emergency follow-up records the actual recipient role');
+}
+
 echo "Emergency GCash handover contract: passed\n";

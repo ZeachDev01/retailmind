@@ -126,7 +126,7 @@ try {
         } elseif (($input['action'] ?? '') === 'handover_session') {
             $incomingId = filter_var($input['incoming_cashier_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$incomingId) {
-                throw new DomainException('Select a valid incoming Cashier.');
+                throw new DomainException('Select a valid incoming staff member.');
             }
             $countedCash = filter_var($input['counted_cash'] ?? null, FILTER_VALIDATE_FLOAT);
             $checkedWallet = filter_var($input['checked_wallet'] ?? null, FILTER_VALIDATE_FLOAT);
