@@ -145,8 +145,8 @@ final class UserLifecycleService
             } else {
                 $targetRoles = $this->requireAssignableRoles($actorRole, $targetRoles);
                 $targetRole = $targetRoles[0];
-                if ($actorId === $userId && $targetRoles !== $before['roles']) {
-                    throw new DomainException('You cannot change your own role access.');
+                if ($actorId === $userId && !in_array('admin', $targetRoles, true)) {
+                    throw new DomainException('You cannot remove your own Administrator role.');
                 }
             }
             if (!in_array('admin', $targetRoles, true)) {

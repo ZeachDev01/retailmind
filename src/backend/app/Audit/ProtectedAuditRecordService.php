@@ -136,7 +136,7 @@ final class ProtectedAuditRecordService
         [$whereSql, $params] = $this->where($actorRole, []);
         $moduleCondition = $whereSql === '' ? 'WHERE' : $whereSql . ' AND';
         $statement = $this->pdo->prepare(
-            "SELECT DISTINCT al.module FROM activity_log al {$moduleCondition} al.module IS NOT NULL AND al.module <> '' ORDER BY al.module"
+            "SELECT DISTINCT al.module FROM activity_log al LEFT JOIN users u ON al.user_id = u.user_id {$moduleCondition} al.module IS NOT NULL AND al.module <> '' ORDER BY al.module"
         );
         $statement->execute($params);
         return $statement->fetchAll(PDO::FETCH_COLUMN);

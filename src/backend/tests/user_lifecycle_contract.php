@@ -95,6 +95,18 @@ try {
     };
     $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo), $notifier);
 
+    foreach ([['admin', 'cashier', 'inventory_manager'], ['cashier', 'admin'], ['admin']] as $roles) {
+        $before = $service->get($adminId);
+        $updated = $service->update($adminId, 'admin', $adminId, array_replace($before, ['roles' => $roles]));
+        $assert($updated['role_name'] === $roles[0] && count($updated['roles']) === count($roles)
+            && array_diff($roles, $updated['roles']) === [], 'Administrator can add, remove, and reorder own operational roles while retaining Admin');
+        $assert((int)$updated['session_version'] === (int)$before['session_version'] + 1, 'Self-role changes revoke existing sessions');
+    }
+    $before = $service->get($adminId);
+    $expectDenied(fn() => $service->update($adminId, 'admin', $adminId,
+        array_replace($before, ['roles' => ['cashier']])), 'Administrator cannot remove own Admin role');
+    $assert($service->get($adminId) === $before, 'Denied self-demotion preserves account and roles');
+
     $service->update($superId, 'super_admin', $superId, [
         'full_name' => 'Super Owner',
         'username' => 'super_owner',
@@ -220,6 +232,14 @@ try {
         'password_hash' => password_hash('AnotherPassword123', PASSWORD_DEFAULT), 'role' => 'admin',
     ]);
     $assert($service->get($ordinaryAdminId)['role_name'] === 'admin', 'Administrator creates ordinary Administrators');
+    $beforeSelf = $service->get($adminId);
+    $auditsBeforeSelf = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
+    foreach ([['cashier'], ['admin', 'super_admin']] as $roles) {
+        $expectDenied(fn() => $service->update($adminId, 'admin', $adminId,
+            array_replace($beforeSelf, ['roles' => $roles])), 'Self-role editing cannot remove Admin or assign Super Administrator');
+        $assert($service->get($adminId) === $beforeSelf, 'Denied self-role editing preserves account and roles with other Administrators available');
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditsBeforeSelf, 'Denied self-role editing adds no audit');
+    }
     $beforeAdditional = $service->get($cashierId);
     $promoted = $service->update($adminId, 'admin', $cashierId,
         array_replace($beforeAdditional, ['roles' => ['cashier', 'admin']]));

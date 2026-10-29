@@ -143,6 +143,27 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             }
             await other.close();
         }
+        for (const assigned of [true, false]) {
+            await page.locator('button[data-is-self="1"]').click();
+            const admin = page.locator('#drawerRoles input[data-role="admin"]');
+            const cashier = page.locator('#drawerRoles input[data-role="cashier"]');
+            assert(await admin.isChecked(), 'Own Admin role stays assigned');
+            assert(await admin.isDisabled(), 'Own Admin role cannot be removed');
+            assert(await cashier.isEnabled(), 'Own optional roles remain editable');
+            await cashier.setChecked(assigned);
+            await save();
+            // Role changes revoke sessions; sign in again to verify persisted access.
+            await page.goto('/?login=1');
+            await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
+            await page.locator('#landing-login-username').fill('theme_admin');
+            await page.locator('#landing-login-password').fill(password);
+            await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            await page.goto(route);
+            await page.locator('button[data-is-self="1"]').click();
+            assert.equal(await cashier.isChecked(), assigned, 'Own optional role change persists');
+            assert(await admin.isChecked(), 'Own Admin role survives save');
+            await page.goto(route);
+        }
         console.log('Administrator management browser/HTTP: passed');
     } finally {
         if (browser) await browser.close();

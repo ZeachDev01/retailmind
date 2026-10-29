@@ -444,15 +444,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const isLastAdministrator = button.dataset.isLastAdministrator === '1';
         document.getElementById('drawerAdministratorMinimumHelp').hidden = !isLastAdministrator;
         const canEditOwnSuperRoles = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?>;
-        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => { input.disabled = (isSelf || isSuper) && !canEditOwnSuperRoles; });
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
         document.querySelector('#drawerStatus option[value="disabled"]').disabled = isLastAdministrator;
-        document.querySelectorAll('#drawerRoles input[data-role="admin"]').forEach(input => {
-            if (isLastAdministrator) input.disabled = true;
-        });
         const retainedAdministrator = document.getElementById('drawerRetainedAdministrator');
-        retainedAdministrator.disabled = !isLastAdministrator;
-        document.getElementById('drawerStatusButton').disabled = (isSelf || isSuper) && !canEditOwnSuperRoles;
+        retainedAdministrator.disabled = !(isLastAdministrator || (isSelf && !isSuper));
+        document.getElementById('drawerStatusButton').disabled = isSuper && !canEditOwnSuperRoles;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
         const remove = document.getElementById('drawerRemoveProfileImage');
         remove.disabled = button.dataset.hasProfileImage !== '1';
@@ -481,6 +477,10 @@ document.addEventListener('DOMContentLoaded', function () {
             document.querySelector('#drawerStatus option[value="active"]').disabled = false;
             selectDrawerTab('user');
         }
+        document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
+            input.disabled = (isSuper && !canEditOwnSuperRoles)
+                || (input.dataset.role === 'admin' && (isLastAdministrator || (isSelf && !isSuper)));
+        });
         setOpen(drawerOverlay, true);
     }));
 
