@@ -9,6 +9,7 @@ const path = require('node:path');
 if (process.env.RUN_DB_TESTS !== '1') { console.log('Administrator management browser: skipped (RUN_DB_TESTS=1 required)'); process.exit(0); }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
+const superadmin = process.argv.includes('--superadmin');
 const recovery = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-admin-management-'));
 const env = {...process.env, BACKUP_STORAGE_PATH: recovery, RM_THEME_TEST_DATABASE: database};
 const fixture = (action, file = 'administrator_minimum_fixture.php') => {
@@ -39,7 +40,7 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         page.on('pageerror', error => console.error(error));
         await page.goto('/?login=1');
         await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
-        await page.locator('#landing-login-username').fill('theme_admin');
+        await page.locator('#landing-login-username').fill(superadmin ? 'theme_super_admin' : 'theme_admin');
         await page.locator('#landing-login-password').fill(password);
         await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const route = '/components/user_manager/user_manager.php';
@@ -47,7 +48,7 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         const state = () => JSON.parse(fixture('state'));
         const row = page.locator('tr').filter({hasText: 'Minimum Additional'});
         assert.equal(await row.getByText('Protected', {exact: true}).count(), 0);
-        assert(await page.locator('tr').filter({hasText: 'Theme Test super_admin'}).getByText('Protected', {exact: true}).isVisible());
+        if (!superadmin) assert(await page.locator('tr').filter({hasText: 'Theme Test super_admin'}).getByText('Protected', {exact: true}).isVisible());
         await page.locator('#openUserModal').click();
         await page.locator('#createUsernameInput').fill('created_administrator');
         await page.locator('#createFirstName').fill('Created');
@@ -58,6 +59,10 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         await Promise.all([page.waitForNavigation(), page.locator('#createUserSubmit').click()]);
         assert(await page.getByText('User created successfully in the Store.', {exact: true}).isVisible());
         assert(await page.locator('tr').filter({hasText: 'Created Administrator'}).getByRole('button', {name: 'Manage Created Administrator'}).isVisible());
+        if (superadmin) {
+            console.log('Super Administrator creates Administrator through Users: passed');
+            return;
+        }
         const open = async () => {
             await row.getByRole('button', {name: /Manage/}).click();
             await page.locator('#drawerFirstName').waitFor({state: 'visible'});
