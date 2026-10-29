@@ -114,10 +114,14 @@ const { chromium } = require('playwright');
         await receivedPacks.fill('2');
         await receivedLoose.fill('4');
 
+        const submitted = await page.evaluate(() => Object.fromEntries(new FormData(document.getElementById('receiving_form'))));
+        assert.equal(submitted['lines[0][quantity_mode]'], 'packs', 'Form submits the sealed-pack quantity mode');
+        assert.equal(submitted['lines[0][received_packs]'], '2', 'Form submits sealed packs');
+        assert.equal(submitted['lines[0][received_loose]'], '4', 'Form submits loose pieces');
+
         // 3. Verify package conversion element text
         const conversionText = await line.locator('[data-field="package_conversion"]').textContent();
-        assert.ok(conversionText.includes('2 pack(s) × 12 + 4 loose = 28 units received'), 'Conversion text shows delivered units');
-        assert.ok(conversionText.includes('28 accepted (2 sealed packs, 4 loose pieces)'), 'Conversion text shows accepted packs and loose pieces');
+        assert.equal(conversionText, 'Accepted: 28 units (2 packs, 4 loose pieces).', 'Conversion text shows accepted packs and loose pieces');
 
         // 4. Verify delivery summary reflects 28 accepted units and 28 received units
         assert.equal(await page.locator('#summary_accepted').textContent(), '28', 'Delivery summary shows 28 accepted units');
@@ -130,9 +134,7 @@ const { chromium } = require('playwright');
         await rejectedPacks.fill('1');
 
         const updatedConversion = await line.locator('[data-field="package_conversion"]').textContent();
-        assert.ok(updatedConversion.includes('12 damaged'), 'Conversion reflects 1 pack (12 units) damaged');
-        assert.ok(updatedConversion.includes('12 rejected'), 'Conversion reflects 1 pack (12 units) rejected');
-        assert.ok(updatedConversion.includes('4 accepted (0 sealed packs, 4 loose pieces)'), 'Conversion reflects 0 sealed packs and 4 loose pieces accepted');
+        assert.equal(updatedConversion, 'Accepted: 4 units (0 packs, 4 loose pieces).', 'Conversion excludes damaged and rejected packs');
         assert.equal(await page.locator('#summary_accepted').textContent(), '4', 'Delivery summary reflects 4 accepted units');
         assert.equal(await page.locator('#summary_damaged').textContent(), '12', 'Delivery summary reflects 12 damaged units');
 

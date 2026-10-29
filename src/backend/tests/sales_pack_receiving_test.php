@@ -311,6 +311,9 @@ $pdo->exec("
     );
 ");
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
+
 $productService = new ProductService($pdo);
 $inventoryService = new InventoryService($pdo);
 $receivingService = new ReceivingService($pdo);
@@ -346,6 +349,7 @@ $assert((int)$summary['quantity_on_hand'] === 63, 'Starting Base Units total is 
 // Receive 2 packs of 12 and 4 loose pieces
 $receipt = $receivingService->receiveStock([
     'product_id' => $productId,
+    'quantity_mode' => 'packs',
     'received_packs' => 2,
     'received_loose' => 4,
     'damaged_packs' => 0,

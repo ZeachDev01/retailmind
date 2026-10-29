@@ -130,8 +130,8 @@ class ReceivingService
     {
         $productId = $this->wholeNumber($data['product_id'] ?? 0, 'Product');
         $quantityMode = $data['quantity_mode'] ?? 'units';
-        if (!in_array($quantityMode, ['units', 'packages'], true)) {
-            throw new RuntimeException('Choose Base units or Packages / cases.');
+        if (!in_array($quantityMode, ['units', 'packages', 'packs'], true)) {
+            throw new RuntimeException('Choose Base units, Packages / cases, or Sealed packs & loose pieces.');
         }
         $receivedPackages = $this->wholeNumber(($data['received_packages'] ?? '') === '' && $quantityMode === 'units' ? 0 : ($data['received_packages'] ?? 0), 'Package quantity');
         $receivedQtyInput = $this->wholeNumber(($data['received_qty'] ?? '') === '' && $quantityMode === 'packages' ? 0 : ($data['received_qty'] ?? 0), 'Received quantity');
