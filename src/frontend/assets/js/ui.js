@@ -395,7 +395,7 @@
     }
     qsa(".alert, .error-msg, .message, .pos-alert").forEach((node) => {
       if (node === flash) return;
-      if (typeof node.closest === "function" && node.closest(".landing-login-modal")) return;
+      if (typeof node.closest === "function" && node.closest('.landing-login-modal, [hidden], [aria-hidden="true"]')) return;
       if (node.dataset.rmAlertProcessed === "1" || node.getAttribute("role") === "note") return;
       const message = (node.textContent || "")
         .split(/\r?\n/)

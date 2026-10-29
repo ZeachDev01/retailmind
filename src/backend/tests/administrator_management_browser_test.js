@@ -58,6 +58,8 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         assert.equal(await page.locator('#createUserForm input[name="role_ids[]"][value="2"]').count(), 0);
         await Promise.all([page.waitForNavigation(), page.locator('#createUserSubmit').click()]);
         assert(await page.getByText('User created successfully in the Store.', {exact: true}).isVisible());
+        assert.equal(await page.locator('.rm-toast').filter({hasText: 'Unfinished duties pending:'}).count(), 0,
+            'Creating an account must not show the hidden pending-duties warning');
         assert(await page.locator('tr').filter({hasText: 'Created Administrator'}).getByRole('button', {name: 'Manage Created Administrator'}).isVisible());
         if (superadmin) {
             console.log('Super Administrator creates Administrator through Users: passed');
