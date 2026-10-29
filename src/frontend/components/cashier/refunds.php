@@ -155,7 +155,15 @@ if ($receiptId > 0 && $receipt === null) {
                 </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
             </div>
             <?php if ($error): ?><div class="message error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
-            <?php if ($registerLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></div><?php endif; ?>
+            <?php if ($registerLocked): ?>
+                <div class="workflow-notice" role="note" data-rm-alert-processed="1">
+                    <div>
+                        <h2>Register locked</h2>
+                        <p><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></p>
+                    </div>
+                    <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock at POS</a>
+                </div>
+            <?php endif; ?>
 
             <?php if ($receipt !== null): ?>
             <dialog id="receiptModal" class="sale-receipt-dialog" aria-labelledby="saleReceiptTitle"

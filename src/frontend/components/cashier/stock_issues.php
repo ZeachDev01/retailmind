@@ -101,9 +101,12 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
             <?php endif; ?>
 
             <?php if (!$openShift): ?>
-                <div class="message warning" role="note" data-rm-alert-processed="1">
-                    You do not have an active cashier shift. Open a shift before reporting stock issues.
-                    <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a>
+                <div class="workflow-notice" role="note" data-rm-alert-processed="1">
+                    <div>
+                        <h2>Cashier Shift required</h2>
+                        <p>You do not have an active cashier shift. Open a shift before reporting stock issues.</p>
+                    </div>
+                    <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a>
                 </div>
             <?php endif; ?>
 

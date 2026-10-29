@@ -164,7 +164,15 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
                 <?php if ($notice !== ''): ?><script>RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 4300);</script><?php endif; ?>
             <?php endforeach; ?>
-            <?php if ($ownRegisterLocked): ?><div class="message error" role="note" data-rm-alert-processed="1"><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?> <a href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock it at the point of sale</a> to carry on with this same shift.</div><?php endif; ?>
+            <?php if ($ownRegisterLocked): ?>
+                <div class="workflow-notice" role="note" data-rm-alert-processed="1">
+                    <div>
+                        <h2>Register locked</h2>
+                        <p><?= htmlspecialchars(CashierShiftService::LOCKED_MESSAGE) ?></p>
+                    </div>
+                    <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock at POS</a>
+                </div>
+            <?php endif; ?>
             <?php if (!$isCashier): ?><section class="dashboard-section shift-selector">
                     <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['full_name']) ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
                 </section><?php endif; ?>

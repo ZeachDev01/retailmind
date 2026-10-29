@@ -594,6 +594,29 @@ button.btn-loading {
 
 /* utilities.css */
 /* Reusable utility classes for formerly inline static styles. */
+.workflow-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--theme-warning-text, #92400e);
+    border-radius: 12px;
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+}
+.workflow-notice > div { min-width: 0; }
+.workflow-notice > div > h2 { margin: 0 0 .25rem; color: inherit; font-size: 1rem; font-weight: 700; line-height: 1.4; }
+.workflow-notice p { max-width: 72ch; margin: 0; font-size: .9rem; line-height: 1.5; overflow-wrap: anywhere; }
+:root .workflow-notice p { color: inherit; }
+.workflow-notice > .btn { flex-shrink: 0; gap: .5rem; text-align: center; }
+.workflow-notice > .btn:focus-visible { outline: 2px solid currentColor; outline-offset: -5px; }
+@media (max-width: 640px) {
+    .workflow-notice { align-items: stretch; flex-direction: column; }
+    .workflow-notice > .btn { width: 100%; }
+}
+
 .muted,
 .u-text-muted { color: var(--muted); }
 .u-text-muted-legacy { color: var(--theme-muted, #666); }

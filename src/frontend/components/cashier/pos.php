@@ -522,7 +522,13 @@ $quickCategoryIcon = static function (string $categoryName): string {
             <script>RetailMindUI.toast(<?= json_encode('Register: ' . ($openShift['register_name'] ?? 'Unassigned') . ' · Shift #' . (int)$openShift['shift_id'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'info', 'Register ready', 3000);</script>
         <?php endif; ?>
         <?php if (!$posShiftOpen): ?>
-            <div class="pos-alert error" role="note" data-rm-alert-processed="1"><i class="bi bi-clock-history" aria-hidden="true"></i>Open a Cashier Shift before checkout. <a href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a></div>
+            <div class="workflow-notice" role="note" data-rm-alert-processed="1">
+                <div>
+                    <h2>Cashier Shift required</h2>
+                    <p>Open a Cashier Shift before checkout.</p>
+                </div>
+                <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Open shift</a>
+            </div>
         <?php endif; ?>
 
         <div class="pos-grid">
