@@ -245,10 +245,8 @@ $emptyTableCopy = $canViewPlatformAudit
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <div class="topbar">
-                <div>
-                    <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                </div>
+            <header class="page-heading topbar">
+                <h1><?= htmlspecialchars($pageTitle) ?></h1>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="export_csv">
@@ -260,7 +258,7 @@ $emptyTableCopy = $canViewPlatformAudit
                     <input type="hidden" name="table_request" id="exportTableRequest" value="{}">
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
-            </div>
+            </header>
 
             <div class="audit-log-stats">
                 <div class="stat-card with-icon">
@@ -285,7 +283,6 @@ $emptyTableCopy = $canViewPlatformAudit
                     <div class="section-header">
                         <div>
                             <h2 id="sign-in-review-title">Review failed sign-ins</h2>
-                            <p class="section-description"><?= $pendingSignInCount ?> failures need review. Clearing records your review; it does not block further attempts.</p>
                         </div>
                     </div>
                     <?php if ($reviewMessage !== ''): ?>
@@ -295,12 +292,11 @@ $emptyTableCopy = $canViewPlatformAudit
                         <p class="alert tag-danger" role="alert"><?= htmlspecialchars($reviewError) ?></p>
                     <?php endif; ?>
                     <?php if ($pendingSignIns === []): ?>
-                        <p>No failed sign-ins need review.</p>
+                        <p class="u-text-muted">No failed sign-ins need review.</p>
                     <?php else: ?>
-                        <p>Confirm the account and time with its owner. Check for unfamiliar accounts or repeated attempts; a shared IP cannot prove intent. Search <strong>Login failure</strong> below for the failure reason. If activity looks unauthorized, secure the account through <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>">User Manager</a> before clearing it.</p>
                         <div class="table-wrap audit-log-table-wrap">
                             <table class="audit-log-table" data-no-smart-table>
-                                <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts. Only these listed attempts will be cleared.</caption>
+                                <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts</caption>
                                 <thead><tr><th>Date &amp; Time</th><th>Account / Identifier</th><th>IP Address</th></tr></thead>
                                 <tbody>
                                     <?php foreach ($pendingSignIns as $attempt): ?>
@@ -317,19 +313,20 @@ $emptyTableCopy = $canViewPlatformAudit
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="review_failed_sign_ins">
                             <input type="hidden" name="through_attempt_id" value="<?= (int)$pendingSignIns[array_key_last($pendingSignIns)]['attempt_id'] ?>">
-                            <div class="form-group">
-                                <label for="sign-in-review-result">Review result <span class="required-mark" aria-hidden="true">*</span></label>
-                                <select id="sign-in-review-result" name="review_result" required>
-                                    <option value="">Choose a result</option>
-                                    <?php foreach (\App\Attention\FailedSignInReviewService::RESULTS as $value => $label): ?>
-                                        <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
-                                <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="sign-in-note-help"><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
-                                <p id="sign-in-note-help" class="section-description">Record who confirmed the attempts and any security action taken.</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="sign-in-review-result">Review result <span class="required-mark" aria-hidden="true">*</span></label>
+                                    <select id="sign-in-review-result" name="review_result" required>
+                                        <option value="">Choose a result</option>
+                                        <?php foreach (\App\Attention\FailedSignInReviewService::RESULTS as $value => $label): ?>
+                                            <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group full">
+                                    <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
+                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="Record reviewer confirmation and any security actions taken" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                </div>
                             </div>
                             <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save review and clear listed attempts</button>
@@ -344,11 +341,10 @@ $emptyTableCopy = $canViewPlatformAudit
                         <h2 id="audit-table-title">Record history</h2>
                     </div>
                 </div>
-                <p class="section-description" id="audit-history-help">Search covers the full record history. Export CSV includes all matching records across every page.</p>
                 <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
                 <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
-                    <table id="auditLogsTable" class="audit-log-table display" aria-describedby="audit-history-help" data-no-smart-table>
+                    <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table>
                         <thead>
                             <tr>
                                 <th>Date &amp; Time</th>

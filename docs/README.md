@@ -52,6 +52,9 @@ Design and policy discussions:
 
 ## Verification
 
+- [Beta questionnaire quality test plan](verification/beta-questionnaire-quality-plan.md) and [2026-10-30 software evidence report](verification/beta-questionnaire-quality-report-20261030.md).
+- [2026-10-30 transaction/browser results and user-reported hardware acceptance](verification/beta-questionnaire-transaction-browser-20261030.md).
+- [Beta questionnaire remediation and verification specification](specs/beta-questionnaire-quality-remediation.md) — [issue #352](https://github.com/ZeachDev01/retailmind/issues/352).
 - [Operator Alerts manual verification matrix](verification/friendly-alerts-matrix.md)
 - [Theme ticket validation](verification/theme-ticket-validation.md)
 - [Responsive UI verification](verification/responsive-ui-verification.md)

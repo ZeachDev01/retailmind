@@ -28,11 +28,14 @@ php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/backup_package_browser_test.js
+node src/backend/tests/encrypted_restore_browser_test.js
+php src/backend/tests/recovery_restart_workflow_integration.php
 php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php
 node src/backend/tests/safety_copy_browser_test.js
 php src/backend/tests/backup_unavailable_navigation_test.php
 php src/backend/tests/sql_backup_format_test.php
 php -d memory_limit=512M src/backend/tests/store_package_format_test.php
+php src/backend/tests/portable_store_package_test.php
 php src/backend/tests/session_policy_test.php
 node src/backend/tests/session_policy_browser_test.js
 node src/backend/tests/session_activity_http_test.js

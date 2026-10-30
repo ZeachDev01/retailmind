@@ -6,19 +6,19 @@ $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\Sy
 $fields = [
     'cash_variance_amount' => [
         'label' => 'Cash variance review threshold (₱)',
-        'help' => 'Requires Shift variance review and raises Store Overview attention when counted cash difference reaches or exceeds this amount.',
+        'step' => '0.01',
     ],
     'inventory_overdue_hours' => [
         'label' => 'Stock Issue overdue warning (hours)',
-        'help' => 'Raises a Store Overview warning when an open Stock Issue remains pending longer than this duration.',
+        'step' => '1',
     ],
     'inventory_high_value_amount' => [
         'label' => 'High-value Stock Issue alert (₱)',
-        'help' => 'Raises a critical Store Overview alert when an open Stock Issue risk value reaches or exceeds this amount.',
+        'step' => '0.01',
     ],
     'fiscal_period_days_to_close' => [
         'label' => 'Fiscal Period closing warning (days)',
-        'help' => 'Raises an upcoming closure warning when an active Fiscal Period has this many or fewer days remaining.',
+        'step' => '1',
     ],
 ];
 $message = '';
@@ -57,12 +57,11 @@ $effective = $service->thresholdsFor('admin');
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div>
-                <h1>Store Settings</h1>
-                <p class="page-subtitle">Configure thresholds that trigger Store Overview attention and required operational reviews.</p>
-            </div>
+            <h1>Store Settings</h1>
         </header>
-        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+        <?php if ($message): ?>
+            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div>
+        <?php endif; ?>
         <section class="dashboard-section">
             <h2>Attention thresholds</h2>
             <form method="post">
@@ -71,10 +70,9 @@ $effective = $service->thresholdsFor('admin');
                     <?php foreach ($fields as $key => $config): ?>
                         <div class="form-group">
                             <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" required>
-                            <small class="muted"><?= htmlspecialchars($config['help']) ?></small>
-                            <?php if (isset($effective[$key]) && isset($requested[$key]) && $effective[$key] !== $requested[$key]): ?>
-                                <small>Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="<?= htmlspecialchars($config['step']) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" required>
+                            <?php if (isset($effective[$key], $requested[$key]) && (float)$effective[$key] !== (float)$requested[$key]): ?>
+                                <small class="u-text-muted">Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>

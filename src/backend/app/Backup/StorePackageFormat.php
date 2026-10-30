@@ -24,7 +24,7 @@ final class StorePackageFormat
         }
         $memory = (string)ini_get('memory_limit');
         $bytes = (int)$memory * match (strtolower(substr($memory, -1))) { 'g' => 1073741824, 'm' => 1048576, 'k' => 1024, default => 1 };
-        if ($bytes !== -1 && $bytes < 512 * 1024 * 1024) {
+        if ($bytes !== -1 && $bytes < 512 * 1024 * 1024 && ini_set('memory_limit', '512M') === false) {
             throw new RuntimeException('Store packages require a PHP memory limit of at least 512 MB.');
         }
     }
@@ -82,7 +82,7 @@ final class StorePackageFormat
             $manifest = json_decode($plain, true, 16, JSON_THROW_ON_ERROR);
             if (!is_array($manifest)) throw new RuntimeException('Invalid Store package manifest.');
             $result = self::validateManifest($manifest, $schema);
-            $result['rows'] = SqlBackupFormat::rows($result['sql'], $schema);
+            $result['rows'] = SqlBackupFormat::rows($result['sql'], $result['source_schema']);
             self::validateReferences($result['rows'], $result['files']);
             return $result;
         } finally { unset($key, $plain); }
@@ -91,7 +91,7 @@ final class StorePackageFormat
     private static function validateManifest(array $manifest, array $schema): array
     {
         if (($manifest['format'] ?? '') !== self::VERSION || ($manifest['sql_format'] ?? '') !== SqlBackupFormat::VERSION
-            || ($manifest['schema'] ?? '') !== hash('sha256', json_encode($schema, JSON_THROW_ON_ERROR))
+            || !preg_match('/^[a-f0-9]{64}$/D', (string)($manifest['schema'] ?? ''))
             || !preg_match('/^[a-f0-9]{32}$/D', (string)($manifest['origin_id'] ?? ''))
             || !preg_match('/^[a-f0-9]{32}$/D', (string)($manifest['package_id'] ?? ''))
             || !is_string($manifest['snapshot_at'] ?? null) || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $manifest['snapshot_at'])
@@ -117,8 +117,11 @@ final class StorePackageFormat
             else { self::assertImage($member['path'], $content); $files[$member['path']] = $content; }
         }
         if ($sql === null) throw new RuntimeException('The package is missing its database snapshot.');
-        SqlBackupFormat::statements($sql, $schema);
-        return ['sql' => $sql, 'files' => $files, 'bytes' => $total, 'manifest' => array_diff_key($manifest, ['members' => true])];
+        $source = SqlBackupFormat::compatibleSourceSchema($sql, $schema);
+        if (!hash_equals($manifest['schema'], hash('sha256', json_encode($source, JSON_THROW_ON_ERROR)))) {
+            throw new RuntimeException('The package schema fingerprint does not match its captured SQL.');
+        }
+        return ['sql' => $sql, 'source_schema' => $source, 'files' => $files, 'bytes' => $total, 'manifest' => array_diff_key($manifest, ['members' => true])];
     }
 
     public static function assertImage(string $path, string $content): void

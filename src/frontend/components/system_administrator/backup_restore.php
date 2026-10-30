@@ -1,8 +1,8 @@
 <?php
 // Super Administrator Database Backup and Database Restore (ticket #69).
 //
-// Shared encrypted capture, read-only Super Administrator package preflight,
-// and restricted backup history. Package replacement is a separate workflow.
+// Shared encrypted capture, read-only preflight, encrypted replacement,
+// and restricted backup history.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
@@ -173,6 +173,7 @@ try {
             </div>
 
             <p><a href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>">Review Identity Reconciliation</a></p>
+            <?php require __DIR__ . '/../backup/restore_form.php'; ?>
             <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
 
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">

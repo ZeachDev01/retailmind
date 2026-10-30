@@ -1,4 +1,9 @@
 <?php
+// components/administrator/store_calendar.php — Store calendar administration.
+//
+// Calendar status provides Store and forecast context for operational planning.
+// It does not gate checkout or close shifts.
+// In demand forecasts, Holiday represents a closed trading day; choose Open if trading on a holiday.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin', 'super_admin']);
 
@@ -159,11 +164,11 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         }
         .calendar-header-day {
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
             padding: 0.5rem 0.25rem;
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.12em;
             color: var(--muted);
         }
         .calendar-day-cell {
@@ -210,8 +215,8 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         }
         .calendar-status-badge {
             display: inline-block;
-            padding: 0.2rem 0.25rem;
-            border-radius: 4px;
+            padding: 0.2rem 0.35rem;
+            border-radius: 6px;
             font-size: 0.75rem;
             font-weight: 500;
             line-height: 1.2;
@@ -235,8 +240,6 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
         .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
         .calendar-scroll { overflow-x: auto; }
-        .calendar-scroll-hint { margin-bottom: .75rem; color: var(--muted); }
-        @media (min-width: 640px) { .calendar-scroll-hint { display: none; } }
     </style>
 </head>
 <body>
@@ -244,14 +247,12 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <div>
-                <h1>Store Calendar</h1><p class="page-subtitle">Calendar status provides Store and forecast context for operational planning. It does not gate checkout or close shifts. In demand forecasts, Holiday represents a closed trading day; choose Open if trading on a holiday.</p>
-            </div>
+            <h1>Store Calendar</h1>
             <button type="button" class="btn" id="record-date-btn">Record date status</button>
         </header>
 
         <?php if ($message): ?>
-            <div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div>
+            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
 
         <section class="dashboard-section">
@@ -271,7 +272,6 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <span class="calendar-status-badge status-exceptional_closure">Exceptional closure</span>
                 <span class="calendar-status-badge status-unrecorded">Not recorded</span>
             </div>
-            <p class="calendar-scroll-hint" id="calendar-scroll-hint">Scroll across to see every date.</p>
             <div class="calendar-scroll" tabindex="0" role="region" aria-label="Store calendar for <?= htmlspecialchars($monthTitle) ?>">
             <div class="calendar-grid">
                 <?php
@@ -333,7 +333,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <div class="rm-modal-body">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="calendar_date">Selected Date (Start)</label>
+                        <label for="calendar_date">Start date</label>
                         <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
                     </div>
                     <div class="form-group">
@@ -342,7 +342,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                         <small class="form-hint" id="range-preview-hint" role="status">Leave empty to update only the selected date.</small>
                     </div>
                     <div class="form-group">
-                        <label for="status">Trading Status</label>
+                        <label for="status">Trading status</label>
                         <select id="status" name="status" required>
                             <?php foreach (['open' => 'Open', 'closed' => 'Closed', 'holiday' => 'Holiday', 'exceptional_closure' => 'Exceptional closure'] as $value => $text): ?>
                                 <option value="<?= $value ?>" <?= ($_POST['status'] ?? 'open') === $value ? 'selected' : '' ?>><?= $text ?></option>
@@ -353,7 +353,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 </div>
                 <footer class="rm-modal-actions">
                     <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
-                    <button class="btn" type="submit" id="save-status-btn">Save Status</button>
+                    <button class="btn" type="submit" id="save-status-btn">Save status</button>
                 </footer>
             </form>
         </section>

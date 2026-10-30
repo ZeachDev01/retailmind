@@ -173,7 +173,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
                 <h3>Cash Reconciliation</h3>
                 <dl class="shift-cash-grid">
                     <div><dt>Expected Cash</dt><dd>₱<?= shift_report_e($targetedShift['Expected Cash']) ?></dd></div>
-                    <div><dt>Counted Cash</dt><dd><?= $targetedShift['Counted Cash'] !== '' ? '₱' . shift_report_e($targetedShift['Counted Cash']) : 'None' ?></dd></div>
+                    <div><dt>Counted Cash</dt><dd><?= $targetedShift['Counted Cash'] !== '' ? '₱' . shift_report_e($targetedShift['Counted Cash']) : '<span class="u-text-muted">None</span>' ?></dd></div>
                     <div><dt>Difference</dt><dd>₱<?= shift_report_e($targetedShift['Variance']) ?></dd></div>
                 </dl>
                 <div class="shift-variance-context">
@@ -197,7 +197,7 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
                             <label for="draft_notes">Draft notes</label>
                             <textarea id="draft_notes" name="draft_notes" rows="6"><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
                         </div>
-                        <button type="submit" class="btn btn-secondary u-mt-10">Save Draft</button>
+                        <button type="submit" class="btn btn-secondary u-mt-10">Save draft</button>
                     </form>
 
                     <form method="post" class="shift-review-form">
@@ -206,18 +206,18 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                         <h3>Complete Review</h3>
                         <div class="form-group u-mt-10">
-                            <label for="explanation">Explanation (Required)</label>
+                            <label for="explanation">Explanation <span class="required-mark" aria-hidden="true">*</span></label>
                             <textarea id="explanation" name="explanation" rows="3" required></textarea>
                         </div>
                         <div class="form-group u-mt-10">
-                            <label for="remaining_shortage">Remaining Shortage (PHP)</label>
+                            <label for="remaining_shortage">Remaining shortage (₱)</label>
                             <input id="remaining_shortage" name="remaining_shortage" type="number" step="0.01" min="0" aria-describedby="review-notice" value="<?= shift_report_e($targetedShift['review_shortage'] ?? (floatval($targetedShift['Variance']) < 0 ? abs(floatval($targetedShift['Variance'])) : 0)) ?>">
                         </div>
                         <details class="shift-review-notice">
                             <summary>Review terms</summary>
                             <p id="review-notice">Marking reviewed explicitly records remaining shortage. It implies neither recovery, debt assignment nor wage-deduction permission.</p>
                         </details>
-                        <button type="submit" class="btn btn-primary u-mt-10">Mark Reviewed</button>
+                        <button type="submit" class="btn btn-primary u-mt-10">Mark reviewed</button>
                     </form>
                 </div>
             <?php else: ?>
@@ -234,10 +234,10 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                         <h4>Reopen Review</h4>
                         <div class="form-group">
-                            <label for="reopen_reason">Reason to reopen (Required)</label>
+                            <label for="reopen_reason">Reason to reopen <span class="required-mark" aria-hidden="true">*</span></label>
                             <input id="reopen_reason" name="reopen_reason" type="text" required>
                         </div>
-                        <button type="submit" class="btn btn-secondary">Reopen Review</button>
+                        <button type="submit" class="btn btn-secondary">Reopen review</button>
                     </form>
                 </div>
             <?php endif; ?>
@@ -261,32 +261,92 @@ function shift_report_e($value): string { return htmlspecialchars((string)$value
         </section>
     <?php endif; ?>
 
-    <section class="dashboard-section report-filters"><h2>Filters</h2>
+    <section class="dashboard-section report-filters">
+        <h2>Filters</h2>
         <form method="get" class="report-filter-grid">
-            <div class="form-group"><label for="from">From</label><input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" required></div>
-            <div class="form-group"><label for="to">To</label><input id="to" name="to" type="date" value="<?= shift_report_e($filters['to']) ?>" required></div>
-            <div class="form-group"><label for="cashier_id">Cashier</label><select id="cashier_id" name="cashier_id"><option value="">All Cashiers</option>
-            <?php foreach ($cashiers as $cashier): ?><option value="<?= (int)$cashier['user_id'] ?>" <?= $filters['cashier_id'] === (string)$cashier['user_id'] ? 'selected' : '' ?>><?= shift_report_e($cashier['full_name']) ?> (#<?= (int)$cashier['user_id'] ?>)</option><?php endforeach; ?>
-            </select></div>
-            <div class="form-group"><label for="register_id">Register</label><select id="register_id" name="register_id"><option value="">All Registers</option><option value="legacy" <?= $filters['register_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned</option>
-            <?php foreach ($registers as $register): ?><option value="<?= (int)$register['register_id'] ?>" <?= $filters['register_id'] === (string)$register['register_id'] ? 'selected' : '' ?>><?= shift_report_e($register['name']) ?> (#<?= (int)$register['register_id'] ?>)</option><?php endforeach; ?>
-            </select></div>
-            <div class="form-group"><label for="shift_id">Cashier Shift</label><select id="shift_id" name="shift_id"><option value="">All shifts</option><option value="legacy" <?= $filters['shift_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned</option>
-            <?php foreach ($shifts as $shift): ?><option value="<?= (int)$shift['shift_id'] ?>" <?= $filters['shift_id'] === (string)$shift['shift_id'] ? 'selected' : '' ?>>#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e($shift['opened_at']) ?></option><?php endforeach; ?>
-            </select></div><button type="submit" class="btn">Run Report</button>
+            <div class="form-group">
+                <label for="from">From</label>
+                <input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" required>
+            </div>
+            <div class="form-group">
+                <label for="to">To</label>
+                <input id="to" name="to" type="date" value="<?= shift_report_e($filters['to']) ?>" required>
+            </div>
+            <div class="form-group">
+                <label for="cashier_id">Cashier</label>
+                <select id="cashier_id" name="cashier_id">
+                    <option value="">All Cashiers</option>
+                    <?php foreach ($cashiers as $cashier): ?>
+                        <option value="<?= (int)$cashier['user_id'] ?>" <?= $filters['cashier_id'] === (string)$cashier['user_id'] ? 'selected' : '' ?>><?= shift_report_e($cashier['full_name']) ?> (#<?= (int)$cashier['user_id'] ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="register_id">Register</label>
+                <select id="register_id" name="register_id">
+                    <option value="">All Registers</option>
+                    <option value="legacy" <?= $filters['register_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned</option>
+                    <?php foreach ($registers as $register): ?>
+                        <option value="<?= (int)$register['register_id'] ?>" <?= $filters['register_id'] === (string)$register['register_id'] ? 'selected' : '' ?>><?= shift_report_e($register['name']) ?> (#<?= (int)$register['register_id'] ?>)</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="shift_id">Cashier Shift</label>
+                <select id="shift_id" name="shift_id">
+                    <option value="">All shifts</option>
+                    <option value="legacy" <?= $filters['shift_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned</option>
+                    <?php foreach ($shifts as $shift): ?>
+                        <option value="<?= (int)$shift['shift_id'] ?>" <?= $filters['shift_id'] === (string)$shift['shift_id'] ? 'selected' : '' ?>>#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e($shift['opened_at']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn">Run report</button>
         </form>
     </section>
-    <section class="dashboard-section u-mt-15"><div class="section-header"><h2>Results (<?= count($report['rows']) ?>)</h2></div>
-        <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0"><table><thead><tr><?php foreach ($report['headers'] as $header): ?><th scope="col"><?= shift_report_e($header) ?></th><?php endforeach; ?></tr></thead>
-            <tbody><?php foreach ($report['rows'] as $row): ?><tr><?php foreach ($report['headers'] as $header): ?><td><?= shift_report_e($row[$header] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?>
-            <?php if (!$report['rows']): ?><tr><td colspan="<?= count($report['headers']) ?>">No records match these filters.</td></tr><?php endif; ?>
-            <?php if ($report['rows']): ?><tr><th>TOTAL</th><?php foreach (array_slice($report['headers'], 1) as $header): ?><td><?= shift_report_e($report['totals'][$header] ?? '') ?></td><?php endforeach; ?></tr><?php endif; ?></tbody></table></div>
-        <form method="post" class="report-actions"><?= csrf_field() ?><input type="hidden" name="action" value="export_csv">
-            <?php foreach ($filters as $name => $value): ?><input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>"><?php endforeach; ?>
+
+    <section class="dashboard-section u-mt-15">
+        <div class="section-header">
+            <h2>Results (<?= count($report['rows']) ?>)</h2>
+        </div>
+        <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0">
+            <table>
+                <thead>
+                    <tr>
+                        <?php foreach ($report['headers'] as $header): ?>
+                            <th scope="col"><?= shift_report_e($header) ?></th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($report['rows'] as $row): ?>
+                        <tr>
+                            <?php foreach ($report['headers'] as $header): ?>
+                                <td><?= shift_report_e($row[$header] ?? '') ?></td>
+                            <?php endforeach; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$report['rows']): ?>
+                        <tr><td colspan="<?= count($report['headers']) ?>" class="u-text-muted">No records match these filters.</td></tr>
+                    <?php endif; ?>
+                    <?php if ($report['rows']): ?>
+                        <tr>
+                            <th>TOTAL</th>
+                            <?php foreach (array_slice($report['headers'], 1) as $header): ?>
+                                <td><?= shift_report_e($report['totals'][$header] ?? '') ?></td>
+                            <?php endforeach; ?>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        <form method="post" class="report-actions">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="export_csv">
+            <?php foreach ($filters as $name => $value): ?>
+                <input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>">
+            <?php endforeach; ?>
             <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export CSV</button>
         </form>
-        <details class="shift-report-definitions"><summary>Report definitions</summary>
-            <p>Dates use each shift's opening date; unassigned sales use their sale date. Payment totals differ from physical drawer cash. Expected cash is the closing snapshot; a blank counted cash value means no reconciliation was recorded. Older reversals without a Shift are Legacy / Unassigned.</p>
-        </details>
     </section>
 </main></div></body></html>

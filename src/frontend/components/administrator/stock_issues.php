@@ -103,13 +103,10 @@ try {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <div class="topbar">
-                <div>
-                    <h1>Stock Issue Oversight</h1>
-                    <p class="page-subtitle">Review Damaged, Missing/Lost, Expired, and Other Stock Issue reports. This page is read-only.</p>
-                </div>
-                <span class="muted"><?= count($reports) ?> Reports</span>
-            </div>
+            <header class="page-heading">
+                <h1>Stock Issue Oversight</h1>
+                <span class="u-text-muted"><?= count($reports) ?> Reports</span>
+            </header>
 
             <?php if ($error): ?>
                 <div class="message error" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></div>
@@ -189,7 +186,6 @@ try {
                     <div class="section-header">
                         <div>
                             <h2>Report #<?= (int)$report['adjustment_id'] ?> — Stock Issue detail</h2>
-                            <p class="section-description">Complete lifecycle history. Approved and rejected reports cannot change; Inventory Managers correct stock through an inventory count.</p>
                         </div>
                         <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>">Back to list</a>
                     </div>
@@ -232,7 +228,7 @@ try {
 
                     <h4>Lifecycle revisions (<?= count($detail['revisions']) ?>)</h4>
                     <?php if (empty($detail['revisions'])): ?>
-                        <p>No revisions recorded.</p>
+                        <p class="u-text-muted">No revisions recorded.</p>
                     <?php else: ?>
                         <?php foreach ($detail['revisions'] as $revision): ?>
                             <div class="adjustment-details">
@@ -241,7 +237,7 @@ try {
                                 at <?= htmlspecialchars($revision['created_at']) ?>
                                 (<?= htmlspecialchars((string)($revision['old_status'] ?? '—')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '—')) ?>)
                                 <?php if (!empty($revision['old_values']) || !empty($revision['new_values'])): ?>
-                                    <br><small class="muted">
+                                    <br><small class="u-text-muted">
                                         old: <?= htmlspecialchars((string)($revision['old_values'] ?? '—')) ?><br>
                                         new: <?= htmlspecialchars((string)($revision['new_values'] ?? '—'))
                                     ?></small>
@@ -252,7 +248,7 @@ try {
 
                     <h4>Deducted batches</h4>
                     <?php if (empty($detail['batches'])): ?>
-                        <p>No batch attribution recorded.</p>
+                        <p class="u-text-muted">No batch attribution recorded.</p>
                     <?php else: ?>
                         <div class="table-wrap">
                             <table>
@@ -278,7 +274,7 @@ try {
 
                     <h4>Linked stock movements</h4>
                     <?php if (empty($detail['stock_movements'])): ?>
-                        <p>No stock movement is linked to this report (approvals record one; rejections and returns never change inventory).</p>
+                        <p class="u-text-muted">No stock movement is linked to this report.</p>
                     <?php else: ?>
                         <div class="table-wrap">
                             <table>
@@ -308,7 +304,7 @@ try {
 
                     <h4>Correction inventory counts</h4>
                     <?php if (empty($detail['correction_counts'])): ?>
-                        <p>No correction inventory count is linked to this report.</p>
+                        <p class="u-text-muted">No correction inventory count is linked to this report.</p>
                     <?php else: ?>
                         <div class="table-wrap">
                             <table>
@@ -331,13 +327,13 @@ try {
                                             <td>
                                                 <?= (int)$countRow['system_quantity'] ?>
                                                 <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $countRow)): ?>
-                                                    <br><small class="muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
+                                                    <br><small class="u-text-muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
                                                 <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?= (int)$countRow['physical_quantity'] ?>
                                                 <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $countRow)): ?>
-                                                    <br><small class="muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
+                                                    <br><small class="u-text-muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
                                                 <?php endif; ?>
                                             </td>
                                             <td><?= (int)$countRow['difference_qty'] > 0 ? '+' . (int)$countRow['difference_qty'] : (int)$countRow['difference_qty'] ?></td>
@@ -350,14 +346,13 @@ try {
                             </table>
                         </div>
                     <?php endif; ?>
-                    <p class="muted">Both records remain independently auditable: this report and each linked inventory count keep their own history.</p>
                 </div>
             <?php endif; ?>
 
             <div class="history-section u-mt-2">
                 <h2>Stock Issue reports (<?= count($reports) ?>)</h2>
                 <?php if (empty($reports)): ?>
-                    <p>No stock issue reports match the current filters.</p>
+                    <p class="u-text-muted">No stock issue reports match the current filters.</p>
                 <?php else: ?>
                     <div class="table-wrap">
                         <table>
@@ -380,7 +375,7 @@ try {
                                         <td>#<?= (int)$row['adjustment_id'] ?></td>
                                         <td>
                                             <strong><?= htmlspecialchars($row['product_name']) ?></strong>
-                                            <br><small class="muted"><?= htmlspecialchars($row['sku']) ?></small>
+                                            <br><small class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></small>
                                         </td>
                                         <td><?= htmlspecialchars($categoryLabel((string)$row['adjustment_type'])) ?></td>
                                         <td><?= htmlspecialchars($formatIssueQty($row)) ?></td>

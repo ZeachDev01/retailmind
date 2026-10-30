@@ -1,5 +1,6 @@
 <?php
 // report/report_generation.php
+// Refunds are counted on the refund issue date and linked to the original sale.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
@@ -927,10 +928,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <div class="topbar">
+        <header class="page-heading topbar">
             <div>
                 <h1 id="page-heading"><?= htmlspecialchars($pageTitle) ?></h1>
-                <p class="page-subtitle"><?= $selectedReport === 'gross_profit' ? 'Product gross profit, sales, cost, and margin.' : 'Sales, inventory, forecast, and variance reports.' ?></p>
             </div>
             <?php if ($selectedReport === 'gross_profit'): ?>
                 <div class="topbar-actions">
@@ -939,7 +939,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                     </a>
                 </div>
             <?php endif; ?>
-        </div>
+        </header>
 
         <div class="dashboard-section report-filters">
             <form method="GET" class="report-filter-grid" id="report-filter-form">
@@ -1173,7 +1173,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                     </div>
                                 </details>
 
-                                <p class="profit-exclusion-note" id="profit-exclusion-note">Gross profit is product revenue minus product cost; operating expenses are excluded.</p>
+                                <p class="profit-exclusion-note" id="profit-exclusion-note">Gross profit reflects product revenue minus product cost. Rent, wages, electricity, and other operating expenses are excluded.</p>
                             </div>
                         </div>
                     </div>
@@ -1212,11 +1212,6 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                         </div>
                     </div>
                     <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
-                    <?php if (in_array($selectedReport, ['sales_period', 'sales_product', 'sales_category', 'sales_cashier', 'fast_moving', 'slow_moving'], true)): ?>
-                        <p class="section-description">Refunds are counted on the refund issue date and linked to the original sale.</p>
-                    <?php elseif ($selectedReport === 'refunds'): ?>
-                        <p class="section-description">Refunds are grouped by issue date.</p>
-                    <?php endif; ?>
 
                     <?php if (!empty($reportData['metrics'])): ?>
                         <div class="card-grid u-my-1">
@@ -1234,7 +1229,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                             <thead>
                                 <tr>
                                     <?php foreach ($reportData['headers'] as $header): ?>
-                                        <th><?= htmlspecialchars($header) ?></th>
+                                        <th scope="col"><?= htmlspecialchars($header) ?></th>
                                     <?php endforeach; ?>
                                 </tr>
                             </thead>
@@ -1288,9 +1283,6 @@ function syncReportControls() {
     if (periodGroup) {
         periodGroup.style.display = reportSelect.value === 'gross_profit' ? '' : 'none';
     }
-    const hideDates = ['low_stock', 'inventory_valuation', 'expiration'].includes(reportSelect.value);
-    if (fromGroup) fromGroup.style.display = hideDates ? 'none' : '';
-    if (toGroup) toGroup.style.display = hideDates ? 'none' : '';
 }
 if (reportSelect) {
     reportSelect.addEventListener('change', () => {

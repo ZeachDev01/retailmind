@@ -120,16 +120,12 @@ $assert(
     str_contains($sidebar, "'components/administrator/database_backup.php'"),
     'Administrator navigation must offer the shared Database Backup page'
 );
-foreach (['confirm_restore', 'backup_file'] as $forbidden) {
-    $assert(
-        !str_contains($administratorPage, $forbidden),
-        "Administrator page must not expose restore control: {$forbidden}"
-    );
-}
-$assert(
-    !str_contains($administratorPage, 'DatabaseRestoreService'),
-    'Administrator page must not wire the Database Restore service at all'
-);
+$restoreEndpoint = $read('src/frontend/components/backup/restore.php');
+$assert(str_contains($administratorPage, "'/../backup/restore_form.php'") && str_contains($superAdministratorPage, "'/../backup/restore_form.php'"), 'Both administrator screens offer the shared encrypted restore form');
+$assert(str_contains($restoreEndpoint, 'require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)')
+    && str_contains($restoreEndpoint, 'csrf_verify()') && str_contains($restoreEndpoint, 'require_local_request(')
+    && str_contains($restoreEndpoint, 'is_uploaded_file(') && str_contains($restoreEndpoint, '->startIncoming('),
+    'Initial encrypted restore requires administrator capability, local access, CSRF and uploaded package validation');
 $assert(
     str_contains($superAdministratorPage, 'DatabaseRestoreService'),
     'The Super Administrator page must keep the Database Restore workflow'

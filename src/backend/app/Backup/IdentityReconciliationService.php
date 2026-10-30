@@ -108,9 +108,8 @@ final class IdentityReconciliationService
         usort($destinationRoles, static fn(array $left, array $right): int => (int)$left['role_id'] <=> (int)$right['role_id']);
         $result = array_replace($approved, ['identity_map' => [], 'file_map' => [], 'provenance' => [], 'errors' => [], 'ready' => false, 'active_administrators' => 0]);
         $context = $approved['context'] ?? [];
-        if (!isset($context['destination_rows'])) {
-            $context['destination_rows'] = array_intersect_key($checkpoint['rows'], array_flip(self::PRESERVED_TABLES));
-        }
+        // Preserve security evidence captured at replacement, including changes since approval.
+        $context['destination_rows'] = array_intersect_key($checkpoint['rows'], array_flip(self::PRESERVED_TABLES));
         if (!isset($context['memberships'])) {
             $context['memberships'] = $checkpoint['rows']['user_roles'] ?? [];
         }

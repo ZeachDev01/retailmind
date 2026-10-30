@@ -64,7 +64,7 @@ $formatProfit = static fn(mixed $value, string $status): string => in_array($sta
     ? ucfirst($status) : $formatFinancial($value);
 $history = $dashboard['financial_history'] ?? null;
 $headlineOrder = [
-    'sales_cash_exceptions' => ['Cash variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
+    'sales_cash_exceptions' => ['Cash Variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam', ['View Stock Issues' => 'components/administrator/stock_issues.php']],
     'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check', ['View Fiscal Periods' => 'components/system_administrator/fiscal_periods.php']],
 ];
@@ -106,12 +106,12 @@ $rangeUrl = $currentUrl;
             ?>
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Needs attention</h2></div>
+                    <div><h2 id="store-attention-title">Needs Attention</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
                 <?php elseif (!$hasExceptions && !$hasGcash): ?>
-                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong></div></div>
+                    <div class="dashboard-state dashboard-state-empty" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><div><strong>No action required</strong><p>All cashier shifts, GCash exchanges, and stock records are in balance.</p></div></div>
                 <?php else: ?>
                     <div class="attention-list" aria-live="polite">
                         <?php if ($hasGcash): ?>
@@ -119,7 +119,7 @@ $rangeUrl = $currentUrl;
                                 <span class="attention-icon"><i class="bi bi-phone" aria-hidden="true"></i></span>
                                 <div class="attention-copy">
                                     <span class="severity-label">Warning</span>
-                                    <strong>GCash Needs attention</strong>
+                                    <strong>GCash Needs Review</strong>
                                     <?php if ($gcash['status'] === 'unavailable'): ?>
                                         <span>GCash review status unavailable. Could not load Store-wide counts.</span>
                                     <?php elseif ($gcash['status'] === 'partial_failure'): ?>
@@ -158,7 +158,7 @@ $rangeUrl = $currentUrl;
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section aria-labelledby="store-status-title">
-                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store status</h2></div></div>
+                    <div class="section-header control-center-section-header"><div><h2 id="store-status-title">Store Status</h2></div></div>
                     <div class="card-grid store-operations-headlines">
                         <?php foreach ($headlineOrder as $key => [$label, $icon, $destinations]): $item = $dashboard['headline'][$key]; ?>
                             <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
@@ -173,7 +173,7 @@ $rangeUrl = $currentUrl;
 
             <section class="dashboard-section net-sales-section <?= !$hasNetSales || !($activePeriodData['has_activity'] ?? false) ? 'is-empty' : '' ?>" aria-labelledby="financial-title">
                 <div class="section-header">
-                    <div><h2 id="financial-title">Sales and profit</h2></div>
+                    <div><h2 id="financial-title">Sales and Profit</h2></div>
                     <form method="get" action="<?= $escape(app_url('components/administrator/dashboard.php')) ?>" class="period-controls" aria-label="Sales and profit period">
                         <input type="hidden" name="range" value="30">
                         <?php foreach (['today' => 'Today', 'week' => 'This Week', 'month' => 'This Month'] as $period => $label): ?>
@@ -194,11 +194,11 @@ $rangeUrl = $currentUrl;
                     <details class="profit-return-help"><summary>How profit is calculated</summary><div class="return-help-drawer"><p><strong>Gross Sales:</strong> Completed product sales before discounts and refunds.</p><p><strong>Net Sales:</strong> Gross Sales minus discounts and issued Cash Refunds.</p><p><strong>Gross Profit:</strong> Net Sales minus product cost, adjusted for returns. Gross Profit excludes operating expenses.</p><p>Rent, wages, electricity, and other operating expenses are excluded.</p><p>Chart gaps mean unavailable costs; estimated costs are identified in the breakdown.</p><p><strong>Restockable returns:</strong> Reverse Net Sales and Product Cost.</p><p><strong>Unsaleable returns:</strong> Reverse Net Sales; product cost remains an inventory loss.</p></div></details>
                 </div>
                 <p class="chart-unavailable" hidden role="status">Charts unavailable. Exact values remain in the detailed breakdowns.</p>
-                <h3 id="net-sales-title">Sales</h3>
+                <div class="chart-group"><h3 id="net-sales-title">Sales Trend</h3>
                 <?php if (!$hasNetSales): ?><p role="status">Sales unavailable. Refresh to try again.</p><?php elseif (!($activePeriodData['has_activity'] ?? false)): ?><p>No sales or refunds recorded in this period.</p><?php endif; ?>
                 <div class="net-sales-chart-wrapper"><canvas id="net-sales-hourly-chart" role="img" aria-label="Gross Sales and Net Sales in Philippine pesos. Exact values in View detailed breakdown."></canvas></div>
-                <h3>Gross Profit</h3>
-                <div class="net-sales-chart-wrapper"><canvas id="gross-profit-chart" role="img" aria-label="Gross Profit in Philippine pesos. Exact values and cost status in View detailed breakdown."></canvas></div>
+                </div><div class="chart-group"><h3>Gross Profit Trend</h3>
+                <div class="net-sales-chart-wrapper"><canvas id="gross-profit-chart" role="img" aria-label="Gross Profit in Philippine pesos. Exact values and cost status in View detailed breakdown."></canvas></div></div>
                 <details id="financial-breakdown" class="financial-breakdown"><summary>View detailed breakdown</summary><p class="section-description" id="financial-period-dates"><?= $escape($periodFrom ?? 'Unavailable') ?> – <?= $escape($periodTo ?? 'Unavailable') ?> · Ongoing through <?= $escape($formatDate($dashboard['net_sales']['as_of'] ?? null)) ?> Philippine time</p>
                     <div class="table-wrap u-table-flat net-sales-table-wrap" role="region" aria-label="Sales and profit breakdown" tabindex="0"><table class="net-sales-table"><caption><?= $selectedPeriod === 'today' ? 'Hourly' : 'Daily' ?> amounts in Philippine pesos · Philippine time</caption><thead><tr><th scope="col"><?= $selectedPeriod === 'today' ? 'Hour' : 'Date' ?></th><th scope="col">Gross Sales</th><th scope="col">Discounts</th><th scope="col">Refunds</th><th scope="col">Net Sales</th><th scope="col">Product Cost</th><th scope="col">Gross Profit</th><th scope="col">Cost status</th></tr></thead><tbody>
                     <?php foreach ($activePeriodPoints as $index => $point): $profitPoint = $activeProfitData['points'][$index] ?? []; $pointStatus = $profitPoint['status'] ?? 'unavailable'; ?>
@@ -219,7 +219,7 @@ $rangeUrl = $currentUrl;
                 <details class="financial-breakdown"><summary>View 30-day breakdown</summary><p class="section-description"><?= $escape($history['period_start'] ?? 'Unavailable') ?> – <?= $escape($history['period_end'] ?? 'Unavailable') ?> · Ongoing through <?= $escape($formatDate($history['as_of'] ?? null)) ?> Philippine time</p><p class="section-description">Compared with the previous 30 complete days: <?= $escape($history['previous_start'] ?? 'Unavailable') ?> – <?= $escape($history['previous_end'] ?? 'Unavailable') ?>. Today is still in progress.</p><div class="table-wrap u-table-flat net-sales-table-wrap" role="region" aria-label="Last 30 days exact values" tabindex="0"><table class="net-sales-table"><caption>Daily amounts in Philippine pesos · Philippine time</caption><thead><tr><th scope="col">Date</th><th scope="col">Net Sales</th><th scope="col">Product Cost</th><th scope="col">Gross Profit</th><th scope="col">Cost status</th></tr></thead><tbody>
                     <?php foreach ($history['points'] ?? [] as $point): ?><tr><th scope="row"><?= $escape($point['date']) ?></th><td><?= $escape($formatFinancial($point['net_sales'] ?? null)) ?></td><td><?= $escape($formatProfit($point['net_cost'] ?? null, $point['status'])) ?></td><td><?= $escape($formatProfit($point['gross_profit'] ?? null, $point['status'])) ?></td><td><?= $escape(ucfirst($point['status'])) ?></td></tr><?php endforeach; ?>
                 </tbody></table></div></details>
-                <h3>Operational counts · last 30 days</h3><div class="comparison-grid"><?php foreach ($comparisonOrder as $key => [$label, $currency]): $item = $dashboard['comparison'][$key] ?? null; ?><article class="comparison-card"><span><?= $escape($label) ?></span><strong><?= $escape($item === null ? 'Unavailable' : $formatMetric($item['current'])) ?></strong><small>Previous <?= $escape($item === null ? 'Unavailable' : $formatMetric($item['previous'])) ?></small></article><?php endforeach; ?></div>
+                <h3>Operational Counts · Last 30 Days</h3><div class="comparison-grid"><?php foreach ($comparisonOrder as $key => [$label, $currency]): $item = $dashboard['comparison'][$key] ?? null; ?><article class="comparison-card"><span><?= $escape($label) ?></span><strong><?= $escape($item === null ? 'Unavailable' : $formatMetric($item['current'])) ?></strong><small>Previous <?= $escape($item === null ? 'Unavailable' : $formatMetric($item['previous'])) ?></small></article><?php endforeach; ?></div>
             </section>
 
         </main>

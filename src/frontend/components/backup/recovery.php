@@ -124,10 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $safetyPassphrase = (string)($_POST['safety_passphrase'] ?? '');
 
             $packagePath = null;
-            if (isset($_FILES['package_file']) && is_uploaded_file($_FILES['package_file']['tmp_name'])) {
+            if (isset($_FILES['package_file']) && $_FILES['package_file']['error'] === UPLOAD_ERR_OK && is_uploaded_file($_FILES['package_file']['tmp_name'])) {
                 $packagePath = $_FILES['package_file']['tmp_name'];
-            } elseif (!empty($_POST['staged_package_path']) && is_file($_POST['staged_package_path'])) {
-                $packagePath = (string)$_POST['staged_package_path'];
             } else {
                 throw new DomainException('Upload the approved encrypted Store package (.rmpkg).');
             }

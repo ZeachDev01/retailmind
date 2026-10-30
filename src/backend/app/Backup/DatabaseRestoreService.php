@@ -41,6 +41,12 @@ final class DatabaseRestoreService
         #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
     {
         $this->authorize($actorRole);
+        return $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
+    }
+
+    private function readAuthorizedPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+    {
         $actor = $this->backups->authorizeActor($actorUserId, $actorRole);
         if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
             throw new DomainException('Your current destination login password is incorrect.');
@@ -132,6 +138,29 @@ final class DatabaseRestoreService
                 }
             }
         }
+    }
+
+    public function startIncoming(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $incomingPassphrase,
+        #[\SensitiveParameter] string $safetyPassphrase): array
+    {
+        $this->backups->authorizeActor($actorUserId, $actorRole);
+        $lock = RecoveryStore::exclusive();
+        try {
+            if (RecoveryStore::isPaused()) throw new DomainException('Finish the active recovery operation first.');
+            $package = $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $incomingPassphrase);
+            $reconciliation = new IdentityReconciliationService($this->pdo, $this->policy);
+            $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package);
+            $approval = $reconciliation->latestApproval();
+            $safety = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
+            $metadata = $safety->create(bin2hex(random_bytes(16)), $actorUserId, $actorRole, $loginPassword, $safetyPassphrase, $lock);
+            $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package, $approval);
+            RecoveryAuthService::preparePreRestoreState($this->pdo, bin2hex(random_bytes(16)), $actorUserId,
+                $actorRole, $loginPassword, $approval, $metadata);
+        } finally {
+            fclose($lock);
+        }
+        return $this->restartIncoming($actorUserId, $actorRole, $sourcePath, $incomingPassphrase, $safetyPassphrase);
     }
 
     public function restore(int $actorUserId, string $actorRole, string $sourcePath, string $originalName, #[\SensitiveParameter] string $password): array
@@ -347,8 +376,8 @@ final class DatabaseRestoreService
         $this->assertRecoveryOperator($actorId, $actorRole);
         $lock = RecoveryStore::exclusive();
         try {
-            if (!is_file($packagePath)) {
-                throw new DomainException('Select a valid encrypted Store package (.rmpkg).');
+            if (!is_file($packagePath) || filesize($packagePath) > StorePackageFormat::MAX_BYTES) {
+                throw new DomainException('Select a valid encrypted Store package (.rmpkg), no larger than 48 MB.');
             }
             $state = RecoveryStore::state();
             $safetyOpId = (string)($state['safety_operation_id'] ?? '');
@@ -360,6 +389,10 @@ final class DatabaseRestoreService
             $approval = $reconciliation->latestApproval();
             if ($approval === null) {
                 throw new DomainException('No approved reconciliation preparation was found. Reconciliation approval is required.');
+            }
+            if (($state['package_id'] ?? '') !== $approval['package_id']
+                || ($state['plan_id'] ?? '') !== ($approval['approval_id'] ?? $approval['approval_hash'] ?? hash('sha256', json_encode($approval['decisions'] ?? [])))) {
+                throw new DomainException('The reconciliation approval does not belong to this recovery operation.');
             }
 
             $safetyService = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
@@ -389,13 +422,21 @@ final class DatabaseRestoreService
             RecoveryStore::transitionStage(RecoveryStore::STAGE_DATABASE_REPLACEMENT);
 
             $executed = $this->replaceTablesFromRows($projected['rows'], $schema, $projected['provenance'] ?? []);
+            // Models bind to the previous Store data and require fresh destination approval.
+            $this->pdo->exec("UPDATE platform_settings SET setting_value='' WHERE setting_key IN ('ml_approved_model_version','ml_previous_approved_model_version','ml_store_activation_record')");
+            $this->pdo->exec("INSERT INTO platform_settings (setting_key,setting_value) VALUES ('ml_observation_mode','1'),('ml_recommendations_suspended','1') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_UPLOADS);
             $uploaded = $this->restoreUploads($incomingPackage['files'], $projected['file_map'] ?? []);
 
+            $expectedFiles = $safetyCheckpoint['files'];
+            foreach ($incomingPackage['files'] as $path => $content) {
+                $expectedFiles[$projected['file_map'][$path] ?? $path] = $content;
+            }
+
             RecoveryStore::transitionStage(RecoveryStore::STAGE_AUTOMATED_VERIFICATION);
-            $this->verifyPostRestoreIntegrity($schema, $incomingPackage['files']);
-            $checks = $this->runVerificationChecks($incomingPackage['files']);
+            $this->verifyPostRestoreIntegrity($schema, $expectedFiles);
+            $checks = $this->runVerificationChecks($expectedFiles);
 
             RecoveryStore::transitionStage(RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, [
                 'mode' => 'incoming_restart',
@@ -665,10 +706,11 @@ final class DatabaseRestoreService
         $saleMismatch = false;
         $salesCount = 0;
         if (\App\Database\Schema::tableExists($this->pdo, 'sales') && \App\Database\Schema::tableExists($this->pdo, 'sale_items')) {
+            $discount = \App\Database\Schema::columnExists($this->pdo, 'sales', 'discount_amount') ? 'COALESCE(s.discount_amount, 0)' : '0';
             $saleMismatch = (bool)$this->pdo->query(
                 "SELECT 1 FROM sales s
                  LEFT JOIN (SELECT sale_id, SUM(subtotal) AS item_sum FROM sale_items GROUP BY sale_id) si ON si.sale_id = s.sale_id
-                 WHERE ABS(s.total_amount - COALESCE(si.item_sum, 0)) > 0.05
+                 WHERE ABS(s.total_amount + {$discount} - COALESCE(si.item_sum, 0)) > 0.05
                  LIMIT 1"
             )->fetchColumn();
             $salesCount = (int)$this->pdo->query("SELECT COUNT(*) FROM sales")->fetchColumn();

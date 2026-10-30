@@ -79,7 +79,7 @@ An identity retained only for attribution, represented as a disabled roleless us
 _Avoid_: Disabled Account, deleted user, active staff
 
 **Database Restore**:
-The replacement of the entire active Store database, including accounts, settings, and audit history, with the state captured in a Database Backup. Only the Super Administrator may perform it; newer database records are not retained, while the restoration itself is recorded separately.
+The replacement of operational Store records and required uploaded files with the state captured in an encrypted Database Backup, while preserving destination privileged access and security evidence. Either administrator role may initiate it after the Super Administrator approves Identity Reconciliation; newer operational records are not retained, and the Store remains closed until verification and explicit reopening.
 _Avoid_: Import report, undo backup
 
 **Recovery Console**:

@@ -73,18 +73,16 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 <body class="manage-users-page database-backup-page" data-rm-authenticated="true"
     data-rm-backup-status="<?= $escape(app_url('components/backup/backup_status.php')) ?>">
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-            <div class="topbar">
-                <div>
-                    <h1>Database Backup</h1>
-                </div>
-            </div>
+            <header class="page-heading">
+                <h1>Database Backup</h1>
+            </header>
 
-            <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="status"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title">Your backup is ready</h2>
-                    <p class="section-description">Download <?= $escape($download['filename']) ?> and store it separately. Creation does not confirm the file was saved on your device.</p>
+                    <p class="section-description">Save <?= $escape($download['filename']) ?> off-server. Creation does not confirm the file was saved on your device.</p>
                     <p><a class="btn" href="<?= $escape($download['url']) ?>" data-backup-download>Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
@@ -102,30 +100,26 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <?php endif; ?>
             </section>
 
+            <?php require __DIR__ . '/../backup/restore_form.php'; ?>
             <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
 
             <div class="card-grid">
                 <section class="dashboard-section">
                     <h2>Create backup</h2>
-                    <p class="section-description">Saving pauses briefly while RetailMind creates a consistent copy.</p>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><div class="form-group"><label for="backup-passphrase">New backup passphrase</label><input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" required></div><button type="submit" class="btn" data-backup-create>Create backup</button></form>
                 </section>
                 <section class="dashboard-section">
                     <h2>Keeping your copy safe</h2>
                     <ul class="backup-guidance">
-                        <li>Encrypted package: includes all records and uploaded Product/profile images. Keep private.</li>
-                        <li>Keep a separate passphrase recovery copy outside both servers. Losing every copy makes this package unusable; resetting your login password cannot recover it.</li>
-                        <li>The Super Administrator can validate packages before replacement.</li>
+                        <li>Encrypted package contains database records and uploaded media.</li>
+                        <li>Store passphrase separately; login password resets cannot decrypt packages.</li>
+                        <li>Super Administrator can validate packages prior to replacement.</li>
                     </ul>
-                    <?php if (!$restoreCapability): ?>
-                        <p class="backup-hint">Ask your Super Administrator to validate a backup.</p>
-                    <?php endif; ?>
                 </section>
             </div>
 
             <div class="dashboard-section">
                 <h2>Backup history</h2>
-                <p class="section-description">Created means server copy only—not a downloaded file.</p>
                 <div class="table-wrap">
                     <table>
                         <tr>

@@ -191,7 +191,7 @@
 
 /* Administrator Store-operations workspace */
 .administrator-workspace .section-header h2 { margin-bottom: 0; }
-.store-operations-headlines { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.store-operations-headlines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .store-operations-headlines .stat-card { margin: 0; }
 .store-operations-headlines .value { font-size: clamp(1.15rem, 1.7vw, 1.6rem); }
 .period-comparison { margin-bottom: 1.5rem; }
@@ -407,7 +407,12 @@ body.admin-dashboard-page.administrator-workspace .financial-breakdown > summary
 body.admin-dashboard-page.administrator-workspace .financial-breakdown { margin-top: .75rem; }
 body.admin-dashboard-page.administrator-workspace .net-sales-table caption { text-align: left; color: var(--muted); padding-bottom: .75rem; }
 body.admin-dashboard-page.administrator-workspace .period-comparison > h3 { margin-top: 1.5rem; }
-body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 320px)); }
+body.admin-dashboard-page.administrator-workspace .chart-group { margin-top: 1.25rem; }
+body.admin-dashboard-page.administrator-workspace .chart-group:first-of-type { margin-top: 1rem; }
+body.admin-dashboard-page.administrator-workspace .chart-group h3 { margin-top: 0; margin-bottom: .6rem; }
+body.admin-dashboard-page.administrator-workspace :is(.stat-card .value, .net-sales-summary-card .value, .comparison-card strong) { font-variant-numeric: tabular-nums; }
+body.admin-dashboard-page.administrator-workspace .net-sales-table :is(th, td):last-child { text-align: center; }
 body.admin-dashboard-page.administrator-workspace .net-sales-section.is-empty > :is(h3, .net-sales-chart-wrapper, .chart-unavailable) { display: none; }
 @media (max-width: 1180px) {
     body.admin-dashboard-page.administrator-workspace .period-comparison > .comparison-grid:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }

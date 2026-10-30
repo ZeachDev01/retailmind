@@ -96,7 +96,7 @@ final class RecoveryAuthService
         $state = [
             'operation_id' => $operationId,
             'package_id' => (string)($reconciliationApproval['package_id'] ?? ''),
-            'plan_id' => (string)($reconciliationApproval['approval_hash'] ?? hash('sha256', json_encode($reconciliationApproval['decisions'] ?? []))),
+            'plan_id' => (string)($reconciliationApproval['approval_id'] ?? $reconciliationApproval['approval_hash'] ?? hash('sha256', json_encode($reconciliationApproval['decisions'] ?? []))),
             'destination_watermark' => (string)($reconciliationApproval['destination_watermark'] ?? ''),
             'safety_operation_id' => (string)($safetyMetadata['operation_id'] ?? ''),
             'safety_metadata' => array_intersect_key($safetyMetadata, array_flip([

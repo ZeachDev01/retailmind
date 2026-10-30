@@ -22,7 +22,7 @@ catch (Throwable $exception) { $safetyError = \App\Support\OperatorAlert::messag
 ?>
 <section class="dashboard-section" aria-labelledby="safety-copy-title" data-safety-copy>
     <h2 id="safety-copy-title">Destination safety copy</h2>
-    <p class="section-description" id="safety-copy-help">Keep this complete encrypted database and image fallback before replacement. Supply its own passphrase separately from the incoming package. Replacement remains unavailable here.</p>
+    <p class="section-description" id="safety-copy-help">Keep this complete encrypted database and image fallback. Supply its own passphrase separately from the incoming package. Starting a restore captures a fresh safety copy automatically.</p>
     <?php if ($safetyError !== ''): ?><p class="alert tag-warning" role="alert"><?= $escape($safetyError) ?></p><?php endif; ?>
     <?php if ($safetyDownload): ?>
         <p role="status">Safety copy verified. The original is retained for this operation; downloading does not remove it.</p>

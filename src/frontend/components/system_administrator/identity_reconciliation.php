@@ -42,7 +42,7 @@ $recordedApproval = $approval ?? $reconciler->latestApproval();
 <div class="dashboard-card" role="region" aria-label="Approved preparation evidence">
 <h2>Active preparation evidence</h2>
 <p>Approved by Super Administrator #<?= (int)$recordedApproval['approved_by'] ?> at <?= $escape($recordedApproval['approved_at']) ?>. Package ID: <code><?= $escape($recordedApproval['package_id']) ?></code>.</p>
-<p><?= (int)$recordedApproval['active_administrators'] ?> active Administrator(s) configured. Replacement remains disabled; authorized consumers may use this preparation without receiving platform governance.</p>
+<p><?= (int)$recordedApproval['active_administrators'] ?> active Administrator(s) configured. Either administrator role can restore this package from Database Backup after fresh credential and safety checks.</p>
 </div>
 <?php endif; ?>
 <form method="post" enctype="multipart/form-data"><?= csrf_field() ?>

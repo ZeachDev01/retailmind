@@ -38,6 +38,62 @@ final class SqlBackupFormat
         return (string)preg_replace('/ AUTO_INCREMENT=\d+/', '', trim($ddl));
     }
 
+    /** Compare known SHOW CREATE differences without changing literals, constraints or the stored fingerprint. */
+    private static function portableDdl(string $ddl): string
+    {
+        if (str_contains($ddl, "\x01") || str_contains($ddl, "\x02")) throw new RuntimeException('Invalid schema text.');
+        $literals = [];
+        $ddl = preg_replace_callback("/'(?:[^'\\\\]|\\\\.|'')*'/s", static function(array $match) use (&$literals): string {
+            $key = "\x01" . count($literals) . "\x02";
+            $literals[$key] = $match[0];
+            return $key;
+        }, self::normalizeDdl($ddl));
+        preg_match('/ COLLATE=([a-z0-9_]+)$/D', $ddl, $collation);
+        $lines = explode("\n", $ddl);
+        foreach ($lines as &$line) {
+            if (preg_match('/^  (`[^`]+`) longtext COLLATE utf8mb4_bin(.*?) CHECK \(json_valid\(\1\)\)(,?)$/D', $line, $json)) {
+                $line = '  ' . $json[1] . ' json' . $json[2] . $json[3];
+            }
+            if (preg_match('/^  `[^`]+` /', $line)) {
+                if (isset($collation[1])) $line = str_replace(' COLLATE ' . $collation[1], '', $line);
+                if (!str_contains(strtolower($line), 'zerofill')) $line = preg_replace('/\b(tinyint|smallint|mediumint|int|bigint)\(\d+\)/', '$1', $line);
+                if (preg_match('/^  `[^`]+` (?:tinyint|smallint|mediumint|int|bigint|decimal|float|double)\b/', $line)) {
+                    $line = preg_replace_callback('/DEFAULT (\x01\d+\x02)/', static function(array $match) use ($literals): string {
+                        $literal = $literals[$match[1]];
+                        return preg_match("/^'-?\d+(?:\.\d+)?'$/D", $literal) ? 'DEFAULT ' . substr($literal, 1, -1) : $match[0];
+                    }, $line);
+                }
+                if (preg_match('/^  `[^`]+` (?:tinytext|text|mediumtext|longtext|tinyblob|blob|mediumblob|longblob)\b/', $line) && !str_contains($line, 'NOT NULL')) {
+                    $line = str_replace(' DEFAULT NULL', '', $line);
+                }
+                if (str_contains($line, 'GENERATED ALWAYS AS')) $line = preg_replace('/if\(\((`[^`]+` = _utf8mb4\x01\d+\x02)\),/', 'if($1,', $line);
+            }
+            $line = preg_replace('/\b(DEFAULT|ON UPDATE) current_timestamp(?:\(\))?/i', '$1 CURRENT_TIMESTAMP', $line);
+            $line = preg_replace('/CHECK \(\((`[^`]+` (?:>=|<=|>|<|=) -?\d+(?:\.\d+)?)\)\)/', 'CHECK ($1)', $line);
+            if (preg_match('/^  CONSTRAINT `[^`]+` FOREIGN KEY /', $line)) $line = str_replace(' ON DELETE RESTRICT', '', $line);
+        }
+        unset($line);
+        return strtr(implode("\n", $lines), $literals);
+    }
+
+    /** The encrypted producer SQL is parsed with its original schema; replacement still uses destination DDL. */
+    public static function compatibleSourceSchema(string $sql, array $destination): array
+    {
+        $statements = \split_sql_statements($sql);
+        $index = 2;
+        $source = $destination;
+        foreach ($destination as $table => $definition) {
+            $quoted = DatabaseSnapshotWriter::identifier($table);
+            if (($statements[$index++] ?? '') !== 'DROP TABLE IF EXISTS ' . $quoted) throw new RuntimeException('The package has an incompatible table sequence.');
+            $ddl = self::normalizeDdl($statements[$index++] ?? '');
+            if (self::portableDdl($ddl) !== self::portableDdl($definition['ddl'])) throw new RuntimeException('The package has an incompatible database structure: ' . $table . '.');
+            $source[$table]['ddl'] = $ddl;
+            while (isset($statements[$index]) && str_starts_with($statements[$index], 'INSERT INTO ' . $quoted . ' ')) $index++;
+        }
+        self::statements($sql, $source);
+        return $source;
+    }
+
     /** Decode the validated data dialect without executing any source SQL. */
     public static function rows(string $sql, array $schema): array
     {

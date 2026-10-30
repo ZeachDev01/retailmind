@@ -1,0 +1,190 @@
+{
+  "mysql": {
+    "activity_log": {
+      "ddl": "CREATE TABLE `activity_log` (\n  `log_id` int NOT NULL AUTO_INCREMENT,\n  `user_id` int DEFAULT NULL,\n  `action` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `category` enum('store_operation','security','recovery','platform_setting','recovery_account') COLLATE utf8mb4_unicode_ci NOT NULL,\n  `module` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `record_id` int DEFAULT NULL,\n  `previous_value` text COLLATE utf8mb4_unicode_ci,\n  `new_value` text COLLATE utf8mb4_unicode_ci,\n  `metadata` longtext COLLATE utf8mb4_bin,\n  `ip_address` varchar(45) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`log_id`),\n  KEY `user_id` (`user_id`),\n  KEY `idx_activity_log_category_created` (`category`,`created_at`),\n  CONSTRAINT `activity_log_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `activity_log_chk_1` CHECK (json_valid(`metadata`))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "log_id",
+        "user_id",
+        "action",
+        "category",
+        "module",
+        "record_id",
+        "previous_value",
+        "new_value",
+        "metadata",
+        "ip_address",
+        "created_at"
+      ]
+    },
+    "cashier_shifts": {
+      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int NOT NULL AUTO_INCREMENT,\n  `cashier_id` int NOT NULL,\n  `register_id` int DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT '0.00',\n  `status` enum('open','closed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT '0',\n  `payment_totals` text COLLATE utf8mb4_unicode_ci,\n  `closing_notes` text COLLATE utf8mb4_unicode_ci,\n  `closed_by` int DEFAULT NULL,\n  `intervention_reason` text COLLATE utf8mb4_unicode_ci,\n  `reviewed_by` int DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text COLLATE utf8mb4_unicode_ci,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`cashier_id`,NULL)) STORED,\n  `open_register_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "shift_id",
+        "cashier_id",
+        "register_id",
+        "opened_at",
+        "opening_cash",
+        "status",
+        "closed_at",
+        "expected_cash",
+        "actual_cash",
+        "cash_variance",
+        "variance_threshold",
+        "variance_review_required",
+        "payment_totals",
+        "closing_notes",
+        "closed_by",
+        "intervention_reason",
+        "reviewed_by",
+        "reviewed_at",
+        "review_draft_notes",
+        "review_notes",
+        "review_shortage",
+        "review_history",
+        "locked_at"
+      ]
+    },
+    "products": {
+      "ddl": "CREATE TABLE `products` (\n  `product_id` int NOT NULL AUTO_INCREMENT,\n  `sku` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `barcode` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `case_barcode` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `pack_size` int DEFAULT NULL,\n  `pack_barcode` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `pack_price` decimal(10,2) DEFAULT NULL,\n  `parent_product_id` int DEFAULT NULL,\n  `variant_label` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `product_name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `brand` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `category_id` int DEFAULT NULL,\n  `unit_price` decimal(10,2) NOT NULL,\n  `cost_price` decimal(10,2) NOT NULL,\n  `quantity_purchased` int NOT NULL DEFAULT '0',\n  `quantity_sold` int NOT NULL DEFAULT '0',\n  `reorder_level` int DEFAULT '10',\n  `supplier` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `preferred_supplier` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `supplier_lead_time_days` int NOT NULL DEFAULT '7',\n  `safety_stock` int NOT NULL DEFAULT '0',\n  `minimum_order_quantity` int NOT NULL DEFAULT '1',\n  `units_per_package` int NOT NULL DEFAULT '1',\n  `base_unit` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'piece',\n  `receiving_unit` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'package',\n  `expiration_date` date DEFAULT NULL,\n  `warning_lead_time_days` int DEFAULT NULL,\n  `product_image` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `status` enum('active','inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'active',\n  `created_by` int DEFAULT NULL,\n  `branch_id` int DEFAULT NULL,\n  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`product_id`),\n  UNIQUE KEY `uq_products_branch_sku` (`branch_id`,`sku`),\n  UNIQUE KEY `uq_products_branch_barcode` (`branch_id`,`barcode`),\n  UNIQUE KEY `uq_products_branch_case_barcode` (`branch_id`,`case_barcode`),\n  UNIQUE KEY `uq_products_branch_pack_barcode` (`branch_id`,`pack_barcode`),\n  KEY `idx_products_product_name` (`product_name`),\n  KEY `idx_products_status` (`status`),\n  KEY `idx_products_branch_id` (`branch_id`),\n  KEY `category_id` (`category_id`),\n  KEY `created_by` (`created_by`),\n  CONSTRAINT `products_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`),\n  CONSTRAINT `products_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `products_ibfk_3` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,\n  CONSTRAINT `chk_products_cost_price` CHECK ((`cost_price` >= 0)),\n  CONSTRAINT `chk_products_unit_price` CHECK ((`unit_price` >= 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "product_id",
+        "sku",
+        "barcode",
+        "case_barcode",
+        "pack_size",
+        "pack_barcode",
+        "pack_price",
+        "parent_product_id",
+        "variant_label",
+        "product_name",
+        "brand",
+        "category_id",
+        "unit_price",
+        "cost_price",
+        "quantity_purchased",
+        "quantity_sold",
+        "reorder_level",
+        "supplier",
+        "preferred_supplier",
+        "supplier_lead_time_days",
+        "safety_stock",
+        "minimum_order_quantity",
+        "units_per_package",
+        "base_unit",
+        "receiving_unit",
+        "expiration_date",
+        "warning_lead_time_days",
+        "product_image",
+        "status",
+        "created_by",
+        "branch_id",
+        "created_at"
+      ]
+    },
+    "scheduled_demand_drivers": {
+      "ddl": "CREATE TABLE `scheduled_demand_drivers` (\n  `driver_id` int NOT NULL AUTO_INCREMENT,\n  `product_id` int NOT NULL,\n  `driver_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,\n  `effective_date` date NOT NULL,\n  `scheduled_at` timestamp NOT NULL,\n  `details_json` json NOT NULL,\n  PRIMARY KEY (`driver_id`),\n  KEY `idx_scheduled_demand_drivers_history` (`product_id`,`effective_date`,`scheduled_at` DESC),\n  CONSTRAINT `fk_scheduled_demand_drivers_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "driver_id",
+        "product_id",
+        "driver_type",
+        "effective_date",
+        "scheduled_at",
+        "details_json"
+      ]
+    }
+  },
+  "mariadb": {
+    "activity_log": {
+      "ddl": "CREATE TABLE `activity_log` (\n  `log_id` int(11) NOT NULL AUTO_INCREMENT,\n  `user_id` int(11) DEFAULT NULL,\n  `action` varchar(255) NOT NULL,\n  `category` enum('store_operation','security','recovery','platform_setting','recovery_account') NOT NULL,\n  `module` varchar(100) DEFAULT NULL,\n  `record_id` int(11) DEFAULT NULL,\n  `previous_value` text DEFAULT NULL,\n  `new_value` text DEFAULT NULL,\n  `metadata` longtext COLLATE utf8mb4_bin DEFAULT NULL,\n  `ip_address` varchar(45) DEFAULT NULL,\n  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`log_id`),\n  KEY `user_id` (`user_id`),\n  KEY `idx_activity_log_category_created` (`category`,`created_at`),\n  CONSTRAINT `activity_log_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `activity_log_chk_1` CHECK (json_valid(`metadata`))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "log_id",
+        "user_id",
+        "action",
+        "category",
+        "module",
+        "record_id",
+        "previous_value",
+        "new_value",
+        "metadata",
+        "ip_address",
+        "created_at"
+      ]
+    },
+    "cashier_shifts": {
+      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int(11) NOT NULL AUTO_INCREMENT,\n  `cashier_id` int(11) NOT NULL,\n  `register_id` int(11) DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT 0.00,\n  `status` enum('open','closed') NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT 0,\n  `payment_totals` text DEFAULT NULL,\n  `closing_notes` text DEFAULT NULL,\n  `closed_by` int(11) DEFAULT NULL,\n  `intervention_reason` text DEFAULT NULL,\n  `reviewed_by` int(11) DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text DEFAULT NULL,\n  `review_notes` text DEFAULT NULL,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text DEFAULT NULL,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`cashier_id`,NULL)) STORED,\n  `open_register_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "shift_id",
+        "cashier_id",
+        "register_id",
+        "opened_at",
+        "opening_cash",
+        "status",
+        "closed_at",
+        "expected_cash",
+        "actual_cash",
+        "cash_variance",
+        "variance_threshold",
+        "variance_review_required",
+        "payment_totals",
+        "closing_notes",
+        "closed_by",
+        "intervention_reason",
+        "reviewed_by",
+        "reviewed_at",
+        "review_draft_notes",
+        "review_notes",
+        "review_shortage",
+        "review_history",
+        "locked_at"
+      ]
+    },
+    "products": {
+      "ddl": "CREATE TABLE `products` (\n  `product_id` int(11) NOT NULL AUTO_INCREMENT,\n  `sku` varchar(50) NOT NULL,\n  `barcode` varchar(50) NOT NULL,\n  `case_barcode` varchar(80) DEFAULT NULL,\n  `pack_size` int(11) DEFAULT NULL,\n  `pack_barcode` varchar(80) DEFAULT NULL,\n  `pack_price` decimal(10,2) DEFAULT NULL,\n  `parent_product_id` int(11) DEFAULT NULL,\n  `variant_label` varchar(100) DEFAULT NULL,\n  `product_name` varchar(150) NOT NULL,\n  `brand` varchar(100) DEFAULT NULL,\n  `category_id` int(11) DEFAULT NULL,\n  `unit_price` decimal(10,2) NOT NULL,\n  `cost_price` decimal(10,2) NOT NULL,\n  `quantity_purchased` int(11) NOT NULL DEFAULT 0,\n  `quantity_sold` int(11) NOT NULL DEFAULT 0,\n  `reorder_level` int(11) DEFAULT 10,\n  `supplier` varchar(150) DEFAULT NULL,\n  `preferred_supplier` varchar(150) DEFAULT NULL,\n  `supplier_lead_time_days` int(11) NOT NULL DEFAULT 7,\n  `safety_stock` int(11) NOT NULL DEFAULT 0,\n  `minimum_order_quantity` int(11) NOT NULL DEFAULT 1,\n  `units_per_package` int(11) NOT NULL DEFAULT 1,\n  `base_unit` varchar(40) NOT NULL DEFAULT 'piece',\n  `receiving_unit` varchar(40) NOT NULL DEFAULT 'package',\n  `expiration_date` date DEFAULT NULL,\n  `warning_lead_time_days` int(11) DEFAULT NULL,\n  `product_image` varchar(255) DEFAULT NULL,\n  `status` enum('active','inactive') DEFAULT 'active',\n  `created_by` int(11) DEFAULT NULL,\n  `branch_id` int(11) DEFAULT NULL,\n  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  PRIMARY KEY (`product_id`),\n  UNIQUE KEY `uq_products_branch_sku` (`branch_id`,`sku`),\n  UNIQUE KEY `uq_products_branch_barcode` (`branch_id`,`barcode`),\n  UNIQUE KEY `uq_products_branch_case_barcode` (`branch_id`,`case_barcode`),\n  UNIQUE KEY `uq_products_branch_pack_barcode` (`branch_id`,`pack_barcode`),\n  KEY `idx_products_product_name` (`product_name`),\n  KEY `idx_products_status` (`status`),\n  KEY `idx_products_branch_id` (`branch_id`),\n  KEY `category_id` (`category_id`),\n  KEY `created_by` (`created_by`),\n  CONSTRAINT `products_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`),\n  CONSTRAINT `products_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `products_ibfk_3` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,\n  CONSTRAINT `chk_products_cost_price` CHECK (`cost_price` >= 0),\n  CONSTRAINT `chk_products_unit_price` CHECK (`unit_price` >= 0)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "product_id",
+        "sku",
+        "barcode",
+        "case_barcode",
+        "pack_size",
+        "pack_barcode",
+        "pack_price",
+        "parent_product_id",
+        "variant_label",
+        "product_name",
+        "brand",
+        "category_id",
+        "unit_price",
+        "cost_price",
+        "quantity_purchased",
+        "quantity_sold",
+        "reorder_level",
+        "supplier",
+        "preferred_supplier",
+        "supplier_lead_time_days",
+        "safety_stock",
+        "minimum_order_quantity",
+        "units_per_package",
+        "base_unit",
+        "receiving_unit",
+        "expiration_date",
+        "warning_lead_time_days",
+        "product_image",
+        "status",
+        "created_by",
+        "branch_id",
+        "created_at"
+      ]
+    },
+    "scheduled_demand_drivers": {
+      "ddl": "CREATE TABLE `scheduled_demand_drivers` (\n  `driver_id` int(11) NOT NULL AUTO_INCREMENT,\n  `product_id` int(11) NOT NULL,\n  `driver_type` varchar(50) NOT NULL,\n  `effective_date` date NOT NULL,\n  `scheduled_at` timestamp NOT NULL,\n  `details_json` longtext COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`details_json`)),\n  PRIMARY KEY (`driver_id`),\n  KEY `idx_scheduled_demand_drivers_history` (`product_id`,`effective_date`,`scheduled_at` DESC),\n  CONSTRAINT `fk_scheduled_demand_drivers_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "driver_id",
+        "product_id",
+        "driver_type",
+        "effective_date",
+        "scheduled_at",
+        "details_json"
+      ]
+    }
+  }
+}
