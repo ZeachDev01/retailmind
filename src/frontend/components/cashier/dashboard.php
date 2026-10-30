@@ -150,7 +150,22 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
             </div>
             </div>
         <div role="tabpanel" id="panel-gcash" aria-labelledby="tab-gcash" tabindex="0" class="gcash-tabpanel" hidden>
+            <header class="gcash-overview-heading">
+                <div>
+                    <h1>GCash overview</h1>
+                    <p>Service balances and activity for your current shift.</p>
+                </div>
+                <div class="gcash-overview-quick-actions">
+                    <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-in')) ?>" class="btn btn-primary" id="gcash-overview-action-cash-in">
+                        <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
+                    </a>
+                    <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-out')) ?>" class="btn btn-secondary" id="gcash-overview-action-cash-out">
+                        <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out
+                    </a>
+                </div>
+            </header>
             <p id="gcash-overview-status" role="status">Loading GCash overview...</p>
+            <div class="gcash-overview-ledger">
             <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-balances-title">
                 <div class="pos-panel-header">
                     <div class="pos-panel-title">
@@ -189,14 +204,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                             <h2 id="gcash-overview-metrics-title">Current shift</h2>
                         </div>
                     </div>
-                    <div class="gcash-overview-quick-actions">
-                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-in')) ?>" class="btn btn-primary" id="gcash-overview-action-cash-in">
-                            <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
-                        </a>
-                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-out')) ?>" class="btn btn-secondary" id="gcash-overview-action-cash-out">
-                            <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>New Cash-Out
-                        </a>
-                    </div>
                 </div>
                 <div class="gcash-overview-grid gcash-metrics-grid">
                     <div class="gcash-card">
@@ -232,6 +239,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <p class="gcash-empty-msg">No unresolved Needs checking transactions.</p>
                 </div>
             </section>
+            </div>
         </div>
 
         </main>

@@ -64,7 +64,7 @@ $formatProfit = static fn(mixed $value, string $status): string => in_array($sta
     ? ucfirst($status) : $formatFinancial($value);
 $history = $dashboard['financial_history'] ?? null;
 $headlineOrder = [
-    'sales_cash_exceptions' => ['Cash Variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
+    'sales_cash_exceptions' => ['Cash variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam', ['View Stock Issues' => 'components/administrator/stock_issues.php']],
     'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check', ['View Fiscal Periods' => 'components/system_administrator/fiscal_periods.php']],
 ];
@@ -80,6 +80,9 @@ $rangeUrl = $currentUrl;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Store Operations</title>
+    <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" as="script" crossorigin>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/dashboard.css')) ?>">
 </head>
@@ -100,13 +103,47 @@ $rangeUrl = $currentUrl;
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
             <?php
+            $isInitialSetup = !($activePeriodData['has_activity'] ?? false)
+                && (int)($dashboard['comparison']['transactions']['current'] ?? 0) === 0
+                && empty($dashboard['exceptions']);
+            ?>
+            <?php if ($isInitialSetup): ?>
+                <section class="dashboard-section store-onboarding-section" aria-labelledby="store-onboarding-title">
+                    <div class="section-header">
+                        <div>
+                            <h2 id="store-onboarding-title">Store Operations Onboarding</h2>
+                            <p class="section-description">Quick activation steps for Shalom Store administration.</p>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <a class="quick-action" href="<?= $escape(app_url('components/system_administrator/fiscal_periods.php')) ?>" data-dashboard-action>
+                            <strong>1. Fiscal Period</strong>
+                            <span>Confirm current store accounting period is open</span>
+                        </a>
+                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/store_settings.php')) ?>" data-dashboard-action>
+                            <strong>2. Store Settings</strong>
+                            <span>Configure review thresholds and variance limits</span>
+                        </a>
+                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/shift_report.php')) ?>" data-dashboard-action>
+                            <strong>3. Cashier Shifts</strong>
+                            <span>Monitor active shifts and reconcile cash variances</span>
+                        </a>
+                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/stock_issues.php')) ?>" data-dashboard-action>
+                            <strong>4. Stock Issues</strong>
+                            <span>Review escalated inventory risks with manager</span>
+                        </a>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <?php
             $gcash = $dashboard['gcash_attention'] ?? ['visible' => false, 'status' => 'ready', 'unresolved_count' => 0, 'differences_count' => 0];
             $hasExceptions = !empty($dashboard['exceptions']);
             $hasGcash = !empty($gcash['visible']);
             ?>
             <section class="dashboard-section governance-queue store-attention-queue" aria-labelledby="store-attention-title">
                 <div class="section-header">
-                    <div><h2 id="store-attention-title">Needs Attention</h2></div>
+                    <div><h2 id="store-attention-title">Needs attention</h2></div>
                 </div>
                 <?php if ($dashboard['state'] === 'error'): ?>
                     <div class="dashboard-state dashboard-state-error" role="alert"><i class="bi bi-cloud-slash" aria-hidden="true"></i><div><strong>Store status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div><a class="btn btn-quiet" href="<?= $escape($rangeUrl) ?>">Try again</a></div>
@@ -241,18 +278,19 @@ $rangeUrl = $currentUrl;
         if (typeof Chart === 'undefined') {
             showChartFallback();
         } else {
-            const series = (label, values, color) => ({label, data: values, backgroundColor: color, borderColor: color, borderWidth: 2, pointRadius: 3, pointHitRadius: 18, tension: 0});
+            const isMobile = window.innerWidth < 640;
+            const series = (label, values, color) => ({label, data: values, backgroundColor: color, borderColor: color, borderWidth: 2, pointRadius: isMobile ? 2 : 3, pointHitRadius: isMobile ? 24 : 18, tension: 0, normalized: true});
             const graph = (id, type, points, datasets, axisTitle) => new Chart(document.getElementById(id), {
                 type, data: {labels: points.map(point => point.label || point.date), datasets},
                 options: {
                     responsive: true, maintainAspectRatio: false, spanGaps: false,
-                    animation: !window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+                    animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : {duration: 250}, resizeDelay: 50,
                     interaction: {mode: 'index', intersect: false},
                     plugins: {legend: {labels: {color: textColor}}, tooltip: {callbacks: {
                         label: context => context.dataset.label + ': ' + formatPeso(context.raw),
                         afterBody: items => {const status = points[items[0]?.dataIndex]?.status; return status ? 'Cost status: ' + status : '';}
                     }}},
-                    scales: {x: {ticks: {color: textColor, maxTicksLimit: 12}, grid: {display: false}, title: {display: true, text: axisTitle, color: textColor}}, y: {beginAtZero: true, ticks: {color: textColor, callback: formatPeso}}}
+                    scales: {x: {ticks: {color: textColor, maxTicksLimit: isMobile ? 6 : 12, maxRotation: 0}, grid: {display: false}, title: {display: true, text: axisTitle, color: textColor}}, y: {beginAtZero: true, ticks: {color: textColor, callback: formatPeso}}}
                 }
             });
             try {
@@ -273,7 +311,7 @@ $rangeUrl = $currentUrl;
         document.addEventListener('focusin', event => { if (event.target.matches?.(interactiveFields)) actionInProgress = true; });
         document.addEventListener('focusout', event => { if (event.target.matches?.(interactiveFields)) actionInProgress = false; });
         document.addEventListener('submit', () => { actionInProgress = true; });
-        document.querySelectorAll('[data-dashboard-action]').forEach(element => element.addEventListener('click', () => { actionInProgress = true; }));
+        document.addEventListener('click', event => { if (event.target.closest?.('[data-dashboard-action]')) actionInProgress = true; }, {passive: true});
 
         const refreshWhenSafe = () => {
             if (actionInProgress || document.hidden || window.__retailMindActionInProgress === true) {

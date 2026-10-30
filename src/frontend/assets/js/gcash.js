@@ -320,7 +320,7 @@
             el('expected-wallet').textContent = '—';
             el('expected-cash').textContent = '—';
             el('cash-checked').textContent = 'Last check: —';
-            el('balances-message').textContent = 'Open GCash to view the wallet and service cash balances.';
+            el('balances-message').textContent = '';
             return;
         }
 
