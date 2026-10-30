@@ -17,7 +17,7 @@ const run = (file, args) => {
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
-const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php', [action, database]);
+const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixture.php', [action, database]);
 (async () => {
     let server, browser;
     try {
@@ -95,6 +95,44 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.evaluate(() => window.scrollTo(0, 0));
             fs.mkdirSync('output/playwright/gcash-admin-clarity', {recursive: true});
             await page.screenshot({path: 'output/playwright/gcash-admin-clarity/overview-' + width + '.png', fullPage: true});
+        }
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        fs.mkdirSync('.impeccable/review', {recursive: true});
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Money history', 'money']]) {
+                await page.getByRole('tab', {name}).click();
+                await page.locator('#tab-' + panel).waitFor({state: 'visible'});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, panel + ' fits ' + width);
+                if (panel === 'reconciliation') {
+                    assert.equal(await page.locator('#gcash-admin-diff-table th').count(), 8);
+                    assert.equal(await page.locator('.gcash-balance-comparison').count(), 2);
+                }
+                if (panel === 'transactions') {
+                    assert.equal(await page.locator('#gcash-admin-history-table th').count(), 9);
+                    await page.locator('.gcash-tx-details').first().click();
+                    assert.equal(await page.locator('#txDetailModal').isVisible(), true);
+                    await page.keyboard.press('Escape');
+                }
+                if (panel === 'money') {
+                    await page.reload();
+                    await page.locator('#tab-money').waitFor({state: 'visible'});
+                    assert.equal(await page.getByLabel('Session ID', {exact: true}).isVisible(), true);
+                    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+                    assert.equal(await page.locator('#gcash-tab-money').evaluate(tab => {
+                        const bounds = tab.getBoundingClientRect();
+                        const nav = tab.parentElement.getBoundingClientRect();
+                        return bounds.left >= nav.left && bounds.right <= nav.right;
+                    }), true, 'Money tab stays visible after loading at ' + width);
+                }
+                await page.evaluate(async () => {
+                    document.querySelectorAll('.gcash-table-wrap').forEach(element => element.scrollTo(0, 0));
+                    window.scrollTo(0, 0);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                });
+                if (panel === 'money') await page.screenshot({path: '.impeccable/review/gcash-money-' + width + '-viewport.png'});
+                await page.screenshot({path: '.impeccable/review/gcash-' + panel + '-' + width + '.png', fullPage: true});
+            }
         }
         assert.deepEqual(errors, []);
         console.log('GCash cached-script tab regression: passed');

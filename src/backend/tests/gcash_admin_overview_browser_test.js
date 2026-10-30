@@ -152,15 +152,15 @@ const csvRows = bytes => {
         await page.keyboard.press('Home');
         assert.equal(await page.locator('#tab-overview').isVisible(), true);
         const initialReviewCount = Number(await page.locator('#admin-nc-count').textContent());
-        const outstanding = page.getByRole('button', {name: /Review unresolved exchanges/});
+        const outstanding = page.getByRole('button', {name: /Unresolved exchanges/});
         assert.ok((await outstanding.textContent()).includes(String(initialReviewCount)));
         await outstanding.click();
         assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
         assert.ok((await page.locator('#tab-unresolved').textContent()).includes('All Cashiers'));
         const legacyUnresolved = page.locator('#gcash-admin-nc-body tr').filter({hasText: '7990000000999'});
-        assert.equal((await legacyUnresolved.locator('td').nth(5).textContent()).trim(), 'Not recorded', 'Unresolved legacy reference has no recorded fee');
-        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Cash: Not recorded'), 'Unresolved legacy reference has no recorded cash movement');
-        assert.ok((await legacyUnresolved.locator('td').nth(6).textContent()).includes('Wallet: Not recorded'), 'Unresolved legacy reference has no recorded wallet movement');
+        assert.equal((await legacyUnresolved.locator('td').nth(4).textContent()).trim(), 'Not recorded', 'Unresolved legacy reference has no recorded fee');
+        assert.ok((await legacyUnresolved.locator('td').nth(5).textContent()).includes('Cash: Not recorded'), 'Unresolved legacy reference has no recorded cash movement');
+        assert.ok((await legacyUnresolved.locator('td').nth(5).textContent()).includes('Wallet: Not recorded'), 'Unresolved legacy reference has no recorded wallet movement');
         await page.goto(origin + '/components/administrator/gcash_overview.php?tab=unresolved&start_date=2020-01-01&end_date=2020-01-02&cashier_id=1&search=no-match&type=Cash-Out');
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), initialReviewCount, 'Historic reporting and every list filter preserve Store-wide review count');
         assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Other cashier held item'), 'Historical other-Cashier unresolved record remains visible');
@@ -241,7 +241,7 @@ const csvRows = bytes => {
         await page.locator('#filter-cashier-id').selectOption('4');
         await search.fill('888888888');
         await page.getByRole('status').filter({hasText: '105 matching transactions'}).waitFor();
-        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').first().locator('td').nth(4).textContent(), 'Not recorded', 'Legacy history does not invent a zero fee');
+        assert.equal(await page.locator('#gcash-admin-history-body tr[data-transaction]').first().locator('.gcash-fee-value').textContent(), 'Not recorded', 'Legacy history does not invent a zero fee');
         assert.equal(await page.locator('#gcash-admin-history-body .gcash-receipt').count(), 0, 'Unpreserved history never exposes a receipt action after filtering');
         const allDownloadPromise = page.waitForEvent('download');
         await page.getByRole('link', {name: 'Export Report'}).click();
@@ -484,7 +484,7 @@ const csvRows = bytes => {
             for (const [tabName, suffix] of [['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved']]) {
                 await page.getByRole('tab', {name: tabName}).click();
                 const panel = page.locator('#tab-' + suffix);
-                assert.equal(await panel.locator('small, .pos-panel-title p').count(), 0, name + ' ' + suffix + ' has no secondary row captions');
+                assert.equal(await panel.locator('thead th').count(), suffix === 'reconciliation' ? 8 : 9, name + ' ' + suffix + ' groups related record fields');
                 if (suffix !== 'transactions') {
                     assert.equal(await panel.getByText('All dates · All Cashiers', {exact: true}).isVisible(), true, name + ' review scope remains visible');
                     const details = panel.locator('.gcash-row-details').first();
@@ -503,6 +503,11 @@ const csvRows = bytes => {
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' ' + suffix + ' has no page overflow');
                 await capture(name + '-' + suffix);
             }
+            await page.getByRole('tab', {name: 'Money history'}).click();
+            await page.locator('#tab-money').waitFor({state: 'visible'});
+            assert.equal(await page.getByLabel('Session ID', {exact: true}).isVisible(), true);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' money history has no page overflow');
+            await capture(name + '-money');
             await page.getByRole('tab', {name: 'Overview'}).click();
         }
         assert.deepEqual(errors, []);

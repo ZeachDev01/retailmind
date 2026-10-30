@@ -8,13 +8,14 @@
         const target = tab.getAttribute('aria-controls');
         const scope = document.getElementById('gcash-reporting-scope');
         if (target === 'tab-overview') document.getElementById('gcash-completed-activity').before(scope);
-        if (target === 'tab-transactions') document.getElementById(target).prepend(scope);
+        if (target === 'tab-transactions') document.getElementById('gcash-transaction-filters').prepend(scope);
         tabs.forEach(item => {
             const selected = item === tab;
             item.setAttribute('aria-selected', String(selected));
             item.tabIndex = selected ? 0 : -1;
             document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
         });
+        tab.parentElement.scrollLeft += tab.getBoundingClientRect().left - tab.parentElement.getBoundingClientRect().left;
         const url = new URL(location.href);
         url.searchParams.set('tab', tab.getAttribute('aria-controls').replace('tab-', ''));
         history.replaceState(null, '', url);
@@ -40,6 +41,14 @@
     });
     selectTab(tabs.find(tab => tab.getAttribute('aria-selected') === 'true'));
 
+    // Browser scroll restoration runs after initialization on reload.
+    window.addEventListener('pageshow', () => {
+        const tab = tabs.find(item => item.getAttribute('aria-selected') === 'true');
+        requestAnimationFrame(() => {
+            tab.parentElement.scrollLeft += tab.getBoundingClientRect().left - tab.parentElement.getBoundingClientRect().left;
+        });
+    });
+
     workspace.addEventListener('click', event => {
         const review = event.target.closest('[data-review-tab]');
         if (review) selectTab(document.getElementById('gcash-tab-' + review.dataset.reviewTab), true);
@@ -56,7 +65,7 @@
 
     function markReviewsUnavailable() {
         document.getElementById('admin-nc-count').textContent = 'Unavailable';
-        for (const [id, columns] of [['gcash-admin-diff-body', 12], ['gcash-admin-nc-table tbody', 10]]) {
+        for (const [id, columns] of [['gcash-admin-diff-body', 8], ['gcash-admin-nc-table tbody', 9]]) {
             const body = workspace.querySelector('#' + id);
             const row = document.createElement('tr');
             const cell = document.createElement('td');
@@ -147,7 +156,7 @@
                 markReviewsUnavailable();
                 const row = document.createElement('tr');
                 const cell = document.createElement('td');
-                cell.colSpan = 11;
+                cell.colSpan = 9;
                 cell.textContent = 'Transaction history unavailable for this selection. Try again.';
                 cell.setAttribute('role', 'alert');
                 row.append(cell);
@@ -267,7 +276,8 @@
             const wFind = document.getElementById('gcash-verify-wallet-finding');
             if (wFind) wFind.value = 'Wallet transfer confirmed in GCash app';
         }
-        document.getElementById('gcash-verify-id').textContent = button.dataset.transactionId;
+        const verifyId = document.getElementById('gcash-verify-id');
+        if (verifyId) verifyId.textContent = button.dataset.transactionId;
         document.getElementById('gcash-verify-reference').value = button.dataset.reference;
         document.getElementById('gcash-verify-error').textContent = '';
         verifyDialog.showModal();
