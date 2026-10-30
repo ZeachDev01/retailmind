@@ -63,12 +63,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <section class="dashboard-panel" aria-labelledby="recent-transactions-title">
                     <div class="dashboard-panel-header">
                         <div>
-                            <h2 id="recent-transactions-title">Recent transactions</h2>
-                        </div>
-                        <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all</a>
-                    </div>
-                    <div class="dashboard-panel-header">
-                        <div>
                             <h3>Today's gross sales by hour (PHT)</h3>
                         </div>
                     </div>
@@ -79,30 +73,31 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                 <?php endforeach; ?>
                             </canvas>
                         </div>
-                    <?php if (!$cashierMetrics['transactions']): ?>
-                        <p class="section-description">No sales recorded today.</p>
-                    <?php endif; ?>
-                    <div class="table-wrap u-table-flat" role="region" aria-labelledby="recent-transactions-title" tabindex="0">
-                        <table class="cashier-recent-table">
-                            <thead>
-                                <tr>
-                                    <th>Receipt</th>
-                                    <th>Total</th>
-                                    <th>Items</th>
-                                    <th>Payment</th>
-                                    <th>Time</th>
-                                    <th>Action</th>
+                    <div class="dashboard-panel-header cashier-transactions-header">
+                        <h2 id="recent-transactions-title">Recent transactions</h2>
+                        <a class="btn btn-small btn-secondary" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                    </div>
+                    <div class="table-wrap cashier-transactions-wrap" role="region" aria-labelledby="recent-transactions-title" tabindex="0">
+                        <table class="cashier-recent-table" role="table" aria-labelledby="recent-transactions-title">
+                            <thead role="rowgroup">
+                                <tr role="row">
+                                    <th scope="col" role="columnheader">Receipt</th>
+                                    <th scope="col" role="columnheader">Total</th>
+                                    <th scope="col" role="columnheader">Items</th>
+                                    <th scope="col" role="columnheader">Payment</th>
+                                    <th scope="col" role="columnheader">Time</th>
+                                    <th scope="col" role="columnheader"><span class="sr-only">Action</span></th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody role="rowgroup">
                                 <?php foreach ($recentTransactions as $sale): ?>
-                                    <tr>
-                                        <td data-label="Receipt"><strong>#<?= (int)$sale['sale_id'] ?></strong></td>
-                                        <td data-label="Total">&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></td>
-                                        <td data-label="Items"><?= (int)$sale['item_count'] ?></td>
-                                        <td data-label="Payment"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></td>
-                                        <td data-label="Time"><?= htmlspecialchars(format_display_datetime($sale['sale_date'])) ?></td>
-                                        <td data-label="Action">
+                                    <tr role="row">
+                                        <td role="cell" data-label="Receipt"><strong>#<?= (int)$sale['sale_id'] ?></strong></td>
+                                        <td role="cell" data-label="Total"><strong>&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></strong></td>
+                                        <td role="cell" data-label="Items"><?= (int)$sale['item_count'] ?></td>
+                                        <td role="cell" data-label="Payment"><span class="transaction-payment"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></span></td>
+                                        <td role="cell" data-label="Time"><?= htmlspecialchars(format_display_datetime($sale['sale_date'])) ?></td>
+                                        <td role="cell" data-label="Action">
                                             <a class="receipt-link" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id'])) ?>">
                                                 View receipt <i class="bi bi-arrow-right" aria-hidden="true"></i>
                                             </a>
@@ -110,8 +105,8 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                     </tr>
                                 <?php endforeach; ?>
                                 <?php if (!$recentTransactions): ?>
-                                    <tr>
-                                        <td class="u-empty-cell-padded" colspan="6">No transactions recorded.</td>
+                                    <tr role="row">
+                                        <td role="cell" class="transaction-empty" colspan="6"><i class="bi bi-receipt" aria-hidden="true"></i><strong>No transactions recorded.</strong><span>Your recent sales will appear here.</span></td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -151,10 +146,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
             </div>
         <div role="tabpanel" id="panel-gcash" aria-labelledby="tab-gcash" tabindex="0" class="gcash-tabpanel" hidden>
             <header class="gcash-overview-heading">
-                <div>
-                    <h1>GCash overview</h1>
-                    <p>Service balances and activity for your current shift.</p>
-                </div>
                 <div class="gcash-overview-quick-actions">
                     <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?type=cash-in')) ?>" class="btn btn-primary" id="gcash-overview-action-cash-in">
                         <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i>New Cash-In
@@ -166,7 +157,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
             </header>
             <p id="gcash-overview-status" role="status">Loading GCash overview...</p>
             <div class="gcash-overview-ledger">
-            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-balances-title">
+            <section class="pos-panel gcash-overview-section gcash-overview-balances" aria-labelledby="gcash-overview-balances-title">
                 <div class="pos-panel-header">
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></div>
@@ -180,13 +171,13 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                         <div class="gcash-card-header">
                             <span class="gcash-card-label">Service cash</span>
                         </div>
-                        <div class="gcash-card-value" id="gcash-overview-expected-cash">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-cash">—</div>
                     </div>
                     <div class="gcash-card gcash-card-balance">
                         <div class="gcash-card-header">
                             <span class="gcash-card-label">Wallet balance</span>
                         </div>
-                        <div class="gcash-card-value" id="gcash-overview-expected-wallet">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-overview-expected-wallet">—</div>
                     </div>
                 </div>
                 <details class="gcash-balance-details">
@@ -196,7 +187,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 </details>
             </section>
 
-            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-metrics-title">
+            <section class="pos-panel gcash-overview-section gcash-overview-shift" aria-labelledby="gcash-overview-metrics-title">
                 <div class="pos-panel-header">
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-graph-up" aria-hidden="true"></i></div>
@@ -208,24 +199,24 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 <div class="gcash-overview-grid gcash-metrics-grid">
                     <div class="gcash-card">
                         <span class="gcash-card-label">Cash-In principal</span>
-                        <div class="gcash-card-value" id="gcash-metric-cash-in-principal">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-metric-cash-in-principal">—</div>
                     </div>
                     <div class="gcash-card">
                         <span class="gcash-card-label">Cash-Out principal</span>
-                        <div class="gcash-card-value" id="gcash-metric-cash-out-principal">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-metric-cash-out-principal">—</div>
                     </div>
                     <div class="gcash-card">
                         <span class="gcash-card-label">Gross fees · Cash</span>
-                        <div class="gcash-card-value" id="gcash-metric-fees-cash">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-metric-fees-cash">—</div>
                     </div>
                     <div class="gcash-card">
                         <span class="gcash-card-label">Gross fees · Wallet</span>
-                        <div class="gcash-card-value" id="gcash-metric-fees-wallet">₱0.00</div>
+                        <div class="gcash-card-value" id="gcash-metric-fees-wallet">—</div>
                     </div>
                 </div>
             </section>
 
-            <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-overview-nc-title">
+            <section class="pos-panel gcash-overview-section gcash-overview-review" aria-labelledby="gcash-overview-nc-title">
                 <div class="pos-panel-header">
                     <div class="pos-panel-title">
                         <div class="pos-panel-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
@@ -233,11 +224,12 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                             <h2 id="gcash-overview-nc-title">Needs checking</h2>
                         </div>
                     </div>
-                    <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">0 open</span>
+                    <div class="gcash-overview-review-actions">
+                        <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">—</span>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>">View history <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                    </div>
                 </div>
-                <div id="gcash-overview-nc-list" class="gcash-nc-list">
-                    <p class="gcash-empty-msg">No unresolved Needs checking transactions.</p>
-                </div>
+                <div id="gcash-overview-nc-list" class="gcash-nc-list"></div>
             </section>
             </div>
         </div>

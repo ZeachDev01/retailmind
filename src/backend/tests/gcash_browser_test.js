@@ -501,7 +501,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal((await ncCard.textContent()).includes('Cash-In'), true);
         assert.equal((await ncCard.textContent()).includes('₱500.00'), true);
         assert.equal((await ncCard.textContent()).includes('₱10.00 (cash)'), true);
-        assert.equal(await ncCard.getByRole('link', {name: 'Review in GCash', exact: true}).isVisible(), true);
+        assert.equal(await ncCard.getByRole('link', {name: 'Review transaction', exact: true}).isVisible(), true);
 
         // Ticket #240: API tests for record_cash_in
         const staleApi = await post({

@@ -263,10 +263,15 @@
 }
 
 #cashier-overview .gcash-overview-quick-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: center;
     gap: 0.5rem;
+}
+
+#cashier-overview .gcash-overview-quick-actions .btn {
+    justify-content: center;
+    white-space: nowrap;
 }
 
 .gcash-overview-grid {
@@ -1219,6 +1224,104 @@ dialog[id^="gcash-"]::backdrop {
     display: none !important;
 }
 
+/* Balance-first Cashier overview; transaction-entry screens keep their own layout. */
+#cashier-overview .gcash-overview-heading {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+#cashier-overview .gcash-overview-quick-actions .btn,
+#cashier-overview .gcash-overview-review-actions .btn {
+    min-height: 44px;
+}
+
+#cashier-overview .gcash-overview-ledger {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 1.25rem;
+}
+
+#cashier-overview .gcash-overview-section {
+    margin: 0;
+    padding: 1.5rem;
+}
+
+#cashier-overview .gcash-overview-section h2 {
+    font-size: 1.05rem;
+    margin: 0;
+}
+
+#cashier-overview .gcash-overview-balances .gcash-balances-grid {
+    padding: 1rem 0 1.5rem;
+}
+
+#cashier-overview .gcash-overview-section .gcash-card-label {
+    font-size: 0.95rem;
+    letter-spacing: normal;
+    text-transform: none;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+#cashier-overview .gcash-overview-section .gcash-card-value {
+    font-size: 1.8rem;
+    line-height: 1.3;
+}
+
+#cashier-overview .gcash-overview-shift .gcash-metrics-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+#cashier-overview .gcash-overview-section.gcash-overview-shift .gcash-card {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    padding: 0.75rem 0;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+#cashier-overview .gcash-overview-section.gcash-overview-shift .gcash-card:first-child { padding-top: 0; }
+#cashier-overview .gcash-overview-section.gcash-overview-shift .gcash-card:last-child { border-bottom: 0; padding-bottom: 0; }
+#cashier-overview .gcash-overview-section.gcash-overview-shift .gcash-card-value { font-size: 1.05rem; }
+#cashier-overview .gcash-overview-review { grid-column: 1 / -1; }
+
+#cashier-overview .gcash-overview-review-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+#cashier-overview .gcash-overview-review .gcash-empty-msg {
+    padding: 1rem 0;
+}
+
+#cashier-overview .gcash-overview-review .gcash-nc-meta { overflow-wrap: anywhere; }
+
+#cashier-overview .gcash-status-needs-checking {
+    color: var(--theme-warning-text, #92400e);
+    background: var(--theme-warning-surface, #fef3c7);
+}
+
+@media (max-width: 1100px) {
+    #cashier-overview .gcash-overview-ledger { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 600px) {
+    #cashier-overview .gcash-overview-section { padding: 1.125rem; }
+    #cashier-overview .gcash-overview-heading { margin: 1.25rem 0; }
+    #cashier-overview .gcash-overview-balances .gcash-balances-grid { padding: 0.25rem 0 0.75rem; }
+}
+
 /* Responsiveness */
 @media (max-width: 1024px) {
     .gcash-form {
@@ -1293,6 +1396,10 @@ dialog[id^="gcash-"]::backdrop {
     .gcash-submit-actions {
         grid-template-columns: minmax(0, 1fr) !important;
     }
+}
+
+@media (max-width: 420px) {
+    #cashier-overview .gcash-overview-quick-actions { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

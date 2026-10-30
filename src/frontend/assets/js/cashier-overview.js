@@ -73,7 +73,7 @@
                 if (items.length === 0) {
                     const empty = document.createElement('p');
                     empty.className = 'gcash-empty-msg';
-                    empty.textContent = 'No unresolved Needs checking transactions.';
+                    empty.textContent = 'No transactions need checking.';
                     ncList.append(empty);
                 } else {
                     for (const item of items) {
@@ -84,7 +84,7 @@
 
                         const title = document.createElement('div');
                         title.className = 'gcash-nc-title';
-                        title.innerHTML = `<strong>#${item.transaction_id}</strong> · <span>${item.transaction_type}</span> <span class="gcash-status gcash-status-needs-checking">Needs checking</span>`;
+                        title.innerHTML = `<strong>#${item.transaction_id}</strong> · <span>${item.transaction_type}</span>`;
 
                         const meta = document.createElement('div');
                         meta.className = 'gcash-nc-meta';
@@ -107,7 +107,7 @@
                         const resolveBtn = document.createElement('a');
                         resolveBtn.href = workspace.dataset.history;
                         resolveBtn.className = 'btn btn-secondary';
-                        resolveBtn.textContent = 'Review in GCash';
+                        resolveBtn.textContent = 'Review transaction';
 
                         card.append(details, resolveBtn);
                         ncList.append(card);

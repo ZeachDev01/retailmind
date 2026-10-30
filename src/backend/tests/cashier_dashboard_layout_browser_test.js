@@ -29,6 +29,16 @@ const {chromium} = require('playwright');
                 body: 'window.Chart = class { constructor(canvas, config) { window.salesChart = {id: canvas.id, config}; } };'
             }));
             await page.route('http://dashboard.test/**', route => {
+                if (new URL(route.request().url()).pathname.endsWith('/gcash_api.php')) {
+                    return route.fulfill({json: empty ? {success: false, message: 'GCash overview is unavailable. Try again later.'} : {
+                        success: true, expected_service_cash: 12500, expected_wallet_balance: 28750.50,
+                        cash_in_principal: 8400, cash_out_principal: 3200, gross_fees_cash: 180, gross_fees_wallet: 45,
+                        last_checked_formatted: 'Oct 30, 2026 08:00 AM', needs_checking_count: 1,
+                        needs_checking: [{transaction_id: 42, transaction_type: 'Cash-Out', principal_amount: 1500,
+                            gross_fee: 30, reference_number: '1234567890123', time_formatted: '08:45 AM',
+                            cashier_name: 'Test Cashier', shift_id: 12, notes: 'Confirm the wallet movement before resolving.'}]
+                    }});
+                }
                 const asset = new URL(route.request().url()).pathname.match(/^\/assets\/(.*)/);
                 return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: html});
             });
@@ -52,6 +62,13 @@ const {chromium} = require('playwright');
                 await page.setViewportSize({width, height: 900});
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Dashboard fits at ${width}`);
                 assert(await page.locator('.table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `Transactions fit at ${width}`);
+                if (!empty) {
+                    const cells = page.locator('.cashier-recent-table tbody tr').first().locator('td');
+                    assert(await cells.evaluateAll(cells => cells.every(cell => cell.getBoundingClientRect().width >= 48)), `Transaction cells stay readable at ${width}`);
+                    assert.equal(await cells.nth(1).evaluate(el => getComputedStyle(el).textAlign), 'right', `Totals align at ${width}`);
+                } else {
+                    assert.equal(await page.locator('.transaction-empty').evaluate(el => getComputedStyle(el).textAlign), 'center', `Empty state centers at ${width}`);
+                }
                 for (const selector of ['.cashier-stats', '.cashier-dashboard-grid']) {
                     assert(await page.locator(selector).evaluate(el => el.scrollWidth <= el.clientWidth), `${selector} fits at ${width}`);
                 }
@@ -61,9 +78,26 @@ const {chromium} = require('playwright');
             else assert.match(await page.getByRole('link', {name: 'View receipt'}).getAttribute('href'), /sale_id=42/);
             await page.getByRole('tab', {name: 'GCash', exact: true}).click();
             assert(await page.locator('#panel-gcash').isVisible());
+            if (empty) {
+                await page.getByRole('status').filter({hasText: 'GCash overview is unavailable.'}).waitFor();
+                assert.equal(await page.locator('#gcash-overview-expected-cash').textContent(), '—', 'Unavailable balances never imply zero');
+            } else {
+                await page.getByText('1 open', {exact: true}).waitFor();
+                assert.match(await page.locator('#gcash-overview-expected-wallet').textContent(), /28,750\.50/);
+                await page.getByText('Balance details', {exact: true}).click();
+                assert(await page.getByText('Last actual check: Oct 30, 2026 08:00 AM', {exact: true}).isVisible());
+                await page.getByText('Balance details', {exact: true}).click();
+            }
+            assert.match(await page.getByRole('link', {name: 'New Cash-In', exact: true}).getAttribute('href'), /type=cash-in/);
+            assert.match(await page.getByRole('link', {name: 'New Cash-Out', exact: true}).getAttribute('href'), /type=cash-out/);
+            assert.match(await page.getByRole('link', {name: 'View history'}).getAttribute('href'), /tab=history/);
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 assert(await page.locator('#panel-gcash').evaluate(el => el.scrollWidth <= el.clientWidth), `GCash fits at ${width}`);
+                const actions = page.locator('.gcash-overview-quick-actions .btn');
+                const boxes = await actions.evaluateAll(links => links.map(link => ({width: link.getBoundingClientRect().width, height: link.getBoundingClientRect().height})));
+                assert(Math.abs(boxes[0].width - boxes[1].width) < 1, `GCash actions have equal widths at ${width}`);
+                assert(boxes.every(box => box.height >= 44), `GCash actions retain touch targets at ${width}`);
                 if (!empty && width !== 320) await page.screenshot({path: path.join(screenshots, `gcash-${width}.png`), fullPage: true});
             }
             await page.evaluate(() => { document.documentElement.style.fontSize = '200%'; });

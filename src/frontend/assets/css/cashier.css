@@ -1245,10 +1245,28 @@
 .cashier-dashboard-page .gcash-card { overflow-wrap: anywhere; }
 .cashier-dashboard-page .gcash-card-header { flex-wrap: wrap; }
 .cashier-dashboard-page .gcash-metrics-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
-.cashier-dashboard-page .cashier-recent-table { width: 100%; min-width: 0; table-layout: fixed; font-variant-numeric: tabular-nums; }
-.cashier-dashboard-page .cashier-recent-table :is(th, td) { padding: .85rem .6rem; white-space: normal; overflow-wrap: anywhere; }
-.cashier-dashboard-page .cashier-recent-table th { color: var(--muted); font-size: .875rem; font-weight: 600; background: var(--theme-surface-soft, #f8fafc); }
-.cashier-dashboard-page .cashier-recent-table .receipt-link { font-size: .875rem; font-weight: 600; }
+.cashier-dashboard-page .cashier-transactions-header { border-top: 1px solid var(--cashier-border); }
+.cashier-dashboard-page .cashier-transactions-wrap { margin: 0; border: 0; border-radius: 0 0 16px 16px; }
+.cashier-dashboard-page .cashier-recent-table { width: 100%; min-width: 0; table-layout: fixed; font-variant-numeric: lining-nums tabular-nums; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td) { padding: .85rem .75rem; vertical-align: middle; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+.cashier-dashboard-page .cashier-recent-table th { color: var(--muted); font-size: .8125rem; font-weight: 600; text-transform: none; letter-spacing: 0; background: var(--theme-surface-soft, #f8fafc); }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):first-child { padding-left: 1.05rem; width: 12%; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):nth-child(2) { width: 20%; text-align: right; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):nth-child(3) { width: 8%; text-align: right; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):nth-child(4) { width: 14%; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):nth-child(5) { width: 26%; }
+.cashier-dashboard-page .cashier-recent-table :is(th, td):last-child { width: 20%; padding-right: 1.05rem; text-align: right; }
+.cashier-dashboard-page .cashier-recent-table td { color: var(--text); font-size: .875rem; }
+.cashier-dashboard-page .cashier-recent-table td:nth-child(5) { color: var(--muted); }
+.cashier-dashboard-page .cashier-recent-table tbody tr:last-child td { border-bottom: 0; }
+.cashier-dashboard-page .cashier-recent-table tbody tr:is(:hover, :focus-within) { background: var(--theme-surface-soft, #f8fafc); }
+.cashier-dashboard-page .transaction-payment { display: inline-block; padding: .15rem .5rem; border: 1px solid var(--cashier-border); border-radius: 6px; color: var(--text); font-size: .8125rem; background: var(--theme-surface-soft, #f8fafc); }
+.cashier-dashboard-page .cashier-recent-table .receipt-link { min-height: 44px; justify-content: flex-end; font-size: .875rem; font-weight: 600; text-underline-offset: .2em; }
+.cashier-dashboard-page .cashier-recent-table tbody td.transaction-empty { width: auto; padding: 2rem 1rem; text-align: center; color: var(--muted); }
+.cashier-dashboard-page .transaction-empty :is(i, strong, span) { display: block; }
+.cashier-dashboard-page .transaction-empty i { margin-bottom: .5rem; font-size: 1.5rem; }
+.cashier-dashboard-page .transaction-empty strong { color: var(--text); font-weight: 600; }
+.cashier-dashboard-page .transaction-empty span { margin-top: .25rem; }
 .cashier-dashboard-page .stock-alert-item { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .cashier-dashboard-page .stock-alert-item > div { flex: 1 1 150px; min-width: 0; overflow-wrap: anywhere; }
 .cashier-dashboard-page .stock-alert-item strong { font-size: 1rem; font-weight: 600; line-height: 1.5; }
@@ -1263,10 +1281,15 @@
     .cashier-dashboard-page .cashier-recent-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .cashier-dashboard-page .cashier-recent-table,
     .cashier-dashboard-page .cashier-recent-table tbody { display: block; }
-    .cashier-dashboard-page .cashier-recent-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1rem; padding: .85rem; border: 1px solid var(--border); border-radius: 12px; }
-    .cashier-dashboard-page .cashier-recent-table tbody td { display: block; padding: 0; border: 0; min-width: 0; text-align: left; }
-    .cashier-dashboard-page .cashier-recent-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .875rem; font-weight: 600; }
-    .cashier-dashboard-page .cashier-recent-table td:last-child { grid-column: 1 / -1; }
+    .cashier-dashboard-page .cashier-recent-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; padding: 1rem 1.05rem; border-bottom: 1px solid var(--cashier-border); }
+    .cashier-dashboard-page .cashier-recent-table tbody tr:last-child { border-bottom: 0; }
+    .cashier-dashboard-page .cashier-recent-table tbody td:nth-child(n) { display: block; width: auto; padding: 0; border: 0; min-width: 0; text-align: left; }
+    .cashier-dashboard-page .cashier-recent-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .2rem; color: var(--muted); font-size: .75rem; font-weight: 400; }
+    .cashier-dashboard-page .cashier-recent-table tbody td:nth-child(even) { text-align: right; }
+    .cashier-dashboard-page .cashier-recent-table td:nth-child(2) { font-size: 1rem; }
+    .cashier-dashboard-page .cashier-recent-table td:last-child { align-self: end; }
+    .cashier-dashboard-page .cashier-recent-table td:last-child::before { content: none; }
+    .cashier-dashboard-page .cashier-recent-table tbody td.transaction-empty { grid-column: 1 / -1; padding: 1rem 0; text-align: center; }
 }
 @media (max-width: 640px) {
     .cashier-dashboard-page .cashier-quick-actions { grid-template-columns: minmax(0, 1fr); }
