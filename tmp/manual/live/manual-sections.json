@@ -1,0 +1,344 @@
+[
+  {
+    "role": "Administrator",
+    "title": "Store Overview",
+    "file": "admin-store-overview.jpg",
+    "bullets": [
+      "View Store performance, sales summaries, and operational alerts.",
+      "Open dashboard links to review cash variances, pending Stock Issues, and Fiscal Periods."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Store Staff",
+    "file": "admin-store-staff.jpg",
+    "bullets": [
+      "View staff accounts, assigned roles, and account status.",
+      "Add or update staff information and manage operational access."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Registers",
+    "file": "admin-registers.jpg",
+    "bullets": [
+      "View available Registers and their current status.",
+      "Manage Register names, receipt paper widths, and availability."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Store Settings",
+    "file": "admin-store-settings.jpg",
+    "bullets": [
+      "View operational thresholds and review limits for the Store.",
+      "Update the required values and select Save settings."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Store Calendar",
+    "file": "admin-store-calendar.jpg",
+    "bullets": [
+      "View the Store calendar and daily operating statuses.",
+      "Record open days, closures, holidays, and exceptional closures."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Fiscal Periods",
+    "file": "admin-fiscal-periods.jpg",
+    "bullets": [
+      "View and create Fiscal Periods for Store records.",
+      "Review outstanding responsibilities before closing or locking a period."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Promotions",
+    "file": "admin-promotions.jpg",
+    "bullets": [
+      "View and manage Store discounts and promotions.",
+      "Set the promotion scope, discount, minimum quantity, and active dates."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "GCash Overview",
+    "file": "admin-gcash-overview.jpg",
+    "bullets": [
+      "View recorded service cash, wallet balances, and GCash activity.",
+      "Review transactions, closing checks, and unresolved exchanges."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Cashier Shifts",
+    "file": "admin-cashier-shifts.jpg",
+    "bullets": [
+      "View Cashier Shift records, sales, drawer counts, and cash differences.",
+      "Filter by date, Cashier, or Register to review the relevant shift."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Database Backup",
+    "file": "admin-database-backup.jpg",
+    "bullets": [
+      "Create and download an encrypted copy of Store records.",
+      "Use a passphrase of at least 16 characters and keep it separately; lost passphrases cannot be recovered."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Generate Report",
+    "file": "admin-generate-report.jpg",
+    "bullets": [
+      "View sales and other available Store reports.",
+      "Choose the report and filters, then run, export, or print the results."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Operational Audit",
+    "file": "admin-operational-audit.jpg",
+    "bullets": [
+      "View recorded Store actions, users, modules, and timestamps.",
+      "Search the history and open details to trace an operational event."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Receipt History",
+    "file": "admin-receipt-history.jpg",
+    "bullets": [
+      "View completed Store receipts and related refund information.",
+      "Filter the list and open Full details to review the selected receipt."
+    ]
+  },
+  {
+    "role": "Administrator",
+    "title": "Refund Correction Reviews",
+    "file": "admin-refund-correction-reviews.jpg",
+    "bullets": [
+      "Review corrections needed after a recorded refund.",
+      "Approve the exact cash or stock changes and assign the responsible staff."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Stock Overview",
+    "file": "inventory-stock-overview.jpg",
+    "bullets": [
+      "View stock totals, low-stock alerts, and expiry information.",
+      "Use the overview to identify products that need attention."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Products",
+    "file": "inventory-products.jpg",
+    "bullets": [
+      "View product names, prices, stock levels, and status.",
+      "Add or update products and manage their barcode and packaging details."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Replenishment Recommendations",
+    "file": "inventory-replenishment-recommendations.jpg",
+    "bullets": [
+      "View suggested buying quantities based on stock rules and available forecasts.",
+      "Use recommendations as buying guidance; an unavailable forecast does not mean zero demand."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Stock Receiving",
+    "file": "inventory-stock-receiving.jpg",
+    "bullets": [
+      "Record bought goods using the product catalog or barcode search.",
+      "Review quantities, costs, and batch details before saving accepted stock."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Receiving History",
+    "file": "inventory-receiving-history.jpg",
+    "bullets": [
+      "View the stock receipts available to your account.",
+      "Search recorded entries and open their details to review received quantities."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Inventory Counts",
+    "file": "inventory-inventory-counts.jpg",
+    "bullets": [
+      "Record physical product or batch counts and the reason for a discrepancy.",
+      "Review pending counts before approval; stock changes only after approval."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Stock Issue Reviews",
+    "file": "inventory-stock-issue-reviews.jpg",
+    "bullets": [
+      "View Stock Issues submitted for Inventory Manager review.",
+      "Check the reported goods and record the appropriate decision and notes."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Supplier Pullouts",
+    "file": "inventory-supplier-pullouts.jpg",
+    "bullets": [
+      "Record goods removed from a selected product batch.",
+      "Enter the actual quantity and reason, then review the pullout history."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Demand Forecast",
+    "file": "inventory-demand-forecast.jpg",
+    "bullets": [
+      "View available product demand estimates and forecast status.",
+      "Check the forecast period and readiness before using estimates for planning."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Forecast Exceptions",
+    "file": "inventory-forecast-exceptions.jpg",
+    "bullets": [
+      "View products whose forecast results need further review.",
+      "Use the exception filters to identify the affected products and reasons."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Data Readiness",
+    "file": "inventory-data-readiness.jpg",
+    "bullets": [
+      "View whether product history is ready for forecasting.",
+      "Identify products needing more history or further data review."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Insights & Risk",
+    "file": "inventory-insights-risk.jpg",
+    "bullets": [
+      "View inventory risks, including excess stock, expiry exposure, and slow-moving goods.",
+      "Use the analysis and cycle-count information to prioritize stock checks."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Generate Report",
+    "file": "inventory-generate-report.jpg",
+    "bullets": [
+      "View the reports available in the Inventory workspace.",
+      "Select the report and filters, then review or export its results."
+    ]
+  },
+  {
+    "role": "Inventory Manager",
+    "title": "Refund Correction Reviews",
+    "file": "inventory-refund-correction-reviews.jpg",
+    "bullets": [
+      "View stock correction tasks assigned after an Administrator review.",
+      "Record the approved stock action and notes while preserving the original refund."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Cashier Shift",
+    "file": "cashier-cashier-shift.jpg",
+    "bullets": [
+      "Open a shift using an available Register and the actual starting cash.",
+      "Review drawer movements and count cash before closing the shift."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Point of Sale",
+    "file": "cashier-point-of-sale.jpg",
+    "bullets": [
+      "Scan or search products, review quantities, and complete customer sales.",
+      "Open a Cashier Shift before checkout and print the receipt after a successful sale."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "GCash",
+    "file": "cashier-gcash.jpg",
+    "bullets": [
+      "Record Cash-In and Cash-Out exchanges, fees, and reference numbers.",
+      "Verify actual wallet and cash movements, then reconcile or hand over service funds."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Dashboard Overview",
+    "file": "cashier-dashboard-overview.jpg",
+    "bullets": [
+      "View daily sales, transaction totals, stock alerts, and recent activity.",
+      "Use the Cashier and GCash tabs to review the corresponding summaries."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Cash Refunds",
+    "file": "cashier-cash-refunds.jpg",
+    "bullets": [
+      "Find the original sale and record returned quantities, item condition, and the refund reason.",
+      "Only Restockable items return to available stock; complete the required payment verification and approvals."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Transaction History",
+    "file": "cashier-transaction-history.jpg",
+    "bullets": [
+      "View your sales, Cash Refunds, drawer movements, and shifts.",
+      "Choose a history tab and date range to find the relevant record."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Receipt History",
+    "file": "cashier-receipt-history.jpg",
+    "bullets": [
+      "View the receipts available to your Cashier account.",
+      "Open a saved receipt to review or print it without repeating the sale."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Report Stock Issue",
+    "file": "cashier-report-stock-issue.jpg",
+    "bullets": [
+      "Report damaged, missing, expired, or other affected stock during an open shift.",
+      "Identify the product, stock form, quantity, and explanation for Inventory Manager review."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Refund Correction Reviews",
+    "file": "cashier-refund-correction-reviews.jpg",
+    "bullets": [
+      "View cash correction tasks assigned after an Administrator review.",
+      "Record the approved drawer action and required notes without rewriting the original refund."
+    ]
+  },
+  {
+    "role": "Cashier",
+    "title": "Notifications",
+    "file": "cashier-notifications.jpg",
+    "bullets": [
+      "View notifications and unread items for your account.",
+      "Open the related record to review any action that needs attention."
+    ]
+  }
+]
