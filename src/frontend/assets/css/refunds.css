@@ -243,7 +243,26 @@
     }
 
     .cashier-refunds-page .refund-empty {
-        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 1.5rem 1rem;
+        border-top: 1px solid var(--border);
+        text-align: center;
+    }
+
+    .cashier-refunds-page .refund-empty h3 {
+        margin-bottom: 0.5rem;
+    }
+
+    .cashier-refunds-page .refund-empty a {
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: underline;
+    }
+
+    .cashier-refunds-page #sale_id {
+        scroll-margin-top: 6rem;
     }
 
     .cashier-refunds-page ::selection {

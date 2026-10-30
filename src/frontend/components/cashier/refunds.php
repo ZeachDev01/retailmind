@@ -322,9 +322,16 @@ if ($receiptId > 0 && $receipt === null) {
             <?php endif; ?>
 
             <section class="dashboard-section refund-history" id="refund-history">
-                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><span><?= $totalRows ?> refund<?= $totalRows === 1 ? '' : 's' ?></span></div>
+                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><?php if ($totalRows > 0): ?><span><?= $totalRows ?> refund<?= $totalRows === 1 ? '' : 's' ?></span><?php endif; ?></div>
                 <?php if (!$refunds): ?>
-                    <p class="refund-help refund-empty">No refunds to show on this page.</p>
+                    <div class="refund-empty">
+                        <h3><?= $totalRows === 0 ? 'No refunds yet' : 'No refunds on this page' ?></h3>
+                        <?php if ($totalRows === 0): ?>
+                            <a href="#sale_id">Find a sale to refund</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars($url(['page' => 1])) ?>">View first page</a>
+                        <?php endif; ?>
+                    </div>
                 <?php else: ?>
                     <div class="table-wrap" role="region" aria-labelledby="refund-history-heading" tabindex="0">
                         <table class="refund-history-table">
@@ -356,7 +363,9 @@ if ($receiptId > 0 && $receipt === null) {
                         </table>
                     </div>
                 <?php endif; ?>
-                <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
+                <?php if ($totalRows > 0): ?>
+                    <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
+                <?php endif; ?>
             </section>
         </main>
     </div>
