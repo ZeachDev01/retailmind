@@ -1081,127 +1081,9 @@ final class GCashTransactionService
                 throw new DomainException('Only the responsible Cashier or an Administrator can hand over GCash responsibility.', 403);
             }
 
-            $recipientRoles = array_column($this->eligibleHandoverRecipients(), 'role_name', 'user_id');
-            if (!isset($recipientRoles[$incomingCashierId])) {
-                throw new DomainException('Select an eligible staff member with an active open shift before handover.');
-            }
-            $incomingRole = $recipientRoles[$incomingCashierId];
-            $shiftService = new CashierShiftService($this->pdo());
-            $shiftService->requireUnlockedRegister($incomingCashierId);
-            $incomingShift = $shiftService->getOpenShift($incomingCashierId);
-            if (!$incomingShift) {
-                throw new DomainException('The incoming Cashier must have an active open shift before handover.');
-            }
-            $incomingShiftId = (int)$incomingShift['shift_id'];
-
-            $sessionId = (int)$session['session_id'];
-            $expected = $this->calculateSessionExpected($sessionId);
-            $expectedCash = (float)$expected['expected_service_cash'];
-            $expectedWallet = (float)$expected['expected_wallet_balance'];
-            $cashVariance = round($countedCash - $expectedCash, 2);
-            $walletVariance = round($checkedWallet - $expectedWallet, 2);
-
-            $diffRespId = null;
-            $diffRespRole = null;
-            if ($cashVariance != 0.0 || $walletVariance != 0.0) {
-                $targetDiffUser = $differenceResponsibleUserId ?? $outgoingCashierId;
-                try {
-                    $diffRespRole = $this->resolveEligibleRole($targetDiffUser);
-                    $diffRespId = $targetDiffUser;
-                } catch (Throwable) {
-                    $diffRespId = null;
-                    $diffRespRole = null;
-                }
-            }
-
-            $closeStmt = $this->pdo()->prepare(
-                "UPDATE gcash_service_sessions
-                 SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ?,
-                     expected_service_cash = ?, expected_wallet_balance = ?,
-                     closing_service_cash = ?, closing_wallet_balance = ?,
-                     cash_variance = ?, wallet_variance = ?, closing_notes = ?,
-                     responsible_user_id = ?, responsible_role = ?,
-                     responsibility_notes = ?, responsibility_assigned_at = " . ($diffRespId !== null ? "CURRENT_TIMESTAMP" : "NULL") . "
-                 WHERE session_id = ? AND status = 'open'"
-            );
-            $closeStmt->execute([
-                $outgoingCashierId,
-                $expectedCash, $expectedWallet,
-                $countedCash, $checkedWallet,
-                $cashVariance, $walletVariance,
-                $notes !== '' ? 'Handover: ' . $notes : 'Handover to Cashier #' . $incomingCashierId,
-                $diffRespId,
-                $diffRespRole,
-                'Handover investigation responsibility: ' . $notes,
-                $sessionId,
-            ]);
-
-            if ($acceptedTransactionIds !== null) {
-                $pendingTxStmt = $this->pdo()->query("SELECT transaction_id, cashier_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'");
-                $pendingTxs = $pendingTxStmt->fetchAll(PDO::FETCH_ASSOC);
-                $updateTxStmt = $this->pdo()->prepare(
-                    "UPDATE gcash_transactions
-                     SET responsible_user_id = ?, responsible_role = ?, responsibility_notes = ?, responsibility_assigned_at = ?
-                     WHERE transaction_id = ?"
-                );
-                foreach ($pendingTxs as $ptx) {
-                    $ptxId = (int)$ptx['transaction_id'];
-                    if (in_array($ptxId, $acceptedTransactionIds, true)) {
-                        $updateTxStmt->execute([
-                            $incomingCashierId,
-                            $incomingRole,
-                            'Accepted follow-up investigation responsibility via handover',
-                            date('Y-m-d H:i:s'),
-                            $ptxId
-                        ]);
-                        \log_activity($this->pdo(), $incomingCashierId, 'GCash exchange follow-up responsibility accepted', 'GCash', $ptxId,
-                            ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => $incomingRole, 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
-                            null,
-                            AuditRecordCategory::STORE_OPERATION);
-                    } else {
-                        $updateTxStmt->execute([
-                            null,
-                            null,
-                            'Unaccepted during handover from Cashier #' . $outgoingCashierId,
-                            null,
-                            $ptxId
-                        ]);
-                        \log_activity($this->pdo(), $outgoingCashierId, 'GCash exchange follow-up responsibility unassigned', 'GCash', $ptxId,
-                            ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => null, 'responsible_role' => null],
-                            null,
-                            AuditRecordCategory::STORE_OPERATION);
-                    }
-                }
-            }
-
-            \log_activity($this->pdo(), $outgoingCashierId, 'GCash session closed for handover', 'GCash', $sessionId,
-                ['opening_service_cash' => $session['opening_service_cash'], 'opening_wallet_balance' => $session['opening_wallet_balance']],
-                ['closing_service_cash' => $countedCash, 'closing_wallet_balance' => $checkedWallet, 'cash_variance' => $cashVariance, 'wallet_variance' => $walletVariance, 'incoming_cashier_id' => $incomingCashierId],
-                null, AuditRecordCategory::STORE_OPERATION);
-
-            $openStmt = $this->pdo()->prepare(
-                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, status)
-                 VALUES (?, ?, ?, ?, 'open')"
-            );
-            $openStmt->execute([$incomingShiftId, $incomingCashierId, $countedCash, $checkedWallet]);
-            $newSessionId = (int)$this->pdo()->lastInsertId();
-
-            \log_activity($this->pdo(), $incomingCashierId, 'GCash session opened via handover', 'GCash', $newSessionId, null,
-                ['shift_id' => $incomingShiftId, 'opening_service_cash' => $countedCash, 'opening_wallet_balance' => $checkedWallet, 'predecessor_session_id' => $sessionId, 'handed_over_by' => $outgoingCashierId],
-                null, AuditRecordCategory::STORE_OPERATION);
-
+            $result = $this->performHandover($session, $outgoingCashierId, $incomingCashierId, $countedCash, $checkedWallet, $notes, $acceptedTransactionIds, $differenceResponsibleUserId, false);
             $this->pdo()->commit();
-
-            return [
-                'outgoing_session_id' => $sessionId,
-                'incoming_session_id' => $newSessionId,
-                'cash_variance' => $cashVariance,
-                'wallet_variance' => $walletVariance,
-                'closing_service_cash' => $countedCash,
-                'closing_wallet_balance' => $checkedWallet,
-            ];
+            return $result;
         } catch (Throwable $e) {
             if ($this->pdo && $this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $e;
@@ -1244,145 +1126,154 @@ final class GCashTransactionService
                 throw new DomainException('No open GCash service session found to hand over.', 404);
             }
 
-            $incomingShiftId = null;
-            if ($incomingCashierId !== null && $incomingCashierId > 0) {
-                $recipientRoles = array_column($this->eligibleHandoverRecipients(), 'role_name', 'user_id');
-                if (!isset($recipientRoles[$incomingCashierId])) {
-                    throw new DomainException('Select an eligible staff member with an active open shift before handover.');
-                }
-                $incomingRole = $recipientRoles[$incomingCashierId];
-                $shiftService = new CashierShiftService($this->pdo());
-                $shiftService->requireUnlockedRegister($incomingCashierId);
-                $incomingShift = $shiftService->getOpenShift($incomingCashierId);
-                if (!$incomingShift) {
-                    throw new DomainException('The incoming Cashier must have an active open shift before handover.');
-                }
-                $incomingShiftId = (int)$incomingShift['shift_id'];
-            } else {
-                $incomingCashierId = null;
-            }
-
-            $sessionId = (int)$session['session_id'];
-            $expected = $this->calculateSessionExpected($sessionId);
-            $expectedCash = (float)$expected['expected_service_cash'];
-            $expectedWallet = (float)$expected['expected_wallet_balance'];
-            $cashVariance = round($countedCash - $expectedCash, 2);
-            $walletVariance = round($checkedWallet - $expectedWallet, 2);
-
-            $diffRespId = null;
-            $diffRespRole = null;
-            if ($cashVariance != 0.0 || $walletVariance != 0.0) {
-                $targetDiffUser = $differenceResponsibleUserId ?? $adminId;
-                try {
-                    $diffRespRole = $this->resolveEligibleRole($targetDiffUser);
-                    $diffRespId = $targetDiffUser;
-                } catch (Throwable) {
-                    $diffRespId = null;
-                    $diffRespRole = null;
-                }
-            }
-
-            $closeStmt = $this->pdo()->prepare(
-                "UPDATE gcash_service_sessions
-                 SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ?,
-                     expected_service_cash = ?, expected_wallet_balance = ?,
-                     closing_service_cash = ?, closing_wallet_balance = ?,
-                     cash_variance = ?, wallet_variance = ?, closing_notes = ?,
-                     responsible_user_id = ?, responsible_role = ?,
-                     responsibility_notes = ?, responsibility_assigned_at = " . ($diffRespId !== null ? "CURRENT_TIMESTAMP" : "NULL") . "
-                 WHERE session_id = ? AND status = 'open'"
-            );
-            $closeStmt->execute([
-                $adminId,
-                $expectedCash, $expectedWallet,
-                $countedCash, $checkedWallet,
-                $cashVariance, $walletVariance,
-                'Emergency Handover: ' . $reason,
-                $diffRespId,
-                $diffRespRole,
-                'Emergency handover investigation responsibility: ' . $reason,
-                $sessionId,
-            ]);
-
-            if ($acceptedTransactionIds !== null || $incomingCashierId === null) {
-                $pendingTxStmt = $this->pdo()->query("SELECT transaction_id, cashier_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'");
-                $pendingTxs = $pendingTxStmt->fetchAll(PDO::FETCH_ASSOC);
-                $updateTxStmt = $this->pdo()->prepare(
-                    "UPDATE gcash_transactions
-                     SET responsible_user_id = ?, responsible_role = ?, responsibility_notes = ?, responsibility_assigned_at = ?
-                     WHERE transaction_id = ?"
-                );
-                foreach ($pendingTxs as $ptx) {
-                    $ptxId = (int)$ptx['transaction_id'];
-                    if ($incomingCashierId !== null && in_array($ptxId, $acceptedTransactionIds ?? [], true)) {
-                        $updateTxStmt->execute([
-                            $incomingCashierId,
-                            $incomingRole,
-                            'Accepted follow-up investigation responsibility via emergency handover',
-                            date('Y-m-d H:i:s'),
-                            $ptxId
-                        ]);
-                        \log_activity($this->pdo(), $incomingCashierId, 'GCash exchange follow-up responsibility accepted', 'GCash', $ptxId,
-                            ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => $incomingCashierId, 'responsible_role' => $incomingRole, 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
-                            null,
-                            AuditRecordCategory::STORE_OPERATION);
-                    } else {
-                        $updateTxStmt->execute([
-                            null,
-                            null,
-                            $incomingCashierId !== null ? 'Unaccepted during emergency handover' : 'Unaccepted during emergency service stop',
-                            null,
-                            $ptxId
-                        ]);
-                        \log_activity($this->pdo(), $adminId, 'GCash exchange follow-up responsibility unassigned', 'GCash', $ptxId,
-                            ['responsible_user_id' => $ptx['responsible_user_id']],
-                            ['responsible_user_id' => null, 'responsible_role' => null],
-                            null,
-                            AuditRecordCategory::STORE_OPERATION);
-                    }
-                }
-            }
-
-            if ($incomingCashierId !== null) {
-                \log_activity($this->pdo(), $adminId, 'GCash session closed via emergency handover', 'GCash', $sessionId,
-                    ['previous_cashier_id' => $session['cashier_id']],
-                    ['closing_service_cash' => $countedCash, 'closing_wallet_balance' => $checkedWallet, 'cash_variance' => $cashVariance, 'wallet_variance' => $walletVariance, 'incoming_cashier_id' => $incomingCashierId, 'reason' => $reason],
-                    null, AuditRecordCategory::STORE_OPERATION);
-
-                $openStmt = $this->pdo()->prepare(
-                    "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, status)
-                     VALUES (?, ?, ?, ?, 'open')"
-                );
-                $openStmt->execute([$incomingShiftId, $incomingCashierId, $countedCash, $checkedWallet]);
-                $newSessionId = (int)$this->pdo()->lastInsertId();
-
-                \log_activity($this->pdo(), $incomingCashierId, 'GCash session opened via emergency handover', 'GCash', $newSessionId, null,
-                    ['shift_id' => $incomingShiftId, 'opening_service_cash' => $countedCash, 'opening_wallet_balance' => $checkedWallet, 'predecessor_session_id' => $sessionId, 'authorized_by' => $adminId],
-                    null, AuditRecordCategory::STORE_OPERATION);
-            } else {
-                $newSessionId = null;
-                \log_activity($this->pdo(), $adminId, 'GCash service stopped via emergency intervention', 'GCash', $sessionId,
-                    ['previous_cashier_id' => $session['cashier_id']],
-                    ['closing_service_cash' => $countedCash, 'closing_wallet_balance' => $checkedWallet, 'cash_variance' => $cashVariance, 'wallet_variance' => $walletVariance, 'reason' => $reason, 'service_stopped' => true],
-                    null, AuditRecordCategory::STORE_OPERATION);
-            }
-
+            $result = $this->performHandover($session, $adminId, $incomingCashierId, $countedCash, $checkedWallet, $reason, $acceptedTransactionIds, $differenceResponsibleUserId, true);
             $this->pdo()->commit();
-
-            return [
-                'outgoing_session_id' => $sessionId,
-                'incoming_session_id' => $newSessionId,
-                'service_stopped' => ($incomingCashierId === null),
-                'cash_variance' => $cashVariance,
-                'wallet_variance' => $walletVariance,
-                'closing_service_cash' => $countedCash,
-                'closing_wallet_balance' => $checkedWallet,
-            ];
+            return $result;
         } catch (Throwable $e) {
             if ($this->pdo && $this->pdo->inTransaction()) { $this->pdo->rollBack(); }
             throw $e;
         }
+    }
+
+    private function performHandover(array $session, int $actorId, ?int $incomingCashierId, float $countedCash, float $checkedWallet, string $notes, ?array $acceptedTransactionIds, ?int $differenceResponsibleUserId, bool $emergency): array
+    {
+        $incomingShiftId = null;
+        if (!$emergency || ($incomingCashierId !== null && $incomingCashierId > 0)) {
+            $recipientRoles = array_column($this->eligibleHandoverRecipients(), 'role_name', 'user_id');
+            if (!isset($recipientRoles[$incomingCashierId])) {
+                throw new DomainException('Select an eligible staff member with an active open shift before handover.');
+            }
+            $incomingRole = $recipientRoles[$incomingCashierId];
+            $shiftService = new CashierShiftService($this->pdo());
+            $shiftService->requireUnlockedRegister($incomingCashierId);
+            $incomingShift = $shiftService->getOpenShift($incomingCashierId);
+            if (!$incomingShift) {
+                throw new DomainException('The incoming Cashier must have an active open shift before handover.');
+            }
+            $incomingShiftId = (int)$incomingShift['shift_id'];
+        } else {
+            $incomingCashierId = null;
+        }
+
+        $sessionId = (int)$session['session_id'];
+        $expected = $this->calculateSessionExpected($sessionId);
+        $expectedCash = (float)$expected['expected_service_cash'];
+        $expectedWallet = (float)$expected['expected_wallet_balance'];
+        $cashVariance = round($countedCash - $expectedCash, 2);
+        $walletVariance = round($checkedWallet - $expectedWallet, 2);
+
+        $diffRespId = null;
+        $diffRespRole = null;
+        if ($cashVariance != 0.0 || $walletVariance != 0.0) {
+            $targetDiffUser = $differenceResponsibleUserId ?? $actorId;
+            try {
+                $diffRespRole = $this->resolveEligibleRole($targetDiffUser);
+                $diffRespId = $targetDiffUser;
+            } catch (Throwable) {
+                $diffRespId = null;
+                $diffRespRole = null;
+            }
+        }
+
+        $closeStmt = $this->pdo()->prepare(
+            "UPDATE gcash_service_sessions
+             SET status = 'closed', closed_at = CURRENT_TIMESTAMP, closed_by = ?,
+                 expected_service_cash = ?, expected_wallet_balance = ?,
+                 closing_service_cash = ?, closing_wallet_balance = ?,
+                 cash_variance = ?, wallet_variance = ?, closing_notes = ?,
+                 responsible_user_id = ?, responsible_role = ?,
+                 responsibility_notes = ?, responsibility_assigned_at = " . ($diffRespId !== null ? "CURRENT_TIMESTAMP" : "NULL") . "
+             WHERE session_id = ? AND status = 'open'"
+        );
+        $closeStmt->execute([
+            $actorId,
+            $expectedCash, $expectedWallet,
+            $countedCash, $checkedWallet,
+            $cashVariance, $walletVariance,
+            $emergency ? 'Emergency Handover: ' . $notes : ($notes !== '' ? 'Handover: ' . $notes : 'Handover to Cashier #' . $incomingCashierId),
+            $diffRespId,
+            $diffRespRole,
+            ($emergency ? 'Emergency handover investigation responsibility: ' : 'Handover investigation responsibility: ') . $notes,
+            $sessionId,
+        ]);
+
+        if ($acceptedTransactionIds !== null || $incomingCashierId === null) {
+            $pendingTxStmt = $this->pdo()->query("SELECT transaction_id, cashier_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'");
+            $pendingTxs = $pendingTxStmt->fetchAll(PDO::FETCH_ASSOC);
+            $updateTxStmt = $this->pdo()->prepare(
+                "UPDATE gcash_transactions
+                 SET responsible_user_id = ?, responsible_role = ?, responsibility_notes = ?, responsibility_assigned_at = ?
+                 WHERE transaction_id = ?"
+            );
+            foreach ($pendingTxs as $ptx) {
+                $ptxId = (int)$ptx['transaction_id'];
+                if ($incomingCashierId !== null && in_array($ptxId, $acceptedTransactionIds ?? [], true)) {
+                    $updateTxStmt->execute([
+                        $incomingCashierId,
+                        $incomingRole,
+                        $emergency ? 'Accepted follow-up investigation responsibility via emergency handover' : 'Accepted follow-up investigation responsibility via handover',
+                        date('Y-m-d H:i:s'),
+                        $ptxId
+                    ]);
+                    \log_activity($this->pdo(), $incomingCashierId, 'GCash exchange follow-up responsibility accepted', 'GCash', $ptxId,
+                        ['responsible_user_id' => $ptx['responsible_user_id']],
+                        ['responsible_user_id' => $incomingCashierId, 'responsible_role' => $incomingRole, 'investigation_responsibility_only' => true, 'underlying_shortage_ownership_transferred' => false, 'clarification' => 'Handover transfers investigation responsibility, not ownership of underlying money shortage'],
+                        null,
+                        AuditRecordCategory::STORE_OPERATION);
+                } else {
+                    $updateTxStmt->execute([
+                        null,
+                        null,
+                        $emergency ? ($incomingCashierId !== null ? 'Unaccepted during emergency handover' : 'Unaccepted during emergency service stop') : 'Unaccepted during handover from Cashier #' . $actorId,
+                        null,
+                        $ptxId
+                    ]);
+                    \log_activity($this->pdo(), $actorId, 'GCash exchange follow-up responsibility unassigned', 'GCash', $ptxId,
+                        ['responsible_user_id' => $ptx['responsible_user_id']],
+                        ['responsible_user_id' => null, 'responsible_role' => null],
+                        null,
+                        AuditRecordCategory::STORE_OPERATION);
+                }
+            }
+        }
+
+        if ($incomingCashierId !== null) {
+            \log_activity($this->pdo(), $actorId, $emergency ? 'GCash session closed via emergency handover' : 'GCash session closed for handover', 'GCash', $sessionId,
+                $emergency ? ['previous_cashier_id' => $session['cashier_id']] : ['opening_service_cash' => $session['opening_service_cash'], 'opening_wallet_balance' => $session['opening_wallet_balance']],
+                ['closing_service_cash' => $countedCash, 'closing_wallet_balance' => $checkedWallet, 'cash_variance' => $cashVariance, 'wallet_variance' => $walletVariance, 'incoming_cashier_id' => $incomingCashierId] + ($emergency ? ['reason' => $notes] : []),
+                null, AuditRecordCategory::STORE_OPERATION);
+
+            $openStmt = $this->pdo()->prepare(
+                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, status)
+                 VALUES (?, ?, ?, ?, 'open')"
+            );
+            $openStmt->execute([$incomingShiftId, $incomingCashierId, $countedCash, $checkedWallet]);
+            $newSessionId = (int)$this->pdo()->lastInsertId();
+
+            \log_activity($this->pdo(), $incomingCashierId, $emergency ? 'GCash session opened via emergency handover' : 'GCash session opened via handover', 'GCash', $newSessionId, null,
+                ['shift_id' => $incomingShiftId, 'opening_service_cash' => $countedCash, 'opening_wallet_balance' => $checkedWallet, 'predecessor_session_id' => $sessionId, ($emergency ? 'authorized_by' : 'handed_over_by') => $actorId],
+                null, AuditRecordCategory::STORE_OPERATION);
+        } else {
+            $newSessionId = null;
+            \log_activity($this->pdo(), $actorId, 'GCash service stopped via emergency intervention', 'GCash', $sessionId,
+                ['previous_cashier_id' => $session['cashier_id']],
+                ['closing_service_cash' => $countedCash, 'closing_wallet_balance' => $checkedWallet, 'cash_variance' => $cashVariance, 'wallet_variance' => $walletVariance, 'reason' => $notes, 'service_stopped' => true],
+                null, AuditRecordCategory::STORE_OPERATION);
+        }
+
+        $result = [
+            'outgoing_session_id' => $sessionId,
+            'incoming_session_id' => $newSessionId,
+            'service_stopped' => ($incomingCashierId === null),
+            'cash_variance' => $cashVariance,
+            'wallet_variance' => $walletVariance,
+            'closing_service_cash' => $countedCash,
+            'closing_wallet_balance' => $checkedWallet,
+        ];
+        if (!$emergency) {
+            unset($result['service_stopped']);
+        }
+        return $result;
     }
 
     public function save(int $cashierId, string $reference, string $amount, string $type): int

@@ -325,4 +325,57 @@ foreach ([1 => 'admin', 6 => 'inventory_manager', 2 => 'cashier'] as $recipientI
     $assert($pdo->query("SELECT responsible_role FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetchColumn() === $recipientRole, 'Emergency follow-up records the actual recipient role');
 }
 
+// Omitted acceptance preserves assignments; an explicit list replaces them store-wide.
+foreach (['routine', 'emergency'] as $path) {
+    foreach ([null, [], [(string)$txId2], [$txId2]] as $acceptedIds) {
+        $pdo->exec("UPDATE gcash_transactions SET responsible_user_id = 3, responsible_role = 'cashier' WHERE verification_status = 'Needs checking'");
+        $before = $gcashService->getCurrentSession();
+        $incomingId = (int)$before['cashier_id'] === 2 ? 3 : 2;
+        $expected = $gcashService->calculateSessionExpected((int)$before['session_id']);
+        $result = $path === 'routine'
+            ? $gcashService->handoverSession((int)$before['cashier_id'], $incomingId, 2600.0, 4700.0, 'Acceptance contract', $acceptedIds)
+            : $gcashService->emergencyHandover(1, $incomingId, 2600.0, 4700.0, 'Acceptance contract', $acceptedIds);
+        $expectedOwner = $acceptedIds === null ? 3 : (in_array($txId2, $acceptedIds, true) ? $incomingId : null);
+        $pending = $pdo->query("SELECT transaction_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($pending as $exchange) {
+            $owner = (int)$exchange['transaction_id'] === $txId2 ? $expectedOwner : ($acceptedIds === null ? 3 : null);
+            $assert($exchange['responsible_user_id'] === $owner, "{$path}: acceptance keeps null, empty and strict-ID behavior across pending exchanges");
+        }
+        $closed = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = {$before['session_id']}")->fetch(PDO::FETCH_ASSOC);
+        $current = $gcashService->getCurrentSession();
+        $assert((float)$closed['closing_service_cash'] === (float)$current['opening_service_cash'] && (float)$current['opening_service_cash'] === 2600.0, "{$path}: counted cash carries into successor");
+        $assert((float)$closed['closing_wallet_balance'] === (float)$current['opening_wallet_balance'] && (float)$current['opening_wallet_balance'] === 4700.0, "{$path}: checked wallet carries into successor");
+        $assert($result['cash_variance'] === round(2600.0 - (float)$expected['expected_service_cash'], 2) && $result['wallet_variance'] === round(4700.0 - (float)$expected['expected_wallet_balance'], 2), "{$path}: closing differences use expected balances");
+        $assert(array_key_exists('service_stopped', $result) === ($path === 'emergency'), "{$path}: result shape stays unchanged");
+    }
+}
+
+// Failure after closure and follow-up changes must roll back the entire transition.
+$snapshot = static function () use ($pdo): array {
+    $state = [];
+    foreach (['gcash_service_sessions', 'gcash_transactions', 'activity_log'] as $table) {
+        $state[$table] = $pdo->query("SELECT * FROM {$table} ORDER BY 1")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    return $state;
+};
+$pdo->exec("CREATE TRIGGER fail_handover_audit BEFORE INSERT ON activity_log WHEN NEW.action LIKE 'GCash session opened via%' BEGIN SELECT RAISE(ABORT, 'handover audit failure'); END");
+foreach (['routine', 'emergency'] as $path) {
+    $before = $snapshot();
+    $current = $gcashService->getCurrentSession();
+    $incomingId = (int)$current['cashier_id'] === 2 ? 3 : 2;
+    $failed = false;
+    try {
+        if ($path === 'routine') {
+            $gcashService->handoverSession((int)$current['cashier_id'], $incomingId, 2700.0, 4600.0, 'Rollback contract', [$txId2]);
+        } else {
+            $gcashService->emergencyHandover(1, $incomingId, 2700.0, 4600.0, 'Rollback contract', [$txId2]);
+        }
+    } catch (PDOException $e) {
+        $failed = str_contains($e->getMessage(), 'handover audit failure');
+    }
+    $assert($failed && !$pdo->inTransaction(), "{$path}: audit failure propagates and ends transaction");
+    $assert($snapshot() === $before, "{$path}: audit failure restores sessions, follow-up responsibility and history");
+}
+$pdo->exec('DROP TRIGGER fail_handover_audit');
+
 echo "Emergency GCash handover contract: passed\n";
