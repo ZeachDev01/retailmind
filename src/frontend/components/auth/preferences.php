@@ -66,7 +66,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
             <header class="page-heading">
                 <div>
                     <h1>Preferences</h1>
-                    <p class="page-subtitle">Choose which inventory updates you receive and how they reach you.</p>
+                    <p class="page-subtitle">Configure notification triggers and delivery channels.</p>
                 </div>
                 <div class="page-heading-actions">
                     <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/auth/user_info.php')) ?>">
@@ -91,7 +91,6 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <span class="preference-section-icon"><i class="bi bi-bell" aria-hidden="true"></i></span>
                         <div>
                             <h2 id="notification-types-heading">Notification types</h2>
-                            <p>Select the inventory activity you want RetailMind to notify you about.</p>
                         </div>
                     </div>
 
@@ -99,7 +98,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <label class="preference-option" for="notify_low_stock">
                             <span>
                                 <strong>Low stock alerts</strong>
-                                <small>Receive an alert when inventory drops below its reorder point.</small>
+                                <small>Alert when stock falls below reorder point.</small>
                             </span>
                             <input type="checkbox" name="notify_low_stock" id="notify_low_stock" <?= !empty($prefs['notify_low_stock']) ? 'checked' : '' ?>>
                         </label>
@@ -107,7 +106,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <label class="preference-option" for="notify_adjustment">
                             <span>
                                 <strong>Inventory adjustments</strong>
-                                <small>Receive updates when damaged, expired, or missing stock is reported.</small>
+                                <small>Alert on damaged, expired, or missing stock corrections.</small>
                             </span>
                             <input type="checkbox" name="notify_adjustment" id="notify_adjustment" <?= !empty($prefs['notify_adjustment']) ? 'checked' : '' ?>>
                         </label>
@@ -119,7 +118,6 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <span class="preference-section-icon"><i class="bi bi-send" aria-hidden="true"></i></span>
                         <div>
                             <h2 id="delivery-method-heading">Delivery method</h2>
-                            <p>Control where enabled notifications are delivered.</p>
                         </div>
                     </div>
 
@@ -127,7 +125,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <label class="preference-option" for="notify_inapp">
                             <span>
                                 <strong>In-app notifications</strong>
-                                <small>Show updates in the RetailMind notification center.</small>
+                                <small>Show alerts in the RetailMind notification center.</small>
                             </span>
                             <input type="checkbox" name="notify_inapp" id="notify_inapp" <?= !empty($prefs['notify_inapp']) ? 'checked' : '' ?>>
                         </label>
@@ -135,7 +133,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <label class="preference-option" for="notify_email">
                             <span>
                                 <strong>Email notifications</strong>
-                                <small>Send important updates to the email address on your profile.</small>
+                                <small>Send updates to your account email address.</small>
                             </span>
                             <input type="checkbox" name="notify_email" id="notify_email" <?= !empty($prefs['notify_email']) ? 'checked' : '' ?>>
                         </label>

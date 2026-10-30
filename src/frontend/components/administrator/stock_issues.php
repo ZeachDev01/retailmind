@@ -68,6 +68,10 @@ if ($detailId > 0 && $error === '') {
 
 $appliedFilters = array_filter($filters, static fn($value) => $value !== '' && $value !== 0);
 $filterQuery = $appliedFilters !== [] ? http_build_query($appliedFilters) . '&' : '';
+$hasAdvancedFilters = $filters['cashier_id'] !== 0
+    || $filters['approver_id'] !== 0
+    || $filters['date_from'] !== ''
+    || $filters['date_to'] !== '';
 
 $cashiers = [];
 $approvers = [];
@@ -87,6 +91,20 @@ try {
 } catch (Throwable $exception) {
     $error = $error !== '' ? $error : 'Staff filter options are unavailable.';
 }
+
+$kpiTotals = [
+    'total' => count($reports),
+    'pending' => 0,
+    'approved' => 0,
+    'returned' => 0,
+    'rejected' => 0,
+];
+foreach ($reports as $r) {
+    $st = strtolower((string)($r['status'] ?? ''));
+    if (isset($kpiTotals[$st])) {
+        $kpiTotals[$st]++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -97,25 +115,282 @@ try {
     <title>Stock Issue Oversight</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-issues.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-issues.css')) ?>">
 </head>
 
-<body>
+<body class="stock-issues-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
             <header class="page-heading">
-                <h1>Stock Issue Oversight</h1>
-                <span class="u-text-muted"><?= count($reports) ?> Reports</span>
+                <div>
+                    <h1>Stock Issue Oversight</h1>
+                    <p class="page-subheading">Track cashier-reported discrepancies and loss resolutions.</p>
+                </div>
+                <?php if ($detail !== null): ?>
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>" aria-label="Back to reports list">Back to list</a>
+                <?php endif; ?>
             </header>
 
             <?php if ($error): ?>
                 <div class="message error" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <div class="history-section">
-                <h2>Find reports</h2>
-                <form method="GET" class="review-form">
-                    <div class="form-grid">
+            <section class="stock-kpi-grid" aria-label="Stock issues summary">
+                <div class="stock-kpi-card">
+                    <span class="stock-kpi-label">In View</span>
+                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['total'] ?></strong>
+                    <span class="stock-kpi-meta"><?= $appliedFilters !== [] ? count($appliedFilters) . ' filtered' : 'All records' ?></span>
+                </div>
+                <div class="stock-kpi-card <?= $kpiTotals['pending'] > 0 ? 'stock-kpi-card--warning' : '' ?>">
+                    <span class="stock-kpi-label">Pending Review</span>
+                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['pending'] ?></strong>
+                    <span class="stock-kpi-meta"><?= $kpiTotals['pending'] > 0 ? 'Awaiting manager' : 'All clear' ?></span>
+                </div>
+                <div class="stock-kpi-card stock-kpi-card--success">
+                    <span class="stock-kpi-label">Approved</span>
+                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['approved'] ?></strong>
+                    <span class="stock-kpi-meta">Deductions applied</span>
+                </div>
+                <div class="stock-kpi-card">
+                    <span class="stock-kpi-label">Returned / Rejected</span>
+                    <strong class="stock-kpi-value"><?= (int)($kpiTotals['returned'] + $kpiTotals['rejected']) ?></strong>
+                    <span class="stock-kpi-meta"><?= (int)$kpiTotals['returned'] ?> ret · <?= (int)$kpiTotals['rejected'] ?> rej</span>
+                </div>
+            </section>
+
+            <?php if ($detail !== null): ?>
+                <?php
+                $report = $detail['report'];
+                $revisions = $detail['revisions'] ?? [];
+                $batches = $detail['batches'] ?? [];
+                $movements = $detail['stock_movements'] ?? [];
+                $corrections = $detail['correction_counts'] ?? [];
+                ?>
+                <section class="history-section" aria-labelledby="detail-heading">
+                    <div class="section-header">
+                        <h2 id="detail-heading">Report #<?= (int)$report['adjustment_id'] ?> Details</h2>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>" aria-label="Back to reports list">Back to list</a>
+                    </div>
+
+                    <div class="adjustment-card <?= htmlspecialchars($report['status']) ?>">
+                        <div class="adjustment-header">
+                            <div>
+                                <div class="adjustment-product"><?= htmlspecialchars($report['product_name']) ?></div>
+                                <div class="adjustment-sku"><span class="sku-code"><?= htmlspecialchars($report['sku']) ?></span></div>
+                                <span class="category-tag <?= htmlspecialchars($report['adjustment_type']) ?> u-mt-05">
+                                    <?= htmlspecialchars($categoryLabel((string)$report['adjustment_type'])) ?>
+                                </span>
+                            </div>
+                            <div class="u-text-right">
+                                <span class="issue-quantity-label"><?= $report['status'] === 'approved' ? 'Deducted' : 'Reported' ?></span>
+                                <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
+                                <span class="adjustment-status <?= htmlspecialchars($report['status']) ?>">
+                                    <?= htmlspecialchars(ucfirst($report['status'])) ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="detail-hero-grid">
+                            <div class="detail-metric-card">
+                                <span class="detail-metric-label">Cashier</span>
+                                <span class="detail-metric-value"><?= htmlspecialchars($report['cashier_name']) ?></span>
+                            </div>
+                            <div class="detail-metric-card">
+                                <span class="detail-metric-label">Shift</span>
+                                <span class="detail-metric-value"><?= !empty($report['shift_id']) ? '#' . (int)$report['shift_id'] : '—' ?></span>
+                            </div>
+                            <div class="detail-metric-card">
+                                <span class="detail-metric-label">Reported At</span>
+                                <span class="detail-metric-value"><?= htmlspecialchars(format_display_datetime($report['reported_at'])) ?></span>
+                            </div>
+                            <div class="detail-metric-card">
+                                <span class="detail-metric-label">Decided By</span>
+                                <span class="detail-metric-value">
+                                    <?php if (!empty($report['approved_at'])): ?>
+                                        <?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?> · <?= htmlspecialchars(format_display_datetime($report['approved_at'])) ?>
+                                    <?php else: ?>
+                                        <span class="u-text-muted">Awaiting decision</span>
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <?php if (!empty($report['reason'])): ?>
+                            <div class="detail-reason-box">
+                                <strong>Cashier note:</strong> <?= htmlspecialchars($report['reason']) ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($report['review_notes'])): ?>
+                            <div class="detail-reason-box detail-reason-box--decision">
+                                <strong>Decision note:</strong> <?= htmlspecialchars($report['review_notes']) ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($batches)): ?>
+                            <details class="issue-batches" open>
+                                <summary>Deducted batches (<?= count($batches) ?>)</summary>
+                                <div class="table-wrap u-mt-05">
+                                    <table aria-label="Deducted batches">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Batch</th>
+                                                <th scope="col">Expiration</th>
+                                                <th scope="col">Quantity Deducted</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($batches as $batch): ?>
+                                                <tr>
+                                                    <td><?= htmlspecialchars($batch['batch_number'] ?? ('#' . $batch['batch_id'])) ?></td>
+                                                    <td><?= htmlspecialchars($batch['expiration_date'] ?? 'Not recorded') ?></td>
+                                                    <td><?= ($batch['form'] ?? 'piece') === 'pack' && (int)($batch['reported_qty'] ?? 0) > 0 ? '-' . (int)$batch['reported_qty'] . ' pack(s) (' . (int)$batch['quantity'] . ' pcs)' : '-' . (int)$batch['quantity'] . ' pc(s)' ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+
+                        <?php if (!empty($movements)): ?>
+                            <details class="issue-batches" open>
+                                <summary>Linked stock movements (<?= count($movements) ?>)</summary>
+                                <div class="table-wrap u-mt-05">
+                                    <table aria-label="Linked stock movements">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Movement</th>
+                                                <th scope="col">Change</th>
+                                                <th scope="col">Reason</th>
+                                                <th scope="col">Recorded by</th>
+                                                <th scope="col">Moved at</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($movements as $movement): ?>
+                                                <tr>
+                                                    <td>#<?= (int)$movement['movement_id'] ?></td>
+                                                    <td><?= (int)$movement['change_qty'] > 0 ? '+' . (int)$movement['change_qty'] : (int)$movement['change_qty'] ?></td>
+                                                    <td><?= htmlspecialchars($movement['reason']) ?></td>
+                                                    <td><?= htmlspecialchars($movement['moved_by_name'] ?? ('User #' . (int)$movement['moved_by'])) ?></td>
+                                                    <td><?= htmlspecialchars(format_display_datetime($movement['moved_at'])) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+
+                        <?php if (!empty($corrections)): ?>
+                            <details class="issue-batches" open>
+                                <summary>Correction inventory counts (<?= count($corrections) ?>)</summary>
+                                <div class="table-wrap u-mt-05">
+                                    <table aria-label="Correction inventory counts">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Count</th>
+                                                <th scope="col">System</th>
+                                                <th scope="col">Physical</th>
+                                                <th scope="col">Difference</th>
+                                                <th scope="col">Reason</th>
+                                                <th scope="col">Counted by</th>
+                                                <th scope="col">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($corrections as $countRow): ?>
+                                                <?php $hasCountPack = !empty($countRow['product_pack_size']) && (int)$countRow['product_pack_size'] > 1; ?>
+                                                <tr>
+                                                    <td>#<?= (int)$countRow['count_id'] ?></td>
+                                                    <td>
+                                                        <?= (int)$countRow['system_quantity'] ?>
+                                                        <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $countRow)): ?>
+                                                            <br><small class="u-text-muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?= (int)$countRow['physical_quantity'] ?>
+                                                        <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $countRow)): ?>
+                                                            <br><small class="u-text-muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td><?= (int)$countRow['difference_qty'] > 0 ? '+' . (int)$countRow['difference_qty'] : (int)$countRow['difference_qty'] ?></td>
+                                                    <td><?= htmlspecialchars($countRow['discrepancy_reason']) ?></td>
+                                                    <td><?= htmlspecialchars($countRow['counted_by_name'] ?? 'Unknown') ?></td>
+                                                    <td><?= htmlspecialchars($countRow['status']) ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        <?php endif; ?>
+
+                        <?php if (!empty($revisions)): ?>
+                            <details class="issue-batches">
+                                <summary>Lifecycle revisions (<?= count($revisions) ?>)</summary>
+                                <?php foreach ($revisions as $revision): ?>
+                                    <div class="adjustment-details u-mt-05">
+                                        <span><strong>#<?= (int)$revision['revision_id'] ?> <?= htmlspecialchars($revision['action']) ?></strong></span>
+                                        <span><?= htmlspecialchars($revision['actor_name'] ?? ('User #' . (int)$revision['actor_id'])) ?></span>
+                                        <span><?= htmlspecialchars(format_display_datetime($revision['created_at'])) ?></span>
+                                        <span><?= htmlspecialchars((string)($revision['old_status'] ?? '—')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '—')) ?></span>
+                                    </div>
+                                <?php endforeach; ?>
+                            </details>
+                        <?php endif; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <section class="dashboard-section u-mb-15" aria-labelledby="filter-heading">
+                <div class="section-header">
+                    <h2 id="filter-heading">Filter reports</h2>
+                    <?php if ($appliedFilters !== []): ?>
+                        <span class="issue-count"><?= count($appliedFilters) ?> active</span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="stock-status-pills" role="tablist" aria-label="Filter reports by status">
+                    <?php
+                    $statusTabs = [
+                        '' => 'All',
+                        'pending' => 'Pending',
+                        'approved' => 'Approved',
+                        'returned' => 'Returned',
+                        'rejected' => 'Rejected',
+                    ];
+                    foreach ($statusTabs as $statusVal => $statusLabel):
+                        $isActive = $filters['status'] === $statusVal;
+                        $pillParams = $filters;
+                        if ($statusVal === '') {
+                            unset($pillParams['status']);
+                        } else {
+                            $pillParams['status'] = $statusVal;
+                        }
+                        $cleanParams = array_filter($pillParams, static fn($v) => $v !== '' && $v !== 0);
+                        $pillUrl = app_url('components/administrator/stock_issues.php' . ($cleanParams !== [] ? '?' . http_build_query($cleanParams) : ''));
+                    ?>
+                        <a href="<?= htmlspecialchars($pillUrl) ?>" 
+                           class="stock-status-pill <?= $isActive ? 'is-active' : '' ?>" 
+                           role="tab" 
+                           aria-selected="<?= $isActive ? 'true' : 'false' ?>">
+                            <?= htmlspecialchars($statusLabel) ?>
+                            <?php if ($statusVal !== '' && isset($kpiTotals[$statusVal])): ?>
+                                <span class="pill-badge"><?= (int)$kpiTotals[$statusVal] ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+
+                <form method="GET">
+                    <div class="report-filter-grid">
+                        <div class="form-group">
+                            <label for="filter-product">Product</label>
+                            <input type="text" name="product" id="filter-product" value="<?= htmlspecialchars($filters['product']) ?>" placeholder="SKU or product name" autocomplete="off">
+                        </div>
                         <div class="form-group">
                             <label for="filter-status">Status</label>
                             <select name="status" id="filter-status">
@@ -138,235 +413,82 @@ try {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="filter-product">Product</label>
-                            <input type="text" name="product" id="filter-product" value="<?= htmlspecialchars($filters['product']) ?>" placeholder="SKU or product name">
-                        </div>
-                        <div class="form-group">
-                            <label for="filter-cashier">Cashier</label>
-                            <select name="cashier_id" id="filter-cashier">
-                                <option value="">All cashiers</option>
-                                <?php foreach ($cashiers as $cashierOption): ?>
-                                    <option value="<?= (int)$cashierOption['user_id'] ?>" <?= $filters['cashier_id'] === (int)$cashierOption['user_id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($cashierOption['full_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="filter-approver">Approver</label>
-                            <select name="approver_id" id="filter-approver">
-                                <option value="">All approvers</option>
-                                <?php foreach ($approvers as $approverOption): ?>
-                                    <option value="<?= (int)$approverOption['user_id'] ?>" <?= $filters['approver_id'] === (int)$approverOption['user_id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($approverOption['full_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="filter-date-from">Reported from</label>
-                            <input type="date" name="date_from" id="filter-date-from" value="<?= htmlspecialchars($filters['date_from']) ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="filter-date-to">Reported to</label>
-                            <input type="date" name="date_to" id="filter-date-to" value="<?= htmlspecialchars($filters['date_to']) ?>">
-                        </div>
                     </div>
-                    <div class="review-actions">
-                        <button type="submit" class="btn">Show reports</button>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>">Clear</a>
+
+                    <details class="issue-batches u-mt-05" <?= $hasAdvancedFilters ? 'open' : '' ?>>
+                        <summary>Staff &amp; date filters</summary>
+                        <div class="report-filter-grid u-mt-05">
+                            <div class="form-group">
+                                <label for="filter-cashier">Cashier</label>
+                                <select name="cashier_id" id="filter-cashier">
+                                    <option value="">All cashiers</option>
+                                    <?php foreach ($cashiers as $cashierOption): ?>
+                                        <option value="<?= (int)$cashierOption['user_id'] ?>" <?= $filters['cashier_id'] === (int)$cashierOption['user_id'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($cashierOption['full_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="filter-approver">Approver</label>
+                                <select name="approver_id" id="filter-approver">
+                                    <option value="">All approvers</option>
+                                    <?php foreach ($approvers as $approverOption): ?>
+                                        <option value="<?= (int)$approverOption['user_id'] ?>" <?= $filters['approver_id'] === (int)$approverOption['user_id'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($approverOption['full_name']) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="filter-date-from">Reported from</label>
+                                <input type="date" name="date_from" id="filter-date-from" value="<?= htmlspecialchars($filters['date_from']) ?>">
+                            </div>
+                            <div class="form-group">
+                                <label for="filter-date-to">Reported to</label>
+                                <input type="date" name="date_to" id="filter-date-to" value="<?= htmlspecialchars($filters['date_to']) ?>">
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="review-actions u-mt-1">
+                        <button type="submit" class="btn">Apply filters</button>
+                        <?php if ($appliedFilters !== []): ?>
+                            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>" aria-label="Reset all filters">Reset</a>
+                        <?php endif; ?>
                     </div>
                 </form>
-            </div>
+            </section>
 
-            <?php if ($detail !== null): ?>
-                <?php $report = $detail['report']; ?>
-                <div class="history-section u-mt-2">
-                    <div class="section-header">
-                        <div>
-                            <h2>Report #<?= (int)$report['adjustment_id'] ?> — Stock Issue detail</h2>
-                        </div>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>">Back to list</a>
-                    </div>
-
-                    <div class="adjustment-card <?= htmlspecialchars($report['status']) ?>">
-                        <div class="adjustment-header">
-                            <div>
-                                <div class="adjustment-product"><?= htmlspecialchars($report['product_name']) ?></div>
-                                <div class="adjustment-sku"><?= htmlspecialchars($report['sku']) ?></div>
-                                <span class="adjustment-type <?= htmlspecialchars($report['adjustment_type']) ?>">
-                                    <?= htmlspecialchars($categoryLabel((string)$report['adjustment_type'])) ?>
-                                </span>
-                            </div>
-                            <div class="u-text-right">
-                                <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
-                                <span class="adjustment-status <?= htmlspecialchars($report['status']) ?>">
-                                    <?= htmlspecialchars(ucfirst($report['status'])) ?>
-                                </span>
-                            </div>
-                        </div>
-                        <div class="adjustment-details">
-                            <strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?> |
-                            <strong>Shift:</strong> <?= !empty($report['shift_id']) ? '#' . (int)$report['shift_id'] : '—' ?> |
-                            <strong>Reported:</strong> <?= htmlspecialchars($report['reported_at']) ?>
-                            <?php if (!empty($report['approved_at'])): ?>
-                                <br><strong>Decided by:</strong> <?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars($report['approved_at']) ?>
-                            <?php endif; ?>
-                        </div>
-                        <?php if (!empty($report['reason'])): ?>
-                            <div class="adjustment-reason">
-                                <strong>Cashier explanation:</strong> <?= htmlspecialchars($report['reason']) ?>
-                            </div>
-                        <?php endif; ?>
-                        <?php if (!empty($report['review_notes'])): ?>
-                            <div class="adjustment-reason">
-                                <strong>Decision reason:</strong> <?= htmlspecialchars($report['review_notes']) ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-
-                    <h4>Lifecycle revisions (<?= count($detail['revisions']) ?>)</h4>
-                    <?php if (empty($detail['revisions'])): ?>
-                        <p class="u-text-muted">No revisions recorded.</p>
-                    <?php else: ?>
-                        <?php foreach ($detail['revisions'] as $revision): ?>
-                            <div class="adjustment-details">
-                                <strong>#<?= (int)$revision['revision_id'] ?> <?= htmlspecialchars($revision['action']) ?></strong>
-                                by <?= htmlspecialchars($revision['actor_name'] ?? ('User #' . (int)$revision['actor_id'])) ?>
-                                at <?= htmlspecialchars($revision['created_at']) ?>
-                                (<?= htmlspecialchars((string)($revision['old_status'] ?? '—')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '—')) ?>)
-                                <?php if (!empty($revision['old_values']) || !empty($revision['new_values'])): ?>
-                                    <br><small class="u-text-muted">
-                                        old: <?= htmlspecialchars((string)($revision['old_values'] ?? '—')) ?><br>
-                                        new: <?= htmlspecialchars((string)($revision['new_values'] ?? '—'))
-                                    ?></small>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-
-                    <h4>Deducted batches</h4>
-                    <?php if (empty($detail['batches'])): ?>
-                        <p class="u-text-muted">No batch attribution recorded.</p>
-                    <?php else: ?>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Batch</th>
-                                        <th>Expiration</th>
-                                        <th>Quantity Deducted</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($detail['batches'] as $batch): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($batch['batch_number'] ?? ('#' . $batch['batch_id'])) ?></td>
-                                            <td><?= htmlspecialchars($batch['expiration_date'] ?? 'Not recorded') ?></td>
-                                            <td><?= ($batch['form'] ?? 'piece') === 'pack' && (int)($batch['reported_qty'] ?? 0) > 0 ? '-' . (int)$batch['reported_qty'] . ' pack(s) (' . (int)$batch['quantity'] . ' pcs)' : '-' . (int)$batch['quantity'] . ' pc(s)' ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
-
-                    <h4>Linked stock movements</h4>
-                    <?php if (empty($detail['stock_movements'])): ?>
-                        <p class="u-text-muted">No stock movement is linked to this report.</p>
-                    <?php else: ?>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Movement</th>
-                                        <th>Change</th>
-                                        <th>Reason</th>
-                                        <th>Recorded by</th>
-                                        <th>Moved at</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($detail['stock_movements'] as $movement): ?>
-                                        <tr>
-                                            <td>#<?= (int)$movement['movement_id'] ?></td>
-                                            <td><?= (int)$movement['change_qty'] > 0 ? '+' . (int)$movement['change_qty'] : (int)$movement['change_qty'] ?></td>
-                                            <td><?= htmlspecialchars($movement['reason']) ?></td>
-                                            <td><?= htmlspecialchars($movement['moved_by_name'] ?? ('User #' . (int)$movement['moved_by'])) ?></td>
-                                            <td><?= htmlspecialchars($movement['moved_at']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
-
-                    <h4>Correction inventory counts</h4>
-                    <?php if (empty($detail['correction_counts'])): ?>
-                        <p class="u-text-muted">No correction inventory count is linked to this report.</p>
-                    <?php else: ?>
-                        <div class="table-wrap">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Count</th>
-                                        <th>System</th>
-                                        <th>Physical</th>
-                                        <th>Difference</th>
-                                        <th>Reason</th>
-                                        <th>Counted by</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($detail['correction_counts'] as $countRow): ?>
-                                        <?php $hasCountPack = !empty($countRow['product_pack_size']) && (int)$countRow['product_pack_size'] > 1; ?>
-                                        <tr>
-                                            <td>#<?= (int)$countRow['count_id'] ?></td>
-                                            <td>
-                                                <?= (int)$countRow['system_quantity'] ?>
-                                                <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $countRow)): ?>
-                                                    <br><small class="u-text-muted"><?= (int)$countRow['system_sealed_quantity'] ?> pk, <?= (int)$countRow['system_loose_quantity'] ?> loose</small>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <?= (int)$countRow['physical_quantity'] ?>
-                                                <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $countRow)): ?>
-                                                    <br><small class="u-text-muted"><?= (int)$countRow['physical_sealed_quantity'] ?> pk, <?= (int)$countRow['physical_loose_quantity'] ?> loose</small>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?= (int)$countRow['difference_qty'] > 0 ? '+' . (int)$countRow['difference_qty'] : (int)$countRow['difference_qty'] ?></td>
-                                            <td><?= htmlspecialchars($countRow['discrepancy_reason']) ?></td>
-                                            <td><?= htmlspecialchars($countRow['counted_by_name'] ?? 'Unknown') ?></td>
-                                            <td><?= htmlspecialchars($countRow['status']) ?></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-
-            <div class="history-section u-mt-2">
-                <h2>Stock Issue reports (<?= count($reports) ?>)</h2>
+            <section class="history-section" aria-labelledby="reports-heading">
+                <h2 id="reports-heading">Stock Issue reports <span class="issue-count"><?= count($reports) ?></span></h2>
                 <?php if (empty($reports)): ?>
-                    <p class="u-text-muted">No stock issue reports match the current filters.</p>
+                    <div class="issue-empty">
+                        <svg class="issue-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3" />
+                            <rect x="9" y="2" width="6" height="5" rx="1" />
+                            <path d="m8 14 3 3 5-6" />
+                        </svg>
+                        <h3>No stock issue reports match the current filters</h3>
+                        <p>Adjust your search keywords, status, or date range to find reports.</p>
+                        <?php if ($appliedFilters !== []): ?>
+                            <a class="btn btn-secondary u-mt-05" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>" aria-label="Reset all filters">Clear all filters</a>
+                        <?php endif; ?>
+                    </div>
                 <?php else: ?>
                     <div class="table-wrap">
-                        <table>
+                        <table aria-label="Stock issue reports">
                             <thead>
                                 <tr>
-                                    <th>Report</th>
-                                    <th>Product</th>
-                                    <th>Category</th>
-                                    <th>Qty</th>
-                                    <th>Status</th>
-                                    <th>Cashier</th>
-                                    <th>Approver</th>
-                                    <th>Reported</th>
-                                    <th>Actions</th>
+                                    <th scope="col">Report</th>
+                                    <th scope="col">Product</th>
+                                    <th scope="col">Category</th>
+                                    <th scope="col">Qty</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Cashier</th>
+                                    <th scope="col">Approver</th>
+                                    <th scope="col">Reported</th>
+                                    <th scope="col">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -375,10 +497,14 @@ try {
                                         <td>#<?= (int)$row['adjustment_id'] ?></td>
                                         <td>
                                             <strong><?= htmlspecialchars($row['product_name']) ?></strong>
-                                            <br><small class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></small>
+                                            <br><span class="sku-code"><?= htmlspecialchars($row['sku']) ?></span>
                                         </td>
-                                        <td><?= htmlspecialchars($categoryLabel((string)$row['adjustment_type'])) ?></td>
-                                        <td><?= htmlspecialchars($formatIssueQty($row)) ?></td>
+                                        <td>
+                                            <span class="category-tag <?= htmlspecialchars($row['adjustment_type']) ?>">
+                                                <?= htmlspecialchars($categoryLabel((string)$row['adjustment_type'])) ?>
+                                            </span>
+                                        </td>
+                                        <td class="cell-qty"><?= htmlspecialchars($formatIssueQty($row)) ?></td>
                                         <td>
                                             <span class="adjustment-status <?= htmlspecialchars($row['status']) ?>">
                                                 <?= htmlspecialchars(ucfirst($row['status'])) ?>
@@ -386,9 +512,9 @@ try {
                                         </td>
                                         <td><?= htmlspecialchars($row['cashier_name']) ?></td>
                                         <td><?= htmlspecialchars($row['reviewer_name'] ?? '—') ?></td>
-                                        <td><?= htmlspecialchars($row['reported_at']) ?></td>
+                                        <td><?= htmlspecialchars(format_display_datetime($row['reported_at'])) ?></td>
                                         <td>
-                                            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?' . $filterQuery . 'detail=' . (int)$row['adjustment_id'])) ?>">Open report</a>
+                                            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php?' . $filterQuery . 'detail=' . (int)$row['adjustment_id'])) ?>" aria-label="Open report #<?= (int)$row['adjustment_id'] ?>">Open report</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -396,7 +522,7 @@ try {
                         </table>
                     </div>
                 <?php endif; ?>
-            </div>
+            </section>
         </main>
     </div>
 </body>

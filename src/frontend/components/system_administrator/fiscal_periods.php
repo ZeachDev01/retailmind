@@ -134,11 +134,11 @@ foreach ($periods as $period) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <div class="topbar">
+            <header class="topbar">
                 <div>
                     <h1>Fiscal Periods</h1>
                 </div>
-            </div>
+            </header>
 
             <?php if ($message !== ''): ?>
                 <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
@@ -148,28 +148,28 @@ foreach ($periods as $period) {
                 <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <div class="card-grid fiscal-period-stats" aria-label="Fiscal period summary">
-                <div class="stat-card with-icon success">
+            <section class="card-grid fiscal-period-stats" aria-label="Fiscal period summary">
+                <article class="stat-card with-icon success">
                     <span class="stat-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['open'] ?></div>
-                    <div class="label">Open Periods</div>
-                </div>
-                <div class="stat-card with-icon warning">
+                    <div class="label">Open</div>
+                </article>
+                <article class="stat-card with-icon warning">
                     <span class="stat-icon"><i class="bi bi-calendar2-minus" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['closed'] ?></div>
-                    <div class="label">Closed Periods</div>
-                </div>
-                <div class="stat-card with-icon fiscal-stat-locked">
+                    <div class="label">Closed</div>
+                </article>
+                <article class="stat-card with-icon fiscal-stat-locked">
                     <span class="stat-icon"><i class="bi bi-lock" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['locked'] ?></div>
-                    <div class="label">Locked Periods</div>
-                </div>
-            </div>
+                    <div class="label">Locked</div>
+                </article>
+            </section>
 
             <section class="dashboard-section fiscal-period-create" aria-labelledby="create-period-title">
                 <div class="section-header">
                     <div>
-                        <h2 id="create-period-title">Create a fiscal period</h2>
+                        <h2 id="create-period-title"><i class="bi bi-plus-circle" aria-hidden="true"></i> Create period</h2>
                     </div>
                 </div>
                 <form method="POST" class="fiscal-period-form">
@@ -177,18 +177,18 @@ foreach ($periods as $period) {
                     <input type="hidden" name="action" value="create">
                     <div class="fiscal-period-form-grid">
                         <div class="form-group">
-                            <label for="period_name">Period Name</label>
-                            <input type="text" id="period_name" name="period_name" placeholder="e.g., Q1 2026" autocomplete="off" required>
+                            <label for="period_name">Period name</label>
+                            <input type="text" id="period_name" name="period_name" placeholder="e.g. Q1 2026" autocomplete="off" required aria-required="true">
                         </div>
                         <div class="form-group">
-                            <label for="start_date">Start Date</label>
-                            <input type="date" id="start_date" name="start_date" required>
+                            <label for="start_date">Start date</label>
+                            <input type="date" id="start_date" name="start_date" required aria-required="true">
                         </div>
                         <div class="form-group">
-                            <label for="end_date">End Date</label>
-                            <input type="date" id="end_date" name="end_date" required>
+                            <label for="end_date">End date</label>
+                            <input type="date" id="end_date" name="end_date" required aria-required="true">
                         </div>
-                        <button type="submit" class="btn btn-primary fiscal-create-button"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create Period</button>
+                        <button type="submit" class="btn btn-primary fiscal-create-button"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create period</button>
                     </div>
                 </form>
             </section>
@@ -196,13 +196,13 @@ foreach ($periods as $period) {
             <section class="fiscal-period-list" aria-labelledby="period-list-title">
                 <div class="fiscal-period-list-heading">
                     <div>
-                        <h2 id="period-list-title">Period history</h2>
+                        <h2 id="period-list-title"><i class="bi bi-calendar-range" aria-hidden="true"></i> Fiscal periods</h2>
                     </div>
                     <span class="fiscal-period-count"><?= count($periods) ?> total</span>
                 </div>
 
                 <?php if (empty($periods)): ?>
-                    <div class="dashboard-section fiscal-period-empty">
+                    <div class="dashboard-section fiscal-period-empty" role="status">
                         <i class="bi bi-calendar2-plus" aria-hidden="true"></i>
                         <strong>No fiscal periods yet</strong>
                         <span>Create the first period using the form above.</span>
@@ -210,14 +210,17 @@ foreach ($periods as $period) {
                 <?php else: ?>
                     <div class="fiscal-period-card-grid">
                         <?php foreach ($periods as $period): ?>
-                            <?php $periodStatus = strtolower((string)$period['status']); ?>
-                            <article class="fiscal-period-card">
+                            <?php
+                            $periodStatus = strtolower((string)$period['status']);
+                            $cardTitleId = 'period-heading-' . (int)$period['period_id'];
+                            ?>
+                            <article class="fiscal-period-card" aria-labelledby="<?= $cardTitleId ?>">
                                 <div class="fiscal-period-card-header">
                                     <div class="fiscal-period-title">
                                         <span class="fiscal-period-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></span>
                                         <div>
-                                            <h3><?= htmlspecialchars($period['period_name']) ?></h3>
-                                            <span><?= htmlspecialchars(date('M j, Y', strtotime((string)$period['start_date']))) ?> – <?= htmlspecialchars(date('M j, Y', strtotime((string)$period['end_date']))) ?></span>
+                                            <h3 id="<?= $cardTitleId ?>"><?= htmlspecialchars($period['period_name']) ?></h3>
+                                            <span><time datetime="<?= htmlspecialchars((string)$period['start_date']) ?>"><?= htmlspecialchars(date('M j, Y', strtotime((string)$period['start_date']))) ?></time> – <time datetime="<?= htmlspecialchars((string)$period['end_date']) ?>"><?= htmlspecialchars(date('M j, Y', strtotime((string)$period['end_date']))) ?></time></span>
                                         </div>
                                     </div>
                                     <span class="fiscal-status-badge <?= htmlspecialchars($periodStatus) ?>"><?= htmlspecialchars(ucfirst($periodStatus)) ?></span>
@@ -250,14 +253,14 @@ foreach ($periods as $period) {
                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                             <input type="hidden" name="action" value="close">
                                             <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                            <button type="submit" class="btn fiscal-action-close"><i class="bi bi-calendar2-minus" aria-hidden="true"></i> Close Period</button>
+                                            <button type="submit" class="btn fiscal-action-close" aria-label="Close fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-minus" aria-hidden="true"></i> Close period</button>
                                         </form>
                                     <?php elseif ($periodStatus === 'closed'): ?>
                                         <form method="POST" data-confirm="Locking makes all period records read-only for compliance." data-confirm-title="Lock fiscal period" data-confirm-button="Lock period" data-confirm-danger="1">
                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                             <input type="hidden" name="action" value="lock">
                                             <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                            <button type="submit" class="btn fiscal-action-lock"><i class="bi bi-lock" aria-hidden="true"></i> Lock Period</button>
+                                            <button type="submit" class="btn fiscal-action-lock" aria-label="Lock fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-lock" aria-hidden="true"></i> Lock period</button>
                                         </form>
                                     <?php else: ?>
                                         <span class="fiscal-read-only"><i class="bi bi-shield-lock" aria-hidden="true"></i> Read-only</span>

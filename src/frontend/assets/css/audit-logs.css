@@ -28,7 +28,7 @@
 
 .audit-log-page .audit-log-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -51,6 +51,9 @@
 
 .audit-log-page .section-header h2 {
   margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .audit-log-page #failed-sign-in-review > p {
@@ -186,17 +189,29 @@
 }
 
 .audit-log-page .audit-action-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   max-width: 260px;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.02em;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.audit-log-page .audit-action-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .audit-log-page .audit-action-badge.is-success {
@@ -529,4 +544,54 @@ html[data-theme="dark"] .audit-log-page .dt-datetime table td {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+
+.audit-log-page .page-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.audit-log-page .audit-action-badge.is-warning {
+  border-color: color-mix(in srgb, var(--warning, #d97706) 30%, var(--border));
+  background: var(--theme-warning-surface, color-mix(in srgb, var(--warning, #d97706) 10%, #ffffff));
+  color: var(--theme-warning-text, color-mix(in srgb, var(--warning, #d97706) 72%, #111827));
+}
+
+.audit-log-page .active-filters-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft, #f8fafc);
+  font-size: 0.85rem;
+}
+
+.audit-log-page .active-filters-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.audit-log-page .btn-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+  color: var(--danger, #dc2626);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.audit-log-page .btn-clear-filters:hover {
+  text-decoration: underline;
 }

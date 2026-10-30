@@ -228,7 +228,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="topbar">
-            <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage Store staff accounts and fixed role access.</p></div>
+            <div><h1><?= htmlspecialchars($pageTitle) ?></h1><p class="page-subtitle">Manage staff accounts and permissions.</p></div>
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
@@ -246,7 +246,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                     <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Password</th><th scope="col">Action</th></tr></thead>
                     <tbody>
                     <?php if ($users === []): ?>
-                        <tr class="table-empty-row"><td colspan="6" class="text-muted">No staff accounts are registered in this Store yet.</td></tr>
+                        <tr class="table-empty-row"><td colspan="6" class="text-muted">No staff accounts registered yet.</td></tr>
                     <?php endif; ?>
                     <?php foreach ($users as $user):
                         $pictureTarget = $user;
@@ -395,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerDeleteForm').dataset.username = button.dataset.username || '';
         document.getElementById('drawerDeleteConfirmed').value = '';
         document.getElementById('drawerDeleteButton').disabled = Boolean(button.dataset.deletionRestriction);
-        document.getElementById('drawerDeleteHelp').textContent = button.dataset.deletionRestriction || 'Permanently removes this account, credentials, preferences and notices. This cannot be undone.';
+        document.getElementById('drawerDeleteHelp').textContent = button.dataset.deletionRestriction || 'Permanently removes this account and access. This cannot be undone.';
         document.getElementById('drawerUsername').value = button.dataset.username || '';
         document.getElementById('drawerFirstName').value = parts.shift() || '';
         document.getElementById('drawerLastName').value = parts.join(' ');

@@ -52,32 +52,43 @@ $effective = $service->thresholdsFor('admin');
     <title>Store Settings</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 </head>
-<body>
+<body class="store-settings-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <h1>Store Settings</h1>
+            <div>
+                <h1>Store Settings</h1>
+                <p class="page-subtitle">Configure operational review thresholds and alert limits for store activity.</p>
+            </div>
         </header>
         <?php if ($message): ?>
-            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div>
+            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>" aria-live="polite"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
-        <section class="dashboard-section">
-            <h2>Attention thresholds</h2>
+        <section class="dashboard-section" aria-labelledby="thresholds-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="thresholds-heading">Attention thresholds</h2>
+                    <p class="section-description">Operational thresholds trigger automated system reviews and supervisory warnings.</p>
+                </div>
+            </div>
             <form method="post">
                 <?= csrf_field() ?>
                 <div class="form-grid">
                     <?php foreach ($fields as $key => $config): ?>
+                        <?php $hasLimit = isset($effective[$key], $requested[$key]) && (float)$effective[$key] !== (float)$requested[$key]; ?>
                         <div class="form-group">
                             <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="<?= htmlspecialchars($config['step']) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" required>
-                            <?php if (isset($effective[$key], $requested[$key]) && (float)$effective[$key] !== (float)$requested[$key]): ?>
-                                <small class="u-text-muted">Effective Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="<?= htmlspecialchars($config['step']) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>"<?= $hasLimit ? ' aria-describedby="' . htmlspecialchars($key) . '-limit"' : '' ?> required>
+                            <?php if ($hasLimit): ?>
+                                <small id="<?= htmlspecialchars($key) ?>-limit" class="field-help u-text-muted">Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>
-                <button class="btn" type="submit">Save Store thresholds</button>
+                <div class="form-actions u-mt-1">
+                    <button class="btn btn-primary" type="submit">Save settings</button>
+                </div>
             </form>
         </section>
     </main>

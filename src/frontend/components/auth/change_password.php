@@ -76,30 +76,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <body>
     <main class="u-auth-main">
-        <section class="dashboard-section u-auth-card">
+        <section class="dashboard-section u-auth-card" aria-labelledby="auth_title">
             <div class="section-header">
                 <div>
-                    <h1 class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
-                    <?php if ($isMandatory): ?>
-                    <p class="section-description">The temporary password must be replaced before you can access RetailMind.</p>
-                    <?php else: ?>
-                    <p class="section-description">You are changing your password voluntarily. Enter your current password to set a new one.</p>
-                    <?php endif; ?>
+                    <h1 id="auth_title" class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
+                    <p class="section-description">
+                        <?= $isMandatory ? 'Replace your temporary password to access RetailMind.' : 'Enter your current password to choose a new one.' ?>
+                    </p>
                 </div>
             </div>
-            <?php if ($message): ?><div class="alert tag-warning" role="alert"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+            <?php if ($message): ?>
+                <div class="alert tag-warning" role="alert" aria-live="polite"><?= htmlspecialchars($message) ?></div>
+            <?php endif; ?>
             <form method="POST" class="form-grid" autocomplete="off">
                 <?= csrf_field() ?>
-                <div class="form-group u-grid-full"><label for="current_password">Current password</label>
-                    <div class="password-input"><input type="password" id="current_password" name="current_password" required autocomplete="current-password"><button type="button" class="password-toggle" data-password-toggle="current_password" aria-controls="current_password" aria-pressed="false" aria-label="Show current password">Show</button></div>
+                <div class="form-group u-grid-full">
+                    <label for="current_password">Current password</label>
+                    <div class="password-input">
+                        <input type="password" id="current_password" name="current_password" required autocomplete="current-password">
+                        <button type="button" class="password-toggle" data-password-toggle="current_password" aria-controls="current_password" aria-pressed="false" aria-label="Show current password">Show</button>
+                    </div>
                 </div>
-                <div class="form-group u-grid-full"><label for="new_password">New password</label>
-                    <div class="password-input"><input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button></div><small class="field-help">Use at least 8 characters with uppercase, lowercase, and a number.</small>
+                <div class="form-group u-grid-full">
+                    <label for="new_password">New password</label>
+                    <div class="password-input">
+                        <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password" aria-describedby="new_password_help">
+                        <button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">Show</button>
+                    </div>
+                    <small id="new_password_help" class="field-help">At least 8 characters with uppercase, lowercase, and a number.</small>
                 </div>
-                <div class="form-group u-grid-full"><label for="confirm_password">Confirm new password</label>
-                    <div class="password-input"><input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password"><button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">Show</button></div>
+                <div class="form-group u-grid-full">
+                    <label for="confirm_password">Confirm new password</label>
+                    <div class="password-input">
+                        <input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password">
+                        <button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">Show</button>
+                    </div>
                 </div>
-                <div class="u-auth-actions"><a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/logout.php')) ?>">Log out</a><button class="btn" type="submit">Save new password</button></div>
+                <div class="u-auth-actions">
+                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/logout.php')) ?>">Log out</a>
+                    <button class="btn" type="submit">Save new password</button>
+                </div>
             </form>
         </section>
     </main>
@@ -111,14 +127,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.querySelectorAll('[data-password-toggle]').forEach(function(toggle) {
             var input = document.getElementById(toggle.dataset.passwordToggle);
             if (!input) return;
+            var targetName = (toggle.getAttribute('aria-label') || '').replace(/^Show\s+/i, '');
             toggle.addEventListener('click', function() {
                 var isVisible = input.type === 'text';
                 input.type = isVisible ? 'password' : 'text';
                 toggle.textContent = isVisible ? 'Show' : 'Hide';
                 toggle.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
-                toggle.setAttribute('aria-label', (isVisible ? 'Show' : 'Hide') + ' password');
+                toggle.setAttribute('aria-label', (isVisible ? 'Show ' : 'Hide ') + targetName);
             });
         });
+
+        var newPasswordInput = document.getElementById('new_password');
+        var confirmPasswordInput = document.getElementById('confirm_password');
+        if (newPasswordInput && confirmPasswordInput) {
+            function validatePasswordMatch() {
+                if (confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value) {
+                    confirmPasswordInput.setCustomValidity('Passwords do not match.');
+                } else {
+                    confirmPasswordInput.setCustomValidity('');
+                }
+            }
+            newPasswordInput.addEventListener('input', validatePasswordMatch);
+            confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+        }
     </script>
 <?php require __DIR__ . '/session_activity_client.php'; ?>
 </body>

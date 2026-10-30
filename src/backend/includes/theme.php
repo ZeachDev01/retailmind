@@ -5,7 +5,7 @@ require_once __DIR__ . '/csrf.php';
 function theme_url(string $path): string
 {
     $url = function_exists('app_url') ? app_url($path) : landing_app_url($path);
-    if (in_array($path, ['assets/css/style.css', 'assets/css/theme.css', 'assets/js/theme.js', 'assets/css/notifications.css', 'assets/css/notifications-utilities.css'], true)) {
+    if (in_array($path, ['assets/css/style.css', 'assets/css/dashboard.css', 'assets/css/theme.css', 'assets/js/theme.js', 'assets/css/notifications.css', 'assets/css/notifications-utilities.css'], true)) {
         $url .= '?v=' . filemtime(dirname(__DIR__, 2) . '/frontend/' . $path);
     }
     return $url;

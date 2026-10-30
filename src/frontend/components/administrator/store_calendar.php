@@ -214,14 +214,16 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             margin-top: 0.25rem;
         }
         .calendar-status-badge {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             padding: 0.2rem 0.35rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
             font-weight: 500;
             line-height: 1.2;
-            overflow-wrap: anywhere;
-            white-space: normal;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             max-width: 100%;
         }
         .status-open { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }
@@ -231,11 +233,12 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .calendar-status-badge::before {
             content: '';
             display: inline-block;
-            width: .5rem;
-            height: .5rem;
-            margin-right: .35rem;
+            width: .45rem;
+            height: .45rem;
+            margin-right: .3rem;
             border-radius: 50%;
             background: currentColor;
+            flex-shrink: 0;
         }
         .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
         .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
@@ -248,7 +251,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <main class="main-content">
         <header class="page-heading">
             <h1>Store Calendar</h1>
-            <button type="button" class="btn" id="record-date-btn">Record date status</button>
+            <button type="button" class="btn btn-primary" id="record-date-btn"><i class="bi bi-calendar-event" aria-hidden="true"></i> Record Status</button>
         </header>
 
         <?php if ($message): ?>
@@ -269,8 +272,8 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <span class="calendar-status-badge status-open">Open</span>
                 <span class="calendar-status-badge status-closed">Closed</span>
                 <span class="calendar-status-badge status-holiday">Holiday</span>
-                <span class="calendar-status-badge status-exceptional_closure">Exceptional closure</span>
-                <span class="calendar-status-badge status-unrecorded">Not recorded</span>
+                <span class="calendar-status-badge status-exceptional_closure">Closure</span>
+                <span class="calendar-status-badge status-unrecorded">Unrecorded</span>
             </div>
             <div class="calendar-scroll" tabindex="0" role="region" aria-label="Store calendar for <?= htmlspecialchars($monthTitle) ?>">
             <div class="calendar-grid">
@@ -287,31 +290,41 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <?php endfor; ?>
 
                 <?php
+                $statusLabels = [
+                    'open' => 'Open',
+                    'closed' => 'Closed',
+                    'holiday' => 'Holiday',
+                    'exceptional_closure' => 'Closure',
+                    'unrecorded' => 'Unrecorded'
+                ];
+                $statusFullNames = [
+                    'open' => 'Open',
+                    'closed' => 'Closed',
+                    'holiday' => 'Holiday',
+                    'exceptional_closure' => 'Exceptional closure',
+                    'unrecorded' => 'Unrecorded'
+                ];
+                $activeSelectedDate = $_POST['calendar_date'] ?? $today;
+
                 // Month day cells
                 for ($day = 1; $day <= $daysInMonth; $day++):
                     $dateStr = sprintf('%04d-%02d-%02d', $viewYear, $viewMonth, $day);
                     $rawStatus = $monthStatuses[$dateStr] ?? null;
                     $statusKey = $rawStatus ? StoreCalendar::normalizeStatus($rawStatus) : 'unrecorded';
                     $isToday = ($dateStr === $today);
-
-                    $statusLabels = [
-                        'open' => 'Open',
-                        'closed' => 'Closed',
-                        'holiday' => 'Holiday',
-                        'exceptional_closure' => 'Exceptional closure',
-                        'unrecorded' => 'Not recorded'
-                    ];
-                    $label = $statusLabels[$statusKey] ?? 'Not recorded';
+                    $isSelected = ($dateStr === $activeSelectedDate);
+                    $label = $statusLabels[$statusKey] ?? 'Unrecorded';
+                    $fullLabel = $statusFullNames[$statusKey] ?? 'Unrecorded';
                 ?>
-                    <button type="button" class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?>"
+                    <button type="button" class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?> <?= $isSelected ? 'selected-day' : '' ?>"
                          data-date="<?= htmlspecialchars($dateStr) ?>"
                          data-status="<?= htmlspecialchars($statusKey) ?>"
                          aria-haspopup="dialog" aria-controls="calendar-editor"
-                         aria-pressed="false"
-                         aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($label) ?>">
+                         aria-pressed="<?= $isSelected ? 'true' : 'false' ?>"
+                         aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($fullLabel) ?>">
                         <span class="day-number"><?= $day ?></span>
                         <span class="day-status">
-                            <span class="calendar-status-badge status-<?= htmlspecialchars($statusKey) ?>"><?= htmlspecialchars($label) ?></span>
+                            <span class="calendar-status-badge status-<?= htmlspecialchars($statusKey) ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
                     </button>
                 <?php endfor; ?>
@@ -325,8 +338,8 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
 <div class="rm-modal-overlay" id="calendar-editor" aria-hidden="true">
         <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-editor-title">
             <header class="rm-modal-header">
-                <h2 id="calendar-editor-title">Record date status</h2>
-                <button type="button" class="rm-close" aria-label="Close date editor"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <h2 id="calendar-editor-title">Record Date Status</h2>
+                <button type="button" class="rm-close" data-close-modal aria-label="Close date editor"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <form method="post" id="calendar-form">
                 <?= csrf_field() ?>
@@ -338,13 +351,13 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     </div>
                     <div class="form-group">
                         <label for="through_date">End date <span class="muted">(optional)</span></label>
-                        <input id="through_date" type="date" name="through_date" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
-                        <small class="form-hint" id="range-preview-hint" role="status">Leave empty to update only the selected date.</small>
+                        <input id="through_date" type="date" name="through_date" aria-describedby="range-preview-hint" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
+                        <small class="form-hint" id="range-preview-hint" role="status" aria-live="polite">Leave blank for single date.</small>
                     </div>
                     <div class="form-group">
                         <label for="status">Trading status</label>
                         <select id="status" name="status" required>
-                            <?php foreach (['open' => 'Open', 'closed' => 'Closed', 'holiday' => 'Holiday', 'exceptional_closure' => 'Exceptional closure'] as $value => $text): ?>
+                            <?php foreach (['open' => 'Open', 'closed' => 'Closed', 'holiday' => 'Holiday', 'exceptional_closure' => 'Exceptional Closure'] as $value => $text): ?>
                                 <option value="<?= $value ?>" <?= ($_POST['status'] ?? 'open') === $value ? 'selected' : '' ?>><?= $text ?></option>
                             <?php endforeach; ?>
                         </select>
@@ -353,7 +366,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 </div>
                 <footer class="rm-modal-actions">
                     <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
-                    <button class="btn" type="submit" id="save-status-btn">Save status</button>
+                    <button class="btn btn-primary" type="submit" id="save-status-btn">Save Status</button>
                 </footer>
             </form>
         </section>
@@ -366,6 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusSelect = document.getElementById('status');
     const hint = document.getElementById('range-preview-hint');
     const dayCells = document.querySelectorAll('.calendar-day-cell:not(.is-empty)');
+    const cellArray = Array.from(dayCells);
     const editor = document.getElementById('calendar-editor');
 
     function updateRangeHint() {
@@ -373,8 +387,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const end = throughDateInput.value;
         const statusText = statusSelect.options[statusSelect.selectedIndex]?.text || '';
 
+        if (!start) {
+            hint.textContent = "Select a start date.";
+            hint.style.color = "var(--muted)";
+            return;
+        }
+
         if (!end || end === start) {
-            hint.textContent = "Updating single date: " + start + " to " + statusText + ".";
+            hint.textContent = "Single date: " + start + " (" + statusText + ")";
             hint.style.color = "var(--muted)";
             return;
         }
@@ -383,7 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const d2 = new Date(end);
 
         if (d2 < d1) {
-            hint.textContent = "Warning: Through date cannot be before start date.";
+            hint.textContent = "End date must be on or after start date.";
             hint.style.color = "var(--theme-danger-text, #991b1b)";
             return;
         }
@@ -392,12 +412,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
         if (diffDays > 366) {
-            hint.textContent = "Warning: Range exceeds maximum limit of 366 days (" + diffDays + " days requested).";
+            hint.textContent = "Range exceeds 366-day limit (" + diffDays + " days selected).";
             hint.style.color = "var(--theme-danger-text, #991b1b)";
             return;
         }
 
-        hint.textContent = "Applying '" + statusText + "' across " + diffDays + " inclusive days (from " + start + " through " + end + ").";
+        hint.textContent = diffDays + " days: " + start + " to " + end + " (" + statusText + ")";
         hint.style.color = "var(--theme-success-text, #166534)";
     }
 
@@ -423,15 +443,25 @@ document.addEventListener('DOMContentLoaded', function() {
         RetailMindUI.openOverlay(editor);
     }
 
-    dayCells.forEach(cell => {
+    cellArray.forEach((cell, index) => {
         cell.addEventListener('click', function() {
             selectDateCell(cell);
         });
 
-        if (cell.getAttribute('data-date') === dateInput.value) {
-            cell.classList.add('selected-day');
-            cell.setAttribute('aria-pressed', 'true');
-        }
+        cell.addEventListener('keydown', function(e) {
+            let targetIndex = null;
+            if (e.key === 'ArrowRight') targetIndex = index + 1;
+            else if (e.key === 'ArrowLeft') targetIndex = index - 1;
+            else if (e.key === 'ArrowDown') targetIndex = index + 7;
+            else if (e.key === 'ArrowUp') targetIndex = index - 7;
+            else if (e.key === 'Home') targetIndex = 0;
+            else if (e.key === 'End') targetIndex = cellArray.length - 1;
+
+            if (targetIndex !== null && targetIndex >= 0 && targetIndex < cellArray.length) {
+                e.preventDefault();
+                cellArray[targetIndex].focus();
+            }
+        });
     });
 
     document.getElementById('record-date-btn').addEventListener('click', function() {

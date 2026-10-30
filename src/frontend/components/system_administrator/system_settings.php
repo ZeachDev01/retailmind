@@ -6,31 +6,50 @@ $message = '';
 $messageClass = '';
 $fields = [
     'store_name' => 'Store name',
-    'store_address' => 'Address',
-    'store_phone' => 'Contact number',
+    'business_identifier' => 'TIN / Business identifier',
     'store_email' => 'Store email',
-    'business_identifier' => 'TIN or business identifier',
+    'store_phone' => 'Contact number',
+    'store_address' => 'Store address',
     'currency_symbol' => 'Currency symbol',
     'timezone' => 'Timezone (IANA)',
-    'expiry_alert_days' => 'Expiry alerts (days before expiry)',
-    'receipt_footer' => 'Sales & refund receipt footer',
+    'expiry_alert_days' => 'Expiry alert lead time (days)',
+    'receipt_footer' => 'Receipt footer',
 ];
 $fieldMeta = [
-    'store_name' => ['type' => 'text', 'autocomplete' => 'organization', 'required' => true],
-    'store_address' => ['type' => 'text', 'autocomplete' => 'street-address'],
-    'store_phone' => ['type' => 'tel', 'autocomplete' => 'tel'],
-    'store_email' => ['type' => 'email', 'autocomplete' => 'email'],
-    'business_identifier' => ['type' => 'text', 'autocomplete' => 'off'],
-    'currency_symbol' => ['type' => 'text', 'autocomplete' => 'off', 'maxlength' => '8'],
+    'store_name' => [
+        'type' => 'text',
+        'autocomplete' => 'organization',
+        'required' => true,
+    ],
+    'business_identifier' => [
+        'type' => 'text',
+        'autocomplete' => 'off',
+    ],
+    'store_email' => [
+        'type' => 'email',
+        'autocomplete' => 'email',
+    ],
+    'store_phone' => [
+        'type' => 'tel',
+        'autocomplete' => 'tel',
+    ],
+    'store_address' => [
+        'type' => 'text',
+        'autocomplete' => 'street-address',
+        'full' => true,
+    ],
+    'currency_symbol' => [
+        'type' => 'text',
+        'autocomplete' => 'off',
+        'maxlength' => '8',
+    ],
     'timezone' => [
         'type' => 'text',
         'autocomplete' => 'off',
-        'placeholder' => 'e.g. Asia/Manila',
     ],
     'expiry_alert_days' => [
         'type' => 'text',
         'autocomplete' => 'off',
-        'placeholder' => 'e.g. 30, 15, 7',
     ],
     'receipt_footer' => [
         'full' => true,
@@ -92,19 +111,159 @@ $settings = get_store_settings($pdo);
 $dormancyThresholds = $dormancyPolicyService->thresholds();
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 ?>
-<!DOCTYPE html><html lang="en"><head><?php retailmind_theme_head(); ?><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Platform Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . $styleVersion) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>Platform Settings</h1></div></div>
-<?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-<div class="dashboard-section"><h2>Store &amp; receipts</h2><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="save"><div class="form-grid">
-<?php foreach ($fields as $key => $label):
-    $meta = $fieldMeta[$key] ?? [];
-    $isRequired = !empty($meta['required']);
-    $isFull = !empty($meta['full']);
-?><div class="form-group<?= $isFull ? ' full' : '' ?>"><label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?><?php if ($isRequired): ?><span class="required-mark" aria-hidden="true">*</span><?php endif; ?></label><?php if ($key === 'receipt_footer'): ?><textarea id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" rows="3"><?= htmlspecialchars((string)$settings[$key]) ?></textarea><?php else: ?><input type="<?= htmlspecialchars((string)($meta['type'] ?? 'text')) ?>" id="<?= htmlspecialchars($key) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$settings[$key]) ?>" autocomplete="<?= htmlspecialchars((string)($meta['autocomplete'] ?? 'off')) ?>"<?= !empty($meta['maxlength']) ? ' maxlength="' . htmlspecialchars((string)$meta['maxlength']) . '"' : '' ?><?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?><?= $isRequired ? ' required' : '' ?>><?php endif; ?></div><?php endforeach; ?>
-</div><button type="submit" class="btn">Save Store settings</button></form></div>
-<div class="dashboard-section"><h2>Dormancy Policy</h2><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="save_dormancy"><div class="form-grid">
-<div class="form-group"><label for="disable_days">Disable accounts after inactivity (days)<span class="required-mark" aria-hidden="true">*</span></label><input type="number" min="1" step="1" id="disable_days" name="disable_days" value="<?= htmlspecialchars((string)$dormancyThresholds['disable_days']) ?>" required></div>
-<div class="form-group"><label for="warn_days">Warn Administrator after inactivity (days)<span class="required-mark" aria-hidden="true">*</span></label><input type="number" min="0" step="1" id="warn_days" name="warn_days" value="<?= htmlspecialchars((string)$dormancyThresholds['warn_days']) ?>" required></div>
-</div><button type="submit" class="btn">Save Dormancy Policy</button></form></div>
-<div class="dashboard-section"><h2>Email delivery test</h2><form method="post" class="form-inline-action"><?= csrf_field() ?><input type="hidden" name="action" value="test_email"><div class="form-group form-inline-field"><label for="test_email">Recipient email<span class="required-mark" aria-hidden="true">*</span></label><input type="email" id="test_email" name="test_email" value="<?= htmlspecialchars((string)$settings['store_email']) ?>" autocomplete="email" required></div><button type="submit" class="btn">Send test email</button></form></div>
-</main></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <?php retailmind_theme_head(); ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Settings | RetailMind</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . $styleVersion) ?>">
+</head>
+<body class="platform-settings-page">
+<div class="app-shell">
+    <?php include __DIR__ . '/../sidebar.php'; ?>
+    <main class="main-content">
+        <header class="topbar">
+            <div>
+                <h1>Platform Settings</h1>
+                <p class="page-subtitle">Configure store identity, receipt formatting, account dormancy, and notification dispatch.</p>
+            </div>
+        </header>
+
+        <?php if ($message): ?>
+            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>" data-rm-alert-processed="1" aria-live="polite">
+                <i class="bi <?= $messageClass === 'tag-success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill' ?>" aria-hidden="true"></i>
+                <span><?= htmlspecialchars($message) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <section class="dashboard-section" aria-labelledby="heading-store">
+            <div class="section-header">
+                <h2 id="heading-store"><i class="bi bi-shop" aria-hidden="true"></i> Store &amp; receipts</h2>
+                <p class="section-description">Store identity, regional defaults, and customer receipt text.</p>
+            </div>
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save">
+                <div class="form-grid">
+                    <?php foreach ($fields as $key => $label):
+                        $meta = $fieldMeta[$key] ?? [];
+                        $isRequired = !empty($meta['required']);
+                        $isFull = !empty($meta['full']);
+                        $helpId = !empty($meta['help']) ? $key . '_help' : '';
+                    ?>
+                        <div class="form-group<?= $isFull ? ' full' : '' ?>">
+                            <label for="<?= htmlspecialchars($key) ?>">
+                                <?= htmlspecialchars($label) ?>
+                                <?php if ($isRequired): ?><span class="required-mark" aria-hidden="true">*</span><?php endif; ?>
+                            </label>
+                            <?php if ($key === 'receipt_footer'): ?>
+                                <textarea id="<?= htmlspecialchars($key) ?>"
+                                          name="<?= htmlspecialchars($key) ?>"
+                                          rows="3"
+                                          <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
+                                          <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>><?= htmlspecialchars((string)($settings[$key] ?? '')) ?></textarea>
+                            <?php else: ?>
+                                <input type="<?= htmlspecialchars((string)($meta['type'] ?? 'text')) ?>"
+                                       id="<?= htmlspecialchars($key) ?>"
+                                       name="<?= htmlspecialchars($key) ?>"
+                                       value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"
+                                       autocomplete="<?= htmlspecialchars((string)($meta['autocomplete'] ?? 'off')) ?>"
+                                       <?= !empty($meta['maxlength']) ? ' maxlength="' . htmlspecialchars((string)$meta['maxlength']) . '"' : '' ?>
+                                       <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>
+                                       <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
+                                       <?= $isRequired ? ' required aria-required="true"' : '' ?>>
+                            <?php endif; ?>
+                            <?php if ($helpId !== ''): ?>
+                                <small class="field-help" id="<?= htmlspecialchars($helpId) ?>"><?= htmlspecialchars((string)$meta['help']) ?></small>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="form-actions u-mt-1">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> Save store settings</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="dashboard-section" aria-labelledby="heading-dormancy">
+            <div class="section-header">
+                <h2 id="heading-dormancy"><i class="bi bi-shield-lock" aria-hidden="true"></i> Dormancy Policy</h2>
+                <p class="section-description">Deactivation thresholds for inactive accounts. Warning lead time must be fewer days than deactivation.</p>
+            </div>
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_dormancy">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="disable_days">
+                            Disable inactive accounts (days)
+                            <span class="required-mark" aria-hidden="true">*</span>
+                        </label>
+                        <input type="number"
+                               min="1"
+                               step="1"
+                               id="disable_days"
+                               name="disable_days"
+                               value="<?= htmlspecialchars((string)$dormancyThresholds['disable_days']) ?>"
+                               aria-describedby="disable_days_help"
+                               aria-required="true"
+                               required>
+                        <small class="field-help" id="disable_days_help">Days of inactivity before an account is automatically locked.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="warn_days">
+                            Warn before deactivation (days)
+                            <span class="required-mark" aria-hidden="true">*</span>
+                        </label>
+                        <input type="number"
+                               min="0"
+                               step="1"
+                               id="warn_days"
+                               name="warn_days"
+                               value="<?= htmlspecialchars((string)$dormancyThresholds['warn_days']) ?>"
+                               aria-describedby="warn_days_help"
+                               aria-required="true"
+                               required>
+                        <small class="field-help" id="warn_days_help">Days of inactivity before alerting administrators prior to deactivation.</small>
+                    </div>
+                </div>
+                <div class="form-actions u-mt-1">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save Dormancy Policy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="dashboard-section" aria-labelledby="heading-email-test">
+            <div class="section-header">
+                <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
+                <p class="section-description">Test outbound SMTP notification dispatch using configured mail environment.</p>
+            </div>
+            <form method="post" class="form-inline-action">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="test_email">
+                <div class="form-group form-inline-field">
+                    <label for="test_email">
+                        Recipient email
+                        <span class="required-mark" aria-hidden="true">*</span>
+                    </label>
+                    <input type="email"
+                           id="test_email"
+                           name="test_email"
+                           value="<?= htmlspecialchars((string)$settings['store_email']) ?>"
+                           autocomplete="email"
+                           placeholder="admin@example.com"
+                           aria-describedby="test_email_help"
+                           aria-required="true"
+                           required>
+                    <small class="field-help" id="test_email_help">Address to receive a test message verifying SMTP connectivity.</small>
+                </div>
+                <button type="submit" class="btn"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
+            </form>
+        </section>
+    </main>
+</div>
+</body>
+</html>

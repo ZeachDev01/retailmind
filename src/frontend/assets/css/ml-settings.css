@@ -92,6 +92,99 @@
     border-bottom: 0;
 }
 
+.ml-settings-page .ml-action-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.ml-settings-page .ml-action-form {
+    margin: 0;
+    display: inline-flex;
+}
+
+.ml-settings-page .ml-job-status {
+    font-size: .875rem;
+    color: var(--muted, #626b7a);
+}
+
+.ml-settings-page .ml-job-status strong {
+    color: var(--text, #1f2937);
+}
+
+.ml-settings-page .candidate-card {
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.ml-settings-page .candidate-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: .875rem;
+    margin-bottom: 1.25rem;
+}
+
+.ml-settings-page .candidate-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+
+.ml-settings-page .candidate-meta-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted, #626b7a);
+}
+
+.ml-settings-page .candidate-meta-val {
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--text, #1f2937);
+}
+
+.ml-settings-page .candidate-card .table-wrap {
+    margin-bottom: .75rem;
+}
+
+.ml-settings-page .ml-eval-reason {
+    font-size: .875rem;
+    color: var(--muted, #626b7a);
+    margin: .5rem 0 0 0;
+}
+
+.ml-settings-page .ml-eval-meta {
+    font-size: .85rem;
+    color: var(--muted, #626b7a);
+    margin: .5rem 0 .875rem;
+}
+
+.ml-settings-page .ml-banner {
+    padding: .75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.25rem;
+    font-size: .9rem;
+}
+
+.ml-settings-page .ml-banner-info {
+    background: var(--surface-soft, #f8fafc);
+    border: 1px solid var(--border, #e5e7eb);
+    color: var(--text, #1f2937);
+}
+
+.ml-settings-page .ml-section-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: 1.25rem;
+}
+
 .ml-settings-page .table-wrap :is(th, td):nth-child(-n + 3) {
     white-space: nowrap;
 }

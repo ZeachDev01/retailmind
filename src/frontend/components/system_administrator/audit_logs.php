@@ -77,10 +77,13 @@ function audit_log_display_value($value): string
 function audit_log_action_class(string $action): string
 {
     $normalized = strtolower($action);
-    if (preg_match('/fail|error|denied|reject/', $normalized)) {
+    if (preg_match('/fail|error|denied|reject|delete|destroy|drop|revoke|danger/', $normalized)) {
         return 'is-danger';
     }
-    if (preg_match('/success|complete|created|updated|approved/', $normalized)) {
+    if (preg_match('/warning|alert|revert|reset/', $normalized)) {
+        return 'is-warning';
+    }
+    if (preg_match('/success|complete|created|updated|approved|restor|active|enable/', $normalized)) {
         return 'is-success';
     }
 
@@ -92,26 +95,34 @@ function audit_log_table_cells(array $log): array
     $previousValue = audit_log_display_value($log['previous_value'] ?? null);
     $newValue = audit_log_display_value($log['new_value'] ?? null);
     $formattedTimestamp = format_display_datetime($log['created_at']);
-    $user = $log['user_id']
-        ? '<strong>' . htmlspecialchars((string)($log['full_name'] ?: $log['username'])) . '</strong><small>' . htmlspecialchars((string)$log['username']) . '</small>'
-        : '<em>System / Unknown</em>';
+    if ($log['user_id']) {
+        $fullName = trim((string)($log['full_name'] ?? ''));
+        $username = trim((string)($log['username'] ?? ''));
+        if ($fullName !== '' && $fullName !== $username) {
+            $user = '<strong>' . htmlspecialchars($fullName) . '</strong><small>@' . htmlspecialchars($username) . '</small>';
+        } else {
+            $user = '<strong>' . htmlspecialchars($username ?: 'User #' . $log['user_id']) . '</strong>';
+        }
+    } else {
+        $user = '<em>System / Unknown</em>';
+    }
     ob_start();
     ?>
     <details class="audit-details">
         <summary aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</summary>
         <dl class="audit-details-content">
-            <dt>IP address:</dt>
+            <dt>IP Address</dt>
             <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
-            <dt>Previous:</dt>
+            <dt>Previous Value</dt>
             <dd class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></dd>
-            <dt>New:</dt>
+            <dt>New Value</dt>
             <dd class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></dd>
             <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
-                <dt>Reviewed evidence:</dt>
+                <dt>Reviewed Evidence</dt>
                 <dd><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
             <?php endif; ?>
             <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
-                <dt>Reviewed log excerpt:</dt>
+                <dt>Reviewed Log Excerpt</dt>
                 <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
             <?php endif; ?>
         </dl>
@@ -209,7 +220,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '')
             $actorRole, (int)$_SESSION['user_id'], (int)($_POST['through_attempt_id'] ?? 0),
             (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
         );
-        $_SESSION['sign_in_review_message'] = 'Review saved. The listed attempts were cleared from the warning; their history is preserved. New or remaining attempts can still trigger a warning.';
+        $_SESSION['sign_in_review_message'] = 'Review saved. Listed attempts cleared from active alerts; audit history is preserved.';
         header('Location: ' . app_url('components/system_administrator/audit_logs.php') . '#failed-sign-in-review');
         exit;
     } catch (Throwable $exception) {
@@ -227,6 +238,23 @@ $pageTitle = $canViewPlatformAudit ? 'Protected Audit Records' : 'Operational Au
 $emptyTableCopy = $canViewPlatformAudit
     ? 'No Protected Audit Records match the selected filters.'
     : 'No Operational Audit records match the selected filters.';
+
+$activeFilters = [];
+if ($moduleFilter !== '') {
+    $activeFilters[] = ['label' => 'Module', 'value' => $moduleFilter];
+}
+if ($actionFilter !== '') {
+    $activeFilters[] = ['label' => 'Action', 'value' => $actionFilter];
+}
+if ($userFilter !== '') {
+    $activeFilters[] = ['label' => 'User', 'value' => $userFilter];
+}
+if ($dateFrom !== '') {
+    $activeFilters[] = ['label' => 'From', 'value' => $dateFrom];
+}
+if ($dateTo !== '') {
+    $activeFilters[] = ['label' => 'To', 'value' => $dateTo];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -246,7 +274,10 @@ $emptyTableCopy = $canViewPlatformAudit
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
             <header class="page-heading topbar">
-                <h1><?= htmlspecialchars($pageTitle) ?></h1>
+                <div>
+                    <h1><?= htmlspecialchars($pageTitle) ?></h1>
+                    <p class="page-subtitle u-text-muted"><?= $canViewPlatformAudit ? 'System security, authentication, and platform configuration audit trail' : 'Store activity, user operations, and inventory event log' ?></p>
+                </div>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="export_csv">
@@ -259,6 +290,16 @@ $emptyTableCopy = $canViewPlatformAudit
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
             </header>
+
+            <?php if ($activeFilters !== []): ?>
+                <aside class="active-filters-bar" aria-label="Applied filters">
+                    <span class="active-filters-label"><i class="bi bi-funnel-fill" aria-hidden="true"></i> Filtered by:</span>
+                    <?php foreach ($activeFilters as $filter): ?>
+                        <span class="tag tag-warning"><?= htmlspecialchars($filter['label']) ?>: <strong><?= htmlspecialchars($filter['value']) ?></strong></span>
+                    <?php endforeach; ?>
+                    <a href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>" class="btn-clear-filters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</a>
+                </aside>
+            <?php endif; ?>
 
             <div class="audit-log-stats">
                 <div class="stat-card with-icon">
@@ -282,7 +323,7 @@ $emptyTableCopy = $canViewPlatformAudit
                 <section class="dashboard-section audit-table-card" id="failed-sign-in-review" aria-labelledby="sign-in-review-title">
                     <div class="section-header">
                         <div>
-                            <h2 id="sign-in-review-title">Review failed sign-ins</h2>
+                            <h2 id="sign-in-review-title"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Review failed sign-ins</h2>
                         </div>
                     </div>
                     <?php if ($reviewMessage !== ''): ?>
@@ -297,7 +338,7 @@ $emptyTableCopy = $canViewPlatformAudit
                         <div class="table-wrap audit-log-table-wrap">
                             <table class="audit-log-table" data-no-smart-table>
                                 <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts</caption>
-                                <thead><tr><th>Date &amp; Time</th><th>Account / Identifier</th><th>IP Address</th></tr></thead>
+                                <thead><tr><th scope="col">Date &amp; Time</th><th scope="col">Account / Identifier</th><th scope="col">IP Address</th></tr></thead>
                                 <tbody>
                                     <?php foreach ($pendingSignIns as $attempt): ?>
                                         <tr>
@@ -325,11 +366,11 @@ $emptyTableCopy = $canViewPlatformAudit
                                 </div>
                                 <div class="form-group full">
                                     <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
-                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="Record reviewer confirmation and any security actions taken" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="Summarize review findings and any security actions taken" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                                 </div>
                             </div>
-                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
-                            <button type="submit" class="btn btn-primary">Save review and clear listed attempts</button>
+                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I confirm I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save review and clear listed attempts</button>
                         </form>
                     <?php endif; ?>
                 </section>
@@ -338,22 +379,23 @@ $emptyTableCopy = $canViewPlatformAudit
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
                 <div class="section-header">
                     <div>
-                        <h2 id="audit-table-title">Record history</h2>
+                        <h2 id="audit-table-title"><i class="bi bi-journal-text" aria-hidden="true"></i> Record history</h2>
                     </div>
                 </div>
                 <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
                 <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
                     <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table>
+                        <caption class="visually-hidden">System audit log history with event details and timestamps</caption>
                         <thead>
                             <tr>
-                                <th>Date &amp; Time</th>
-                                <th>User</th>
-                                <th>Action</th>
-                                <th>Category</th>
-                                <th>Module</th>
-                                <th>Record ID</th>
-                                <th>Details</th>
+                                <th scope="col">Date &amp; Time</th>
+                                <th scope="col">User</th>
+                                <th scope="col">Action</th>
+                                <th scope="col">Category</th>
+                                <th scope="col">Module</th>
+                                <th scope="col">Record ID</th>
+                                <th scope="col">Details</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -473,7 +515,12 @@ $emptyTableCopy = $canViewPlatformAudit
                 },
                 language: {
                     emptyTable: <?= json_encode($emptyTableCopy, JSON_UNESCAPED_UNICODE) ?>,
-                    search: 'Search:'
+                    search: 'Search:',
+                    searchPlaceholder: 'Search records, users, actions...',
+                    lengthMenu: 'Show _MENU_ records',
+                    info: 'Showing _START_ to _END_ of _TOTAL_ records',
+                    infoEmpty: 'Showing 0 records',
+                    infoFiltered: '(filtered from _MAX_ total)'
                 }
             });
 

@@ -4,7 +4,7 @@
 .reset-page h2, .reset-section-title { font-size: 1.05rem; font-weight: 700; line-height: 1.3; }
 .reset-page h3 { font-size: 1.05rem; line-height: 1.3; margin-bottom: .5rem; }
 .reset-page p { max-width: 72ch; line-height: 1.5; }
-.reset-note, .reset-outcomes, .reset-group-total, .reset-preserved ul, .reset-preflight { color: var(--muted); }
+.reset-note, .reset-outcomes, .reset-group-total, .reset-preserved ul, .reset-preflight, .reset-hint { color: var(--muted); }
 .reset-panel { min-width: 0; background: var(--theme-surface, var(--card-bg)); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; }
 .reset-product { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.25fr); gap: 2rem; }
 .reset-product-intro, .reset-product-form, .reset-review, .reset-confirm { min-width: 0; }
@@ -14,6 +14,7 @@
 .reset-outcomes li + li { margin-top: .75rem; }
 .reset-outcomes strong { color: var(--text); font-weight: 600; }
 .reset-note { font-size: 1rem; }
+.reset-hint { display: block; margin-top: .35rem; font-size: .8125rem; }
 .reset-product-warning { margin-top: 1.25rem; padding: .875rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-danger-surface, #fef2f2); color: var(--reset-danger); font-size: .875rem; }
 .reset-product-warning strong { font-weight: 600; }
 .reset-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
@@ -71,7 +72,7 @@
 html[data-theme="dark"] .main-content.reset-page { background-color: var(--bg) !important; }
 html[data-theme="dark"] .reset-page .btn-danger.reset-delete { background-color: transparent; color: var(--reset-danger); border-color: var(--reset-danger); }
 html[data-theme="dark"] .reset-page .btn-danger.reset-delete:hover:not(:disabled) { background-color: var(--theme-danger-surface); color: var(--text); }
-html[data-theme="dark"] .reset-page .btn-danger { background-color: var(--danger); color: var(--bg); }
+html[data-theme="dark"] .reset-page .btn-danger { background-color: var(--danger); color: #ffffff; }
 html[data-theme="dark"] .reset-page .btn-danger:hover:not(:disabled) { background-color: var(--reset-danger); filter: brightness(1.08); }
 .reset-page :is(a, button, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; box-shadow: none; }
 .reset-page :is(input, select):focus-visible { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }

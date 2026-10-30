@@ -182,7 +182,7 @@ $active_batch_reminders = $inventory_workspace
                         <h2>You're all caught up</h2>
                         <a class="mark-all-btn" href="?<?= htmlspecialchars(http_build_query(['category' => $category, 'view' => 'all'])) ?>">View all notifications</a>
                     <?php else: ?>
-                        <p><?= $category === '' ? 'No notifications yet.' : 'No notifications in this category.' ?></p>
+                        <h2><?= $category === '' ? 'No notifications' : 'No notifications in this category' ?></h2>
                     <?php endif; ?>
                 </div>
             <?php else: ?>
@@ -197,7 +197,7 @@ $active_batch_reminders = $inventory_workspace
                         $product_search = $reminder['sku'] ?? null;
                         $notif['title'] = 'Expiry alert history: ' . $notif['title'];
                         $notif['message'] = $reminder
-                            ? "Batch {$reminder['batch_number']} (#{$reminder['batch_id']}). Expiration: " . ($reminder['expiration_date'] ?? 'Not recorded') . ". Current remaining: {$reminder['remaining_quantity']}. " . ($reminder['active'] ? 'See Active batch reminders for current work.' : 'No active reminder.')
+                            ? "Batch {$reminder['batch_number']} (#{$reminder['batch_id']}). Expiration: " . ($reminder['expiration_date'] ?? 'Not recorded') . ". Current remaining: {$reminder['remaining_quantity']}."
                             : 'Historical alert. The referenced batch is no longer available.';
                     }
                     ?>

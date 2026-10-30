@@ -9,10 +9,10 @@ if (!is_logged_in()) {
 }
 
 $workspaceDetails = [
-    'super_admin' => ['label' => 'Super Administrator', 'description' => 'Platform governance, security, and system health.', 'icon' => 'bi-shield-lock'],
-    'admin' => ['label' => 'Administrator', 'description' => 'Store operations, staff, approvals, and reports.', 'icon' => 'bi-shop'],
-    'inventory_manager' => ['label' => 'Inventory', 'description' => 'Stock, receiving, replenishment, and inventory control.', 'icon' => 'bi-boxes'],
-    'cashier' => ['label' => 'Cashier', 'description' => 'Point of sale, shifts, and sales documents.', 'icon' => 'bi-cart-check'],
+    'super_admin' => ['label' => 'Super Administrator', 'description' => 'Platform governance & security', 'icon' => 'bi-shield-lock'],
+    'admin' => ['label' => 'Administrator', 'description' => 'Store operations & reports', 'icon' => 'bi-shop'],
+    'inventory_manager' => ['label' => 'Inventory', 'description' => 'Stock & catalog management', 'icon' => 'bi-boxes'],
+    'cashier' => ['label' => 'Cashier', 'description' => 'Point of sale & shifts', 'icon' => 'bi-cart-check'],
 ];
 $error = '';
 
@@ -59,7 +59,6 @@ $assignedWorkspaces = array_values(array_filter(
             <header class="page-heading">
                 <div>
                     <h1>Change workspace</h1>
-                    <p class="page-subtitle">Choose the workspace you want to use.</p>
                 </div>
             </header>
 
@@ -70,7 +69,7 @@ $assignedWorkspaces = array_values(array_filter(
             <div class="workspace-options">
                 <?php foreach ($assignedWorkspaces as $assignedRole): ?>
                     <?php $details = $workspaceDetails[$assignedRole]; ?>
-                    <form method="post" data-rm-backup-bypass="true" class="workspace-option<?= $assignedRole === current_role() ? ' is-active' : '' ?>">
+                    <form method="post" data-rm-backup-bypass="true" class="workspace-option<?= $assignedRole === current_role() ? ' is-active' : '' ?>"<?= $assignedRole === current_role() ? ' aria-current="true"' : '' ?>>
                         <?= csrf_field() ?>
                         <input type="hidden" name="workspace" value="<?= htmlspecialchars($assignedRole) ?>">
                         <span class="workspace-option-icon"><i class="bi <?= htmlspecialchars($details['icon']) ?>" aria-hidden="true"></i></span>

@@ -189,7 +189,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
             <header class="page-heading">
                 <div>
                     <h1>My profile</h1>
-                    <p class="page-subtitle">Update your picture, name, and email.</p>
+
                 </div>
             </header>
 
@@ -206,7 +206,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                 <div class="profile-picture-copy">
                                     <div>
                                         <h2>Profile picture</h2>
-                                        <p>Optional. Your initials appear when no picture is set.</p>
+                                        <p class="field-hint">Optional.</p>
                                     </div>
                                 </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form" id="profile-picture-form"
@@ -216,7 +216,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                     <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
                                         <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" aria-describedby="profile-picture-help profile-crop-error" required>
-                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
+                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image" aria-hidden="true"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
                                     <small class="field-help" id="profile-picture-help"><?= ProfileImageStorage::HELP ?></small>
@@ -235,7 +235,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                         <input id="profile-crop-size" type="hidden" name="crop[size]">
                                     </fieldset>
                                     <div class="profile-picture-actions">
-                                        <button id="profile-picture-save" class="btn btn-small" type="submit" disabled><i class="bi bi-cloud-arrow-up"></i>Save picture</button>
+                                        <button id="profile-picture-save" class="btn btn-small" type="submit" disabled><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>Save picture</button>
                                         <button id="profile-picture-cancel" class="btn btn-quiet btn-small" type="button" hidden>Cancel</button>
                                     </div>
                                 </form>
@@ -243,7 +243,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                     <form method="POST" class="profile-picture-remove-form">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="remove_profile_image">
-                                        <button class="btn btn-quiet btn-small" type="submit"><i class="bi bi-trash3"></i>Remove picture</button>
+                                        <button class="btn btn-quiet btn-small" type="submit"><i class="bi bi-trash3" aria-hidden="true"></i>Remove picture</button>
                                     </form>
                                 <?php endif; ?>
                             </div>
@@ -256,17 +256,17 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
                         <div class="form-group full<?= isset($fieldErrors['full_name']) ? ' invalid' : '' ?>">
-                            <label for="full_name">Full name (required)</label>
-                            <input id="full_name" name="full_name" autocomplete="name" maxlength="100" value="<?= htmlspecialchars($profileValues['full_name'] ?? $account['full_name']) ?>" required<?= isset($fieldErrors['full_name']) ? ' aria-invalid="true" aria-describedby="full-name-error"' : '' ?>>
+                            <label for="full_name">Full name</label>
+                            <input type="text" id="full_name" name="full_name" autocomplete="name" maxlength="100" value="<?= htmlspecialchars($profileValues['full_name'] ?? $account['full_name']) ?>" required<?= isset($fieldErrors['full_name']) ? ' aria-invalid="true" aria-describedby="full-name-error"' : '' ?>>
                             <?php if (isset($fieldErrors['full_name'])): ?><small class="field-error" id="full-name-error"><?= htmlspecialchars($fieldErrors['full_name']) ?></small><?php endif; ?>
                         </div>
                         <div class="form-group full<?= isset($fieldErrors['email']) ? ' invalid' : '' ?>">
-                            <label for="email">Email (optional)</label>
+                            <label for="email">Email address</label>
                             <input type="email" id="email" name="email" autocomplete="email" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
                             <?php if (isset($fieldErrors['email'])): ?><small class="field-error" id="email-error"><?= htmlspecialchars($fieldErrors['email']) ?></small><?php endif; ?>
                         </div>
                         <div class="full profile-save-row">
-                            <button class="btn" type="submit">Save details</button>
+                            <button class="btn" type="submit"><i class="bi bi-check2" aria-hidden="true"></i>Save details</button>
                         </div>
                     </form>
                 </section>
@@ -277,14 +277,14 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                     </div>
                     <dl class="account-detail-list">
                         <div><dt>Username</dt><dd><?= htmlspecialchars($account['username']) ?></dd></div>
-                        <div><dt>Role</dt><dd><?= htmlspecialchars($roleLabel) ?></dd></div>
-                        <div><dt>Status</dt><dd class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></dd></div>
+                        <div><dt>Role</dt><dd><span class="badge-role"><?= htmlspecialchars($roleLabel) ?></span></dd></div>
+                        <div><dt>Status</dt><dd class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><span class="status-badge <?= $account['status'] === 'active' ? 'good' : 'inactive' ?>"><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></span></dd></div>
                         <div><dt>User ID</dt><dd>#<?= (int)$account['user_id'] ?></dd></div>
                         <div><dt>Last sign-in</dt><dd><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></dd></div>
                         <div><dt>Account created</dt><dd><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></dd></div>
                     </dl>
                     <div class="account-security">
-                        <h3>Password</h3>
+                        <h3>Password security</h3>
                         <p><?= htmlspecialchars($passwordStatus) ?></p>
                         <dl class="account-detail-list">
                             <div><dt>Last changed</dt><dd><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></dd></div>

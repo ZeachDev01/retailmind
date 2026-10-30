@@ -71,50 +71,47 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
             <header class="page-heading system-health-heading">
                 <div>
                     <h1>System Health</h1>
-                    <p class="page-subtitle">Review system checks and investigate warnings.</p>
                     <p class="system-health-checked"><i class="bi bi-clock" aria-hidden="true"></i> Checked <?= htmlspecialchars($checkedAt) ?></p>
                 </div>
                 <div class="page-heading-actions">
-                    <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/system_administrator/system_health.php')) ?>"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh checks</a>
-                    <span class="decision-pill <?= $overall === 'healthy' ? 'ok' : ($overall === 'critical' ? 'critical' : 'action') ?>"><i class="bi <?= htmlspecialchars($icons[$overall]) ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$overall]) ?></span>
+                    <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/system_administrator/system_health.php')) ?>" title="Run all health checks again" aria-label="Refresh health checks"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh checks</a>
+                    <span class="decision-pill <?= $overall === 'healthy' ? 'ok' : ($overall === 'critical' ? 'critical' : 'action') ?>" role="status" aria-live="polite"><i class="bi <?= htmlspecialchars($icons[$overall]) ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$overall]) ?></span>
                 </div>
             </header>
 
-            <div class="system-health-stats" aria-label="System health summary">
-                <article class="health-summary">
+            <section class="system-health-stats" aria-label="System health summary">
+                <article class="health-summary<?= $counts['healthy'] > 0 ? ' is-healthy' : '' ?>">
                     <div class="value"><?= $counts['healthy'] ?></div>
                     <div class="label">Healthy</div>
                 </article>
-                <article class="health-summary">
+                <article class="health-summary<?= $counts['warning'] > 0 ? ' is-warning' : '' ?>">
                     <div class="value"><?= $counts['warning'] ?></div>
                     <div class="label">Warnings</div>
                 </article>
-                <article class="health-summary">
+                <article class="health-summary<?= $counts['critical'] > 0 ? ' is-critical' : '' ?>">
                     <div class="value"><?= $counts['critical'] ?></div>
                     <div class="label">Critical</div>
                 </article>
-            </div>
+            </section>
 
             <section class="dashboard-section system-health-checks" aria-labelledby="environment-checks-title">
                 <div class="section-header">
-                    <div>
-                        <h2 id="environment-checks-title">Environment checks</h2>
-                        <p class="section-description">Refresh checks after maintenance to see the latest status.</p>
-                    </div>
-                    <span class="system-health-check-count"><?= count($checks) ?> checks</span>
+                    <h2 id="environment-checks-title">Environment checks</h2>
+                    <span class="system-health-check-count" aria-label="<?= count($checks) ?> total checks"><?= count($checks) ?> checks</span>
                 </div>
 
                 <div class="system-health-groups">
                     <?php foreach ($checksByCategory as $category => $categoryChecks): ?>
-                        <section class="system-health-group" aria-labelledby="health-category-<?= htmlspecialchars(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $category)), ENT_QUOTES, 'UTF-8') ?>">
-                            <h3 id="health-category-<?= htmlspecialchars(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $category)), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($category) ?></h3>
+                        <?php $categoryId = 'health-category-' . htmlspecialchars(strtolower(preg_replace('/[^a-z0-9]+/i', '-', $category)), ENT_QUOTES, 'UTF-8'); ?>
+                        <section class="system-health-group" aria-labelledby="<?= $categoryId ?>">
+                            <h3 id="<?= $categoryId ?>"><?= htmlspecialchars($category) ?></h3>
                             <div class="system-health-group-list">
                                 <?php foreach ($categoryChecks as $check): ?>
                                     <article class="health-check">
                                         <div class="health-check-copy">
                                             <div class="health-check-title">
                                                 <strong><?= htmlspecialchars($check['name']) ?></strong>
-                                                <span class="health-status <?= htmlspecialchars($check['status']) ?>"><?= htmlspecialchars($labels[$check['status']]) ?></span>
+                                                <span class="health-status <?= htmlspecialchars($check['status']) ?>"><i class="bi <?= htmlspecialchars($icons[$check['status']] ?? 'bi-circle-fill') ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$check['status']]) ?></span>
                                             </div>
                                             <p class="health-detail"><?= htmlspecialchars($check['detail']) ?></p>
                                         </div>
@@ -126,8 +123,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                 </div>
             </section>
             <details class="dashboard-section system-health-maintenance">
-                <summary>Maintenance commands</summary>
-                <p class="section-description">Run from the project directory during deployment or maintenance.</p>
+                <summary>Recommended maintenance commands</summary>
                 <div class="maintenance-list">
                     <div class="maintenance-item">
                         <span class="maintenance-icon"><i class="bi bi-database-gear" aria-hidden="true"></i></span>
@@ -145,27 +141,23 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
             </details>
             <section class="dashboard-section application-log-review" id="application-log-review" aria-labelledby="log-review-title">
                 <div class="section-header">
-                    <div>
-                        <h2 id="log-review-title">Review application log</h2>
-                        <p class="section-description">Investigate the entries and verify the affected action before saving a review. Acknowledgment preserves the log; other failing checks still need attention.</p>
-                    </div>
+                    <h2 id="log-review-title">Review application log</h2>
                     <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">View audit history</a>
                 </div>
                 <?php if ($logReviewMessage !== ''): ?>
-                    <p class="alert tag-success" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewMessage) ?></p>
+                    <p class="alert tag-success" role="status" aria-live="polite" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewMessage) ?></p>
                 <?php endif; ?>
                 <?php if ($logReviewError !== ''): ?>
-                    <p id="log-review-error" class="alert tag-warning" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewError) ?></p>
+                    <p id="log-review-error" class="alert tag-warning" role="alert" aria-live="assertive" data-rm-alert-processed="1"><?= htmlspecialchars($logReviewError) ?></p>
                 <?php endif; ?>
                 <?php if ($logSnapshot === null): ?>
-                    <p class="system-health-empty">Application log details are currently unavailable. Check storage permissions for <strong>storage/logs/app.log</strong> and refresh checks.</p>
+                    <p class="system-health-empty" role="status">Application log details are currently unavailable. Check storage permissions for <strong>storage/logs/app.log</strong> and refresh checks.</p>
                 <?php elseif ($logSnapshot['size'] === 0): ?>
-                    <p class="system-health-empty">No application log entries need review.</p>
+                    <p class="system-health-empty" role="status">No application log entries need review.</p>
                 <?php else: ?>
-                    <p class="section-description">Recent excerpt from <strong>app.log</strong> (up to 16 KB). The excerpt may start mid-entry; check the full file for more context.</p>
                     <pre class="application-log-excerpt" tabindex="0" aria-label="Recent application log entries"><?= htmlspecialchars($logSnapshot['excerpt']) ?></pre>
                     <?php if ($logSnapshot['acknowledged']): ?>
-                        <p class="alert tag-success" role="status" data-rm-alert-processed="1">This log version has been acknowledged. New entries will require another review.</p>
+                        <p class="alert tag-success" role="status" aria-live="polite" data-rm-alert-processed="1">This log version has been acknowledged. New entries will require another review.</p>
                     <?php else: ?>
                         <?php
                         $hasFormError = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $logReviewError !== '');
@@ -190,7 +182,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                             <div class="form-group">
                                 <label for="log-review-note">Review note <span class="required-indicator" aria-hidden="true">*</span></label>
                                 <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="<?= $noteDescribedBy ?>"<?= $noteInvalidAttr ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
-                                <p id="log-review-note-help" class="section-description">Describe the cause, the fix or why the entry was expected, and how you verified it. Maximum 1,000 characters. Do not include passwords or tokens.</p>
+                                <p id="log-review-note-help" class="section-description">Describe root cause, resolution, or verification details. Max 1,000 characters.</p>
                             </div>
                             <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required<?= ($_POST['review_confirmed'] ?? '') === '1' ? ' checked' : '' ?><?= $confirmErrorAttr ?>> <span>I investigated these entries and verified the result. <span class="required-indicator" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save review and acknowledge log</button>

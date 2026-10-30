@@ -6,9 +6,6 @@
     const tabs = [...workspace.querySelectorAll('[role="tab"]')];
     function selectTab(tab, focus = false) {
         const target = tab.getAttribute('aria-controls');
-        const scope = document.getElementById('gcash-reporting-scope');
-        if (target === 'tab-overview') document.getElementById('gcash-completed-activity').before(scope);
-        if (target === 'tab-transactions') document.getElementById('gcash-transaction-filters').prepend(scope);
         tabs.forEach(item => {
             const selected = item === tab;
             item.setAttribute('aria-selected', String(selected));

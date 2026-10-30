@@ -145,8 +145,8 @@ function gcash_admin_money(mixed $val): string {
                 </span>
             </div>
             <div class="gcash-topbar-actions">
-                <button type="button" class="btn btn-secondary" id="gcash-refresh"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
-                <?php if (!(function_exists('is_remote_request') && is_remote_request())): ?><a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a><?php endif; ?>
+                <button type="button" class="btn btn-secondary" id="gcash-refresh" aria-label="Refresh GCash overview"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
+                <?php if (!(function_exists('is_remote_request') && is_remote_request())): ?><a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>" aria-label="Export transaction report to CSV"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a><?php endif; ?>
                 <?php if (in_array('cashier', current_workspace_roles(), true)): ?>
                     <button type="button" class="btn btn-primary" id="gcash-record">Record Exchange</button>
                 <?php endif; ?>
@@ -156,15 +156,15 @@ function gcash_admin_money(mixed $val): string {
         <?php if ($interventionError !== ''): ?><p class="alert alert-danger" role="alert"><?= gcash_admin_e($interventionError) ?></p><?php endif; ?>
         <?php if ($canMutate && !empty($overview['session_id'])): ?>
         <details class="pos-panel gcash-emergency"><summary>Emergency handover / Stop service</summary>
-            <p>Count the physical service cash and check the GCash wallet. This closes custody without settling unfinished exchanges or shortages. Each incoming staff member must accept unfinished exchanges separately.</p>
+            <p>Count physical service cash and check GCash wallet. Closes custody immediately; incoming staff must accept unfinished exchanges separately.</p>
             <form method="post"><input type="hidden" name="csrf_token" value="<?= gcash_admin_e(generate_csrf_token()) ?>"><input type="hidden" name="action" value="emergency_handover">
                 <div class="form-row">
-                    <label>Counted service cash (PHP)<input class="pos-input" name="counted_cash" type="number" min="0" step="0.01" required></label>
-                    <label>Checked wallet balance (PHP)<input class="pos-input" name="checked_wallet" type="number" min="0" step="0.01" required></label>
-                    <label>Incoming staff member (open shift required)<select class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                    <label for="emergency-counted-cash">Counted service cash (PHP)<input id="emergency-counted-cash" class="pos-input" name="counted_cash" type="number" min="0" step="0.01" required></label>
+                    <label for="emergency-checked-wallet">Checked wallet balance (PHP)<input id="emergency-checked-wallet" class="pos-input" name="checked_wallet" type="number" min="0" step="0.01" required></label>
+                    <label for="emergency-incoming-cashier">Incoming staff member (open shift required)<select id="emergency-incoming-cashier" class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
                 </div>
-                <label>Reason<textarea class="pos-input" name="reason" required minlength="5" maxlength="255" rows="2"></textarea></label>
-                <label><input name="checked" type="checkbox" value="yes" required> I checked both balances and confirm this emergency custody change.</label>
+                <label for="emergency-reason">Reason<textarea id="emergency-reason" class="pos-input" name="reason" required minlength="5" maxlength="255" rows="2"></textarea></label>
+                <label class="gcash-confirmation" for="emergency-checked"><input id="emergency-checked" name="checked" type="checkbox" value="yes" required> I checked both balances and confirm this emergency custody change.</label>
                 <p><button class="btn btn-primary" type="submit">Confirm handover or stop</button></p>
             </form>
         </details>
@@ -197,7 +197,7 @@ function gcash_admin_money(mixed $val): string {
                         <h2 id="gcash-admin-balances-title">Recorded service funds</h2>
                     </div>
                 </div>
-                <span class="gcash-badge" id="admin-session-status">Latest session &middot; Unaffected by report filters</span>
+                <span class="gcash-badge" id="admin-session-status">Latest session</span>
             </div>
 
             <div class="gcash-overview-grid gcash-balances-grid">
@@ -271,7 +271,6 @@ function gcash_admin_money(mixed $val): string {
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-outstanding-title" id="gcash-outstanding-reviews">
             <div class="pos-panel-header">
                 <h2 id="gcash-outstanding-title">Outstanding reviews</h2>
-                <span class="gcash-badge">All dates &middot; All Cashiers</span>
             </div>
             <?php if ($overview === null): ?>
                 <p role="alert">Outstanding reviews unavailable. Refresh to try again.</p>
@@ -317,7 +316,7 @@ function gcash_admin_money(mixed $val): string {
                 </div>
             </div>
             <div class="gcash-activity-footer">
-                <p>Principal excludes fees. Gross fees are before fee returns.</p>
+                <p>Principal excludes fees. Gross fees precede fee returns.</p>
                 <button type="button" class="btn btn-secondary" data-review-tab="transactions">View transactions<i class="bi bi-arrow-right" aria-hidden="true"></i></button>
             </div>
         </section>
@@ -412,7 +411,7 @@ function gcash_admin_money(mixed $val): string {
                     </tbody>
                 </table>
             </div>
-            <p class="gcash-scroll-hint">Scroll across the table to see all details and actions.</p>
+            <p class="gcash-scroll-hint">Scroll horizontally for complete table details.</p>
             <!-- Pagination Controls -->
             <div class="gcash-pagination">
                 <div>
@@ -443,7 +442,7 @@ function gcash_admin_money(mixed $val): string {
                 </div>
                 <span class="gcash-badge">All dates &middot; All Cashiers</span>
             </div>
-            <p class="gcash-section-description">Compare expected balances with the closing count. Review records your investigation; it does not settle a shortage.</p>
+            <p class="gcash-section-description">Compare expected balances with closing count. Review records investigation without settling shortage.</p>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Reconciliation differences">
                 <table class="table" id="gcash-admin-diff-table">
                     <thead>
@@ -527,7 +526,7 @@ function gcash_admin_money(mixed $val): string {
                     </tbody>
                 </table>
             </div>
-            <p class="gcash-scroll-hint">Scroll across the table to see all details and actions.</p>
+            <p class="gcash-scroll-hint">Scroll horizontally for complete table details.</p>
         </section>
 
         </div>
@@ -549,7 +548,7 @@ function gcash_admin_money(mixed $val): string {
                     </span>
                 </div>
             </div>
-            <p class="gcash-section-description">Check the cash and wallet evidence before clearing an exchange. Failed exchanges must be cancelled in the Cashier workspace.</p>
+            <p class="gcash-section-description">Verify cash and wallet evidence before clearing. Cancel failed exchanges in Cashier workspace.</p>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Unresolved activity">
                 <table class="table" id="gcash-admin-nc-table">
                     <thead>
@@ -613,15 +612,15 @@ function gcash_admin_money(mixed $val): string {
                     </tbody>
                 </table>
             </div>
-            <p class="gcash-scroll-hint">Scroll across the table to see all details and actions.</p>
+            <p class="gcash-scroll-hint">Scroll horizontally for complete table details.</p>
         </section>
 
         </div>
 
         <dialog id="gcash-verify-dialog" aria-labelledby="gcash-verify-title">
             <h2 id="gcash-verify-title">Verify &amp; Clear Exchange</h2>
-            <p>Verify &amp; Clear confirms an actually completed exchange and posts only applicable remaining movements. It cannot dismiss or cancel a failed exchange. Uncertain evidence leaves the exchange pending; expected system balances alone are insufficient.</p>
-            <p class="gcash-dialog-routing text-muted">Failed exchange? Cancellation and returns must be handled in the Cashier Workspace by the responsible Cashier. <a href="<?= gcash_admin_e(app_url('components/cashier/gcash.php')) ?>" class="gcash-switch-link">Switch to Cashier Workspace</a></p>
+            <p>Confirms completed exchange and posts only applicable remaining movements; cannot dismiss failed exchanges.</p>
+            <p class="gcash-dialog-routing text-muted">Failed exchange? Cancellations must be handled in Cashier Workspace. <a href="<?= gcash_admin_e(app_url('components/cashier/gcash.php')) ?>" class="gcash-switch-link">Switch to Cashier Workspace</a></p>
             <form id="gcash-verify-form">
                 <input type="hidden" id="gcash-verify-tx">
                 <input type="hidden" id="gcash-verify-cashier-id">
@@ -642,7 +641,7 @@ function gcash_admin_money(mixed $val): string {
         </dialog>
         <dialog id="gcash-record-dialog" aria-labelledby="gcash-record-title">
             <h2 id="gcash-record-title">Record Exchange</h2>
-            <p>Record and verify exchanges in the Cashier workspace with an open Cashier Shift and control of the GCash Service session.</p>
+            <p>Exchanges require an open shift and active GCash session in the Cashier workspace.</p>
             <form method="post" action="<?= gcash_admin_e(app_url('components/auth/workspace.php')) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="workspace" value="cashier">
@@ -660,8 +659,8 @@ function gcash_admin_money(mixed $val): string {
                 <button class="btn btn-primary" type="submit">Load money history</button>
                 <a class="btn btn-secondary" href="?tab=money">All sessions</a>
             </form>
-            <details class="gcash-history-help"><summary>How dates and corrections are shown</summary><p>Completed exchanges use completion time; unfinished or cancelled use start time. Corrections and returns use recorded time; historical counts stay unchanged.</p></details>
-            <?php if ($moneyHistory === null): ?><p role="status">Open or reload Money history to load movements.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><h3>No movements recorded</h3><p>Funding, exchanges, returns, and corrections will appear here for the selected session.</p></div><?php else: ?>
+            <details class="gcash-history-help"><summary>Timestamp &amp; correction rules</summary><p>Completed exchanges show completion time; unfinished use start time. Corrections and returns show recorded time.</p></details>
+            <?php if ($moneyHistory === null): ?><p role="status">Open or reload Money history to load movements.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><h3>No movements recorded</h3><p>Session funding, exchanges, and corrections appear here.</p></div><?php else: ?>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash money history"><table class="gcash-table" id="gcash-money-table"><thead><tr><th>Date / time</th><th>Movement</th><th>Session / exchange</th><th>Cash / wallet effect</th><th>Recorded / approved by</th><th>Evidence / reason</th></tr></thead><tbody>
             <?php foreach ($moneyHistory as $movement): ?><tr>
                 <td><?= gcash_admin_e($movement['created_at']) ?></td><td><?= gcash_admin_e(ucfirst(str_replace('_', ' ', $movement['movement_type']))) ?><?php if (empty($movement['is_actual_movement'])): ?><small class="gcash-cell-meta">Recording correction · no current money moved</small><?php endif; ?></td>
@@ -672,7 +671,7 @@ function gcash_admin_money(mixed $val): string {
         </div>
         <dialog id="gcash-admin-waiver-dialog" aria-labelledby="waiver-dialog-title">
             <h2 id="waiver-dialog-title" class="gcash-dialog-title">Mark Closing Difference Reviewed</h2>
-            <p>The counted variance stays on record. Review records the investigation; it does not record repayment.</p>
+            <p>Counted variance remains on record. Review logs investigation findings without settling repayment.</p>
             <div id="admin-waiver-summary" class="gcash-waiver-summary">
                 <p class="gcash-waiver-session"><strong>Session:</strong> #<span id="waiver-target-session"></span> (<span id="waiver-target-cashier"></span>)</p>
                 <p class="gcash-waiver-cash"><strong>Cash Variance:</strong> <span id="waiver-target-cash-var"></span></p>

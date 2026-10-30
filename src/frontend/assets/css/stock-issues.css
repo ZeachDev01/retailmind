@@ -1,6 +1,7 @@
 .stock-issues-page .main-content { min-width:0; }
 .stock-issues-page .history-section { padding:0; margin-bottom:1.5rem; border:0; background:transparent; box-shadow:none; }
 .stock-issues-page h2 { display:inline-flex; align-items:center; gap:.625rem; margin:0 0 1rem; font-size:1.05rem; line-height:1.4; }
+.stock-issues-page .page-subheading { margin:.25rem 0 0; font-size:.875rem; color:var(--muted); line-height:1.4; }
 .stock-issues-page .issue-count { padding:.125rem .5rem; border-radius:6px; background:var(--surface-soft); color:var(--muted); font-size:.875rem; font-weight:600; font-variant-numeric:tabular-nums; }
 .stock-issues-page .adjustment-card { margin-bottom:1rem; padding:1.25rem; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); }
 .stock-issues-page .adjustment-header { gap:1rem; margin-bottom:.75rem; }
@@ -24,16 +25,18 @@
 .stock-issues-page .form-group small,
 .stock-issues-page .issue-batches p { color:var(--muted); font-size:.875rem; line-height:1.5; }
 .stock-issues-page .form-group textarea,
-.stock-issues-page .form-group select { width:100%; min-width:0; margin:0; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); color:var(--text); font:inherit; padding:.625rem .75rem; }
+.stock-issues-page .form-group select,
+.stock-issues-page .form-group input { width:100%; min-width:0; min-height:44px; margin:0; border:1px solid var(--border); border-radius:10px; background:var(--card-bg); color:var(--text); font:inherit; padding:.625rem .75rem; }
 .stock-issues-page .form-group textarea { min-height:4.5rem; resize:vertical; }
 .stock-issues-page .form-group select { max-width:24rem; min-height:44px; }
+.stock-issues-page .report-filter-grid .form-group select { max-width:none; }
 .stock-issues-page summary { cursor:pointer; min-height:44px; padding-block:.625rem; color:var(--text); }
 .stock-issues-page .issue-batches p { margin:.375rem 0 .75rem; }
 .stock-issues-page .table-wrap { max-width:100%; border-color:var(--border); }
 .stock-issues-page .table-wrap table { min-width:420px; }
 .stock-issues-page .table-wrap input { width:5rem; min-height:44px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font:inherit; padding:.5rem; }
 .stock-issues-page .review-actions { display:flex; flex-wrap:wrap; gap:.5rem; }
-.stock-issues-page .review-actions button { min-height:44px; padding:.625rem 1rem; border-radius:10px; font-size:.9rem; }
+.stock-issues-page .review-actions :is(button, .btn) { min-height:44px; padding:.625rem 1rem; border-radius:10px; font-size:.9rem; }
 .stock-issues-page .btn-secondary { border:1px solid var(--border); background:var(--surface-soft); color:var(--text); }
 .stock-issues-page .btn-secondary:hover { border-color:var(--muted); background:var(--surface-soft); color:var(--text); }
 .stock-issues-page .btn-submit:disabled { opacity:.6; cursor:not-allowed; }
@@ -43,11 +46,219 @@
 .stock-issues-page .issue-history[open] > summary { margin-bottom:.75rem; }
 .stock-issues-page .issue-empty { display:grid; justify-items:center; gap:1rem; padding:3rem 1rem; border-radius:14px; background:color-mix(in srgb, var(--primary) 4%, var(--card-bg)); text-align:center; }
 .stock-issues-page .issue-empty-icon { color:var(--primary); }
-.stock-issues-page .issue-empty h3 { color:var(--text); font-size:1rem; font-weight:600; }
+.stock-issues-page .issue-empty h3 { color:var(--text); font-size:1rem; font-weight:600; margin:0; }
+.stock-issues-page .issue-empty p { color:var(--muted); font-size:.875rem; margin:0; }
 .stock-issues-page :is(summary, textarea, select, input, button, a):focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+
+/* Stock Issue KPI Overview Strip */
+.stock-issues-page .stock-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+.stock-issues-page .stock-kpi-card {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: 1rem 1.25rem;
+    background: var(--card-bg, #fff);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.stock-issues-page .stock-kpi-card--warning {
+    border-color: var(--theme-warning-text, #b45309);
+    background: var(--theme-warning-surface, #fffbeb);
+}
+.stock-issues-page .stock-kpi-card--warning :is(.stock-kpi-label, .stock-kpi-meta, .stock-kpi-value) {
+    color: var(--theme-warning-text, #92400e);
+}
+.stock-issues-page .stock-kpi-card--success {
+    border-color: rgba(22, 163, 74, 0.3);
+    background: var(--theme-success-surface, #f0fdf4);
+}
+.stock-issues-page .stock-kpi-card--success :is(.stock-kpi-label, .stock-kpi-meta, .stock-kpi-value) {
+    color: var(--theme-success-text, #166534);
+}
+.stock-issues-page .stock-kpi-label {
+    font-size: .8125rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .025em;
+}
+.stock-issues-page .stock-kpi-value {
+    font-size: clamp(1.35rem, 2vw, 1.7rem);
+    font-weight: 700;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+}
+.stock-issues-page .stock-kpi-meta {
+    font-size: .8125rem;
+    color: var(--muted);
+}
+
+/* Quick Status Filter Pills */
+.stock-issues-page .stock-status-pills {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.stock-issues-page .stock-status-pill {
+    min-height: 44px;
+    padding: .5rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--muted);
+    font-size: .875rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    transition: all 150ms ease;
+}
+.stock-issues-page .stock-status-pill:hover {
+    border-color: var(--primary);
+    color: var(--text);
+}
+.stock-issues-page .stock-status-pill.is-active {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+.stock-issues-page .stock-status-pill .pill-badge {
+    font-size: .75rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 9999px;
+    background: var(--surface-soft);
+    color: var(--text);
+}
+.stock-issues-page .stock-status-pill.is-active .pill-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* Enhanced Status Badges */
+.stock-issues-page .adjustment-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    padding: .25rem .625rem;
+    border-radius: 9999px;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+.stock-issues-page .adjustment-status.pending {
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+    border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.stock-issues-page .adjustment-status.approved {
+    background: var(--theme-success-surface, #dcfce7);
+    color: var(--theme-success-text, #166534);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.stock-issues-page .adjustment-status.rejected {
+    background: var(--theme-danger-surface, #fee2e2);
+    color: var(--theme-danger-text, #991b1b);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+}
+.stock-issues-page .adjustment-status.returned {
+    background: var(--theme-info-surface, #e0f2fe);
+    color: var(--theme-info-text, #0369a1);
+    border: 1px solid rgba(2, 132, 199, 0.25);
+}
+
+/* Category Badges */
+.stock-issues-page .category-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .55rem;
+    border-radius: 6px;
+    font-size: .8125rem;
+    font-weight: 500;
+}
+.stock-issues-page .category-tag.damaged { background: #fee2e2; color: #991b1b; }
+.stock-issues-page .category-tag.expired { background: #fef3c7; color: #92400e; }
+.stock-issues-page .category-tag.missing { background: #ede9fe; color: #5b21b6; }
+.stock-issues-page .category-tag.other { background: var(--surface-soft); color: var(--muted); border: 1px solid var(--border); }
+
+/* Table Enhancements */
+.stock-issues-page tbody tr:hover {
+    background: var(--surface-soft);
+}
+.stock-issues-page td.cell-qty {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.stock-issues-page .sku-code {
+    display: inline-block;
+    padding: .1rem .35rem;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: .75rem;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Audit Detail Section Enhancements */
+.stock-issues-page .detail-hero-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 1rem 0;
+}
+.stock-issues-page .detail-metric-card {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+}
+.stock-issues-page .detail-metric-label {
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .025em;
+    color: var(--muted);
+}
+.stock-issues-page .detail-metric-value {
+    font-size: .9375rem;
+    font-weight: 600;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.stock-issues-page .detail-reason-box {
+    padding: .875rem 1rem;
+    border-radius: 8px;
+    background: var(--surface-soft);
+    border-left: 4px solid var(--primary);
+    margin: .75rem 0;
+    font-size: .9rem;
+    line-height: 1.5;
+}
+.stock-issues-page .detail-reason-box--decision {
+    border-left-color: var(--theme-action, #2563eb);
+    background: color-mix(in srgb, var(--primary) 5%, var(--card-bg));
+}
+
+@media(max-width:900px) {
+    .stock-issues-page .stock-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media(max-width:640px) {
+    .stock-issues-page .stock-kpi-grid { grid-template-columns: minmax(0, 1fr); }
+    .stock-issues-page .stock-status-pills { overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
     .stock-issues-page .adjustment-card { padding:1rem; }
     .stock-issues-page .review-actions { display:grid; grid-template-columns:1fr; }
-    .stock-issues-page .review-actions button { width:100%; }
+    .stock-issues-page .review-actions :is(button, .btn) { width:100%; }
     .stock-issues-page .issue-history > summary h2 { font-size:1rem; }
 }

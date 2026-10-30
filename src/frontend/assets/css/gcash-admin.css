@@ -58,9 +58,10 @@
 #gcash-admin-workspace #gcash-outstanding-reviews .btn { justify-content: space-between; text-align: left; padding: .875rem 1rem; line-height: 1.4; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); font-weight: 600; height: 100%; }
 #gcash-admin-workspace #gcash-outstanding-reviews .btn:hover { border-color: var(--primary); background: var(--theme-info-surface, #eff6ff); }
 #gcash-outstanding-reviews .btn i { color: var(--primary); margin-left: .75rem; }
-#gcash-admin-workspace #gcash-reporting-scope { background: var(--theme-surface-soft, #f8fafc); padding: 1rem 1.25rem; }
-#gcash-admin-workspace #tab-overview #gcash-reporting-scope { border-bottom: 0; border-radius: 14px 14px 0 0; }
-#gcash-admin-workspace #tab-overview #gcash-completed-activity { margin-top: -1rem; border-top: 1px solid var(--border); border-radius: 0 0 14px 14px; }
+#gcash-admin-workspace .gcash-transaction-filters { display: grid; gap: .75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
+#gcash-admin-workspace .gcash-unified-filter-form { display: grid; gap: .75rem; }
+#gcash-admin-workspace .gcash-filter-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; }
+#gcash-admin-workspace .gcash-filter-scope-row { display: grid; grid-template-columns: minmax(130px, .8fr) repeat(2, minmax(135px, 1fr)) minmax(160px, 1.15fr) auto; align-items: end; gap: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
 #gcash-admin-workspace .gcash-filter-bar { display: grid; grid-template-columns: minmax(130px, .8fr) repeat(2, minmax(135px, 1fr)) minmax(160px, 1.15fr) auto; align-items: end; gap: .75rem; }
 #gcash-admin-workspace .gcash-filter-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 #gcash-admin-workspace .gcash-filter-label, #gcash-admin-workspace .gcash-money-filters label, #gcash-admin-workspace dialog label { font-size: .8125rem; color: var(--muted); font-weight: 600; }
@@ -73,7 +74,7 @@
 #gcash-admin-workspace .gcash-total-badge { background: var(--theme-success-surface, #f0fdf4); color: var(--theme-success-text, #15803d); border-color: rgb(22 163 74 / .25); }
 #gcash-transaction-filters { display: grid; gap: .75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
 #gcash-admin-workspace #gcash-transaction-filters #gcash-reporting-scope { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
-.gcash-transaction-local-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+.gcash-transaction-local-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; }
 .gcash-type-pills { display: flex; flex-wrap: wrap; gap: .375rem; }
 #gcash-admin-workspace .gcash-type-pills .btn { background: var(--card-bg, #fff); padding-inline: .875rem; }
 #gcash-admin-workspace .gcash-type-pills [aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
@@ -149,7 +150,7 @@
     #tab-overview { grid-template-columns: minmax(0, 1fr); }
     #gcash-outstanding-reviews { grid-column: 1; grid-row: auto; }
     #gcash-outstanding-reviews .gcash-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    #gcash-admin-workspace .gcash-filter-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 767px) {
     #gcash-admin-workspace .topbar { flex-direction: column; align-items: stretch; gap: .625rem; margin-bottom: .75rem; }
@@ -158,14 +159,14 @@
     #gcash-admin-workspace .gcash-section-nav { display: flex; overflow-x: auto; padding: .25rem; margin-bottom: .75rem; }
     .gcash-section-nav button { display: inline-flex; justify-content: flex-start; text-align: left; font-size: .875rem; gap: .5rem; padding: .5rem .75rem; white-space: nowrap; }
     #gcash-admin-workspace .gcash-overview-section, #gcash-admin-workspace #gcash-reporting-scope { padding: 1rem; }
-    #gcash-admin-workspace .gcash-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
-    #gcash-admin-workspace .gcash-filter-bar > .gcash-filter-actions { grid-column: 1 / -1; }
-    #gcash-admin-workspace .gcash-filter-bar .gcash-field, #gcash-admin-workspace .gcash-filter-bar .gcash-actions { width: auto !important; }
+    #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
+    #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) > .gcash-filter-actions { grid-column: 1 / -1; }
+    #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) .gcash-field, #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) .gcash-actions { width: auto !important; }
     #gcash-admin-workspace .form-control, #gcash-admin-workspace .pos-input { font-size: 1rem; padding: .5rem .625rem; }
     #gcash-admin-workspace .gcash-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #gcash-admin-workspace .gcash-metrics-grid .gcash-card { padding: .875rem; }
-    #gcash-transaction-filters { padding: .75rem; gap: .625rem; margin-bottom: .75rem; }
-    .gcash-transaction-local-filters { grid-template-columns: minmax(0, 1fr); gap: .625rem; padding-top: .625rem; }
+    #gcash-transaction-filters, #gcash-admin-workspace .gcash-transaction-filters { padding: .75rem; gap: .625rem; margin-bottom: .75rem; }
+    .gcash-transaction-local-filters, #gcash-admin-workspace .gcash-filter-search-row { grid-template-columns: minmax(0, 1fr); gap: .625rem; }
     #gcash-admin-workspace .gcash-table-wrap { max-height: none; }
     #gcash-admin-workspace .gcash-money-filters { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); justify-content: stretch; padding: .75rem; gap: .625rem; }
     #gcash-admin-workspace .gcash-money-filters .gcash-field { grid-column: 1 / -1; width: 100%; }

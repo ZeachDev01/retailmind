@@ -4,6 +4,19 @@
     gap: 1rem;
 }
 
+.registers-page .page-subheading {
+    color: var(--muted);
+    font-size: 0.92rem;
+    margin: 0.35rem 0 0;
+}
+
+.registers-page .form-hint {
+    display: block;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 0.35rem;
+}
+
 .registers-page .form-grid > .form-group { margin: 0; min-width: 0; }
 .registers-page .form-grid :is(input:not([type="hidden"]), select, .btn) { height: 46px; }
 .registers-page .data-table { min-width: 900px; table-layout: fixed; }
@@ -21,7 +34,7 @@
 .register-edit-toggle { display: inline-grid; place-items: center; width: 44px; height: 44px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
 .register-edit-toggle:hover, .register-edit-toggle:focus-visible { border-color: var(--border); background: var(--surface-soft); color: var(--text); }
 .register-identity .register-id { grid-column: 1 / -1; }
-.register-id { color: var(--muted); font-variant-numeric: tabular-nums; }
+.register-id { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.8rem; }
 .registers-page .inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; min-width: 0; }
 .registers-page .inline-form input:not([type="hidden"]),
 .registers-page .inline-form select {
@@ -41,9 +54,14 @@
 .register-rename-form { margin-top: .75rem; }
 .register-rename-form[hidden] { display: none; }
 .registers-page td:nth-child(3) .inline-form select { flex: 0 1 7rem; }
-.registers-page .data-table :is(.tag-success, .tag-warning) { white-space: normal; }
-.register-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.register-actions .inline-form { flex: 0 1 auto; }
+.registers-page .data-table :is(.tag-success, .tag-warning) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: normal;
+}
+.register-table-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.register-table-actions .inline-form { flex: 0 1 auto; }
 .registers-page .btn-danger {
     background: transparent;
     color: var(--theme-danger-text, var(--danger));
@@ -54,7 +72,7 @@
     background: var(--theme-danger-surface, var(--card-bg));
     border-color: currentColor;
 }
-.registers-page :is(input, select, .data-table-scroll):focus-visible {
+.registers-page :is(input, select, .btn, .register-edit-toggle, .data-table-scroll):focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
 }

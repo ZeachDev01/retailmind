@@ -26,6 +26,28 @@
 
 .backup-ready {
     background: var(--theme-success-surface, color-mix(in srgb, #16a34a 8%, #ffffff));
+    border-color: color-mix(in srgb, #16a34a 25%, var(--border)) !important;
+}
+
+.administrator-backup-page .backup-ready-details {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.85rem;
+}
+
+.administrator-backup-page .backup-ready-details p {
+    margin: 0;
+}
+
+.administrator-backup-page .backup-ready-details .backup-filename {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
 }
 
 .backup-hint {
@@ -49,7 +71,9 @@
 }
 
 .database-backup-page .card-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)) !important;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 /* Keep routine backup work ahead of the Administrator's recovery tools. */
@@ -60,23 +84,66 @@
 .administrator-backup-page .page-heading .section-description { margin-bottom: 0; }
 .administrator-backup-page .backup-history-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); font-size: .9375rem; text-underline-offset: 3px; }
 .administrator-backup-page .main-content .dashboard-section { padding: 1.5rem; margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: 14px; box-shadow: none; }
-.administrator-backup-page .main-content h2 { margin: 0; font-size: 1.0625rem; line-height: 1.4; }
+.administrator-backup-page .main-content h2 { margin: 0; font-size: 1.0625rem; line-height: 1.4; display: flex; align-items: center; gap: 0.5rem; }
 .administrator-backup-page .backup-create { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 2rem; }
 .administrator-backup-page .backup-create > div { min-width: 0; }
 .administrator-backup-page .backup-storage { padding-left: 2rem; border-left: 1px solid var(--border); }
-.administrator-backup-page .backup-storage h3 { margin: 0 0 .75rem; font-size: .9375rem; }
+.administrator-backup-page .backup-storage h3 { margin: 0 0 .75rem; font-size: .9375rem; display: flex; align-items: center; gap: 0.4rem; }
 .administrator-backup-page .backup-storage p { margin: .75rem 0 0; font-size: .9375rem; line-height: 1.6; color: var(--muted); max-width: 65ch; }
+.administrator-backup-page .backup-guidance-list { margin: .5rem 0 0; padding-left: 1.25rem; color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.administrator-backup-page .backup-guidance-list li + li { margin-top: .4rem; }
 .administrator-backup-page .backup-storage strong { color: var(--text); font-weight: 600; }
 .administrator-backup-page .backup-hint { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .administrator-backup-page .form-group { margin: 1rem 0; }
 .administrator-backup-page .form-group label { display: block; margin-bottom: .5rem; color: var(--text); font-size: .9375rem; font-weight: 600; }
 .administrator-backup-page .form-group p { margin: .5rem 0; }
-.administrator-backup-page input:is([type="password"], [type="file"]) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: .75rem .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg, #fff); color: var(--text); font: inherit; caret-color: var(--primary); }
-.administrator-backup-page .main-content .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .75rem 1rem; font-size: .9375rem; border-radius: 10px; }
+.administrator-backup-page input:is([type="password"], [type="text"], [type="file"]) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: .75rem .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg, #fff); color: var(--text); font: inherit; caret-color: var(--primary); }
+
+.password-toggle-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.password-toggle-wrapper input {
+    padding-right: 3rem !important;
+}
+.btn-toggle-password {
+    position: absolute;
+    right: 4px;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 8px;
+}
+.btn-toggle-password:hover,
+.btn-toggle-password:focus-visible {
+    color: var(--text);
+    background: var(--surface-soft, rgba(0, 0, 0, 0.04));
+}
+
+.administrator-backup-page .main-content .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; min-height: 44px; padding: .75rem 1rem; font-size: .9375rem; border-radius: 10px; }
 .administrator-backup-page .main-content :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .administrator-backup-page .main-content ::selection { background: var(--primary); color: #fff; }
 .administrator-backup-page .backup-filename { overflow-wrap: anywhere; white-space: normal; font-size: .875rem; line-height: 1.6; }
 .administrator-backup-page .backup-format { display: block; margin-top: .25rem; }
+.administrator-backup-page .sr-only,
+.administrator-backup-page caption.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .administrator-backup-page .backup-history { scroll-margin-top: 6rem; }
 .administrator-backup-page .backup-history .table-wrap { max-width: 100%; overflow-x: auto; scrollbar-color: var(--muted) transparent; }
 .administrator-backup-page .backup-history table { min-width: 760px; }
@@ -91,9 +158,10 @@
 .administrator-backup-page .backup-size { text-align: right; }
 .administrator-backup-page .backup-row-notes summary { display: list-item; padding: .5rem 0; min-height: 44px; box-sizing: border-box; color: var(--primary); cursor: pointer; }
 .administrator-backup-page .backup-row-notes p { margin: .25rem 0; max-width: 65ch; overflow-wrap: anywhere; white-space: normal; }
+.administrator-backup-page .backup-history .tag { display: inline-flex; align-items: center; gap: 0.35rem; }
 .administrator-backup-page .backup-recovery { scroll-margin-top: 6rem; }
 .administrator-backup-page .backup-recovery > summary { display: list-item; min-height: 44px; cursor: pointer; color: var(--primary); }
-.administrator-backup-page .backup-recovery-title { font-size: 1.0625rem; font-weight: 700; }
+.administrator-backup-page .backup-recovery-title { font-size: 1.0625rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; }
 .administrator-backup-page .backup-recovery > summary .backup-hint { display: block; margin-top: .5rem; }
 .administrator-backup-page .backup-recovery > .dashboard-section,
 .administrator-backup-page .restore-guidance { margin: 1.5rem 0 0; padding: 1.5rem 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }

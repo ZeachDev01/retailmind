@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
+require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 
@@ -75,6 +76,36 @@ foreach ($predictions as $row) {
     $exceptions[] = $row;
 }
 
+$searchQuery = trim($_GET['search'] ?? '');
+$reasonFilter = trim($_GET['reason'] ?? '');
+
+$availableReasons = [];
+foreach ($exceptions as $ex) {
+    foreach ($ex['exception_reasons'] as $r) {
+        $availableReasons[$r] = true;
+    }
+}
+$availableReasons = array_keys($availableReasons);
+sort($availableReasons);
+
+$filteredExceptions = $exceptions;
+if ($searchQuery !== '' || $reasonFilter !== '') {
+    $filteredExceptions = array_values(array_filter($exceptions, static function (array $row) use ($searchQuery, $reasonFilter): bool {
+        if ($searchQuery !== '') {
+            $term = mb_strtolower($searchQuery);
+            $sku = mb_strtolower((string)($row['sku'] ?? ''));
+            $name = mb_strtolower((string)($row['product_name'] ?? ''));
+            if (!str_contains($sku, $term) && !str_contains($name, $term)) {
+                return false;
+            }
+        }
+        if ($reasonFilter !== '' && !in_array($reasonFilter, $row['exception_reasons'] ?? [], true)) {
+            return false;
+        }
+        return true;
+    }));
+}
+
 $decisionStatement = $pdo->prepare("SELECT fd.*,p.sku,p.product_name,u.full_name decided_by_name
     FROM forecast_decisions fd JOIN products p ON p.product_id=fd.product_id LEFT JOIN users u ON u.user_id=fd.decided_by
     WHERE p.branch_id = ? ORDER BY fd.decided_at DESC LIMIT 30");
@@ -106,7 +137,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
             </div>
         </header>
 
-        <div class="card-grid">
+        <div class="card-grid" aria-label="Triage summary cards">
             <div class="stat-card">
                 <div class="value"><?= count($exceptions) ?></div>
                 <div class="label">Products needing review</div>
@@ -127,8 +158,31 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
 
         <section class="dashboard-section">
             <div class="section-header">
-                <h2>Exception queue (<?= count($exceptions) ?>)</h2>
+                <h2>Exception queue (<?= count($filteredExceptions) ?>)</h2>
             </div>
+
+            <form method="get" action="" class="search-form no-print" role="search" aria-label="Filter exception queue" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
+                <div>
+                    <label for="filter-search" class="u-text-muted" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Search</label>
+                    <input type="search" id="filter-search" name="search" value="<?= htmlspecialchars($searchQuery) ?>" placeholder="Product name or SKU" class="input-text" style="min-width:200px;">
+                </div>
+                <div>
+                    <label for="filter-reason" class="u-text-muted" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Reason</label>
+                    <select id="filter-reason" name="reason" class="input-select" style="min-width:180px;">
+                        <option value="">All reasons</option>
+                        <?php foreach ($availableReasons as $r): ?>
+                            <option value="<?= htmlspecialchars($r) ?>" <?= $reasonFilter === $r ? 'selected' : '' ?>><?= htmlspecialchars($r) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button type="submit" class="btn btn-secondary">Filter</button>
+                    <?php if ($searchQuery !== '' || $reasonFilter !== ''): ?>
+                        <a href="forecast_exceptions.php" class="btn btn-quiet">Clear</a>
+                    <?php endif; ?>
+                </div>
+            </form>
+
             <div class="table-wrap" role="region" aria-label="Forecast exceptions queue" tabindex="0">
                 <table>
                     <thead>
@@ -140,12 +194,16 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             <th scope="col">WAPE</th>
                             <th scope="col">Generated</th>
                             <th scope="col">Reasons</th>
+                            <th scope="col">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($exceptions as $row): ?>
+                        <?php foreach ($filteredExceptions as $row): ?>
                             <tr>
-                                <td><?= htmlspecialchars($row['sku'] . ' - ' . $row['product_name']) ?></td>
+                                <td>
+                                    <strong><?= htmlspecialchars($row['product_name']) ?></strong><br>
+                                    <span class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></span>
+                                </td>
                                 <td><?= (int)$row['predicted_demand_next_30_days'] ?></td>
                                 <td><?= (int)$row['units_30'] ?></td>
                                 <td><?= isset($row['confidence_score']) && $row['confidence_score'] !== null ? number_format((float)$row['confidence_score'] * 100, 0) . '%' : 'Unavailable' ?></td>
@@ -156,10 +214,13 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                                         <span class="reason"><?= htmlspecialchars($reason) ?></span>
                                     <?php endforeach; ?>
                                 </td>
+                                <td>
+                                    <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="Inspect forecast for <?= htmlspecialchars($row['product_name']) ?>">Inspect</a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$exceptions): ?>
-                            <tr><td colspan="7" class="u-text-muted">No current forecast exceptions.</td></tr>
+                        <?php if (!$filteredExceptions): ?>
+                            <tr><td colspan="8" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No current forecast exceptions.' ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -168,7 +229,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
 
         <section class="dashboard-section">
             <div class="section-header">
-                <h2>Recent forecast decisions</h2>
+                <h2>Recent forecast decisions (<?= count($decisions) ?>)</h2>
             </div>
             <div class="table-wrap" role="region" aria-label="Recent forecast decisions" tabindex="0">
                 <table>
@@ -187,7 +248,10 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                         <?php foreach ($decisions as $row): ?>
                             <tr>
                                 <td><?= htmlspecialchars($row['decided_at']) ?></td>
-                                <td><?= htmlspecialchars($row['sku'] . ' - ' . $row['product_name']) ?></td>
+                                <td>
+                                    <strong><?= htmlspecialchars($row['product_name']) ?></strong><br>
+                                    <span class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></span>
+                                </td>
                                 <td><?= htmlspecialchars(ucfirst($row['decision'])) ?></td>
                                 <td><?= (int)$row['original_suggested_qty'] ?></td>
                                 <td><?= (int)$row['final_quantity'] ?></td>
@@ -196,7 +260,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$decisions): ?>
-                            <tr><td colspan="7" class="u-text-muted">No forecast decisions recorded yet.</td></tr>
+                            <tr><td colspan="7" class="u-text-muted u-text-center">No forecast decisions recorded yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

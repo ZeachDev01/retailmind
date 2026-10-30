@@ -99,14 +99,13 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
             <header class="page-heading control-center-heading">
                 <div class="control-center-heading-copy">
                     <h1>Platform Control Center</h1>
-                    <p class="page-subtitle">Review platform issues and open the controls needed to resolve them.</p>
                 </div>
                 <div class="control-center-utilities">
                     <p class="dashboard-freshness">
                         <i class="bi bi-clock" aria-hidden="true"></i>
                         <span>Updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></span>
                     </p>
-                    <a class="btn btn-quiet btn-icon" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>" data-manual-refresh>
+                    <a class="btn btn-quiet btn-icon" id="dashboardRefreshBtn" title="Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?>" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>" data-manual-refresh data-dashboard-action>
                         <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
                     </a>
                 </div>
@@ -114,7 +113,7 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden>
                 <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                This view may be out of date. Updates resume automatically when this page is active and no action is in progress.
+                Refresh paused until you finish.
             </p>
 
             <?php if ($dashboard['state'] !== 'error'): ?>
@@ -124,17 +123,24 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                 </div>
                 <div class="risk-horizon-grid">
                     <article class="horizon-signal <?= $criticalAttentionCount > 0 ? 'is-critical' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><span>Critical</span></span><strong><?= $escape((string) $criticalAttentionCount) ?></strong><small><?= $criticalAttentionCount === 1 ? 'condition' : 'conditions' ?></small>
+                        <span class="horizon-label"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><span>Critical</span></span><strong><?= $escape((string) $criticalAttentionCount) ?></strong><small><?= $criticalAttentionCount === 0 ? 'All clear' : ($criticalAttentionCount === 1 ? 'Action required' : 'Actions required') ?></small>
                     </article>
                     <article class="horizon-signal <?= $warningAttentionCount > 0 ? 'needs-attention' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Warnings</span></span><strong><?= $escape((string) $warningAttentionCount) ?></strong><small><?= $warningAttentionCount === 1 ? 'condition' : 'conditions' ?></small>
+                        <span class="horizon-label"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Warnings</span></span><strong><?= $escape((string) $warningAttentionCount) ?></strong><small><?= $warningAttentionCount === 0 ? 'All clear' : ($warningAttentionCount === 1 ? 'Needs review' : 'Need review') ?></small>
                     </article>
-                    <?php $backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available']; ?>
+                    <?php
+                    $backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available'];
+                    $backupSubtext = match (true) {
+                        $backup['value'] === 'Not available' => 'No backup found',
+                        $backup['status'] === 'healthy' => 'Up to date',
+                        default => $backup['detail'] ?? 'Out of date',
+                    };
+                    ?>
                     <article class="horizon-signal <?= $escape($statusTone((string) $backup['status'])) ?>">
-                        <span class="horizon-label"><i class="bi bi-database-check" aria-hidden="true"></i><span>Latest successful backup</span></span><strong class="horizon-date"><?= $escape($backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string) $backup['value'])) ?></strong><small><?= $escape($statusLabel((string) $backup['status'])) ?> · <?= $escape($backup['detail'] ?? '') ?></small>
+                        <span class="horizon-label"><i class="bi bi-database-check" aria-hidden="true"></i><span>Latest successful backup</span></span><strong class="horizon-date"><?= $escape($backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string) $backup['value'])) ?></strong><small><?= $escape($backupSubtext) ?></small>
                     </article>
                     <article class="horizon-signal <?= $privilegedActionCount > 0 ? 'needs-attention' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-person-lock" aria-hidden="true"></i><span>Recovery access</span></span><strong><?= $escape((string) $privilegedActionCount) ?></strong><small><?= $privilegedActionCount === 1 ? 'action needed' : 'actions needed' ?></small>
+                        <span class="horizon-label"><i class="bi bi-person-lock" aria-hidden="true"></i><span>Recovery access</span></span><strong><?= $escape((string) $privilegedActionCount) ?></strong><small><?= $privilegedActionCount === 0 ? 'Secured' : ($privilegedActionCount === 1 ? 'Action needed' : 'Actions needed') ?></small>
                     </article>
                 </div>
             </section>
@@ -142,9 +148,9 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
 
             <section class="issue-queue" aria-labelledby="platform-attention-title">
                 <div class="workspace-section-heading">
-                    <div><h2 id="platform-attention-title">Issue queue</h2><p>Most urgent first. After resolving an issue, return and refresh to check its status.</p></div>
+                    <div><h2 id="platform-attention-title">Issue queue</h2></div>
                     <?php if ($dashboard['state'] !== 'error'): ?>
-                        <span class="priority-label"><?= $escape((string) count($attentionItems)) ?> open</span>
+                        <span class="priority-label"><?= count($attentionItems) > 0 ? $escape((string) count($attentionItems)) . ' open' : 'All clear' ?></span>
                     <?php endif; ?>
                 </div>
 
@@ -160,15 +166,20 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                         <div><strong>No platform action required</strong><p><?= $escape($dashboard['message']) ?></p></div>
                     </div>
                 <?php else: ?>
-                    <div class="triage-list" aria-label="Open platform issues">
+                    <div class="triage-list" role="list" aria-label="Open platform issues">
                         <?php foreach ($attentionItems as $item): ?>
                             <?php
                             $categoryLabel = $attentionCategoryLabels[$item['category']] ?? ucfirst(str_replace('_', ' ', $item['category']));
-                            $actionLabel = $attentionActionLabels[$item['category']] ?? 'Open details';
+                            $actionLabel = $attentionActionLabels[$item['category']] ?? 'Review';
+                            $severityIcon = match ($item['severity'] ?? '') {
+                                'critical' => 'bi-exclamation-octagon',
+                                'info' => 'bi-info-circle',
+                                default => 'bi-exclamation-triangle',
+                            };
                             ?>
                             <a class="triage-item attention-<?= $escape($item['severity']) ?>"
                                 href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>
-                                <span class="triage-severity" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
+                                <span class="triage-severity" aria-hidden="true"><i class="bi <?= $severityIcon ?>" aria-hidden="true"></i></span>
                                 <span class="triage-copy"><span><?= $escape(ucfirst($item['severity'])) ?> · <?= $escape($categoryLabel) ?></span><strong><?= $escape($item['title']) ?></strong></span>
                                 <span class="triage-action"><?= $escape($actionLabel) ?></span>
                                 <i class="bi bi-chevron-right triage-arrow" aria-hidden="true"></i>
@@ -182,22 +193,31 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                 <section class="readiness-ledger" aria-labelledby="readiness-title">
                     <div class="workspace-section-heading readiness-heading">
                         <div><h2 id="readiness-title">System status</h2></div>
-                        <span class="ledger-summary"><?= $escape((string) $continuityIssueCount) ?> store <?= $continuityIssueCount === 1 ? 'check needs' : 'checks need' ?> review</span>
+                        <span class="ledger-summary">Store continuity: <?= $continuityIssueCount === 0 ? 'Nominal' : $escape((string) $continuityIssueCount) . ' need review' ?></span>
                     </div>
                     <div class="ledger-grid">
                         <?php foreach (['platform_health', 'ml_health'] as $key): ?>
                             <?php
                             [$label, $icon] = $headlineOrder[$key];
                             $item = $dashboard['headline'][$key];
+                            $detail = ($item['status'] ?? '') === 'healthy' ? 'All checks nominal' : ($item['detail'] ?? 'Attention required');
                             ?>
                             <article class="ledger-item <?= $escape($statusTone((string) $item['status'])) ?>">
-                                <i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i><div><span><?= $escape($label) ?></span><strong><?= $escape($item['value']) ?></strong><small><?= $escape($item['detail']) ?></small></div><em><?= $escape($statusLabel((string) $item['status'])) ?></em>
+                                <i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i><div><span><?= $escape($label) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($detail) ?></small></div>
                             </article>
                         <?php endforeach; ?>
                         <?php foreach ($accessOrder as $accessKey => $accessLabel): ?>
-                            <?php $item = $dashboard['access'][$accessKey]; ?>
+                            <?php
+                            $item = $dashboard['access'][$accessKey];
+                            $accessDetail = match ($item['status'] ?? '') {
+                                'sealed' => !empty($item['last_used_at']) ? 'Last used ' . $formatDate($item['last_used_at']) : 'Tamper seal intact',
+                                'unsealed' => 'Active — review audit log',
+                                'not_configured' => 'Configuration needed',
+                                default => $item['detail'] ?? '',
+                            };
+                            ?>
                             <a class="ledger-item ledger-link <?= $escape($statusTone((string) $item['status'])) ?>" href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>
-                                <i class="bi bi-person-lock" aria-hidden="true"></i><div><span><?= $escape($accessLabel) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($item['detail']) ?></small></div><i class="bi bi-arrow-up-right" aria-hidden="true"></i>
+                                <i class="bi bi-person-lock" aria-hidden="true"></i><div><span><?= $escape($accessLabel) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($accessDetail) ?></small></div><i class="bi bi-arrow-up-right" aria-hidden="true"></i>
                             </a>
                         <?php endforeach; ?>
                     </div>

@@ -8,7 +8,8 @@
 .database-restore-page .recovery-standalone { max-width: 44rem; margin: 4rem auto; padding: 1.5rem; }
 .database-restore-page .recovery-standalone-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .75rem 1rem; margin-top: 1.25rem; }
 .database-restore-page .recovery-standalone-link { display: inline-flex; align-items: center; min-height: 44px; padding: .4rem .5rem; color: var(--primary-dark); font-weight: 600; text-underline-offset: 3px; }
-.database-restore-page .recovery-heading { align-items: flex-end; margin: .5rem 0 1.5rem; gap: .8rem; }
+.database-restore-page .recovery-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: .5rem 0 1.5rem; gap: .8rem; }
+.database-restore-page .recovery-heading-actions { display: inline-flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .database-restore-page .recovery-heading h1 { color: var(--recovery-ink); font-size: clamp(1.4rem, 2vw, 1.8rem); letter-spacing: -.03em; }
 .database-restore-page .recovery-history-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary-dark); font-size: 1rem; font-weight: 600; text-underline-offset: 4px; padding: .4rem 0; }
 .database-restore-page .recovery-workspace { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 1.5rem; align-items: start; margin-bottom: 2rem; }
@@ -106,7 +107,8 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
     .database-restore-page .recovery-workspace { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-    .database-restore-page .recovery-heading { align-items: flex-start; flex-direction: column; gap: .25rem; margin-bottom: 1rem; }
+    .database-restore-page .recovery-heading { align-items: flex-start; flex-direction: column; gap: .5rem; margin-bottom: 1rem; }
+    .database-restore-page .recovery-heading-actions { width: 100%; justify-content: flex-start; gap: .5rem; }
     .database-restore-page .main-content .dashboard-section { padding: 1.1rem; }
     .database-restore-page .main-content .backup-history { padding: 0; }
     .database-restore-page .backup-history > .recovery-panel-heading { padding: 1.1rem; }

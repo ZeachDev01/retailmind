@@ -87,39 +87,76 @@ $allRegisters = $registers->all();
         <header class="page-heading">
             <div>
                 <h1>Registers</h1>
+                <p class="page-subheading">Manage points of sale, receipt widths, and shift availability.</p>
             </div>
         </header>
 
         <?php if ($message): ?><div id="register-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
 
+        <?php
+        $activeCount = 0;
+        $disabledCount = 0;
+        foreach ($allRegisters as $reg) {
+            if (($reg['status'] ?? '') === RegisterService::STATUS_ACTIVE) {
+                $activeCount++;
+            } else {
+                $disabledCount++;
+            }
+        }
+        ?>
+        <div class="card-grid" style="margin-bottom: 1.5rem;">
+            <article class="stat-card with-icon">
+                <span class="stat-icon"><i class="bi bi-hdd-network" aria-hidden="true"></i></span>
+                <div class="label">Total Registers</div>
+                <div class="value"><?= count($allRegisters) ?></div>
+                <div class="hint">Configured tills</div>
+            </article>
+            <article class="stat-card with-icon status-healthy">
+                <span class="stat-icon"><i class="bi bi-check-circle" aria-hidden="true"></i></span>
+                <div class="label">Available Registers</div>
+                <div class="value"><?= $activeCount ?></div>
+                <div class="hint">Open for shifts</div>
+            </article>
+            <article class="stat-card with-icon <?= $disabledCount > 0 ? 'status-warning' : '' ?>">
+                <span class="stat-icon"><i class="bi bi-pause-circle" aria-hidden="true"></i></span>
+                <div class="label">Disabled Registers</div>
+                <div class="value"><?= $disabledCount ?></div>
+                <div class="hint">Blocked from shifts</div>
+            </article>
+        </div>
+
         <section class="dashboard-section" aria-labelledby="add-register-heading">
-            <h2 id="add-register-heading">Add a Register</h2>
+            <h2 id="add-register-heading"><i class="bi bi-plus-circle" aria-hidden="true"></i> Add a Register</h2>
             <form method="post" class="form-grid">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
                 <div class="form-group">
                     <label for="register-name">Register name</label>
-                    <input id="register-name" type="text" name="name" maxlength="100" placeholder="Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
+                    <input id="register-name" type="text" name="name" maxlength="100" placeholder="e.g. Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
                 </div>
                 <div class="form-group">
                     <label for="register-paper-width">Receipt paper width</label>
                     <select id="register-paper-width" name="paper_width_mm" required>
-                        <option value="80" <?= $failedAction !== 'create' || $submittedPaperWidth !== '58' ? 'selected' : '' ?>>80 mm</option>
-                        <option value="58" <?= $failedAction === 'create' && $submittedPaperWidth === '58' ? 'selected' : '' ?>>58 mm</option>
+                        <option value="80" <?= $failedAction !== 'create' || $submittedPaperWidth !== '58' ? 'selected' : '' ?>>80 mm (Standard POS roll)</option>
+                        <option value="58" <?= $failedAction === 'create' && $submittedPaperWidth === '58' ? 'selected' : '' ?>>58 mm (Compact roll)</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <button class="btn" type="submit">Create Register</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create Register</button>
                 </div>
             </form>
         </section>
 
         <section class="dashboard-section" aria-labelledby="store-registers-heading">
-            <h2 id="store-registers-heading">Store Registers <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
-            <p class="section-description">Disabling a Register blocks new Shifts on it while preserving existing open Shifts until normal closure.</p>
+            <h2 id="store-registers-heading"><i class="bi bi-hdd-network" aria-hidden="true"></i> Store Registers <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
+            <p class="section-description">Disabling blocks new Shifts while preserving existing open Shifts.</p>
 
             <?php if ($allRegisters === []): ?>
-                <p class="section-description">No Registers yet. Create one above so Cashier Shifts have a till to anchor to.</p>
+                <div class="empty-state">
+                    <i class="bi bi-hdd-network" aria-hidden="true"></i>
+                    <strong>No Registers Configured</strong>
+                    <p class="section-description">Add a register above to enable cashier shifts.</p>
+                </div>
             <?php else: ?>
                 <div class="data-table-shell">
                     <div class="data-table-scroll" tabindex="0" role="region" aria-labelledby="store-registers-heading">
@@ -142,7 +179,7 @@ $allRegisters = $registers->all();
                             <td class="register-name-cell">
                                 <div class="register-identity">
                                     <strong><?= htmlspecialchars($register['name']) ?></strong>
-                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="<?= $renameFailed ? 'true' : 'false' ?>" aria-controls="rename-form-<?= (int)$register['register_id'] ?>">
+                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="<?= $renameFailed ? 'true' : 'false' ?>" aria-controls="rename-form-<?= (int)$register['register_id'] ?>" title="Rename register">
                                         <i class="bi bi-pencil" aria-hidden="true"></i>
                                     </button>
                                     <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
@@ -153,13 +190,14 @@ $allRegisters = $registers->all();
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
                                     <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($renameFailed ? $submittedName : $register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" <?= $renameFailed ? 'aria-describedby="register-feedback"' : '' ?> required>
                                     <button class="btn btn-secondary" type="submit" aria-label="Rename <?= htmlspecialchars($register['name']) ?>">Rename</button>
+                                    <button class="btn btn-quiet register-rename-cancel" type="button" aria-label="Cancel rename" data-cancel-for="rename-form-<?= (int)$register['register_id'] ?>">Cancel</button>
                                 </form>
                             </td>
                             <td>
                                 <?php if ($isActive): ?>
-                                    <span class="tag-success">Available for new shifts</span>
+                                    <span class="tag-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Available for new shifts</span>
                                 <?php else: ?>
-                                    <span class="tag-warning">Disabled<?= $register['disabled_at'] !== null ? ' since ' . htmlspecialchars(format_display_date($register['disabled_at'])) : '' ?></span>
+                                    <span class="tag-warning"><i class="bi bi-dash-circle" aria-hidden="true"></i> Disabled<?= $register['disabled_at'] !== null ? ' since ' . htmlspecialchars(format_display_date($register['disabled_at'])) : '' ?></span>
                                 <?php endif; ?>
                             </td>
                             <td>
@@ -171,23 +209,23 @@ $allRegisters = $registers->all();
                                         <option value="80" <?= $register['paper_width_mm'] === 80 ? 'selected' : '' ?>>80 mm</option>
                                         <option value="58" <?= $register['paper_width_mm'] === 58 ? 'selected' : '' ?>>58 mm</option>
                                     </select>
-                                    <button class="btn btn-secondary" type="submit" aria-label="Save width for <?= htmlspecialchars($register['name']) ?>">Save width</button>
+                                    <button class="btn btn-secondary" type="submit" aria-label="Save width for <?= htmlspecialchars($register['name']) ?>"><i class="bi bi-check2" aria-hidden="true"></i> Save width</button>
                                 </form>
                             </td>
                             <td>
-                                <div class="register-actions">
+                                <div class="register-table-actions">
                                 <form method="post" class="inline-form">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="set_status">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
                                     <input type="hidden" name="status" value="<?= $isActive ? RegisterService::STATUS_DISABLED : RegisterService::STATUS_ACTIVE ?>">
-                                    <button class="btn btn-secondary" type="submit" aria-label="<?= $isActive ? 'Disable' : 'Enable' ?> <?= htmlspecialchars($register['name']) ?>"><?= $isActive ? 'Disable' : 'Enable' ?></button>
+                                    <button class="btn btn-secondary" type="submit" aria-label="<?= $isActive ? 'Disable' : 'Enable' ?> <?= htmlspecialchars($register['name']) ?>"><i class="bi <?= $isActive ? 'bi-pause-circle' : 'bi-play-circle' ?>" aria-hidden="true"></i> <?= $isActive ? 'Disable' : 'Enable' ?></button>
                                 </form>
                                 <form method="post" class="inline-form" data-confirm="<?= htmlspecialchars('Permanently delete Register “' . $register['name'] . '”? This cannot be undone.') ?>" data-confirm-title="Delete Register" data-confirm-button="Delete Register" data-confirm-danger="1">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <button class="btn btn-danger" type="submit" aria-label="Delete <?= htmlspecialchars($register['name']) ?>">Delete</button>
+                                    <button class="btn btn-danger" type="submit" aria-label="Delete <?= htmlspecialchars($register['name']) ?>"><i class="bi bi-trash" aria-hidden="true"></i> Delete</button>
                                 </form>
                                 </div>
                             </td>
@@ -208,8 +246,38 @@ document.querySelectorAll('.register-edit-toggle').forEach(button => {
         const open = form.hidden;
         form.hidden = !open;
         button.setAttribute('aria-expanded', String(open));
-        if (open) form.querySelector('input[name="name"]').focus();
+        if (open) {
+            const input = form.querySelector('input[name="name"]');
+            input.focus();
+            input.select();
+        }
     });
+});
+document.querySelectorAll('.register-rename-cancel').forEach(button => {
+    button.addEventListener('click', () => {
+        const formId = button.getAttribute('data-cancel-for');
+        const form = document.getElementById(formId);
+        if (form) {
+            form.hidden = true;
+            const toggle = document.querySelector(`[aria-controls="${formId}"]`);
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.focus();
+            }
+        }
+    });
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        document.querySelectorAll('.register-rename-form:not([hidden])').forEach(form => {
+            form.hidden = true;
+            const toggle = document.querySelector(`[aria-controls="${form.id}"]`);
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.focus();
+            }
+        });
+    }
 });
 </script>
 </body>

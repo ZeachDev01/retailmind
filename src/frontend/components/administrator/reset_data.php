@@ -75,14 +75,20 @@ $recordGroups = [
 </head><body><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content reset-page">
-<header class="reset-heading"><h1>Reset Data</h1></header>
+<header class="reset-heading">
+    <h1>Reset Data</h1>
+    <p class="reset-note">Operational data purging and catalog cleanup with automated safeguards.</p>
+</header>
 <?php if ($message): ?><p class="alert tag-success" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($message) ?></p><?php endif; ?>
 <?php if ($error): ?><p class="alert tag-warning alert-danger" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></p><?php endif; ?>
 <section class="reset-panel reset-product" aria-labelledby="product-title">
     <div class="reset-product-intro">
         <h2 id="product-title">Delete one product</h2>
-        <ul class="reset-outcomes"><li><strong>No stock or history:</strong> permanently deleted with its product promotions.</li><li><strong>Has stock or history:</strong> made inactive; stock and records kept.</li></ul>
-        <p id="delete-product-warning" class="reset-note reset-product-warning"><strong>No automatic backup or recovery from this page.</strong></p>
+        <ul class="reset-outcomes">
+            <li><strong>No history:</strong> Permanently deleted.</li>
+            <li><strong>With history:</strong> Archived as inactive; records preserved.</li>
+        </ul>
+        <p id="delete-product-warning" class="reset-note reset-product-warning" role="alert"><strong>Cannot be undone:</strong> Individual items have no automatic backup.</p>
     </div>
     <form method="post" class="reset-product-form" aria-labelledby="product-title" aria-describedby="delete-product-warning">
         <?= csrf_field() ?>
@@ -92,16 +98,16 @@ $recordGroups = [
         <?php if (!$products): ?><p id="delete-product-empty" class="reset-note">No products to delete.</p><?php endif; ?>
         <div class="reset-fields">
             <div class="form-group"><label for="delete-password">Current password</label><input type="password" id="delete-password" name="current_password" autocomplete="current-password" required></div>
-            <div class="form-group"><label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong> to confirm</label><input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required></div>
+            <div class="form-group"><label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong> to confirm</label><input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" placeholder="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required></div>
         </div>
         <button type="submit" class="btn btn-danger reset-delete" <?= !$products ? 'disabled' : '' ?>>Delete selected product</button>
     </form>
 </section>
-<?php if ($backupToken): ?><section class="reset-panel reset-backup" aria-labelledby="backup-title"><h2 id="backup-title">Pre-reset encrypted backup</h2><a class="btn" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>" download>Download pre-reset backup</a></section><?php endif; ?>
-<details id="store-reset" class="reset-panel reset-store" <?= $error && ($_POST['action'] ?? '') !== 'delete_product' ? 'open' : '' ?>>
+<?php if ($backupToken): ?><section class="reset-panel reset-backup" aria-labelledby="backup-title"><div><h2 id="backup-title">Pre-reset encrypted backup</h2><p class="reset-note">Download this encrypted backup snapshot and store it off-server.</p></div><a class="btn" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>" download>Download pre-reset backup</a></section><?php endif; ?>
+<details id="store-reset" class="reset-panel reset-store" <?= $error && ($_POST['action'] ?? '') !== 'delete_product' ? 'open' : '' ?> aria-labelledby="store-title">
     <summary class="reset-section-heading"><span><span id="store-title" class="reset-section-title">Reset the whole Store</span><?php if ($blockers): ?><span class="reset-blocked">Reset unavailable. <?= htmlspecialchars(implode(' ', $blockers)) ?></span><?php endif; ?></span><span class="reset-review-link">Review reset <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></summary>
     <div class="reset-store-body">
-    <div class="reset-warning"><strong>Deletes all products, sales, inventory, and forecasting data, including receipts, refunds, reversals, and the trained model.</strong><p>Database recovery requires a Super Administrator to restore a backup.</p></div>
+    <div id="store-warning-desc" class="reset-warning" role="alert"><strong>Irreversible action:</strong> Deletes all products, sales, inventory, and forecasting models.<p>Database recovery requires a Super Administrator backup restoration.</p></div>
     <div class="reset-layout">
         <div class="reset-review">
             <h3>Records to delete</h3>
@@ -112,24 +118,24 @@ $recordGroups = [
                 </details>
                 <?php endforeach; ?>
             </div>
-            <div class="reset-preserved"><h3>What stays unchanged</h3><ul><li>Categories and store-wide or category promotions</li><li>Users, roles, registers, and settings</li><li>Fiscal Periods and Protected Audit Records</li></ul></div>
+            <div class="reset-preserved"><h3>Preserved system data</h3><ul><li>Categories and store-wide promotions</li><li>User accounts, roles, registers, and settings</li><li>Fiscal periods and protected audit records</li></ul></div>
         </div>
         <div class="reset-confirm">
             <h3>Before you reset</h3>
             <ul class="reset-preflight">
-                <li>An encrypted backup must succeed before reset. Download it afterward and keep its separate passphrase off-server. Losing every copy makes the package unusable.</li>
-                <li>Other users are signed out; old carts and previews become invalid.</li>
-                <li>Add products, stock, and sales history before retraining forecasts.</li>
+                <li><strong>Encrypted backup:</strong> Generated automatically; store passphrase off-server.</li>
+                <li><strong>Active sessions:</strong> Users signed out immediately; active carts invalidated.</li>
+                <li><strong>Forecasting:</strong> Prediction models reset until new sales history is recorded.</li>
             </ul>
             <div class="reset-confirmation">
-                <h3>Confirm reset</h3>
+                <h3 id="store-confirm-title">Confirm reset</h3>
                 <?php if ($blockers): ?><div class="alert tag-warning" role="alert" data-rm-alert-processed="1"><strong>Reset unavailable</strong><ul><?php foreach ($blockers as $blocker): ?><li><?= htmlspecialchars($blocker) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
-                <form method="post">
+                <form method="post" aria-labelledby="store-confirm-title" aria-describedby="store-warning-desc">
                     <?= csrf_field() ?>
                     <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
                     <div class="form-group"><label for="reset-password">Current password</label><input type="password" id="reset-password" name="current_password" autocomplete="current-password" required></div>
-                    <div class="form-group"><label for="reset-backup-passphrase">New backup passphrase</label><input type="password" id="reset-backup-passphrase" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" required></div>
-                    <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong> to confirm</label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
+                    <div class="form-group"><label for="reset-backup-passphrase">New backup passphrase</label><input type="password" id="reset-backup-passphrase" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" aria-describedby="reset-passphrase-hint" required><span id="reset-passphrase-hint" class="reset-hint">Minimum 16 characters for backup encryption.</span></div>
+                    <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong> to confirm</label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" placeholder="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
                     <button type="submit" class="btn btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
                 </form>
             </div>
