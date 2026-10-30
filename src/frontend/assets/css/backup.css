@@ -51,3 +51,65 @@
 .database-backup-page .card-grid {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)) !important;
 }
+
+/* Keep routine backup work ahead of the Administrator's recovery tools. */
+.administrator-backup-page .main-content { min-width: 0; }
+.administrator-backup-page .page-heading { align-items: center; gap: 1rem; }
+.administrator-backup-page .page-heading h1 { font-size: 1.75rem; letter-spacing: -.025em; }
+.administrator-backup-page .section-description { margin: .5rem 0 1.25rem; color: var(--muted); font-size: .9375rem; line-height: 1.6; max-width: 70ch; }
+.administrator-backup-page .page-heading .section-description { margin-bottom: 0; }
+.administrator-backup-page .backup-history-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); font-size: .9375rem; text-underline-offset: 3px; }
+.administrator-backup-page .main-content .dashboard-section { padding: 1.5rem; margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: 14px; box-shadow: none; }
+.administrator-backup-page .main-content h2 { margin: 0; font-size: 1.0625rem; line-height: 1.4; }
+.administrator-backup-page .backup-create { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 2rem; }
+.administrator-backup-page .backup-create > div { min-width: 0; }
+.administrator-backup-page .backup-storage { padding-left: 2rem; border-left: 1px solid var(--border); }
+.administrator-backup-page .backup-storage h3 { margin: 0 0 .75rem; font-size: .9375rem; }
+.administrator-backup-page .backup-storage p { margin: .75rem 0 0; font-size: .9375rem; line-height: 1.6; color: var(--muted); max-width: 65ch; }
+.administrator-backup-page .backup-storage strong { color: var(--text); font-weight: 600; }
+.administrator-backup-page .backup-hint { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.administrator-backup-page .form-group { margin: 1rem 0; }
+.administrator-backup-page .form-group label { display: block; margin-bottom: .5rem; color: var(--text); font-size: .9375rem; font-weight: 600; }
+.administrator-backup-page .form-group p { margin: .5rem 0; }
+.administrator-backup-page input:is([type="password"], [type="file"]) { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: .75rem .9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg, #fff); color: var(--text); font: inherit; caret-color: var(--primary); }
+.administrator-backup-page .main-content .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .75rem 1rem; font-size: .9375rem; border-radius: 10px; }
+.administrator-backup-page .main-content :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.administrator-backup-page .main-content ::selection { background: var(--primary); color: #fff; }
+.administrator-backup-page .backup-filename { overflow-wrap: anywhere; white-space: normal; font-size: .875rem; line-height: 1.6; }
+.administrator-backup-page .backup-format { display: block; margin-top: .25rem; }
+.administrator-backup-page .backup-history { scroll-margin-top: 6rem; }
+.administrator-backup-page .backup-history .table-wrap { max-width: 100%; overflow-x: auto; scrollbar-color: var(--muted) transparent; }
+.administrator-backup-page .backup-history table { min-width: 760px; }
+.administrator-backup-page .backup-history table:has(.backup-empty) { min-width: 0; }
+.administrator-backup-page .backup-history table:has(.backup-empty) thead { display: none; }
+.administrator-backup-page .backup-history th { background: var(--surface-soft, #f8fafc); color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.administrator-backup-page .backup-history td { font-size: .875rem; vertical-align: top; }
+.administrator-backup-page .backup-history :is(th, td) { padding: 1rem; }
+.administrator-backup-page .backup-history td:nth-child(2) { min-width: 230px; max-width: 360px; }
+.administrator-backup-page .backup-history td.backup-empty { padding: 2rem 1rem; color: var(--muted); text-align: center; white-space: normal; }
+.administrator-backup-page .backup-date, .administrator-backup-page .backup-size { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.administrator-backup-page .backup-size { text-align: right; }
+.administrator-backup-page .backup-row-notes summary { display: list-item; padding: .5rem 0; min-height: 44px; box-sizing: border-box; color: var(--primary); cursor: pointer; }
+.administrator-backup-page .backup-row-notes p { margin: .25rem 0; max-width: 65ch; overflow-wrap: anywhere; white-space: normal; }
+.administrator-backup-page .backup-recovery { scroll-margin-top: 6rem; }
+.administrator-backup-page .backup-recovery > summary { display: list-item; min-height: 44px; cursor: pointer; color: var(--primary); }
+.administrator-backup-page .backup-recovery-title { font-size: 1.0625rem; font-weight: 700; }
+.administrator-backup-page .backup-recovery > summary .backup-hint { display: block; margin-top: .5rem; }
+.administrator-backup-page .backup-recovery > .dashboard-section,
+.administrator-backup-page .restore-guidance { margin: 1.5rem 0 0; padding: 1.5rem 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
+.administrator-backup-page .backup-recovery p { max-width: 70ch; line-height: 1.6; }
+.administrator-backup-page .backup-recovery form { max-width: 40rem; }
+.administrator-backup-page #restore-package-warning { margin-top: 1rem; }
+.administrator-backup-page #restore-package-warning strong { display: block; margin-bottom: .5rem; }
+.administrator-backup-page .backup-recovery input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--primary); vertical-align: middle; }
+.administrator-backup-page .backup-recovery form > p:has(input[type="checkbox"]) { padding: .5rem 0; }
+@media (max-width: 900px) {
+    .administrator-backup-page .backup-create { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+    .administrator-backup-page .backup-storage { border-left: 0; border-top: 1px solid var(--border); padding: 1.25rem 0 0; }
+}
+@media (max-width: 600px) {
+    .administrator-backup-page .page-heading { align-items: flex-start; gap: .5rem; }
+    .administrator-backup-page .main-content .dashboard-section { padding: 1.125rem; }
+    .administrator-backup-page .backup-recovery > .dashboard-section { padding: 1.25rem 0 0; }
+    .administrator-backup-page .main-content input { font-size: 1rem; }
+}

@@ -906,7 +906,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         // Overview tabs expose one task at a time and support keyboard navigation.
         assert.equal(await adminPage.getByRole('tab').count(), 4);
-        const balancesTab = adminPage.getByRole('tab', {name: 'Balances & Summary'});
+        const balancesTab = adminPage.getByRole('tab', {name: 'Overview'});
         assert.equal(await balancesTab.getAttribute('aria-selected'), 'true');
         assert.equal(await adminPage.locator('#tab-transactions').isVisible(), false);
         await balancesTab.focus();
@@ -929,7 +929,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const cashInMetricEl = adminPage.locator('#admin-metric-cash-in-principal');
         await cashInMetricEl.waitFor();
 
-        await adminPage.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await adminPage.getByRole('tab', {name: 'Transactions'}).click();
 
         // Verify Date Filtering with Philippine reporting-day boundaries
         await adminPage.locator('#filter-start-date').fill('2026-01-01');
@@ -948,7 +948,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             adminPage.locator('#btn-reset-filters').click()
         ]);
 
-        await adminPage.getByRole('tab', {name: 'Reconciliation Log'}).click();
+        await adminPage.getByRole('tab', {name: 'Closing checks'}).click();
         // Reconciliation Differences Section
         const diffTable = adminPage.locator('#gcash-admin-diff-table');
         await diffTable.waitFor();
@@ -956,13 +956,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const diffText = await diffTable.textContent();
         assert.equal(diffText.includes('Waived') || diffText.includes('Variance') || diffText.includes('Session'), true, 'Reconciliation table contains session differences');
 
-        await adminPage.getByRole('tab', {name: 'Unresolved Activity'}).click();
+        await adminPage.getByRole('tab', {name: 'Unresolved exchanges'}).click();
         // Unresolved Activities Section
         const ncTable = adminPage.locator('#gcash-admin-nc-table');
         await ncTable.waitFor();
         assert.equal(await ncTable.isVisible(), true, 'Unresolved activities section is displayed');
 
-        await adminPage.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await adminPage.getByRole('tab', {name: 'Transactions'}).click();
         // Store-wide Transaction History Table & Legacy reference distinction
         const historyTable = adminPage.locator('#gcash-admin-history-table');
         await historyTable.waitFor();

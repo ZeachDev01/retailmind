@@ -20,8 +20,11 @@
         history.replaceState(null, '', url);
         const tabInput = document.querySelector('#gcash-admin-filter-form [name="tab"]');
         if (tabInput) tabInput.value = url.searchParams.get('tab');
-        if (focus) tab.focus();
-        tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
+        document.getElementById('btn-reset-filters').search = new URLSearchParams({tab: url.searchParams.get('tab')});
+        if (focus) {
+            tab.focus({preventScroll: true});
+            tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
+        }
         if (target === 'tab-money' && document.getElementById(target).dataset.loaded !== 'true' && focus) window.location.assign(url);
     }
     tabs.forEach((tab, index) => {
@@ -64,7 +67,7 @@
             body.replaceChildren(row);
         }
         for (const section of ['reconciliation', 'unresolved']) workspace.querySelector('#gcash-tab-' + section + ' .gcash-badge').textContent = 'Unavailable';
-        for (const alert of workspace.querySelectorAll('[data-review-tab]')) {
+        for (const alert of workspace.querySelectorAll('#gcash-outstanding-reviews [data-review-tab]')) {
             alert.textContent = 'Review data unavailable. Refresh to try again';
             alert.disabled = true;
         }

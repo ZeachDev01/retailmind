@@ -60,12 +60,25 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await cache.put(new URL('/assets/js/gcash-admin-overview.js', location.href), new Response('window.legacyGCashScript = true;', {headers: {'Content-Type': 'text/javascript'}}));
         });
         await page.goto(origin + '/components/administrator/gcash_overview.php');
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        assert.equal(await page.evaluate(() => window.scrollY), 0, 'Opening overview keeps the page title visible');
+        await page.getByRole('button', {name: 'View transactions', exact: true}).click();
+        assert.equal(await page.locator('#tab-transactions').isVisible(), true, 'Activity report links to its transaction history');
+        await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         assert.equal(await page.locator('#tab-transactions').isVisible(), true, 'Transactions tab opens with an older GCash script cached');
         assert.equal(await page.evaluate(() => window.legacyGCashScript), undefined, 'Stale unversioned script is bypassed');
+        await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        await page.getByLabel('Reporting period', {exact: true}).selectOption('month_to_date');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForURL(url => url.searchParams.get('period') === 'month_to_date');
+        assert.equal(await page.locator('#gcash-completed-activity').isVisible(), true, 'Filtered totals remain visible beside the report controls');
+        await page.getByRole('link', {name: 'Reset filters', exact: true}).click();
+        await page.waitForURL(url => url.searchParams.get('tab') === 'overview' && !url.searchParams.has('period'));
+        assert.equal(await page.getByLabel('Reporting period', {exact: true}).inputValue(), 'today', 'Reset restores Today without leaving Overview');
         for (const width of [1440, 390]) {
             await page.setViewportSize({width, height: 900});
-            for (const [name, panel] of [['Reconciliation Log', 'reconciliation'], ['Unresolved Activity', 'unresolved'], ['Balances & Summary', 'overview'], ['Transactions & Filters', 'transactions']]) {
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page overflow at ' + width + 'px');
+            for (const [name, panel] of [['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Overview', 'overview'], ['Transactions', 'transactions']]) {
                 await page.getByRole('tab', {name}).click();
                 assert.equal(await page.locator('#tab-' + panel).isVisible(), true, name + ' opens at ' + width + 'px');
             }
@@ -75,6 +88,13 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             await page.waitForURL(url => url.searchParams.get('tab') === 'money');
             await page.locator('#tab-money').waitFor({state: 'visible'});
             assert.equal(await page.locator('#tab-money').isVisible(), true);
+            await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+            assert.equal(new URL(await page.locator('#btn-reset-filters').getAttribute('href'), origin).searchParams.get('tab'), 'overview', 'Reset preserves the current report tab');
+            const reportGap = await page.evaluate(() => document.getElementById('gcash-completed-activity').getBoundingClientRect().top - document.getElementById('gcash-reporting-scope').getBoundingClientRect().bottom);
+            assert.ok(Math.abs(reportGap) < 1, 'Filters and completed activity form one panel at ' + width + 'px');
+            await page.evaluate(() => window.scrollTo(0, 0));
+            fs.mkdirSync('output/playwright/gcash-admin-clarity', {recursive: true});
+            await page.screenshot({path: 'output/playwright/gcash-admin-clarity/overview-' + width + '.png', fullPage: true});
         }
         assert.deepEqual(errors, []);
         console.log('GCash cached-script tab regression: passed');

@@ -61,10 +61,40 @@ const fixture = action => {
         assert.equal((await administrator.page.goto(superUrl)).status(), 403, 'Administrator cannot view restricted preflight');
         assert.equal((await administrator.page.goto(adminUrl)).status(), 200);
         assert.equal(await administrator.page.getByLabel('New backup passphrase', { exact: true }).count(), 1);
+        assert.equal(await administrator.page.locator('#backup-recovery').evaluate(element => element.open), false, 'Routine backup work starts with recovery tools collapsed');
+        for (const width of [1440, 390]) {
+            await administrator.page.setViewportSize({width, height: 960});
+            assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Backup workspace fits ' + width + 'px');
+            assert(await administrator.page.locator('[data-backup-create]').isVisible(), 'Create backup remains visible');
+            assert(await administrator.page.locator('.backup-empty').evaluate(element => element.scrollWidth <= element.clientWidth), 'Empty history message wraps within its cell');
+            await administrator.page.locator('#backup-recovery > summary').click();
+            assert(await administrator.page.locator('#incoming-package').isVisible(), 'Restore form remains available');
+            assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Safety copy remains available');
+            assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded recovery fits ' + width + 'px');
+            fs.mkdirSync('output/playwright/backup-clarity', {recursive: true});
+            await administrator.page.locator('#backup-recovery').scrollIntoViewIfNeeded();
+            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/recovery-' + width + '.png'});
+            await administrator.page.locator('#backup-recovery > summary').click();
+            await administrator.page.evaluate(() => window.scrollTo(0, 0));
+            fs.mkdirSync('output/playwright/backup-clarity', {recursive: true});
+            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/overview-' + width + '.png', fullPage: true});
+        }
+        const restoreCsrf = await administrator.page.locator('input[name="csrf_token"]').first().inputValue();
+        const invalidRestore = await administrator.context.request.post(origin + '/components/backup/restore.php', {form: {csrf_token: restoreCsrf}, maxRedirects: 0});
+        assert.equal(invalidRestore.status(), 303);
+        await administrator.page.goto(adminUrl);
+        assert.equal(await administrator.page.locator('#backup-recovery').evaluate(element => element.open), true, 'Restore errors automatically reveal recovery tools');
+        assert(await administrator.page.locator('#restore-package [role="alert"]').isVisible(), 'Restore errors stay visible');
+        await administrator.page.goto(adminUrl);
         assert.equal((await administrator.context.request.post(adminUrl, { form: { action: 'backup', backup_passphrase: backupPassphrase } })).status(), 403, 'Creation needs CSRF');
         await administrator.page.locator('#backup-passphrase').fill(backupPassphrase);
         await Promise.all([administrator.page.waitForNavigation(), administrator.page.locator('[data-backup-create]').click()]);
         assert.equal(await administrator.page.locator('[data-backup-download]').count(), 1, await administrator.page.locator('body').innerText());
+        for (const width of [1440, 390]) {
+            await administrator.page.setViewportSize({width, height: 960});
+            assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Ready backup and populated history fit ' + width + 'px');
+            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/ready-' + width + '.png', fullPage: true});
+        }
         const href = await administrator.page.locator('[data-backup-download]').getAttribute('href');
         assert(href, await administrator.page.locator('body').innerText());
         assert.equal((await superAdministrator.context.request.get(new URL(href, origin).href)).status(), 404, 'Another user cannot claim the package');

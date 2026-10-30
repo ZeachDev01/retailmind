@@ -66,7 +66,7 @@ const csvRows = bytes => {
         assert.equal(await page.locator('#filter-start-date').inputValue(), today, 'Initial report defaults to Philippine Today');
         assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
         await page.reload();
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         const savedReceiptRow = page.locator('#gcash-admin-history-body tr', {hasText: '00000000000000000000000000123456'});
         const receiptAction = savedReceiptRow.getByRole('button', {name: 'Receipt', exact: true});
         const beforeReprint = await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json();
@@ -84,7 +84,7 @@ const csvRows = bytes => {
         await page.keyboard.press('Escape');
         assert.equal(await receiptAction.evaluate(button => button === document.activeElement), true, 'Closing returns to originating Overview receipt action');
         assert.deepEqual(await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json(), beforeReprint, 'Receipt retrieval and printing leave Store-wide financial state unchanged');
-        await page.getByRole('tab', {name: 'Balances & Summary', exact: true}).click();
+        await page.getByRole('tab', {name: 'Overview', exact: true}).click();
         assert.equal(await page.locator('#filter-start-date').isVisible(), true, 'Shared reporting controls are available beside headline activity');
         await page.getByLabel('Reporting period', {exact: true}).selectOption('month_to_date');
         await page.locator('#btn-apply-filters').click();
@@ -132,19 +132,22 @@ const csvRows = bytes => {
         assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.cashier_name));
         assert.ok((await page.locator('#admin-cash-checked').textContent()).includes(evidence.checked_at_formatted));
         assert.equal(await page.locator('#admin-cash-checked').isVisible(), false, 'Fund metadata stays collapsed by default');
-        await page.getByText('Fund details', {exact: true}).click();
+        await page.getByText('Balance check & cashier', {exact: true}).click();
         assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Fund metadata remains accessible');
-        await page.getByText('Fund details', {exact: true}).click();
+        await page.getByText('Balance check & cashier', {exact: true}).click();
         assert.equal(await page.locator('.page-subtitle, #tab-overview .gcash-card-sub, #tab-overview .pos-panel-title p').count(), 0, 'Overview omits explanatory subtext');
         const recordedCash = await page.locator('#admin-expected-cash').textContent();
-        assert.equal(await page.getByRole('tab').count(), 4, 'Overview has four task tabs');
-        const balances = page.getByRole('tab', {name: 'Balances & Summary'});
+        assert.equal(await page.getByRole('tab').count(), 5, 'All five task tabs remain available');
+        const balances = page.getByRole('tab', {name: 'Overview'});
         assert.equal(await balances.getAttribute('aria-selected'), 'true');
         assert.equal(await page.locator('#tab-transactions').isVisible(), false);
         await balances.focus();
         await page.keyboard.press('ArrowRight');
         assert.equal(await page.locator('#tab-transactions').isVisible(), true);
         await page.keyboard.press('End');
+        await page.waitForURL(url => url.searchParams.get('tab') === 'money');
+        assert.equal(await page.locator('#tab-money').isVisible(), true);
+        await page.keyboard.press('ArrowLeft');
         assert.equal(await page.locator('#tab-unresolved').isVisible(), true);
         await page.keyboard.press('Home');
         assert.equal(await page.locator('#tab-overview').isVisible(), true);
@@ -162,7 +165,7 @@ const csvRows = bytes => {
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), initialReviewCount, 'Historic reporting and every list filter preserve Store-wide review count');
         assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Other cashier held item'), 'Historical other-Cashier unresolved record remains visible');
         await page.goto(origin + '/components/administrator/gcash_overview.php');
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         const search = page.getByRole('searchbox', {name: 'Search transactions'});
         await search.fill('no-such-gcash-reference');
         await page.getByText('No transactions match these filters.').waitFor();
@@ -182,12 +185,12 @@ const csvRows = bytes => {
         const requestStarted = page.waitForRequest(request => request.url().includes('search=no-such-gcash-reference'));
         await search.fill('no-such-gcash-reference');
         await requestStarted;
-        await page.getByRole('tab', {name: 'Balances & Summary'}).click();
+        await page.getByRole('tab', {name: 'Overview'}).click();
         releaseFilter();
         await page.locator('#gcash-filter-status').filter({hasText: '0 matching transactions'}).waitFor({state: 'attached'});
         assert.equal(new URL(page.url()).searchParams.get('tab'), 'overview');
         await page.unroute('**/gcash_overview.php?**');
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
         // A superseded report must not replace the newer selection's rows or totals.
@@ -380,7 +383,7 @@ const csvRows = bytes => {
         assert.equal((await context.request.post(adminApi, {headers: {'X-CSRF-Token': token}, data: {action: 'resolve_exchange', transaction_id: 1, confirmed_wallet: false, confirmed_cash: true}})).status(), 400, 'Resolution requires both confirmations');
         await search.fill('no-such-gcash-reference');
         await page.getByRole('status').filter({hasText: '0 matching transactions'}).waitFor();
-        await page.getByRole('tab', {name: 'Reconciliation Log'}).click();
+        await page.getByRole('tab', {name: 'Closing checks'}).click();
         const discrepancyBefore = Number((await page.locator('#gcash-tab-reconciliation .gcash-badge').textContent()).match(/\d+/)[0]);
         const waive = page.locator('.admin-btn-waive').first();
         await waive.click();
@@ -392,7 +395,7 @@ const csvRows = bytes => {
         await page.waitForFunction(previous => document.querySelector('#gcash-tab-reconciliation .gcash-badge').textContent === `Pending (${previous - 1})`, discrepancyBefore);
         assert.ok((await page.locator('#gcash-admin-diff-body').textContent()).includes('Waived'));
         assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Waiver refresh preserves local filter');
-        await page.getByRole('tab', {name: 'Unresolved Activity'}).click();
+        await page.getByRole('tab', {name: 'Unresolved exchanges'}).click();
         const verify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await verify.click();
         const resolve = page.getByRole('dialog', {name: 'Verify & Clear Exchange'});
@@ -427,7 +430,7 @@ const csvRows = bytes => {
         await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
         await page.waitForFunction(() => document.getElementById('gcash-tab-unresolved') === document.activeElement);
         assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Verification refresh preserves local filter');
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         await page.getByLabel('Reporting period', {exact: true}).selectOption('custom');
         await page.locator('#filter-start-date').fill('2020-01-01');
         await search.fill('9999999999988');
@@ -439,14 +442,14 @@ const csvRows = bytes => {
         await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
         await search.fill('no-such-gcash-reference');
         await page.getByRole('status').filter({hasText: '0 matching transactions'}).waitFor();
-        await page.getByRole('tab', {name: 'Unresolved Activity'}).click();
+        await page.getByRole('tab', {name: 'Unresolved exchanges'}).click();
         const remainingVerify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await remainingVerify.click();
         await resolve.waitFor();
         assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).isChecked(), false, 'Each Administrator review resets printing');
         await page.keyboard.press('Escape');
         await page.route('**/gcash_overview.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
-        await page.getByRole('tab', {name: 'Transactions & Filters'}).click();
+        await page.getByRole('tab', {name: 'Transactions'}).click();
         await search.fill('failed-load');
         await page.locator('#gcash-filter-status').filter({hasText: 'Unable to load transactions'}).waitFor();
         assert.equal(await page.locator('#gcash-tab-unresolved .gcash-badge').textContent(), 'Unavailable');
@@ -454,7 +457,7 @@ const csvRows = bytes => {
         await page.unroute('**/gcash_overview.php?**');
         await search.fill('');
         await page.getByRole('status').filter({hasText: /matching transactions/}).waitFor();
-        await page.getByRole('tab', {name: 'Balances & Summary'}).click();
+        await page.getByRole('tab', {name: 'Overview'}).click();
         await page.emulateMedia({reducedMotion: 'reduce'});
         const capture = async name => {
             await page.evaluate(async () => {
@@ -478,7 +481,7 @@ const csvRows = bytes => {
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' has no page overflow');
             assert.equal(await page.locator('.gcash-topbar-actions').evaluate(element => getComputedStyle(element).flexDirection), 'row', name + ' header actions remain in a compact row');
             await capture(name);
-            for (const [tabName, suffix] of [['Transactions & Filters', 'transactions'], ['Reconciliation Log', 'reconciliation'], ['Unresolved Activity', 'unresolved']]) {
+            for (const [tabName, suffix] of [['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved']]) {
                 await page.getByRole('tab', {name: tabName}).click();
                 const panel = page.locator('#tab-' + suffix);
                 assert.equal(await panel.locator('small, .pos-panel-title p').count(), 0, name + ' ' + suffix + ' has no secondary row captions');
@@ -500,7 +503,7 @@ const csvRows = bytes => {
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' ' + suffix + ' has no page overflow');
                 await capture(name + '-' + suffix);
             }
-            await page.getByRole('tab', {name: 'Balances & Summary'}).click();
+            await page.getByRole('tab', {name: 'Overview'}).click();
         }
         assert.deepEqual(errors, []);
         const privilegedContext = await browser.newContext();
