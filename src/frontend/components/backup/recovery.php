@@ -208,20 +208,10 @@ $isPaused = RecoveryStore::isPaused();
 $viewData = RecoveryAuthService::recoveryViewData($session);
 $reopenedRecord = RecoveryStore::reopenedRecord();
 
-$readiness = ['ready' => false, 'missing' => [], 'guidance' => ''];
+$readiness = \App\Backup\StoreReopening::readiness($isPaused ? RecoveryStore::state() : null);
 $reviewChecks = $viewData['review_checks'] ?? [];
 $automatedChecks = $reviewChecks['automated'] ?? [];
 $humanChecks = $reviewChecks['human_confirmations'] ?? [];
-
-if ($isPaused && $session) {
-    try {
-        $pdo = $getPdo();
-        $policy = new RoleCapabilityPolicy();
-        $backups = new DatabaseBackupService($pdo, $policy);
-        $restore = new DatabaseRestoreService($pdo, $policy, $backups);
-        $readiness = $restore->validateReopeningReadiness();
-    } catch (Throwable $e) {}
-}
 
 $canReopen = !empty($session['is_initiator']) || in_array(($session['role'] ?? ''), ['admin', 'super_admin'], true);
 $isTakeover = !empty($session) && empty($session['is_initiator']);

@@ -263,37 +263,10 @@ final class RecoveryAuthService
 
         $state = RecoveryStore::state();
         $rawStage = (string)($state['stage'] ?? '');
-        if ($rawStage === RecoveryStore::STAGE_RECOVERY_REQUIRED) {
-            $guidanceStage = 'actionable_failure';
-            $guidanceLabel = 'Actionable failure (Recovery required)';
-            $nextAction = 'Execute Complete Safety Recovery (rollback to destination safety copy) or Restart Approved Incoming Replacement.';
-        } elseif ($rawStage === RecoveryStore::STAGE_SAFETY_VERIFIED) {
-            $guidanceStage = 'ready_to_restore';
-            $guidanceLabel = 'Ready to restore';
-            $nextAction = 'Authenticate with destination credentials and start encrypted replacement or restart incoming replacement.';
-        } elseif ($rawStage === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING) {
-            $human = $state['review_checks']['human_confirmations'] ?? [];
-            $auto = $state['review_checks']['automated'] ?? [];
-            $allAutoPassed = !empty($auto) && count(array_filter($auto, static fn($c): bool => ($c['status'] ?? '') === 'passed')) >= 4;
-            $allHumanConfirmed = !empty($human['stock']['confirmed']) && !empty($human['receipt']['confirmed']) && !empty($human['upload']['confirmed']) && !empty($human['attribution']['confirmed']);
-            if ($allAutoPassed && $allHumanConfirmed) {
-                $guidanceStage = 'ready_to_reopen';
-                $guidanceLabel = 'Ready to reopen';
-                $nextAction = 'Authorized operator must confirm single active Store and re-enter destination password to explicitly reopen Store access.';
-            } else {
-                $guidanceStage = 'verification_needed';
-                $guidanceLabel = 'Verification needed';
-                $nextAction = 'Run automated verification checks and confirm all human checklist items (stock, receipt, upload, attribution) before reopening.';
-            }
-        } elseif ($rawStage === RecoveryStore::STAGE_REOPENED_COMPLETED) {
-            $guidanceStage = 'reopened_completed';
-            $guidanceLabel = 'Reopened';
-            $nextAction = 'Store online. Ordinary requests admitted.';
-        } else {
-            $guidanceStage = $rawStage ?: 'in_progress';
-            $guidanceLabel = ucwords(str_replace('_', ' ', $guidanceStage));
-            $nextAction = 'Wait for stage completion. Automated recovery process is running.';
-        }
+        $guidance = StoreReopening::guidance($state);
+        $guidanceStage = $guidance['stage'];
+        $guidanceLabel = $guidance['stage_label'];
+        $nextAction = $guidance['next_permitted_action'];
 
         if (!$recoverySession) {
             return [

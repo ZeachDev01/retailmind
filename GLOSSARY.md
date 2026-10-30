@@ -16,6 +16,10 @@ _Avoid_: Default brand, required brand
 The transfer of the Store's recorded state and uploaded files to another RetailMind installation, which becomes its sole active installation after verification. It supports movement between a local host and web hosting.
 _Avoid_: Synchronization, merging Stores
 
+**Store Reopening**:
+The authorized operator's explicit resumption of Store operations after Database Restore, once automated verification and human review are complete. Readiness for Store Reopening does not itself resume operations.
+_Avoid_: Automatic reopening, completed verification (when referring to resumed operations)
+
 **Identity Reconciliation**:
 The Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
 _Avoid_: Automatic account matching, general account merging
