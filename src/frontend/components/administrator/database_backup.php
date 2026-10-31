@@ -89,17 +89,17 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <div class="card-grid">
                 <article class="stat-card with-icon">
                     <span class="stat-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                    <div class="label">Latest Snapshot</div>
+                    <div class="label">Latest backup</div>
                     <div class="value"><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></div>
                 </article>
                 <article class="stat-card with-icon">
                     <span class="stat-icon"><i class="bi bi-archive" aria-hidden="true"></i></span>
-                    <div class="label">Recorded Snapshots</div>
+                    <div class="label">Backups created</div>
                     <div class="value"><?= $totalSnapshots ?></div>
                 </article>
                 <article class="stat-card with-icon <?= $storePaused ? 'status-warning' : 'status-healthy' ?>">
                     <span class="stat-icon"><i class="bi <?= $storePaused ? 'bi-exclamation-triangle' : 'bi-shield-check' ?>" aria-hidden="true"></i></span>
-                    <div class="label">Store Status</div>
+                    <div class="label">Store status</div>
                     <div class="value"><?= $storePaused ? 'Recovery Paused' : 'Operational' ?></div>
                 </article>
             </div>
@@ -119,33 +119,41 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <?php endif; ?>
 
             <section class="dashboard-section backup-create" aria-labelledby="backup-create-title">
-                <div>
-                    <h2 id="backup-create-title"><i class="bi bi-shield-lock" aria-hidden="true"></i> Create backup</h2>
+                <div class="backup-create-main">
+                    <span class="backup-create-icon"><i class="bi bi-database-lock" aria-hidden="true"></i></span>
+                    <div class="backup-create-copy">
+                        <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
+                        <p>Save a copy of your Store records and images.</p>
+                    </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
-                        <p>Database records and uploaded images are encrypted automatically. No backup passphrase needed.</p>
-                        <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-shield-plus" aria-hidden="true"></i> Create backup</button>
+                        <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
                 </div>
-                <aside class="backup-storage" aria-label="Backup guidelines">
-                    <h3><i class="bi bi-shield-check" aria-hidden="true"></i> Key guidelines</h3>
-                    <ul class="backup-guidance-list">
-                        <li>Store backups off-server.</li>
-                        <li>Download immediately; creation does not confirm the file is saved.</li>
-                        <li>Ask your Super Administrator to save the recovery key once.</li>
-                        <li>Restores require Super Admin approval.</li>
-                    </ul>
-                </aside>
+                <div class="backup-create-footer">
+                    <p><i class="bi bi-download" aria-hidden="true"></i> Download after creation and keep a copy off-server.</p>
+                    <details class="backup-tips">
+                        <summary>Backup tips</summary>
+                        <ul class="backup-guidance-list">
+                            <li>Creating a backup does not confirm the file is saved. Download your copy immediately.</li>
+                            <li>No backup passphrase is needed.</li>
+                            <li>Save the recovery key separately, once per installation.</li>
+                        </ul>
+                    </details>
+                </div>
             </section>
 
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="backup-history-title">
-                <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
+                <div class="backup-section-heading">
+                    <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
+                    <span class="backup-record-count"><?= count($history) ?> records</span>
+                </div>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
                     <table data-no-smart-table>
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Snapshot date</th>
                             <th scope="col">Backup file</th>
-                            <th scope="col">Size</th>
+                            <th scope="col" class="backup-size">Size</th>
                             <th scope="col">Outcome</th>
                             <th scope="col">Requested by</th>
                         </tr></thead><tbody><?php foreach ($history as $row): ?><tr>
@@ -155,7 +163,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                                 <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty">No backups yet. Create one above, then download your copy.</td>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Your backup history will appear here.</span></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>

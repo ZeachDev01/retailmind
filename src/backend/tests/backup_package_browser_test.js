@@ -63,10 +63,17 @@ const fixture = action => {
         assert.equal((await administrator.page.goto(adminUrl)).status(), 200);
         assert.equal(await administrator.page.locator('#backup-passphrase').count(), 0);
         assert.equal(await administrator.page.locator('#backup-recovery').evaluate(element => element.open), false, 'Routine backup work starts with recovery tools collapsed');
-        for (const width of [1440, 390]) {
+        for (const width of [1440, 375, 812]) {
             await administrator.page.setViewportSize({width, height: 960});
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Backup workspace fits ' + width + 'px');
             assert(await administrator.page.locator('[data-backup-create]').isVisible(), 'Create backup remains visible');
+            const tips = administrator.page.locator('.backup-tips');
+            assert.equal(await tips.evaluate(element => element.open), false, 'Optional backup tips start collapsed');
+            await tips.locator('summary').focus();
+            await administrator.page.keyboard.press('Enter');
+            assert(await tips.getByText('No backup passphrase is needed.').isVisible(), 'Backup tips are keyboard accessible');
+            await administrator.page.keyboard.press('Enter');
+            assert.equal(await tips.evaluate(element => element.open), false, 'Backup tips can be dismissed with the keyboard');
             assert(await administrator.page.locator('.backup-empty').evaluate(element => element.scrollWidth <= element.clientWidth), 'Empty history message wraps within its cell');
             await administrator.page.locator('#backup-recovery > summary').click();
             assert(await administrator.page.locator('#incoming-package').isVisible(), 'Restore form remains available');
@@ -81,7 +88,12 @@ const fixture = action => {
             await administrator.page.evaluate(() => window.scrollTo(0, 0));
             fs.mkdirSync(proofDirectory, {recursive: true});
             await administrator.page.screenshot({path: path.join(proofDirectory, 'overview-' + width + '.png'), fullPage: true});
+            await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+            assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Dark backup workspace fits ' + width + 'px');
+            await administrator.page.screenshot({path: path.join(proofDirectory, 'overview-dark-' + width + '.png'), fullPage: true, animations: 'disabled'});
+            await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
         }
+        console.log('Backup layout: passed (1440/375/812px, light/dark, keyboard tips, expanded recovery, reduced motion)');
         const restoreCsrf = await administrator.page.locator('input[name="csrf_token"]').first().inputValue();
         const invalidRestore = await administrator.context.request.post(origin + '/components/backup/restore.php', {form: {csrf_token: restoreCsrf}, maxRedirects: 0});
         assert.equal(invalidRestore.status(), 303);
