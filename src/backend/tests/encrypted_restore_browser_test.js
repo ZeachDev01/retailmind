@@ -116,6 +116,9 @@ async function runScenario(initiator) {
         await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', { name: 'Review backup', exact: true }).click()]);
         await admin.page.locator('#resolution-1').waitFor();
         assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Review identities/);
+        assert.equal(await admin.page.locator('#identity-package').isVisible(), false, 'Reviewed package is summarized instead of prompting again');
+        assert.equal(await admin.page.locator('#identity-password').isVisible(), false, 'Verified password is retained without another prompt');
+        assert.equal(await admin.page.locator('[data-selected-package-name]').innerText(), 'store.rmpkg');
         assert.equal(await admin.page.locator('fieldset legend').first().evaluate(el => el.getBoundingClientRect().width), 1, 'Identity legends remain available to screen readers without duplicating visible names');
         for (const id of [1, 2, 3, 4]) {
             await admin.page.locator('#resolution-' + id).selectOption('link');
@@ -126,9 +129,22 @@ async function runScenario(initiator) {
         await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', { name: 'Review resolutions', exact: true }).click()]);
         await admin.page.locator('[data-start-restore]').waitFor();
         assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Confirm restoration/);
+        assert.equal(await admin.page.locator('.reconcile-reference').isVisible(), false, 'Completed identity review hides destination people and resolved conflicts');
+        assert.equal(await admin.page.locator('.resolution-list').isVisible(), false, 'Completed identity review hides account decision controls');
         assert.equal(await admin.page.locator('#identity-password').inputValue(), data.password, 'Password entered once survives review');
         assert.equal(await admin.page.locator('#identity-package').evaluate(input => input.files.length), 1, 'Package stays selected');
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'reconciliation-approval.json')), 'No separate approval needed before final confirmation');
+        await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', {name: 'Edit account choices'}).click()]);
+        await admin.page.locator('.resolution-list').waitFor({state: 'visible'});
+        assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Review identities/);
+        assert.equal(await admin.page.locator('#resolution-1').inputValue(), 'link', 'Editing retains the account decision');
+        assert.equal(await admin.page.locator('#destination-1').inputValue(), '1', 'Editing retains the chosen destination');
+        await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', {name: 'Review resolutions', exact: true}).click()]);
+        await admin.page.locator('[data-start-restore]').waitFor();
+        await admin.page.reload();
+        assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Confirm restoration/, 'Refresh preserves completed review');
+        assert.equal(await admin.page.locator('#identity-password').inputValue(), '', 'Refresh never restores a stored password');
+        await admin.page.locator('#identity-password').fill(data.password);
         for (const width of [390, 1440]) {
             await admin.page.setViewportSize({ width, height: 960 });
             assert(await admin.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Restore form fits viewport');

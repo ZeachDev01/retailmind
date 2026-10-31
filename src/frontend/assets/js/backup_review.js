@@ -1,4 +1,4 @@
-// Keep the selected file and credentials in this page only; reload clears them.
+// Keep credentials in this page only; the session draft resumes review after reload.
 (function () {
     'use strict';
     function initialize() {
@@ -48,6 +48,12 @@
                         const input = next.elements.namedItem(name);
                         if (input) input.value = values[index];
                     });
+                    const summary = next.querySelector('[data-reviewed-package]');
+                    if (summary && upload.files.length && next.elements.namedItem('restore_password').value) {
+                        summary.querySelector('[data-selected-package-name]').textContent = upload.files[0].name;
+                        summary.hidden = false;
+                        next.querySelector('[data-package-inputs]').hidden = true;
+                    }
                 });
                 const target = main.querySelector('#restore-package') || main;
                 target.scrollIntoView({ block: 'start' });

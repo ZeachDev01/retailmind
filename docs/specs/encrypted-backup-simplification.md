@@ -90,6 +90,10 @@ Label backup creation's field “Backup passphrase.” Allow reuse of a strong p
 
 ## Further Notes
 
+On 2026-11-01, the user confirmed one continuous restore flow: select the package and enter the current login password once, review identities, then confirm replacement. Once retained, the review displays a selected-package summary instead of upload and password prompts. Completed review hides destination people, resolved conflicts, and account decision controls; Edit account choices returns to those controls without discarding decisions. Change backup starts a fresh selection and identity review. Review-script URLs must change when the script changes so cached assets cannot bypass this handoff.
+
+The user subsequently requested refresh persistence. This replaces the earlier reload-clears-review behavior: retain the encrypted package and display-only review data in the initiating signed-in session for 30 minutes. Never retain plaintext login passwords, passphrases, keys, or decrypted package rows. Refresh resumes the same reviewed step and choices, with password/passphrase reentry before continuing. Session expiry, logout, Change backup, or successful restoration ends the draft. The draft grants no replacement authority; final restoration revalidates the package, credentials, identities, and destination state using the existing engine.
+
 Experience direction agreed on 2026-10-30. This spec synthesizes that plan; it does not claim the simplification is implemented. Existing security policy remains in force. Existing uncommitted backup implementation work must be preserved.
 
 This is an experience follow-up to [issue #282](https://github.com/ZeachDev01/retailmind/issues/282), preserving its security and migration requirements. ADR-0017 governs encrypted portable backups and Administrator restoration; ADR-0021 governs portable schema validation. Vocabulary follows the project context and glossary.

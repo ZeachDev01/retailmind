@@ -7,6 +7,43 @@
 // internals: the SQL statement splitter and backup history writer. All restore
 // validation and execution goes through DatabaseRestoreService/SqlBackupFormat.
 
+/** Review drafts contain ciphertext and account choices, never passwords or keys. */
+function backup_review_draft(): ?array {
+    $draft = $_SESSION['backup_review'] ?? null;
+    if (!is_array($draft) || ($draft['user_id'] ?? null) !== ($_SESSION['user_id'] ?? null)
+        || ($draft['role'] ?? null) !== ($_SESSION['role'] ?? null) || ($draft['expires_at'] ?? 0) < time()) {
+        unset($_SESSION['backup_review']);
+        return null;
+    }
+    return $draft;
+}
+
+/** Resolve a new upload or this session's exact reviewed encrypted package. */
+function backup_review_source(): array {
+    $file = $_FILES['backup_file'] ?? [];
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK && is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
+        return $file + ['temporary' => false];
+    }
+    $draft = backup_review_draft();
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE || !$draft
+        || !is_string($_POST['review_token'] ?? null) || !hash_equals($draft['token'], $_POST['review_token'])
+        || !is_string($_POST['package_hash'] ?? null) || !hash_equals($draft['package_hash'], $_POST['package_hash'])) {
+        throw new DomainException('Select the encrypted Store package or resume its current review.');
+    }
+    $path = tempnam(\App\Backup\RecoveryStore::directory(), 'review-');
+    if ($path === false) throw new RuntimeException('The reviewed package could not be prepared.');
+    try {
+        if (!chmod($path, 0600) || file_put_contents($path, $draft['encrypted_package']) !== strlen($draft['encrypted_package'])
+            || !hash_equals($draft['package_hash'], hash_file('sha256', $path))) {
+            throw new RuntimeException('The reviewed package could not be verified.');
+        }
+    } catch (Throwable $exception) {
+        unlink($path);
+        throw $exception;
+    }
+    return ['tmp_name' => $path, 'name' => $draft['filename'], 'error' => UPLOAD_ERR_OK, 'temporary' => true];
+}
+
 function ensure_backup_schema(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS backup_history (
         backup_id BIGINT AUTO_INCREMENT PRIMARY KEY,

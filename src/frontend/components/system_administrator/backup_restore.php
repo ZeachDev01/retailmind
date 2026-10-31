@@ -283,7 +283,7 @@ $storePaused = RecoveryStore::isPaused();
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
-    <script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_review.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_restore.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_restore.js')) ?>"></script>
 </body>
 

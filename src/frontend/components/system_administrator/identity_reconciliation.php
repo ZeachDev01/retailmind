@@ -15,15 +15,23 @@ $restorer = new \App\Backup\DatabaseRestoreService($pdo, role_capability_policy(
 $reconciler = new \App\Backup\IdentityReconciliationService($pdo, role_capability_policy());
 $decisions = is_array($_POST['people'] ?? null) ? $_POST['people'] : [];
 $action = (string)($_POST['action'] ?? 'review');
+$file = null;
+if (isset($_GET['new'])) unset($_SESSION['backup_review']);
+$draft = backup_review_draft();
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $draft) {
+    $review = $draft['review'];
+    $decisions = $draft['decisions'];
+    $packageHash = $draft['package_hash'];
+    $package = ['manifest' => ['snapshot_at' => $draft['snapshot_at']]];
+    $action = $draft['action'];
+    $message = 'Review resumed. Enter your current login password to continue. Older backups also need their original passphrase.';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_local_request('Database restore is not available during remote monitoring.');
     csrf_verify();
     try {
-        $file = $_FILES['backup_file'] ?? [];
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
-            throw new DomainException('Select the encrypted Store package to review.');
-        }
+        $file = backup_review_source();
         $packageHash = hash_file('sha256', $file['tmp_name']);
         if ($decisions !== [] && (!is_string($_POST['package_hash'] ?? null) || !hash_equals($_POST['package_hash'], $packageHash))) {
             throw new DomainException('The selected package changed. Start a new identity review before choosing resolutions.');
@@ -43,14 +51,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Reconciliation approved. Destination security and preparation evidence are recorded. No records or files were replaced.';
         } else {
             $review = $reconciler->review((int)$_SESSION['user_id'], (string)current_role(), $package, $decisions);
-            $message = $review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : implode(' ', $review['errors']);
+            $message = $action === 'edit' ? 'Review your account choices below. No records or files were replaced.'
+                : ($review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : implode(' ', $review['errors']));
         }
+        $encryptedPackage = file_get_contents($file['tmp_name']);
+        if ($encryptedPackage === false) throw new RuntimeException('The reviewed package could not be retained.');
+        $_SESSION['backup_review'] = $draft = [
+            'user_id' => $_SESSION['user_id'], 'role' => $_SESSION['role'], 'expires_at' => time() + 1800,
+            'token' => bin2hex(random_bytes(32)), 'package_hash' => $packageHash, 'filename' => $file['name'],
+            'encrypted_package' => $encryptedPackage, 'snapshot_at' => $package['manifest']['snapshot_at'],
+            'review' => array_intersect_key($review, array_flip(['source_users', 'destination_users', 'conflicts', 'errors',
+                'ready', 'active_administrators', 'preservation_closure', 'resulting_access'])),
+            'decisions' => $decisions, 'action' => $action,
+        ];
     } catch (DomainException $e) {
         $message = $e->getMessage();
     } catch (Throwable $e) {
         $message = \App\Support\OperatorAlert::message($e, 'The identity review could not be completed. No Store records or files were replaced.');
+    } finally {
+        if (!empty($file['temporary'])) unlink($file['tmp_name']);
     }
 }
+$editing = $action === 'edit';
 $recordedApproval = $approval ?? $reconciler->latestApproval();
 $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review['ready']));
 ?>
@@ -84,8 +106,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
         <div class="reconcile-stack">
             <ol class="reconcile-steps" aria-label="Restoration progress">
                 <li <?= !$review ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">1</span><span><strong>Select package</strong></span></li>
-                <li <?= $review && empty($review['ready']) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">2</span><span><strong>Review identities</strong></span></li>
-                <li <?= $review && !empty($review['ready']) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">3</span><span><strong>Confirm restoration</strong></span></li>
+                <li <?= $review && (empty($review['ready']) || $editing) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">2</span><span><strong>Review identities</strong></span></li>
+                <li <?= $review && !empty($review['ready']) && !$editing ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">3</span><span><strong>Confirm restoration</strong></span></li>
             </ol>
 
             <?php if ($message !== ''): ?>
@@ -114,6 +136,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 <?= csrf_field() ?>
                 <?php if ($review): ?>
                     <input type="hidden" name="package_hash" value="<?= $escape($packageHash) ?>">
+                    <?php if ($draft): ?><input type="hidden" name="review_token" value="<?= $escape($draft['token']) ?>"><?php endif; ?>
                 <?php endif; ?>
 
                 <section class="dashboard-section reconcile-package" aria-labelledby="package-heading">
@@ -125,11 +148,21 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <?php endif; ?>
                     </div>
 
-                    <div class="form-group reconcile-field">
+                    <?php if ($review): ?>
+                        <div data-reviewed-package<?= $draft ? '' : ' hidden' ?>>
+                            <dl class="reconcile-facts">
+                                <div><dt>Selected backup</dt><dd data-selected-package-name><?= $escape($draft['filename'] ?? '') ?></dd></div>
+                            </dl>
+                            <p><?= !empty($review['ready']) && !$editing ? 'Account review complete. Confirm restoration below.' : 'Package loaded. Continue with the account choices below.' ?></p>
+                            <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php?new=1')) ?>">Change backup</a>
+                        </div>
+                    <?php endif; ?>
+                    <div data-package-inputs>
+                    <div class="form-group reconcile-field"<?= $review && $draft ? ' hidden' : '' ?>>
                         <label for="identity-package">Encrypted Store package (.rmpkg)</label>
-                        <p class="restore-file-hint" id="identity-upload-help"><?= $escape($restorer->supportedSizeLine()) ?> Reloading clears your selection.</p>
+                        <p class="restore-file-hint" id="identity-upload-help"><?= $escape($restorer->supportedSizeLine()) ?> Reviews are retained for 30 minutes in this signed-in session.</p>
                         <div class="restore-file-field">
-                            <input id="identity-package" type="file" name="backup_file" accept=".rmpkg" required aria-describedby="identity-upload-help">
+                            <input id="identity-package" type="file" name="backup_file" accept=".rmpkg"<?= $review && $draft ? '' : ' required' ?> aria-describedby="identity-upload-help">
                         </div>
                     </div>
 
@@ -147,6 +180,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         </div>
                     </div>
                     </div>
+                    </div>
                     <aside class="reconcile-guidance" aria-labelledby="identity-guidance-heading">
                         <h3 id="identity-guidance-heading">Review does not change records</h3>
                         <ul>
@@ -158,6 +192,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 </section>
 
                 <?php if ($review): ?>
+                    <div data-identity-choices<?= !empty($review['ready']) && !$editing ? ' hidden' : '' ?>>
                     <div class="reconcile-reference">
                     <section class="dashboard-section" aria-labelledby="dest-people-heading">
                         <div class="recovery-panel-heading">
@@ -277,7 +312,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         </div>
                     </section>
 
-                    <?php if ($review['ready']): ?>
+                    </div>
+                    <?php if ($review['ready'] && !$editing): ?>
                         <?php $counts = $review['preservation_closure']['counts'];
                         $preserved = [
                             ['Recovery accounts', 'recovery_accounts', 'Destination sealed recovery state preserved intact'],
@@ -375,8 +411,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                     <button class="btn btn-danger" type="submit" formaction="<?= $escape(app_url('components/backup/restore.php')) ?>" data-start-restore>
                                         <i class="bi bi-shield-check" aria-hidden="true"></i> Restore and verify
                                     </button>
-                                    <button class="btn btn-secondary" type="submit" name="action" value="review" formnovalidate>
-                                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Review resolutions
+                                    <button class="btn btn-secondary" type="submit" name="action" value="edit" formnovalidate>
+                                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Edit account choices
                                     </button>
                                 </div>
                             </section>
@@ -384,7 +420,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                     <?php endif; ?>
                 <?php endif; ?>
 
-                <?php if (!$review || empty($review['ready'])): ?>
+                <?php if (!$review || empty($review['ready']) || $editing): ?>
                     <div class="reconcile-actions">
                         <button class="btn btn-primary" type="submit" name="action" value="review">
                             <i class="bi bi-search" aria-hidden="true"></i> <?= $review ? 'Review resolutions' : 'Review accounts' ?>
@@ -400,6 +436,6 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
         endif; ?>
     </main>
 </div>
-<script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
+<script src="<?= $escape(app_url('assets/js/backup_review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_review.js')) ?>"></script>
 </body>
 </html>
