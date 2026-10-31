@@ -82,7 +82,6 @@ try {
     $source->exec("UPDATE users SET profile_image='test.png' WHERE user_id=2");
     file_put_contents($uploadRoot . '/images/test.png', $image);
     file_put_contents($uploadRoot . '/profile-images/test.png', $image);
-    $passphrase = 'separate-off-server-passphrase';
     $policy = new RoleCapabilityPolicy();
     $backups = new DatabaseBackupService($source, $policy, $private . '/downloads', $source, $uploadRoot);
     $targetBackups = new DatabaseBackupService($target, $policy, $private . '/target-downloads', $target, $uploadRoot);
@@ -113,7 +112,7 @@ try {
     $decoded = StorePackageFormat::decode($encrypted, SqlBackupFormat::schema($source));
     $sql = $decoded['sql'];
     $assert($decoded['files']['images/test.png'] === $image && $decoded['files']['profile-images/test.png'] === $image, 'Actual Product and profile image bytes round trip');
-    $assert(!str_contains($encrypted, 'INSERT INTO') && !str_contains($encrypted, $passphrase), 'Package conceals captured SQL and passphrase');
+    $assert(!str_contains($encrypted, 'INSERT INTO') && !str_contains($encrypted, \App\Backup\BackupKeyStore::current()), 'Package conceals captured SQL and key');
     $assert(str_ends_with($backup['filename'], '.rmpkg'), 'Downloads use encrypted package extension');
     $assert($backups->history('admin')[0]['format'] === 'Encrypted Store package', 'History reports SQL format');
     $reject(fn() => $backups->resolveDownload($backup['token'], 1, 'super_admin'), 'Downloads are requester-bound');
@@ -122,7 +121,7 @@ try {
     $assert($superBackup['status'] === DatabaseBackupService::OUTCOME_READY, 'Super Administrator can create backups too');
     $assert($decoded['rows']['backup_operations'] === [] && $decoded['rows']['store_write_gate'] === [], 'Packages exclude source tokens, private artifact paths and transient pause state');
     $systemBackup = $backups->createForSystem();
-    $assert(str_starts_with((string)file_get_contents($systemBackup['path']), "RMSTORE1\n"), 'System export also requires encrypted package format');
+    $assert(str_starts_with((string)file_get_contents($systemBackup['path']), "RMSTORE2\n"), 'System export also requires encrypted package format');
     $backups->discardAfterDelivery($systemBackup['path']);
 
     $before = (string)$target->query('SELECT password_hash FROM users WHERE user_id=1')->fetchColumn();

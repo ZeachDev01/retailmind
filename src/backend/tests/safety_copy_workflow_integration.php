@@ -27,7 +27,8 @@ try {
     $pdo->exec("UPDATE products SET product_image='storage/images/safety.png' WHERE product_id=1");
     $pdo->exec("UPDATE users SET profile_image='safety.png' WHERE user_id=1");
     $service = new SafetyCopyService($pdo, new RoleCapabilityPolicy(), $pdo, $uploads);
-    $operation = bin2hex(random_bytes(16)); $secret = 'Independent destination safety secret 2026';
+    $operation = bin2hex(random_bytes(16));
+    $secret = \App\Backup\BackupKeyStore::current();
     $copy = $service->create($operation, 1, 'admin', 'ThemeTest@2026');
     $assert($copy['stage'] === 'safety_verified', 'Only fully verified safety copies become ready');
     $verified = $service->verify($operation);

@@ -67,7 +67,7 @@ final class StorePackageFormat
             throw new RuntimeException('Select a complete encrypted RetailMind Store package (.rmpkg), no larger than 48 MB.');
         }
         $secret = BackupKeyStore::find(substr($package, strlen(self::KEY_HEADER), 64));
-        $salt = substr($package, $offset, 16); $iv = substr($package, $offset + 16, 12);
+        $iv = substr($package, $offset + 16, 12);
         $prefix = substr($package, 0, $offset + 28);
         $key = hex2bin($secret);
         try {

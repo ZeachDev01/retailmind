@@ -18,8 +18,6 @@ $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$dat
 $superRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name='super_admin'")->fetchColumn();
 $adminRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name='admin'")->fetchColumn();
 $hash = password_hash($password, PASSWORD_DEFAULT);
-
-$safetyPassphrase = 'BrowserSafetyPassphrase@2026';
 $policy = new App\Authorization\RoleCapabilityPolicy();
 $safetyService = new App\Backup\SafetyCopyService($pdo, $policy);
 
@@ -55,5 +53,4 @@ $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 echo json_encode([
     'operation_id' => $opId,
     'safety_op_id' => $safetyOpId,
-    'safety_passphrase' => $safetyPassphrase,
 ]);

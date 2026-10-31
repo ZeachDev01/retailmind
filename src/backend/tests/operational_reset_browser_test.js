@@ -13,7 +13,6 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
-const backupPassphrase = 'Reset package passphrase 2026';
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-operational-reset-'));
 const models = path.join(testDirectory, 'models');
 fs.mkdirSync(models);
@@ -133,7 +132,7 @@ const fixture = action => {
             await page.goto(resetUrl);
             const token = await page.locator('input[name="csrf_token"]').first().inputValue();
             const nonce = await page.locator('form:has(#reset-password) input[name="reset_nonce"]').inputValue();
-            return context.request.post(resetUrl, { form: { csrf_token: token, reset_nonce: nonce, confirmation, current_password: password, backup_passphrase: backupPassphrase } });
+            return context.request.post(resetUrl, { form: { csrf_token: token, reset_nonce: nonce, confirmation, current_password: password } });
         };
         let response = await submit('wrong password');
         assert.match(await response.text(), /current password is incorrect/);
@@ -191,10 +190,10 @@ const fixture = action => {
         const download = await downloadEvent;
         const backup = fs.readFileSync(await download.path());
         assert.match(download.suggestedFilename(), /\.rmpkg$/);
-        assert.equal(backup.subarray(0, 8).toString(), 'RMSTORE1', 'Reset must produce the shared encrypted format');
+        assert.equal(backup.subarray(0, 8).toString(), 'RMSTORE2', 'Reset must produce the shared encrypted format');
         assert(!backup.includes(Buffer.from('INSERT INTO `products`')), 'The downloaded package must hide SQL records');
         const inspected = spawnSync(php, ['-d', 'memory_limit=512M', 'src/backend/tests/support/theme_fixture.php',
-            'backup_package_contents', database, await download.path()], { encoding: 'utf8', env, input: backupPassphrase + '\n' });
+            'backup_package_contents', database, await download.path()], { encoding: 'utf8', env });
         assert.equal(inspected.status, 0, inspected.stderr);
         const captured = JSON.parse(inspected.stdout);
         for (const table of ['products', 'sales', 'stock_predictions']) assert(captured[table] > 0, 'Pre-reset package preserves ' + table);

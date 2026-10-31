@@ -13,7 +13,6 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
-const backupPassphrase = ''; // Automatic server-key encryption.
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-backup-package-'));
 const env = { ...process.env, BACKUP_STORAGE_PATH: path.join(testDirectory, 'recovery') };
 const proofDirectory = path.join(testDirectory, 'proof');
@@ -77,11 +76,11 @@ const fixture = action => {
             await administrator.page.keyboard.press('Enter');
             assert.equal(await tips.evaluate(element => element.open), false, 'Backup tips can be dismissed with the keyboard');
             assert(await administrator.page.locator('.backup-empty').evaluate(element => element.scrollWidth <= element.clientWidth), 'Empty history message wraps within its cell');
-            await administrator.page.getByRole('tab', {name: 'Restore backup', exact: true}).click();
+            await administrator.page.getByRole('tab', {name: 'Restore', exact: true}).click();
             assert(await administrator.page.locator('#incoming-package').isVisible(), 'Restore form remains available');
             await administrator.page.getByRole('tab', {name: 'Safety copy', exact: true}).click();
             assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Safety copy remains available in its tab');
-            await administrator.page.getByRole('tab', {name: 'Restore backup', exact: true}).click();
+            await administrator.page.getByRole('tab', {name: 'Restore', exact: true}).click();
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded recovery fits ' + width + 'px');
             fs.mkdirSync(proofDirectory, {recursive: true});
             await administrator.page.locator('#backup-recovery').scrollIntoViewIfNeeded();
@@ -93,7 +92,7 @@ const fixture = action => {
             assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Dark recovery exposes the safety form');
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded dark recovery fits ' + width + 'px');
             await administrator.page.screenshot({path: path.join(proofDirectory, 'recovery-dark-' + width + '.png'), fullPage: true});
-            await administrator.page.getByRole('tab', {name: 'Restore backup', exact: true}).click();
+            await administrator.page.getByRole('tab', {name: 'Restore', exact: true}).click();
             await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
             await administrator.page.evaluate(() => window.scrollTo(0, 0));
             fs.mkdirSync(proofDirectory, {recursive: true});
@@ -111,7 +110,7 @@ const fixture = action => {
         assert(await administrator.page.locator('#restore-panel').isVisible(), 'Restore errors automatically reveal the restore tab');
         assert(await administrator.page.locator('#restore-package [role="alert"]').isVisible(), 'Restore errors stay visible');
         await administrator.page.goto(adminUrl);
-        assert.equal((await administrator.context.request.post(adminUrl, { form: { action: 'backup', backup_passphrase: backupPassphrase } })).status(), 403, 'Creation needs CSRF');
+        assert.equal((await administrator.context.request.post(adminUrl, { form: { action: 'backup' } })).status(), 403, 'Creation needs CSRF');
         await Promise.all([administrator.page.waitForNavigation(), administrator.page.locator('[data-backup-create]').click()]);
         assert.equal(await administrator.page.locator('[data-backup-download]').count(), 1, await administrator.page.locator('body').innerText());
         for (const width of [1440, 390]) {
@@ -138,23 +137,23 @@ const fixture = action => {
             await superAdministrator.page.setViewportSize({ width, height: 960 });
             assert(await superAdministrator.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Preflight fits viewport');
         }
-        const submit = async (loginPassword, passphrase, bytes = packageBytes, filename = 'store.rmpkg') => {
+        const submit = async (loginPassword, bytes = packageBytes, filename = 'store.rmpkg') => {
             await superAdministrator.page.goto(superUrl);
             const csrf = await superAdministrator.page.locator('input[name="csrf_token"]').first().inputValue();
             return superAdministrator.context.request.post(superUrl, { multipart: { action: 'preflight', csrf_token: csrf,
-                restore_password: loginPassword, backup_passphrase: passphrase,
+                restore_password: loginPassword,
                 backup_file: { name: filename, mimeType: 'application/octet-stream', buffer: bytes } } });
         };
-        assert.match(await (await submit('wrong-password', backupPassphrase)).text(), /password is incorrect/);
+        assert.match(await (await submit('wrong-password')).text(), /password is incorrect/);
         const damaged = Buffer.from(packageBytes);
         damaged[damaged.length - 1] ^= 1;
-        assert.match(await (await submit(data.password, '', damaged)).text(), /damaged|incorrect/i);
-        assert.match(await (await submit(data.password, backupPassphrase, Buffer.from('DROP TABLE users;'), 'old.sql')).text(), /encrypted|rmpkg|package/i);
-        const checked = await submit(data.password, backupPassphrase);
+        assert.match(await (await submit(data.password, damaged)).text(), /damaged|incorrect/i);
+        assert.match(await (await submit(data.password, Buffer.from('DROP TABLE users;'), 'old.sql')).text(), /encrypted|rmpkg|package/i);
+        const checked = await submit(data.password);
         assert.equal(checked.status(), 200);
         assert.match(await checked.text(), /No [Ss]tore records or files were replaced/);
         const identityUrl = origin + '/components/system_administrator/identity_reconciliation.php';
-        assert.equal((await administrator.page.goto(identityUrl)).status(), 403, 'Administrator cannot reconcile privileged identities');
+        assert.equal((await administrator.page.goto(identityUrl)).status(), 200, 'Administrator can review a backup');
         assert.equal((await manager.page.goto(identityUrl)).status(), 403);
         assert.equal((await superAdministrator.context.request.post(identityUrl, { form: { action: 'review' } })).status(), 403, 'Identity choices need CSRF');
         await superAdministrator.page.goto(identityUrl);

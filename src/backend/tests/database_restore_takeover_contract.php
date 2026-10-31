@@ -106,7 +106,6 @@ try {
     $incSqlPath = $private . '/incoming.sql';
     (new \App\Backup\DatabaseSnapshotWriter($pdo))->write($incSqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate']);
     $incSql = file_get_contents($incSqlPath);
-    $incomingPassphrase = 'IncomingPassphrase@2026';
     $incomingRaw = StorePackageFormat::encode($incSql, [], $schema, bin2hex(random_bytes(16)));
     $incomingDecoded = StorePackageFormat::decode($incomingRaw, $schema);
 

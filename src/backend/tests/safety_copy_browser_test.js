@@ -13,7 +13,6 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
-const backupPassphrase = 'Reset package passphrase 2026';
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-safety-browser-'));
 const env = { ...process.env, BACKUP_STORAGE_PATH: path.join(testDirectory, 'recovery') };
 const proofDirectory = path.join(os.tmpdir(), 'retailmind-284-310');
@@ -52,7 +51,6 @@ const fixture = action => {
         const superAdministrator = await login('super_admin');
         const cashier = await login('cashier');
         const urls = ['/components/administrator/database_backup.php', '/components/system_administrator/backup_restore.php'];
-        const secret = 'Independent safety recovery phrase 2026';
         for (const [index, actor] of [administrator, superAdministrator].entries()) {
             const url = origin + urls[index];
             await actor.page.goto(url);
@@ -67,7 +65,7 @@ const fixture = action => {
                 await actor.page.screenshot({ path: path.join(proofDirectory, `safety-form-${index}-${width}.png`), fullPage: true });
             }
             const operation = await actor.page.locator('input[name="safety_operation"]').inputValue();
-            assert.equal((await actor.context.request.post(url, { form: { action: 'safety', safety_operation: operation, safety_password: data.password, safety_passphrase: secret } })).status(), 403, 'Safety capture requires CSRF');
+            assert.equal((await actor.context.request.post(url, { form: { action: 'safety', safety_operation: operation, safety_password: data.password } })).status(), 403, 'Safety capture requires CSRF');
             const submit = async password => {
                 await actor.page.locator('#safety-password').fill(password);
                 await Promise.all([actor.page.waitForNavigation(), actor.page.locator('[data-safety-create]').click()]);

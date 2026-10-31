@@ -73,8 +73,6 @@ try {
     $reconciliationService = new IdentityReconciliationService($pdo, $policy);
 
     $password = 'ThemeTest@2026';
-    $safetyPassphrase = 'DestinationSafetyPassphrase@2026';
-    $incomingPassphrase = 'IncomingStorePassphrase@2026';
 
     // 1. Capture safety copy
     $safetyOpId = bin2hex(random_bytes(16));

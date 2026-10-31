@@ -17,41 +17,41 @@ mkdir($directory, 0700);
 try {
     $_ENV['BACKUP_STORAGE_PATH'] = $directory . '/source';
     $key = \App\Backup\BackupKeyStore::current();
-$package = StorePackageFormat::encode($sql, [], $schema);
-$assert(!str_contains($package, 'CREATE TABLE') && !str_contains($package, $key), 'Stolen package exposes neither SQL nor key');
-$result = StorePackageFormat::decode($package, $schema);
-$assert($result['sql'] === $sql, 'Unicode and binary SQL round trip unchanged');
-$assert($result['rows']['items'][0]['note'] === "\xc3\xb1\xff\x00", 'Rows expose decoded binary values without executing SQL');
-$reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $schema), 'Truncated package rejected');
-$modified = $package; $modified[strlen($modified)-1] = chr(ord($modified[strlen($modified)-1]) ^ 1);
-$reject(fn() => StorePackageFormat::decode($modified, $schema), 'Authentication rejects altered ciphertext');
-$reject(fn() => StorePackageFormat::decode($sql, $schema), 'Plain SQL rejected');
-$reject(fn() => StorePackageFormat::encode($sql, ['images/../evil.php' => '<?php'], $schema), 'Traversal rejected');
-$reject(fn() => StorePackageFormat::encode($sql, ['images/evil.php' => '<?php'], $schema), 'Executable member rejected');
-// Authenticated hostile input represents an untrusted holder of the recovery key.
-$manifest = $result['manifest'];
-$member = ['path' => 'database.sql', 'size' => strlen($sql), 'content' => base64_encode($sql)];
-$manifest['members'] = [$member];
-$seal = static function(array $manifest) use ($key): string {
-    $salt = str_repeat('s', 16); $iv = str_repeat('i', 12); $prefix = "RMSTORE2\n" . hash('sha256', $key) . $salt . $iv;
-    $key = hex2bin($key);
-    $cipher = openssl_encrypt(json_encode($manifest, JSON_THROW_ON_ERROR), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, $prefix, 16);
-    return $prefix . $tag . $cipher;
-};
-$bad = [];
-$case = $manifest; $case['members'][] = $member; $bad['duplicate database member'] = $case;
-$case = $manifest; $case['members'] = []; $bad['missing database'] = $case;
-$case = $manifest; $case['members'][0]['link'] = '../outside'; $bad['linked member'] = $case;
-$case = $manifest; $case['schema'] = str_repeat('0', 64); $bad['incompatible schema'] = $case;
-$case = $manifest; $case['format'] = 'RMSTORE999'; $bad['incompatible version'] = $case;
-$case = $manifest; $case['members'][0]['size'] = 33554433; $bad['content resource limit'] = $case;
-$case = $manifest; $case['members'][0]['size']--; $bad['false declared size'] = $case;
-$case = $manifest; $case['members'][0]['content'] = base64_encode('DROP DATABASE store;'); $case['members'][0]['size'] = 20; $bad['arbitrary SQL'] = $case;
-foreach (['../outside.png', '/images/x.png', 'C:/images/x.png', 'images/linked.png/else', 'images/code.php', 'secrets/.env'] as $path) {
-    $case = $manifest; $case['members'][] = ['path' => $path, 'size' => 4, 'content' => base64_encode('evil')]; $bad[$path] = $case;
-}
-foreach ($bad as $why => $case) $reject(fn() => StorePackageFormat::decode($seal($case), $schema), $why . ' must reject before any replacement');
-$reject(fn() => StorePackageFormat::decode(str_repeat('x', StorePackageFormat::MAX_BYTES + 1), $schema), 'Oversize input rejects before derivation');
+    $package = StorePackageFormat::encode($sql, [], $schema);
+    $assert(!str_contains($package, 'CREATE TABLE') && !str_contains($package, $key), 'Stolen package exposes neither SQL nor key');
+    $result = StorePackageFormat::decode($package, $schema);
+    $assert($result['sql'] === $sql, 'Unicode and binary SQL round trip unchanged');
+    $assert($result['rows']['items'][0]['note'] === "\xc3\xb1\xff\x00", 'Rows expose decoded binary values without executing SQL');
+    $reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $schema), 'Truncated package rejected');
+    $modified = $package; $modified[strlen($modified)-1] = chr(ord($modified[strlen($modified)-1]) ^ 1);
+    $reject(fn() => StorePackageFormat::decode($modified, $schema), 'Authentication rejects altered ciphertext');
+    $reject(fn() => StorePackageFormat::decode($sql, $schema), 'Plain SQL rejected');
+    $reject(fn() => StorePackageFormat::encode($sql, ['images/../evil.php' => '<?php'], $schema), 'Traversal rejected');
+    $reject(fn() => StorePackageFormat::encode($sql, ['images/evil.php' => '<?php'], $schema), 'Executable member rejected');
+    // Authenticated hostile input represents an untrusted holder of the recovery key.
+    $manifest = $result['manifest'];
+    $member = ['path' => 'database.sql', 'size' => strlen($sql), 'content' => base64_encode($sql)];
+    $manifest['members'] = [$member];
+    $seal = static function(array $manifest) use ($key): string {
+        $salt = str_repeat('s', 16); $iv = str_repeat('i', 12); $prefix = "RMSTORE2\n" . hash('sha256', $key) . $salt . $iv;
+        $key = hex2bin($key);
+        $cipher = openssl_encrypt(json_encode($manifest, JSON_THROW_ON_ERROR), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, $prefix, 16);
+        return $prefix . $tag . $cipher;
+    };
+    $bad = [];
+    $case = $manifest; $case['members'][] = $member; $bad['duplicate database member'] = $case;
+    $case = $manifest; $case['members'] = []; $bad['missing database'] = $case;
+    $case = $manifest; $case['members'][0]['link'] = '../outside'; $bad['linked member'] = $case;
+    $case = $manifest; $case['schema'] = str_repeat('0', 64); $bad['incompatible schema'] = $case;
+    $case = $manifest; $case['format'] = 'RMSTORE999'; $bad['incompatible version'] = $case;
+    $case = $manifest; $case['members'][0]['size'] = 33554433; $bad['content resource limit'] = $case;
+    $case = $manifest; $case['members'][0]['size']--; $bad['false declared size'] = $case;
+    $case = $manifest; $case['members'][0]['content'] = base64_encode('DROP DATABASE store;'); $case['members'][0]['size'] = 20; $bad['arbitrary SQL'] = $case;
+    foreach (['../outside.png', '/images/x.png', 'C:/images/x.png', 'images/linked.png/else', 'images/code.php', 'secrets/.env'] as $path) {
+        $case = $manifest; $case['members'][] = ['path' => $path, 'size' => 4, 'content' => base64_encode('evil')]; $bad[$path] = $case;
+    }
+    foreach ($bad as $why => $case) $reject(fn() => StorePackageFormat::decode($seal($case), $schema), $why . ' must reject before any replacement');
+    $reject(fn() => StorePackageFormat::decode(str_repeat('x', StorePackageFormat::MAX_BYTES + 1), $schema), 'Oversize input rejects before derivation');
     $key = \App\Backup\BackupKeyStore::current();
     $assert($key === \App\Backup\BackupKeyStore::current(), 'Backup key is stable across requests');
     $automatic = StorePackageFormat::encode($sql, [], $schema);

@@ -77,8 +77,6 @@ try {
     $assert($restoreService->runVerificationChecks()['checks']['receipt']['status'] === 'passed', 'Valid discounted receipts must pass restore verification');
 
     $password = 'ThemeTest@2026';
-    $safetyPassphrase = 'DestinationSafetyPassphrase@2026';
-    $incomingPassphrase = 'IncomingStorePassphrase@2026';
 
     // 1. Capture verified destination safety copy
     $safetyOpId = bin2hex(random_bytes(16));
@@ -139,11 +137,11 @@ try {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 
     // Reject invalid operator
-    $reject(function() use ($restoreService, $safetyOpId, $safetyPassphrase) {
+    $reject(function() use ($restoreService, $safetyOpId) {
         $restoreService->recoverSafety(999, 'cashier', $safetyOpId);
     }, 'Rejects unauthorized operator');
 
-    // Execute valid safety recovery - works completely WITHOUT incoming package or incoming passphrase!
+    // Execute valid safety recovery - works completely WITHOUT the incoming package!
     $safetyOutcome = $restoreService->recoverSafety(1, 'admin', $safetyOpId);
     $assert($safetyOutcome['success'] === true, 'Safety recovery succeeded');
     $assert(RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Stage is operator_review_pending');
@@ -181,7 +179,7 @@ try {
     $reject(fn() => $restoreService->restartIncoming(1, 'admin', $oversizedPkgPath), 'Rejects oversized incoming file before reading it');
     $tamperedPkgPath = $private . '/tampered.rmpkg';
     file_put_contents($tamperedPkgPath, 'RMSTORE1' . random_bytes(200));
-    $reject(function() use ($restoreService, $tamperedPkgPath, $incomingPassphrase, $safetyPassphrase) {
+    $reject(function() use ($restoreService, $tamperedPkgPath) {
         $restoreService->restartIncoming(1, 'admin', $tamperedPkgPath);
     }, 'Rejects tampered incoming package');
 
