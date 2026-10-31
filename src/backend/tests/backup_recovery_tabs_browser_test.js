@@ -6,7 +6,7 @@ const {chromium} = require('playwright');
 (async () => {
     const source = fs.readFileSync('src/frontend/components/administrator/database_backup.php', 'utf8');
     const start = source.indexOf('<section class="dashboard-section backup-recovery"');
-    const end = source.indexOf('</main>', start);
+    const end = source.indexOf('<section class="dashboard-section backup-history"', start);
     const markup = source.slice(start, end).replace(/<\?php[\s\S]*?\?>|<\?=[\s\S]*?\?>/g, '')
         .replace('data-recovery-tab=""', 'data-recovery-tab="restore-panel"')
         .replace(/(<div id="(?:restore|safety)-panel"[^>]*>)/g, '$1<p>Tool form</p>')

@@ -172,6 +172,11 @@
 .administrator-backup-page .backup-row-notes summary { display: list-item; padding: .5rem 0; min-height: 44px; box-sizing: border-box; color: var(--primary); cursor: pointer; }
 .administrator-backup-page .backup-row-notes p { margin: .25rem 0; max-width: 65ch; overflow-wrap: anywhere; white-space: normal; }
 .administrator-backup-page .backup-history .tag { display: inline-flex; align-items: center; gap: 0.35rem; }
+.administrator-backup-page .backup-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-top: 1.25rem; color: var(--muted); font-size: .875rem; font-variant-numeric: tabular-nums; }
+.administrator-backup-page .backup-pagination p { margin: 0; }
+.administrator-backup-page .backup-pagination-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.administrator-backup-page .backup-page-number { padding: .5rem; color: var(--text); }
+.administrator-backup-page .backup-pagination [aria-disabled="true"] { opacity: .5; cursor: default; }
 .administrator-backup-page .backup-recovery { scroll-margin-top: 6rem; }
 .administrator-backup-page .backup-recovery-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0; border-bottom: 1px solid var(--border); }
 .administrator-backup-page .backup-recovery [hidden] { display: none !important; }

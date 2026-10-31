@@ -54,6 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ensure_backup_schema($pdo);
 $history = $service->history($actorRole);
+$historyPerPage = 10;
+$historyTotal = count($history);
+$historyPages = max(1, (int)ceil($historyTotal / $historyPerPage));
+$historyPage = min($historyPages, max(1, (int)($_GET['history_page'] ?? 1)));
+$historyOffset = ($historyPage - 1) * $historyPerPage;
+$historyRows = array_slice($history, $historyOffset, $historyPerPage);
 $restoreCapability = role_capability_policy()->allows($actorRole, RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 $restoreService = new \App\Backup\DatabaseRestoreService($pdo, role_capability_policy(), $service);
 $restoreGuidance = $restoreService->workflowGuidance();
@@ -142,33 +148,6 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 </div>
             </section>
 
-            <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="backup-history-title">
-                <div class="backup-section-heading">
-                    <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
-                    <span class="backup-record-count"><?= count($history) ?> records</span>
-                </div>
-                <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
-                    <table data-no-smart-table>
-                        <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
-                        <thead><tr>
-                            <th scope="col">Backup date</th>
-                            <th scope="col">Backup file</th>
-                            <th scope="col" class="backup-size">Size</th>
-                            <th scope="col">Outcome</th>
-                            <th scope="col">Requested by</th>
-                        </tr></thead><tbody><?php foreach ($history as $row): ?><tr>
-                                <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
-                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
-                                <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
-                                <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
-                                <td><?= $escape($row['requested_by']) ?></td>
-                            </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong></td>
-                            </tr><?php endif; ?></tbody>
-                    </table>
-                </div>
-            </section>
-
             <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
                 <h2 id="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</h2>
                 <div class="restore-guidance" data-restore-guidance>
@@ -196,6 +175,43 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <?php $recoveryTabbed = true; require __DIR__ . '/../backup/recovery_key_form.php'; ?>
                 </div>
             </section>
+            <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="backup-history-title">
+                <div class="backup-section-heading">
+                    <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
+                    <span class="backup-record-count"><?= count($history) ?> records</span>
+                </div>
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
+                    <table data-no-smart-table>
+                        <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
+                        <thead><tr>
+                            <th scope="col">Backup date</th>
+                            <th scope="col">Backup file</th>
+                            <th scope="col" class="backup-size">Size</th>
+                            <th scope="col">Outcome</th>
+                            <th scope="col">Requested by</th>
+                        </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
+                                <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
+                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
+                                <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
+                                <td><?= $escape($row['requested_by']) ?></td>
+                            </tr><?php endforeach; ?><?php if (!$history): ?><tr>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong></td>
+                            </tr><?php endif; ?></tbody>
+                    </table>
+                </div>
+                <?php if ($historyTotal > 0): ?>
+                <nav class="backup-pagination" aria-label="Backup history pagination">
+                    <p>Showing <?= $historyOffset + 1 ?>–<?= min($historyOffset + $historyPerPage, $historyTotal) ?> of <?= $historyTotal ?></p>
+                    <div class="backup-pagination-actions">
+                        <?php if ($historyPage > 1): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage - 1 ?>#backup-history" rel="prev">Previous</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Previous</span><?php endif; ?>
+                        <span class="backup-page-number" aria-current="page">Page <?= $historyPage ?> of <?= $historyPages ?></span>
+                        <?php if ($historyPage < $historyPages): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage + 1 ?>#backup-history" rel="next">Next</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Next</span><?php endif; ?>
+                    </div>
+                </nav>
+                <?php endif; ?>
+            </section>
+
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
