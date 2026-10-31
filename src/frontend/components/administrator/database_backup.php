@@ -166,11 +166,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 <div class="restore-guidance" data-restore-guidance>
                     <h2>Restore status</h2>
                     <p><strong>Status:</strong> <span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
-                    <?php if ($restoreGuidance['stage'] === 'technical_approval_waiting'): ?>
-                        <p data-restore-next-action>Super Administrator approval required for Identity Reconciliation before restoring.</p>
-                    <?php else: ?>
-                        <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
-                    <?php endif; ?>
+                    <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
                     <?php if (\App\Backup\RecoveryStore::isPaused()): ?>
                         <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Open Database Recovery Console</a></p>
                     <?php endif; ?>

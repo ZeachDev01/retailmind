@@ -52,9 +52,7 @@ final class RoleCapabilityPolicy
             self::REPLACE_MODELS,
             self::ROLL_BACK_MODELS,
         ],
-        // Shared preservation authority: the Administrator may create and
-        // download a Database Backup but never restoration authority, which
-        // stays exclusive to the Super Administrator (see ADR-0003).
+        // Either administrator role may create and restore encrypted backups (ADR-0024).
         'admin' => [
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,

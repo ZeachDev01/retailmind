@@ -32,15 +32,7 @@ final class IdentityReconciliationService
 
     public function review(int $actorId, string $actorRole, #[\SensitiveParameter] array $package, array $decisions = []): array
     {
-        $actor = $this->pdo->prepare("SELECT u.status FROM users u WHERE u.user_id=? AND u.role_id IS NOT NULL
-            AND u.is_recovery_account=0 AND NOT EXISTS (SELECT 1 FROM recovery_accounts recovery WHERE recovery.user_id=u.user_id)
-            AND (EXISTS (SELECT 1 FROM user_roles ur JOIN roles r ON r.role_id=ur.role_id WHERE ur.user_id=u.user_id AND r.role_name='super_admin')
-                OR (NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id=u.user_id)
-                    AND EXISTS (SELECT 1 FROM roles r WHERE r.role_id=u.role_id AND r.role_name='super_admin')))");
-        $actor->execute([$actorId]);
-        if ($actorRole !== 'super_admin' || $actor->fetchColumn() !== 'active') {
-            throw new DomainException('An active destination Super Administrator must review identity reconciliation.');
-        }
+        $this->authorizeActor($actorId, $actorRole);
         $validation = new DatabaseRestoreService($this->pdo, $this->policy, new DatabaseBackupService($this->pdo, $this->policy));
         $validation->validateReferences($package['rows']);
         $this->validateEmbeddedActors($package['rows']);
@@ -189,10 +181,7 @@ final class IdentityReconciliationService
 
     public function approve(int $actorId, string $actorRole, #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] array $package, array $decisions): array
     {
-        $actor = $this->destinationActor($actorId);
-        if ($actorRole !== 'super_admin' || $actor['status'] !== 'active' || !empty($actor['is_recovery_account']) || !$this->hasSuperAdminCapability($actorId)) {
-            throw new DomainException('An active destination Super Administrator must approve identity reconciliation.');
-        }
+        $actor = $this->authorizeActor($actorId, $actorRole);
         if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
             throw new DomainException('Your current destination login password is incorrect.');
         }
@@ -242,17 +231,16 @@ final class IdentityReconciliationService
         if ($approval === null) {
             throw new DomainException('No approved reconciliation preparation was found. Review and approve reconciliation first.');
         }
-        $actor = $this->destinationActor($actorId);
-        if ($actor['status'] !== 'active' || !empty($actor['is_recovery_account'])) {
-            throw new DomainException('An active authorized destination account is required.');
-        }
+        $actor = $this->authorizeActor($actorId, $actorRole);
         if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
             throw new DomainException('Your current destination login password is incorrect.');
         }
-        $approver = $this->destinationActor((int)$approval['approved_by']);
-        if ($approver['status'] !== 'active' || !empty($approver['is_recovery_account']) || !$this->hasSuperAdminCapability((int)$approval['approved_by'])) {
+        $approverRole = $approval['approved_by_role'] ?? 'super_admin';
+        try {
+            $this->authorizeActor((int)$approval['approved_by'], $approverRole);
+        } catch (DomainException $exception) {
             $this->invalidateApproval();
-            throw new DomainException('The Super Administrator who approved reconciliation no longer has required destination platform authority. Renewed reconciliation review is required.');
+            throw new DomainException('The restoring administrator no longer has required destination authority. Review the backup again.', 0, $exception);
         }
         if (($package['manifest']['package_id'] ?? '') !== $approval['package_id']
             || ($package['manifest']['origin_id'] ?? '') !== $approval['origin_id']
@@ -266,7 +254,7 @@ final class IdentityReconciliationService
             throw new DomainException('Destination security state or role configuration has changed since approval. Renewed reconciliation review is required.');
         }
         try {
-            $rechecked = $this->review((int)$approval['approved_by'], 'super_admin', $package, $approval['decisions']);
+            $rechecked = $this->review((int)$approval['approved_by'], $approverRole, $package, $approval['decisions']);
         } catch (\Throwable) {
             $this->invalidateApproval();
             throw new DomainException('Reconciliation mappings are no longer valid against the current destination state. Renewed reconciliation review is required.');
@@ -294,24 +282,15 @@ final class IdentityReconciliationService
         }
     }
 
-    private function destinationActor(int $actorId): array
+    private function authorizeActor(int $actorId, string $actorRole): array
     {
-        $stmt = $this->pdo->prepare('SELECT user_id, password_hash, status, is_recovery_account, role_id FROM users WHERE user_id=?');
+        $actor = (new DatabaseBackupService($this->pdo, $this->policy))->authorizeActor($actorId, $actorRole);
+        $stmt = $this->pdo->prepare('SELECT 1 FROM recovery_accounts WHERE user_id=?');
         $stmt->execute([$actorId]);
-        $actor = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$actor) throw new DomainException('Destination actor not found.');
+        if (!empty($actor['is_recovery_account']) || $stmt->fetchColumn()) {
+            throw new DomainException('Use an active ordinary Administrator or Super Administrator account to restore a backup.');
+        }
         return $actor;
-    }
-
-    private function hasSuperAdminCapability(int $actorId): bool
-    {
-        $stmt = $this->pdo->prepare("SELECT 1 FROM users u
-            LEFT JOIN roles r ON r.role_id=u.role_id
-            LEFT JOIN user_roles ur ON ur.user_id=u.user_id
-            LEFT JOIN roles sr ON sr.role_id=ur.role_id
-            WHERE u.user_id=? AND (r.role_name='super_admin' OR sr.role_name='super_admin')");
-        $stmt->execute([$actorId]);
-        return (bool)$stmt->fetchColumn();
     }
 
     private function displayUser(array $user, array $roles): array

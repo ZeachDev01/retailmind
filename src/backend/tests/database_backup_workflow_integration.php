@@ -131,7 +131,7 @@ try {
     $assert($target->query('SELECT password_hash FROM users WHERE user_id=1')->fetchColumn() === $before, 'Preflight never changes credentials');
     $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Snapshot-password', $passphrase), 'Obsolete source password cannot authorize destination preflight');
     $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password', 'wrong-offline-passphrase'), 'Wrong independent passphrase rejected');
-    $reject(fn() => $restorer->preflight(2, 'admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase), 'Read-only security preflight is Super Administrator only');
+    $assert(!$restorer->preflight(2, 'admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase)['replacement_authorized'], 'Administrator can validate a backup without replacing data');
     $bodyWithDuplicate = preg_replace('/\n-- SHA256: [a-f0-9]{64}\n$/', '', $sql);
     $bodyWithDuplicate = str_replace("X'" . bin2hex('person-3') . "'", "X'" . bin2hex('PERSON-2') . "'", $bodyWithDuplicate);
     $duplicateSql = $bodyWithDuplicate . "\n-- SHA256: " . hash('sha256', $bodyWithDuplicate) . "\n";

@@ -1,5 +1,7 @@
 # Encrypted backups, safe Database Restore, and Store Migration
 
+Update 2026-10-31: [ADR-0024](../adr/0024-administrator-self-authorized-restore.md) supersedes separate Super Administrator restore approval and exclusive recovery-key custody. Either administrator role may review and confirm restoration with their own current login password, and import or download recovery keys. Integrity, explicit account choices, destination security preservation, verified safety capture, and reopening checks remain required.
+
 Update 2026-10-31: [ADR-0023](../adr/0023-password-authorized-backup-restoration.md) supersedes the separate user-entered passphrase requirements for new backups and safety copies. Generated private keys provide encryption; the operator's current login password authorizes restoration. A separately saved recovery-key file supports server loss and migration. Older packages still require their original passphrase; other preservation and recovery requirements remain in force.
 
 ## Problem Statement

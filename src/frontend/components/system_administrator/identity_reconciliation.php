@@ -1,7 +1,9 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
-require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
+require_local_request('Database restore is not available during remote monitoring.');
+$backupPage = (string)current_role() === 'super_admin' ? 'system_administrator/backup_restore.php' : 'administrator/database_backup.php';
 
 $review = null;
 $approval = null;
@@ -41,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Reconciliation approved. Destination security and preparation evidence are recorded. No records or files were replaced.';
         } else {
             $review = $reconciler->review((int)$_SESSION['user_id'], (string)current_role(), $package, $decisions);
-            $message = $review['ready'] ? 'Identity review is ready for destination security approval. No records or files were replaced.' : implode(' ', $review['errors']);
+            $message = $review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : implode(' ', $review['errors']);
         }
     } catch (DomainException $e) {
         $message = $e->getMessage();
@@ -58,7 +60,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <?php retailmind_theme_head(); ?>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Identity Reconciliation</title>
+    <title>Review backup</title>
     <link rel="stylesheet" href="<?= $escape(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
@@ -70,10 +72,10 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <main class="main-content">
         <header class="topbar recovery-heading">
             <div>
-                <h1>Identity Reconciliation</h1>
+                <h1>Review backup</h1>
             </div>
             <div class="recovery-heading-actions">
-                <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/backup_restore.php')) ?>">
+                <a class="btn btn-secondary" href="<?= $escape(app_url('components/' . $backupPage)) ?>">
                     <i class="bi bi-arrow-left" aria-hidden="true"></i> Back to Backup &amp; Restore
                 </a>
             </div>
@@ -83,7 +85,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
             <h2 id="policy-heading" class="sr-only">Governance Policy</h2>
             <div class="backup-storage-note" role="note" aria-label="Identity reconciliation principles">
                 <i class="bi bi-shield-check" aria-hidden="true"></i>
-                <strong>Identity Matching &amp; Governance Policy:</strong> Matching names or IDs never prove identical ownership. Linked accounts retain destination credentials, roles, and security policies. Privileged-only and Recovery identities convert to Historical Actors without usable login access.
+                <strong>Check the accounts:</strong> Matching names or IDs do not prove two accounts belong to the same person. Linked accounts keep their destination password and access. Source privileged-only and Recovery accounts are kept for history without login access.
             </div>
 
             <?php if ($message !== ''): ?>
@@ -100,7 +102,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <span class="tag-success">Approved</span>
                     </div>
                     <p style="margin: 0.5rem 0 0.25rem;">
-                        Approved by Super Administrator <strong>#<?= (int)$recordedApproval['approved_by'] ?></strong> at <time><?= $escape($recordedApproval['approved_at']) ?></time> &bull; Package ID: <code><?= $escape($recordedApproval['package_id']) ?></code>
+                        Reviewed by Administrator <strong>#<?= (int)$recordedApproval['approved_by'] ?></strong> at <time><?= $escape($recordedApproval['approved_at']) ?></time> &bull; Package ID: <code><?= $escape($recordedApproval['package_id']) ?></code>
                     </p>
                     <p class="backup-hint" style="margin: 0;">
                         <strong><?= (int)$recordedApproval['active_administrators'] ?></strong> active Administrator(s) configured. Ready for database restore under fresh credential validation.
@@ -336,15 +338,16 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                     <span class="tag-success">Evidence Recorded</span>
                                 </div>
                                 <p style="margin: 0.75rem 0 0.25rem;">Approval ID: <code><?= $escape($approval['approval_id']) ?></code></p>
-                                <p style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--recovery-muted);">Approved at <?= $escape($approval['approved_at']) ?> by Super Administrator #<?= (int)$approval['approved_by'] ?>.</p>
+                                <p style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--recovery-muted);">Approved at <?= $escape($approval['approved_at']) ?> by Administrator #<?= (int)$approval['approved_by'] ?>.</p>
                                 <p class="backup-hint" style="margin: 0;">Review complete. Confirm restoration below.</p>
                             </div>
                         <?php else: ?>
+                            <p><label><input type="checkbox" name="confirm_replacement" value="1" required> I understand this snapshot replaces newer records and Store operations remain paused until verification. Stop source sales and background workers before continuing.</label></p>
                             <div class="form-actions" style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem;">
-                                <button class="btn btn-primary" type="submit" name="action" value="approve">
-                                    <i class="bi bi-shield-check" aria-hidden="true"></i> Approve reconciliation and record preparation evidence
+                                <button class="btn btn-primary" type="submit" formaction="<?= $escape(app_url('components/backup/restore.php')) ?>" data-start-restore>
+                                    <i class="bi bi-shield-check" aria-hidden="true"></i> Restore and verify
                                 </button>
-                                <button class="btn btn-secondary" type="submit" name="action" value="review">
+                                <button class="btn btn-secondary" type="submit" name="action" value="review" formnovalidate>
                                     <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Review resolutions
                                 </button>
                             </div>

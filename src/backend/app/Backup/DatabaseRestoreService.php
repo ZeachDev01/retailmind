@@ -40,7 +40,6 @@ final class DatabaseRestoreService
     public function readPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
     {
-        $this->authorize($actorRole);
         return $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
     }
 
@@ -80,7 +79,7 @@ final class DatabaseRestoreService
                 foreach ($lookup->fetchAll(PDO::FETCH_COLUMN) as $targetId) {
                     $conflicts[] = ['kind' => $kind, 'source_id' => (int)$source['user_id'], 'destination_id' => (int)$targetId,
                         'message' => 'Source user ' . (int)$source['user_id'] . ' conflicts with destination user ' . (int)$targetId
-                            . ' by ' . $kind . '. Super Administrator identity preparation is required before replacement.'];
+                            . ' by ' . $kind . '. Review the account choices before replacement.'];
                 }
             }
         }
@@ -142,7 +141,7 @@ final class DatabaseRestoreService
 
     public function startIncoming(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $incomingPassphrase,
-        #[\SensitiveParameter] string $safetyPassphrase): array
+        #[\SensitiveParameter] string $safetyPassphrase, array $decisions = []): array
     {
         $this->backups->authorizeActor($actorUserId, $actorRole);
         $lock = RecoveryStore::exclusive();
@@ -150,6 +149,9 @@ final class DatabaseRestoreService
             if (RecoveryStore::isPaused()) throw new DomainException('Finish the active recovery operation first.');
             $package = $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $incomingPassphrase);
             $reconciliation = new IdentityReconciliationService($this->pdo, $this->policy);
+            if ($decisions !== []) {
+                $reconciliation->approve($actorUserId, $actorRole, $loginPassword, $package, $decisions);
+            }
             $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package);
             $approval = $reconciliation->latestApproval();
             $safety = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
@@ -878,10 +880,10 @@ final class DatabaseRestoreService
             if ($approval === null) {
                 return [
                     'stage' => 'technical_approval_waiting',
-                    'stage_label' => 'Waiting for technical approval',
-                    'next_permitted_action' => 'Super Administrator must review and approve Identity Reconciliation in platform governance workspace before replacement can proceed.',
+                    'stage_label' => 'Review backup',
+                    'next_permitted_action' => 'Select a backup, review the account choices, and confirm restoration with your current login password.',
                     'ready' => false,
-                    'missing' => ['Identity Reconciliation has not been approved by a Super Administrator.'],
+                    'missing' => ['Review the backup before restoring.'],
                 ];
             }
 

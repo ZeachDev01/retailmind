@@ -4,6 +4,8 @@ status: accepted
 
 # Current-password authorization for encrypted backup restoration
 
+[ADR-0024](0024-administrator-self-authorized-restore.md) supersedes the separate Super Administrator restore approval and Super Administrator-only recovery-key management boundaries. Other encryption and recovery protections remain in force.
+
 On 2026-10-31, the user confirmed that downloaded Database Backups must remain encrypted and unreadable or unimportable as ordinary SQL, including required uploaded images. Restoration should require the signed-in operator's current login password once, remain usable after login-password changes or resets, and automate package validation and verified destination safety-copy creation while retaining the final snapshot/replacement warning.
 
 The user then accepted a generated server-held encryption key with a separately downloaded recovery-key file, retained restore permissions and approvals, and instructed direct implementation during development. This supersedes ADR-0017's requirement for a user-entered independent passphrase for new backups and the corresponding credential exclusions in the encrypted-backup-simplification specification. The operator's current login password authorizes restoration; it is never the backup encryption secret, so login-password changes do not strand old backups.

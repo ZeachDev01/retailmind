@@ -4,7 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\{BackupKeyStore, DatabaseBackupService};
 
-require_capability(RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
 require_local_request('Recovery keys are not available during remote monitoring.');
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); header('Allow: POST'); exit; }
 csrf_verify();
@@ -37,5 +37,6 @@ try {
     $_SESSION['backup_key_message'] = $exception instanceof DomainException || $exception instanceof RuntimeException
         ? $exception->getMessage() : 'The recovery key could not be saved. Try again.';
 }
-header('Location: ' . app_url('components/system_administrator/backup_restore.php') . '#recovery-key', true, 303);
+$page = (string)current_role() === 'super_admin' ? 'system_administrator/backup_restore.php' : 'administrator/database_backup.php';
+header('Location: ' . app_url('components/' . $page) . '#recovery-key', true, 303);
 exit;

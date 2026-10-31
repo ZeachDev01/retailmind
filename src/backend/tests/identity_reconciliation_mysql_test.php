@@ -101,8 +101,15 @@ try {
     };
 
     // Role-denied approval (AC 5)
-    $reject(fn() => $service->review(1, 'admin', $package, $choices), 'Ordinary Administrator cannot review identities');
-    $reject(fn() => $service->approve(1, 'admin', 'ThemeTest@2026', $package, $choices), 'Ordinary Administrator cannot approve reconciliation');
+    $assert($service->review(1, 'admin', $package, $choices)['ready'], 'Ordinary Administrator can review identities');
+    $reject(fn() => $service->review(3, 'inventory_manager', $package, $choices), 'Inventory Manager cannot review identities');
+    $reject(fn() => $service->review(3, 'admin', $package, $choices), 'Staff cannot claim an Administrator Workspace');
+    $reject(fn() => $service->approve(1, 'admin', 'wrong-password', $package, $choices), 'Administrator must supply their own current password');
+    $adminApproval = $service->approve(1, 'admin', 'ThemeTest@2026', $package, $choices);
+    $assert($adminApproval['approval']['approved_by_role'] === 'admin', 'Administrator can authorize their own account review');
+    $assert($service->recheck(1, 'admin', 'ThemeTest@2026', $package)['ready'], 'Administrator review passes the same preservation and integrity rechecks');
+    $service->invalidateApproval();
+    $pdo->exec("DELETE FROM activity_log WHERE action='Reconciliation approved'");
 
     // Duplicate collation & link checks
     $duplicate = $choices; $duplicate[3]['username'] = 'THEME_CASHIER';

@@ -3,12 +3,12 @@
     'use strict';
     function initialize() {
         const controller = new AbortController();
-        window.addEventListener('retailmind:pagechange', () => controller.abort());
         window.addEventListener('pagehide', () => controller.abort());
         let pending = false;
         document.addEventListener('submit', async function (event) {
             const form = event.target;
             if (!form.matches('[data-identity-form]')) return;
+            if (event.submitter?.matches('[data-start-restore][formaction]')) return;
             event.preventDefault();
             if (pending) return;
             const fields = ['restore_password', 'backup_passphrase'];

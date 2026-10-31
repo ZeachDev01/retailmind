@@ -55,7 +55,7 @@ A sealed privileged identity used only when the primary Super Administrator cann
 _Avoid_: Backup administrator, shared admin account, routine login
 
 **Administrator**:
-The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from other ordinary Administrators, Cashiers, and Inventory Managers, including accounts with additional Administrator access. It may promote staff using only the fixed Administrator, Cashier, and Inventory Manager role templates; it cannot assign Super Administrator, arbitrary privileges, or technical governance. Manual changes preserve at least one active ordinary account with assigned Administrator access, without a Super Administrator bypass; self-disable and self-demotion remain forbidden. Account management requires the active Administrator Workspace. It may create a Database Backup alongside the Super Administrator. Routine inventory execution belongs to the Inventory Manager; platform security, recovery, and technical model controls belong to the Super Administrator.
+The operational owner responsible for Store performance, staff, approvals, compliance, Fiscal Periods, Store Settings, and operational exceptions. It has delegated authority to create, edit, disable, reset passwords for, and revoke sessions from other ordinary Administrators, Cashiers, and Inventory Managers, including accounts with additional Administrator access. It may promote staff using only the fixed Administrator, Cashier, and Inventory Manager role templates; it cannot assign Super Administrator, arbitrary privileges, or technical governance. Manual changes preserve at least one active ordinary account with assigned Administrator access, without a Super Administrator bypass; self-disable and self-demotion remain forbidden. Account management requires the active Administrator Workspace. It may create and restore a Database Backup alongside the Super Administrator, using its own current login password and explicit account review without separate technical approval. Routine inventory execution belongs to the Inventory Manager; platform security, sealed Recovery Account management, and technical model controls belong to the Super Administrator.
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
@@ -67,7 +67,7 @@ The separately saved secret file that unlocks the Store's Database Backups after
 _Avoid_: Login password, Recovery Account credentials
 
 **Identity Reconciliation**:
-The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts, preservation closure, and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access.
+The restoring Administrator or Super Administrator's explicit read-only review of source people, destination accounts, conflicts, preservation closure, and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access.
 _Avoid_: Automatic account matching, general account merging
 
 **Preservation Closure**:
@@ -75,7 +75,7 @@ The complete destination security and state boundary preserved intact during rec
 _Avoid_: Partial import, blind overwrite, security reset
 
 **Reconciliation Approval**:
-The Super Administrator's cryptographic verification and policy endorsement of explicit reconciliation resolutions, recorded in destination-owned preparation evidence under RecoveryStore with exact package integrity, identity/file maps, administrator designations, and a destination watermark. Ordinary Administrators cannot approve or alter reconciliation; immediately before destructive use, strict rechecks invalidate approval if package, state, or authority changed.
+The restoring Administrator or Super Administrator's confirmation of explicit account choices for a particular Database Backup and destination. It belongs to the restore confirmation and does not require a separate Super Administrator approval; changed backup contents, destination security state, or operator authority require renewed review.
 _Avoid_: Unattended restore, silent promotion, unapproved migration
 
 **Historical Actor**:
@@ -83,7 +83,7 @@ An identity retained only for attribution, represented as a disabled roleless us
 _Avoid_: Disabled Account, deleted user, active staff
 
 **Database Restore**:
-The replacement of operational Store records and required uploaded files with the state captured in an encrypted Database Backup, while preserving destination privileged access and security evidence. Either administrator role may initiate it after the Super Administrator approves Identity Reconciliation; newer operational records are not retained, and the Store remains closed until verification and explicit reopening.
+The replacement of operational Store records and required uploaded files with the state captured in an encrypted Database Backup, while preserving destination privileged access and security evidence. Either administrator role may review and confirm it with their own current login password, without separate Super Administrator approval; newer operational records are not retained, and the Store remains closed until verification and explicit reopening.
 _Avoid_: Import report, undo backup
 
 **Recovery Console**:

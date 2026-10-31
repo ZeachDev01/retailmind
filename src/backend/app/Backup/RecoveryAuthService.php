@@ -31,7 +31,7 @@ final class RecoveryAuthService
         }
 
         if (empty($reconciliationApproval['package_id']) || ($reconciliationApproval['stage'] ?? '') !== 'reconciliation_approved') {
-            throw new DomainException('Invalid or stale reconciliation approval. Technical identity approval from a Super Administrator is required.');
+            throw new DomainException('Invalid or stale account review. Review the backup again before restoring.');
         }
 
         // Validate initiator credentials against current live database

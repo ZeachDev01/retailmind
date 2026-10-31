@@ -21,7 +21,7 @@ The authorized operator's explicit resumption of Store operations after Database
 _Avoid_: Automatic reopening, completed verification (when referring to resumed operations)
 
 **Identity Reconciliation**:
-The Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
+The restoring Administrator or Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
 _Avoid_: Automatic account matching, general account merging
 
 **Historical Actor**:

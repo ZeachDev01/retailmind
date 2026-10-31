@@ -16,11 +16,16 @@ try {
     if (!$file || $file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file((string)$file['tmp_name'])) {
         throw new DomainException('Select a complete encrypted Store package within the displayed upload limit.');
     }
+    $decisions = is_array($_POST['people'] ?? null) ? $_POST['people'] : [];
+    if ($decisions !== [] && (!is_string($_POST['package_hash'] ?? null)
+        || !hash_equals($_POST['package_hash'], hash_file('sha256', $file['tmp_name'])))) {
+        throw new DomainException('The selected backup changed. Review it again before restoring.');
+    }
     $backups = new DatabaseBackupService($pdo, role_capability_policy());
     $restorer = new DatabaseRestoreService($pdo, role_capability_policy(), $backups);
     $restorer->startIncoming((int)$_SESSION['user_id'], $role, (string)$file['tmp_name'], (string)$file['name'],
         (string)($_POST['restore_password'] ?? ''), (string)($_POST['backup_passphrase'] ?? ''),
-        '');
+        '', $decisions);
 } catch (Throwable $exception) {
     $_SESSION['restore_error'] = \App\Support\OperatorAlert::message($exception, 'Restore could not finish. Check recovery status before reopening the Store.');
 }
