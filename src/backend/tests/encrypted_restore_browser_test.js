@@ -112,8 +112,9 @@ async function runScenario(initiator) {
         const backupPage = initiator === 'super_admin' ? origin + '/components/system_administrator/backup_restore.php' : adminUrl;
         await admin.page.goto(backupPage);
         await admin.page.locator('#incoming-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes });
+        await admin.page.getByRole('button', { name: 'Review backup', exact: true }).click();
         await admin.page.locator('#incoming-password').fill(data.password);
-        await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', { name: 'Review backup', exact: true }).click()]);
+        await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('dialog').getByRole('button', { name: 'Review backup', exact: true }).click()]);
         await admin.page.locator('#resolution-1').waitFor();
         assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Review identities/);
         assert.equal(await admin.page.locator('#identity-package').isVisible(), false, 'Reviewed package is summarized instead of prompting again');

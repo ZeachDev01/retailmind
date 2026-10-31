@@ -10,7 +10,7 @@ $reviewFirst = $restoreReviewFirst ?? true;
     <div class="restore-introduction">
     <p id="restore-package-warning"><strong>Restore replaces newer records, including sales.</strong> Stop source sales and background workers. The Store stays closed until recovery is verified.</p>
     </div>
-    <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url($reviewFirst ? 'components/system_administrator/identity_reconciliation.php' : 'components/backup/restore.php')) ?>" aria-describedby="restore-package-warning"<?= $reviewFirst ? ' data-identity-form' : '' ?>>
+    <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url($reviewFirst ? 'components/system_administrator/identity_reconciliation.php' : 'components/backup/restore.php')) ?>" aria-describedby="restore-package-warning" data-password-authorization<?= $reviewFirst ? ' data-identity-form' : '' ?>>
         <?= csrf_field() ?>
         <div class="form-group"><label for="incoming-package">Backup file (.rmpkg)</label><input id="incoming-package" type="file" name="backup_file" accept=".rmpkg" aria-describedby="incoming-package-help" required><p id="incoming-package-help" class="backup-hint"><?= $escape($restoreLimit) ?></p></div>
         <div class="form-group"><label for="incoming-password">Current login password</label><input id="incoming-password" type="password" name="restore_password" autocomplete="current-password" required></div>

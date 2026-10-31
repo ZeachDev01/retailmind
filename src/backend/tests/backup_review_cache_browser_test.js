@@ -19,9 +19,9 @@ const {chromium} = require('playwright');
         assert.equal(rendered.status, 0, rendered.stderr);
         return rendered.stdout;
     });
-    const form = `<form method="post" action="/review" enctype="multipart/form-data" data-identity-form>
+    const form = `<form method="post" action="/review" enctype="multipart/form-data" data-identity-form data-password-authorization>
         <input type="file" name="backup_file" required>
-        <input type="password" name="restore_password" required>
+        <div class="form-group"><label for="test-password">Current login password</label><input id="test-password" type="password" name="restore_password" required></div>
         <button>Review backup</button></form>`;
     const reviewSource = fs.readFileSync(path.join(frontend, 'components/system_administrator/identity_reconciliation.php'), 'utf8');
     const packageSection = reviewSource.match(/<section class="dashboard-section reconcile-package"[\s\S]*?<\/section>/)[0];
@@ -46,7 +46,7 @@ const {chromium} = require('playwright');
         if (request.method === 'POST') for await (const chunk of request) { /* consume upload */ }
         response.setHeader('Content-Type', 'text/html');
         response.end(`<!doctype html><title>Backup review</title><main>
-            ${request.method === 'POST' ? '<h1>Review identities</h1>' + form.replace(/<input[\s\S]*<button>/, reviewed.stdout + '<button>') : form}</main>
+            ${request.method === 'POST' ? '<h1>Review identities</h1>' + form.replace(' data-password-authorization', '').replace(/<input[\s\S]*<button>/, reviewed.stdout + '<button>') : form}</main>
             ${scripts[Number(url.searchParams.get('page') || 0)]}`);
     });
     let browser;
@@ -68,8 +68,10 @@ const {chromium} = require('playwright');
         for (let index = 0; index < pages.length; index++) {
             await page.goto(origin + '/?page=' + index);
             await page.locator('[name="backup_file"]').setInputFiles({name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: Buffer.from('test package')});
+            assert.equal(await page.locator('[name="restore_password"]').isVisible(), false);
+            await page.getByRole('button', {name: 'Review backup', exact: true}).click();
             await page.locator('[name="restore_password"]').fill('test-password');
-            await page.getByRole('button', {name: 'Review backup'}).click();
+            await page.getByRole('dialog').getByRole('button', {name: 'Review backup', exact: true}).click();
             await page.getByRole('heading', {name: 'Review identities'}).waitFor();
             assert.equal(await page.locator('[name="backup_file"]').evaluate(input => input.files[0]?.name), 'store.rmpkg', pages[index] + ': no second file selection');
             assert.equal(await page.locator('[name="restore_password"]').inputValue(), 'test-password', pages[index] + ': no second password entry');

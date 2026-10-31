@@ -20,14 +20,14 @@ const {chromium} = require('playwright');
         await page.addScriptTag({path: 'src/frontend/assets/js/backup_recovery_tabs.js'});
         for (const width of [1440, 375]) {
             await page.setViewportSize({width, height: 900});
-            await page.getByRole('tab', {name: 'Restore backup', exact: true}).click();
+            await page.getByRole('tab', {name: 'Restore', exact: true}).click();
             assert.equal(await page.locator('#restore-panel').isVisible(), true);
             await page.keyboard.press('ArrowRight');
             assert.equal(await page.locator('#safety-panel').isVisible(), true);
             await page.keyboard.press('End');
             assert.equal(await page.locator('#key-panel').isVisible(), true);
             await page.getByLabel('Key password').fill('retained');
-            await page.getByRole('tab', {name: 'Restore backup', exact: true}).click();
+            await page.getByRole('tab', {name: 'Restore', exact: true}).click();
             await page.keyboard.press('ArrowLeft');
             assert.equal(await page.getByLabel('Key password').inputValue(), 'retained');
             await page.keyboard.press('Home');

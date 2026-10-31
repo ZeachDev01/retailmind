@@ -1,7 +1,75 @@
 // Keep credentials in this page only; the session draft resumes review after reload.
 (function () {
     'use strict';
+    function initializeAuthorization(root) {
+        root.querySelectorAll('[data-password-authorization]').forEach(form => {
+            const password = form.querySelector('input[type="password"]');
+            const dialog = document.createElement('dialog');
+            dialog.className = 'backup-authorization';
+            dialog.setAttribute('aria-labelledby', password.id + '-authorization-title');
+            const title = document.createElement('h2');
+            title.id = password.id + '-authorization-title';
+            let warning = form.closest('#restore-package')?.querySelector('.restore-introduction');
+            if (!warning && password.name === 'restore_password') {
+                warning = document.createElement('div');
+                warning.className = 'restore-introduction';
+                const text = document.createElement('p');
+                const emphasis = document.createElement('strong');
+                emphasis.textContent = 'Restore replaces newer records, including sales.';
+                text.append(emphasis, ' Stop source sales and background workers. The Store stays closed until recovery is verified.');
+                warning.append(text);
+            }
+            dialog.append(title);
+            if (warning) dialog.append(warning);
+            dialog.append(password.closest('.form-group'));
+            const actions = document.createElement('div');
+            actions.className = 'backup-authorization-actions';
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'btn btn-secondary';
+            cancel.textContent = 'Cancel';
+            const confirm = document.createElement('button');
+            confirm.type = 'button';
+            confirm.className = 'btn btn-primary';
+            actions.append(cancel, confirm);
+            dialog.append(actions);
+            form.append(dialog);
+            password.disabled = true;
+            let submitter;
+            let authorized = false;
+            form.addEventListener('submit', event => {
+                if (authorized) { authorized = false; return; }
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                submitter = event.submitter;
+                title.textContent = submitter.textContent.trim();
+                confirm.textContent = title.textContent;
+                password.disabled = false;
+                dialog.returnValue = '';
+                dialog.showModal();
+                password.focus();
+            });
+            function clearPassword() {
+                password.value = '';
+                password.disabled = true;
+            }
+            cancel.addEventListener('click', () => { clearPassword(); dialog.close(); });
+            dialog.addEventListener('cancel', clearPassword);
+            confirm.addEventListener('click', () => {
+                if (!password.reportValidity()) return;
+                authorized = true;
+                dialog.close('authorized');
+                form.requestSubmit(submitter);
+            });
+            password.addEventListener('keydown', event => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                confirm.click();
+            });
+        });
+    }
     function initialize() {
+        initializeAuthorization(document);
         const controller = new AbortController();
         window.addEventListener('pagehide', () => controller.abort());
         let pending = false;
@@ -55,6 +123,7 @@
                         next.querySelector('[data-package-inputs]').hidden = true;
                     }
                 });
+                initializeAuthorization(main);
                 const target = main.querySelector('#restore-package') || main;
                 target.scrollIntoView({ block: 'start' });
             } catch (error) {

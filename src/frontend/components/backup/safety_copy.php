@@ -33,7 +33,7 @@ catch (Throwable $exception) { $safetyError = \App\Support\OperatorAlert::messag
             <a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download safety copy</a>
         </div>
     <?php else: ?>
-        <form class="safety-copy-create" method="post">
+        <form class="safety-copy-create" method="post" data-password-authorization>
             <?= csrf_field() ?><input type="hidden" name="action" value="safety"><input type="hidden" name="safety_operation" value="<?= $escape($safetyOperation) ?>">
             <h3>Create a safety copy</h3>
             <div class="form-group"><label for="safety-password">Current login password</label><input id="safety-password" type="password" name="safety_password" autocomplete="current-password" required></div>

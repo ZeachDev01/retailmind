@@ -83,6 +83,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <title>Review backup</title>
     <link rel="stylesheet" href="<?= $escape(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
 
 </head>
@@ -130,7 +131,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 </section>
             <?php endif; ?>
 
-            <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>" data-identity-form class="reconcile-stack">
+            <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>" data-identity-form<?= !$review ? ' data-password-authorization' : '' ?> class="reconcile-stack">
                 <?= csrf_field() ?>
                 <?php if ($review): ?>
                     <input type="hidden" name="package_hash" value="<?= $escape($packageHash) ?>">

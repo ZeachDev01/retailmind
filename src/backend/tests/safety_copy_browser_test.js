@@ -67,8 +67,9 @@ const fixture = action => {
             const operation = await actor.page.locator('input[name="safety_operation"]').inputValue();
             assert.equal((await actor.context.request.post(url, { form: { action: 'safety', safety_operation: operation, safety_password: data.password } })).status(), 403, 'Safety capture requires CSRF');
             const submit = async password => {
+                await actor.page.locator('[data-safety-create]').click();
                 await actor.page.locator('#safety-password').fill(password);
-                await Promise.all([actor.page.waitForNavigation(), actor.page.locator('[data-safety-create]').click()]);
+                await Promise.all([actor.page.waitForNavigation(), actor.page.getByRole('dialog').getByRole('button', { name: 'Create and verify safety copy', exact: true }).click()]);
             };
             await submit('wrong-password');
             assert.match(await actor.page.locator('[data-safety-copy]').innerText(), /password is incorrect/);
