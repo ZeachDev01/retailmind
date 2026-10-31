@@ -132,6 +132,10 @@ _Avoid_: Automatic order, required purchase quantity
 The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
 _Avoid_: Suggested purchase quantity, guaranteed sales, stock quantity
 
+**Stockout Day**:
+A Store trading day when a Product was unavailable for sale during part or all of the day. Recorded sales remain valid, but do not reveal how many additional units customers might have bought.
+_Avoid_: Zero demand, complete demand observation
+
 **Replenishment Receipt**:
 A receipt issued by a supplier or larger retailer for goods the Store buys to replenish its inventory. It records the Store's purchases, rather than purchases made by the Store's customers.
 _Avoid_: Sale Receipt, customer demand record

@@ -1,0 +1,5 @@
+# Let the local Administrator approve qualified Store forecasting models
+
+The Store runs RetailMind locally on XAMPP without routine developer access, so model activation and replacement cannot depend on a developer Super Administrator login. The local Administrator will approve Store models only after fixed automated technical checks pass; the Super Administrator retains initial technical configuration and maintenance. This changes the Super Administrator-only model approval boundary in ADR-0005 and related role policy, while retaining chronological evaluation, configured quality gates, observation requirements, audit attribution, demo isolation, and advisory purchasing guidance.
+
+Scheduled forecasting, candidate training, and evaluation should run unattended. Candidates that fail checks leave the approved model unchanged. The trade-off is local operational ownership instead of requiring developer intervention for routine model changes; exact UI and authorization changes remain unimplemented.
