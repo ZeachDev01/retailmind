@@ -130,6 +130,7 @@ $storePaused = RecoveryStore::isPaused();
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Backup &amp; Restore</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
 </head>
 

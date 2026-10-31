@@ -30,6 +30,7 @@ php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/backup_package_browser_test.js
 node src/backend/tests/backup_recovery_tabs_browser_test.js
+node src/backend/tests/recovery_tools_browser_test.js
 node src/backend/tests/backup_history_pagination_browser_test.js
 node src/backend/tests/encrypted_restore_browser_test.js
 php src/backend/tests/recovery_restart_workflow_integration.php

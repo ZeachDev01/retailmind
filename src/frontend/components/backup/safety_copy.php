@@ -22,13 +22,20 @@ catch (Throwable $exception) { $safetyError = \App\Support\OperatorAlert::messag
 ?>
 <section class="dashboard-section" aria-labelledby="safety-copy-title" data-safety-copy>
     <h2 id="safety-copy-title">Safety copy</h2>
+    <p class="recovery-tool-description">Keep a verified copy of this server’s current Store records and images before a restore.</p>
     <?php if ($safetyError !== ''): ?><p class="alert tag-warning" role="alert"><?= $escape($safetyError) ?></p><?php endif; ?>
     <?php if ($safetyDownload): ?>
-        <p role="status">Safety copy verified and retained for this operation.</p>
-        <p><a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>">Download safety copy</a></p>
+        <div class="safety-copy-ready">
+            <div role="status">
+                <h3><i class="bi bi-check-circle" aria-hidden="true"></i> Safety copy verified</h3>
+                <p>Retained for this operation. Download a copy to keep off-server.</p>
+            </div>
+            <a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download safety copy</a>
+        </div>
     <?php else: ?>
-        <form method="post">
+        <form class="safety-copy-create" method="post">
             <?= csrf_field() ?><input type="hidden" name="action" value="safety"><input type="hidden" name="safety_operation" value="<?= $escape($safetyOperation) ?>">
+            <h3>Create a safety copy</h3>
             <div class="form-group"><label for="safety-password">Current login password</label><input id="safety-password" type="password" name="safety_password" autocomplete="current-password" required></div>
             <button class="btn btn-primary" type="submit" data-safety-create>Create and verify safety copy</button>
         </form>
