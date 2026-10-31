@@ -10,12 +10,10 @@ final class StorePackageFormat
     public const VERSION = 'RMSTORE1';
     public const KEY_VERSION = 'RMSTORE2';
     public const CIPHER = 'aes-256-gcm';
-    public const ITERATIONS = 600000;
     public const MAX_BYTES = 48 * 1024 * 1024;
     public const MAX_CONTENT_BYTES = 32 * 1024 * 1024;
     public const MAX_FILES = 2000;
     public const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-    private const HEADER = "RMSTORE1\n";
     private const KEY_HEADER = "RMSTORE2\n";
 
     public static function assertRuntime(): void
@@ -31,23 +29,11 @@ final class StorePackageFormat
         }
     }
 
-    public static function assertPassphrase(#[\SensitiveParameter] string $passphrase): void
-    {
-        if (strlen($passphrase) < 16 || strlen($passphrase) > 1024) {
-            throw new RuntimeException('Use a separate backup passphrase between 16 and 1024 bytes. Keep an off-server recovery copy.');
-        }
-    }
-
-    public static function encode(#[\SensitiveParameter] string $sql, array $files, array $schema, #[\SensitiveParameter] string $passphrase, string $origin = '', string $databaseVersion = ''): string
+    public static function encode(#[\SensitiveParameter] string $sql, array $files, array $schema, string $origin = '', string $databaseVersion = ''): string
     {
         self::assertRuntime();
-        $header = self::HEADER;
-        $managed = $passphrase === '';
-        if ($managed) {
-            $passphrase = BackupKeyStore::current();
-            $header = self::KEY_HEADER . hash('sha256', $passphrase);
-        }
-        self::assertPassphrase($passphrase);
+        $secret = BackupKeyStore::current();
+        $header = self::KEY_HEADER . hash('sha256', $secret);
         SqlBackupFormat::statements($sql, $schema);
         $members = [['path' => 'database.sql', 'size' => strlen($sql), 'content' => base64_encode($sql)]];
         foreach ($files as $path => $content) {
@@ -65,7 +51,7 @@ final class StorePackageFormat
         $salt = random_bytes(16);
         $iv = random_bytes(12);
         $prefix = $header . $salt . $iv;
-        $key = $managed ? hex2bin($passphrase) : hash_pbkdf2('sha256', $passphrase, $salt, self::ITERATIONS, 32, true);
+        $key = hex2bin($secret);
         try {
             $ciphertext = openssl_encrypt($plain, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv, $tag, $prefix, 16);
             if ($ciphertext === false) throw new RuntimeException('The Store package could not be encrypted.');
@@ -73,26 +59,20 @@ final class StorePackageFormat
         } finally { unset($key, $plain); }
     }
 
-    public static function decode(string $package, #[\SensitiveParameter] string $passphrase, array $schema): array
+    public static function decode(string $package, array $schema): array
     {
         self::assertRuntime();
-        $managed = str_starts_with($package, self::KEY_HEADER);
-        $offset = strlen(self::HEADER) + ($managed ? 64 : 0);
-        if (strlen($package) > self::MAX_BYTES || strlen($package) < $offset + 45 || (!$managed && !str_starts_with($package, self::HEADER))) {
+        $offset = strlen(self::KEY_HEADER) + 64;
+        if (strlen($package) > self::MAX_BYTES || strlen($package) < $offset + 45 || !str_starts_with($package, self::KEY_HEADER)) {
             throw new RuntimeException('Select a complete encrypted RetailMind Store package (.rmpkg), no larger than 48 MB.');
         }
-        if ($managed) {
-            $passphrase = BackupKeyStore::find(substr($package, strlen(self::KEY_HEADER), 64));
-        } elseif ($passphrase === '') {
-            throw new RuntimeException('This older backup needs its original passphrase. Open Older backup options and enter it.');
-        }
-        self::assertPassphrase($passphrase);
+        $secret = BackupKeyStore::find(substr($package, strlen(self::KEY_HEADER), 64));
         $salt = substr($package, $offset, 16); $iv = substr($package, $offset + 16, 12);
         $prefix = substr($package, 0, $offset + 28);
-        $key = $managed ? hex2bin($passphrase) : hash_pbkdf2('sha256', $passphrase, $salt, self::ITERATIONS, 32, true);
+        $key = hex2bin($secret);
         try {
             $plain = openssl_decrypt(substr($package, $offset + 44), self::CIPHER, $key, OPENSSL_RAW_DATA, $iv, substr($package, $offset + 28, 16), $prefix);
-            if ($plain === false) throw new RuntimeException($managed ? 'The backup is damaged or its recovery key is incorrect.' : 'The backup passphrase is incorrect, or the package is damaged.');
+            if ($plain === false) throw new RuntimeException('The backup is damaged or its recovery key is incorrect.');
             $manifest = json_decode($plain, true, 16, JSON_THROW_ON_ERROR);
             if (!is_array($manifest)) throw new RuntimeException('Invalid Store package manifest.');
             $result = self::validateManifest($manifest, $schema);

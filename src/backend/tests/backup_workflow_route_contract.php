@@ -131,7 +131,7 @@ $assert(
     'The Super Administrator page must keep the Database Restore workflow'
 );
 $assert(
-    str_contains($superAdministratorPage, 'restore_password') && str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
+    str_contains($superAdministratorPage, 'restore_password') && !str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
     'Read-only preflight requires distinct credentials and cannot replace records'
 );
 

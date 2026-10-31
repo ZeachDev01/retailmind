@@ -38,13 +38,13 @@ final class DatabaseRestoreService
 
     /** Read-only: successful validation never grants replacement authority. */
     public function readPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
-        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+        #[\SensitiveParameter] string $loginPassword): array
     {
-        return $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
+        return $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
     }
 
     private function readAuthorizedPackage(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
-        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+        #[\SensitiveParameter] string $loginPassword): array
     {
         $actor = $this->backups->authorizeActor($actorUserId, $actorRole);
         if ($loginPassword === '' || !password_verify($loginPassword, (string)$actor['password_hash'])) {
@@ -56,7 +56,7 @@ final class DatabaseRestoreService
         }
         $schema = SqlBackupFormat::schema($this->pdo);
         try {
-            $package = StorePackageFormat::decode((string)file_get_contents($sourcePath), $backupPassphrase, $schema);
+            $package = StorePackageFormat::decode((string)file_get_contents($sourcePath), $schema);
         } catch (\RuntimeException $exception) {
             throw new DomainException($exception->getMessage(), 0, $exception);
         }
@@ -65,9 +65,9 @@ final class DatabaseRestoreService
     }
 
     public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
-        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $backupPassphrase): array
+        #[\SensitiveParameter] string $loginPassword): array
     {
-        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $backupPassphrase);
+        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
         $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
         foreach (['user_id' => 'id', 'username' => 'username', 'email' => 'email'] as $column => $kind) {
@@ -140,14 +140,13 @@ final class DatabaseRestoreService
     }
 
     public function startIncoming(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
-        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $incomingPassphrase,
-        #[\SensitiveParameter] string $safetyPassphrase, array $decisions = []): array
+        #[\SensitiveParameter] string $loginPassword, array $decisions = []): array
     {
         $this->backups->authorizeActor($actorUserId, $actorRole);
         $lock = RecoveryStore::exclusive();
         try {
             if (RecoveryStore::isPaused()) throw new DomainException('Finish the active recovery operation first.');
-            $package = $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword, $incomingPassphrase);
+            $package = $this->readAuthorizedPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
             $reconciliation = new IdentityReconciliationService($this->pdo, $this->policy);
             if ($decisions !== []) {
                 $reconciliation->approve($actorUserId, $actorRole, $loginPassword, $package, $decisions);
@@ -155,14 +154,14 @@ final class DatabaseRestoreService
             $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package);
             $approval = $reconciliation->latestApproval();
             $safety = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
-            $metadata = $safety->create(bin2hex(random_bytes(16)), $actorUserId, $actorRole, $loginPassword, $safetyPassphrase, $lock);
+            $metadata = $safety->create(bin2hex(random_bytes(16)), $actorUserId, $actorRole, $loginPassword, $lock);
             $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package, $approval);
             RecoveryAuthService::preparePreRestoreState($this->pdo, bin2hex(random_bytes(16)), $actorUserId,
                 $actorRole, $loginPassword, $approval, $metadata);
         } finally {
             fclose($lock);
         }
-        return $this->restartIncoming($actorUserId, $actorRole, $sourcePath, $incomingPassphrase, $safetyPassphrase);
+        return $this->restartIncoming($actorUserId, $actorRole, $sourcePath);
     }
 
     public function restore(int $actorUserId, string $actorRole, string $sourcePath, string $originalName, #[\SensitiveParameter] string $password): array
@@ -314,14 +313,13 @@ final class DatabaseRestoreService
     public function recoverSafety(
         int $actorId,
         string $actorRole,
-        string $safetyOperationId,
-        #[\SensitiveParameter] string $safetyPassphrase
+        string $safetyOperationId
     ): array {
         $this->assertRecoveryOperator($actorId, $actorRole);
         $lock = RecoveryStore::exclusive();
         try {
             $safetyService = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
-            $verified = $safetyService->verify($safetyOperationId, $safetyPassphrase);
+            $verified = $safetyService->verify($safetyOperationId);
             $metadata = $verified['metadata'];
             $package = $verified['package'];
             $schema = $metadata['schema'];
@@ -371,9 +369,7 @@ final class DatabaseRestoreService
     public function restartIncoming(
         int $actorId,
         string $actorRole,
-        string $packagePath,
-        #[\SensitiveParameter] string $incomingPassphrase,
-        #[\SensitiveParameter] string $safetyPassphrase
+        string $packagePath
     ): array {
         $this->assertRecoveryOperator($actorId, $actorRole);
         $lock = RecoveryStore::exclusive();
@@ -398,7 +394,7 @@ final class DatabaseRestoreService
             }
 
             $safetyService = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
-            $verifiedSafety = $safetyService->verify($safetyOpId, $safetyPassphrase);
+            $verifiedSafety = $safetyService->verify($safetyOpId);
             $safetyCheckpoint = $verifiedSafety['package'];
             $schema = $verifiedSafety['metadata']['schema'];
 
@@ -406,7 +402,7 @@ final class DatabaseRestoreService
             if ($pkgBytes === false) {
                 throw new DomainException('The incoming package could not be read.');
             }
-            $incomingPackage = StorePackageFormat::decode($pkgBytes, $incomingPassphrase, $schema);
+            $incomingPackage = StorePackageFormat::decode($pkgBytes, $schema);
 
             if (($incomingPackage['manifest']['package_id'] ?? '') !== $approval['package_id']
                 || ($incomingPackage['manifest']['origin_id'] ?? '') !== $approval['origin_id']
@@ -890,7 +886,7 @@ final class DatabaseRestoreService
             return [
                 'stage' => 'ready_to_restore',
                 'stage_label' => 'Ready to restore',
-                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with verified passphrases.',
+                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with available recovery keys.',
                 'ready' => true,
                 'missing' => [],
             ];

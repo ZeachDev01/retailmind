@@ -77,7 +77,7 @@ final class StoreReopening
             return [
                 'stage' => 'ready_to_restore',
                 'stage_label' => 'Ready to restore',
-                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with verified passphrases.',
+                'next_permitted_action' => 'Authenticated Administrator or Super Administrator may initiate encrypted replacement or restart incoming replacement with available recovery keys.',
                 'ready' => true,
                 'missing' => [],
             ];

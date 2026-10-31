@@ -15,8 +15,8 @@ $sqlFor=static function(array $schema): string {
 $passphrase='Portable package regression passphrase';
 foreach (['mysql'=>'mariadb','mariadb'=>'mysql'] as $from=>$to) {
     $source=$schemas[$from];$target=$schemas[$to];$sql=$sqlFor($source);
-    $package=StorePackageFormat::encode($sql,[],$source,$passphrase);
-    $decoded=StorePackageFormat::decode($package,$passphrase,$target);
+    $package=StorePackageFormat::encode($sql,[],$source);
+    $decoded=StorePackageFormat::decode($package,$target);
     $assert($decoded['sql']===$sql,'Existing source SQL and its authenticated fingerprint survive cross-engine decoding');
     $assert($decoded['rows']['products']===[],'Compatible source rows parse against the producer schema');
     foreach (['type'=>['`product_name` varchar(150)','`product_name` varchar(140)'],
@@ -27,9 +27,9 @@ foreach (['mysql'=>'mariadb','mariadb'=>'mysql'] as $from=>$to) {
         'unsigned'=>['`product_id` int','`product_id` int unsigned']] as $kind=>[$before,$after]) {
         $different=$target;$different['products']['ddl']=str_replace($before,$after,$different['products']['ddl']);
         $assert($different!==$target,'Fixture mutation must change ' . $kind);
-        $reject(fn()=>StorePackageFormat::decode($package,$passphrase,$different),'Reject incompatible ' . $kind);
+        $reject(fn()=>StorePackageFormat::decode($package,$different),'Reject incompatible ' . $kind);
     }
     $different=$target;$different['scheduled_demand_drivers']['ddl']=str_replace('CHECK (json_valid(`details_json`))','',$schemas['mariadb']['scheduled_demand_drivers']['ddl']);
-    $reject(fn()=>StorePackageFormat::decode($package,$passphrase,$different),'Plain longtext must not stand in for validated JSON');
+    $reject(fn()=>StorePackageFormat::decode($package,$different),'Plain longtext must not stand in for validated JSON');
 }
 echo "Portable Store packages: passed (MySQL/MariaDB, original encrypted format, incompatible schema rejection)\n";

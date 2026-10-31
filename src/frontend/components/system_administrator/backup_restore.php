@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $preflight = $restorer->preflight($actorUserId, $actorRole, (string)$file['tmp_name'],
-                    (string)$file['name'], (string)($_POST['restore_password'] ?? ''), (string)($_POST['backup_passphrase'] ?? ''));
+                    (string)$file['name'], (string)($_POST['restore_password'] ?? ''));
                 $message = (string)$preflight['message'];
                 $messageClass = $preflight['valid'] ? 'tag-success' : 'tag-warning';
             } catch (DomainException $e) {
@@ -217,11 +217,6 @@ $storePaused = RecoveryStore::isPaused();
                             <label for="restore-password">Administrator password</label>
                             <p class="restore-file-hint" id="restore-password-hint">Current session password for authorization.</p>
                             <input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required>
-                        </div>
-                        <div class="form-group">
-                            <label for="restore-passphrase">Original passphrase (older backups only)</label>
-                            <p class="restore-file-hint" id="restore-passphrase-hint">Leave empty for automatically encrypted backups.</p>
-                            <input id="restore-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024" aria-describedby="restore-passphrase-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?>>
                         </div>
                         <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
                     </form>

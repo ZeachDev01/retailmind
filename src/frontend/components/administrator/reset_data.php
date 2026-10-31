@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $result = $service->reset((int)$_SESSION['user_id'], (string)current_role(),
-            (string)($_POST['current_password'] ?? ''), (string)($_POST['confirmation'] ?? ''), (string)($_POST['backup_passphrase'] ?? ''));
+            (string)($_POST['current_password'] ?? ''), (string)($_POST['confirmation'] ?? ''));
         $_SESSION['reset_data_backup'] = $result['backup']['token'];
         unset($_SESSION['forecast_import_preview'], $_SESSION['checkout_quotes'], $_SESSION['completed_checkout_sale']);
         $message = 'Products, sales, inventory, and forecasting data were deleted. Other users must sign in again. Add products, stock, and sales history before retraining forecasts.';
@@ -123,7 +123,7 @@ $recordGroups = [
         <div class="reset-confirm">
             <h3>Before you reset</h3>
             <ul class="reset-preflight">
-                <li><strong>Encrypted backup:</strong> Generated automatically; store passphrase off-server.</li>
+                <li><strong>Encrypted backup:</strong> Generated automatically; keep your recovery key separately.</li>
                 <li><strong>Active sessions:</strong> Users signed out immediately; active carts invalidated.</li>
                 <li><strong>Forecasting:</strong> Prediction models reset until new sales history is recorded.</li>
             </ul>
@@ -134,7 +134,6 @@ $recordGroups = [
                     <?= csrf_field() ?>
                     <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
                     <div class="form-group"><label for="reset-password">Current password</label><input type="password" id="reset-password" name="current_password" autocomplete="current-password" required></div>
-                    <div class="form-group"><label for="reset-backup-passphrase">New backup passphrase</label><input type="password" id="reset-backup-passphrase" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" aria-describedby="reset-passphrase-hint" required><span id="reset-passphrase-hint" class="reset-hint">Minimum 16 characters for backup encryption.</span></div>
                     <div class="form-group"><label for="reset-confirmation">Type <strong>RESET ALL DATA</strong> to confirm</label><input type="text" id="reset-confirmation" name="confirmation" autocomplete="off" pattern="RESET ALL DATA" placeholder="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" required></div>
                     <button type="submit" class="btn btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
                 </form>

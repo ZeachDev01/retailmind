@@ -78,7 +78,7 @@ try {
 
     // 1. Capture safety copy
     $safetyOpId = bin2hex(random_bytes(16));
-    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password);
     $safetyArtifactHash = hash_file('sha256', $private . '/safety-' . $safetyOpId . '/safety.rmpkg');
 
     // 2. Build incoming package fixture
@@ -88,10 +88,10 @@ try {
     $incSql = file_get_contents($incSqlPath);
     $incFiles = ['images/product-test.png' => $testPng, 'profile-images/user-test.png' => $testPng];
     $srcOrigin = bin2hex(random_bytes(16));
-    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $incomingPassphrase, $srcOrigin);
+    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $srcOrigin);
     $incomingPackagePath = $private . '/incoming.rmpkg';
     file_put_contents($incomingPackagePath, $incomingRaw);
-    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $schema);
 
     // 3. Approve reconciliation
     $decisions = [
@@ -112,7 +112,7 @@ try {
     $assert(RecoveryStore::isPaused(), 'Recovery is paused');
 
     // Execute complete safety recovery
-    $safetyOutcome = $restoreService->recoverSafety(1, 'admin', $safetyOpId, $safetyPassphrase);
+    $safetyOutcome = $restoreService->recoverSafety(1, 'admin', $safetyOpId);
     $assert($safetyOutcome['success'] === true, 'Safety recovery succeeded');
     $assert(RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Stage is operator_review_pending');
 
@@ -203,7 +203,7 @@ try {
     $epoch2 = RecoveryStore::epoch();
     $assert(RecoveryStore::isPaused(), 'Store paused for incoming restart');
 
-    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, $safetyPassphrase);
+    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath);
     $assert($restartOutcome['success'] === true, 'Incoming restart succeeded');
     $assert(RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Stage is operator_review_pending');
 

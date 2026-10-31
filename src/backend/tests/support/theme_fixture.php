@@ -25,8 +25,7 @@ if (in_array($argv[1], ['identity_historical', 'identity_reset_count'], true)) {
 if ($argv[1] === 'backup_package_contents') {
     require_once __DIR__ . '/../../includes/backup.php';
     $pdo->exec("USE `{$database}`");
-    $package = App\Backup\StorePackageFormat::decode((string)file_get_contents($argv[3]),
-        rtrim((string)fgets(STDIN), "\r\n"), App\Backup\SqlBackupFormat::schema($pdo));
+    $package = App\Backup\StorePackageFormat::decode((string)file_get_contents($argv[3]), App\Backup\SqlBackupFormat::schema($pdo));
     echo json_encode(array_map('count', $package['rows']), JSON_THROW_ON_ERROR);
     exit;
 }

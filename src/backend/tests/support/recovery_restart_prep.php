@@ -27,7 +27,7 @@ $opId = bin2hex(random_bytes(16));
 $safetyOpId = bin2hex(random_bytes(16));
 
 // Capture real verified safety copy
-$safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+$safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password);
 
 $approval = [
     'stage' => 'reconciliation_approved',

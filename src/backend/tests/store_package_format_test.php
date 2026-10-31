@@ -12,26 +12,29 @@ $ddl = 'CREATE TABLE `items` (`id` int, `note` text) ENGINE=InnoDB';
 $schema = ['items' => ['ddl' => $ddl, 'columns' => ['id', 'note']]];
 $body = SqlBackupFormat::HEADER . "SET FOREIGN_KEY_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\nDROP TABLE IF EXISTS `items`;\n{$ddl};\nINSERT INTO `items` (`id`, `note`) VALUES (X'31', X'c3b1ff00');\nSET FOREIGN_KEY_CHECKS=1;";
 $sql = $body . "\n-- SHA256: " . hash('sha256', $body) . "\n";
-$pass = 'offline-independent-passphrase';
-$package = StorePackageFormat::encode($sql, [], $schema, $pass);
-$assert(!str_contains($package, 'CREATE TABLE') && !str_contains($package, $pass), 'Stolen package exposes neither SQL nor passphrase');
-$result = StorePackageFormat::decode($package, $pass, $schema);
+$directory = sys_get_temp_dir() . '/rm-backup-key-' . bin2hex(random_bytes(8));
+mkdir($directory, 0700);
+try {
+    $_ENV['BACKUP_STORAGE_PATH'] = $directory . '/source';
+    $key = \App\Backup\BackupKeyStore::current();
+$package = StorePackageFormat::encode($sql, [], $schema);
+$assert(!str_contains($package, 'CREATE TABLE') && !str_contains($package, $key), 'Stolen package exposes neither SQL nor key');
+$result = StorePackageFormat::decode($package, $schema);
 $assert($result['sql'] === $sql, 'Unicode and binary SQL round trip unchanged');
 $assert($result['rows']['items'][0]['note'] === "\xc3\xb1\xff\x00", 'Rows expose decoded binary values without executing SQL');
-$reject(fn() => StorePackageFormat::decode($package, 'definitely-wrong-passphrase', $schema), 'Wrong passphrase rejected');
-$reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $pass, $schema), 'Truncated package rejected');
+$reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $schema), 'Truncated package rejected');
 $modified = $package; $modified[strlen($modified)-1] = chr(ord($modified[strlen($modified)-1]) ^ 1);
-$reject(fn() => StorePackageFormat::decode($modified, $pass, $schema), 'Authentication rejects altered ciphertext');
-$reject(fn() => StorePackageFormat::decode($sql, $pass, $schema), 'Plain SQL rejected');
-$reject(fn() => StorePackageFormat::encode($sql, ['images/../evil.php' => '<?php'], $schema, $pass), 'Traversal rejected');
-$reject(fn() => StorePackageFormat::encode($sql, ['images/evil.php' => '<?php'], $schema, $pass), 'Executable member rejected');
-// Authenticated hostile input represents an untrusted holder of the passphrase.
+$reject(fn() => StorePackageFormat::decode($modified, $schema), 'Authentication rejects altered ciphertext');
+$reject(fn() => StorePackageFormat::decode($sql, $schema), 'Plain SQL rejected');
+$reject(fn() => StorePackageFormat::encode($sql, ['images/../evil.php' => '<?php'], $schema), 'Traversal rejected');
+$reject(fn() => StorePackageFormat::encode($sql, ['images/evil.php' => '<?php'], $schema), 'Executable member rejected');
+// Authenticated hostile input represents an untrusted holder of the recovery key.
 $manifest = $result['manifest'];
 $member = ['path' => 'database.sql', 'size' => strlen($sql), 'content' => base64_encode($sql)];
 $manifest['members'] = [$member];
-$seal = static function(array $manifest) use ($pass): string {
-    $salt = str_repeat('s', 16); $iv = str_repeat('i', 12); $prefix = "RMSTORE1\n" . $salt . $iv;
-    $key = hash_pbkdf2('sha256', $pass, $salt, 600000, 32, true);
+$seal = static function(array $manifest) use ($key): string {
+    $salt = str_repeat('s', 16); $iv = str_repeat('i', 12); $prefix = "RMSTORE2\n" . hash('sha256', $key) . $salt . $iv;
+    $key = hex2bin($key);
     $cipher = openssl_encrypt(json_encode($manifest, JSON_THROW_ON_ERROR), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, $prefix, 16);
     return $prefix . $tag . $cipher;
 };
@@ -47,30 +50,28 @@ $case = $manifest; $case['members'][0]['content'] = base64_encode('DROP DATABASE
 foreach (['../outside.png', '/images/x.png', 'C:/images/x.png', 'images/linked.png/else', 'images/code.php', 'secrets/.env'] as $path) {
     $case = $manifest; $case['members'][] = ['path' => $path, 'size' => 4, 'content' => base64_encode('evil')]; $bad[$path] = $case;
 }
-foreach ($bad as $why => $case) $reject(fn() => StorePackageFormat::decode($seal($case), $pass, $schema), $why . ' must reject before any replacement');
-$reject(fn() => StorePackageFormat::decode(str_repeat('x', StorePackageFormat::MAX_BYTES + 1), $pass, $schema), 'Oversize input rejects before derivation');
-$directory = sys_get_temp_dir() . '/rm-backup-key-' . bin2hex(random_bytes(8));
-mkdir($directory, 0700);
-try {
-    $_ENV['BACKUP_STORAGE_PATH'] = $directory . '/source';
+foreach ($bad as $why => $case) $reject(fn() => StorePackageFormat::decode($seal($case), $schema), $why . ' must reject before any replacement');
+$reject(fn() => StorePackageFormat::decode(str_repeat('x', StorePackageFormat::MAX_BYTES + 1), $schema), 'Oversize input rejects before derivation');
     $key = \App\Backup\BackupKeyStore::current();
     $assert($key === \App\Backup\BackupKeyStore::current(), 'Backup key is stable across requests');
-    $automatic = StorePackageFormat::encode($sql, [], $schema, '');
+    $automatic = StorePackageFormat::encode($sql, [], $schema);
     $assert(str_starts_with($automatic, "RMSTORE2\n"), 'Automatic encryption identifies its recovery key');
     $assert(!str_contains($automatic, $sql) && !str_contains($automatic, $key), 'Encrypted backup exposes neither SQL nor key');
-    $assert(StorePackageFormat::decode($automatic, '', $schema)['sql'] === $sql, 'Automatic restore needs no login-derived encryption secret');
+    $assert(StorePackageFormat::decode($automatic, $schema)['sql'] === $sql, 'Automatic restore needs no login-derived encryption secret');
     $tampered = $automatic;
     $tampered[strlen($tampered)-1] = chr(ord($tampered[strlen($tampered)-1]) ^ 1);
-    $reject(fn() => StorePackageFormat::decode($tampered, '', $schema), 'Automatic encryption rejects damaged packages');
-    $reject(fn() => StorePackageFormat::decode($package, '', $schema), 'Older packages still require their original passphrase');
+    $reject(fn() => StorePackageFormat::decode($tampered, $schema), 'Automatic encryption rejects damaged packages');
+    $legacyPrefix = "RMSTORE1\n" . str_repeat('s', 16) . str_repeat('i', 12);
+    $legacyKey = hash_pbkdf2('sha256', 'legacy-backup-passphrase', str_repeat('s', 16), 600000, 32, true);
+    $legacyCipher = openssl_encrypt(json_encode($manifest, JSON_THROW_ON_ERROR), 'aes-256-gcm', $legacyKey, OPENSSL_RAW_DATA, str_repeat('i', 12), $legacyTag, $legacyPrefix, 16);
+    $reject(fn() => StorePackageFormat::decode($legacyPrefix . $legacyTag . $legacyCipher, $schema), 'Legacy passphrase packages are no longer supported');
     $_ENV['BACKUP_STORAGE_PATH'] = $directory . '/destination';
     $destinationKey = \App\Backup\BackupKeyStore::current();
-    $reject(fn() => StorePackageFormat::decode($automatic, '', $schema), 'Another server cannot decrypt without the recovery key');
+    $reject(fn() => StorePackageFormat::decode($automatic, $schema), 'Another server cannot decrypt without the recovery key');
     $reject(fn() => \App\Backup\BackupKeyStore::import('../invalid'), 'Invalid recovery keys are rejected');
     \App\Backup\BackupKeyStore::import($key . "\n");
-    $assert(StorePackageFormat::decode($automatic, '', $schema)['sql'] === $sql, 'Imported recovery key enables cross-server restoration');
+    $assert(StorePackageFormat::decode($automatic, $schema)['sql'] === $sql, 'Imported recovery key enables cross-server restoration');
     $assert(\App\Backup\BackupKeyStore::current() === $destinationKey, 'Import preserves keys for existing destination backups');
-    $assert(StorePackageFormat::decode($package, $pass, $schema)['sql'] === $sql, 'Original passphrase backups remain supported');
 } finally {
     foreach (glob($directory . '/*') as $folder) {
         foreach (glob($folder . '/*') as $file) unlink($file);

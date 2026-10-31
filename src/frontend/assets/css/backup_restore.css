@@ -165,9 +165,6 @@ html[data-theme="dark"] .identity-reconciliation-page .reconcile-steps [aria-cur
 .identity-reconciliation-page .form-group :is(input:not([type="file"], [type="checkbox"]), select) { width: 100%; min-height: 44px; padding: .65rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); font-size: 1rem; caret-color: var(--primary, #2563eb); }
 .identity-reconciliation-page .form-group :is(input, select)::placeholder { color: var(--recovery-muted); }
 .identity-reconciliation-page .form-group :is(input:not([type="file"], [type="checkbox"]), select):focus { border-color: var(--primary, #2563eb); }
-.identity-reconciliation-page .reconcile-older > summary { display: list-item; list-style: disclosure-closed inside; min-height: 44px; padding: .65rem 0; font-size: .875rem; }
-.identity-reconciliation-page .reconcile-older[open] > summary { list-style-type: disclosure-open; }
-.identity-reconciliation-page .reconcile-older[open] > summary { color: var(--recovery-ink); }
 
 /* Tables */
 .identity-reconciliation-page .reconcile-table { border: 1px solid var(--recovery-line); border-radius: 12px; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--recovery-line) transparent; }

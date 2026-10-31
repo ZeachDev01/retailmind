@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $draft) {
     $packageHash = $draft['package_hash'];
     $package = ['manifest' => ['snapshot_at' => $draft['snapshot_at']]];
     $action = $draft['action'];
-    $message = 'Review resumed. Enter your current login password to continue. Older backups also need their original passphrase.';
+    $message = 'Review resumed. Enter your current login password to continue.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -41,9 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (string)current_role(),
             $file['tmp_name'],
             $file['name'],
-            (string)($_POST['restore_password'] ?? ''),
-            (string)($_POST['backup_passphrase'] ?? '')
-        );
+            (string)($_POST['restore_password'] ?? ''));
         if ($action === 'approve') {
             $approved = $reconciler->approve((int)$_SESSION['user_id'], (string)current_role(), (string)($_POST['restore_password'] ?? ''), $package, $decisions);
             $review = $approved['review'];
@@ -170,13 +168,6 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <div class="form-group">
                             <label for="identity-password">Current login password on this server</label>
                             <input id="identity-password" type="password" name="restore_password" autocomplete="current-password" required>
-                        </div>
-                        <div class="form-group">
-                            <details class="reconcile-older">
-                                <summary>Older backup options</summary>
-                                <label for="identity-passphrase">Original passphrase (older backups only)</label>
-                                <input id="identity-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024">
-                            </details>
                         </div>
                     </div>
                     </div>

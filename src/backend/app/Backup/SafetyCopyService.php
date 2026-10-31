@@ -19,12 +19,11 @@ final class SafetyCopyService
     }
 
     public function create(string $operationId, int $actorId, string $role,
-        #[\SensitiveParameter] string $loginPassword, #[\SensitiveParameter] string $safetyPassphrase, $requestLease = null): array
+        #[\SensitiveParameter] string $loginPassword, $requestLease = null): array
     {
         $directory = self::directory($operationId);
         $backups = new DatabaseBackupService($this->pdo, $this->policy, $directory, $this->coordination, $this->uploadDirectory);
         $backups->authorizeActor($actorId, $role);
-        if ($safetyPassphrase !== '') StorePackageFormat::assertPassphrase($safetyPassphrase);
         $lease = $requestLease ?? RecoveryStore::exclusive();
         $created = null;
         try {
@@ -38,19 +37,19 @@ final class SafetyCopyService
                 throw new DomainException('Your current destination login password is incorrect.');
             }
             if (is_file($directory . '/metadata.json')) {
-                $verified = $this->verify($operationId, $safetyPassphrase);
+                $verified = $this->verify($operationId);
                 if ($verified['metadata']['requested_by'] !== $actorId) throw new DomainException('That safety copy belongs to another requester.');
                 return $verified['metadata'];
             }
             if (file_exists($directory . '/safety.rmpkg')) {
                 throw new DomainException('Safety capture was interrupted before verification. Keep the artifact and prepare a new operation; nothing was replaced.');
             }
-            $created = $backups->create($actorId, $role, $safetyPassphrase, $lease);
+            $created = $backups->create($actorId, $role, $lease);
             if ($created['status'] !== DatabaseBackupService::OUTCOME_READY) throw new DomainException(DatabaseBackupService::IN_PROGRESS_LINE);
             $schema = SqlBackupFormat::schema($this->pdo);
             $bytes = file_get_contents($created['path']);
             if ($bytes === false) throw new DomainException('The safety artifact could not be read for full verification.');
-            $package = StorePackageFormat::decode($bytes, $safetyPassphrase, $schema);
+            $package = StorePackageFormat::decode($bytes, $schema);
             (new DatabaseRestoreService($this->pdo, $this->policy, $backups))->validateReferences($package['rows']);
             $metadata = [
                 'operation_id' => $operationId, 'stage' => 'safety_verified', 'requested_by' => $actorId, 'requested_by_role' => $role,
@@ -75,14 +74,14 @@ final class SafetyCopyService
     }
 
     /** Uses the original checkpoint schema, including when application tables are missing. */
-    public function verify(string $operationId, #[\SensitiveParameter] string $safetyPassphrase): array
+    public function verify(string $operationId): array
     {
         $metadata = $this->metadata($operationId);
         $path = self::directory($operationId) . '/safety.rmpkg';
         $this->assertArtifact($path, $metadata);
         $bytes = file_get_contents($path);
         if ($bytes === false) throw new DomainException('The original safety copy could not be read. Keep Store operations closed.');
-        $package = StorePackageFormat::decode($bytes, $safetyPassphrase, $metadata['schema']);
+        $package = StorePackageFormat::decode($bytes, $metadata['schema']);
         if ($package['manifest']['package_id'] !== $metadata['package_id'] || $package['manifest']['origin_id'] !== $metadata['origin_id']
             || $package['manifest']['schema'] !== $metadata['schema_hash'] || hash('sha256', $package['sql']) !== $metadata['sql_sha256']
             || array_map(static fn(string $content): string => hash('sha256', $content), $package['files']) !== $metadata['file_sha256']) {

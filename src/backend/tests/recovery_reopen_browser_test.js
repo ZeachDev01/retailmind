@@ -80,7 +80,6 @@ const fixture = action => {
         await page.locator('[data-recovery-submit="login"]').click();
 
         // 3. Perform complete safety recovery
-        await page.locator('#safety-passphrase').fill(recoveryInfo.safety_passphrase);
         await Promise.all([
             page.waitForNavigation(),
             page.locator('[data-recovery-submit="safety"]').click(),

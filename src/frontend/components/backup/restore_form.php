@@ -14,7 +14,6 @@ $reviewFirst = $restoreReviewFirst ?? true;
         <?= csrf_field() ?>
         <div class="form-group"><label for="incoming-package">Backup file (.rmpkg)</label><input id="incoming-package" type="file" name="backup_file" accept=".rmpkg" aria-describedby="incoming-package-help" required><p id="incoming-package-help" class="backup-hint"><?= $escape($restoreLimit) ?></p></div>
         <div class="form-group"><label for="incoming-password">Current login password</label><input id="incoming-password" type="password" name="restore_password" autocomplete="current-password" required></div>
-        <details><summary>Older backups</summary><div class="form-group"><label for="incoming-passphrase">Original backup passphrase</label><input id="incoming-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024"></div></details>
         <?php if (!$reviewFirst): ?>
         <p><label><input type="checkbox" name="confirm_replacement" value="1" required> I understand the snapshot replaces newer records and Store operations remain paused until verification.</label></p>
         <?php endif; ?>

@@ -91,7 +91,7 @@ try {
 
     // Test rejection of invalid/stale approvals
     $safetyOpId = bin2hex(random_bytes(16));
-    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, 'SafetyPassphrase@2026');
+    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password);
 
     $invalidApproval = [
         'stage' => 'draft', // not reconciliation_approved
@@ -107,8 +107,8 @@ try {
     (new \App\Backup\DatabaseSnapshotWriter($pdo))->write($incSqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate']);
     $incSql = file_get_contents($incSqlPath);
     $incomingPassphrase = 'IncomingPassphrase@2026';
-    $incomingRaw = StorePackageFormat::encode($incSql, [], $schema, $incomingPassphrase, bin2hex(random_bytes(16)));
-    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+    $incomingRaw = StorePackageFormat::encode($incSql, [], $schema, bin2hex(random_bytes(16)));
+    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $schema);
 
     // Super Admin approves reconciliation
     $decisions = [

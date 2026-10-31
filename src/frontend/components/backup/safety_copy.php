@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'safet
             throw new DomainException('This safety operation changed. Reload the page and try again.');
         }
         $safety->create($safetyOperation, $actorUserId, $actorRole,
-            (string)($_POST['safety_password'] ?? ''), '');
+            (string)($_POST['safety_password'] ?? ''));
     } catch (Throwable $exception) {
         $safetyError = \App\Support\OperatorAlert::message($exception, 'The safety copy could not be verified. Nothing was replaced. Check storage and required images, then retry.');
     }

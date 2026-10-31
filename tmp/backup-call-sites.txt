@@ -1,0 +1,116 @@
+src/backend/tests\backup_workflow_route_contract.php:92:        str_contains($source, '$service->create($actorUserId, $actorRole)') && !str_contains($source, 'id="backup-passphrase"'),
+src/backend/tests\backup_workflow_route_contract.php:109:    str_contains($scheduledScript, 'createForSystem()'),
+src/backend/tests\backup_workflow_route_contract.php:127:    && str_contains($restoreEndpoint, 'is_uploaded_file(') && str_contains($restoreEndpoint, '->startIncoming('),
+src/backend/tests\backup_workflow_route_contract.php:134:    str_contains($superAdministratorPage, 'restore_password') && str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
+src/backend/tests\database_backup_workflow_integration.php:92:        $reject(fn() => $backups->create(3, $role, $passphrase), 'Operational staff cannot create backups');
+src/backend/tests\database_backup_workflow_integration.php:101:    $assert($backups->create(2, 'admin', $passphrase)['status'] === DatabaseBackupService::OUTCOME_IN_PROGRESS, 'Busy backup does not start another export');
+src/backend/tests\database_backup_workflow_integration.php:110:    $backup = $backups->create(2, 'admin', $passphrase);
+src/backend/tests\database_backup_workflow_integration.php:113:    $decoded = StorePackageFormat::decode($encrypted, $passphrase, SqlBackupFormat::schema($source));
+src/backend/tests\database_backup_workflow_integration.php:121:    $superBackup = $backups->create(1, 'super_admin', $passphrase);
+src/backend/tests\database_backup_workflow_integration.php:124:    $systemBackup = $backups->createForSystem($passphrase);
+src/backend/tests\database_backup_workflow_integration.php:129:    $preflight = $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase);
+src/backend/tests\database_backup_workflow_integration.php:132:    $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Snapshot-password', $passphrase), 'Obsolete source password cannot authorize destination preflight');
+src/backend/tests\database_backup_workflow_integration.php:133:    $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password', 'wrong-offline-passphrase'), 'Wrong independent passphrase rejected');
+src/backend/tests\database_backup_workflow_integration.php:134:    $assert(!$restorer->preflight(2, 'admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase)['replacement_authorized'], 'Administrator can validate a backup without replacing data');
+src/backend/tests\database_backup_workflow_integration.php:139:    file_put_contents($duplicatePath, StorePackageFormat::encode($duplicateSql, $decoded['files'], SqlBackupFormat::schema($source), $passphrase));
+src/backend/tests\database_backup_workflow_integration.php:140:    $reject(fn() => $restorer->preflight(1, 'super_admin', $duplicatePath, 'duplicate.rmpkg', 'Current-password', $passphrase), 'MySQL case-insensitive unique semantics reject hostile duplicate usernames');
+src/backend/tests\database_backup_workflow_integration.php:222:    $fullBackup = $fullBackups->create($fullActor, 'super_admin', $passphrase);
+src/backend/tests\database_backup_workflow_integration.php:229:    $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password', $passphrase);
+src/backend/tests\database_backup_workflow_integration.php:232:    $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), $passphrase, SqlBackupFormat::schema($full));
+src/backend/tests\database_backup_workflow_integration.php:238:    $reject(fn() => $fullBackups->create($fullActor, 'super_admin', $passphrase), 'Unsupported custom objects must fail rather than produce an incomplete backup');
+src/backend/tests\database_restore_takeover_contract.php:94:    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, 'SafetyPassphrase@2026');
+src/backend/tests\database_restore_takeover_contract.php:110:    $incomingRaw = StorePackageFormat::encode($incSql, [], $schema, $incomingPassphrase, bin2hex(random_bytes(16)));
+src/backend/tests\database_restore_takeover_contract.php:111:    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+src/backend/tests\portable_store_package_test.php:18:    $package=StorePackageFormat::encode($sql,[],$source,$passphrase);
+src/backend/tests\portable_store_package_test.php:19:    $decoded=StorePackageFormat::decode($package,$passphrase,$target);
+src/backend/tests\portable_store_package_test.php:30:        $reject(fn()=>StorePackageFormat::decode($package,$passphrase,$different),'Reject incompatible ' . $kind);
+src/backend/tests\portable_store_package_test.php:33:    $reject(fn()=>StorePackageFormat::decode($package,$passphrase,$different),'Plain longtext must not stand in for validated JSON');
+src/backend/tests\recovery_reopen_workflow_integration.php:81:    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+src/backend/tests\recovery_reopen_workflow_integration.php:91:    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $incomingPassphrase, $srcOrigin);
+src/backend/tests\recovery_reopen_workflow_integration.php:94:    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+src/backend/tests\recovery_reopen_workflow_integration.php:206:    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, $safetyPassphrase);
+src/backend/tests\recovery_restart_workflow_integration.php:85:    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+src/backend/tests\recovery_restart_workflow_integration.php:97:    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $incomingPassphrase, $srcOrigin);
+src/backend/tests\recovery_restart_workflow_integration.php:100:    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+src/backend/tests\recovery_restart_workflow_integration.php:115:    $reject(fn() => $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', 'wrong', $incomingPassphrase, $safetyPassphrase), 'Rejects wrong destination password');
+src/backend/tests\recovery_restart_workflow_integration.php:116:    $reject(fn() => $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', $password, 'WrongIncomingPassphrase123', $safetyPassphrase), 'Rejects wrong incoming passphrase');
+src/backend/tests\recovery_restart_workflow_integration.php:117:    $reject(fn() => $restoreService->startIncoming(3, 'inventory_manager', $incomingPackagePath, 'store.rmpkg', $password, $incomingPassphrase, $safetyPassphrase), 'Rejects unauthorized initial operator');
+src/backend/tests\recovery_restart_workflow_integration.php:121:    $started = $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', $password, $incomingPassphrase, $safetyPassphrase);
+src/backend/tests\recovery_restart_workflow_integration.php:184:        $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, 'WrongIncomingPassphrase123', $safetyPassphrase);
+src/backend/tests\recovery_restart_workflow_integration.php:189:        $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, 'WrongSafetyPassphrase123');
+src/backend/tests\recovery_restart_workflow_integration.php:197:    $reject(fn() => $restoreService->restartIncoming(1, 'admin', $oversizedPkgPath, $incomingPassphrase, $safetyPassphrase), 'Rejects oversized incoming file before reading it');
+src/backend/tests\recovery_restart_workflow_integration.php:201:        $restoreService->restartIncoming(1, 'admin', $tamperedPkgPath, $incomingPassphrase, $safetyPassphrase);
+src/backend/tests\recovery_restart_workflow_integration.php:205:    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, $safetyPassphrase);
+src/backend/tests\register_administration_contract.php:67:    $frontId = $service->create($adminId, 'admin', 'Front Counter');
+src/backend/tests\register_administration_contract.php:68:    $backId = $service->create($adminId, 'admin', 'Back Counter');
+src/backend/tests\register_administration_contract.php:74:        fn() => $service->create($adminId, 'admin', '  '),
+src/backend/tests\register_administration_contract.php:78:        fn() => $service->create($adminId, 'admin', 'Front Counter'),
+src/backend/tests\register_administration_contract.php:93:        $expectDenied(fn() => $service->create($adminId, 'admin', 'Invalid width', $invalid), 'creation rejects unsupported width');
+src/backend/tests\register_administration_contract.php:98:    $narrowId = $service->create($adminId, 'admin', 'Narrow Till', '58');
+src/backend/tests\register_administration_contract.php:153:            fn() => $service->create($adminId, $role, 'Unauthorized Till'),
+src/backend/tests\safety_copy_workflow_integration.php:31:    $copy = $service->create($operation, 1, 'admin', 'ThemeTest@2026', $secret);
+src/backend/tests\safety_copy_workflow_integration.php:33:    $verified = $service->verify($operation, $secret);
+src/backend/tests\safety_copy_workflow_integration.php:41:    $reject(fn() => $service->create($operation, 1, 'admin', 'wrong', $secret), 'Fresh destination password required');
+src/backend/tests\safety_copy_workflow_integration.php:42:    $reject(fn() => $service->verify($operation, 'Wrong separate safety secret'), 'Wrong safety passphrase rejected');
+src/backend/tests\safety_copy_workflow_integration.php:44:    $service->create($operation, 1, 'admin', 'ThemeTest@2026', $secret);
+src/backend/tests\safety_copy_workflow_integration.php:46:    $assert((int)$service->verify($operation, $secret)['package']['rows']['inventory'][0]['quantity_on_hand'] === 10, 'Retry retains original destination snapshot');
+src/backend/tests\safety_copy_workflow_integration.php:48:    $reject(fn() => $service->create(bin2hex(random_bytes(16)), 4, 'cashier', 'ThemeTest@2026', $secret), 'Operational staff cannot capture safety');
+src/backend/tests\safety_copy_workflow_integration.php:49:    $reject(fn() => $service->create('../escape', 1, 'admin', 'ThemeTest@2026', $secret), 'Operation path is validated');
+src/backend/tests\safety_copy_workflow_integration.php:53:        $reject(fn() => $service->create($failedOperation, 1, 'admin', 'ThemeTest@2026', $secret), 'Injected ' . $fault . ' failure must abort');
+src/backend/tests\safety_copy_workflow_integration.php:62:    $reject(fn() => $service->create(bin2hex(random_bytes(16)), 1, 'admin', 'ThemeTest@2026', $secret), 'Missing required upload aborts');
+src/backend/tests\safety_copy_workflow_integration.php:65:    $reject(fn() => $service->create(bin2hex(random_bytes(16)), 1, 'admin', 'ThemeTest@2026', $secret), 'Unsupported database capture aborts');
+src/backend/tests\safety_copy_workflow_integration.php:69:    $reject(fn() => $service->create($invalidOperation, 1, 'admin', 'ThemeTest@2026', $secret), 'Invalid database actor reference prevents verified safety');
+src/backend/tests\safety_copy_workflow_integration.php:76:    $reject(fn() => $service->verify($operation, $secret), 'Changed original safety material fails closed');
+src/backend/tests\safety_copy_workflow_integration.php:77:    $reject(fn() => $service->create($operation, 1, 'admin', 'ThemeTest@2026', $secret), 'Changed original cannot be silently recaptured');
+src/backend/tests\safety_copy_workflow_integration.php:80:    $assert($service->verify($operation, $secret)['metadata']['sha256'] === $original, 'Original safety verifies against retained schema with users missing');
+src/backend/tests\staff_lifecycle_audit_contract.php:185:    $newAdminId = $service->create($superId, 'super_admin', [
+src/backend/tests\staff_lifecycle_audit_contract.php:195:    $expectDenied(fn() => $service->create($superId, 'super_admin', [
+src/backend/tests\staff_lifecycle_audit_contract.php:203:    $expectDenied(fn() => $service->create($superId, 'super_admin', [
+src/backend/tests\store_controls_forecast_contract.php:169:$regId1 = $registerService->create(1, 'admin', 'Front Till', '80');
+src/backend/tests\store_controls_forecast_contract.php:170:$regId2 = $registerService->create(1, 'admin', 'Back Till', '80');
+src/backend/tests\store_package_format_test.php:16:$package = StorePackageFormat::encode($sql, [], $schema, $pass);
+src/backend/tests\store_package_format_test.php:17:$reject(fn() => StorePackageFormat::decode($package, $pass, $schema), 'Legacy passphrase packages are no longer supported');
+src/backend/tests\store_package_format_test.php:19:$result = StorePackageFormat::decode($package, $pass, $schema);
+src/backend/tests\store_package_format_test.php:22:$reject(fn() => StorePackageFormat::decode($package, 'definitely-wrong-passphrase', $schema), 'Wrong passphrase rejected');
+src/backend/tests\store_package_format_test.php:23:$reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $pass, $schema), 'Truncated package rejected');
+src/backend/tests\store_package_format_test.php:25:$reject(fn() => StorePackageFormat::decode($modified, $pass, $schema), 'Authentication rejects altered ciphertext');
+src/backend/tests\store_package_format_test.php:26:$reject(fn() => StorePackageFormat::decode($sql, $pass, $schema), 'Plain SQL rejected');
+src/backend/tests\store_package_format_test.php:27:$reject(fn() => StorePackageFormat::encode($sql, ['images/../evil.php' => '<?php'], $schema, $pass), 'Traversal rejected');
+src/backend/tests\store_package_format_test.php:28:$reject(fn() => StorePackageFormat::encode($sql, ['images/evil.php' => '<?php'], $schema, $pass), 'Executable member rejected');
+src/backend/tests\store_package_format_test.php:51:foreach ($bad as $why => $case) $reject(fn() => StorePackageFormat::decode($seal($case), $pass, $schema), $why . ' must reject before any replacement');
+src/backend/tests\store_package_format_test.php:52:$reject(fn() => StorePackageFormat::decode(str_repeat('x', StorePackageFormat::MAX_BYTES + 1), $pass, $schema), 'Oversize input rejects before derivation');
+src/backend/tests\store_package_format_test.php:59:    $automatic = StorePackageFormat::encode($sql, [], $schema, '');
+src/backend/tests\store_package_format_test.php:62:    $assert(StorePackageFormat::decode($automatic, '', $schema)['sql'] === $sql, 'Automatic restore needs no login-derived encryption secret');
+src/backend/tests\store_package_format_test.php:65:    $reject(fn() => StorePackageFormat::decode($tampered, '', $schema), 'Automatic encryption rejects damaged packages');
+src/backend/tests\store_package_format_test.php:66:    $reject(fn() => StorePackageFormat::decode($package, '', $schema), 'Older packages still require their original passphrase');
+src/backend/tests\store_package_format_test.php:69:    $reject(fn() => StorePackageFormat::decode($automatic, '', $schema), 'Another server cannot decrypt without the recovery key');
+src/backend/tests\store_package_format_test.php:72:    $assert(StorePackageFormat::decode($automatic, '', $schema)['sql'] === $sql, 'Imported recovery key enables cross-server restoration');
+src/backend/tests\store_package_format_test.php:74:    $assert(StorePackageFormat::decode($package, $pass, $schema)['sql'] === $sql, 'Original passphrase backups remain supported');
+src/backend/tests\store_scope_contract.php:30:    $zero = $scope->preflight();
+src/backend/tests\store_scope_contract.php:56:    $one = $scope->preflight();
+src/backend/tests\store_staff_account_rules_contract.php:128:        fn() => $service->create($adminId, 'admin', $buildAccount('cashier@example.test', 'shape_at@example.test')),
+src/backend/tests\store_staff_account_rules_contract.php:135:            fn() => $service->create($adminId, 'admin', $buildAccount($spaced, null)),
+src/backend/tests\store_staff_account_rules_contract.php:142:    $editableId = $service->create($adminId, 'admin', $buildAccount('editable.cashier_01', 'editable@example.test'));
+src/backend/tests\store_staff_account_rules_contract.php:160:    $dottedId = $service->create($adminId, 'admin', $buildAccount('john.doe_99-x', 'john.doe@example.test'));
+src/backend/tests\store_staff_account_rules_contract.php:170:    $noEmailOne = $service->create($adminId, 'admin', $buildAccount('noemail.one', ''));
+src/backend/tests\store_staff_account_rules_contract.php:171:    $noEmailTwo = $service->create($adminId, 'admin', $buildAccount('noemail.two', '   '));
+src/backend/tests\store_staff_account_rules_contract.php:172:    $noEmailThree = $service->create($adminId, 'admin', $buildAccount('noemail-three', null));
+src/backend/tests\store_staff_account_rules_contract.php:179:    $holderId = $service->create($adminId, 'admin', $buildAccount('email.holder', 'unique@example.test'));
+src/backend/tests\store_staff_account_rules_contract.php:183:        fn() => $service->create($adminId, 'admin', $buildAccount('email.copycat', 'unique@example.test')),
+src/backend/tests\store_staff_race_fallback_contract.php:103:    $firstId = $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:116:        fn() => $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:129:        fn() => $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:142:        fn() => $service->create($superId, 'super_admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:152:        fn() => $service->create($superId, 'super_admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:166:    $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:173:    $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:183:    $scopedId = $service->create($adminId, 'admin', [
+src/backend/tests\store_staff_race_fallback_contract.php:192:    $superScopedId = $service->create($superId, 'super_admin', [
+src/backend/tests\user_lifecycle_contract.php:126:    $cashierId = $service->create($adminId, 'admin', [
+src/backend/tests\user_lifecycle_contract.php:138:    $managerId = $service->create($adminId, 'admin', [
+src/backend/tests\user_lifecycle_contract.php:211:    $noEmailId = $service->create($adminId, 'admin', [
+src/backend/tests\user_lifecycle_contract.php:230:    $ordinaryAdminId = $service->create($adminId, 'admin', [
+src/backend/tests\user_lifecycle_contract.php:282:    $privilegedId = $service->create($superId, 'super_admin', [
+src/backend/tests\user_deletion_mysql_test.php:88:    $id = $service->create(1, 'admin', ['full_name' => 'Created Account', 'username' => 'created_account', 'password_hash' => 'unused', 'roles' => ['cashier']]);
+src/backend/tests\support\recovery_restart_prep.php:30:$safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+src/backend/tests\support\theme_fixture.php:28:    $package = App\Backup\StorePackageFormat::decode((string)file_get_contents($argv[3]),

@@ -86,11 +86,8 @@ const fixture = action => {
             fs.mkdirSync(proofDirectory, {recursive: true});
             await administrator.page.locator('#backup-recovery').scrollIntoViewIfNeeded();
             await administrator.page.screenshot({path: path.join(proofDirectory, 'recovery-' + width + '.png')});
-            const olderOptions = administrator.page.locator('#restore-package form > details');
-            await olderOptions.locator('summary').focus();
-            await administrator.page.keyboard.press('Enter');
-            assert(await administrator.page.locator('#incoming-passphrase').isVisible(), 'Older backup options remain keyboard accessible');
-            await administrator.page.keyboard.press('Enter');
+            assert.equal(await administrator.page.getByText('Older backups', {exact: true}).count(), 0, 'Legacy backup options are removed');
+            assert.equal(await administrator.page.locator('[name="backup_passphrase"]').count(), 0);
             await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
             await administrator.page.getByRole('tab', {name: 'Safety copy', exact: true}).click();
             assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Dark recovery exposes the safety form');
@@ -135,7 +132,7 @@ const fixture = action => {
         assert.equal((await administrator.context.request.get(new URL(href, origin).href)).status(), 404, 'Delivered temporary package is removed');
         await superAdministrator.page.goto(superUrl);
         assert.equal(await superAdministrator.page.locator('#restore-password').count(), 1);
-        assert.equal(await superAdministrator.page.locator('#restore-passphrase').count(), 1);
+        assert.equal(await superAdministrator.page.locator('#restore-passphrase').count(), 0);
         assert.equal(await superAdministrator.page.locator('#backup-file').getAttribute('accept'), '.rmpkg');
         for (const width of [390, 1440]) {
             await superAdministrator.page.setViewportSize({ width, height: 960 });

@@ -82,7 +82,7 @@ try {
 
     // 1. Capture verified destination safety copy
     $safetyOpId = bin2hex(random_bytes(16));
-    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password, $safetyPassphrase);
+    $safetyMeta = $safetyService->create($safetyOpId, 1, 'admin', $password);
     $assert(is_file($private . '/safety-' . $safetyOpId . '/safety.rmpkg'), 'Safety artifact exists');
     $safetyArtifactHash = hash_file('sha256', $private . '/safety-' . $safetyOpId . '/safety.rmpkg');
 
@@ -94,10 +94,10 @@ try {
     $incSql = file_get_contents($incSqlPath);
     $incFiles = ['images/product-test.png' => $testPng, 'profile-images/user-test.png' => $testPng];
     $srcOrigin = bin2hex(random_bytes(16));
-    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $incomingPassphrase, $srcOrigin);
+    $incomingRaw = StorePackageFormat::encode($incSql, $incFiles, $schema, $srcOrigin);
     $incomingPackagePath = $private . '/incoming.rmpkg';
     file_put_contents($incomingPackagePath, $incomingRaw);
-    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $incomingPassphrase, $schema);
+    $incomingDecoded = StorePackageFormat::decode($incomingRaw, $schema);
     $destinationPng = $testPng . "\n";
     file_put_contents($uploadDir . '/profile-images/user-test.png', $destinationPng);
 
@@ -112,13 +112,12 @@ try {
     $approval = $approvalResult['approval'];
 
     // Initial replacement must reject bad credentials without pausing or changing Store data.
-    $reject(fn() => $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', 'wrong', $incomingPassphrase, $safetyPassphrase), 'Rejects wrong destination password');
-    $reject(fn() => $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', $password, 'WrongIncomingPassphrase123', $safetyPassphrase), 'Rejects wrong incoming passphrase');
-    $reject(fn() => $restoreService->startIncoming(3, 'inventory_manager', $incomingPackagePath, 'store.rmpkg', $password, $incomingPassphrase, $safetyPassphrase), 'Rejects unauthorized initial operator');
+    $reject(fn() => $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', 'wrong'), 'Rejects wrong destination password');
+    $reject(fn() => $restoreService->startIncoming(3, 'inventory_manager', $incomingPackagePath, 'store.rmpkg', $password), 'Rejects unauthorized initial operator');
     $assert(!RecoveryStore::isPaused(), 'Rejected initial replacements leave Store open');
     $pdo->exec("INSERT INTO activity_log (user_id,action,category,module) VALUES (2,'Security evidence after approval','security','Authentication')");
     $pdo->exec("INSERT INTO platform_settings (setting_key,setting_value,updated_by) VALUES ('backup_security_fixture','fresh-checkpoint',2),('ml_approved_model_version','previous-store-model',2)");
-    $started = $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', $password, $incomingPassphrase, $safetyPassphrase);
+    $started = $restoreService->startIncoming(1, 'admin', $incomingPackagePath, 'store.rmpkg', $password);
     $assert($started['success'] && RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Initial encrypted replacement completes and awaits review');
     $assert((bool)$pdo->query("SELECT 1 FROM activity_log WHERE action='Security evidence after approval'")->fetchColumn(), 'Preserves security evidence recorded after reconciliation approval');
     $assert($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='backup_security_fixture'")->fetchColumn() === 'fresh-checkpoint', 'Preserves latest destination settings');
@@ -139,18 +138,13 @@ try {
     $pdo->exec('DROP TABLE sales');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 
-    // Reject wrong safety passphrase
-    $reject(function() use ($restoreService, $safetyOpId) {
-        $restoreService->recoverSafety(1, 'admin', $safetyOpId, 'WrongSafetyPassphrase123');
-    }, 'Rejects invalid safety passphrase');
-
     // Reject invalid operator
     $reject(function() use ($restoreService, $safetyOpId, $safetyPassphrase) {
-        $restoreService->recoverSafety(999, 'cashier', $safetyOpId, $safetyPassphrase);
+        $restoreService->recoverSafety(999, 'cashier', $safetyOpId);
     }, 'Rejects unauthorized operator');
 
     // Execute valid safety recovery - works completely WITHOUT incoming package or incoming passphrase!
-    $safetyOutcome = $restoreService->recoverSafety(1, 'admin', $safetyOpId, $safetyPassphrase);
+    $safetyOutcome = $restoreService->recoverSafety(1, 'admin', $safetyOpId);
     $assert($safetyOutcome['success'] === true, 'Safety recovery succeeded');
     $assert(RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Stage is operator_review_pending');
     $assert(hash_file('sha256', $private . '/safety-' . $safetyOpId . '/safety.rmpkg') === $safetyArtifactHash, 'Safety artifact unmodified');
@@ -179,30 +173,20 @@ try {
     RecoveryAuthService::preparePreRestoreState($pdo, $opId2, 1, 'admin', $password, $approval, $safetyMeta);
     $assert(RecoveryStore::isPaused(), 'Store paused again for restart');
 
-    // Reject wrong incoming passphrase
-    $reject(function() use ($restoreService, $incomingPackagePath, $safetyPassphrase) {
-        $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, 'WrongIncomingPassphrase123', $safetyPassphrase);
-    }, 'Rejects wrong incoming passphrase');
-
-    // Reject wrong safety passphrase during restart
-    $reject(function() use ($restoreService, $incomingPackagePath, $incomingPassphrase) {
-        $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, 'WrongSafetyPassphrase123');
-    }, 'Rejects wrong safety passphrase during restart');
-
     // Reject tampered package
     $oversizedPkgPath = $private . '/oversized.rmpkg';
     $oversized = fopen($oversizedPkgPath, 'wb');
     ftruncate($oversized, StorePackageFormat::MAX_BYTES + 1);
     fclose($oversized);
-    $reject(fn() => $restoreService->restartIncoming(1, 'admin', $oversizedPkgPath, $incomingPassphrase, $safetyPassphrase), 'Rejects oversized incoming file before reading it');
+    $reject(fn() => $restoreService->restartIncoming(1, 'admin', $oversizedPkgPath), 'Rejects oversized incoming file before reading it');
     $tamperedPkgPath = $private . '/tampered.rmpkg';
     file_put_contents($tamperedPkgPath, 'RMSTORE1' . random_bytes(200));
     $reject(function() use ($restoreService, $tamperedPkgPath, $incomingPassphrase, $safetyPassphrase) {
-        $restoreService->restartIncoming(1, 'admin', $tamperedPkgPath, $incomingPassphrase, $safetyPassphrase);
+        $restoreService->restartIncoming(1, 'admin', $tamperedPkgPath);
     }, 'Rejects tampered incoming package');
 
     // Execute valid incoming restart
-    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath, $incomingPassphrase, $safetyPassphrase);
+    $restartOutcome = $restoreService->restartIncoming(1, 'admin', $incomingPackagePath);
     $assert($restartOutcome['success'] === true, 'Incoming restart succeeded');
     $assert(RecoveryStore::currentStage() === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING, 'Stage transitions to operator_review_pending');
     $assert(hash_file('sha256', $private . '/safety-' . $safetyOpId . '/safety.rmpkg') === $safetyArtifactHash, 'Safety artifact still unmodified');

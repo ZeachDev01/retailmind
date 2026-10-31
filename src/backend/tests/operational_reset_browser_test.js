@@ -170,7 +170,6 @@ const fixture = action => {
         const csrf = await page.locator('input[name="csrf_token"]').first().inputValue();
         await page.locator('#store-reset > summary').click();
         await page.locator('#reset-password').fill(data.password);
-        await page.locator('#reset-backup-passphrase').fill(backupPassphrase);
         await page.locator('#reset-confirmation').fill('RESET ALL DATA');
         await Promise.all([page.waitForNavigation(), page.locator('form:has(#reset-password) button[type="submit"]').click()]);
         assert.match(await page.locator('p[role="status"]').innerText(), /Products, sales, inventory, and forecasting data were deleted/);

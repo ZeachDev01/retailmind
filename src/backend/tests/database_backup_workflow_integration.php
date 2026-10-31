@@ -89,7 +89,7 @@ try {
     $restorer = new DatabaseRestoreService($target, $policy, $targetBackups);
 
     foreach (['cashier', 'inventory_manager'] as $role) {
-        $reject(fn() => $backups->create(3, $role, $passphrase), 'Operational staff cannot create backups');
+        $reject(fn() => $backups->create(3, $role), 'Operational staff cannot create backups');
     }
     foreach (['admin', 'cashier', 'inventory_manager'] as $role) {
         $reject(fn() => $restorer->restore(2, $role, '', 'backup.sql', 'Current-password'), 'Only Super Administrator can restore');
@@ -98,7 +98,7 @@ try {
     $coordinator = $backups->coordinator();
     $claim = $coordinator->claim(1, 'super_admin');
     $assert($coordinator->claim(2, 'admin') === null, 'Only one capture may claim the slot');
-    $assert($backups->create(2, 'admin', $passphrase)['status'] === DatabaseBackupService::OUTCOME_IN_PROGRESS, 'Busy backup does not start another export');
+    $assert($backups->create(2, 'admin')['status'] === DatabaseBackupService::OUTCOME_IN_PROGRESS, 'Busy backup does not start another export');
     $coordinator->beginCapture(1);
     $writer = new PDO($dsn . ';dbname=' . $names[0], $config['username'], $config['password'], $options);
     $reject(fn() => StoreWriteGate::begin($writer), 'Store writes must pause during a capture');
@@ -107,10 +107,10 @@ try {
     StoreWriteGate::begin($writer);
     $writer->rollBack();
 
-    $backup = $backups->create(2, 'admin', $passphrase);
+    $backup = $backups->create(2, 'admin');
     $assert($backup['status'] === DatabaseBackupService::OUTCOME_READY, 'Administrator can capture an encrypted Store package');
     $encrypted = (string)file_get_contents($backup['path']);
-    $decoded = StorePackageFormat::decode($encrypted, $passphrase, SqlBackupFormat::schema($source));
+    $decoded = StorePackageFormat::decode($encrypted, SqlBackupFormat::schema($source));
     $sql = $decoded['sql'];
     $assert($decoded['files']['images/test.png'] === $image && $decoded['files']['profile-images/test.png'] === $image, 'Actual Product and profile image bytes round trip');
     $assert(!str_contains($encrypted, 'INSERT INTO') && !str_contains($encrypted, $passphrase), 'Package conceals captured SQL and passphrase');
@@ -118,26 +118,25 @@ try {
     $assert($backups->history('admin')[0]['format'] === 'Encrypted Store package', 'History reports SQL format');
     $reject(fn() => $backups->resolveDownload($backup['token'], 1, 'super_admin'), 'Downloads are requester-bound');
     $assert($backups->resolveDownload($backup['token'], 2, 'admin')['path'] === $backup['path'], 'Owner resolves own download');
-    $superBackup = $backups->create(1, 'super_admin', $passphrase);
+    $superBackup = $backups->create(1, 'super_admin');
     $assert($superBackup['status'] === DatabaseBackupService::OUTCOME_READY, 'Super Administrator can create backups too');
     $assert($decoded['rows']['backup_operations'] === [] && $decoded['rows']['store_write_gate'] === [], 'Packages exclude source tokens, private artifact paths and transient pause state');
-    $systemBackup = $backups->createForSystem($passphrase);
+    $systemBackup = $backups->createForSystem();
     $assert(str_starts_with((string)file_get_contents($systemBackup['path']), "RMSTORE1\n"), 'System export also requires encrypted package format');
     $backups->discardAfterDelivery($systemBackup['path']);
 
     $before = (string)$target->query('SELECT password_hash FROM users WHERE user_id=1')->fetchColumn();
-    $preflight = $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase);
+    $preflight = $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password');
     $assert(!$preflight['valid'] && count($preflight['conflicts']) >= 3 && !$preflight['replacement_authorized'], 'Preflight reports colliding actor IDs and never permits replacement');
     $assert($target->query('SELECT password_hash FROM users WHERE user_id=1')->fetchColumn() === $before, 'Preflight never changes credentials');
-    $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Snapshot-password', $passphrase), 'Obsolete source password cannot authorize destination preflight');
-    $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password', 'wrong-offline-passphrase'), 'Wrong independent passphrase rejected');
-    $assert(!$restorer->preflight(2, 'admin', $backup['path'], $backup['filename'], 'Current-password', $passphrase)['replacement_authorized'], 'Administrator can validate a backup without replacing data');
+    $reject(fn() => $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Snapshot-password'), 'Obsolete source password cannot authorize destination preflight');
+    $assert(!$restorer->preflight(2, 'admin', $backup['path'], $backup['filename'], 'Current-password')['replacement_authorized'], 'Administrator can validate a backup without replacing data');
     $bodyWithDuplicate = preg_replace('/\n-- SHA256: [a-f0-9]{64}\n$/', '', $sql);
     $bodyWithDuplicate = str_replace("X'" . bin2hex('person-3') . "'", "X'" . bin2hex('PERSON-2') . "'", $bodyWithDuplicate);
     $duplicateSql = $bodyWithDuplicate . "\n-- SHA256: " . hash('sha256', $bodyWithDuplicate) . "\n";
     $duplicatePath = $private . '/duplicate.rmpkg';
-    file_put_contents($duplicatePath, StorePackageFormat::encode($duplicateSql, $decoded['files'], SqlBackupFormat::schema($source), $passphrase));
-    $reject(fn() => $restorer->preflight(1, 'super_admin', $duplicatePath, 'duplicate.rmpkg', 'Current-password', $passphrase), 'MySQL case-insensitive unique semantics reject hostile duplicate usernames');
+    file_put_contents($duplicatePath, StorePackageFormat::encode($duplicateSql, $decoded['files'], SqlBackupFormat::schema($source)));
+    $reject(fn() => $restorer->preflight(1, 'super_admin', $duplicatePath, 'duplicate.rmpkg', 'Current-password'), 'MySQL case-insensitive unique semantics reject hostile duplicate usernames');
     $assert((int)$target->query('SELECT stock FROM products WHERE product_id=9')->fetchColumn() === 3, 'Hostile preflight leaves permanent operational data unchanged');
     // Existing CLI-only legacy recovery remains private until encrypted replacement lands.
     $legacySql = $private . '/legacy-private.sql';
@@ -219,23 +218,23 @@ try {
         file_put_contents($uploadRoot . '/' . $reference, $image);
     }
     $fullBackups = new DatabaseBackupService($full, $policy, $private . '/full-downloads', $full, $uploadRoot);
-    $fullBackup = $fullBackups->create($fullActor, 'super_admin', $passphrase);
+    $fullBackup = $fullBackups->create($fullActor, 'super_admin');
     $full->prepare('UPDATE users SET full_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
     $fullSchema = SqlBackupFormat::schema($full);
     foreach (['privileges', 'role_privileges', 'user_privileges', 'restore_preserved_activity', 'emergency_access_sessions'] as $retiredTable) {
         $assert(!isset($fullSchema[$retiredTable]), 'Encrypted baseline must not recreate retired storage: ' . $retiredTable);
     }
-    $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password', $passphrase);
+    $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password');
     $assert($fullPreflight['replacement_authorized'] === false, 'Complete migrated schema preflight never authorizes replacement');
     $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
-    $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), $passphrase, SqlBackupFormat::schema($full));
+    $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), SqlBackupFormat::schema($full));
     file_put_contents($legacySql, $fullDecoded['sql']);
     $fullRestorer->restore($fullActor, 'super_admin', $legacySql, 'legacy-private.sql', 'Full-schema-password');
     $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
     $assert($full->query("SELECT receipt_details_json FROM gcash_transactions WHERE reference_number='00000000000000000000000000123456'")->fetchColumn() === $receiptSentinel, 'GCash receipt snapshot survives full backup and restore byte for byte');
     $full->exec('CREATE VIEW unsupported_fixture_view AS SELECT user_id FROM users');
-    $reject(fn() => $fullBackups->create($fullActor, 'super_admin', $passphrase), 'Unsupported custom objects must fail rather than produce an incomplete backup');
+    $reject(fn() => $fullBackups->create($fullActor, 'super_admin'), 'Unsupported custom objects must fail rather than produce an incomplete backup');
     $assert(!$fullBackups->status()['paused'], 'Failed unsupported capture releases the write gate');
     echo 'Integrated schema: ' . count($fullSchema) . ' tables, SHA-256 ' . hash('sha256', json_encode($fullSchema, JSON_THROW_ON_ERROR)) . "\n";
     echo "Database Backup workflow integration: passed (including full migrated schema)\n";

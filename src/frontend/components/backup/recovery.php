@@ -89,8 +89,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new DomainException('Invalid recovery session token.');
                 }
             }
-
-            $safetyPassphrase = (string)($_POST['safety_passphrase'] ?? '');
             $state = RecoveryStore::state();
             $safetyOpId = (string)($state['safety_operation_id'] ?? '');
             if ($safetyOpId === '') {
@@ -101,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $policy = new RoleCapabilityPolicy();
             $backups = new DatabaseBackupService($pdo, $policy);
             $restore = new DatabaseRestoreService($pdo, $policy, $backups);
-            $result = $restore->recoverSafety((int)$session['user_id'], (string)$session['role'], $safetyOpId, $safetyPassphrase);
+            $result = $restore->recoverSafety((int)$session['user_id'], (string)$session['role'], $safetyOpId);
             $notice = 'Complete safety recovery finished successfully. Database and uploads rolled back to verified original. Store is pending operator review.';
         } elseif ($action === 'restart_incoming') {
             if (!$session) {
@@ -120,9 +118,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $incomingPassphrase = (string)($_POST['incoming_passphrase'] ?? '');
-            $safetyPassphrase = (string)($_POST['safety_passphrase'] ?? '');
-
             $packagePath = null;
             if (isset($_FILES['package_file']) && $_FILES['package_file']['error'] === UPLOAD_ERR_OK && is_uploaded_file($_FILES['package_file']['tmp_name'])) {
                 $packagePath = $_FILES['package_file']['tmp_name'];
@@ -134,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $policy = new RoleCapabilityPolicy();
             $backups = new DatabaseBackupService($pdo, $policy);
             $restore = new DatabaseRestoreService($pdo, $policy, $backups);
-            $result = $restore->restartIncoming((int)$session['user_id'], (string)$session['role'], $packagePath, $incomingPassphrase, $safetyPassphrase);
+            $result = $restore->restartIncoming((int)$session['user_id'], (string)$session['role'], $packagePath);
             $notice = 'Approved incoming replacement restarted from the beginning. Verification passed. Store is pending operator review.';
         } elseif ($action === 'run_verification') {
             if (!$session) {
@@ -566,7 +561,7 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                     <div>
                         <h3 class="text-sm font-semibold text-slate-900">Alternative Recovery Actions</h3>
                         <p class="text-xs text-slate-600 mt-1">
-                            Choose an action to recover safety state or restart approved incoming replacement. Keys are loaded automatically. Older backups still need their original passphrases. Both actions revalidate integrity independently of partial live tables.
+                            Choose an action to recover safety state or restart approved incoming replacement. Keys are loaded automatically. Both actions revalidate integrity independently of partial live tables.
                         </p>
                     </div>
 
@@ -582,11 +577,6 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                             <form method="post" class="space-y-3" data-recovery-form="safety">
                                 <input type="hidden" name="action" value="recover_safety">
                                 <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-
-                                <div>
-                                    <label for="safety-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Original safety passphrase (older backups only)</label>
-                                    <input id="safety-passphrase" name="safety_passphrase" type="password" autocomplete="current-password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
-                                </div>
 
                                 <button type="submit" data-recovery-submit="safety" class="w-full px-3 py-2 bg-slate-800 text-white font-medium text-xs rounded hover:bg-slate-900">
                                     Recover Destination Safety Copy
@@ -609,16 +599,6 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                                 <div>
                                     <label for="incoming-file" class="block text-xs font-medium text-slate-700 mb-1">Approved Package (.rmpkg)</label>
                                     <input id="incoming-file" name="package_file" type="file" accept=".rmpkg" required class="w-full text-xs">
-                                </div>
-
-                                <div>
-                                    <label for="incoming-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Original package passphrase (older backups only)</label>
-                                    <input id="incoming-passphrase" name="incoming_passphrase" type="password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
-                                </div>
-
-                                <div>
-                                    <label for="safety-passphrase-restart" class="block text-xs font-medium text-slate-700 mb-1">Original safety passphrase (older backups only)</label>
-                                    <input id="safety-passphrase-restart" name="safety_passphrase" type="password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
                                 </div>
 
                                 <button type="submit" data-recovery-submit="incoming" class="w-full px-3 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">

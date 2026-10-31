@@ -40,25 +40,24 @@ final class DatabaseBackupService
      * Create one consistent, encrypted database and uploads package and leave a private
      * temporary artifact ready for the requester's download.
      */
-    public function create(int $actorUserId, string $actorRole, #[\SensitiveParameter] string $passphrase = '', $requestLease = null): array
+    public function create(int $actorUserId, string $actorRole, $requestLease = null): array
     {
         $this->authorizeActor($actorUserId, $actorRole);
-        return $this->capture($actorUserId, $actorRole, $passphrase, $requestLease);
+        return $this->capture($actorUserId, $actorRole, $requestLease);
     }
 
     /**
      * The existing scheduled script shares the same capture, coordination, and
      * encrypted package format instead of keeping a second exporter.
      */
-    public function createForSystem(#[\SensitiveParameter] string $passphrase = ''): array
+    public function createForSystem(): array
     {
-        return $this->capture(null, null, $passphrase);
+        return $this->capture(null, null);
     }
 
-    private function capture(?int $actorUserId, ?string $actorRole, #[\SensitiveParameter] string $passphrase, $requestLease = null): array
+    private function capture(?int $actorUserId, ?string $actorRole, $requestLease = null): array
     {
         StorePackageFormat::assertRuntime();
-        if ($passphrase !== '') StorePackageFormat::assertPassphrase($passphrase);
         if (RecoveryStore::isPaused()) {
             throw new DomainException('Database recovery is in progress. Finish recovery before creating another backup.');
         }
@@ -125,7 +124,7 @@ final class DatabaseBackupService
             }
             $originPath = RecoveryStore::path('installation-id');
             if (!is_file($originPath)) RecoveryStore::write('installation-id', bin2hex(random_bytes(16)));
-            $package = StorePackageFormat::encode($sql, $files, $schema, $passphrase, trim((string)file_get_contents($originPath)), (string)$this->pdo->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $package = StorePackageFormat::encode($sql, $files, $schema, trim((string)file_get_contents($originPath)), (string)$this->pdo->getAttribute(PDO::ATTR_SERVER_VERSION));
             $handle = fopen($artifactPath, 'xb');
             if ($handle === false) throw new DomainException('The encrypted package could not be opened.');
             chmod($artifactPath, 0600);
@@ -137,7 +136,7 @@ final class DatabaseBackupService
             $capture['size'] = strlen($package);
             $capture['files'] = count($files);
             unset($package, $sql, $files);
-            $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $passphrase, $schema);
+            $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $schema);
             $snapshotAt = $verified['manifest']['snapshot_at'];
             unset($verified);
             $coordinator->discard($sqlPath);
@@ -159,7 +158,7 @@ final class DatabaseBackupService
                 $artifactPath,
                 $filename,
                 (int)$capture['size'],
-                $passphrase === '' ? StorePackageFormat::KEY_VERSION : StorePackageFormat::VERSION,
+                StorePackageFormat::KEY_VERSION,
                 StorePackageFormat::CIPHER,
                 $snapshotAt
             );
@@ -177,7 +176,7 @@ final class DatabaseBackupService
                     (int)$capture['rows']
                 ),
                 $snapshotAt,
-                $passphrase === '' ? StorePackageFormat::KEY_VERSION : StorePackageFormat::VERSION,
+                StorePackageFormat::KEY_VERSION,
                 StorePackageFormat::CIPHER,
                 $actorRole
             );
@@ -289,7 +288,7 @@ final class DatabaseBackupService
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
                 'requested_by' => (string)($row['full_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
-                'format' => in_array($row['envelope_version'], [StorePackageFormat::VERSION, StorePackageFormat::KEY_VERSION], true)
+                'format' => $row['envelope_version'] === StorePackageFormat::KEY_VERSION
                     ? 'Encrypted Store package'
                     : ($row['envelope_version'] === SqlBackupFormat::VERSION
                     ? 'SQL (unencrypted)'

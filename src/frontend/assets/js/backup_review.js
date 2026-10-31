@@ -11,7 +11,7 @@
             if (event.submitter?.matches('[data-start-restore][formaction]')) return;
             event.preventDefault();
             if (pending) return;
-            const fields = ['restore_password', 'backup_passphrase'];
+            const fields = ['restore_password'];
             const values = fields.map(name => form.elements.namedItem(name)?.value || '');
             const files = form.elements.namedItem('backup_file').files;
             const body = new FormData(form);
