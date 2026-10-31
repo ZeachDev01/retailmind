@@ -10,8 +10,11 @@
         <?= csrf_field() ?>
         <div class="form-group"><label for="key-password">Current login password</label><input id="key-password" name="key_password" type="password" autocomplete="current-password" required></div>
         <button class="btn btn-secondary" name="key_action" value="download" type="submit">Download recovery key</button>
-        <div class="form-group"><label for="recovery-key-file">Recovery-key file from another server</label><input id="recovery-key-file" name="recovery_key" type="file" accept=".key"></div>
-        <button class="btn btn-secondary" name="key_action" value="import" type="submit">Import recovery key</button>
+        <details>
+            <summary>Import key from another server</summary>
+            <div class="form-group"><label for="recovery-key-file">Recovery key file (.key)</label><input id="recovery-key-file" name="recovery_key" type="file" accept=".key"></div>
+            <button class="btn btn-secondary" name="key_action" value="import" type="submit">Import recovery key</button>
+        </details>
     </form>
 </<?= !empty($recoveryTabbed) ? 'section' : 'details' ?>>
 <?php endif; ?>

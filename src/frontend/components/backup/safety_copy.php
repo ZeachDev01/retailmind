@@ -21,16 +21,16 @@ catch (DomainException) { /* No verified safety artifact has been prepared for t
 catch (Throwable $exception) { $safetyError = \App\Support\OperatorAlert::message($exception, 'The safety checkpoint cannot be read. Keep its artifact and ask your Super Administrator to check private storage.'); }
 ?>
 <section class="dashboard-section" aria-labelledby="safety-copy-title" data-safety-copy>
-    <h2 id="safety-copy-title">Destination safety copy</h2>
+    <h2 id="safety-copy-title">Safety copy</h2>
     <?php if ($safetyError !== ''): ?><p class="alert tag-warning" role="alert"><?= $escape($safetyError) ?></p><?php endif; ?>
     <?php if ($safetyDownload): ?>
-        <p role="status">Safety copy verified. The original is retained for this operation; downloading does not remove it.</p>
-        <p><a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>">Download encrypted safety copy</a></p>
+        <p role="status">Safety copy verified and retained for this operation.</p>
+        <p><a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>">Download safety copy</a></p>
     <?php else: ?>
         <form method="post">
             <?= csrf_field() ?><input type="hidden" name="action" value="safety"><input type="hidden" name="safety_operation" value="<?= $escape($safetyOperation) ?>">
-            <div class="form-group"><label for="safety-password">Your current destination login password</label><input id="safety-password" type="password" name="safety_password" autocomplete="current-password" required></div>
-            <button class="btn btn-primary" type="submit" data-safety-create>Capture and verify safety copy</button>
+            <div class="form-group"><label for="safety-password">Current login password</label><input id="safety-password" type="password" name="safety_password" autocomplete="current-password" required></div>
+            <button class="btn btn-primary" type="submit" data-safety-create>Create and verify safety copy</button>
         </form>
     <?php endif; ?>
 </section>

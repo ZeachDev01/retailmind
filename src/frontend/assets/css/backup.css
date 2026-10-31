@@ -187,9 +187,8 @@
 .administrator-backup-page .backup-recovery [role="tabpanel"] > .dashboard-section > h2 { display: none; }
 .administrator-backup-page .backup-recovery p { max-width: 70ch; line-height: 1.6; }
 .administrator-backup-page .backup-recovery form { max-width: 40rem; }
-.administrator-backup-page .restore-guidance { margin-top: 1.25rem; }
+.administrator-backup-page .restore-guidance { margin-top: 0; }
 .administrator-backup-page .restore-status-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
-.administrator-backup-page .restore-status-heading h2 { font-size: .9375rem; }
 .administrator-backup-page .restore-status-heading h2 i { color: var(--primary); }
 .administrator-backup-page .restore-stage { margin: 0; padding: .25rem .75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--card-bg); color: var(--text); font-size: .8125rem; font-weight: 600; }
 .administrator-backup-page .restore-guidance > p { margin: .75rem 0 0; color: var(--muted); font-size: .9375rem; }

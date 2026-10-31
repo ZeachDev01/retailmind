@@ -129,7 +129,6 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <span class="backup-create-icon"><i class="bi bi-database-lock" aria-hidden="true"></i></span>
                     <div class="backup-create-copy">
                         <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
-                        <p>Save a copy of your Store records and images.</p>
                     </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
@@ -140,7 +139,6 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <details class="backup-tips">
                         <summary>Backup tips</summary>
                         <ul class="backup-guidance-list">
-                            <li>Creating a backup does not confirm the file is saved. Download your copy immediately.</li>
                             <li>No backup passphrase is needed.</li>
                             <li>Save the recovery key separately, once per installation.</li>
                         </ul>
@@ -149,19 +147,18 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             </section>
 
             <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
-                <h2 id="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</h2>
                 <div class="restore-guidance" data-restore-guidance>
                     <div class="restore-status-heading">
-                        <h2><i class="bi bi-shield-check" aria-hidden="true"></i> Restore status</h2>
-                        <p class="restore-stage"><span class="sr-only">Status:</span> <span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
+                        <h2 id="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</h2>
+                        <p class="restore-stage" role="status"><span class="sr-only">Restore status: </span><span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
                     </div>
                     <?php if (\App\Backup\RecoveryStore::isPaused()): ?>
                         <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
-                        <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Open Database Recovery Console</a></p>
+                        <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Continue recovery</a></p>
                     <?php endif; ?>
                 </div>
                 <div class="backup-recovery-tabs" role="tablist" aria-label="Restore and recovery tools" hidden>
-                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true">Restore backup</button>
+                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true">Restore</button>
                     <button type="button" id="safety-tab" role="tab" aria-controls="safety-panel" aria-selected="false" tabindex="-1">Safety copy</button>
                     <button type="button" id="key-tab" role="tab" aria-controls="key-panel" aria-selected="false" tabindex="-1">Recovery key</button>
                 </div>
