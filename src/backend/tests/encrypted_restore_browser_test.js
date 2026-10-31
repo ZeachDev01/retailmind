@@ -16,8 +16,6 @@ async function runScenario(initiator) {
     const php = process.env.PHP_BINARY || 'php';
     const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-encrypted-restore-'));
     const env = { ...process.env, BACKUP_STORAGE_PATH: path.join(testDirectory, 'recovery') };
-    const passphrase = 'Incoming backup passphrase 2026';
-    const safetyPassphrase = 'Independent safety passphrase 2026';
     const fixture = action => {
         const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], { encoding: 'utf8', env });
         assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -59,54 +57,88 @@ async function runScenario(initiator) {
         assert.equal((await manager.context.request.post(restoreUrl)).status(), 403);
         assert.equal((await admin.context.request.post(restoreUrl)).status(), 403, 'Restore rejects missing CSRF');
         await admin.page.goto(adminUrl);
-        await admin.page.locator('#backup-passphrase').fill(passphrase);
         await Promise.all([admin.page.waitForNavigation(), admin.page.locator('[data-backup-create]').click()]);
         const href = await admin.page.locator('[data-backup-download]').getAttribute('href');
         assert(href, await admin.page.locator('body').innerText());
         const download = await admin.context.request.get(new URL(href, origin).href);
         assert.equal(download.status(), 200);
         const bytes = await download.body();
-        assert.equal(bytes.subarray(0, 8).toString(), 'RMSTORE1');
+        assert.equal(bytes.subarray(0, 8).toString(), 'RMSTORE2');
+        assert(!bytes.includes(Buffer.from('CREATE TABLE')), 'Downloaded backup cannot be read or imported as SQL');
+        data.password = JSON.parse(fixture('backup_password_change')).password;
+        Object.assign(admin, await login(initiator));
+        Object.assign(superAdmin, await login('super_admin'));
+        const keyUrl = origin + '/components/backup/recovery_key.php';
+        await superAdmin.page.goto(origin + '/components/system_administrator/backup_restore.php');
+        const keyCsrf = await superAdmin.page.locator('input[name="csrf_token"]').first().inputValue();
+        assert.equal((await superAdmin.context.request.get(keyUrl)).status(), 405, 'Key access requires POST');
+        assert.equal((await superAdmin.context.request.post(keyUrl)).status(), 403, 'Key export requires CSRF');
+        const deniedKey = await superAdmin.context.request.post(keyUrl, { maxRedirects: 0, form: {
+            csrf_token: keyCsrf, key_action: 'download', key_password: 'wrong-password'
+        } });
+        assert.equal(deniedKey.status(), 303, 'Wrong password cannot export a key');
+        const keyDownload = await superAdmin.context.request.post(keyUrl, { form: {
+            csrf_token: keyCsrf, key_action: 'download', key_password: data.password
+        } });
+        assert.equal(keyDownload.status(), 200);
+        assert.equal(keyDownload.headers()['cache-control'], 'no-store');
+        const recoveryKey = await keyDownload.body();
+        assert.match(recoveryKey.toString(), /^[a-f0-9]{64}\n$/);
+        assert(!bytes.includes(recoveryKey.subarray(0, 64)), 'Backup does not contain its decryption key');
+        const keyImport = await superAdmin.context.request.post(keyUrl, { maxRedirects: 0, multipart: {
+            csrf_token: keyCsrf, key_action: 'import', key_password: data.password,
+            recovery_key: { name: 'recovery.key', mimeType: 'application/octet-stream', buffer: recoveryKey }
+        } });
+        assert.equal(keyImport.status(), 303, 'Recovery key can be imported without replacing the destination key');
         const start = async password => {
             await admin.page.goto(adminUrl);
             const csrf = await admin.page.locator('input[name="csrf_token"]').first().inputValue();
             return admin.context.request.post(restoreUrl, { maxRedirects: 0, multipart: {
                 csrf_token: csrf, confirm_replacement: '1', restore_password: password,
-                backup_passphrase: passphrase, safety_passphrase: safetyPassphrase,
                 backup_file: { name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes }
             } });
         };
         await start(data.password);
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'restore-state.json')), 'Missing approval leaves destination untouched');
         const identityUrl = origin + '/components/system_administrator/identity_reconciliation.php';
-        await superAdmin.page.goto(identityUrl);
-        const fill = async () => {
+        if (initiator === 'super_admin') {
+            await superAdmin.page.goto(origin + '/components/system_administrator/backup_restore.php');
+            await superAdmin.page.locator('#incoming-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes });
+            await superAdmin.page.locator('#incoming-password').fill(data.password);
+            await Promise.all([superAdmin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), superAdmin.page.getByRole('button', { name: 'Review backup', exact: true }).click()]);
+        } else {
+            await superAdmin.page.goto(identityUrl);
             await superAdmin.page.locator('#identity-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes });
             await superAdmin.page.locator('#identity-password').fill(data.password);
-            await superAdmin.page.locator('#identity-passphrase').fill(passphrase);
-        };
-        await fill();
-        await Promise.all([superAdmin.page.waitForNavigation(), superAdmin.page.getByRole('button', { name: 'Inspect people and conflicts' }).click()]);
+            await Promise.all([superAdmin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), superAdmin.page.getByRole('button', { name: 'Inspect people and conflicts' }).click()]);
+        }
+        await superAdmin.page.locator('#resolution-1').waitFor();
         for (const id of [1, 2, 3, 4]) {
             await superAdmin.page.locator('#resolution-' + id).selectOption('link');
             await superAdmin.page.locator('#destination-' + id).selectOption(String(id));
         }
-        await fill();
-        await Promise.all([superAdmin.page.waitForNavigation(), superAdmin.page.getByRole('button', { name: 'Review resolutions', exact: true }).click()]);
-        await fill();
-        await Promise.all([superAdmin.page.waitForNavigation(), superAdmin.page.getByRole('button', { name: 'Approve reconciliation and record preparation evidence' }).click()]);
+        await Promise.all([superAdmin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), superAdmin.page.getByRole('button', { name: 'Review resolutions', exact: true }).click()]);
+        await superAdmin.page.getByRole('button', { name: 'Approve reconciliation and record preparation evidence' }).waitFor();
+        assert.equal(await superAdmin.page.locator('#identity-password').inputValue(), data.password, 'Password entered once survives review');
+        assert.equal(await superAdmin.page.locator('#identity-package').evaluate(input => input.files.length), 1, 'Package stays selected');
+        await superAdmin.page.getByRole('button', { name: 'Approve reconciliation and record preparation evidence' }).click();
+        await superAdmin.page.locator('[data-start-restore]').waitFor();
         assert.match(await superAdmin.page.locator('body').innerText(), /Reconciliation approved/);
         await start('Wrong destination password');
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'restore-state.json')), 'Wrong password leaves Store open');
-        await admin.page.goto(adminUrl);
+        if (initiator !== 'super_admin') await admin.page.goto(adminUrl);
         for (const width of [390, 1440]) {
             await admin.page.setViewportSize({ width, height: 960 });
             assert(await admin.page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Restore form fits viewport');
         }
-        await admin.page.locator('#incoming-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes });
-        await admin.page.locator('#incoming-password').fill(data.password);
-        await admin.page.locator('#incoming-passphrase').fill(passphrase);
-        await admin.page.locator('#replacement-safety-passphrase').fill(safetyPassphrase);
+        if (initiator === 'super_admin') {
+            admin.page = superAdmin.page;
+            assert.equal(await admin.page.locator('#incoming-password').inputValue(), data.password, 'Approval carries password into final restore');
+            assert.equal(await admin.page.locator('#incoming-package').evaluate(input => input.files.length), 1);
+        } else {
+            await admin.page.locator('#incoming-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: bytes });
+            await admin.page.locator('#incoming-password').fill(data.password);
+        }
         await admin.page.locator('input[name="confirm_replacement"]').check();
         await Promise.all([admin.page.waitForURL(/\/backup\/recovery\.php/, { timeout: 120000 }), admin.page.locator('[data-start-restore]').click()]);
         const state = JSON.parse(fs.readFileSync(path.join(env.BACKUP_STORAGE_PATH, 'restore-state.json')));

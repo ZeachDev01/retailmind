@@ -40,7 +40,7 @@ final class DatabaseBackupService
      * Create one consistent, encrypted database and uploads package and leave a private
      * temporary artifact ready for the requester's download.
      */
-    public function create(int $actorUserId, string $actorRole, #[\SensitiveParameter] string $passphrase, $requestLease = null): array
+    public function create(int $actorUserId, string $actorRole, #[\SensitiveParameter] string $passphrase = '', $requestLease = null): array
     {
         $this->authorizeActor($actorUserId, $actorRole);
         return $this->capture($actorUserId, $actorRole, $passphrase, $requestLease);
@@ -50,7 +50,7 @@ final class DatabaseBackupService
      * The existing scheduled script shares the same capture, coordination, and
      * encrypted package format instead of keeping a second exporter.
      */
-    public function createForSystem(#[\SensitiveParameter] string $passphrase): array
+    public function createForSystem(#[\SensitiveParameter] string $passphrase = ''): array
     {
         return $this->capture(null, null, $passphrase);
     }
@@ -58,7 +58,7 @@ final class DatabaseBackupService
     private function capture(?int $actorUserId, ?string $actorRole, #[\SensitiveParameter] string $passphrase, $requestLease = null): array
     {
         StorePackageFormat::assertRuntime();
-        StorePackageFormat::assertPassphrase($passphrase);
+        if ($passphrase !== '') StorePackageFormat::assertPassphrase($passphrase);
         if (RecoveryStore::isPaused()) {
             throw new DomainException('Database recovery is in progress. Finish recovery before creating another backup.');
         }
@@ -159,7 +159,7 @@ final class DatabaseBackupService
                 $artifactPath,
                 $filename,
                 (int)$capture['size'],
-                StorePackageFormat::VERSION,
+                $passphrase === '' ? StorePackageFormat::KEY_VERSION : StorePackageFormat::VERSION,
                 StorePackageFormat::CIPHER,
                 $snapshotAt
             );
@@ -177,7 +177,7 @@ final class DatabaseBackupService
                     (int)$capture['rows']
                 ),
                 $snapshotAt,
-                StorePackageFormat::VERSION,
+                $passphrase === '' ? StorePackageFormat::KEY_VERSION : StorePackageFormat::VERSION,
                 StorePackageFormat::CIPHER,
                 $actorRole
             );
@@ -190,7 +190,7 @@ final class DatabaseBackupService
 
         return [
             'status' => self::OUTCOME_READY,
-            'message' => 'Your encrypted Store package is ready to download. Save it and keep its passphrase separately off-server.',
+            'message' => 'Your encrypted Store package is ready to download. Save it off-server and keep its recovery key separately.',
             'backup_id' => $backupId,
             'filename' => $filename,
             'token' => $token,
@@ -289,7 +289,7 @@ final class DatabaseBackupService
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
                 'requested_by' => (string)($row['full_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
-                'format' => $row['envelope_version'] === StorePackageFormat::VERSION
+                'format' => in_array($row['envelope_version'], [StorePackageFormat::VERSION, StorePackageFormat::KEY_VERSION], true)
                     ? 'Encrypted Store package'
                     : ($row['envelope_version'] === SqlBackupFormat::VERSION
                     ? 'SQL (unencrypted)'

@@ -12,10 +12,7 @@ use App\Backup\DatabaseBackupService;
 $service = new DatabaseBackupService($pdo, new RoleCapabilityPolicy());
 $filename = 'scheduled-' . date('m-d-Y-His') . '.rmpkg';
 try {
-    // Supply the independent package passphrase through a protected pipe, never an argument or URL.
-    $passphrase = rtrim((string)fgets(STDIN, 1026), "\r\n");
-    $result = $service->createForSystem($passphrase);
-    unset($passphrase);
+    $result = $service->createForSystem();
     if (($result['status'] ?? '') !== DatabaseBackupService::OUTCOME_READY) {
         fwrite(STDERR, ($result['message'] ?? 'A backup is already in progress.') . PHP_EOL);
         exit(2);

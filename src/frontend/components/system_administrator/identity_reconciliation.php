@@ -15,6 +15,7 @@ $decisions = is_array($_POST['people'] ?? null) ? $_POST['people'] : [];
 $action = (string)($_POST['action'] ?? 'review');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_local_request('Database restore is not available during remote monitoring.');
     csrf_verify();
     try {
         $file = $_FILES['backup_file'] ?? [];
@@ -61,50 +62,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <link rel="stylesheet" href="<?= $escape(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
-    <style>
-        .identity-reconciliation-page .credentials-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1rem;
-        }
-        .identity-reconciliation-page .resolution-card {
-            border: 1px solid var(--recovery-line, #dce2ea);
-            border-radius: 12px;
-            padding: 1.25rem;
-            background: var(--surface-soft, #f8fafc);
-            margin-bottom: 1rem;
-        }
-        .identity-reconciliation-page .resolution-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1rem;
-            margin-top: 0.75rem;
-        }
-        .identity-reconciliation-page .identity-meta {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 0.4rem 0.75rem;
-            font-size: 0.85rem;
-            color: var(--recovery-muted, #667085);
-            margin: 0.25rem 0 0.75rem;
-        }
-        .identity-reconciliation-page .tag-neutral {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.22rem 0.58rem;
-            border-radius: 999px;
-            border: 1px solid var(--recovery-line, #dce2ea);
-            font-size: 0.76rem;
-            font-weight: 600;
-            line-height: 1.25;
-            background: var(--card-bg, #ffffff);
-            color: var(--recovery-ink, #1f2937);
-        }
-        .identity-reconciliation-page .status-callout {
-            border-left: 4px solid var(--theme-success-text, #166534);
-        }
-    </style>
+
 </head>
 <body class="database-backup-page database-restore-page identity-reconciliation-page">
 <div class="app-shell">
@@ -150,7 +108,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 </div>
             <?php endif; ?>
 
-            <form method="post" enctype="multipart/form-data" style="margin-top: 1.25rem;"><?= csrf_field() ?>
+            <?php if (isset($package)): ?><p><strong>Backup snapshot: <?= $escape($package['manifest']['snapshot_at']) ?> UTC.</strong> Restoring replaces newer Store records.</p><?php endif; ?>
+            <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>" data-identity-form style="margin-top: 1.25rem;"><?= csrf_field() ?>
                 <?php if ($review): ?>
                     <input type="hidden" name="package_hash" value="<?= $escape($packageHash) ?>">
                 <?php endif; ?>
@@ -161,7 +120,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
 
                 <div class="form-group">
                     <label for="identity-package">Encrypted Store package (.rmpkg)</label>
-                    <p class="restore-file-hint" id="identity-upload-help"><?= $escape($restorer->supportedSizeLine()) ?> Re-select package when reviewing resolutions. Passwords and package contents are never permanently stored in preview.</p>
+                    <p class="restore-file-hint" id="identity-upload-help"><?= $escape($restorer->supportedSizeLine()) ?> Your selection stays available during this review. Reloading clears it.</p>
                     <div class="restore-file-field">
                         <input id="identity-package" type="file" name="backup_file" accept=".rmpkg" required aria-describedby="identity-upload-help">
                     </div>
@@ -173,8 +132,10 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <input id="identity-password" type="password" name="restore_password" autocomplete="current-password" required placeholder="Destination login password">
                     </div>
                     <div class="form-group">
-                        <label for="identity-passphrase">Package original backup passphrase</label>
-                        <input id="identity-passphrase" type="password" name="backup_passphrase" autocomplete="off" required placeholder="Original package passphrase">
+                        <details><summary>Older backup options</summary>
+                        <label for="identity-passphrase">Original passphrase (older backups only)</label>
+                        <input id="identity-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024">
+                        </details>
                     </div>
                 </div>
 
@@ -376,7 +337,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                 </div>
                                 <p style="margin: 0.75rem 0 0.25rem;">Approval ID: <code><?= $escape($approval['approval_id']) ?></code></p>
                                 <p style="margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--recovery-muted);">Approved at <?= $escape($approval['approved_at']) ?> by Super Administrator #<?= (int)$approval['approved_by'] ?>.</p>
-                                <p class="backup-hint" style="margin: 0;">Destination security and preparation evidence are recorded. Ordinary replacement remains disabled.</p>
+                                <p class="backup-hint" style="margin: 0;">Review complete. Confirm restoration below.</p>
                             </div>
                         <?php else: ?>
                             <div class="form-actions" style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem;">
@@ -400,7 +361,13 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 <?php endif; ?>
             </form>
         </section>
+        <?php if ($approval):
+            $service = $backups;
+            $restoreReviewFirst = false;
+            require __DIR__ . '/../backup/restore_form.php';
+        endif; ?>
     </main>
 </div>
+<script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
 </body>
 </html>

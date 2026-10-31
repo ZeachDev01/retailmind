@@ -122,3 +122,47 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 @media (max-width: 480px) {
     .database-restore-page .recovery-standalone { margin: 1.5rem auto; padding: 1rem; }
 }
+
+/* Account review in the guided restore flow. */
+.identity-reconciliation-page .credentials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .identity-reconciliation-page .resolution-card {
+            border: 1px solid var(--recovery-line, #dce2ea);
+            border-radius: 12px;
+            padding: 1.25rem;
+            background: var(--surface-soft, #f8fafc);
+            margin-bottom: 1rem;
+        }
+        .identity-reconciliation-page .resolution-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-top: 0.75rem;
+        }
+        .identity-reconciliation-page .identity-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            color: var(--recovery-muted, #667085);
+            margin: 0.25rem 0 0.75rem;
+        }
+        .identity-reconciliation-page .tag-neutral {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.22rem 0.58rem;
+            border-radius: 999px;
+            border: 1px solid var(--recovery-line, #dce2ea);
+            font-size: 0.76rem;
+            font-weight: 600;
+            line-height: 1.25;
+            background: var(--card-bg, #ffffff);
+            color: var(--recovery-ink, #1f2937);
+        }
+        .identity-reconciliation-page .status-callout {
+            border-left: 4px solid var(--theme-success-text, #166534);
+        }

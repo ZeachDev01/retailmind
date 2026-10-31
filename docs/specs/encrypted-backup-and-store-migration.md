@@ -1,5 +1,7 @@
 # Encrypted backups, safe Database Restore, and Store Migration
 
+Update 2026-10-31: [ADR-0023](../adr/0023-password-authorized-backup-restoration.md) supersedes the separate user-entered passphrase requirements for new backups and safety copies. Generated private keys provide encryption; the operator's current login password authorizes restoration. A separately saved recovery-key file supports server loss and migration. Older packages still require their original passphrase; other preservation and recovery requirements remain in force.
+
 ## Problem Statement
 
 The Store owner needs recoverable backups and a dependable way to move the same Store between localhost and web hosting. A database-only SQL download leaves uploaded images behind, exposes captured records if stolen, and does not preserve the destination's privileged access when restored. Today, only the Super Administrator can restore, and full replacement also rolls back accounts, settings, and audit history.

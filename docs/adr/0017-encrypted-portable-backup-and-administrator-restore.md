@@ -4,6 +4,8 @@ status: accepted
 
 # Encrypted portable backups and Administrator restore
 
+The new-backup passphrase and key-custody requirements below are superseded by [ADR-0023](0023-password-authorized-backup-restoration.md), accepted on 2026-10-31. Other restore, identity, migration, and recovery requirements remain in force.
+
 On 2026-10-24, the user selected recovery after data loss and migration in both directions between localhost and web hosting, encrypted backups that protect against theft of the backup file, and Database Restore access for the Administrator as well as the Super Administrator. The user subsequently requested specification synthesis/publication and confirmed workflow integration and Administrator-screen testing with disposable data. This accepts the target design; it does not authorize production deployment or a destructive live migration.
 
 This revisits ADR-0004's plaintext backup and Super Administrator-only restore policy and ADR-0001's recovery authority boundary. Migration adds a choice of active host to ADR-0015's local-hosting plan; it does not authorize simultaneous independent Store operation. Existing behavior and operational instructions remain unchanged until the design is completed and implemented.

@@ -1,5 +1,7 @@
 # Simplify encrypted Database Backup and Database Restore
 
+Update 2026-10-31: [ADR-0023](../adr/0023-password-authorized-backup-restoration.md) supersedes this document's independent user-entered backup/safety passphrases and prohibition on server-held backup keys for new packages. Routine packages and safety copies use private generated keys; the operator supplies their current login password. Older packages retain optional original-passphrase support. Existing permissions, approvals, validation, and recovery safeguards remain required.
+
 ## Problem Statement
 
 The Store owner must navigate separate interfaces for backup validation, Identity Reconciliation, Database Restore, manual safety capture, and recovery review. Review and restoration repeatedly request the same package and credentials. Optional safety tools appear to be prerequisites although restoration already captures and verifies a fresh destination safety copy automatically. Some guidance still says ordinary replacement is disabled although the supported route enables it.

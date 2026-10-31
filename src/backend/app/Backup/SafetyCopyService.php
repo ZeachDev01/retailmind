@@ -24,7 +24,7 @@ final class SafetyCopyService
         $directory = self::directory($operationId);
         $backups = new DatabaseBackupService($this->pdo, $this->policy, $directory, $this->coordination, $this->uploadDirectory);
         $backups->authorizeActor($actorId, $role);
-        StorePackageFormat::assertPassphrase($safetyPassphrase);
+        if ($safetyPassphrase !== '') StorePackageFormat::assertPassphrase($safetyPassphrase);
         $lease = $requestLease ?? RecoveryStore::exclusive();
         $created = null;
         try {

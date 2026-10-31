@@ -56,7 +56,9 @@ const fixture = action => {
         for (const [index, actor] of [administrator, superAdministrator].entries()) {
             const url = origin + urls[index];
             await actor.page.goto(url);
-            assert.equal(await actor.page.getByLabel('Separate destination safety passphrase').count(), 1, 'Both administrator screens expose complete safety capture');
+            assert.equal(await actor.page.locator('#safety-passphrase').count(), 0, 'Safety encryption needs no passphrase');
+            if (index === 0) await actor.page.locator('#backup-recovery > summary').click();
+            await actor.page.getByText('Advanced backup tools', { exact: true }).click();
             for (const width of [390, 1440]) {
                 await actor.page.setViewportSize({ width, height: 960 });
                 const button = await actor.page.locator('[data-backup-create]').boundingBox();
@@ -68,7 +70,6 @@ const fixture = action => {
             assert.equal((await actor.context.request.post(url, { form: { action: 'safety', safety_operation: operation, safety_password: data.password, safety_passphrase: secret } })).status(), 403, 'Safety capture requires CSRF');
             const submit = async password => {
                 await actor.page.locator('#safety-password').fill(password);
-                await actor.page.locator('#safety-passphrase').fill(secret);
                 await Promise.all([actor.page.waitForNavigation(), actor.page.locator('[data-safety-create]').click()]);
             };
             await submit('wrong-password');
@@ -78,7 +79,7 @@ const fixture = action => {
             const href = await actor.page.locator('[data-safety-download]').getAttribute('href');
             const download = await actor.context.request.get(new URL(href, origin).href);
             assert.equal(download.status(), 200);
-            assert.equal((await download.body()).subarray(0, 8).toString(), 'RMSTORE1');
+            assert.equal((await download.body()).subarray(0, 8).toString(), 'RMSTORE2');
             assert.equal((await actor.context.request.get(new URL(href, origin).href)).status(), 200, 'Safety download never deletes the original');
             const other = index === 0 ? superAdministrator : administrator;
             assert.equal((await other.context.request.get(new URL(href, origin).href)).status(), 404, 'Another administrator cannot download requester-bound safety material');

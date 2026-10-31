@@ -59,8 +59,12 @@ The operational owner responsible for Store performance, staff, approvals, compl
 _Avoid_: System administrator, global administrator, inventory manager
 
 **Database Backup**:
-An encrypted, consistent package of the Store database and required uploaded Product/profile images, which either administrator role may create and download using a separate backup passphrase. A decrypted complete package includes restricted captured records. See STORE_PACKAGE_FORMAT.md for the current capture/preflight boundary.
+An encrypted, consistent package of the Store database and required uploaded Product/profile images, which either administrator role may create and download. A decrypted complete package includes restricted captured records. See STORE_PACKAGE_FORMAT.md for the current capture/preflight boundary.
 _Avoid_: Parallel backup, report export
+
+**Backup Recovery Key**:
+The separately saved secret file that unlocks the Store's Database Backups after server loss or transfer to another installation. It is distinct from the operator's current login password and Recovery Account credentials.
+_Avoid_: Login password, Recovery Account credentials
 
 **Identity Reconciliation**:
 The destination Super Administrator's explicit read-only review of source people, destination accounts, conflicts, preservation closure, and resulting access. Matching identifiers never establish identity. Links retain destination account authority; distinct ordinary people use deliberately selected unused login details. Source privileged-only and Recovery people remain Historical Actors with no usable access.
@@ -95,11 +99,11 @@ The independent verification of initiating Administrator and active destination 
 _Avoid_: Decrypted password cache, generic session bypass
 
 **Complete Safety Recovery**:
-The restoration of the destination database, uploads, and security state directly from the original verified safety copy checkpoint. Requires the destination safety passphrase and operates completely without incoming package material.
+The restoration of the destination database, uploads, and security state directly from the original verified safety copy checkpoint, independently of incoming package material.
 _Avoid_: Partial rollback, unverified destination recovery
 
 **Approved Incoming Restart**:
-The deterministic, from-the-beginning re-execution of an approved incoming replacement. Requires both the incoming and safety passphrases, revalidates package and plan integrity against the destination checkpoint independently of live tables, and enforces security preservation closure.
+The deterministic, from-the-beginning re-execution of an approved incoming replacement. It revalidates the incoming backup and original safety checkpoint independently of live tables and preserves destination security authority and evidence.
 _Avoid_: In-place resume, statement offset continuation, guessed mapping
 
 **Controlled Verification Check**:

@@ -82,15 +82,15 @@ foreach (['Administrator page' => $administratorPage, 'Super Administrator page'
     $assert(str_contains($source, 'csrf_field()'), ucfirst($name) . ' must render the CSRF field');
 }
 
-// --- encrypted download uses a guarded endpoint, with independent passphrase ---
+// --- encrypted download uses a guarded endpoint, with automatic encryption ---
 $backupPages = ['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage];
 foreach ($backupPages as $name => $source) {
     $assert(!str_contains($source, 'application/sql'), ucfirst($name) . ' must not offer a plain SQL download');
     $assert(!str_contains($source, 'readfile('), ucfirst($name) . ' must not stream a readable copy directly');
     $assert(!str_contains($source, 'BACKUP_ENCRYPTION_KEY'), ucfirst($name) . ' must never surface key configuration to the operator');
     $assert(
-        str_contains($source, 'backup_passphrase') && !str_contains($source, 'keyStatus()'),
-        ucfirst($name) . ' must require an independent backup passphrase'
+        str_contains($source, '$service->create($actorUserId, $actorRole)') && !str_contains($source, 'id="backup-passphrase"'),
+        ucfirst($name) . ' must encrypt backups automatically without a creation passphrase'
     );
     $assert(
         str_contains($source, 'does not confirm the file') || str_contains($source, 'it does not confirm'),
@@ -106,7 +106,7 @@ $assert(
     'The shared module must reuse the single snapshot writer'
 );
 $assert(
-    str_contains($scheduledScript, 'createForSystem($passphrase)'),
+    str_contains($scheduledScript, 'createForSystem()'),
     'The scheduled script must share the encrypted workflow instead of a second exporter'
 );
 $assert(

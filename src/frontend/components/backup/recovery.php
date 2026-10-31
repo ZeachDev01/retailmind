@@ -566,7 +566,7 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                     <div>
                         <h3 class="text-sm font-semibold text-slate-900">Alternative Recovery Actions</h3>
                         <p class="text-xs text-slate-600 mt-1">
-                            Choose an action to recover safety state or restart approved incoming replacement. Both actions require appropriate passphrases and revalidate integrity independently of partial live tables.
+                            Choose an action to recover safety state or restart approved incoming replacement. Keys are loaded automatically. Older backups still need their original passphrases. Both actions revalidate integrity independently of partial live tables.
                         </p>
                     </div>
 
@@ -584,8 +584,8 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                                 <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
 
                                 <div>
-                                    <label for="safety-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Safety-Copy Passphrase</label>
-                                    <input id="safety-passphrase" name="safety_passphrase" type="password" required autocomplete="current-password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                    <label for="safety-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Original safety passphrase (older backups only)</label>
+                                    <input id="safety-passphrase" name="safety_passphrase" type="password" autocomplete="current-password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
                                 </div>
 
                                 <button type="submit" data-recovery-submit="safety" class="w-full px-3 py-2 bg-slate-800 text-white font-medium text-xs rounded hover:bg-slate-900">
@@ -612,13 +612,13 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
                                 </div>
 
                                 <div>
-                                    <label for="incoming-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Incoming Package Passphrase</label>
-                                    <input id="incoming-passphrase" name="incoming_passphrase" type="password" required class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                    <label for="incoming-passphrase" class="block text-xs font-medium text-slate-700 mb-1">Original package passphrase (older backups only)</label>
+                                    <input id="incoming-passphrase" name="incoming_passphrase" type="password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
                                 </div>
 
                                 <div>
-                                    <label for="safety-passphrase-restart" class="block text-xs font-medium text-slate-700 mb-1">Destination Safety Passphrase</label>
-                                    <input id="safety-passphrase-restart" name="safety_passphrase" type="password" required class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
+                                    <label for="safety-passphrase-restart" class="block text-xs font-medium text-slate-700 mb-1">Original safety passphrase (older backups only)</label>
+                                    <input id="safety-passphrase-restart" name="safety_passphrase" type="password" class="w-full px-3 py-1.5 border border-slate-300 rounded text-xs">
                                 </div>
 
                                 <button type="submit" data-recovery-submit="incoming" class="w-full px-3 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">

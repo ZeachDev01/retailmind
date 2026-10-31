@@ -20,7 +20,7 @@ try {
     $restorer = new DatabaseRestoreService($pdo, role_capability_policy(), $backups);
     $restorer->startIncoming((int)$_SESSION['user_id'], $role, (string)$file['tmp_name'], (string)$file['name'],
         (string)($_POST['restore_password'] ?? ''), (string)($_POST['backup_passphrase'] ?? ''),
-        (string)($_POST['safety_passphrase'] ?? ''));
+        '');
 } catch (Throwable $exception) {
     $_SESSION['restore_error'] = \App\Support\OperatorAlert::message($exception, 'Restore could not finish. Check recovery status before reopening the Store.');
 }

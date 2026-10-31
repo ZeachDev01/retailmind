@@ -13,9 +13,10 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
-const backupPassphrase = 'Reset package passphrase 2026';
+const backupPassphrase = ''; // Automatic server-key encryption.
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-backup-package-'));
 const env = { ...process.env, BACKUP_STORAGE_PATH: path.join(testDirectory, 'recovery') };
+const proofDirectory = path.join(testDirectory, 'proof');
 const fixture = action => {
     const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], { encoding: 'utf8', env });
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -60,7 +61,7 @@ const fixture = action => {
         }
         assert.equal((await administrator.page.goto(superUrl)).status(), 403, 'Administrator cannot view restricted preflight');
         assert.equal((await administrator.page.goto(adminUrl)).status(), 200);
-        assert.equal(await administrator.page.getByLabel('New backup passphrase', { exact: true }).count(), 1);
+        assert.equal(await administrator.page.locator('#backup-passphrase').count(), 0);
         assert.equal(await administrator.page.locator('#backup-recovery').evaluate(element => element.open), false, 'Routine backup work starts with recovery tools collapsed');
         for (const width of [1440, 390]) {
             await administrator.page.setViewportSize({width, height: 960});
@@ -69,15 +70,17 @@ const fixture = action => {
             assert(await administrator.page.locator('.backup-empty').evaluate(element => element.scrollWidth <= element.clientWidth), 'Empty history message wraps within its cell');
             await administrator.page.locator('#backup-recovery > summary').click();
             assert(await administrator.page.locator('#incoming-package').isVisible(), 'Restore form remains available');
-            assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Safety copy remains available');
+            await administrator.page.getByText('Advanced backup tools', { exact: true }).click();
+            assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Safety copy remains available under Advanced');
+            await administrator.page.getByText('Advanced backup tools', { exact: true }).click();
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded recovery fits ' + width + 'px');
-            fs.mkdirSync('output/playwright/backup-clarity', {recursive: true});
+            fs.mkdirSync(proofDirectory, {recursive: true});
             await administrator.page.locator('#backup-recovery').scrollIntoViewIfNeeded();
-            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/recovery-' + width + '.png'});
+            await administrator.page.screenshot({path: path.join(proofDirectory, 'recovery-' + width + '.png')});
             await administrator.page.locator('#backup-recovery > summary').click();
             await administrator.page.evaluate(() => window.scrollTo(0, 0));
-            fs.mkdirSync('output/playwright/backup-clarity', {recursive: true});
-            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/overview-' + width + '.png', fullPage: true});
+            fs.mkdirSync(proofDirectory, {recursive: true});
+            await administrator.page.screenshot({path: path.join(proofDirectory, 'overview-' + width + '.png'), fullPage: true});
         }
         const restoreCsrf = await administrator.page.locator('input[name="csrf_token"]').first().inputValue();
         const invalidRestore = await administrator.context.request.post(origin + '/components/backup/restore.php', {form: {csrf_token: restoreCsrf}, maxRedirects: 0});
@@ -87,27 +90,27 @@ const fixture = action => {
         assert(await administrator.page.locator('#restore-package [role="alert"]').isVisible(), 'Restore errors stay visible');
         await administrator.page.goto(adminUrl);
         assert.equal((await administrator.context.request.post(adminUrl, { form: { action: 'backup', backup_passphrase: backupPassphrase } })).status(), 403, 'Creation needs CSRF');
-        await administrator.page.locator('#backup-passphrase').fill(backupPassphrase);
         await Promise.all([administrator.page.waitForNavigation(), administrator.page.locator('[data-backup-create]').click()]);
         assert.equal(await administrator.page.locator('[data-backup-download]').count(), 1, await administrator.page.locator('body').innerText());
         for (const width of [1440, 390]) {
             await administrator.page.setViewportSize({width, height: 960});
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Ready backup and populated history fit ' + width + 'px');
-            await administrator.page.screenshot({path: 'output/playwright/backup-clarity/ready-' + width + '.png', fullPage: true});
+            await administrator.page.screenshot({path: path.join(proofDirectory, 'ready-' + width + '.png'), fullPage: true});
         }
+        assert.notEqual(await administrator.page.locator('[data-backup-download]').getAttribute('download'), null, 'Backup downloads bypass navigation prefetch');
         const href = await administrator.page.locator('[data-backup-download]').getAttribute('href');
         assert(href, await administrator.page.locator('body').innerText());
         assert.equal((await superAdministrator.context.request.get(new URL(href, origin).href)).status(), 404, 'Another user cannot claim the package');
         const download = await administrator.context.request.get(new URL(href, origin).href);
-        assert.equal(download.status(), 200);
+        assert.equal(download.status(), 200, download.status() === 200 ? '' : await download.text());
         assert.match(download.headers()['content-type'], /application\/octet-stream/);
         const packageBytes = await download.body();
-        assert.equal(packageBytes.subarray(0, 8).toString(), 'RMSTORE1');
+        assert.equal(packageBytes.subarray(0, 8).toString(), 'RMSTORE2');
         assert(!packageBytes.includes(Buffer.from('theme_admin')), 'Stolen package must not expose usernames');
         assert.equal((await administrator.context.request.get(new URL(href, origin).href)).status(), 404, 'Delivered temporary package is removed');
         await superAdministrator.page.goto(superUrl);
-        assert.equal(await superAdministrator.page.getByLabel('Current destination login password', { exact: true }).count(), 1);
-        assert.equal(await superAdministrator.page.getByLabel("This package's original backup passphrase", { exact: true }).count(), 1);
+        assert.equal(await superAdministrator.page.locator('#restore-password').count(), 1);
+        assert.equal(await superAdministrator.page.locator('#restore-passphrase').count(), 1);
         assert.equal(await superAdministrator.page.locator('#backup-file').getAttribute('accept'), '.rmpkg');
         for (const width of [390, 1440]) {
             await superAdministrator.page.setViewportSize({ width, height: 960 });
@@ -121,24 +124,25 @@ const fixture = action => {
                 backup_file: { name: filename, mimeType: 'application/octet-stream', buffer: bytes } } });
         };
         assert.match(await (await submit('wrong-password', backupPassphrase)).text(), /password is incorrect/);
-        assert.match(await (await submit(data.password, 'Incorrect package passphrase 2026')).text(), /passphrase|authenticate|decrypt/i);
+        const damaged = Buffer.from(packageBytes);
+        damaged[damaged.length - 1] ^= 1;
+        assert.match(await (await submit(data.password, '', damaged)).text(), /damaged|incorrect/i);
         assert.match(await (await submit(data.password, backupPassphrase, Buffer.from('DROP TABLE users;'), 'old.sql')).text(), /encrypted|rmpkg|package/i);
         const checked = await submit(data.password, backupPassphrase);
         assert.equal(checked.status(), 200);
-        assert.match(await checked.text(), /No Store records or files were replaced/);
+        assert.match(await checked.text(), /No [Ss]tore records or files were replaced/);
         const identityUrl = origin + '/components/system_administrator/identity_reconciliation.php';
         assert.equal((await administrator.page.goto(identityUrl)).status(), 403, 'Administrator cannot reconcile privileged identities');
         assert.equal((await manager.page.goto(identityUrl)).status(), 403);
         assert.equal((await superAdministrator.context.request.post(identityUrl, { form: { action: 'review' } })).status(), 403, 'Identity choices need CSRF');
         await superAdministrator.page.goto(identityUrl);
         const fillIdentityCredentials = async () => {
-            await superAdministrator.page.getByLabel('Encrypted Store package', { exact: true }).setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: packageBytes });
+            await superAdministrator.page.locator('#identity-package').setInputFiles({ name: 'store.rmpkg', mimeType: 'application/octet-stream', buffer: packageBytes });
             await superAdministrator.page.getByLabel('Current destination login password').fill(data.password);
-            await superAdministrator.page.getByLabel("This package's original backup passphrase").fill(backupPassphrase);
         };
         await fillIdentityCredentials();
-        await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.getByRole('button', { name: 'Inspect people and conflicts' }).click()]);
-        assert.equal(await superAdministrator.page.getByRole('heading', { name: 'Destination people', exact: true }).count(), 1, await superAdministrator.page.locator('body').innerText());
+        await Promise.all([superAdministrator.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), superAdministrator.page.getByRole('button', { name: 'Inspect people and conflicts' }).click()]);
+        await superAdministrator.page.getByRole('heading', { name: 'Destination people', exact: true }).waitFor();
         assert.match(await superAdministrator.page.locator('body').innerText(), /share numeric ID/);
         for (const id of [1, 2, 3, 4]) {
             assert.equal(await superAdministrator.page.locator('#resolution-' + id).inputValue(), '', 'Matching ID never preselects a link');
@@ -146,8 +150,9 @@ const fixture = action => {
             await superAdministrator.page.locator('#destination-' + id).selectOption(String(id));
         }
         await fillIdentityCredentials();
-        await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.getByRole('button', { name: 'Review resolutions' }).click()]);
-        assert.match(await superAdministrator.page.getByRole('status').innerText(), /ready for destination security approval/);
+        await Promise.all([superAdministrator.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), superAdministrator.page.getByRole('button', { name: 'Review resolutions' }).click()]);
+        await superAdministrator.page.getByRole('button', { name: 'Approve reconciliation and record preparation evidence' }).waitFor();
+        assert.match(await superAdministrator.page.locator('main').innerText(), /ready for destination security approval/);
         assert(!await superAdministrator.page.locator('body').innerHTML().then(html => html.includes('$2y$') || html.includes('$argon2')), 'Review never emits password verifiers');
         for (const width of [390, 1440]) {
             await superAdministrator.page.setViewportSize({ width, height: 960 });
@@ -168,7 +173,6 @@ const fixture = action => {
         assert.equal(fixture('identity_reset_count').trim(), '0', 'Historical Actor cannot request a reset token');
         await historicalContext.close();
         await superAdministrator.page.goto(superUrl);
-        await superAdministrator.page.locator('#backup-passphrase').fill(backupPassphrase);
         await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.locator('[data-backup-create]').click()]);
         assert.equal(await superAdministrator.page.locator('[data-backup-download]').count(), 1, await superAdministrator.page.locator('body').innerText());
         assert.equal((await secondAdministrator.page.goto(adminUrl)).status(), 200, 'Preflight keeps destination users and sessions usable');
@@ -184,7 +188,6 @@ const fixture = action => {
         assert.equal((await superAdministrator.context.request.get(downloadUrl + '?token=invalid')).status(), 403);
         await selectWorkspace('admin');
         assert.equal((await superAdministrator.page.goto(adminUrl)).status(), 200, 'Secondary Administrator membership can use its own Workspace');
-        await superAdministrator.page.locator('#backup-passphrase').fill(backupPassphrase);
         await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.locator('[data-backup-create]').click()]);
         assert.equal(await superAdministrator.page.locator('[data-backup-download]').count(), 1, 'Secondary Administrator membership can capture packages');
         fixture('backup_stale_session');

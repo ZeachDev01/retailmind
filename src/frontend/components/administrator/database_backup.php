@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'backup') {
         try {
-            $result = $service->create($actorUserId, $actorRole, (string)($_POST['backup_passphrase'] ?? ''));
+            $result = $service->create($actorUserId, $actorRole);
             if (($result['status'] ?? '') === DatabaseBackupService::OUTCOME_IN_PROGRESS) {
                 $message = DatabaseBackupService::IN_PROGRESS_LINE;
                 $messageClass = 'tag-warning';
@@ -113,7 +113,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                             <span><?= $escape($download['filename']) ?></span>
                             <span class="tag tag-success"><?= number_format($download['size'] / 1024, 1) ?> KB</span>
                         </p>
-                        <p><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a></p>
+                        <p><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a></p>
                     </div>
                 </section>
             <?php endif; ?>
@@ -122,16 +122,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 <div>
                     <h2 id="backup-create-title"><i class="bi bi-shield-lock" aria-hidden="true"></i> Create backup</h2>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
-                        <div class="form-group">
-                            <label for="backup-passphrase">New backup passphrase</label>
-                            <div class="password-toggle-wrapper">
-                                <input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" aria-describedby="backup-passphrase-help" required>
-                                <button type="button" class="btn-toggle-password" aria-label="Show passphrase" title="Show passphrase">
-                                    <i class="bi bi-eye" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <p class="backup-hint" id="backup-passphrase-help">Min. 16 chars. Backups cannot be recovered if passphrase is lost.</p>
-                        </div>
+                        <p>Database records and uploaded images are encrypted automatically. No backup passphrase needed.</p>
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-shield-plus" aria-hidden="true"></i> Create backup</button>
                     </form>
                 </div>
@@ -140,7 +131,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <ul class="backup-guidance-list">
                         <li>Store backups off-server.</li>
                         <li>Download immediately; creation does not confirm the file is saved.</li>
-                        <li>Keep passphrase safe; unrecoverable if lost.</li>
+                        <li>Ask your Super Administrator to save the recovery key once.</li>
                         <li>Restores require Super Admin approval.</li>
                     </ul>
                 </aside>
@@ -185,27 +176,15 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <?php endif; ?>
                 </div>
                 <?php require __DIR__ . '/../backup/restore_form.php'; ?>
+                <details class="dashboard-section"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
                 <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+                </details>
+                <?php require __DIR__ . '/../backup/recovery_key_form.php'; ?>
             </details>
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
-    <script>
-    document.querySelectorAll('.btn-toggle-password').forEach(button => {
-        button.addEventListener('click', () => {
-            const input = button.closest('.password-toggle-wrapper')?.querySelector('input');
-            if (!input) return;
-            const isPassword = input.type === 'password';
-            input.type = isPassword ? 'text' : 'password';
-            const icon = button.querySelector('i');
-            if (icon) {
-                icon.className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
-            }
-            button.setAttribute('aria-label', isPassword ? 'Hide passphrase' : 'Show passphrase');
-            button.title = isPassword ? 'Hide passphrase' : 'Show passphrase';
-        });
-    });
-    </script>
+    <script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
 </body>
 
 </html>

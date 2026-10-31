@@ -52,11 +52,12 @@ $actorRole = (string)current_role();
 $maxUploadBytes = $restorer->supportedUploadBytes();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_local_request('Database backup is not available during remote monitoring.');
     csrf_verify();
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'backup') {
         try {
-            $result = $service->create($actorUserId, $actorRole, (string)($_POST['backup_passphrase'] ?? ''));
+            $result = $service->create($actorUserId, $actorRole);
             if (($result['status'] ?? '') === DatabaseBackupService::OUTCOME_IN_PROGRESS) {
                 $message = DatabaseBackupService::IN_PROGRESS_LINE;
                 $messageClass = 'tag-warning';
@@ -169,7 +170,7 @@ $storePaused = RecoveryStore::isPaused();
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title"><i class="bi bi-check2-circle" aria-hidden="true"></i> Backup ready for download</h2>
-                    <p class="backup-ready-actions"><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
+                    <p class="backup-ready-actions"><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
                 </section>
             <?php endif; ?>
 
@@ -179,26 +180,23 @@ $storePaused = RecoveryStore::isPaused();
                         <h2 id="create-title"><i class="bi bi-shield-lock" aria-hidden="true"></i> Create backup</h2>
                     </div>
                     <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
-                        <div class="form-group">
-                            <label for="backup-passphrase">New backup passphrase</label>
-                            <p class="restore-file-hint" id="backup-passphrase-hint">Min. 16 characters. Encrypted with AES-256-GCM.</p>
-                            <input id="backup-passphrase" type="password" name="backup_passphrase" autocomplete="new-password" minlength="16" maxlength="1024" aria-describedby="backup-passphrase-hint" required>
-                        </div>
+                        <p>Database records and uploaded images are encrypted automatically. No backup passphrase needed.</p>
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-shield-plus" aria-hidden="true"></i> Create encrypted backup</button>
                     </form>
-                    <div class="backup-storage-note"><i class="bi bi-shield-check" aria-hidden="true"></i> <strong>Scope:</strong> Includes database records and uploaded media. Store package and passphrase off-server in separate safe locations.</div>
+                    <div class="backup-storage-note"><i class="bi bi-shield-check" aria-hidden="true"></i> <strong>Scope:</strong> Includes database records and uploaded media. Save the backup off-server. Save the recovery key separately, once per installation.</div>
                     <details class="restore-details">
                         <summary><i class="bi bi-info-circle" aria-hidden="true"></i> Backup guidelines</summary>
                         <ul class="backup-guidance">
                             <li>Transactions pause momentarily during snapshot capture.</li>
                             <li>Server creation does not confirm the file is saved locally; download immediately.</li>
-                            <li>Unrecoverable if passphrase is lost; account resets cannot unlock packages.</li>
+                            <li>Save the recovery key once so backups remain usable after server loss.</li>
                         </ul>
                     </details>
                     <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
                         <div class="backup-safety"><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download latest pre-restore safety backup</a></div>
                     <?php endif; ?>
                 </section>
+                <details class="dashboard-section backup-restore-panel"<?= in_array($_POST['action'] ?? '', ['preflight', 'restore'], true) ? ' open' : '' ?>><summary>Advanced: validate without restoring</summary>
                 <section class="dashboard-section backup-restore-panel" aria-labelledby="restore-title">
                     <div class="recovery-panel-heading">
                         <h2 id="restore-title"><i class="bi bi-patch-check" aria-hidden="true"></i> Validate backup</h2>
@@ -221,9 +219,9 @@ $storePaused = RecoveryStore::isPaused();
                             <input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required>
                         </div>
                         <div class="form-group">
-                            <label for="restore-passphrase">Package passphrase</label>
-                            <p class="restore-file-hint" id="restore-passphrase-hint">Passphrase configured when this package was created.</p>
-                            <input id="restore-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024" aria-describedby="restore-passphrase-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required>
+                            <label for="restore-passphrase">Original passphrase (older backups only)</label>
+                            <p class="restore-file-hint" id="restore-passphrase-hint">Leave empty for automatically encrypted backups.</p>
+                            <input id="restore-passphrase" type="password" name="backup_passphrase" autocomplete="off" maxlength="1024" aria-describedby="restore-passphrase-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?>>
                         </div>
                         <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
                     </form>
@@ -242,10 +240,14 @@ $storePaused = RecoveryStore::isPaused();
                         </div>
                     <?php endif; ?>
                 </section>
+                </details>
             </div>
 
             <?php require __DIR__ . '/../backup/restore_form.php'; ?>
-            <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+            <details class="dashboard-section"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
+                <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+                </details>
+                <?php require __DIR__ . '/../backup/recovery_key_form.php'; ?>
 
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">
                 <div class="recovery-panel-heading"><h2 id="history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2><span class="history-total"><?= count($history) ?> <?= count($history) === 1 ? 'record' : 'records' ?></span></div>
@@ -281,6 +283,7 @@ $storePaused = RecoveryStore::isPaused();
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_restore.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_restore.js')) ?>"></script>
 </body>
 
