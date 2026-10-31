@@ -73,6 +73,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
         <header class="topbar recovery-heading">
             <div>
                 <h1>Review backup</h1>
+                <p class="reconcile-subtitle">Check account identities before replacing Store records.</p>
             </div>
             <div class="recovery-heading-actions">
                 <a class="btn btn-secondary" href="<?= $escape(app_url('components/' . $backupPage)) ?>">
@@ -82,11 +83,11 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
         </header>
 
         <div class="reconcile-stack">
-            <h2 class="sr-only">Identity review</h2>
-            <div class="backup-storage-note" role="note" aria-label="Identity reconciliation principles">
-                <i class="bi bi-shield-check" aria-hidden="true"></i>
-                <p><strong>Check the accounts.</strong> Matching names or IDs do not prove two accounts belong to the same person. Linked accounts keep their destination password and access. Source privileged-only and Recovery accounts are kept for history without login access.</p>
-            </div>
+            <ol class="reconcile-steps" aria-label="Restoration progress">
+                <li <?= !$review ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">1</span><span><strong>Select package</strong><small>File and credentials</small></span></li>
+                <li <?= $review && empty($review['ready']) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">2</span><span><strong>Review identities</strong><small>People and account conflicts</small></span></li>
+                <li <?= $review && !empty($review['ready']) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">3</span><span><strong>Confirm restoration</strong><small>Access and preservation checks</small></span></li>
+            </ol>
 
             <?php if ($message !== ''): ?>
                 <div class="alert reconcile-alert <?= $isSuccessMessage ? 'tag-success' : 'tag-warning' ?>" role="<?= $isSuccessMessage ? 'status' : 'alert' ?>">
@@ -117,7 +118,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                     <input type="hidden" name="package_hash" value="<?= $escape($packageHash) ?>">
                 <?php endif; ?>
 
-                <section class="dashboard-section" aria-labelledby="package-heading">
+                <section class="dashboard-section reconcile-package" aria-labelledby="package-heading">
+                    <div>
                     <div class="recovery-panel-heading">
                         <h2 id="package-heading"><i class="bi bi-shield-lock" aria-hidden="true"></i> Package &amp; credentials</h2>
                         <?php if (isset($package)): ?>
@@ -149,9 +151,20 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             </details>
                         </div>
                     </div>
+                    </div>
+                    <aside class="reconcile-guidance" aria-labelledby="identity-guidance-heading">
+                        <h3 id="identity-guidance-heading">Review first. Restore after.</h3>
+                        <p>Inspecting a package does not replace records or files.</p>
+                        <ul>
+                            <li>Matching names or IDs do not prove two accounts belong to the same person.</li>
+                            <li>Linked accounts keep their destination password and access.</li>
+                            <li>Source privileged-only and Recovery accounts stay in history without login access.</li>
+                        </ul>
+                    </aside>
                 </section>
 
                 <?php if ($review): ?>
+                    <div class="reconcile-reference">
                     <section class="dashboard-section" aria-labelledby="dest-people-heading">
                         <div class="recovery-panel-heading">
                             <h2 id="dest-people-heading"><i class="bi bi-people" aria-hidden="true"></i> Destination people</h2>
@@ -198,11 +211,13 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <?php endif; ?>
                     </section>
 
+                    </div>
                     <section class="dashboard-section" aria-labelledby="source-resolutions-heading">
                         <div class="recovery-panel-heading">
                             <h2 id="source-resolutions-heading"><i class="bi bi-person-gear" aria-hidden="true"></i> Source people and resolutions</h2>
                             <span class="history-total"><?= count($review['source_users']) ?> <?= count($review['source_users']) === 1 ? 'identity' : 'identities' ?></span>
                         </div>
+                        <p class="backup-hint">Choose whether each source person already has a destination account or needs a distinct account.</p>
                         <div class="resolution-list">
                             <?php foreach ($review['source_users'] as $person):
                                 $id = (int)$person['user_id'];
@@ -358,12 +373,16 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             </section>
                         <?php else: ?>
                             <section class="dashboard-section reconcile-confirm" aria-label="Confirm restoration">
+                                <div>
+                                    <h2>Confirm restoration</h2>
+                                    <p class="backup-hint">Restoring replaces newer Store records. Review the resulting access above before continuing.</p>
+                                </div>
                                 <label class="resolution-option">
                                     <input type="checkbox" name="confirm_replacement" value="1" required>
                                     <span>I understand this snapshot replaces newer records and Store operations remain paused until verification. Stop source sales and background workers before continuing.</span>
                                 </label>
                                 <div class="reconcile-actions">
-                                    <button class="btn btn-primary" type="submit" formaction="<?= $escape(app_url('components/backup/restore.php')) ?>" data-start-restore>
+                                    <button class="btn btn-danger" type="submit" formaction="<?= $escape(app_url('components/backup/restore.php')) ?>" data-start-restore>
                                         <i class="bi bi-shield-check" aria-hidden="true"></i> Restore and verify
                                     </button>
                                     <button class="btn btn-secondary" type="submit" name="action" value="review" formnovalidate>

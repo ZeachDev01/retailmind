@@ -105,6 +105,8 @@ async function runScenario(initiator) {
         await start(data.password);
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'restore-state.json')), 'Missing approval leaves destination untouched');
         const identityUrl = origin + '/components/system_administrator/identity_reconciliation.php';
+        await admin.page.goto(identityUrl);
+        assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Select package/);
         await start('Wrong destination password');
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'restore-state.json')), 'Wrong password leaves Store open');
         const backupPage = initiator === 'super_admin' ? origin + '/components/system_administrator/backup_restore.php' : adminUrl;
@@ -113,6 +115,8 @@ async function runScenario(initiator) {
         await admin.page.locator('#incoming-password').fill(data.password);
         await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', { name: 'Review backup', exact: true }).click()]);
         await admin.page.locator('#resolution-1').waitFor();
+        assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Review identities/);
+        assert.equal(await admin.page.locator('fieldset legend').first().evaluate(el => el.getBoundingClientRect().width), 1, 'Identity legends remain available to screen readers without duplicating visible names');
         for (const id of [1, 2, 3, 4]) {
             await admin.page.locator('#resolution-' + id).selectOption('link');
             await admin.page.locator('#destination-' + id).selectOption(String(id));
@@ -121,6 +125,7 @@ async function runScenario(initiator) {
             .filter(input => input.willValidate && !input.validity.valid).map(input => input.name)), [], 'Account review retains required inputs');
         await Promise.all([admin.page.waitForResponse(r => r.url() === identityUrl && r.request().method() === 'POST'), admin.page.getByRole('button', { name: 'Review resolutions', exact: true }).click()]);
         await admin.page.locator('[data-start-restore]').waitFor();
+        assert.match(await admin.page.locator('.reconcile-steps [aria-current="step"]').innerText(), /Confirm restoration/);
         assert.equal(await admin.page.locator('#identity-password').inputValue(), data.password, 'Password entered once survives review');
         assert.equal(await admin.page.locator('#identity-package').evaluate(input => input.files.length), 1, 'Package stays selected');
         assert(!fs.existsSync(path.join(env.BACKUP_STORAGE_PATH, 'reconciliation-approval.json')), 'No separate approval needed before final confirmation');

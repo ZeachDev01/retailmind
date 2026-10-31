@@ -25,6 +25,17 @@
                 const page = new DOMParser().parseFromString(await response.text(), 'text/html');
                 const main = page.querySelector('main');
                 if (!main || !main.querySelector('[data-identity-form]')) throw new Error('Your session expired. Reload and sign in again.');
+                await Promise.all(Array.from(page.querySelectorAll('link[rel="stylesheet"]'), link => {
+                    if (Array.from(document.styleSheets).some(sheet => sheet.href === link.href)) return;
+                    return new Promise((resolve, reject) => {
+                        const stylesheet = document.createElement('link');
+                        stylesheet.rel = 'stylesheet';
+                        stylesheet.href = link.href;
+                        stylesheet.onload = resolve;
+                        stylesheet.onerror = () => { stylesheet.remove(); reject(new Error('Review styles could not load. Try again.')); };
+                        document.head.append(stylesheet);
+                    });
+                }));
                 document.querySelector('main').replaceWith(main);
                 document.title = page.title;
                 document.body.className = page.body.className;

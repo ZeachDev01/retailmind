@@ -125,8 +125,29 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 
 
 /* Account review in the guided restore flow. */
-.identity-reconciliation-page .reconcile-stack { display: flex; flex-direction: column; gap: 1.25rem; max-width: 64rem; }
+.identity-reconciliation-page .reconcile-stack { display: flex; flex-direction: column; gap: 1.25rem; width: 100%; max-width: 76rem; }
 .identity-reconciliation-page .reconcile-stack > .dashboard-section { margin: 0; }
+.identity-reconciliation-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.identity-reconciliation-page .recovery-heading { max-width: 76rem; align-items: flex-start; }
+.identity-reconciliation-page .reconcile-subtitle { margin: .45rem 0 0; color: var(--recovery-muted); font-size: .9375rem; }
+.identity-reconciliation-page .reconcile-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0 0 1.25rem; border-bottom: 1px solid var(--recovery-line); gap: 1rem; }
+.identity-reconciliation-page .reconcile-steps li { display: flex; align-items: center; gap: .75rem; color: var(--recovery-muted); }
+.identity-reconciliation-page .reconcile-step-number { display: grid; place-items: center; flex: 0 0 2rem; height: 2rem; border: 1px solid var(--recovery-line); border-radius: 50%; font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.identity-reconciliation-page .reconcile-steps strong { display: block; font-size: .9375rem; font-weight: 600; }
+.identity-reconciliation-page .reconcile-steps small { display: block; margin-top: .15rem; font-size: .8125rem; }
+.identity-reconciliation-page .reconcile-steps [aria-current] strong { color: var(--recovery-ink); }
+.identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { background: var(--primary, #2563eb); border-color: var(--primary, #2563eb); color: #fff; }
+html[data-theme="dark"] .identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { color: #0f172a; }
+.identity-reconciliation-page .reconcile-package { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, 1fr); gap: 2rem; }
+.identity-reconciliation-page .reconcile-guidance { padding-left: 1.5rem; border-left: 1px solid var(--recovery-line); color: var(--recovery-muted); font-size: .875rem; line-height: 1.6; }
+.identity-reconciliation-page .reconcile-guidance h3 { margin: 0; color: var(--recovery-ink); font-size: 1rem; font-weight: 700; }
+.identity-reconciliation-page .reconcile-guidance p { margin: .5rem 0 1rem; }
+.identity-reconciliation-page .reconcile-guidance ul { margin: 0; padding-left: 1.1rem; }
+.identity-reconciliation-page .reconcile-guidance li + li { margin-top: .75rem; }
+.identity-reconciliation-page .reconcile-reference { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: 1.25rem; }
+.identity-reconciliation-page .reconcile-reference > .dashboard-section { min-width: 0; margin: 0; }
+.identity-reconciliation-page .reconcile-reference .reconcile-table { margin-top: 1rem; }
+.identity-reconciliation-page .reconcile-reference table { min-width: 460px; }
 .identity-reconciliation-page .backup-storage-note { display: flex; align-items: flex-start; gap: .75rem; }
 .identity-reconciliation-page .backup-storage-note > i { margin-top: .2rem; color: var(--primary, #2563eb); flex-shrink: 0; }
 .identity-reconciliation-page .backup-storage-note p { margin: 0; max-width: 72ch; }
@@ -138,13 +159,14 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .recovery-panel-heading h2 { display: flex; align-items: center; gap: .5rem; }
 .identity-reconciliation-page .recovery-panel-heading h2 > i { color: var(--recovery-muted); }
 .identity-reconciliation-page .reconcile-field { margin-top: 1rem; }
-.identity-reconciliation-page .credentials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 1.25rem; align-items: start; }
+.identity-reconciliation-page .credentials-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; align-items: start; }
 
 /* Inputs and selects match the password-field treatment. */
 .identity-reconciliation-page .form-group :is(input:not([type="file"], [type="checkbox"]), select) { width: 100%; min-height: 44px; padding: .65rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); font-size: 1rem; caret-color: var(--primary, #2563eb); }
 .identity-reconciliation-page .form-group :is(input, select)::placeholder { color: var(--recovery-muted); }
 .identity-reconciliation-page .form-group :is(input:not([type="file"], [type="checkbox"]), select):focus { border-color: var(--primary, #2563eb); }
-.identity-reconciliation-page .reconcile-older > summary { padding-top: 0; min-height: 0; margin-bottom: .6rem; }
+.identity-reconciliation-page .reconcile-older > summary { display: list-item; list-style: disclosure-closed inside; min-height: 44px; padding: .65rem 0; font-size: .875rem; }
+.identity-reconciliation-page .reconcile-older[open] > summary { list-style-type: disclosure-open; }
 .identity-reconciliation-page .reconcile-older[open] > summary { color: var(--recovery-ink); }
 
 /* Tables */
@@ -164,13 +186,14 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .reconcile-conflicts li { padding: .7rem .9rem; border: 1px solid color-mix(in srgb, #d97706 30%, var(--recovery-line)); border-radius: 10px; background: color-mix(in srgb, #d97706 6%, var(--card-bg, #ffffff)); line-height: 1.6; }
 
 /* Source resolutions */
-.identity-reconciliation-page .resolution-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
-.identity-reconciliation-page .resolution-card { margin: 0; min-width: 0; padding: 1.25rem; border: 1px solid var(--recovery-line); border-radius: 12px; background: var(--surface-soft, #f8fafc); }
+.identity-reconciliation-page .resolution-list { display: flex; flex-direction: column; margin-top: 1rem; }
+.identity-reconciliation-page .resolution-card { margin: 0; min-width: 0; padding: 1.5rem 0; border: 0; border-top: 1px solid var(--recovery-line); background: transparent; }
+.identity-reconciliation-page .resolution-card:last-child { padding-bottom: 0; }
 .identity-reconciliation-page .resolution-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: .75rem 1rem; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--recovery-line); }
 .identity-reconciliation-page .resolution-head h3 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--recovery-ink); }
 .identity-reconciliation-page .identity-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; margin: .3rem 0 0; font-size: .875rem; color: var(--recovery-muted); overflow-wrap: anywhere; }
 .identity-reconciliation-page .resolution-badges { display: flex; flex-wrap: wrap; gap: .4rem; }
-.identity-reconciliation-page .resolution-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 1rem; }
+.identity-reconciliation-page .resolution-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
 .identity-reconciliation-page .resolution-grid .form-group { margin-bottom: 1rem; }
 .identity-reconciliation-page .resolution-historical { display: flex; align-items: flex-start; gap: .65rem; padding: .75rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); font-size: .9rem; line-height: 1.5; }
 .identity-reconciliation-page .resolution-historical > i { margin-top: .2rem; color: var(--recovery-muted); }
@@ -182,7 +205,7 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .resolution-option small strong { color: var(--recovery-ink); }
 
 /* Tags */
-.identity-reconciliation-page .tag-neutral { display: inline-flex; align-items: center; padding: .22rem .58rem; border-radius: 999px; border: 1px solid var(--recovery-line); font-size: .76rem; font-weight: 600; line-height: 1.25; background: var(--card-bg, #ffffff); color: var(--recovery-ink); }
+.identity-reconciliation-page .tag-neutral { display: inline-flex; align-items: center; padding: .22rem .58rem; border-radius: 6px; border: 1px solid var(--recovery-line); font-size: .76rem; font-weight: 600; line-height: 1.25; background: var(--card-bg, #ffffff); color: var(--recovery-ink); overflow-wrap: anywhere; }
 
 /* Evidence and actions */
 .identity-reconciliation-page .reconcile-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .85rem 1.5rem; margin: 1rem 0 0; }
@@ -192,12 +215,24 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .reconcile-evidence h2 > i { color: var(--theme-success-text, #166534); }
 .identity-reconciliation-page .reconcile-confirm { display: flex; flex-direction: column; gap: 1.1rem; }
 .identity-reconciliation-page .reconcile-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.identity-reconciliation-page .reconcile-actions .btn { gap: .5rem; }
+.identity-reconciliation-page [data-review-error] { padding: 1rem; border: 1px solid var(--theme-danger-text, #dc2626); border-radius: 10px; color: var(--theme-danger-text, #dc2626); }
+.identity-reconciliation-page .btn[aria-busy="true"] { opacity: .65; cursor: progress; }
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-evidence { background: var(--theme-success-surface, var(--card-bg)); border-color: color-mix(in srgb, var(--theme-success-text) 35%, var(--border)); }
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-conflicts li { background: var(--bg, #0f172a); }
-html[data-theme="dark"] .identity-reconciliation-page .resolution-card { background: var(--bg, #0f172a); }
 html[data-theme="dark"] .identity-reconciliation-page .resolution-historical,
 html[data-theme="dark"] .identity-reconciliation-page .resolution-option { background: var(--card-bg); }
+@media (max-width: 1180px) {
+    .identity-reconciliation-page .reconcile-reference { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+    .identity-reconciliation-page .reconcile-package { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    .identity-reconciliation-page .reconcile-guidance { padding: 1rem 0 0; border-left: 0; border-top: 1px solid var(--recovery-line); }
+}
 @media (max-width: 600px) {
-    .identity-reconciliation-page .resolution-card { padding: 1rem; }
+    .identity-reconciliation-page .reconcile-steps { grid-template-columns: minmax(0, 1fr); gap: .85rem; }
+    .identity-reconciliation-page .reconcile-steps li { align-items: flex-start; }
+    .identity-reconciliation-page .resolution-grid { grid-template-columns: minmax(0, 1fr); }
+    .identity-reconciliation-page .resolution-card { padding: 1.25rem 0; }
     .identity-reconciliation-page .reconcile-actions .btn { width: 100%; }
 }
