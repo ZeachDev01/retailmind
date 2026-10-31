@@ -1,6 +1,6 @@
 <?php if (role_capability_policy()->allows((string)current_role(), \App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)): ?>
-<details class="dashboard-section" id="recovery-key"<?= isset($_SESSION['backup_key_message']) ? ' open' : '' ?>>
-    <summary>Recovery key — save once</summary>
+<<?= !empty($recoveryTabbed) ? 'section' : 'details' ?> class="dashboard-section" id="recovery-key"<?= empty($recoveryTabbed) && isset($_SESSION['backup_key_message']) ? ' open' : '' ?>>
+    <?php if (!empty($recoveryTabbed)): ?><h2>Recovery key</h2><?php else: ?><summary>Recovery key — save once</summary><?php endif; ?>
     <p>Save this key separately from backups. Anyone with both can read Store records.</p>
     <?php if (isset($_SESSION['backup_key_message'])): ?>
         <p role="status"><?= $escape($_SESSION['backup_key_message']) ?></p>
@@ -13,5 +13,5 @@
         <div class="form-group"><label for="recovery-key-file">Recovery-key file from another server</label><input id="recovery-key-file" name="recovery_key" type="file" accept=".key"></div>
         <button class="btn btn-secondary" name="key_action" value="import" type="submit">Import recovery key</button>
     </form>
-</details>
+</<?= !empty($recoveryTabbed) ? 'section' : 'details' ?>>
 <?php endif; ?>

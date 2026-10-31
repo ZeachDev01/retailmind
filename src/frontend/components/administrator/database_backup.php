@@ -169,8 +169,8 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 </div>
             </section>
 
-            <details class="dashboard-section backup-recovery" id="backup-recovery" <?= \App\Backup\RecoveryStore::isPaused() || !empty($_SESSION['restore_error']) || ($_POST['action'] ?? '') === 'safety' ? 'open' : '' ?>>
-                <summary><span class="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</span></summary>
+            <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
+                <h2 id="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</h2>
                 <div class="restore-guidance" data-restore-guidance>
                     <div class="restore-status-heading">
                         <h2><i class="bi bi-shield-check" aria-hidden="true"></i> Restore status</h2>
@@ -181,16 +181,26 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                         <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Open Database Recovery Console</a></p>
                     <?php endif; ?>
                 </div>
-                <?php require __DIR__ . '/../backup/restore_form.php'; ?>
-                <details class="dashboard-section backup-advanced"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
-                <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
-                </details>
-                <?php require __DIR__ . '/../backup/recovery_key_form.php'; ?>
-            </details>
+                <div class="backup-recovery-tabs" role="tablist" aria-label="Restore and recovery tools" hidden>
+                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true">Restore backup</button>
+                    <button type="button" id="safety-tab" role="tab" aria-controls="safety-panel" aria-selected="false" tabindex="-1">Safety copy</button>
+                    <button type="button" id="key-tab" role="tab" aria-controls="key-panel" aria-selected="false" tabindex="-1">Recovery key</button>
+                </div>
+                <div id="restore-panel" role="tabpanel" aria-labelledby="restore-tab" tabindex="0">
+                    <?php require __DIR__ . '/../backup/restore_form.php'; ?>
+                </div>
+                <div id="safety-panel" role="tabpanel" aria-labelledby="safety-tab" tabindex="0">
+                    <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+                </div>
+                <div id="key-panel" role="tabpanel" aria-labelledby="key-tab" tabindex="0">
+                    <?php $recoveryTabbed = true; require __DIR__ . '/../backup/recovery_key_form.php'; ?>
+                </div>
+            </section>
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_review.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_recovery_tabs.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_recovery_tabs.js')) ?>"></script>
 </body>
 
 </html>
