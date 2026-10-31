@@ -130,7 +130,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     </form>
                 </div>
                 <div class="backup-create-footer">
-                    <p><i class="bi bi-download" aria-hidden="true"></i> Download after creation and keep a copy off-server.</p>
+                    <p><i class="bi bi-download" aria-hidden="true"></i> Download your backup and keep it off-server.</p>
                     <details class="backup-tips">
                         <summary>Backup tips</summary>
                         <ul class="backup-guidance-list">
@@ -151,7 +151,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <table data-no-smart-table>
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
-                            <th scope="col">Snapshot date</th>
+                            <th scope="col">Backup date</th>
                             <th scope="col">Backup file</th>
                             <th scope="col" class="backup-size">Size</th>
                             <th scope="col">Outcome</th>
@@ -163,7 +163,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                                 <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Your backup history will appear here.</span></td>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>
@@ -172,15 +172,17 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <details class="dashboard-section backup-recovery" id="backup-recovery" <?= \App\Backup\RecoveryStore::isPaused() || !empty($_SESSION['restore_error']) || ($_POST['action'] ?? '') === 'safety' ? 'open' : '' ?>>
                 <summary><span class="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</span></summary>
                 <div class="restore-guidance" data-restore-guidance>
-                    <h2>Restore status</h2>
-                    <p><strong>Status:</strong> <span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
-                    <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
+                    <div class="restore-status-heading">
+                        <h2><i class="bi bi-shield-check" aria-hidden="true"></i> Restore status</h2>
+                        <p class="restore-stage"><span class="sr-only">Status:</span> <span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
+                    </div>
                     <?php if (\App\Backup\RecoveryStore::isPaused()): ?>
+                        <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
                         <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Open Database Recovery Console</a></p>
                     <?php endif; ?>
                 </div>
                 <?php require __DIR__ . '/../backup/restore_form.php'; ?>
-                <details class="dashboard-section"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
+                <details class="dashboard-section backup-advanced"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
                 <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
                 </details>
                 <?php require __DIR__ . '/../backup/recovery_key_form.php'; ?>

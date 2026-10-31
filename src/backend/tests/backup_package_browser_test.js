@@ -63,6 +63,8 @@ const fixture = action => {
         assert.equal((await administrator.page.goto(adminUrl)).status(), 200);
         assert.equal(await administrator.page.locator('#backup-passphrase').count(), 0);
         assert.equal(await administrator.page.locator('#backup-recovery').evaluate(element => element.open), false, 'Routine backup work starts with recovery tools collapsed');
+        assert.equal(await administrator.page.locator('#backup-recovery [data-restore-next-action]').count(), 0, 'Idle recovery omits repeated instructions');
+        assert.equal(await administrator.page.locator('#restore-package-warning').count(), 1, 'Restore consequences remain available');
         for (const width of [1440, 375, 812]) {
             await administrator.page.setViewportSize({width, height: 960});
             assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Backup workspace fits ' + width + 'px');
@@ -84,6 +86,18 @@ const fixture = action => {
             fs.mkdirSync(proofDirectory, {recursive: true});
             await administrator.page.locator('#backup-recovery').scrollIntoViewIfNeeded();
             await administrator.page.screenshot({path: path.join(proofDirectory, 'recovery-' + width + '.png')});
+            const olderOptions = administrator.page.locator('#restore-package form > details');
+            await olderOptions.locator('summary').focus();
+            await administrator.page.keyboard.press('Enter');
+            assert(await administrator.page.locator('#incoming-passphrase').isVisible(), 'Older backup options remain keyboard accessible');
+            await administrator.page.keyboard.press('Enter');
+            await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+            await administrator.page.getByText('Advanced backup tools', { exact: true }).click();
+            assert(await administrator.page.locator('[data-safety-create]').isVisible(), 'Dark recovery exposes the safety form');
+            assert(await administrator.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded dark recovery fits ' + width + 'px');
+            await administrator.page.screenshot({path: path.join(proofDirectory, 'recovery-dark-' + width + '.png'), fullPage: true});
+            await administrator.page.getByText('Advanced backup tools', { exact: true }).click();
+            await administrator.page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
             await administrator.page.locator('#backup-recovery > summary').click();
             await administrator.page.evaluate(() => window.scrollTo(0, 0));
             fs.mkdirSync(proofDirectory, {recursive: true});

@@ -175,13 +175,31 @@
 .administrator-backup-page .backup-recovery { scroll-margin-top: 6rem; }
 .administrator-backup-page .backup-recovery > summary { display: list-item; min-height: 44px; cursor: pointer; color: var(--primary); }
 .administrator-backup-page .backup-recovery-title { font-size: 1.0625rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.4rem; }
-.administrator-backup-page .backup-recovery > summary .backup-hint { display: block; margin-top: .5rem; }
-.administrator-backup-page .backup-recovery > .dashboard-section,
-.administrator-backup-page .restore-guidance { margin: 1.5rem 0 0; padding: 1.5rem 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
+.administrator-backup-page .backup-recovery > .dashboard-section { margin: 1.5rem 0 0; padding: 1.5rem 0 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; box-shadow: none; }
 .administrator-backup-page .backup-recovery p { max-width: 70ch; line-height: 1.6; }
 .administrator-backup-page .backup-recovery form { max-width: 40rem; }
-.administrator-backup-page #restore-package-warning { margin-top: 1rem; }
+.administrator-backup-page .restore-guidance { margin-top: 1.25rem; }
+.administrator-backup-page .restore-status-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+.administrator-backup-page .restore-status-heading h2 { font-size: .9375rem; }
+.administrator-backup-page .restore-status-heading h2 i { color: var(--primary); }
+.administrator-backup-page .restore-stage { margin: 0; padding: .25rem .75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--card-bg); color: var(--text); font-size: .8125rem; font-weight: 600; }
+.administrator-backup-page .restore-guidance > p { margin: .75rem 0 0; color: var(--muted); font-size: .9375rem; }
+.administrator-backup-page #restore-package > h2 { margin-bottom: 1rem; }
+.administrator-backup-page .restore-introduction { min-width: 0; font-size: .9375rem; }
+.administrator-backup-page #restore-package-warning { margin: 0 0 1.25rem; padding: 1rem; border-radius: 10px; background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
 .administrator-backup-page #restore-package-warning strong { display: block; margin-bottom: .5rem; }
+.administrator-backup-page #restore-package > form { min-width: 0; width: 100%; }
+.administrator-backup-page #restore-package .form-group:first-of-type { margin-top: 0; }
+.administrator-backup-page .backup-recovery form > details { margin: .25rem 0 1rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.administrator-backup-page .backup-recovery :is(form > details, .backup-advanced, #recovery-key) > summary { padding: .75rem 0; min-height: 44px; box-sizing: border-box; color: var(--text); font-size: .9375rem; font-weight: 600; cursor: pointer; }
+.administrator-backup-page .backup-recovery input[type="file"] { padding: .5rem; font-size: .875rem; }
+.administrator-backup-page .backup-recovery input[type="file"]::file-selector-button { margin-right: .75rem; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--text); font: inherit; cursor: pointer; }
+.administrator-backup-page .backup-recovery input[type="file"]:hover::file-selector-button { border-color: var(--primary); }
+.administrator-backup-page .backup-recovery > :is(.backup-advanced, #recovery-key) { margin-top: 1rem; padding-top: .25rem; }
+.administrator-backup-page .backup-advanced > .dashboard-section { margin: .5rem 0 0; padding: 1.25rem; border-radius: 10px; background: var(--surface-soft); }
+.administrator-backup-page #recovery-key > p { margin: .75rem 0 0; color: var(--muted); font-size: .9375rem; }
+.administrator-backup-page .backup-advanced .btn-primary { background: var(--card-bg); color: var(--primary); border: 1px solid var(--primary); }
+.administrator-backup-page .backup-advanced .btn-primary:hover { background: var(--surface-soft); }
 .administrator-backup-page .backup-recovery input[type="checkbox"] { width: 1.1rem; height: 1.1rem; accent-color: var(--primary); vertical-align: middle; }
 .administrator-backup-page .backup-recovery form > p:has(input[type="checkbox"]) { padding: .5rem 0; }
 @media (max-width: 900px) {
@@ -197,5 +215,7 @@
     .administrator-backup-page .backup-create-footer { padding: .5rem 1.125rem; gap: 0; }
     .administrator-backup-page .backup-tips { flex-basis: 100%; }
     .administrator-backup-page .backup-recovery > .dashboard-section { padding: 1.25rem 0 0; }
+    .administrator-backup-page .backup-advanced > .dashboard-section { padding: 1rem; }
+    .administrator-backup-page .backup-recovery .btn { width: 100%; white-space: normal; }
     .administrator-backup-page .main-content input { font-size: 1rem; }
 }

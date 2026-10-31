@@ -1,7 +1,7 @@
 <?php if (role_capability_policy()->allows((string)current_role(), \App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)): ?>
 <details class="dashboard-section" id="recovery-key"<?= isset($_SESSION['backup_key_message']) ? ' open' : '' ?>>
     <summary>Recovery key — save once</summary>
-    <p>Backups are encrypted automatically. Save this key separately from your backups. You only need to import it after server loss or when moving to another server. Anyone with both the key and a backup can read its contents.</p>
+    <p>Save this key separately from backups. Anyone with both can read Store records.</p>
     <?php if (isset($_SESSION['backup_key_message'])): ?>
         <p role="status"><?= $escape($_SESSION['backup_key_message']) ?></p>
         <?php unset($_SESSION['backup_key_message']); ?>
