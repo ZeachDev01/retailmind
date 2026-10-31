@@ -410,6 +410,25 @@ unset($_SESSION['_login_username']);
                 }
             }
 
+            function morph(from, to, update) {
+                var root = document.documentElement;
+                if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !from || !to) {
+                    update();
+                    return;
+                }
+                root.classList.add('vt-active');
+                from.style.viewTransitionName = 'login-surface';
+                var transition = document.startViewTransition(function() {
+                    from.style.viewTransitionName = '';
+                    to.style.viewTransitionName = 'login-surface';
+                    update();
+                });
+                transition.finished.finally(function() {
+                    to.style.viewTransitionName = '';
+                    root.classList.remove('vt-active');
+                });
+            }
+
             function openModal(event, view) {
                 if (event) {
                     event.preventDefault();
@@ -421,11 +440,14 @@ unset($_SESSION['_login_username']);
                 if (view !== 'recovery') {
                     restoreFormState();
                 }
-                modal.classList.add('is-open');
-                modal.setAttribute('aria-hidden', 'false');
-                document.body.classList.add('landing-modal-open');
-                setPageInert(true);
-                setView(view, true);
+                var wasOpen = modal.classList.contains('is-open');
+                morph(wasOpen ? null : activeOpener, panel, function() {
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('landing-modal-open');
+                    setPageInert(true);
+                    setView(view, true);
+                });
             }
 
             function closeModal() {
@@ -438,15 +460,17 @@ unset($_SESSION['_login_username']);
                     viewFocusTimer = null;
                 }
                 saveFormState();
-                modal.classList.remove('is-open');
-                modal.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('landing-modal-open');
-                setPageInert(false);
                 var returnTarget = activeOpener && document.contains(activeOpener) ? activeOpener : openers[0];
                 activeOpener = null;
-                if (returnTarget) {
-                    returnTarget.focus();
-                }
+                morph(panel, returnTarget, function() {
+                    modal.classList.remove('is-open');
+                    modal.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('landing-modal-open');
+                    setPageInert(false);
+                    if (returnTarget) {
+                        returnTarget.focus();
+                    }
+                });
             }
 
             openers.forEach(function(opener) {
