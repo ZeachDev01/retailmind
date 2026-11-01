@@ -60,6 +60,7 @@ node src/backend/tests/login_redirect_test.js
 php src/backend/tests/workspace_switching_contract.php
 node src/backend/tests/workspace_switching_browser_test.js
 node src/backend/tests/workspace_onboarding_browser_test.js
+node src/backend/tests/store_setup_confirmations_browser_test.js
 php src/backend/tests/cashier_workspace_authorization_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/inventory_load_contract.php
