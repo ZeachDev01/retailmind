@@ -207,6 +207,10 @@ function ensure_key_value_table(PDO $pdo, string $table): void
     if (!in_array($table, $allowed, true)) {
         throw new InvalidArgumentException('Unsupported settings table.');
     }
+    // MySQL DDL commits transactions; transactional callers prepare settings tables before writing.
+    if ($pdo->inTransaction()) {
+        return;
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
         setting_key VARCHAR(100) PRIMARY KEY,
         setting_value TEXT NOT NULL,

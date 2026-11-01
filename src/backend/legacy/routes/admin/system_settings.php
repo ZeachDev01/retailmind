@@ -4,16 +4,6 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
 
 $message = '';
 $messageClass = '';
-$fields = [
-    'store_name' => 'Store name',
-    'store_address' => 'Address',
-    'store_phone' => 'Contact number',
-    'store_email' => 'Store email',
-    'business_identifier' => 'TIN or business identifier',
-    'currency_symbol' => 'Currency symbol',
-    'timezone' => 'Timezone',
-    'receipt_footer' => 'Receipt footer',
-];
 $attentionFields = [
     'failed_login_count' => 'Failed sign-ins',
     'locked_account_count' => 'Locked accounts',
@@ -52,30 +42,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-warning';
         }
     } else {
-        $updates = [];
-        foreach ($fields as $key => $label) {
-            $updates[$key] = trim((string)($_POST[$key] ?? ''));
-        }
-        if ($updates['store_name'] === '') {
-            $message = 'Store name is required.';
-            $messageClass = 'tag-warning';
-        } else {
-            save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
-            $message = 'Store and receipt settings saved.';
-            $messageClass = 'tag-success';
-        }
+        $message = 'Choose a platform setting to save. Store and receipt settings are managed in the Administrator Workspace.';
+        $messageClass = 'tag-warning';
     }
 }
 $settings = get_store_settings($pdo);
 $attentionSettings = $attentionSettingsService->platformSettings();
 ?>
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>System Settings</title><link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css')) ?>"></head>
-<body><div class="app-shell"><?php include __DIR__ . '/../../../../frontend/components/sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>System Settings</h1><p class="page-subtitle">Configure store identity, receipts, timezone, and email delivery.</p></div></div>
+<body><div class="app-shell"><?php include __DIR__ . '/../../../../frontend/components/sidebar.php'; ?><main class="main-content"><div class="topbar"><div><h1>System Settings</h1><p class="page-subtitle">Configure platform attention thresholds, Store safety limits, and email delivery.</p></div></div>
 <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-<div class="dashboard-section"><h3>Store and receipt</h3><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="save"><div class="form-grid">
-<?php foreach ($fields as $key => $label): ?><div class="form-group"><label><?= htmlspecialchars($label) ?></label><?php if ($key === 'receipt_footer'): ?><textarea name="<?= htmlspecialchars($key) ?>" rows="3"><?= htmlspecialchars((string)$settings[$key]) ?></textarea><?php else: ?><input name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$settings[$key]) ?>"<?= $key === 'store_name' ? ' required' : '' ?>><?php endif; ?></div><?php endforeach; ?>
-</div><button class="btn">Save settings</button></form></div>
 <div class="dashboard-section"><h3>Platform attention thresholds</h3><p class="section-description">Technical thresholds and hard safety limits are governed only by the Super Administrator. Store Settings may choose stricter values but cannot exceed these limits.</p><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="save_attention"><div class="form-grid">
 <?php foreach ($attentionFields as $key => $label): ?><div class="form-group"><label><?= htmlspecialchars($label) ?></label><input type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$attentionSettings[$key]) ?>" required></div><?php endforeach; ?>
 </div><button class="btn">Save attention thresholds</button></form></div>

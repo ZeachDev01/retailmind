@@ -8,6 +8,22 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['store_settings_state', 'store_settings_failure', 'store_settings_allow'], true)) {
+    $pdo->exec("USE `{$database}`");
+    if ($argv[1] === 'store_settings_state') {
+        echo json_encode([
+            'store' => $pdo->query('SELECT setting_key, setting_value, updated_by FROM store_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'platform' => $pdo->query('SELECT setting_key, setting_value FROM platform_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'attention' => $pdo->query('SELECT setting_scope, setting_key, setting_value FROM attention_settings ORDER BY setting_scope, setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'audit' => $pdo->query("SELECT user_id, new_value FROM activity_log WHERE action='Store settings update' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC),
+        ], JSON_THROW_ON_ERROR);
+    } elseif ($argv[1] === 'store_settings_failure') {
+        $pdo->exec("CREATE TRIGGER reject_store_settings BEFORE INSERT ON store_settings FOR EACH ROW BEGIN IF NEW.setting_key='store_phone' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Fixture persistence failure'; END IF; END");
+    } else {
+        $pdo->exec('DROP TRIGGER reject_store_settings');
+    }
+    exit;
+}
 if ($argv[1] === 'open_fiscal_period') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Test Fiscal Period','2026-01-01','2026-12-31','open',1)");

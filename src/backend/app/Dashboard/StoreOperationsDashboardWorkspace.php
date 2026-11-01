@@ -27,7 +27,7 @@ final class StoreOperationsDashboardWorkspace
         ['label' => 'Stock Issue Oversight', 'description' => 'Inspect Stock Issue history read-only', 'icon' => 'bi-check2-square', 'destination' => 'components/administrator/stock_issues.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
-        ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
+        ['label' => 'Store Settings', 'description' => 'Maintain Store identity, receipts, and attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Database Backup', 'description' => 'Create and download a SQL Store copy', 'icon' => 'bi-database-check', 'destination' => 'components/administrator/database_backup.php', 'capability' => RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP],
     ];
 

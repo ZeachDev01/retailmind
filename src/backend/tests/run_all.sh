@@ -144,6 +144,7 @@ php src/backend/tests/cashier_alert_contract.php
 php src/backend/tests/inventory_alert_contract.php
 php src/backend/tests/product_code_lookup_contract.php
 php src/backend/tests/inventory_counts_scan_contract.php
+node src/backend/tests/store_receipt_settings_browser_test.js
 php src/backend/tests/admin_alert_contract.php
 php src/backend/tests/friendly_alerts_verification_contract.php
 php src/backend/tests/product_seed_checks.php
