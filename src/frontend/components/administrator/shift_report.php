@@ -12,7 +12,7 @@ require_capability(RoleCapabilityPolicy::STORE_OPERATIONS);
 
 $defaultFrom = date('Y-m-01');
 $defaultTo = date('Y-m-d');
-$input = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' ? $_POST : $_GET;
+$input = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' ? $_POST + $_GET : $_GET;
 $filters = [
     'from' => (string)($input['from'] ?? $defaultFrom),
     'to' => (string)($input['to'] ?? $defaultTo),
@@ -60,12 +60,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
+$reportLoaded = true;
 try {
     $report = $service->report((string)current_role(), $filters);
 } catch (InvalidArgumentException $exception) {
+    $reportLoaded = false;
     $error = $exception->getMessage();
     $report = ['headers' => StoreShiftReportService::HEADERS, 'rows' => [], 'totals' => []];
 } catch (Throwable $exception) {
+    $reportLoaded = false;
     $error = OperatorAlert::message($exception, 'The Cashier Shift report could not be loaded. Try again or tell your Administrator.');
     $report = ['headers' => StoreShiftReportService::HEADERS, 'rows' => [], 'totals' => []];
 }
@@ -113,7 +116,13 @@ if ($filters['shift_id'] !== '' && $filters['shift_id'] !== 'legacy') {
 
 $cashiers = $pdo->query('SELECT u.user_id, u.full_name FROM users u WHERE EXISTS (SELECT 1 FROM cashier_shifts cs WHERE cs.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sales s WHERE s.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sale_reversals sr WHERE sr.requested_by=u.user_id) ORDER BY u.full_name, u.user_id')->fetchAll(PDO::FETCH_ASSOC);
 $registers = $pdo->query('SELECT register_id, name FROM registers ORDER BY name, register_id')->fetchAll(PDO::FETCH_ASSOC);
-$shifts = $pdo->query('SELECT shift_id, opened_at FROM cashier_shifts ORDER BY shift_id DESC')->fetchAll(PDO::FETCH_ASSOC);
+$shifts = [];
+foreach ($report['rows'] as $row) {
+    if ($row['Shift ID'] !== '') $shifts[] = ['shift_id' => $row['Shift ID'], 'opened_at' => $row['Opened At']];
+}
+if ($targetedShift !== null && !$shifts) {
+    $shifts[] = ['shift_id' => $targetedShift['Shift ID'], 'opened_at' => $targetedShift['Opened At']];
+}
 
 function shift_report_e($value): string { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
 function shift_report_money($value): string {
@@ -182,23 +191,23 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
     <section class="shift-kpi-grid" aria-label="Report summary">
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Shifts</span>
-            <strong class="shift-kpi-value"><?= $shiftRowsCount ?></strong>
-            <span class="shift-kpi-meta"><?= $openShiftsCount ?> currently open</span>
+            <strong class="shift-kpi-value"><?= $reportLoaded ? $shiftRowsCount : '—' ?></strong>
+            <span class="shift-kpi-meta"><?= $reportLoaded ? $openShiftsCount . ' currently open' : 'Unavailable' ?></span>
         </div>
         <div class="shift-kpi-card <?= $needsReviewCount > 0 ? 'shift-kpi-card--warning' : '' ?>">
             <span class="shift-kpi-label">Needs Review</span>
-            <strong class="shift-kpi-value"><?= $needsReviewCount ?></strong>
-            <span class="shift-kpi-meta"><?= $needsReviewCount > 0 ? 'Unresolved cash variances' : 'No pending variance reviews' ?></span>
+            <strong class="shift-kpi-value"><?= $reportLoaded ? $needsReviewCount : '—' ?></strong>
+            <span class="shift-kpi-meta"><?= !$reportLoaded ? 'Unavailable' : ($needsReviewCount > 0 ? 'Unresolved cash variances' : 'No pending variance reviews') ?></span>
         </div>
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Sales</span>
-            <strong class="shift-kpi-value"><?= shift_report_money($totalSalesAmount) ?></strong>
-            <span class="shift-kpi-meta"><?= number_format($totalSaleCount) ?> transactions</span>
+            <strong class="shift-kpi-value"><?= $reportLoaded ? shift_report_money($totalSalesAmount) : '—' ?></strong>
+            <span class="shift-kpi-meta"><?= $reportLoaded ? number_format($totalSaleCount) . ' transactions' : 'Unavailable' ?></span>
         </div>
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Refunds</span>
-            <strong class="shift-kpi-value"><?= shift_report_money($totalRefundsAmount) ?></strong>
-            <span class="shift-kpi-meta">All payment methods</span>
+            <strong class="shift-kpi-value"><?= $reportLoaded ? shift_report_money($totalRefundsAmount) : '—' ?></strong>
+            <span class="shift-kpi-meta"><?= $reportLoaded ? 'All payment methods' : 'Unavailable' ?></span>
         </div>
     </section>
 
@@ -356,7 +365,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
     <section class="dashboard-section shift-results" aria-labelledby="shift-records-heading">
         <div class="section-header shift-results-header">
             <div>
-                <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= count($report['rows']) ?></span></h2>
+                <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= $reportLoaded ? count($report['rows']) : '—' ?></span></h2>
                 <p class="shift-section-note">Review cash variances or explore each shift’s payment breakdown.</p>
             </div>
             <form method="post" class="report-actions shift-export-form">
@@ -400,13 +409,13 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
             </div>
             <div class="form-group">
                 <label for="shift_id">Jump to Shift</label>
-                <select id="shift_id" name="shift_id">
-                    <option value="">All Shifts</option>
-                    <option value="legacy" <?= $filters['shift_id'] === 'legacy' ? 'selected' : '' ?>>Legacy / Unassigned Only</option>
+                <input id="shift_id" name="shift_id" type="text" list="shift-options" value="<?= shift_report_e($filters['shift_id']) ?>" placeholder="All shifts" pattern="[1-9][0-9]*|legacy" title="Enter a Shift ID or legacy; leave blank for all shifts.">
+                <datalist id="shift-options">
+                    <option value="legacy">Legacy / Unassigned Only</option>
                     <?php foreach ($shifts as $shift): ?>
-                        <option value="<?= (int)$shift['shift_id'] ?>" <?= $filters['shift_id'] === (string)$shift['shift_id'] ? 'selected' : '' ?>>#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e(substr((string)$shift['opened_at'], 0, 16)) ?></option>
+                        <option value="<?= (int)$shift['shift_id'] ?>">#<?= (int)$shift['shift_id'] ?> · <?= shift_report_e(substr((string)$shift['opened_at'], 0, 16)) ?></option>
                     <?php endforeach; ?>
-                </select>
+                </datalist>
             </div>
             <div class="shift-filter-actions">
                 <button type="submit" class="btn">Apply filters</button>
@@ -559,8 +568,8 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     <?php if (!$report['rows']): ?>
                         <tr><td colspan="8" class="shift-empty">
                             <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>
-                            <h3>No shifts to show</h3>
-                            <p>No records match this report. Try another date range or clear your filters.</p>
+                            <h3><?= $reportLoaded ? 'No shifts to show' : 'Report unavailable' ?></h3>
+                            <p><?= $reportLoaded ? 'No records match this report. Try another date range or clear your filters.' : 'Results could not be loaded. Check your filters and apply them again to retry.' ?></p>
                             <a href="#shift-filters" class="btn btn-secondary">Adjust filters</a>
                         </td></tr>
                     <?php endif; ?>

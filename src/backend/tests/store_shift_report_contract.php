@@ -3,7 +3,18 @@ require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Services\StoreShiftReportService;
 
-$pdo = new PDO('sqlite::memory:');
+class ShiftReportCountingPDO extends PDO
+{
+    public int $queries = 0;
+
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        $this->queries++;
+        return parent::prepare($query, $options);
+    }
+}
+
+$pdo = new ShiftReportCountingPDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
  INSERT INTO users VALUES (1,'Alice'),(2,'Bob'),(3,'Administrator');
@@ -69,6 +80,14 @@ $check(count($csv) === 3 && $csv[0] === StoreShiftReportService::HEADERS
     && $csv[2][array_search('Total Sales', $csv[0], true)] === '130.00',
     'CSV exports the exact filtered row and its totals');
 $page = file_get_contents(__DIR__ . '/../../frontend/components/administrator/shift_report.php');
+$filterCode = substr($page, strpos($page, '$defaultFrom ='), strpos($page, '$service =') - strpos($page, '$defaultFrom ='));
+foreach (['save_draft', 'mark_reviewed', 'reopen_review', 'export_csv'] as $action) {
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+    $_GET = ['from' => '2026-09-01', 'to' => '2026-09-30', 'cashier_id' => '1', 'register_id' => '10', 'shift_id' => '19'];
+    $_POST = ['action' => $action, 'shift_id' => '20'];
+    $retained = (static function () use ($filterCode): array { eval($filterCode); return $filters; })();
+    $check($retained === array_replace($_GET, ['shift_id' => '20']), $action . ' retains query filters and gives posted shift precedence');
+}
 $check(str_contains($page, 'require_capability(RoleCapabilityPolicy::STORE_OPERATIONS)')
     && str_contains($page, 'csrf_verify()'), 'the report and export route enforce access and CSRF');
 $pdo->exec("UPDATE users SET full_name='=2+2' WHERE user_id=1");
@@ -79,6 +98,31 @@ fgetcsv($stream);
 $formulaRow = fgetcsv($stream);
 $check($formulaRow[array_search('Cashier', StoreShiftReportService::HEADERS, true)] === "'=2+2",
     'CSV neutralizes spreadsheet formulas in account names');
+$pdo->exec("INSERT INTO sales VALUES (6,2,21,'2026-09-30 13:00:00',40,'cash',0);
+    INSERT INTO cash_drawer_movements VALUES (21,'pay_in',7),(21,'cash_in',3),(21,'pay_out',4),(21,'cash_out',1),(21,'safe_drop',2);
+    INSERT INTO cash_refunds VALUES (21,'cash',6),(21,'card',5),(21,'ewallet',4);
+    INSERT INTO sale_reversals VALUES (6,2,'approved','cash',9,'2026-09-30 16:00:00'),
+        (6,2,'pending','cash',100,'2026-09-30 16:00:00'),(6,2,'approved','card',20,'2026-09-30 16:00:00');");
+$openReport = $service->report('admin', array_merge($filters, ['shift_id' => '21']))['rows'][0];
+$drawer = (new App\Services\CashierShiftService($pdo))->calculateShift(21);
+$check($openReport['Expected Cash'] === '78.00'
+    && (float)$openReport['Expected Cash'] === $drawer['calculated_expected_cash'],
+    'batched expected cash matches drawer calculation with movement aliases and approved cash reversals');
+$check($openReport['Total Refunds'] === '15.00' && $openReport['E-Wallet Sales'] === '70.00'
+    && $openReport['Sale Count'] === 2, 'independent aggregates do not multiply sales or refunds');
+$pdo->queries = 0;
+$smallReport = $service->report('admin', $filters);
+$smallReportQueries = $pdo->queries;
+for ($i = 1; $i <= 100; $i++) {
+    $pdo->exec('INSERT INTO cashier_shifts SELECT shift_id + ' . ($i * 100) . ', cashier_id, register_id,
+        opened_at, closed_at, status, opening_cash, expected_cash, actual_cash, cash_variance,
+        variance_review_required, closing_notes, closed_by, intervention_reason FROM cashier_shifts WHERE shift_id = 20');
+}
+$pdo->queries = 0;
+$largeReport = $service->report('admin', $filters);
+echo 'Report queries (2 / 102 shifts): ' . $smallReportQueries . ' / ' . $pdo->queries . "\n";
+$check($smallReportQueries === 7 && $pdo->queries === $smallReportQueries, 'report query count stays constant as shift count grows');
+$check(count($largeReport['rows']) === count($smallReport['rows']) + 100, 'batching preserves every shift and legacy record');
 if ($failures) {
     fwrite(STDERR, "Store Cashier Shift report contract failed:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);

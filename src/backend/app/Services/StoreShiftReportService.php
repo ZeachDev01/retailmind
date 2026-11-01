@@ -66,10 +66,7 @@ final class StoreShiftReportService
             $where[] = '1 = 0';
         }
         $statement = $this->pdo->prepare(
-            'SELECT cs.shift_id, cs.cashier_id, cs.register_id, cs.opened_at, cs.closed_at,
-                    cs.status, cs.opening_cash, cs.expected_cash, cs.actual_cash,
-                    cs.cash_variance, cs.variance_review_required, cs.closing_notes,
-                    cs.closed_by, cs.intervention_reason, u.full_name AS cashier,
+            'SELECT cs.*, u.full_name AS cashier,
                     r.name AS register_name, closer.full_name AS closer_name
              FROM cashier_shifts cs
              LEFT JOIN users u ON u.user_id = cs.cashier_id
@@ -78,12 +75,51 @@ final class StoreShiftReportService
              WHERE ' . implode(' AND ', $where) . ' ORDER BY cs.opened_at DESC, cs.shift_id DESC'
         );
         $statement->execute($params);
-        $shiftService = new CashierShiftService($this->pdo);
+        $records = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $summaries = [];
+        $selectedShifts = 'SELECT cs.shift_id FROM cashier_shifts cs WHERE ' . implode(' AND ', $where);
+        if ($records) {
+            foreach ([
+                "SELECT shift_id, COUNT(*) AS sale_count, SUM(total_amount) AS total_sales,
+                        SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END) AS cash_sales,
+                        SUM(CASE WHEN payment_method='card' THEN total_amount ELSE 0 END) AS card_sales,
+                        SUM(CASE WHEN payment_method='ewallet' THEN total_amount ELSE 0 END) AS ewallet_sales
+                 FROM sales WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
+                "SELECT shift_id,
+                        SUM(CASE WHEN movement_type IN ('cash_in','pay_in') THEN amount ELSE 0 END) AS cash_in,
+                        SUM(CASE WHEN movement_type IN ('cash_out','pay_out') THEN amount ELSE 0 END) AS cash_out,
+                        SUM(CASE WHEN movement_type='safe_drop' THEN amount ELSE 0 END) AS safe_drop
+                 FROM cash_drawer_movements WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
+                "SELECT shift_id,
+                        SUM(CASE WHEN payment_method='cash' THEN refund_amount ELSE 0 END) AS cash_refunds,
+                        SUM(CASE WHEN payment_method='card' THEN refund_amount ELSE 0 END) AS card_refunds,
+                        SUM(CASE WHEN payment_method='ewallet' THEN refund_amount ELSE 0 END) AS ewallet_refunds
+                 FROM cash_refunds WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
+                "SELECT s.shift_id, SUM(sr.refund_amount) AS reversal_cash
+                 FROM sale_reversals sr JOIN sales s ON s.sale_id=sr.sale_id
+                 WHERE s.shift_id IN ($selectedShifts) AND sr.status='approved' AND sr.settlement_method='cash'
+                 GROUP BY s.shift_id",
+            ] as $sql) {
+                $aggregate = $this->pdo->prepare($sql);
+                $aggregate->execute($params);
+                foreach ($aggregate->fetchAll(PDO::FETCH_ASSOC) as $totals) {
+                    $id = (int)$totals['shift_id'];
+                    $summaries[$id] = array_merge($summaries[$id] ?? [], $totals);
+                }
+            }
+        }
         $rows = [];
-        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $record) {
+        foreach ($records as $record) {
             $id = (int)$record['shift_id'];
-            $summary = $shiftService->calculateShift($id);
-            $refunds = $this->refundTotals($id);
+            $summary = array_merge($record, array_fill_keys([
+                'sale_count', 'total_sales', 'cash_sales', 'card_sales', 'ewallet_sales',
+                'cash_in', 'cash_out', 'safe_drop', 'cash_refunds', 'card_refunds', 'ewallet_refunds', 'reversal_cash',
+            ], 0), $summaries[$id] ?? []);
+            $refunds = ['cash' => $summary['cash_refunds'], 'card' => $summary['card_refunds'], 'ewallet' => $summary['ewallet_refunds']];
+            // Cash Refunds belong to the issuing drawer; legacy reversals follow the original sale.
+            $summary['calculated_expected_cash'] = round((float)$record['opening_cash'] + (float)$summary['cash_sales']
+                + (float)$summary['cash_in'] - (float)$summary['cash_out'] - (float)$summary['safe_drop']
+                - (float)$summary['cash_refunds'] - (float)$summary['reversal_cash'], 2);
             $closed = $record['status'] === 'closed';
             $rows[] = [
                 'Record' => 'Cashier Shift', 'Date' => substr((string)$record['opened_at'], 0, 10),
@@ -169,17 +205,6 @@ final class StoreShiftReportService
         }
         // Opening/expected/count/variance are intentionally not totaled: open
         // and legacy rows have no comparable counted cash.
-        return $totals;
-    }
-
-    private function refundTotals(int $shiftId): array
-    {
-        $stmt = $this->pdo->prepare('SELECT payment_method, SUM(refund_amount) AS amount FROM cash_refunds WHERE shift_id = ? GROUP BY payment_method');
-        $stmt->execute([$shiftId]);
-        $totals = ['cash' => 0.0, 'card' => 0.0, 'ewallet' => 0.0];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (isset($totals[$row['payment_method']])) $totals[$row['payment_method']] = (float)$row['amount'];
-        }
         return $totals;
     }
 
