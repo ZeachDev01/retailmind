@@ -198,6 +198,12 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                         <p class="queue-recommended">Recommended buying quantity: <strong><?= (int)$item['recommended_quantity'] ?> units</strong></p>
                                                     <?php endif; ?>
                                                     <p class="queue-forecast-status"><?= htmlspecialchars($item['forecast_status']) ?></p>
+                                                    <?php if (!empty($item['model_version'])): ?>
+                                                        <small class="queue-model muted" style="display:block;">Model: <?= htmlspecialchars((string)$item['model_version']) ?><?= !empty($item['job_id']) ? ' (run #' . (int)$item['job_id'] . ')' : '' ?></small>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($item['limitation_marker'])): ?>
+                                                        <small class="queue-limitations muted" style="display:block;"><?= htmlspecialchars((string)$item['limitation_marker']) ?></small>
+                                                    <?php endif; ?>
                                                     <?php if (!empty($item['forecast_origin']) && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
                                                         <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
                                                     <?php endif; ?>
