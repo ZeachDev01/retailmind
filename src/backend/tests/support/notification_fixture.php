@@ -1,4 +1,48 @@
 <?php
+if (str_starts_with($argv[1] ?? '', 'forecasting_')) {
+    require_once __DIR__ . '/../../bootstrap/app.php';
+    require_once __DIR__ . '/../../app/Services/NotificationService.php';
+    require_once __DIR__ . '/../../app/Attention/Clock.php';
+    require_once __DIR__ . '/../../app/Attention/SystemClock.php';
+    set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, (string)$error); exit(1); });
+    $database = $argv[2] ?? '';
+    if (!preg_match('/^retailmind_theme_test_[a-f0-9]{12}$/', $database)) throw new RuntimeException('Disposable database required.');
+    $config = require __DIR__ . '/../../config/database.php';
+    $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec("SET time_zone = '+08:00'");
+    $clock = new \App\Attention\SystemClock();
+    $notifications = new \NotificationService($pdo, $clock);
+    require_once __DIR__ . '/../../app/Dashboard/StoreOperationsDashboardWorkspace.php';
+    \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();
+
+    if ($argv[1] === 'forecasting_seed_failure') {
+        $pdo->exec("INSERT INTO ml_jobs (trigger_type, status, queued_at, completed_at, attempts, operator_message, diagnostic_reference) VALUES
+            ('forecast_generation', 'failed', NOW(), NOW(), 3, 'Demand forecast generation failed due to insufficient sales data.', 'Stack: raw internal trace line 99')");
+        $notifications->checkAndNotifyForecasts();
+    } elseif ($argv[1] === 'forecasting_seed_candidate') {
+        $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES
+            ('ml_max_wape_7d', '35.0'), ('ml_max_wape_14d', '40.0'), ('ml_max_wape_28d', '45.0'), ('ml_approved_model_version', 'rf_prod_v1')
+            ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $pdo->exec("INSERT INTO model_training_runs (model_version, status, started_at, completed_at) VALUES
+            ('rf_candidate_v9', 'completed', NOW(), NOW())");
+        $pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, candidate_gate_outcome) VALUES
+            ('rf_candidate_v9', 7, 20.0, 'passed'),
+            ('rf_candidate_v9', 14, 25.0, 'passed'),
+            ('rf_candidate_v9', 28, 30.0, 'passed')");
+        $notifications->checkAndNotifyForecasts();
+    } elseif ($argv[1] === 'forecasting_seed_success') {
+        $pdo->exec("INSERT INTO ml_jobs (trigger_type, status, queued_at, completed_at, attempts) VALUES
+            ('forecast_generation', 'succeeded', NOW(), NOW(), 1)");
+        $notifications->checkAndNotifyForecasts();
+    } elseif ($argv[1] === 'forecasting_complete_onboarding') {
+        $pdo->exec("INSERT INTO workspace_guidance (user_id, workspace, status) VALUES (2, 'admin', 'completed')
+            ON DUPLICATE KEY UPDATE status = 'completed'");
+    } elseif ($argv[1] === 'forecasting_check') {
+        $notifications->checkAndNotifyForecasts();
+    }
+    exit;
+}
+
 if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '', 'workspace_')) {
     require_once __DIR__ . '/../../bootstrap/app.php';
     require_once __DIR__ . '/../../app/Services/NotificationService.php';

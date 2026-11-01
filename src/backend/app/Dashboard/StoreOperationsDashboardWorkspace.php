@@ -553,6 +553,32 @@ final class StoreOperationsDashboardWorkspace
             $items[] = $this->exception('warning', 'Follow up with Inventory Manager', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Follow up with Inventory Manager', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
         }
 
+        try {
+            $signalSource = new \App\Attention\DatabaseAttentionSignalSource($this->pdo, $this->clock);
+            $signals = $signalSource->store();
+            $fail = $signals['forecasting_failure'] ?? null;
+            if ($fail && !empty($fail['value']) && (float)$fail['value'] >= 1.0) {
+                $items[] = $this->exception(
+                    'critical',
+                    'Forecasting failure',
+                    (string)($fail['explanation'] ?? 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.'),
+                    (string)($fail['detected_at'] ?? $now->format('Y-m-d H:i:s')),
+                    'components/report/predictions.php'
+                );
+            }
+
+            $cand = $signals['forecasting_candidate_review'] ?? null;
+            if ($cand && !empty($cand['value']) && (float)$cand['value'] >= 1.0) {
+                $items[] = $this->exception(
+                    'warning',
+                    'Candidate model awaiting review',
+                    (string)($cand['explanation'] ?? 'A qualified candidate forecast model is awaiting local review.'),
+                    (string)($cand['detected_at'] ?? $now->format('Y-m-d H:i:s')),
+                    'components/report/predictions.php'
+                );
+            }
+        } catch (\Throwable) {}
+
         $severity = ['critical' => 0, 'warning' => 1, 'info' => 2];
         usort($items, static fn(array $left, array $right): int => ($severity[$left['severity']] <=> $severity[$right['severity']]) ?: strcmp($left['detected_at'], $right['detected_at']));
         return array_slice($items, 0, 30);

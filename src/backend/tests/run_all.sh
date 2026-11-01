@@ -48,6 +48,7 @@ php src/backend/tests/backup_unavailable_status_test.php
 php src/backend/tests/recovery_account_lifecycle_test.php
 php src/backend/tests/attention_rules_contract.php
 php src/backend/tests/role_notification_routing_contract.php
+php src/backend/tests/forecasting_notices_contract.php
 php src/backend/tests/dormancy_policy_settings_contract.php
 php src/backend/tests/dormancy_runner_contract.php
 php src/backend/tests/dormancy_status_tab_contract.php
@@ -60,6 +61,9 @@ node src/backend/tests/login_redirect_test.js
 php src/backend/tests/workspace_switching_contract.php
 node src/backend/tests/workspace_switching_browser_test.js
 node src/backend/tests/workspace_onboarding_browser_test.js
+node src/backend/tests/store_setup_confirmations_browser_test.js
+node src/backend/tests/administrator_workflow_guidance_browser_test.js
+node src/backend/tests/inventory_workflow_guidance_browser_test.js
 php src/backend/tests/cashier_workspace_authorization_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/inventory_load_contract.php
@@ -164,6 +168,7 @@ node src/backend/tests/theme_login_browser_test.js
 node src/backend/tests/sidebar_theme_browser_test.js
 node src/backend/tests/fullscreen_preferences_browser_test.js
 node src/backend/tests/notification_list_browser_test.js
+node src/backend/tests/forecasting_notices_browser_test.js
 php src/backend/tests/development_notification_rebuild_test.php
 node src/backend/tests/responsive_system_browser_test.js
 node src/backend/tests/superadmin_ui_browser_test.js

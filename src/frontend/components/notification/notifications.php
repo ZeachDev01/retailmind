@@ -14,6 +14,7 @@ $category_labels = [
     'expiring_stock' => 'Expiring stock',
     'expired_stock' => 'Expired stock',
     'attention' => 'Attention',
+    'forecasting' => 'Forecasting',
 ];
 $notification_source = "notifications LEFT JOIN products p ON notifications.reference_type = 'product' AND p.product_id = notifications.reference_id";
 $workspace_scope = notification_workspace_scope($pdo);
@@ -233,7 +234,7 @@ $active_batch_reminders = $inventory_workspace
                                                 default => 'components/inventory_management/stock_issues.php',
                                             };
                                         }
-                                        ?><?php if (!empty($destination)): ?><a href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
+                                        ?><?php if (!empty($destination)): ?><a class="btn btn-quiet btn-small mt-2" href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
                                 </div>
                             </div>
                         </div>

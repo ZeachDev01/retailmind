@@ -42,41 +42,68 @@ class ReplenishmentQueueService
             $stock = (int)$product['current_stock'];
             $reorder = (int)$product['reorder_level'];
             $forecast = $forecasts[(int)$product['product_id']] ?? [];
-            $available = ($forecast['readiness_level'] ?? null) !== null;
-            $useForecast = $available && !$observation && !$suspended;
+            $hasForecast = ($forecast['readiness_level'] ?? null) !== null;
             $stockRuleQuantity = $stock <= $reorder ? max(0, $reorder + (int)$product['safety_stock'] - $stock) : 0;
-            $quantity = $useForecast ? (int)$forecast['recommended_quantity']
-                : $stockRuleQuantity;
-            if ($useForecast) {
-                $product += $forecast;
-            }
-            $product['recommended_quantity'] = self::roundQuantity($quantity,
-                (int)($useForecast ? $forecast['moq'] : $product['minimum_order_quantity']),
-                (int)$product['units_per_package']);
             $product['stock_rule_quantity'] = self::roundQuantity($stockRuleQuantity,
                 (int)$product['minimum_order_quantity'], (int)$product['units_per_package']);
-            $usableForecast = $useForecast && !empty($forecast['complete_forecast'])
+
+            $usableForecast = $hasForecast
+                && !$observation
+                && !$suspended
+                && !empty($forecast['complete_forecast'])
                 && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)
-                && $forecast['forecast_origin'] === $origin && $approvedVersion !== ''
+                && $forecast['forecast_origin'] === $origin
+                && $approvedVersion !== ''
                 && $forecast['model_version'] === $approvedVersion;
-            $product['expected_sales_28_day'] = $usableForecast ? $forecast['forecast_28_day'] : null;
-            $product['expected_sales_period'] = $usableForecast
-                ? $today->format('Y-m-d') . ' – ' . $today->modify('+27 days')->format('Y-m-d') : null;
-            $product['stock_status'] = $stock <= 0 ? 'Out of stock' : ($stock <= $reorder ? 'Low stock' : 'In stock');
-            $product['basis'] = $useForecast ? 'Demand Forecast' : 'Stock rules';
-            $product['forecast_status'] = !$available ? 'Forecast unavailable'
-                : ($observation ? 'Observation Mode: forecast is observation telemetry only'
-                    : ($suspended ? 'Recommendations Suspended by Administrator' : $forecast['readiness_level'] . ' readiness forecast'));
-            if ($observation && $suspended) {
-                $product['forecast_status'] .= '; Recommendations Suspended by Administrator';
-            }
-            if (!$useForecast) {
+
+            if ($usableForecast) {
+                $product += $forecast;
+                $product['recommended_quantity'] = self::roundQuantity((int)$forecast['recommended_quantity'],
+                    (int)$forecast['moq'], (int)$product['units_per_package']);
+                $product['expected_sales_28_day'] = $forecast['forecast_28_day'];
+                $product['expected_sales_period'] = $today->format('Y-m-d') . ' – ' . $today->modify('+27 days')->format('Y-m-d');
+                $product['basis'] = 'Demand Forecast';
+                $product['forecast_status'] = $forecast['readiness_level'] . ' readiness forecast';
+            } else {
+                $product['recommended_quantity'] = $product['stock_rule_quantity'];
+                $product['expected_sales_28_day'] = null;
+                $product['expected_sales_period'] = null;
                 $product['urgency_label'] = 'Unknown';
                 $product['stock_exposure'] = null;
-                $product['forecast_origin'] = null;
+                $product['basis'] = 'Stock-rule suggestion';
                 $product['explanation'] = sprintf('%d on hand; reorder level %d + safety stock %d. Stock-rule suggestion rounded to the minimum quantity and package size.',
                     $stock, $reorder, (int)$product['safety_stock']);
+
+                if (!$hasForecast) {
+                    $product['forecast_status'] = 'Forecast unavailable';
+                    $product['forecast_origin'] = null;
+                } else {
+                    $product['forecast_origin'] = $forecast['forecast_origin'] ?? null;
+                    $product['model_version'] = $forecast['model_version'] ?? null;
+                    $product['readiness_level'] = $forecast['readiness_level'] ?? null;
+                    $statusParts = [];
+                    if ($observation) {
+                        $statusParts[] = 'Observation Mode: forecast is observation telemetry only';
+                    }
+                    if ($suspended) {
+                        $statusParts[] = 'Recommendations Suspended by Administrator';
+                    }
+                    if (!$observation && !$suspended) {
+                        if ($forecast['forecast_origin'] !== $origin) {
+                            $statusParts[] = 'Stale forecast: ' . $forecast['forecast_origin'];
+                        } elseif ($approvedVersion === '' || $forecast['model_version'] !== $approvedVersion) {
+                            $statusParts[] = 'Unapproved model: ' . ($forecast['model_version'] ?: 'none');
+                        } elseif (empty($forecast['complete_forecast'])) {
+                            $statusParts[] = 'Incomplete forecast';
+                        } else {
+                            $statusParts[] = $forecast['readiness_level'] . ' readiness forecast';
+                        }
+                    }
+                    $product['forecast_status'] = implode('; ', $statusParts);
+                }
             }
+
+            $product['stock_status'] = $stock <= 0 ? 'Out of stock' : ($stock <= $reorder ? 'Low stock' : 'In stock');
         }
         unset($product);
         return $forecasts && !$observation && !$suspended ? $this->sortByRisk($products) : $products;

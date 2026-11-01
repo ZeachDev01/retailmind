@@ -104,36 +104,44 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
             <?php
-            $isInitialSetup = !($activePeriodData['has_activity'] ?? false)
-                && (int)($dashboard['comparison']['transactions']['current'] ?? 0) === 0
-                && empty($dashboard['exceptions']);
+            $setupComplete = false;
+            $guidanceStatus = null;
+            try {
+                $setupComplete = \App\Store\StoreSetupConfirmations::isComplete($pdo);
+                $guidanceStmt = $pdo->prepare('SELECT status FROM workspace_guidance WHERE user_id = ? AND workspace = ?');
+                $guidanceStmt->execute([(int)($_SESSION['user_id'] ?? 0), current_role()]);
+                $guidanceStatus = $guidanceStmt->fetchColumn() ?: null;
+            } catch (Throwable) {}
+
+            $showStoreOnboarding = !$setupComplete && empty($guidanceStatus);
             ?>
-            <?php if ($isInitialSetup): ?>
+            <?php if ($showStoreOnboarding): ?>
                 <section class="dashboard-section store-onboarding-section" aria-labelledby="store-onboarding-title">
                     <div class="section-header">
                         <div>
-                            <h2 id="store-onboarding-title">Store Operations Onboarding</h2>
-                            <p class="section-description">Quick activation steps for Shalom Store administration.</p>
+                            <h2 id="store-onboarding-title">Administrator Workflows</h2>
+                            <p class="section-description">Permitted operational workflows for Shalom Store administration.</p>
                         </div>
                     </div>
                     <div class="quick-actions">
-                        <a class="quick-action" href="<?= $escape(app_url('components/system_administrator/fiscal_periods.php')) ?>" data-dashboard-action>
-                            <strong>1. Fiscal Period</strong>
-                            <span>Confirm active period</span>
+                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/store_calendar.php')) ?>" data-dashboard-action>
+                            <strong>1. Store Calendar</strong>
+                            <span>Set trading days and closures</span>
                         </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/store_settings.php')) ?>" data-dashboard-action>
-                            <strong>2. Store Settings</strong>
-                            <span>Review thresholds and limits</span>
+                        <a class="quick-action" href="<?= $escape(app_url('components/user_manager/user_manager.php')) ?>" data-dashboard-action>
+                            <strong>2. Staff Management</strong>
+                            <span>Maintain staff accounts and roles</span>
                         </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/shift_report.php')) ?>" data-dashboard-action>
-                            <strong>3. Cashier Shifts</strong>
-                            <span>Monitor shifts and variances</span>
+                        <a class="quick-action" href="<?= $escape(app_url('components/report/report_generation.php')) ?>" data-dashboard-action>
+                            <strong>3. Store Reports</strong>
+                            <span>Review sales and performance</span>
                         </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/stock_issues.php')) ?>" data-dashboard-action>
-                            <strong>4. Stock Issues</strong>
-                            <span>Review escalated stock risks</span>
+                        <a class="quick-action" href="<?= $escape(app_url('components/report/forecast_exceptions.php')) ?>" data-dashboard-action>
+                            <strong>4. Forecast Exceptions</strong>
+                            <span>Check readiness and oversight</span>
                         </a>
                     </div>
+                    <p class="section-note" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted);">Operational setup prepares Store trading. Customer sales history accumulates through genuine sales over time; stock receiving does not establish sales history.</p>
                 </section>
             <?php endif; ?>
 

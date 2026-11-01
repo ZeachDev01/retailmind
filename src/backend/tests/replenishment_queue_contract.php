@@ -59,31 +59,33 @@ try {
     ");
 
     $asOfDate = '2026-10-09';
+    $pdo->exec("INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'contract-model')");
+    $insert28 = function (int $pid, array $dayValues, string $readiness = 'High') use ($pdo, $asOfDate) {
+        $stmt = $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level, model_version) VALUES (10, ?, ?, ?, '$asOfDate', ?, 'contract-model')");
+        for ($day = 1; $day <= 28; $day++) {
+            $stmt->execute([$pid, $day, $dayValues[$day] ?? 0, $readiness]);
+        }
+    };
 
     // Product 1: Urgent. Stock 0, Inbound 0, Lead time demand 10. Exposure -10.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (1, 'SKU1', 'P1 Urgent', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 0)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 1, 7, 10, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 1, 28, 20, '$asOfDate', 'High')");
+    $insert28(1, [7 => 10, 28 => 10]);
 
     // Product 2: Watch. Stock 5, Inbound 0, Lead time 7. Demand is 4, 7-day demand 10. Exposure = 1.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (2, 'SKU2', 'P2 Watch', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 5)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 2, 7, 4, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 2, 14, 10, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 2, 28, 15, '$asOfDate', 'High')");
+    $insert28(2, [7 => 4, 14 => 6, 28 => 5]);
 
     // Product 3: Covered. Stock 100.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (3, 'SKU3', 'P3 Covered', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 100)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 3, 7, 1, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 3, 28, 5, '$asOfDate', 'High')");
+    $insert28(3, [7 => 1, 28 => 4]);
 
     // Product 4: Ties with P1 (exposure -10). P4 has product_id 4.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (4, 'SKU4', 'P4 Tie', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 0)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 4, 7, 10, '$asOfDate', 'Low')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 4, 28, 20, '$asOfDate', 'Low')");
+    $insert28(4, [7 => 10, 28 => 10], 'Low');
 
     // Product 5: Missing forecast completely (no rows in demand_forecasts). Must be 'Unknown', never zero demand or Covered.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (5, 'SKU5', 'P5 Missing Forecast', 'active', 7, 10)");
@@ -92,23 +94,20 @@ try {
     // Product 6: Zero forecast (row exists in demand_forecasts, but predicted_units = 0 across horizon). Stock 8.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (6, 'SKU6', 'P6 Zero Forecast', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (6, 8)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 6, 7, 0, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 6, 28, 0, '$asOfDate', 'High')");
+    $insert28(6, []);
 
     // Product 7: Guidance uses recorded stock only.
     // Stock 0, Lead time 7 days, Lead time demand 15.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (7, 'SKU7', 'P7 Current Stock', 'active', 7, 5)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 0)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 7, 7, 15, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 7, 28, 30, '$asOfDate', 'High')");
+    $insert28(7, [7 => 15, 28 => 15]);
 
     // Product 8: MOQ Constraint rounding.
     // Stock 0, Inbound 0, Lead time demand 10, 28-day demand 15. Target = 25. Deficit = 25.
     // MOQ = 12. Recommended quantity must be ceil(25 / 12) * 12 = 36.
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity) VALUES (8, 'SKU8', 'P8 MOQ Rounding', 'active', 7, 12)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (8, 0)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 8, 7, 10, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 8, 28, 15, '$asOfDate', 'High')");
+    $insert28(8, [7 => 10, 28 => 5]);
     $initialInventoryQty = (int)$pdo->query("SELECT SUM(quantity_on_hand) FROM inventory")->fetchColumn();
 
     $service = new ReplenishmentQueueService($pdo);
@@ -150,8 +149,7 @@ try {
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status, supplier_lead_time_days, minimum_order_quantity, reorder_level, safety_stock, units_per_package)
         VALUES (9, 'SKU9', 'P9 Supplier Free', 'active', 5, 8, 15, 10, 4)");
     $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (9, 0)");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 9, 5, 12, '$asOfDate', 'High')");
-    $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level) VALUES (10, 9, 28, 20, '$asOfDate', 'High')");
+    $insert28(9, [5 => 12, 28 => 20]);
 
     $queueWithP9 = $service->getQueue(10, $asOfDate);
     $p9Queue = array_column($queueWithP9, null, 'product_id')[9] ?? null;
@@ -162,7 +160,7 @@ try {
     $assert($p9Queue['recommended_quantity'] === 48, "P9 recommended quantity must be 48, got " . ($p9Queue['recommended_quantity'] ?? 'null'));
 
     // Test getRecommendations() method
-    $recs = $service->getRecommendations(10);
+    $recs = $service->getRecommendations(10, '2026-10-10');
     $assert(array_column($recs, 'product_id') === array_column($queueWithP9, 'product_id'),
         'Displayed recommendations must preserve forecast risk ordering, including exposure and product ID ties');
     $recsByPid = array_column($recs, null, 'product_id');
@@ -172,12 +170,12 @@ try {
 
     // Stock rule only: product with no forecast
     $assert(isset($recsByPid[5]), "P5 must be present in getRecommendations");
-    $assert($recsByPid[5]['basis'] === 'Stock rules', "P5 basis must be Stock rules");
+    $assert($recsByPid[5]['basis'] === 'Stock-rule suggestion', "P5 basis must be Stock-rule suggestion");
     $assert($recsByPid[5]['forecast_status'] === 'Forecast unavailable', "P5 forecast_status must be Forecast unavailable");
 
     // Committed stock update reflection
     $pdo->exec("UPDATE inventory SET quantity_on_hand = 48 WHERE product_id = 9");
-    $recsAfterStock = $service->getRecommendations(10);
+    $recsAfterStock = $service->getRecommendations(10, '2026-10-10');
     $p9After = array_column($recsAfterStock, null, 'product_id')[9];
     $assert($p9After['current_stock'] === 48, "P9 current_stock must reflect committed inventory");
     $assert($p9After['recommended_quantity'] === 0, "P9 suggested units must be 0 after receiving stock");
@@ -240,7 +238,7 @@ try {
 
     $pdo->exec("UPDATE ml_jobs SET trigger_type='forecast_generation' WHERE job_id=10;
         DELETE FROM demand_forecasts;
-        INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'v1');
+        INSERT OR REPLACE INTO platform_settings VALUES ('ml_approved_model_version', 'v1');
         UPDATE products SET reorder_level=10, safety_stock=5, units_per_package=6");
     $insertForecast = $pdo->prepare('INSERT INTO demand_forecasts
         (job_id, product_id, horizon_day, predicted_units, forecast_origin, readiness_level, model_version)

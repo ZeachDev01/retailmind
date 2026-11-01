@@ -95,38 +95,74 @@ async function checkQueueAccessibility(page) {
         await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Out of stock/);
         assert.match(await stockOnly.innerText(), /16 units/);
-        assert.match(await stockOnly.innerText(), /Stock rules/);
+        assert.match(await stockOnly.innerText(), /Stock-rule suggestion/);
         assert.match(await stockOnly.innerText(), /Forecast unavailable/);
+        assert.match(await stockOnly.innerText(), /Not available yet/);
+        assert.match(await stockOnly.innerText(), /0 on hand; reorder level 10 \+ safety stock 5/);
         fixture('seed');
         const unchanged = JSON.parse(fixture('state'));
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Demand Forecast/);
         assert.match(await stockOnly.innerText(), /32 units/);
+
+        // Product 2: legacy product with no ML forecast
         const missing = page.locator('.queue-item').filter({hasText: 'Unrelated legacy product'});
         await missing.locator('.queue-details').evaluate(d => { d.open = true; });
+        assert.match(await missing.innerText(), /Stock-rule suggestion/);
         assert.match(await missing.innerText(), /Forecast unavailable/);
+        assert.match(await missing.innerText(), /Not available yet/);
         assert.match(await missing.innerText(), /Low stock/);
+
+        // Product 3: genuine zero forecast
+        const zeroItem = page.locator('.queue-item').filter({hasText: 'Zero Forecast Item'});
+        await zeroItem.locator('.queue-details').evaluate(d => { d.open = true; });
+        assert.match(await zeroItem.innerText(), /Demand Forecast/);
+        assert.match(await zeroItem.innerText(), /0 units/);
+        assert.doesNotMatch(await zeroItem.innerText(), /Not available yet/);
+
+        // Product 4: stale forecast
+        const staleItem = page.locator('.queue-item').filter({hasText: 'Stale Forecast Item'});
+        await staleItem.locator('.queue-details').evaluate(d => { d.open = true; });
+        assert.match(await staleItem.innerText(), /Stock-rule suggestion/);
+        assert.match(await staleItem.innerText(), /Stale forecast/);
+        assert.match(await staleItem.innerText(), /Not available yet/);
+        assert.match(await staleItem.innerText(), /16 units/);
+
         assert.equal(await page.getByRole('link', {name: 'Review Request', exact: true}).count(), 0);
         const response = await context.request.post(queueRoute, {form: {action: 'accept', product_id: 1}});
         assert.equal(response.status(), 405);
         assert.deepEqual(JSON.parse(fixture('state')), unchanged, 'Viewing and accepting guidance cannot mutate stock or purchasing');
-        for (const mode of ['low_readiness', 'demo', 'production', 'unavailable']) {
+        for (const mode of ['low_readiness', 'demo', 'production', 'unavailable', 'observe', 'suspend']) {
             fixture(mode);
             const beforeView = JSON.parse(fixture('state'));
             await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
             await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
             const text = await stockOnly.innerText();
             if (mode === 'low_readiness') assert.match(text, /Low readiness forecast/);
-            if (mode === 'demo') assert.match(await page.locator('main').innerText(), /Demo Mode/);
+            if (mode === 'demo') assert.match(await page.locator('main').innerText(), /Demo Mode|Demo:/);
             if (mode === 'production') assert.match(await page.locator('main').innerText(), /Production forecast/);
             if (mode === 'unavailable') {
-                assert.match(text, /Stock rules/);
+                assert.match(text, /Stock-rule suggestion/);
                 assert.match(text, /Forecast unavailable/);
+                assert.match(text, /16 units/);
+                assert.match(text, /Not available yet/);
+            }
+            if (mode === 'observe') {
+                assert.match(text, /Stock-rule suggestion/);
+                assert.match(text, /Observation Mode/);
+                assert.match(text, /Not available yet/);
+                assert.match(text, /16 units/);
+            }
+            if (mode === 'suspend') {
+                assert.match(text, /Stock-rule suggestion/);
+                assert.match(text, /Recommendations Suspended by Administrator/);
+                assert.match(text, /Not available yet/);
                 assert.match(text, /16 units/);
             }
             assert.deepEqual(JSON.parse(fixture('state')), beforeView, 'Guidance leaves the database unchanged in ' + mode);
         }
+        fixture('activate');
         fixture('restore_forecast');
         fs.mkdirSync('.scratch/ticket179', {recursive: true});
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
@@ -135,32 +171,29 @@ async function checkQueueAccessibility(page) {
         await page.screenshot({path: '.scratch/ticket179/mobile.png', fullPage: true});
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recommendations fit mobile width');
         await page.setViewportSize({width: 1280, height: 720});
-        // Non-binding handoff to stock receiving
-        const handoffLink = page.locator('tr.queue-item a', {hasText: 'Add bought goods'}).first();
-        assert.equal(await handoffLink.count(), 1, 'Handoff action present on recommendation row');
-        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), handoffLink.click()]);
-        assert.match(page.url(), /stock_receiving\.php\?product_id=1/);
-        assert.equal(await page.locator('#product_id').inputValue(), '1', 'Product 1 pre-selected from recommendations');
-        assert.equal(await page.locator('#received_qty').inputValue(), '', 'Bought quantity never prefilled from recommendations');
+        // Ensure recommendations page contains no receiving action links or stock mutations
+        assert.equal(await page.locator('.queue-item a.queue-receive').count(), 0);
+        assert.equal(await page.getByRole('link', {name: 'Add bought goods', exact: true}).count(), 0);
+        assert.equal(await page.getByRole('link', {name: 'Record bought stock', exact: true}).count(), 0);
 
         fixture('queue_many');
         const started = performance.now();
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         const rows = page.locator('.queue-item');
         assert.equal(await rows.count(), 1002);
-        assert.equal(await page.locator('.queue-item:visible').count(), 1002);
+        assert.equal(await page.locator('.queue-item:visible').count(), 10);
         const loadMs = Math.round(performance.now() - started);
         assert.match(await rows.first().innerText(), /Out of stock/);
         await page.locator('#queue-search').fill('QUEUE-0999');
         assert.equal(await page.locator('.queue-item:visible').count(), 1);
         assert.match(await page.locator('.queue-item:visible').innerText(), /Queue product 999/);
-        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 1 of 1002 products');
+        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 1–1 of 1 products');
         await page.locator('#queue-search').fill('no-such-queue-product');
         assert.equal(await page.locator('.queue-item:visible').count(), 0);
         assert.equal(await page.locator('#queue-no-results').isVisible(), true);
-        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 0 of 1002 products');
+        assert.equal(await page.locator('#queue-results').innerText(), 'Showing 0–0 of 0 products');
         await page.locator('#queue-search').fill('');
-        assert.equal(await page.locator('.queue-item:visible').count(), 1002);
+        assert.equal(await page.locator('.queue-item:visible').count(), 10);
         const artifacts = 'output/playwright/replenishment';
         fs.mkdirSync(artifacts, {recursive: true});
         for (const colorScheme of ['light', 'dark']) {
@@ -258,7 +291,7 @@ async function checkQueueAccessibility(page) {
         await page.getByRole('link', {name: 'Reload', exact: true}).click();
         await page.waitForSelector('.queue-item');
         assert.equal(await page.locator('.queue-item').count(), 2, 'Reload recovers recommendations after a load failure');
-        assert.equal(await page.locator('main [role="status"]').count(), 0);
+        assert.equal(await page.locator('main .alert[role="status"]').count(), 0);
         assert.deepEqual(pageErrors, [], 'No JavaScript exceptions during queue workflows');
         console.log('Forecast decision browser passed.');
     } finally {

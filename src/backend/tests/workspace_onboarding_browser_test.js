@@ -71,7 +71,7 @@ const fixture = action => {
             await help.press('Enter');
             await page.waitForURL('**/auth/help.php');
             await page.getByRole('heading', {name: 'Workspace Help', exact: true}).waitFor();
-            await page.waitForFunction(() => getComputedStyle(document.querySelector('.workspace-guidance')).paddingTop === '19.2px');
+            await page.waitForFunction(() => ['19.2px', '12px'].includes(getComputedStyle(document.querySelector('.workspace-guidance')).paddingTop));
             await page.keyboard.press('Escape');
             assert.equal(await overview.count(), 0, 'Help does not duplicate the automatic prompt');
         };

@@ -70,8 +70,8 @@
 .queue-receive { display: inline-flex; justify-content: center; align-items: center; gap: .4rem; min-height: 44px; padding: .35rem .65rem; white-space: nowrap; font-size: .85rem; }
 .queue-receive.btn-secondary { background: var(--card-bg); border: 1px solid var(--border); }
 .queue-panel-footer { color: var(--muted); font-size: .75rem; }
-.queue-pagination { display: flex; gap: .25rem; }
-.queue-pagination button, #queue-page-size { min-height: 36px; padding: .35rem .6rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); }
+.queue-pagination { display: flex; flex-wrap: wrap; gap: .25rem; }
+.queue-pagination button, #queue-page-size { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; padding: .35rem .6rem; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); }
 .queue-pagination button[aria-current="page"] { border-color: var(--primary); color: var(--primary); font-weight: 700; }
 .queue-pagination button:disabled { opacity: .5; cursor: not-allowed; }
 .queue-panel > .empty-state, .queue-panel > p { padding: 1.5rem; }
@@ -88,7 +88,7 @@ html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); c
     .queue-summary { grid-template-columns: 1fr; gap: .75rem; }
     .queue-stat { gap: .75rem; padding: 1rem; }
     .queue-filters { grid-template-columns: 1fr; padding: 1rem; }
-    .queue-panel-heading, .queue-panel-footer { padding: 1rem; flex-wrap: wrap; }
+    .queue-panel-heading, .queue-panel-footer { padding: .75rem; flex-wrap: wrap; }
 }
 @media print {
     .queue-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -1787,3 +1787,15 @@ CREATE TABLE IF NOT EXISTS `workspace_guidance` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_workspace_guidance','Remember optional guidance per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+
+CREATE TABLE IF NOT EXISTS `store_setup_confirmations` (
+  `task_key` VARCHAR(50) NOT NULL,
+  `confirmed_by_user_id` INT NOT NULL,
+  `confirmed_workspace` VARCHAR(30) NOT NULL,
+  `confirmed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_key`),
+  CONSTRAINT `fk_store_setup_confirmations_user` FOREIGN KEY (`confirmed_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
