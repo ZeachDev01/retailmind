@@ -104,10 +104,6 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
             <?php
-            $isInitialSetup = !($activePeriodData['has_activity'] ?? false)
-                && (int)($dashboard['comparison']['transactions']['current'] ?? 0) === 0
-                && empty($dashboard['exceptions']);
-
             $setupComplete = false;
             $guidanceStatus = null;
             try {

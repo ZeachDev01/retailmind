@@ -105,43 +105,33 @@ if (isset($workflows[$currentScript])) {
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
 </h2>
 
-<?php if ($isAdmin): ?>
-    <?php if ($guidanceIsHelp): ?>
-        <p>Oversee Store performance, staff and operational exceptions. Start with Store operations to see what needs attention.</p>
-        <ul class="workspace-guidance-links">
-            <?php foreach ($adminWorkflows as $wf): ?>
-            <li>
-                <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>"><?= htmlspecialchars($wf['link_label']) ?></a>
-                <strong class="workspace-workflow-heading"><?= htmlspecialchars($wf['title']) ?></strong>
-                <p><?= htmlspecialchars($wf['guidance']) ?></p>
-            </li>
-            <?php endforeach; ?>
-        </ul>
-    <?php elseif ($activeWorkflow): ?>
-        <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-        <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
-    <?php else: ?>
-        <p>Oversee Store performance, staff and operational exceptions. Start with Store operations to see what needs attention.</p>
-        <p><a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php')) ?>">Review Store operations</a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
-    <?php endif; ?>
+<?php
+$introText = $isAdmin
+    ? 'Oversee Store performance, staff and operational exceptions. Start with Store operations to see what needs attention.'
+    : 'Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.';
+$primaryActionUrl = $isAdmin
+    ? app_url('components/administrator/dashboard.php')
+    : app_url('components/inventory_management/replenishment_queue.php');
+$primaryActionLabel = $isAdmin
+    ? 'Review Store operations'
+    : 'Review replenishment needs';
+?>
+<?php if ($guidanceIsHelp): ?>
+    <p><?= htmlspecialchars($introText) ?></p>
+    <ul class="workspace-guidance-links">
+        <?php foreach ($workflows as $wf): ?>
+        <li>
+            <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>"><?= htmlspecialchars($wf['link_label']) ?></a>
+            <strong class="workspace-workflow-heading"><?= htmlspecialchars($wf['title']) ?></strong>
+            <p><?= htmlspecialchars($wf['guidance']) ?></p>
+        </li>
+        <?php endforeach; ?>
+    </ul>
+<?php elseif ($activeWorkflow): ?>
+    <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
+    <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
 <?php else: ?>
-    <?php if ($guidanceIsHelp): ?>
-        <p>Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.</p>
-        <ul class="workspace-guidance-links">
-            <?php foreach ($inventoryWorkflows as $wf): ?>
-            <li>
-                <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>"><?= htmlspecialchars($wf['link_label']) ?></a>
-                <strong class="workspace-workflow-heading"><?= htmlspecialchars($wf['title']) ?></strong>
-                <p><?= htmlspecialchars($wf['guidance']) ?></p>
-            </li>
-            <?php endforeach; ?>
-        </ul>
-    <?php elseif ($activeWorkflow): ?>
-        <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-        <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
-    <?php else: ?>
-        <p>Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.</p>
-        <p><a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review replenishment needs</a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
-    <?php endif; ?>
+    <p><?= htmlspecialchars($introText) ?></p>
+    <p><a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
 <?php endif; ?>
 <p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>

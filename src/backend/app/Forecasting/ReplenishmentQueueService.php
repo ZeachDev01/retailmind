@@ -95,8 +95,6 @@ class ReplenishmentQueueService
                             $statusParts[] = 'Unapproved model: ' . ($forecast['model_version'] ?: 'none');
                         } elseif (empty($forecast['complete_forecast'])) {
                             $statusParts[] = 'Incomplete forecast';
-                        } elseif (!in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)) {
-                            $statusParts[] = $forecast['readiness_level'] . ' readiness forecast';
                         } else {
                             $statusParts[] = $forecast['readiness_level'] . ' readiness forecast';
                         }

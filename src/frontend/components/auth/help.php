@@ -2,6 +2,12 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin', 'inventory_manager']);
 $error = '';
+$sanitizeRedirect = static function (mixed $target): string {
+    $prefix = preg_quote(app_url('components/'), '~');
+    return (is_string($target) && preg_match('~^' . $prefix . '[a-z_]+/[a-z_]+\.php$~D', $target))
+        ? $target
+        : app_url('components/auth/help.php');
+};
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     if (isset($_POST['confirm_task'])) {
@@ -11,12 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (\App\Store\StoreSetupConfirmations::isComplete($pdo)) {
                 $_SESSION['store_setup_just_completed'] = true;
             }
-            $target = $_POST['return_to'] ?? '';
-            $prefix = preg_quote(app_url('components/'), '~');
-            if (!is_string($target) || !preg_match('~^' . $prefix . '[a-z_]+/[a-z_]+\.php$~D', $target)) {
-                $target = app_url('components/auth/help.php');
-            }
-            header('Location: ' . $target, true, 303);
+            header('Location: ' . $sanitizeRedirect($_POST['return_to'] ?? null), true, 303);
             exit;
         } catch (DomainException $e) {
             http_response_code(403);
@@ -37,12 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Reopening Help cannot reset a completed overview.
                 $query = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = IF(status = \'completed\', status, VALUES(status))');
                 $query->execute([(int)$_SESSION['user_id'], current_role(), $status]);
-                $target = $_POST['return_to'] ?? '';
-                $prefix = preg_quote(app_url('components/'), '~');
-                if (!is_string($target) || !preg_match('~^' . $prefix . '[a-z_]+/[a-z_]+\.php$~D', $target)) {
-                    $target = app_url('components/auth/help.php');
-                }
-                header('Location: ' . $target, true, 303);
+                header('Location: ' . $sanitizeRedirect($_POST['return_to'] ?? null), true, 303);
                 exit;
             } catch (Throwable $e) {
                 $error = \App\Support\OperatorAlert::message($e, 'Unable to save your guidance choice. Please try again.');
