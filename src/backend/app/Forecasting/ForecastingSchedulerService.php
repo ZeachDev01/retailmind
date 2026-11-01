@@ -379,8 +379,8 @@ class ForecastingSchedulerService {
         } catch (\Throwable) {}
     }
 
-    private function preserveLocalDiagnostic(string $message, string $ref): void {
-        $logDir = dirname(__DIR__, 2) . '/storage/logs';
+    public static function recordLocalDiagnostic(string $message, string $ref, ?string $storageDir = null): void {
+        $logDir = $storageDir ?: (dirname(__DIR__, 2) . '/storage/logs');
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0777, true);
         }
@@ -400,5 +400,9 @@ class ForecastingSchedulerService {
             $entries = array_slice($entries, -20);
         }
         @file_put_contents($logFile, json_encode($entries, JSON_PRETTY_PRINT));
+    }
+
+    private function preserveLocalDiagnostic(string $message, string $ref): void {
+        self::recordLocalDiagnostic($message, $ref);
     }
 }

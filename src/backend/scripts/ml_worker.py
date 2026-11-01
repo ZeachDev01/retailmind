@@ -25,12 +25,25 @@ from feature_pipeline import (FEATURE_COLUMNS, FEATURE_VERSION, build_feature_ma
 ROOT_DIR = Path(__file__).resolve().parents[3]
 STORAGE_MODELS_DIR = ROOT_DIR / "src" / "backend" / "storage" / "ml_models"
 
+RUNNER_CONFIG_PATH = ROOT_DIR / "src" / "backend" / "config" / "forecasting_runner.json"
+if RUNNER_CONFIG_PATH.exists():
+    try:
+        with open(RUNNER_CONFIG_PATH, "r", encoding="utf-8") as _rcf:
+            _runner_cfg = json.load(_rcf)
+            if _runner_cfg.get("model_storage"):
+                STORAGE_MODELS_DIR = Path(_runner_cfg["model_storage"])
+    except Exception:
+        pass
+
 def get_connection():
+    db_host = os.getenv("DB_HOST", "127.0.0.1")
+    if db_host.lower() not in ("127.0.0.1", "localhost", "::1"):
+        raise PermissionError(f"Forecasting database interface must be local; remote host '{db_host}' is not permitted.")
     try:
         import pymysql
         import pymysql.cursors
         connection = pymysql.connect(
-            host=os.getenv("DB_HOST", "127.0.0.1"),
+            host=db_host,
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASSWORD", os.getenv("DB_PASS", "")),
@@ -42,7 +55,7 @@ def get_connection():
     except ImportError:
         import mysql.connector
         connection = mysql.connector.connect(
-            host=os.getenv("DB_HOST", "127.0.0.1"),
+            host=db_host,
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASSWORD", os.getenv("DB_PASS", "")),
