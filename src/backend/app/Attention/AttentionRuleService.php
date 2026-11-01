@@ -25,6 +25,8 @@ final class AttentionRuleService
         ['key' => 'store.inventory.high-value', 'signal' => 'inventory_risk_value', 'threshold' => 'inventory_high_value_amount', 'severity' => 'critical', 'category' => 'inventory', 'title' => 'Follow up with Inventory Manager', 'destination' => 'components/administrator/stock_issues.php'],
         ['key' => 'store.fiscal-period.closing', 'signal' => 'fiscal_period_days_remaining', 'threshold' => 'fiscal_period_days_to_close', 'severity' => 'warning', 'category' => 'fiscal_period', 'title' => 'Fiscal Period is approaching closure', 'destination' => 'components/system_administrator/fiscal_periods.php', 'comparison' => 'at_most'],
         ['key' => 'store.fiscal-period.overdue', 'signal' => 'fiscal_period_overdue_count', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'fiscal_period', 'title' => 'Fiscal Period action is overdue', 'destination' => 'components/system_administrator/fiscal_periods.php'],
+        ['key' => 'store.forecasting.candidate-review', 'signal' => 'forecasting_candidate_review', 'fixed_threshold' => 1.0, 'severity' => 'warning', 'category' => 'forecasting', 'title' => 'Qualified forecast model awaiting review', 'destination' => 'components/report/predictions.php'],
+        ['key' => 'store.forecasting.failure', 'signal' => 'forecasting_failure', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'forecasting', 'title' => 'Demand forecast generation failed', 'destination' => 'components/report/predictions.php'],
     ];
 
     public function __construct(private AttentionSettingsService $settings, private Clock $clock)
@@ -130,6 +132,8 @@ final class AttentionRuleService
                 ? 'No recent successful Demand Forecast model run is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')
                 : 'The Demand Forecast model is ' . $current . ' ' . ($value === 1.0 ? 'day' : 'days') . ' old. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.'),
             'platform_setting_change_count' => $current . ' recent Platform Setting ' . ($value === 1.0 ? 'change requires' : 'changes require') . ' review. Review threshold: ' . $limit . '.',
+            'forecasting_candidate_review' => 'A qualified candidate forecast model has passed technical checks and awaits local Administrator review.',
+            'forecasting_failure' => 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.',
             'recovery_account_active_count' => $current . ' unsealed Recovery ' . ($value === 1.0 ? 'Account requires' : 'Accounts require') . ' review. Review threshold: ' . $limit . '.',
             default => 'Current value: ' . $current . '. Review threshold: ' . $limit . '.',
         };
