@@ -124,7 +124,9 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             <?php endif; ?>
 
             <?php if ($isDemo): ?>
-                <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
+                <p class="muted"><span class="badge tag-info">Demo Mode</span> Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
+            <?php elseif ($isProduction): ?>
+                <p class="muted"><span class="badge tag-light">Production forecast</span> Store demand forecast from approved model <?= htmlspecialchars($activeModelVersion) ?>.</p>
             <?php endif; ?>
             <?php if ($isHistoricalDemo): ?>
                 <p class="tag-warning" role="status">Historical M5 demo: expected sales use the original 2016 dates shown in each row. Stock is illustrative. These predictions are unapproved and are not current Store forecasts. <a href="../report/forecast_replay.php">Compare predictions with actual sales</a>.</p>
@@ -140,6 +142,12 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <p>No active products available for recommendations.</p>
                         </div>
                     <?php else: ?>
+                        <section class="queue-guidance no-print" aria-label="Replenishment guidance">
+                            <details>
+                                <summary>Non-binding buying guidance</summary>
+                                <p class="muted">Stock rules suggest how much to buy. Expected sales estimate customer purchases. The Inventory Manager decides how much to buy.</p>
+                            </details>
+                        </section>
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
                             <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">🔵 Needs replenishment</option><option value="Out of stock">🔴 Out of stock</option><option value="Low stock">🟡 Low stock</option><option value="In stock">🟢 In stock</option></select></label>
@@ -182,13 +190,25 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                 <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
                                                 <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
+                                                <details class="queue-details">
+                                                    <summary><?= $item['basis'] === 'Demand Forecast' ? 'Forecast details' : 'Stock-rule details' ?></summary>
+                                                    <strong class="queue-basis"><?= htmlspecialchars($item['basis']) ?></strong>
+                                                    <p class="queue-reason"><?= htmlspecialchars($item['explanation']) ?></p>
+                                                    <?php if ($item['basis'] === 'Demand Forecast'): ?>
+                                                        <p class="queue-recommended">Recommended buying quantity: <strong><?= (int)$item['recommended_quantity'] ?> units</strong></p>
+                                                    <?php endif; ?>
+                                                    <p class="queue-forecast-status"><?= htmlspecialchars($item['forecast_status']) ?></p>
+                                                    <?php if (!empty($item['forecast_origin']) && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
+                                                        <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
+                                                    <?php endif; ?>
+                                                </details>
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
                                             <td><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></td>
                                             <td><?php if ($item['expected_sales_28_day'] !== null): ?>
                                                 <strong class="queue-number"><?= (int)$item['expected_sales_28_day'] ?></strong> <small class="muted">units</small>
                                                 <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['expected_sales_context'] ?? ($item['readiness_level'] . ' readiness')) ?></small>
-                                            <?php else: ?><span class="muted">Unavailable</span><?php endif; ?></td>
+                                            <?php else: ?><span class="muted">Not available yet</span><?php endif; ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

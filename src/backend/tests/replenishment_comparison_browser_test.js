@@ -53,7 +53,7 @@ const html = execFileSync('php', ['-r', `
         assert.equal(await page.locator('body').textContent().then(text => text.includes('Old suggested layout')), false);
         await page.locator('#queue-search').fill('SKU-3');
         assert.equal(await page.locator('.queue-item:visible').count(), 2);
-        assert.equal((await page.locator('.queue-item:visible').first().locator('td').nth(3).textContent()).trim(), 'Unavailable');
+        assert.equal((await page.locator('.queue-item:visible').first().locator('td').nth(3).textContent()).trim(), 'Not available yet');
         await page.locator('#queue-search').fill('');
         await page.locator('#queue-stock').selectOption('needs_replenishment');
         assert.equal(await page.locator('.queue-item:visible').count(), 2);

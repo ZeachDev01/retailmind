@@ -55,7 +55,7 @@ const vm = require('node:vm');
         assert.ok(fills.some(fill => fill.color === background), `${value} has a priority background`);
     }
     assert.ok(text.includes('Stock-rule buy') && text.includes('28-day sales'), 'Export separates stock-rule buying from expected sales');
-    assert.ok(text.includes('Unavailable') && text.includes('0') && text.includes('42'), 'Missing, genuine zero and positive forecasts remain distinct');
+    assert.ok(text.includes('Not available yet') && text.includes('0') && text.includes('42'), 'Missing, genuine zero and positive forecasts remain distinct');
     assert.equal(button.disabled, false);
     window.jspdf = undefined;
     await click();

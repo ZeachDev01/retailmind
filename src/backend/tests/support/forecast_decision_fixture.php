@@ -31,6 +31,7 @@ if ($argv[1] === 'create') {
 $pdo->exec("USE `{$database}`");
 switch ($argv[1]) {
     case 'queue_many':
+        $pdo->exec("UPDATE products SET status='inactive' WHERE product_id IN (3,4)");
         $product = $pdo->prepare('INSERT INTO products (sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level) VALUES (?,?,?,25,3,1,10)');
         $inventory = $pdo->prepare('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (?,5)');
         for ($i = 0; $i < 1000; $i++) {
@@ -82,8 +83,6 @@ switch ($argv[1]) {
         $pdo->exec("UPDATE inventory SET quantity_on_hand=0;
             INSERT INTO ml_jobs (job_id,trigger_type,status,queued_at,completed_at) VALUES
                 (10,'forecast_generation','succeeded',NOW(),NOW());
-            INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
-                VALUES (10,1,CURDATE(),CURDATE()+INTERVAL 7 DAY,7,14,'decision-test','High');
             INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (2,'UNRELATED','UNRELATED','Unrelated legacy product',25,3,1);
             UPDATE products SET reorder_level=10,safety_stock=5 WHERE product_id=2;
             INSERT INTO inventory (product_id,quantity_on_hand) VALUES (2,5);
@@ -91,7 +90,32 @@ switch ($argv[1]) {
             INSERT INTO stock_predictions (prediction_id,forecast_run_id,product_id,forecast_period_days,forecast_value,actual_demand)
                 VALUES (100,100,2,7,8,6);
             INSERT INTO forecast_decisions (prediction_id,product_id,original_suggested_qty,final_quantity,decision,decided_by)
-                VALUES (100,2,8,8,'accepted',3)");
+                VALUES (100,2,8,8,'accepted',3);
+            INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'decision-test')
+                ON DUPLICATE KEY UPDATE setting_value='decision-test';
+            DELETE FROM model_training_runs;
+            INSERT INTO model_training_runs (model_name,model_version,status,metrics_json) VALUES ('Random Forest','decision-test','completed','{\"metadata\":{\"dataset_kind\":\"store\"}}	');");
+        $stmtF1 = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
+            VALUES (10,1,CURDATE()-INTERVAL 1 DAY,CURDATE()+INTERVAL (? - 1) DAY,?,?, 'decision-test','High')");
+        for ($day = 1; $day <= 28; $day++) {
+            $stmtF1->execute([$day, $day, $day <= 7 ? 2 : 0]);
+        }
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
+            VALUES (3,'ZERO-ITEM','ZERO-ITEM','Zero Forecast Item',25,3,1,10,5,1,1);
+            INSERT INTO inventory (product_id,quantity_on_hand) VALUES (3,15)");
+        $stmtF3 = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
+            VALUES (10,3,CURDATE()-INTERVAL 1 DAY,CURDATE()+INTERVAL (? - 1) DAY,?,0, 'decision-test','High')");
+        for ($day = 1; $day <= 28; $day++) {
+            $stmtF3->execute([$day, $day]);
+        }
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
+            VALUES (4,'STALE-ITEM','STALE-ITEM','Stale Forecast Item',25,3,1,10,5,6,4);
+            INSERT INTO inventory (product_id,quantity_on_hand) VALUES (4,0)");
+        $stmtF4 = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
+            VALUES (10,4,CURDATE()-INTERVAL 5 DAY,CURDATE()+INTERVAL (? - 5) DAY,?,5, 'decision-test','High')");
+        for ($day = 1; $day <= 28; $day++) {
+            $stmtF4->execute([$day, $day]);
+        }
         break;
     case 'upgrade':
         $migration = require __DIR__ . '/../../database/migrations/202610120001_forecast_decision_source.php';
@@ -113,6 +137,7 @@ switch ($argv[1]) {
     case 'observe':
     case 'suspend':
     case 'activate':
+        $pdo->exec("UPDATE ml_jobs SET status='succeeded' WHERE job_id=10");
         $settings = new App\Forecasting\CandidateEvaluationService($pdo);
         $settings->setObservationMode($argv[1] === 'observe', 3);
         $settings->setRecommendationsSuspended($argv[1] === 'suspend', 3);
