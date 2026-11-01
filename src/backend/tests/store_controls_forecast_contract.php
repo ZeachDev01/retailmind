@@ -228,6 +228,30 @@ $assert(!str_contains($predictionsFile, 'href="forecast_analytics.php"') && !str
 $analyticsFile = file_get_contents(__DIR__ . '/../../frontend/components/report/forecast_analytics.php');
 $assert(str_contains($analyticsFile, 'super_admin') || str_contains($analyticsFile, 'CONFIGURE_MODELS'), 'Forecast analytics restricted to technical governance / super_admin');
 
+// 9. Operational evidence export contract (Ticket #372)
+$pdo->exec("
+    CREATE TABLE IF NOT EXISTS store_calendar (calendar_id INTEGER PRIMARY KEY, calendar_date TEXT, status TEXT, recorded_at TEXT);
+    CREATE TABLE IF NOT EXISTS stock_movements (product_id INTEGER, change_qty INTEGER, moved_at TEXT);
+    CREATE TABLE IF NOT EXISTS sale_items (sale_item_id INTEGER, sale_id INTEGER, product_id INTEGER, quantity INTEGER);
+    CREATE TABLE IF NOT EXISTS sales (sale_id INTEGER, sale_date TEXT);
+    CREATE TABLE IF NOT EXISTS sale_reversals (reversal_id INTEGER, status TEXT, approved_at TEXT);
+    CREATE TABLE IF NOT EXISTS sale_reversal_items (reversal_id INTEGER, sale_item_id INTEGER, product_id INTEGER, quantity INTEGER);
+    CREATE TABLE IF NOT EXISTS cash_refunds (refund_id INTEGER, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS cash_refund_items (refund_id INTEGER, sale_item_id INTEGER, product_id INTEGER, quantity INTEGER);
+");
+$demandService = new App\Forecasting\DemandHistoryService();
+$evidenceFields = $demandService->getDailyEvidence($pdo, 1, '2026-10-01', '2026-10-01', '2026-10-01 12:00:00')[0] ?? [];
+$assert(array_key_exists('price', $evidenceFields), 'Export contract includes nullable price field');
+$assert(array_key_exists('is_on_promotion', $evidenceFields), 'Export contract includes nullable is_on_promotion field');
+$assert(array_key_exists('out_of_stock', $evidenceFields), 'Export contract includes nullable out_of_stock field');
+
+$featurePipelineCode = file_get_contents(__DIR__ . '/../scripts/feature_pipeline.py');
+$assert(str_contains($featurePipelineCode, 'FEATURE_COLUMNS'), 'Feature pipeline defines standard FEATURE_COLUMNS');
+preg_match('/FEATURE_COLUMNS\s*=\s*\[(.*?)\]/s', $featurePipelineCode, $matches);
+$featureColumnsBlock = $matches[1] ?? '';
+$assert(!str_contains($featureColumnsBlock, '"price"') && !str_contains($featureColumnsBlock, "'price'"), 'Standard Store model FEATURE_COLUMNS does not enable price as active predictor');
+$assert(!str_contains($featureColumnsBlock, '"is_on_promotion"') && !str_contains($featureColumnsBlock, "'is_on_promotion'"), 'Standard Store model FEATURE_COLUMNS does not enable is_on_promotion as active predictor');
+
 if (!empty($failures)) {
     echo "FAIL: Store controls and operational forecasts contract failed:\n";
     foreach ($failures as $f) {
