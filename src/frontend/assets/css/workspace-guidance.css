@@ -1,0 +1,16 @@
+.workspace-guidance {
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text);
+}
+.workspace-guidance h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.workspace-guidance p { max-width: 72ch; margin: .5rem 0 1rem; line-height: 1.5; }
+.workspace-guidance-note { font-size: .95rem; }
+.workspace-guidance-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.workspace-guidance-links { padding-left: 1.2rem; }
+.workspace-guidance-links li { margin-top: 1.2rem; }
+.workspace-guidance a { color: var(--primary); text-underline-offset: .2em; }
+.workspace-guidance :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }

@@ -36,12 +36,15 @@ try {
 
 
 
+    $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status) VALUES (2,'admin','skipped'),(3,'inventory_manager','deferred')");
     $rows = [];
     foreach (App\Backup\SqlBackupFormat::schema($pdo) as $table => $definition) {
         $columns = implode(',', array_map([App\Backup\DatabaseSnapshotWriter::class, 'identifier'], $definition['columns']));
         $rows[$table] = $pdo->query('SELECT ' . $columns . ' FROM ' . App\Backup\DatabaseSnapshotWriter::identifier($table))->fetchAll(PDO::FETCH_ASSOC);
     }
     $package = ['rows' => $rows, 'files' => [], 'manifest' => ['origin_id' => str_repeat('a', 32), 'package_id' => str_repeat('b', 32), 'schema' => hash('sha256', json_encode(array_keys($rows)))]];
+    $pdo->exec("UPDATE workspace_guidance SET status='completed' WHERE user_id=2");
+    $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status) VALUES (2,'inventory_manager','skipped')");
     // Destination dependent actor (evidence-only closure, AC 2, 3)
     $pdo->exec("INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id) VALUES (50,'Old Log Subject','old_audited_staff','\$2y\$10\$xyz',4,1)");
     $pdo->exec("INSERT INTO activity_log (log_id,user_id,action,category,module,record_id) VALUES (300,2,'Audited old staff','security','User Access',50)");
@@ -72,6 +75,9 @@ try {
     $assert(count($review['rows']['login_attempts']) >= 1, 'Destination login attempts preserved');
     $assert(count($review['rows']['password_reset_tokens']) >= 1, 'Protected reset state preserved');
     $assert(count($review['rows']['notification_preferences']) >= 1, 'Protected notification preferences preserved');
+    $protectedGuidance = array_values(array_filter($review['rows']['workspace_guidance'], static fn(array $row): bool => (int)$row['user_id'] === 2));
+    $assert($protectedGuidance === [['user_id' => 2, 'workspace' => 'admin', 'status' => 'completed'], ['user_id' => 2, 'workspace' => 'inventory_manager', 'status' => 'skipped']], 'Protected guidance choices survive restore without source choices replacing them');
+    $assert(count(array_filter($review['rows']['workspace_guidance'], static fn(array $row): bool => (int)$row['user_id'] === $review['identity_map'][3] && $row['status'] === 'deferred')) === 1, 'Ordinary staff guidance follows explicit identity mapping');
     $assert(count($review['rows']['notifications']) >= 1, 'Protected notifications preserved');
     $assert(count($review['rows']['attention_states']) >= 1, 'Protected attention states preserved');
     $assert(count($review['rows']['backup_history']) >= 1, 'Backup history preserved');

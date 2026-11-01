@@ -154,6 +154,11 @@ if ($argv[1] === 'responsive') {
     }
     exit;
 }
+if ($argv[1] === 'guidance_state') {
+    $pdo->exec("USE `{$database}`");
+    echo json_encode($pdo->query('SELECT user_id, workspace, status FROM workspace_guidance ORDER BY user_id, workspace')->fetchAll(PDO::FETCH_ASSOC));
+    exit;
+}
 if ($argv[1] === 'inventory_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];

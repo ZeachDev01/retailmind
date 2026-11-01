@@ -42,6 +42,7 @@ try {
         $id = $seed($status, 1);
         $pdo->exec("INSERT INTO password_reset_tokens (user_id,token_hash,expires_at) VALUES ($id, 'token_$id', DATE_ADD(NOW(), INTERVAL 1 HOUR))");
         $pdo->exec("INSERT INTO notification_preferences (user_id) VALUES ($id)");
+        $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status) VALUES ($id,'admin','skipped')");
         $pdo->exec("INSERT INTO notifications (user_id,title,message,type) VALUES ($id,'Notice','Disposable','system')");
         $pdo->exec("INSERT INTO attention_states (user_id,attention_key,fingerprint,first_detected_at,last_detected_at) VALUES ($id,'test','test',NOW(),NOW())");
         $denied(fn() => $service->delete(1, 'admin', $id), 'Confirm');
@@ -49,7 +50,7 @@ try {
         $service->delete(1, 'admin', $id, true);
         try { $service->get($id); throw new RuntimeException('Deleted account still exists'); }
         catch (InvalidArgumentException $e) { $assert($e->getMessage() === 'User not found.', 'Account cannot be retrieved after deletion'); }
-        foreach (['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states'] as $table) {
+        foreach (['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states', 'workspace_guidance'] as $table) {
             $assert((int)$pdo->query("SELECT COUNT(*) FROM $table WHERE user_id = $id")->fetchColumn() === 0, "$table removed atomically");
         }
         $audit = $pdo->query("SELECT * FROM activity_log WHERE record_id = $id AND action = 'User permanently deleted'")->fetch(PDO::FETCH_ASSOC);

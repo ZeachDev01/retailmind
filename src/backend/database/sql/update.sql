@@ -1777,3 +1777,13 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE t
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE IF NOT EXISTS `workspace_guidance` (
+  `user_id` INT NOT NULL,
+  `workspace` VARCHAR(30) NOT NULL,
+  `status` ENUM('skipped','deferred','completed') NOT NULL,
+  PRIMARY KEY (`user_id`, `workspace`),
+  CONSTRAINT `fk_workspace_guidance_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_workspace_guidance','Remember optional guidance per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);

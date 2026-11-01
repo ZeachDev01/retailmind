@@ -398,6 +398,11 @@ $GLOBALS['rm_navigation_shell'] = [
                     <?php endif; ?>
                 </div>
             </details>
+            <?php if (in_array($role, ['admin', 'inventory_manager'], true)): ?>
+            <a href="<?= sidebar_e(app_url('components/auth/help.php')) ?>">
+                <?= sidebar_icon('disclaimer', 'bi-question-circle') ?><span>Help</span>
+            </a>
+            <?php endif; ?>
             <a href="<?= sidebar_e(app_url('components/auth/logout.php')) ?>" class="sidebar-account-logout">
                 <?= sidebar_icon('external', 'bi-box-arrow-right') ?>
                 <span>Logout</span>
@@ -595,4 +600,11 @@ cartWorkspace.bindNavigation();
     });
 </script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sw-register.js'), ENT_QUOTES, 'UTF-8') ?>" data-sw="<?= htmlspecialchars(app_url('sw.js'), ENT_QUOTES, 'UTF-8') ?>" data-scope="<?= htmlspecialchars(app_url('/'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
+<?php if (in_array($role, ['admin', 'inventory_manager'], true)): ?>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/workspace-guidance.css') . '?v=' . filemtime(__DIR__ . '/../assets/css/workspace-guidance.css')) ?>">
+<?php endif; ?>
 <!--rm-shell-end-->
+
+<?php if (in_array($role, ['admin', 'inventory_manager'], true)): ?>
+<?php include __DIR__ . '/auth/workspace_guidance.php'; ?>
+<?php endif; ?>

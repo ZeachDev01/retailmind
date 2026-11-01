@@ -14,7 +14,7 @@ use Throwable;
 final class UserLifecycleService
 {
     public const DELETION_HISTORY_MESSAGE = 'This account has retained business or audit history and cannot be permanently deleted. Disable it instead where permitted.';
-    private const DISPOSABLE_USER_TABLES = ['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states'];
+    private const DISPOSABLE_USER_TABLES = ['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states', 'workspace_guidance'];
     private ?array $identityReferences = null;
 
     public function __construct(
