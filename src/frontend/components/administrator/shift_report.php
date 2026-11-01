@@ -166,9 +166,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
 <main class="main-content">
     <header class="page-heading shift-page-header">
         <div>
+            <p class="shift-eyebrow">Store reports / Cash management</p>
             <h1>Cashier Shift Report</h1>
-            <p class="shift-page-subtitle">Drawer counts, cash variances, and shift audit totals.</p>
+            <p class="shift-page-subtitle">Track shift performance. Reconcile every drawer.</p>
         </div>
+        <a href="#shift-filters" class="btn btn-secondary shift-period-link"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>Report filters</a>
         <?php if ($targetedShift !== null): ?>
             <a href="<?= shift_report_e($clearShiftUrl) ?>" class="btn btn-secondary">All shifts</a>
         <?php endif; ?>
@@ -181,12 +183,12 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Shifts</span>
             <strong class="shift-kpi-value"><?= $shiftRowsCount ?></strong>
-            <span class="shift-kpi-meta"><?= $openShiftsCount > 0 ? $openShiftsCount . ' open' : count($report['rows']) . ' total records' ?></span>
+            <span class="shift-kpi-meta"><?= $openShiftsCount ?> currently open</span>
         </div>
         <div class="shift-kpi-card <?= $needsReviewCount > 0 ? 'shift-kpi-card--warning' : '' ?>">
             <span class="shift-kpi-label">Needs Review</span>
             <strong class="shift-kpi-value"><?= $needsReviewCount ?></strong>
-            <span class="shift-kpi-meta"><?= $needsReviewCount > 0 ? 'Action required' : 'All resolved' ?></span>
+            <span class="shift-kpi-meta"><?= $needsReviewCount > 0 ? 'Unresolved cash variances' : 'No pending variance reviews' ?></span>
         </div>
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Sales</span>
@@ -315,9 +317,6 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                             <p><strong>Explanation:</strong> <?= shift_report_e($targetedShift['review_notes']) ?></p>
                             <p><strong>Remaining Shortage:</strong> ₱<?= shift_report_e(number_format((float)($targetedShift['review_shortage'] ?? 0), 2)) ?></p>
                         </div>
-                            <p><strong>Explanation:</strong> <?= shift_report_e($targetedShift['review_notes']) ?></p>
-                            <p><strong>Remaining Shortage:</strong> ₱<?= shift_report_e(number_format((float)($targetedShift['review_shortage'] ?? 0), 2)) ?></p>
-                        </div>
                         <details class="shift-reopen-disclosure">
                             <summary class="btn btn-secondary">Reopen review</summary>
                             <form method="post" class="shift-reopen-form">
@@ -354,9 +353,12 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         </section>
     <?php endif; ?>
 
-    <section class="dashboard-section report-filters" aria-label="Filter shifts">
+    <section id="shift-filters" class="dashboard-section report-filters" aria-label="Filter shifts">
         <div class="section-header shift-filter-header">
-            <h2>Filter Shifts</h2>
+            <div>
+                <h2>Filter shifts</h2>
+                <p class="shift-section-note">Choose a period, cashier, or register to narrow your report.</p>
+            </div>
             <?php if ($hasActiveFilters): ?>
                 <a href="shift_report.php" class="btn btn-secondary">Reset filters</a>
             <?php endif; ?>
@@ -403,11 +405,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         </form>
     </section>
 
-    <section class="dashboard-section u-mt-15">
+    <section class="dashboard-section shift-results u-mt-15" aria-labelledby="shift-records-heading">
         <div class="section-header shift-results-header">
             <div>
-                <h2>Shift Records (<?= count($report['rows']) ?>)</h2>
-                <p class="shift-section-note">Select <strong>Review</strong> to audit variances. Open <strong>Breakdown</strong> for payment methods.</p>
+                <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= count($report['rows']) ?></span></h2>
+                <p class="shift-section-note">Review cash variances or explore each shift’s payment breakdown.</p>
             </div>
             <form method="post" class="report-actions shift-export-form">
                 <?= csrf_field() ?>
@@ -415,7 +417,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                 <?php foreach ($filters as $name => $value): ?>
                     <input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>">
                 <?php endforeach; ?>
-                <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>>Export CSV (31 cols)</button>
+                <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Export CSV</button>
             </form>
         </div>
 
@@ -434,7 +436,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($report['rows'] as $row): ?>
+                    <?php foreach ($report['rows'] as $rowIndex => $row): ?>
                         <?php
                             $rowShiftId = $row['Shift ID'] ?? '';
                             $isShiftRow = $rowShiftId !== '';
@@ -453,7 +455,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                             ]);
                         ?>
                         <tr class="<?= $isSelectedRow ? 'is-selected-shift' : '' ?> <?= $rowNeedsReview ? 'needs-review-row' : '' ?>">
-                            <td>
+                            <td data-label="Shift / Date">
                                 <?php if ($isShiftRow): ?>
                                     <strong class="shift-id-pill">#<?= (int)$rowShiftId ?></strong>
                                 <?php else: ?>
@@ -461,11 +463,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                 <?php endif; ?>
                                 <div class="cell-sub"><?= shift_report_e($row['Date']) ?></div>
                             </td>
-                            <td>
+                            <td data-label="Cashier &amp; Register">
                                 <strong><?= shift_report_e($row['Cashier']) ?></strong>
                                 <div class="cell-sub"><?= shift_report_e($row['Register']) ?></div>
                             </td>
-                            <td>
+                            <td data-label="Status">
                                 <?php if ($rowNeedsReview): ?>
                                     <span class="badge badge-warning">Needs review</span>
                                 <?php elseif ($rowReviewed): ?>
@@ -478,22 +480,22 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                     <span class="badge badge-neutral">Legacy</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="num-col">
+                            <td class="num-col" data-label="Total sales">
                                 <strong><?= shift_report_money($row['Total Sales']) ?></strong>
                                 <div class="cell-sub"><?= (int)($row['Sale Count'] ?? 0) ?> sales</div>
                             </td>
-                            <td class="num-col">
+                            <td class="num-col" data-label="Refunds">
                                 <?= (float)($row['Total Refunds'] ?? 0) > 0 ? shift_report_money($row['Total Refunds']) : '<span class="u-text-muted">₱0.00</span>' ?>
                             </td>
-                            <td class="num-col">
+                            <td class="num-col" data-label="Drawer cash">
                                 <?php if ($isShiftRow): ?>
-                                    <div>Exp: <?= shift_report_money($row['Expected Cash']) ?></div>
-                                    <div class="cell-sub">Cnt: <?= $row['Counted Cash'] !== '' ? shift_report_money($row['Counted Cash']) : 'Open' ?></div>
+                                    <div>Expected <?= shift_report_money($row['Expected Cash']) ?></div>
+                                    <div class="cell-sub">Counted <?= $row['Counted Cash'] !== '' ? shift_report_money($row['Counted Cash']) : 'Pending' ?></div>
                                 <?php else: ?>
                                     <span class="u-text-muted">—</span>
                                 <?php endif; ?>
                             </td>
-                            <td class="num-col">
+                            <td class="num-col" data-label="Variance">
                                 <?php if ($rowVarFloat === null): ?>
                                     <span class="u-text-muted">—</span>
                                 <?php elseif (abs($rowVarFloat) < 0.005): ?>
@@ -513,9 +515,15 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                             <?= $rowNeedsReview ? 'Review' : 'Inspect' ?>
                                         </a>
                                     <?php endif; ?>
-                                    <details class="shift-row-breakdown">
-                                        <summary class="btn btn-secondary" aria-label="Breakdown for <?= $isShiftRow ? 'Shift #' . (int)$rowShiftId : shift_report_e($row['Record'] . ' on ' . $row['Date']) ?>">Breakdown</summary>
-                                        <div class="shift-breakdown-popover">
+                                    <button type="button" class="btn btn-secondary" popovertarget="shift-breakdown-<?= (int)$rowIndex ?>" aria-label="Breakdown for <?= $isShiftRow ? 'Shift #' . (int)$rowShiftId : shift_report_e($row['Record'] . ' on ' . $row['Date']) ?>">Breakdown</button>
+                                        <div popover class="shift-breakdown-popover" id="shift-breakdown-<?= (int)$rowIndex ?>" role="region" aria-labelledby="shift-breakdown-title-<?= (int)$rowIndex ?>">
+                                            <div class="shift-breakdown-header">
+                                                <div>
+                                                    <h3 id="shift-breakdown-title-<?= (int)$rowIndex ?>"><?= $isShiftRow ? 'Shift #' . (int)$rowShiftId : shift_report_e($row['Record']) ?> breakdown</h3>
+                                                    <p><?= shift_report_e($row['Cashier']) ?> · <?= shift_report_e($row['Date']) ?></p>
+                                                </div>
+                                                <button type="button" class="btn btn-secondary" popovertarget="shift-breakdown-<?= (int)$rowIndex ?>" popovertargetaction="hide">Close</button>
+                                            </div>
                                             <div class="shift-breakdown-grid">
                                                 <div>
                                                     <h4>Sales by Method</h4>
@@ -548,30 +556,36 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                                 <?php endif; ?>
                                             </div>
                                         </div>
-                                    </details>
                                 </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (!$report['rows']): ?>
-                        <tr><td colspan="8" class="u-text-muted">No records match these filters.</td></tr>
+                        <tr><td colspan="8" class="shift-empty">
+                            <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>
+                            <h3>No shifts to show</h3>
+                            <p>No records match this report. Try another date range or clear your filters.</p>
+                            <a href="#shift-filters" class="btn btn-secondary">Adjust filters</a>
+                        </td></tr>
                     <?php endif; ?>
+                </tbody>
                     <?php if ($report['rows']): ?>
+                    <tfoot>
                         <tr class="shift-totals-row">
                             <th scope="row" colspan="3">TOTAL (<?= count($report['rows']) ?> records)</th>
-                            <td class="num-col">
+                            <td class="num-col" data-label="Total sales">
                                 <strong><?= shift_report_money($report['totals']['Total Sales'] ?? 0) ?></strong>
                                 <div class="cell-sub"><?= (int)($report['totals']['Sale Count'] ?? 0) ?> sales</div>
                             </td>
-                            <td class="num-col"><?= shift_report_money($report['totals']['Total Refunds'] ?? 0) ?></td>
+                            <td class="num-col" data-label="Refunds"><?= shift_report_money($report['totals']['Total Refunds'] ?? 0) ?></td>
                             <td colspan="3" class="cell-sub">
                                 Cash In: <?= shift_report_money($report['totals']['Cash In'] ?? 0) ?> ·
                                 Cash Out: <?= shift_report_money($report['totals']['Cash Out'] ?? 0) ?> ·
                                 Safe Drops: <?= shift_report_money($report['totals']['Safe Drops'] ?? 0) ?>
                             </td>
                         </tr>
+                    </tfoot>
                     <?php endif; ?>
-                </tbody>
             </table>
         </div>
     </section>
