@@ -25,6 +25,9 @@ def normalize_history(df):
     versioned = "available_date" in df
     if versioned:
         columns.append("available_date")
+    for extra in ("price", "is_on_promotion", "out_of_stock"):
+        if extra in df:
+            columns.append(extra)
     data = df.rename(columns={
         "Date": "date", "Product ID": "product_id", "Units Sold": "units_sold",
     })[columns].copy()

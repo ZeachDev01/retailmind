@@ -50,6 +50,29 @@ class DemandHistoryService
             
             // Check if the requested date is entirely in the future relative to the cutoff
             if ($startOfDay > $cutoff) {
+                $futureDrivers = [];
+                try {
+                    $futureDrivers = $this->driverService->getEffectiveDrivers($pdo, $productId, $dateStr, $cutoff);
+                } catch (Throwable) {
+                }
+                $futurePrice = null;
+                try {
+                    $futurePrice = $this->driverService->getEffectivePrice($pdo, $productId, $dateStr, $cutoff);
+                } catch (Throwable) {
+                }
+                $futurePromo = null;
+                try {
+                    $futurePromo = $this->driverService->resolveIsOnPromotion(
+                        $pdo,
+                        $productId,
+                        $dateStr,
+                        $cutoff,
+                        $futureDrivers,
+                        $calStatus,
+                        false
+                    );
+                } catch (Throwable) {
+                }
                 $results[] = [
                     'date' => $dateStr,
                     'valid_sales_units' => 0,
@@ -60,8 +83,11 @@ class DemandHistoryService
                     'end_of_day_stock' => 0,
                     'stock_evidence_known' => false,
                     'classification' => 'future_unobserved',
-                    'scheduled_drivers' => [],
-                    'has_scheduled_driver' => false
+                    'scheduled_drivers' => $futureDrivers,
+                    'has_scheduled_driver' => !empty($futureDrivers),
+                    'price' => $futurePrice,
+                    'is_on_promotion' => $futurePromo,
+                    'out_of_stock' => null,
                 ];
                 $current->modify('+1 day');
                 continue;
@@ -168,6 +194,32 @@ class DemandHistoryService
                 }
             }
             
+            // 6. Dated Price, Promotion, and Stockout Evidence
+            $price = null;
+            try {
+                $price = $this->driverService->getEffectivePrice($pdo, $productId, $dateStr, $effectiveEnd);
+            } catch (Throwable) {
+            }
+
+            $isOnPromotion = null;
+            try {
+                $isOnPromotion = $this->driverService->resolveIsOnPromotion(
+                    $pdo,
+                    $productId,
+                    $dateStr,
+                    $effectiveEnd,
+                    $effectiveDrivers,
+                    $calStatus,
+                    $imported !== false
+                );
+            } catch (Throwable) {
+            }
+
+            $outOfStock = null;
+            if ($hasStockEvidence) {
+                $outOfStock = ($endOfDayStock <= 0);
+            }
+
             $results[] = [
                 'date' => $dateStr,
                 'valid_sales_units' => $validSalesUnits,
@@ -179,7 +231,10 @@ class DemandHistoryService
                 'stock_evidence_known' => $hasStockEvidence,
                 'classification' => $classification,
                 'scheduled_drivers' => $effectiveDrivers,
-                'has_scheduled_driver' => !empty($effectiveDrivers)
+                'has_scheduled_driver' => !empty($effectiveDrivers),
+                'price' => $price,
+                'is_on_promotion' => $isOnPromotion,
+                'out_of_stock' => $outOfStock,
             ];
             
             $current->modify('+1 day');
@@ -212,6 +267,17 @@ class DemandHistoryService
         foreach ($calendar->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $calendarRevisions[$row['calendar_date']][] = $row['available_date'];
         }
+        $driverRevisions = [];
+        try {
+            $driverStmt = $pdo->prepare('SELECT product_id, effective_date, DATE(scheduled_at) AS available_date'
+                . ' FROM scheduled_demand_drivers'
+                . ' WHERE scheduled_at <= ? AND DATE(scheduled_at) > effective_date');
+            $driverStmt->execute([$throughDate . ' 23:59:59']);
+            foreach ($driverStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $driverRevisions[(int)$row['product_id']][$row['effective_date']][] = $row['available_date'];
+            }
+        } catch (Throwable) {
+        }
         $stmt = $pdo->prepare('SELECT product_id, MIN(sale_date) AS first_date FROM (
             SELECT si.product_id, DATE(s.sale_date) AS sale_date
             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE s.sale_date <= ?
@@ -225,13 +291,25 @@ class DemandHistoryService
             $end = new DateTime($throughDate, $this->timezone);
             while ($day <= $end) {
                 $date = $day->format('Y-m-d');
-                $cutoffs = array_unique(array_merge([$date], $revisions[$product['product_id']][$date] ?? [], $calendarRevisions[$date] ?? []));
+                $cutoffs = array_unique(array_merge(
+                    [$date],
+                    $revisions[$product['product_id']][$date] ?? [],
+                    $calendarRevisions[$date] ?? [],
+                    $driverRevisions[(int)$product['product_id']][$date] ?? []
+                ));
                 sort($cutoffs);
                 foreach ($cutoffs as $cutoff) {
                     $evidence = $this->getDailyEvidence($pdo, (int)$product['product_id'], $date, $date, $cutoff . ' 23:59:59')[0];
                     $known = in_array($evidence['classification'], ['valid_demand', 'genuine_zero'], true);
-                    $history[] = ['date' => $date, 'product_id' => (int)$product['product_id'],
-                        'units_sold' => $known ? $evidence['valid_sales_units'] : null, 'available_date' => $cutoff];
+                    $history[] = [
+                        'date' => $date,
+                        'product_id' => (int)$product['product_id'],
+                        'units_sold' => $known ? $evidence['valid_sales_units'] : null,
+                        'available_date' => $cutoff,
+                        'price' => $evidence['price'],
+                        'is_on_promotion' => $evidence['is_on_promotion'],
+                        'out_of_stock' => $evidence['out_of_stock'],
+                    ];
                 }
                 $day->modify('+1 day');
             }
