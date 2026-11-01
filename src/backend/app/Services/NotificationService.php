@@ -83,24 +83,28 @@ class NotificationService
 
     public function checkAndNotifyForecasts(): void
     {
-        $spikes = $this->pdo->query(
-            "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
-                    COALESCE(hist.avg_weekly, 0) AS avg_weekly
-             FROM stock_predictions sp
-             JOIN products p ON p.product_id = sp.product_id
-             LEFT JOIN (
-                 SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
-                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-                 WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 28 DAY)
-                 GROUP BY si.product_id
-             ) hist ON hist.product_id = sp.product_id
-             WHERE sp.prediction_id = (
-                 SELECT sp2.prediction_id FROM stock_predictions sp2
-                 WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
-             )
-               AND hist.avg_weekly > 0
-               AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
-        )->fetchAll(PDO::FETCH_ASSOC);
+        $spikes = [];
+        try {
+            $twentyEightDaysAgo = $this->clock->now()->modify('-28 days')->format('Y-m-d H:i:s');
+            $spikes = $this->pdo->query(
+                "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
+                        COALESCE(hist.avg_weekly, 0) AS avg_weekly
+                 FROM stock_predictions sp
+                 JOIN products p ON p.product_id = sp.product_id
+                 LEFT JOIN (
+                     SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
+                     FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                     WHERE s.sale_date >= '{$twentyEightDaysAgo}'
+                     GROUP BY si.product_id
+                 ) hist ON hist.product_id = sp.product_id
+                 WHERE sp.prediction_id = (
+                     SELECT sp2.prediction_id FROM stock_predictions sp2
+                     WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
+                 )
+                    AND hist.avg_weekly > 0
+                    AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {}
         $demandItems = [];
         foreach ($spikes as $spike) {
             $demandItems[] = new \App\Attention\AttentionItem(
@@ -117,9 +121,13 @@ class NotificationService
             $conditionNotifications->synchronize((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
         }
-        $failedRun = $this->pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs
-            WHERE status = 'failed' AND started_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
-            ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        $failedRun = null;
+        try {
+            $oneDayAgo = $this->clock->now()->modify('-1 day')->format('Y-m-d H:i:s');
+            $failedRun = $this->pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs
+                WHERE status = 'failed' AND started_at >= '{$oneDayAgo}'
+                ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {}
         $trainingItems = $failedRun ? [new \App\Attention\AttentionItem(
             'platform-training.failure.' . $failedRun['training_run_id'], 'critical', 'ml_health',
             'Random Forest training failure',
@@ -131,6 +139,15 @@ class NotificationService
         foreach ($this->recipients('super_admin') as $recipient) {
             $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
+        }
+        $storeSignals = (new \App\Attention\DatabaseAttentionSignalSource($this->pdo, $this->clock))->store();
+        $adminForecastingItems = array_values(array_filter(
+            (new \App\Attention\AttentionRuleService(new \App\Attention\AttentionSettingsService($this->pdo, $this->clock), $this->clock))->evaluate('admin', $storeSignals),
+            static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
+        ));
+        foreach ($this->recipients('admin') as $recipient) {
+            $conditionNotifications->synchronize((int)$recipient['user_id'], $adminForecastingItems,
+                (bool)($recipient['notify_inapp'] ?? true), 'store.forecasting.');
         }
     }
 

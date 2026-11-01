@@ -91,6 +91,7 @@ final class DatabaseAttentionSignalSource
             "SELECT COUNT(*) FROM fiscal_periods WHERE status = 'open' AND end_date < ?",
             [$now->format('Y-m-d')]
         );
+        $forecast = $this->forecastingSignals();
         $inventoryHours = $this->ageHours($inventory['oldest_at'] ?? null);
         $fiscalDays = isset($fiscal['next_end'])
             ? max(0, (int)$now->setTime(0, 0)->diff(new \DateTimeImmutable((string)$fiscal['next_end']))->format('%a'))
@@ -106,6 +107,90 @@ final class DatabaseAttentionSignalSource
             'oldest_unresolved_inventory_hours' => $this->signal($inventoryHours),
             'fiscal_period_days_remaining' => $this->signal($fiscalDays),
             'fiscal_period_overdue_count' => $this->signal($fiscalOverdue, (int)$fiscalOverdue),
+            'forecasting_candidate_review' => $forecast['forecasting_candidate_review'],
+            'forecasting_failure' => $forecast['forecasting_failure'],
+        ];
+    }
+
+    private function forecastingSignals(): array
+    {
+        $candidateValue = 0;
+        $candidateExplanation = null;
+        $candidateDetectedAt = null;
+
+        $failureValue = 0;
+        $failureExplanation = null;
+        $failureDetectedAt = null;
+
+        try {
+            $candidateRun = $this->row(
+                "SELECT model_version, completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1"
+            );
+            $candidateVersion = $candidateRun['model_version'] ?? null;
+            if (!$candidateVersion) {
+                $candidateVersion = $this->scalar(
+                    "SELECT model_version FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 1"
+                );
+            }
+            if ($candidateVersion) {
+                $lower = strtolower((string)$candidateVersion);
+                $isDemo = str_contains($lower, 'demo') || str_contains($lower, 'kaggle');
+                $appRow = $this->row("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
+                $approved = (string)($appRow['setting_value'] ?? '');
+                $opRow = $this->row("SELECT setting_value FROM platform_settings WHERE setting_key = ?", ["ml_review_operational_{$candidateVersion}"]);
+                $opReviewRaw = $opRow['setting_value'] ?? null;
+                $opAccepted = false;
+                if ($opReviewRaw) {
+                    $opData = json_decode((string)$opReviewRaw, true);
+                    if (($opData['decision'] ?? '') === 'accepted') {
+                        $opAccepted = true;
+                    }
+                }
+                if (!$isDemo && $approved !== (string)$candidateVersion && !$opAccepted) {
+                    $evalService = new \App\Forecasting\CandidateEvaluationService($this->pdo);
+                    $quality = $evalService->evaluateCandidateQuality((string)$candidateVersion);
+                    if (!empty($quality['passed'])) {
+                        $candidateValue = 1;
+                        $candidateExplanation = "Candidate model version {$candidateVersion} has passed quality gates and is awaiting local Administrator review.";
+                        $candidateDetectedAt = $candidateRun['completed_at'] ?? $this->now();
+                    }
+                }
+            }
+        } catch (\Throwable) {}
+
+        try {
+            $latestJob = $this->row(
+                "SELECT job_id, status, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1"
+            );
+            if ($latestJob && ($latestJob['status'] ?? '') === 'failed') {
+                $failureValue = 1;
+                $msg = !empty($latestJob['operator_message'])
+                    ? (string)$latestJob['operator_message']
+                    : 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.';
+                $failureExplanation = $msg;
+                $failureDetectedAt = $latestJob['completed_at'] ?? $latestJob['queued_at'] ?? $this->now();
+            }
+        } catch (\Throwable) {}
+
+        $candSignal = $this->signal($candidateValue, $candidateValue);
+        if ($candidateExplanation !== null) {
+            $candSignal['explanation'] = $candidateExplanation;
+        }
+        if ($candidateDetectedAt !== null) {
+            $candSignal['detected_at'] = $candidateDetectedAt;
+        }
+
+        $failSignal = $this->signal($failureValue, $failureValue);
+        if ($failureExplanation !== null) {
+            $failSignal['explanation'] = $failureExplanation;
+        }
+        if ($failureDetectedAt !== null) {
+            $failSignal['detected_at'] = $failureDetectedAt;
+        }
+
+        return [
+            'forecasting_candidate_review' => $candSignal,
+            'forecasting_failure' => $failSignal,
         ];
     }
 
