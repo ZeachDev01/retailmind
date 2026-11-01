@@ -64,6 +64,8 @@ function render(variant) {
             }
             await page.addScriptTag({path: path.join(root, 'src/frontend/assets/js/ui.js')});
             await page.evaluate(() => window.RetailMindUI.initPageContent());
+            assert.equal(await page.locator('.shift-results #shift-filters form[method="get"]').count(), 1, 'Filters belong to records panel');
+            assert.equal(await page.locator('.shift-results .shift-summary-table').count(), 1, 'Records share the filters panel');
             for (const theme of ['light', 'dark']) {
                 await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
                 for (const width of [1440, 1024, 768, 375, 667]) {
@@ -88,6 +90,10 @@ function render(variant) {
                 }
             }
             assert.equal(await page.locator('form input[name="action"][value="export_csv"]').count(), 1, 'CSV action preserved');
+            await page.emulateMedia({media: 'print'});
+            assert.equal(await page.locator('#shift-filters').isVisible(), false, 'Print hides filters');
+            assert(await page.locator('.shift-summary-table').isVisible(), 'Print preserves records');
+            await page.emulateMedia({media: 'screen'});
             if (variant === 'empty') assert(await page.getByRole('link', {name: 'Adjust filters'}).isVisible());
             if (variant === 'review') {
                 assert(await page.getByRole('button', {name: 'Mark reviewed', exact: true}).isVisible());

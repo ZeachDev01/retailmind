@@ -353,17 +353,24 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         </section>
     <?php endif; ?>
 
-    <section id="shift-filters" class="dashboard-section report-filters" aria-label="Filter shifts">
-        <div class="section-header shift-filter-header">
+    <section class="dashboard-section shift-results" aria-labelledby="shift-records-heading">
+        <div class="section-header shift-results-header">
             <div>
-                <h2>Filter shifts</h2>
-                <p class="shift-section-note">Choose a period, cashier, or register to narrow your report.</p>
+                <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= count($report['rows']) ?></span></h2>
+                <p class="shift-section-note">Review cash variances or explore each shift’s payment breakdown.</p>
             </div>
-            <?php if ($hasActiveFilters): ?>
-                <a href="shift_report.php" class="btn btn-secondary">Reset filters</a>
-            <?php endif; ?>
+            <form method="post" class="report-actions shift-export-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="export_csv">
+                <?php foreach ($filters as $name => $value): ?>
+                    <input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>">
+                <?php endforeach; ?>
+                <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Export CSV</button>
+            </form>
         </div>
-        <form method="get" class="report-filter-grid">
+
+        <div id="shift-filters" class="report-filters">
+        <form method="get" class="report-filter-grid" aria-label="Filter shifts">
             <div class="form-group">
                 <label for="from">From Date</label>
                 <input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" required>
@@ -401,24 +408,13 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     <?php endforeach; ?>
                 </select>
             </div>
-            <button type="submit" class="btn">Apply filters</button>
-        </form>
-    </section>
-
-    <section class="dashboard-section shift-results u-mt-15" aria-labelledby="shift-records-heading">
-        <div class="section-header shift-results-header">
-            <div>
-                <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= count($report['rows']) ?></span></h2>
-                <p class="shift-section-note">Review cash variances or explore each shift’s payment breakdown.</p>
+            <div class="shift-filter-actions">
+                <button type="submit" class="btn">Apply filters</button>
+                <?php if ($hasActiveFilters): ?>
+                    <a href="shift_report.php" class="btn btn-secondary">Reset filters</a>
+                <?php endif; ?>
             </div>
-            <form method="post" class="report-actions shift-export-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="export_csv">
-                <?php foreach ($filters as $name => $value): ?>
-                    <input type="hidden" name="<?= shift_report_e($name) ?>" value="<?= shift_report_e($value) ?>">
-                <?php endforeach; ?>
-                <button class="btn btn-secondary" type="submit" <?= $error !== '' ? 'disabled' : '' ?>><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Export CSV</button>
-            </form>
+        </form>
         </div>
 
         <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0">
