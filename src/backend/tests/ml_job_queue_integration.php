@@ -20,6 +20,8 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 
 $assert(Schema::tableExists($pdo, 'ml_jobs'), 'ml_jobs table is missing');
 $assert(Schema::columnExists($pdo, 'ml_jobs', 'lease_expires_at'), 'ml_jobs.lease_expires_at is missing');
+$assert(Schema::columnExists($pdo, 'ml_jobs', 'evidence_cutoff'), 'ml_jobs.evidence_cutoff is missing');
+$assert(Schema::columnExists($pdo, 'ml_jobs', 'model_version'), 'ml_jobs.model_version is missing');
 
 $service = new MlJobService($pdo);
 
@@ -43,9 +45,9 @@ $pdo->exec("TRUNCATE TABLE activity_log");
 // We need a dummy user with ID=1 to satisfy foreign keys
 $pdo->exec("INSERT IGNORE INTO users (user_id, username, password_hash, full_name, role_id) VALUES (1, 'test', 'hash', 'Test User', 1)");
 
-
-// Test Enqueue
-$jobId = $service->enqueue('forecast_generation', 1, 'super_admin');
+// Test Enqueue with logical evidence cutoff and model version
+$cutoffDate = date('Y-m-d', strtotime('-1 day'));
+$jobId = $service->enqueue('forecast_generation', 1, 'super_admin', '127.0.0.1', $cutoffDate, 'rf_prod_v1');
 $assert($jobId > 0, 'Job should be enqueued');
 
 $stmt = $pdo->query("SELECT * FROM activity_log WHERE record_id = $jobId");
@@ -55,6 +57,8 @@ $assert($log['action'] === 'Enqueued ML Job', 'Correct audit log action');
 
 $status = $service->getJobStatus($jobId);
 $assert($status['status'] === 'queued', 'Initial status should be queued');
+$assert($status['cutoff'] === $cutoffDate, 'Job status exposes evidence cutoff');
+$assert($status['model_version'] === 'rf_prod_v1', 'Job status exposes model version');
 
 // Python worker is tested via subprocess
 $dbName = getenv('DB_NAME') ?: 'retailmind_test';
@@ -95,7 +99,7 @@ if (is_resource($process)) {
 $status = $service->getJobStatus($jobId);
 $assert($status['status'] === 'succeeded', 'Worker should process job successfully. Stdout: ' . $stdout . ' Stderr: ' . $stderr);
 
-// Test lease expiry and retry
+// Test lease expiry and retry (under 3 attempts)
 $pdo->exec("INSERT INTO ml_jobs (trigger_type, status, requester_id, queued_at, lease_expires_at, attempts) VALUES ('model_retraining', 'running', 1, NOW(), DATE_SUB(NOW(), INTERVAL 1 HOUR), 1)");
 $jobId2 = (int)$pdo->lastInsertId();
 
@@ -110,6 +114,24 @@ if (is_resource($process)) {
 
 $status2 = $service->getJobStatus($jobId2);
 $assert($status2['status'] === 'succeeded', 'Worker should claim and process expired lease job');
+
+// Test lease expiry with attempts >= 3 failing permanently
+$pdo->exec("INSERT INTO ml_jobs (trigger_type, status, requester_id, queued_at, lease_expires_at, attempts) VALUES ('model_retraining', 'running', 1, NOW(), DATE_SUB(NOW(), INTERVAL 1 HOUR), 3)");
+$jobId3 = (int)$pdo->lastInsertId();
+
+$process = proc_open('python ' . escapeshellarg($workerPath) . ' --run-once', $descriptorSpec, $pipes, null, $env);
+if (is_resource($process)) {
+    stream_get_contents($pipes[1]);
+    fclose($pipes[0]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    proc_close($process);
+}
+
+$status3 = $service->getJobStatus($jobId3);
+$assert($status3['status'] === 'failed', 'Worker should fail expired lease job that reached 3 attempts');
+$assert($status3['diagnostic_reference'] === 'LEASE_TIMEOUT_EXHAUSTED', 'Diagnostic reference should be LEASE_TIMEOUT_EXHAUSTED');
+$assert($status3['attempts'] === 3, 'Attempts count should be preserved at 3');
 
 if (!empty($failures)) {
     echo "FAILURES:\n" . implode("\n", $failures) . "\n";

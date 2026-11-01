@@ -160,7 +160,7 @@ final class DatabaseAttentionSignalSource
 
         try {
             $latestJob = $this->row(
-                "SELECT job_id, status, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1"
+                "SELECT job_id, trigger_type, status, attempts, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type IN ('forecast_generation', 'model_retraining') ORDER BY job_id DESC LIMIT 1"
             );
             if ($latestJob && ($latestJob['status'] ?? '') === 'failed') {
                 $failureValue = 1;
@@ -169,6 +169,38 @@ final class DatabaseAttentionSignalSource
                     : 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.';
                 $failureExplanation = $msg;
                 $failureDetectedAt = $latestJob['completed_at'] ?? $latestJob['queued_at'] ?? $this->now();
+            }
+
+            // Check for persistent background inactivity (queued jobs older than 2 hours without worker pickup)
+            if ($failureValue === 0) {
+                $twoHoursAgo = (clone $this->clock->now())->modify('-2 hours')->format('Y-m-d H:i:s');
+                $stalledJob = $this->row(
+                    "SELECT job_id, trigger_type, queued_at FROM ml_jobs WHERE status = 'queued' AND queued_at <= ? ORDER BY job_id DESC LIMIT 1",
+                    [$twoHoursAgo]
+                );
+                if ($stalledJob) {
+                    $failureValue = 1;
+                    $failureExplanation = 'Forecasting background worker is inactive or stalled. Scheduled jobs are not being processed.';
+                    $failureDetectedAt = $stalledJob['queued_at'] ?? $this->now();
+                }
+            }
+
+            // Check for preserved local diagnostics during database outage
+            $logFile = dirname(__DIR__, 2) . '/storage/logs/forecasting_diagnostics.json';
+            if (file_exists($logFile) && $failureValue === 0) {
+                $content = @file_get_contents($logFile);
+                $diagEntries = json_decode((string)$content, true) ?: [];
+                if (!empty($diagEntries)) {
+                    $lastDiag = end($diagEntries);
+                    $diagTime = $lastDiag['timestamp'] ?? '';
+                    $latestSuccessRow = $this->row("SELECT completed_at FROM ml_jobs WHERE status = 'succeeded' ORDER BY job_id DESC LIMIT 1");
+                    $latestSuccessTime = $latestSuccessRow['completed_at'] ?? '';
+                    if ($diagTime > $latestSuccessTime) {
+                        $failureValue = 1;
+                        $failureExplanation = 'Forecasting outage recorded: ' . ($lastDiag['error'] ?? 'Local database outage');
+                        $failureDetectedAt = $diagTime;
+                    }
+                }
             }
         } catch (\Throwable) {}
 
