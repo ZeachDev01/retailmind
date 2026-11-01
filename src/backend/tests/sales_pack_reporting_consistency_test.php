@@ -541,7 +541,7 @@ $assert($quantityOnHand(1) === 25, 'Quoting pack availability changes no stock')
 
 $recommendations = array_column($replenishment->getRecommendations(), null, 'product_id');
 $assert($recommendations[1]['current_stock'] === 25, 'Replenishment keeps expired stock in the physical Base Unit total');
-$assert($recommendations[1]['basis'] === 'Stock rules', 'Replenishment still explains its stock-rule basis');
+$assert($recommendations[1]['basis'] === 'Stock-rule suggestion', 'Replenishment still explains its stock-rule basis');
 
 // -------------------------------------------------------------------------
 // 6. Oil pouches stay whole-pouch Base Units

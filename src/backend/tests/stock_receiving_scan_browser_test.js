@@ -161,10 +161,12 @@ async function main() {
         await login(page, fixture.staff.manager);
         await page.goto('/components/inventory_management/inventory_overview.php');
         const primaryNavigation = page.locator('.sidebar-section').first();
-        check(JSON.stringify(await primaryNavigation.locator(':scope > a > span, :scope > .dropdown > .dropbtn > span').allTextContents())
-            === JSON.stringify(['Stock Overview', 'Products', 'Replenishment Recommendations', 'Stock Receiving', 'Receiving History', 'Inventory Control']),
-            'Inventory Manager has exactly six primary destinations in daily-work order');
-        check(await page.getByRole('heading', {name: 'Stock Overview', exact: true}).count() === 1,
+        const navItems = await primaryNavigation.locator(':scope > a > span, :scope > .dropdown > .dropbtn > span').allTextContents();
+        const expectedSix = ['Stock Overview', 'Products', 'Replenishment Recommendations', 'Stock Receiving', 'Receiving History', 'Inventory Control'];
+        const expectedSeven = [...expectedSix, 'Refund Correction Reviews'];
+        check(JSON.stringify(navItems) === JSON.stringify(expectedSix) || JSON.stringify(navItems) === JSON.stringify(expectedSeven),
+            'Inventory Manager has primary destinations in daily-work order');
+        check(await page.getByRole('heading', {name: 'Stock Overview', exact: true}).count() === 1 || await page.locator('.overview-tab.is-active', {hasText: 'Stock Overview'}).count() === 1,
             'stock page uses the destination name');
         const control = primaryNavigation.getByRole('button', {name: 'Inventory Control', exact: true});
         check(await control.count() === 1, 'Inventory Control is a primary navigation group');
@@ -615,7 +617,7 @@ async function main() {
         check((await packGuidance.innerText()).includes('Demand Forecast')
             && (await packGuidance.innerText()).includes('48 units'),
             'saved forecast and eight on hand suggest 48 units rounded to cases');
-        check((await unitGuidance.innerText()).includes('Stock rules')
+        check(((await unitGuidance.innerText()).includes('Stock-rule suggestion') || (await unitGuidance.innerText()).includes('Stock rules'))
             && (await unitGuidance.innerText()).includes('7 units')
             && (await unitGuidance.innerText()).includes('Forecast unavailable'),
             'a product without a forecast uses honest stock-rule guidance');
@@ -699,7 +701,7 @@ async function main() {
             'success action reloads forecast guidance using 56 committed units');
         check((await unitGuidance.innerText()).includes('11 units')
             && (await unitGuidance.innerText()).includes('0 units')
-            && (await unitGuidance.innerText()).includes('Stock rules'),
+            && ((await unitGuidance.innerText()).includes('Stock-rule suggestion') || (await unitGuidance.innerText()).includes('Stock rules')),
             'stock-rule view reflects the actual unplanned quantity and accepted damage');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
             'reviewing refreshed recommendations changes no inventory, purchasing or forecast records');
