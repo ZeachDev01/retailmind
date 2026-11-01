@@ -136,15 +136,47 @@ def process_job(conn, job):
                 artifact_file.unlink(missing_ok=True)
             diag_ref = f"ERR-{uuid.uuid4().hex[:8]}"
             err_msg = str(e)
+            blocked_markers = [
+                'No approved forecasting model version configured',
+                'Demo/Store model artifacts cannot cross dataset boundaries',
+                'Model artifact belongs to another dataset',
+                'Model feature contract is obsolete',
+                'Model artifact version does not match',
+                'No active products have 140 consecutive usable days for training',
+                'No trained products have 28 consecutive observed days for generation',
+                'Invalid observation model version',
+                'Imported Demo history does not match',
+            ]
+            is_blocked = any(m.lower() in err_msg.lower() for m in blocked_markers)
+            attempts = job.get('attempts', 1)
             try:
-                cursor.execute("""
-                    UPDATE ml_jobs 
-                    SET status = 'failed', 
-                        completed_at = NOW(), 
-                        operator_message = 'Job encountered an error and could not complete.',
-                        diagnostic_reference = %s
-                    WHERE job_id = %s
-                """, (f"{err_msg} [{diag_ref}]", job_id))
+                if is_blocked:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = %s,
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"Prerequisite blocked: {err_msg}", f"BLOCKED:{err_msg} [{diag_ref}]", job_id))
+                elif attempts >= 3:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = 'Job failed: maximum retry attempts (3) exceeded.',
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"EXHAUSTED:{err_msg} [{diag_ref}]", job_id))
+                else:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = 'Job encountered a temporary error and will be retried on a later schedule tick.',
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"TRANSIENT:{err_msg} [{diag_ref}]", job_id))
                 conn.commit()
             except Exception:
                 pass
