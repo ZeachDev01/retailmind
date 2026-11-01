@@ -41,17 +41,65 @@ $adminWorkflows = [
     ],
 ];
 
-$inventoryGuidanceLinks = [
-    ['inventory_management/replenishment_queue.php', 'Review replenishment needs', 'Suggestions support your buying decisions; they do not place orders or change stock.'],
-    ['inventory_management/products.php', 'Set up Products', 'Use Add Product for details, counted opening stock, package sizes and stock rules.'],
-    ['inventory_management/inventory_overview.php', 'Monitor stock', 'Check availability, low stock and expiry risk.'],
-    ['report/stock_receiving.php', 'Record Stock Receiving', 'Record the quantities that actually arrived at the Store.'],
-    ['inventory_management/inventory_counts.php', 'Check inventory counts', 'Count stock and resolve differences through Inventory Control.'],
-    ['inventory_management/stock_issues.php', 'Review Stock Issues', 'Review reports and decide the permitted stock corrections.'],
+$inventoryWorkflows = [
+    'replenishment_queue.php' => [
+        'title' => 'Replenishment recommendations',
+        'path' => 'inventory_management/replenishment_queue.php',
+        'link_label' => 'Review replenishment needs',
+        'summary' => 'Start daily buying review: buying quantities, basis and reasons. Forecast details are optional supporting information.',
+        'guidance' => 'Start your daily buying review here. Suggestions show recommended buying quantities, basis, and reasons to focus on products needing attention. Without an approved forecast, suggestions use stock rules; demand forecasts and forecast details remain optional supporting information. Staff decide what to buy based on Store knowledge and supplier availability; reviewing recommendations creates no purchase or inventory change. Record actual arrivals in Stock Receiving.',
+    ],
+    'products.php' => [
+        'title' => 'Product setup',
+        'path' => 'inventory_management/products.php',
+        'link_label' => 'Set up Products',
+        'summary' => 'Use Add Product for details, counted opening stock, package sizes and stock rules.',
+        'guidance' => 'Use the existing Add Product form to define product details, physically counted opening stock, package unit sizes, and replenishment stock rules (reorder level, safety stock, MOQ). Enter values based on Store knowledge rather than relying on defaults. There is one product setup procedure; no per-product onboarding confirmations are required. Confirm setup in the checklist once initial catalog and opening stock are ready.',
+    ],
+    'inventory_overview.php' => [
+        'title' => 'Stock monitoring',
+        'path' => 'inventory_management/inventory_overview.php',
+        'link_label' => 'Monitor stock',
+        'summary' => 'Check availability, low stock and expiry risk across the Store catalog.',
+        'guidance' => 'Monitor inventory levels, stock availability, out-of-stock items, low stock warnings, and expiry risk across the Store catalog. Use metric cards to filter products requiring attention and jump directly to stock receiving or replenishment.',
+    ],
+    'stock_receiving.php' => [
+        'title' => 'Stock Receiving',
+        'path' => 'report/stock_receiving.php',
+        'link_label' => 'Record Stock Receiving',
+        'summary' => 'Record the actual goods and quantities that arrived at the Store.',
+        'guidance' => 'Record goods and quantities that physically arrived at the Store. While replenishment suggestions guide purchasing decisions based on Store knowledge and availability, Stock Receiving records actual receipts and commits stock to inventory. Stock receiving does not establish customer demand history for forecasting.',
+    ],
+    'inventory_counts.php' => [
+        'title' => 'Inventory counts',
+        'path' => 'inventory_management/inventory_counts.php',
+        'link_label' => 'Check inventory counts',
+        'summary' => 'Count stock and resolve differences through Inventory Control.',
+        'guidance' => 'Conduct periodic physical inventory counts to verify on-hand quantities against recorded stock. Record counted items and resolve discrepancies through Inventory Control count adjustments.',
+    ],
+    'stock_issues.php' => [
+        'title' => 'Stock Issue review',
+        'path' => 'inventory_management/stock_issues.php',
+        'link_label' => 'Review Stock Issues',
+        'summary' => 'Review damage, loss or shrinkage reports and decide permitted stock corrections.',
+        'guidance' => 'Review reported stock issues including damage, expired goods, loss, and shrinkage. Evaluate reports and apply permitted stock corrections to keep inventory records accurate.',
+    ],
 ];
 
-$currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-$activeWorkflow = ($isAdmin && isset($adminWorkflows[$currentScript])) ? $adminWorkflows[$currentScript] : null;
+$scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+$currentScript = basename($scriptPath);
+$workflows = $isAdmin ? $adminWorkflows : $inventoryWorkflows;
+$activeWorkflow = null;
+if (isset($workflows[$currentScript])) {
+    $activeWorkflow = $workflows[$currentScript];
+} else {
+    foreach ($workflows as $wf) {
+        if (str_ends_with($scriptPath, $wf['path'])) {
+            $activeWorkflow = $wf;
+            break;
+        }
+    }
+}
 ?>
 <h2 id="workspace-guidance-title">
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
@@ -77,15 +125,23 @@ $activeWorkflow = ($isAdmin && isset($adminWorkflows[$currentScript])) ? $adminW
         <p><a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php')) ?>">Review Store operations</a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
     <?php endif; ?>
 <?php else: ?>
-    <p>Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.</p>
     <?php if ($guidanceIsHelp): ?>
-    <ul class="workspace-guidance-links">
-        <?php foreach ($inventoryGuidanceLinks as [$path, $label, $description]): ?>
-        <li><a href="<?= htmlspecialchars(app_url('components/' . $path)) ?>"><?= htmlspecialchars($label) ?></a><p><?= htmlspecialchars($description) ?></p></li>
-        <?php endforeach; ?>
-    </ul>
+        <p>Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.</p>
+        <ul class="workspace-guidance-links">
+            <?php foreach ($inventoryWorkflows as $wf): ?>
+            <li>
+                <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>"><?= htmlspecialchars($wf['link_label']) ?></a>
+                <strong class="workspace-workflow-heading"><?= htmlspecialchars($wf['title']) ?></strong>
+                <p><?= htmlspecialchars($wf['guidance']) ?></p>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php elseif ($activeWorkflow): ?>
+        <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
+        <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
     <?php else: ?>
-    <p><a href="<?= htmlspecialchars(app_url('components/' . $inventoryGuidanceLinks[0][0])) ?>"><?= htmlspecialchars($inventoryGuidanceLinks[0][1]) ?></a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
+        <p>Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.</p>
+        <p><a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review replenishment needs</a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
     <?php endif; ?>
 <?php endif; ?>
 <p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>

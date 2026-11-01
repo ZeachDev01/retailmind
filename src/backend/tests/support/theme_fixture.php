@@ -8,6 +8,11 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'open_fiscal_period') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Test Fiscal Period','2026-01-01','2026-12-31','open',1)");
+    exit;
+}
 if ($argv[1] === 'receiving_empty_catalog') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec("UPDATE products SET status='inactive'");
