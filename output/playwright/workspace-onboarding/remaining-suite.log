@@ -1,0 +1,681 @@
+Store reopening: passed
+PASS: 4 daily sales predicates preserve boundaries and support index range lookups.
+Environment loading checks passed.
+Environment loading checks passed.
+Fresh schema contract: passed
+Procurement schema integration: passed (fresh install, upgrade, retained data, repeated setup, legacy ML prerequisite)
+[operator-alert] RuntimeException: The receiving entry is incomplete. Nothing was saved. Split it into smaller entries and try again. in C:\xampp\htdocs\retailmind\src\backend\tests\receiving_submission_contract.php(37) : eval()'d code:53
+Receiving submission contract: passed (truncation rejected, complete entry accepted)
+Role capability policy contract: passed
+Backup workflow route contract failed:
+- Administrator page must state that creation is not proof of local retention
+- Initial encrypted restore requires administrator capability, local access, CSRF and uploaded package validation
+Identity Reconciliation MySQL: passed
+Backup layout: passed (1440/375/812px, light/dark, keyboard tips, expanded recovery, reduced motion)
+locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByLabel('Current destination login password')
+
+    at fillIdentityCredentials (C:\xampp\htdocs\retailmind\src\backend\tests\backup_package_browser_test.js:162:92)
+    at async C:\xampp\htdocs\retailmind\src\backend\tests\backup_package_browser_test.js:164:9 {
+  log: [
+    "  - waiting for getByLabel('Current destination login password')"
+  ],
+  name: 'TimeoutError'
+}
+Backup recovery tabs: passed
+Recovery tools: passed (1440px and 390px; import/download validation; safety states)
+Backup history pagination: passed (order, 10 rows, boundaries, empty, desktop/mobile)
+Encrypted restore browser: passed for admin (128 MB runtime, capture, private download, self-authorized restore, role/CSRF/password rejection, initial replacement, safety checkpoint, review, reopen, fresh login)
+Encrypted restore browser: passed for super_admin (128 MB runtime, capture, private download, self-authorized restore, role/CSRF/password rejection, initial replacement, safety checkpoint, review, reopen, fresh login)
+Recovery restart workflow: passed (safety recovery, incoming restart, failures closed, artifact preserved, operator verification)
+Safety copy workflow: passed (complete schema/uploads, immutable retry, private download, independent failures, missing users)
+Runtime: PHP 8.5.1; MySQL 10.11.16-MariaDB; schema a23a066818a0eb8a3c92756ef385fa9a41c71131c38f13fa798d70da8400c49c; encrypted bytes 155824; peak memory 6291456
+locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('#backup-recovery > summary')
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\safety_copy_browser_test.js:58:85 {
+  log: [ "  - waiting for locator('#backup-recovery > summary')" ],
+  name: 'TimeoutError'
+}
+Backup unavailable navigation: passed
+SQL backup format and session invalidation: passed
+Encrypted Store package format: passed
+Portable Store packages: passed (MySQL/MariaDB, key-based encryption, incompatible schema rejection)
+Staff session policy: passed
+Staff session browser policy: passed
+Staff session activity HTTP: passed
+Restricted-host web startup: passed
+Backup unavailable status: passed
+Recovery Account lifecycle test: passed
+Attention rules contract: passed
+Starting role-based notification routing contract...
+
+--- 1. Recipient eligibility ---
+  ok - An account without role mappings still receives through its primary Inventory Manager role
+  ok - A secondary Inventory Manager assignment is a recipient
+  ok - A Cashier with a secondary Inventory Manager role is a recipient
+  ok - A routine opt-out does not remove Workspace eligibility
+  ok - A disabled account receives nothing
+  ok - A primary Cashier is not an Inventory Manager recipient
+  ok - An Administrator is not an Inventory Manager recipient
+  ok - An active Administrator is an Administrator recipient
+  ok - A user whose Administrator assignment was replaced by a secondary role is not an Administrator recipient
+  ok - An Inventory Manager does not fill the Administrator Workspace
+  ok - A Cashier does not fill the Administrator Workspace
+
+--- 2. Low-stock routing ---
+  ok - A routine low-stock product notifies the Inventory Manager once
+  ok - A routine low-stock alert belongs to the Inventory Workspace
+  ok - A routine low-stock alert carries the low-stock type
+  ok - Routine stock remains an in-stock low-stock alert
+  ok - A routine low-stock alert is delivered in-app when preferences allow
+  ok - A secondary Inventory Manager receives the routine low-stock alert
+  ok - A secondary Inventory Manager role does not fill the Administrator Workspace
+  ok - A secondary-role Cashier receives the routine low-stock alert
+  ok - A primary Cashier receives no routine stock alerts
+  ok - A disabled account receives no routine stock alerts
+  ok - Administrator oversight ignores products that are still in stock
+  ok - Routine low-stock alerts never land outside the Inventory Workspace
+  ok - An out-of-stock product is a critical Inventory Manager alert
+  ok - An out-of-stock product additionally escalates to Administrator oversight
+  ok - The out-of-stock escalation belongs to the Administrator Workspace
+  ok - Administrator oversight uses the oversight stock condition identity
+  ok - Required oversight keeps in-app delivery despite a disabled optional preference
+  ok - A Cashier receives no out-of-stock oversight alert
+  ok - A routine opt-out keeps the condition active for the Inventory Manager
+  ok - A disabled routine preference suppresses the optional in-app reminder
+  ok - Removing the role assignment stops new Inventory Workspace alerts
+  ok - Removing the role assignment revokes Inventory Workspace recipients
+  ok - A removed secondary role falls back to the primary Cashier role
+
+--- 3. Expiry routing ---
+  ok - An expiring batch reminds the Inventory Manager once
+  ok - A routine expiry reminder belongs to the Inventory Workspace
+  ok - A batch inside its lead time is a routine expiring reminder
+  ok - A routine expiry reminder is delivered in-app when preferences allow
+  ok - A secondary Inventory Manager receives the routine expiry reminder
+  ok - Administrator oversight waits for the overdue escalation
+  ok - A Cashier receives no routine expiry reminder
+  ok - A disabled account receives no expiry reminder
+  ok - The current batch state stays actionable on the expiration day
+  ok - The expiration day is not yet overdue for collection
+  ok - Current batch reminders stay inside the Inventory Workspace
+  ok - One second before the boundary the Administrator escalation is still absent
+  ok - At the Manila expiration day plus two days the Administrator escalation appears
+  ok - The overdue escalation belongs to the Administrator Workspace
+  ok - Required escalation overrides a disabled optional in-app preference
+  ok - A secondary Inventory Manager role does not fill the Administrator Workspace
+  ok - The severity escalation also re-alerts the Inventory Manager
+  ok - Depleted stock resolves the Inventory Manager expiry condition
+  ok - Depleted stock resolves the Administrator oversight condition
+  ok - A restocked expired batch re-alerts the Inventory Manager
+  ok - A restocked overdue batch re-alerts the Administrator
+
+--- 4. Required work ---
+  ok - Pending Stock Issues are the Inventory Manager required work
+  ok - Pending required work names the Stock Issue
+  ok - Inventory Manager required work points at the Inventory Workspace
+  ok - A Cashier is not assigned the Inventory Manager Workspace
+  ok - A returned report is the reporting Cashier required work
+  ok - Returned required work names the reporting Cashier report
+  ok - Cashier required work points at the Cashier Workspace
+  ok - Another Cashier sees only their own returned report
+  ok - An Inventory Manager is not assigned the Cashier Workspace
+
+--- 5. Optional-delivery preferences ---
+  ok - A user without a preference row keeps in-app delivery
+  ok - A user without a preference row keeps the default routine preference
+  ok - An explicitly disabled in-app preference reports disabled
+  ok - A routine opt-out does not disable the in-app channel itself
+  ok - An explicitly disabled routine preference reports disabled
+  ok - An unknown preference key is refused
+
+--- 6. Notification persistence ---
+  ok - A created workflow update is stored in its Workspace
+  ok - A created optional update keeps its in-app flag
+  ok - A created workflow update queues the daily email
+
+Role-based notification routing contract: passed
+Dormancy Policy settings contract: passed
+Dormancy runner contract: passed
+Manage Account Status tab contract: passed
+Super Administrator dashboard workspace tests: passed
+Super Administrator dashboard route tests: passed
+Administrator dashboard workspace tests: passed
+Administrator dashboard route tests: passed
+Workspace routing contract: passed
+Login server redirect: passed
+Workspace switching contract: passed
+Workspace switching browser: passed (Super Administrator -> Administrator -> Inventory -> Cashier -> Super Administrator, including reload)
+Workspace onboarding browser: passed
+Cashier workspace authorization contract: passed
+Store scope contract: passed
+Inventory load contract: passed
+User lifecycle contract: passed
+User deletion MySQL: passed
+disable/disable: passed
+RuntimeException: Both mutations must overlap while waiting for the common mutex: [] in C:\xampp\htdocs\retailmind\src\backend\tests\administrator_minimum_mysql_test.php:14
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\src\backend\tests\administrator_minimum_mysql_test.php(55): {closure:C:\xampp\htdocs\retailmind\src\backend\tests\administrator_minimum_mysql_test.php:14}()
+#1 {main}locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('#drawerFirstName')
+    - locator resolved to <input disabled required="" name="first_name" id="drawerFirstName"/>
+    - fill("Updated")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    59 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\administrator_minimum_browser_test.js:69:48 {
+  log: [
+    "  - waiting for locator('#drawerFirstName')",
+    '    - locator resolved to <input disabled required="" name="first_name" id="drawerFirstName"/>',
+    '    - fill("Updated")',
+    '  - attempting fill action',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '      - waiting 100ms',
+    '    59 × waiting for element to be visible, enabled and editable',
+    '       - element is not visible',
+    '     - retrying fill action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+Administrator management browser/HTTP: passed
+User deletion browser/HTTP: passed
+Register administration contract: passed
+Register schema parity contract: passed
+Legacy Register upgrade: skipped (set RUN_REGISTER_DB_TESTS=1; requires CREATE DATABASE)
+Cashier Shift opening contract: passed
+Drawer movement contract: passed
+locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('#movement-approver')
+    - locator resolved to <input disabled required="" autofocus="" autocomplete="off" id="movement-approver" name="approver_username"/>
+    - fill("owner")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    59 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\drawer_movement_browser_test.js:18:50 {
+  log: [
+    "  - waiting for locator('#movement-approver')",
+    '    - locator resolved to <input disabled required="" autofocus="" autocomplete="off" id="movement-approver" name="approver_username"/>',
+    '    - fill("owner")',
+    '  - attempting fill action',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '      - waiting 100ms',
+    '    59 × waiting for element to be visible, enabled and editable',
+    '       - element is not visible',
+    '     - retrying fill action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+Cashier Shift schema parity contract: passed
+Sale Cashier Shift attribution contract failed:
+- Sale Cashier Shift attribution contract threw: Cannot record sale dated 2026-11-01 because no open fiscal period covers that date.
+Checkout attempts: skipped (set RUN_CHECKOUT_DB_TESTS=1; requires CREATE DATABASE)
+Checkout attempts: skipped (set RUN_CHECKOUT_DB_TESTS=1; requires CREATE DATABASE)
+Cashier operation serialization: skipped (set RUN_CHECKOUT_DB_TESTS=1)
+Checkout browser state behavior: passed (double click, reload, unavailable recovery, lost response, simultaneous/stale tabs, Cashier scope, credential exclusion, cancellation failure, cancellation recovery, new identity, committed receipt protection)
+Checkout tabs browser: passed (lost response, stale tab refusal, reload receipt recovery, simultaneous-tab serialization)
+AssertionError [ERR_ASSERTION]: The input did not match the regular expression /No eligible promotions/. Input:
+
+''
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\checkout_quote_browser_test.js:146:16 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '',
+  expected: /No eligible promotions/,
+  operator: 'match',
+  diff: 'simple'
+}
+Cart workspace browser: passed (reload, identity/shift/workspace isolation, declined review, leave decisions, audited discard request, locked write/race, resumed preservation, payment recovery)
+Sale Cashier Shift schema parity contract: passed
+Cashier Shift register lock contract: passed
+Register lock schema parity contract: passed
+GCash movement schema contract: passed
+Failed exchange actual returns contract: passed
+GCash closing difference review contract: passed
+Refund correction review contract: passed
+Cashier Shift variance review contract: passed
+locator.fill: Timeout 10000ms exceeded.
+Call log:
+  - waiting for getByLabel('Cash correction (PHP)', { exact: true })
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\integration_326_browser_test.js:61:71 {
+  log: [
+    "  - waiting for getByLabel('Cash correction (PHP)', { exact: true })"
+  ],
+  name: 'TimeoutError'
+}
+Held Sale Cashier Shift ownership contract: passed
+Held Sale Cashier Shift ownership schema parity contract: passed
+Append-only Cash Refund contract: passed
+Cash Refund concurrency: skipped (set RUN_REFUND_DB_TESTS=1; requires CREATE DATABASE)
+Legacy transition: skipped
+Error: Command failed: php C:\xampp\htdocs\retailmind\src\backend\tests\cash_refund_concurrency_integration.php
+Cash Refund database test failed: HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility
+
+    at genericNodeError (node:internal/errors:998:15)
+    at wrappedFn (node:internal/errors:543:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at C:\xampp\htdocs\retailmind\src\backend\tests\safe_refund_browser_test.js:14:9
+    at Object.<anonymous> (C:\xampp\htdocs\retailmind\src\backend\tests\safe_refund_browser_test.js:78:3)
+    at Module._compile (node:internal/modules/cjs/loader:1856:14)
+    at Object..js (node:internal/modules/cjs/loader:1996:10)
+    at Module.load (node:internal/modules/cjs/loader:1579:32)
+    at Module._load (node:internal/modules/cjs/loader:1381:12) {
+  status: 1,
+  signal: null,
+  output: [
+    null,
+    <Buffer >,
+    <Buffer 43 61 73 68 20 52 65 66 75 6e 64 20 64 61 74 61 62 61 73 65 20 74 65 73 74 20 66 61 69 6c 65 64 3a 20 48 54 54 50 20 72 65 66 75 6e 64 20 66 6f 72 6d ... 79 more bytes>
+  ],
+  pid: 35300,
+  stdout: <Buffer >,
+  stderr: <Buffer 43 61 73 68 20 52 65 66 75 6e 64 20 64 61 74 61 62 61 73 65 20 74 65 73 74 20 66 61 69 6c 65 64 3a 20 48 54 54 50 20 72 65 66 75 6e 64 20 66 6f 72 6d ... 79 more bytes>
+}
+Cash Refund database test failed: HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility
+Error: Command failed: php C:\xampp\htdocs\retailmind\src\backend\tests\cash_refund_concurrency_integration.php
+    at genericNodeError (node:internal/errors:998:15)
+    at wrappedFn (node:internal/errors:543:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at C:\xampp\htdocs\retailmind\src\backend\tests\refund_completion_browser_test.js:10:9
+    at Object.<anonymous> (C:\xampp\htdocs\retailmind\src\backend\tests\refund_completion_browser_test.js:198:3)
+    at Module._compile (node:internal/modules/cjs/loader:1856:14)
+    at Object..js (node:internal/modules/cjs/loader:1996:10)
+    at Module.load (node:internal/modules/cjs/loader:1579:32)
+    at Module._load (node:internal/modules/cjs/loader:1381:12) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 31036,
+  stdout: null,
+  stderr: null
+}
+Cash Refund schema parity contract: passed
+Store Staff availability contract: passed
+Store Staff username notice contract: passed
+Store Staff email notice contract: passed
+Store Staff race fallback contract: passed
+Staff account rules contract: passed
+Staff login identifier contract: passed
+Staff login parity contract: passed
+Password policy contract failed:
+- src/frontend/components/auth/change_password.php must state the unified 8-character expectation
+Password change modes contract failed:
+- mandatory mode must keep the forced copy
+Recovery exclusion reset audit contract: passed
+Profile image storage tests: passed
+Profile picture self-service tests: passed
+Profile picture crop browser: passed (persisted pixels, four roles, keyboard zoom/reposition, Save/Cancel, replacements, invalid requests, rollback failures, mobile)
+Profile picture authority tests: passed
+[Sun Nov  1 14:27:58 2026] PHP 8.5.1 Development Server (http://127.0.0.1:1952) started
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1955 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1955 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1956 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1956 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1957 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1957 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1958 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1958 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1959 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1959 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1960 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1960 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1961 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1961 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1962 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1962 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1963 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1963 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1964 Accepted
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1964 Closing
+[Sun Nov  1 14:27:58 2026] 127.0.0.1:1965 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1965 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1966 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1966 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1967 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1967 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1968 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1968 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1969 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1969 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1970 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1970 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1971 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1971 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1972 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1972 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1973 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1973 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1974 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1974 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1975 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1975 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1976 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1976 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1977 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1977 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1978 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1978 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1979 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1979 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1980 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1980 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1981 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1981 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1982 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1982 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1983 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1983 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1984 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1984 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1985 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1985 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1986 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1986 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1987 Accepted
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1987 Closing
+[Sun Nov  1 14:27:59 2026] 127.0.0.1:1988 Accepted
+
+AssertionError [ERR_ASSERTION]: read actor 4 -> 1
+
+403 !== 200
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\profile_picture_visibility_http_test.js:37:24
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 403,
+  expected: 200,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+Operator alert helper tests: passed
+Operator alert UI contract: passed
+Operator alert wrapper behavior test: passed
+Backup status client behavior test: passed
+Anonymous boundaries
+  ok - anonymous lookup is refused with 401
+  ok - anonymous lookup exposes no product or outcome
+  ok - anonymous lookup cannot be reached with a write method
+Cashier role boundary
+  ok - a role outside Inventory Counts cannot use the lookup
+Authenticated lookup outcomes
+  ok - unit barcode lookup reports a match
+  ok - unit barcode reports the unit_barcode match kind
+  ok - unit barcode resolves the labelled product
+  ok - SKU lookup reports a sku match kind
+  ok - case barcode reports the case_barcode match kind
+  ok - a zero-stock product is still resolved
+  ok - an inactive product is not resolved
+  ok - an unknown code reports unknown without a product
+  ok - an ambiguous code refuses to choose a product
+  ok - an ambiguous code lists both candidates
+  ok - a blank code is refused with 400
+  ok - the lookup endpoint refuses write methods with 405
+  ok - Inventory Counts renders the scan field
+Searchable product dropdown
+  ok - quantity shortcut is disabled without a selected product
+  ok - scan and product search use one field
+  ok - initial focus shows no products
+  ok - clicking the empty field shows no products
+  ok - ArrowDown cannot list products for a blank query
+  ok - whitespace does not open results
+  ok - search results also show only five matches
+  ok - Show all matches is reachable by keyboard
+  ok - keyboard Show all expands the current search
+  ok - changing the query resets the five-result limit
+  ok - clearing the search hides results and Show all
+  ok - click alone does not reopen a populated search
+  ok - partial SKU search ignores case
+  ok - matching products open below the search field
+  ok - clicking a result selects the existing product ID
+  ok - selected product shows SKU and name
+  ok - product selection leaves the physical count blank
+  ok - shortcut suggests the selected product system quantity
+  ok - clicking the shortcut fills the count and refreshes the difference
+  ok - quantity shortcut does not submit the form
+  ok - partial product name search ignores case
+  ok - typing preserves the committed product until selection
+  ok - matching typed text requires explicit selection
+  ok - keyboard selection sets the product ID
+  ok - explicit selection clears validation error
+  ok - unmatched search shows the empty state
+  ok - unmatched text cannot replace the committed product
+  ok - Escape closes the product list
+  ok - zero-stock products remain searchable
+  ok - inactive products are excluded from search
+Partly filled counts protect entered work from conflicting scans
+  ok - cancelling a searched replacement preserves the committed product
+  ok - a different matched product asks before replacing a partly filled count
+  ok - cancelling the replacement preserves the selected product
+  ok - cancelling the replacement preserves the counted total
+  ok - cancelling the replacement preserves the discrepancy reason
+  ok - cancelling the replacement preserves the quantity preview
+  ok - confirming the replacement selects the newly scanned product
+Linked correction counts accept only their Stock Issue product
+  ok - the linked correction starts on the approved Stock Issue product
+  ok - search selection cannot replace a linked correction product
+  ok - a conflicting linked scan does not change the selected product
+  ok - a conflicting linked scan preserves the counted total
+  ok - a conflicting linked scan preserves the discrepancy reason
+  ok - a conflicting linked scan preserves the quantity preview
+  ok - a conflicting linked scan preserves the approved Stock Issue association
+  ok - a matching linked scan may return focus to the counted total
+  ok - a matching linked scan never sets the counted total
+  ok - the protected linked correction remains valid for submission
+  ok - the mismatched linked submission is handled without an unsafe write
+  ok - server-side mismatch validation refuses the other product
+  FAIL - the linked correction records a separate pending count
+  FAIL - the pending correction keeps the approved Stock Issue product and association
+  FAIL - the separate linked correction remains pending
+Inventory counts scan browser workflow failed: TypeError: Cannot read properties of undefined (reading 'count_id')
+    at main (C:\xampp\htdocs\retailmind\src\backend\tests\inventory_counts_scan_browser_test.js:583:46)
+Server log tail:
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:40238 Closing
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:19601 Accepted
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:19601 [200]: GET /components/inventory_management/inventory_counts.php?correct=2
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:19601 Closing
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:52055 Accepted
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:52055 [200]: GET /components/auth/session_activity.php
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:52055 Closing
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:14806 Accepted
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:14806 [200]: GET /components/inventory_management/inventory_counts.php?action=batch_coverage&product_id=76
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:14806 Closing
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:7388 Accepted
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:7388 [200]: GET /components/backup/backup_status.php
+[Sun Nov  1 14:28:10 2026] 127.0.0.1:7388 Closing
+[Sun Nov  1 14:28:11 2026] 127.0.0.1:17549 Accepted
+[Sun Nov  1 14:28:11 2026] 127.0.0.1:17549 [200]: POST /components/auth/session_activity.php
+[Sun Nov  1 14:28:11 2026] 127.0.0.1:17549 Closing
+[Sun Nov  1 14:28:12 2026] 127.0.0.1:13190 Accepted
+[Sun Nov  1 14:28:12 2026] 127.0.0.1:13190 [200]: GET /components/barcodeScanner/apiScanner/product_code_lookup.php?code=840wf607ipt00002
+[Sun Nov  1 14:28:12 2026] 127.0.0.1:13190 Closing
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:45540 Accepted
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:45540 [200]: GET /sw.js
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:45540 Closing
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:18996 Accepted
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:18996 [200]: GET /sw.js
+[Sun Nov  1 14:28:14 2026] 127.0.0.1:18996 Closing
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:47666 Accepted
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:47666 [200]: GET /components/barcodeScanner/apiScanner/product_code_lookup.php?code=SCNwf607iptA
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:47666 Closing
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1694 Accepted
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1694 [200]: GET /components/inventory_management/inventory_counts.php?action=batch_coverage&product_id=76
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1694 Closing
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1696 Accepted
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1696 [200]: POST /components/inventory_management/inventory_counts.php?correct=2
+[Sun Nov  1 14:28:16 2026] 127.0.0.1:1696 Closing
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:45844 Accepted
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:45844 [200]: POST /components/inventory_management/inventory_counts.php?correct=2
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:45844 Closing
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:36711 Accepted
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:36711 [200]: GET /components/inventory_management/inventory_counts.php?action=batch_coverage&product_id=76
+[Sun Nov  1 14:28:17 2026] 127.0.0.1:36711 Closing
+locator.fill: Timeout 10000ms exceeded.
+Call log:
+  - waiting for locator('#batch_number')
+    - locator resolved to <input type="text" maxlength="100" id="batch_number" placeholder="Batch #" data-field="batch_number" name="lines[0][batch_number]"/>
+    - fill("PRIVATE-BATCH-316")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    20 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\inventory_private_recovery_browser_test.js:84:45 {
+  log: [
+    "  - waiting for locator('#batch_number')",
+    '    - locator resolved to <input type="text" maxlength="100" id="batch_number" placeholder="Batch #" data-field="batch_number" name="lines[0][batch_number]"/>',
+    '    - fill("PRIVATE-BATCH-316")',
+    '  - attempting fill action',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and editable',
+    '      - element is not visible',
+    '    - retrying fill action',
+    '      - waiting 100ms',
+    '    20 × waiting for element to be visible, enabled and editable',
+    '       - element is not visible',
+    '     - retrying fill action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+AssertionError [ERR_ASSERTION]: Notification opens the referenced issue
+    at C:\xampp\htdocs\retailmind\src\backend\tests\administrator_mobile_monitoring_browser_test.js:93:21 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+Products keyboard scanning: passed
+Stock receiving keyboard scanning: passed
+Stock issues keyboard scanning: passed
+  FAIL - Inventory Manager has exactly six primary destinations in daily-work order
+  FAIL - stock page uses the destination name
+  ok - Inventory Control is a primary navigation group
+  ok - keyboard opens Inventory Control
+  ok - Inventory Control exposes existing counts and Stock Issue review
+Error: Inventory Manager has exactly six primary destinations in daily-work order
+stock page uses the destination name
+    at main (C:\xampp\htdocs\retailmind\src\backend\tests\stock_receiving_scan_browser_test.js:179:36)
+Receiving empty catalog: passed
+Disposable forecast database seeded.
+Browser launched.
+locator.evaluate: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.queue-item').filter({ hasText: 'Decision Test Item' }).locator('.queue-details')
+
+    at C:\xampp\htdocs\retailmind\src\backend\tests\forecast_decision_browser_test.js:95:51 {
+  log: [
+    "  - waiting for locator('.queue-item').filter({ hasText: 'Decision Test Item' }).locator('.queue-details')"
+  ],
+  name: 'TimeoutError'
+}
+PASS: replenishment_queue_contract
+Procurement retirement contract: passed
+[operator-alert] PDOException: SQLSTATE[HY000]: General error: 1 no such table: inventory in C:\xampp\htdocs\retailmind\src\backend\app\Forecasting\ReplenishmentQueueService.php:134
+[operator-alert] PDOException: SQLSTATE[HY000]: General error: 1 no such table: inventory in C:\xampp\htdocs\retailmind\src\backend\app\Forecasting\ReplenishmentQueueService.php:35
+Replenishment metadata and error-state contract passed.
+Replenishment suppliers: skipped (set RUN_REPLENISHMENT_DB_TESTS=1; requires CREATE DATABASE)
+PASS: test_aggregates_forecast_horizons
+Operator alert fallback contract: passed
+Cashier alert contract failed:
+- Camera start failure must show its aligned easy sentence
+- Checkout failure must render in the red Unable to continue container
+- Shift failure must render in the red Unable to continue container
+- Camera start failure must raise a red Unable to continue Operator Alert
+- POS camera tech detail must be gated behind the debug flag
+- Pos must not surface getMessage output to the Cashier
+- POS cart messages must run through the shared alert safety net
+- Camera failure must gate the grey tech line on the debug flag
+- Camera failure must keep the full detail on the developer console
+Inventory alert contract: passed
+Product code lookup contract: passed
+Inventory counts scan contract: passed
+Administrator alert contract failed:
+- Backup page restore failure must show its aligned easy sentence
+- Backup route restore failure must show its aligned easy sentence
+Friendly alerts verification contract failed:
+- Camera failure must show its aligned easy line (missing: The camera could not start. Check your camera permission, or enter the code manually to continue. Tell your Administrator if this keeps happening.)
+- Camera tech line must be gated behind the debug flag
+- Camera failure must keep full detail on the developer console (missing: console.error('Camera start failed:')
+- Checkout failure must render in the red Unable to continue container
+- Src/frontend/components/system_administrator/ml_settings.php is out of scope and must not gain OperatorAlert
+Product seed checks passed: 17
+Unhandled application exception: Cannot record stock issue report dated 2026-11-01 because no open fiscal period covers that date.
+Unhandled application exception: Cannot record stock issue report dated 2026-11-01 because no open fiscal period covers that date.
+Unhandled application exception: Cannot record stock issue report dated 2026-11-01 because no open fiscal period covers that date.
+Database integration tests: passed
+User password reset integration failed: Super Administrators cannot edit staff profiles, passwords, or role assignments.
+Audit visibility integration tests failed:
+- privileged-account lifecycle activity should be categorized as security
+- privileged-account demotion should remain categorized as security
+Integrated schema: 77 tables, SHA-256 746edcae1589b8faaa043106591e2bac10d41c27f5e30db34e5c320d09e3e8b2
+Database Backup workflow integration: passed (including full migrated schema)
+Philippine time and private day boundaries: passed
+Philippine TIMESTAMP projection: skipped (RUN_CHECKOUT_DB_TESTS=1)
+Receipt History integration: skipped
+Receipt table contract: passed
+Receipt attribution contract: passed
+Thermal Sale Receipt browser checks: passed; screen captures and Chromium print PDFs: C:\Users\Mike\AppData\Local\Temp\retailmind-receipt-104
+Sale Receipt dialog Chromium keyboard/mobile/long paper/manual print: passed (C:\Users\Mike\AppData\Local\Temp\retailmind-receipt-dialog-115)
+Receipt History Chromium failures/storage/dates/themes/responsive/keyboard: passed (C:\Users\Mike\AppData\Local\Temp\retailmind-receipt-history-audit)
+Thermal Refund Receipt browser checks: passed (C:\Users\Mike\AppData\Local\Temp\retailmind-refund-receipt-105)
+Refund Receipt reprint browser checks: passed (C:\Users\Mike\AppData\Local\Temp\retailmind-refund-reprint-106)
+Theme login browser: passed
