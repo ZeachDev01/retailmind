@@ -12,6 +12,7 @@
 .workspace-guidance-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .workspace-guidance-links { padding-left: 1.2rem; }
 .workspace-guidance-links li { margin-top: 1.2rem; }
+.workspace-workflow-heading { display: block; margin: .35rem 0 .15rem; font-size: .95rem; }
 .workspace-guidance a { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-underline-offset: .2em; }
 .workspace-guidance :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
