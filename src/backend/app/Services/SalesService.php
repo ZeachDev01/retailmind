@@ -4,12 +4,10 @@
 class SalesService
 {
     private PDO $pdo;
-    private App\Store\StoreScope $storeScope;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
-        $this->storeScope = new App\Store\StoreScope($pdo);
     }
 
     public function getRecentTransactions(): array
@@ -22,16 +20,11 @@ class SalesService
                 s.total_amount,
                 s.payment_method,
                 s.sale_date,
-                u.full_name AS cashier_name,
+                u.display_name AS cashier_name,
                 COUNT(si.sale_item_id) AS item_count
              FROM sales s
              JOIN users u ON s.cashier_id = u.user_id
              LEFT JOIN sale_items si ON s.sale_id = si.sale_id
-             WHERE u.branch_id = " . $this->storeScope->id() . " OR EXISTS (
-                 SELECT 1 FROM sale_items scope_si
-                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = " . $this->storeScope->id() . "
-             )
              GROUP BY s.sale_id
              ORDER BY s.sale_date DESC
              LIMIT 10"
@@ -40,16 +33,8 @@ class SalesService
 
     public function getSalesSummary(): array
     {
-        $storeId = $this->storeScope->id();
-        $scopeSql = '(u.branch_id = ? OR EXISTS (
-            SELECT 1 FROM sale_items scope_si
-            JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-            WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-        ))';
-        $total = $this->pdo->prepare('SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s JOIN users u ON u.user_id = s.cashier_id WHERE ' . $scopeSql);
-        $total->execute([$storeId, $storeId]);
-        $today = $this->pdo->prepare('SELECT COALESCE(SUM(s.total_amount), 0) FROM sales s JOIN users u ON u.user_id = s.cashier_id WHERE ' . $scopeSql . ' AND s.sale_date >= CURDATE() AND s.sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)');
-        $today->execute([$storeId, $storeId]);
+        $total = $this->pdo->query('SELECT COALESCE(SUM(total_amount), 0) FROM sales');
+        $today = $this->pdo->query('SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE sale_date >= CURDATE() AND sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)');
         return [
             'total_sales' => (float)$total->fetchColumn(),
             'total_sales_today' => (float)$today->fetchColumn(),

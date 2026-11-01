@@ -118,6 +118,7 @@ try {
     $clock = new MutableTestClock($initialTime);
     $policy = new RoleCapabilityPolicy();
     $workspace = new StoreOperationsDashboardWorkspace($pdo, $clock, $policy);
+    $pdo->exec('CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type))');
     $shiftService = new CashierShiftService($pdo, $policy);
     $refundService = new CashRefundService($pdo, $shiftService, $policy);
     $quietNotifications = new class($pdo) extends NotificationService {

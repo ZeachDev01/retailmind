@@ -134,6 +134,7 @@ $pdo->exec("
     CREATE TABLE ml_model_evaluations (evaluation_id INTEGER PRIMARY KEY, horizon_days INTEGER, mae REAL, rmse REAL, wape REAL);
 ");
 
+$pdo->exec('CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type))');
 $service = new CashierShiftService($pdo);
 $reportService = new StoreShiftReportService($pdo);
 $failures = [];

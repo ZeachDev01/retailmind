@@ -22,7 +22,7 @@ $actorRole = (string)current_role();
 $isCashier = $actorRole === 'cashier';
 $cashiers = [];
 if (!$isCashier) {
-    $cashiers = $pdo->query("SELECT DISTINCT u.user_id,u.full_name FROM users u JOIN cashier_shifts cs ON cs.cashier_id=u.user_id AND cs.status='open' ORDER BY u.full_name")->fetchAll(PDO::FETCH_ASSOC);
+    $cashiers = $pdo->query("SELECT DISTINCT u.user_id,u.display_name FROM users u JOIN cashier_shifts cs ON cs.cashier_id=u.user_id AND cs.status='open' ORDER BY u.display_name")->fetchAll(PDO::FETCH_ASSOC);
 }
 $targetCashierId = $isCashier ? $actorId : (int)($_GET['cashier_id'] ?? ($cashiers[0]['user_id'] ?? 0));
 if (!$isCashier && $targetCashierId > 0 && !in_array($targetCashierId, array_map(static fn(array $c): int => (int)$c['user_id'], $cashiers), true)) {
@@ -174,7 +174,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </div>
             <?php endif; ?>
             <?php if (!$isCashier): ?><section class="dashboard-section shift-selector">
-                    <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['full_name']) ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
+                    <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['display_name']) ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
                 </section><?php endif; ?>
             <div class="shift-grid">
                 <section class="dashboard-section shift-overview">
@@ -242,7 +242,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                     </section><?php endif; ?>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
                         <h2><?= $countPreview ? 'Review count and close shift' : 'Count cash to close shift' ?></h2>
-                        <?php if (!$isCashier): ?><p class="shift-help">Closing for <?= htmlspecialchars($openShift['full_name']) ?>.</p><?php endif; ?>
+                        <?php if (!$isCashier): ?><p class="shift-help">Closing for <?= htmlspecialchars($openShift['display_name']) ?>.</p><?php endif; ?>
                         <?php if ($unresolvedHeldSales): ?><div class="message error" role="note" data-rm-alert-processed="1">
                             <?php if ($isCashier): ?>
                                 This shift still has <?= count($unresolvedHeldSales) ?> held sale<?= count($unresolvedHeldSales) === 1 ? '' : 's' ?>. Complete or discard <?= count($unresolvedHeldSales) === 1 ? 'it' : 'them' ?> at the point of sale before closing.
@@ -307,7 +307,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                     <td data-label="Amount">₱<?= number_format((float)$m['amount'], 2) ?></td>
                                     <td data-label="Reason"><?= htmlspecialchars(str_replace('_', ' ', ucfirst($m['reason']))) ?></td>
                                     <td data-label="Note"><?= htmlspecialchars($m['note'] ?? '') ?></td>
-                                    <td data-label="Cashier"><?= htmlspecialchars($m['full_name']) ?></td>
+                                    <td data-label="Cashier"><?= htmlspecialchars($m['display_name']) ?></td>
                                 </tr><?php endforeach; ?>
                         </tbody></table>
                     </div>
@@ -325,7 +325,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                             <th>Counted cash</th>
                             <th>Difference</th>
                         </tr></thead><tbody><?php foreach ($recent as $r): ?><tr>
-                                <td data-label="Cashier / register"><?= htmlspecialchars($r['full_name']) ?><span class="shift-history-meta"><?= htmlspecialchars($r['register_name'] ?? 'Unassigned') ?></span></td>
+                                <td data-label="Cashier / register"><?= htmlspecialchars($r['display_name']) ?><span class="shift-history-meta"><?= htmlspecialchars($r['register_name'] ?? 'Unassigned') ?></span></td>
                                 <td data-label="Opened" class="shift-date"><?= htmlspecialchars(format_display_datetime($r['opened_at'])) ?></td>
                                 <td data-label="Closed" class="shift-date"><?= $r['closed_at'] ? htmlspecialchars(format_display_datetime($r['closed_at'])) : '—' ?>
                                     <?php if ($r['closing_actor_name']): ?><span class="shift-history-meta">By <?= htmlspecialchars($r['closing_actor_name']) ?></span><?php endif; ?>

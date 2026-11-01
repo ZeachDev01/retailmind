@@ -95,7 +95,7 @@ function receipt_render_details(array $sale, array $items): void {
 // Fetch receipts for list view
 if ($action === 'list' || $action === 'view') {
     $query = "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-              u.full_name AS cashier_name, COUNT(si.sale_item_id) as item_count,
+              u.display_name AS cashier_name, COUNT(si.sale_item_id) as item_count,
               COALESCE(reversal_summary.pending_count, 0) AS pending_reversals,
               COALESCE(reversal_summary.approved_count, 0) AS approved_reversals
               FROM sales s
@@ -119,7 +119,7 @@ if ($action === 'list' || $action === 'view') {
     
     if (!empty($search_query)) {
         if ($search_field === 'all') {
-            $where_conditions[] = "(s.sale_id LIKE ? OR s.sale_date LIKE ? OR u.full_name LIKE ?)";
+            $where_conditions[] = "(s.sale_id LIKE ? OR s.sale_date LIKE ? OR u.display_name LIKE ?)";
             $search_term = "%$search_query%";
             $params = array_merge($params, [$search_term, $search_term, $search_term]);
         } elseif ($search_field === 'id') {
@@ -129,7 +129,7 @@ if ($action === 'list' || $action === 'view') {
             $where_conditions[] = "s.sale_date LIKE ?";
             $params[] = "%$search_query%";
         } elseif ($search_field === 'cashier') {
-            $where_conditions[] = "u.full_name LIKE ?";
+            $where_conditions[] = "u.display_name LIKE ?";
             $params[] = "%$search_query%";
         }
     }
@@ -700,7 +700,7 @@ if ($sale_id > 0) {
 <?php if (false && $action === 'update' && $sale_id > 0): ?>
     <?php
     $saleStmt = $pdo->prepare(
-        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.full_name AS cashier_name
+        "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date, u.display_name AS cashier_name
          FROM sales s
          JOIN users u ON s.cashier_id = u.user_id
          WHERE s.sale_id = ?"

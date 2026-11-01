@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\AdministratorAccessMinimum;
 use App\Authorization\RoleCapabilityPolicy;
-use App\Store\StoreScope;
 use DomainException;
 use InvalidArgumentException;
 use PDO;
@@ -20,7 +19,6 @@ final class UserLifecycleService
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
-        private StoreScope $storeScope,
         private ?UserAccountNotifier $notifier = null
     ) {
         $this->notifier = $notifier ?? new UserAccountNotifier();
@@ -29,9 +27,9 @@ final class UserLifecycleService
     public function get(int $userId, bool $lock = false): array
     {
         $statement = $this->pdo->prepare(
-            'SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash,
+            'SELECT u.user_id, u.first_name, u.last_name, u.display_name, u.username, u.email, u.profile_image, u.password_hash,
                     u.status, u.disabled_at, u.session_version, u.must_change_password, u.is_recovery_account,
-                    u.role_id, u.branch_id, r.role_name
+                    u.role_id, r.role_name
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
              WHERE u.user_id = ?' . ($lock && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '')
@@ -91,31 +89,36 @@ final class UserLifecycleService
             throw new DomainException('Super Administrators may only create ordinary Administrator accounts.');
         }
         $targetRole = $targetRoles[0];
-        $fullName = trim((string)($account['full_name'] ?? ''));
+        $firstName = trim((string)($account['first_name'] ?? ''));
+        $lastName = trim((string)($account['last_name'] ?? ''));
+        $displayName = trim($firstName . ' ' . $lastName);
         $username = trim((string)($account['username'] ?? ''));
         $passwordHash = (string)($account['password_hash'] ?? '');
-        if ($fullName === '' || $username === '' || $passwordHash === '') {
-            throw new InvalidArgumentException('Full name, username, and password are required.');
+        if (mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
+            throw new InvalidArgumentException('Keep each name part under 51 characters and the full display name under 101 characters.');
+        }
+        if ($firstName === '' || $username === '' || $passwordHash === '') {
+            throw new InvalidArgumentException('First name, username, and password are required.');
         }
         if ($shapeError = self::usernameShapeError($username)) {
             throw new InvalidArgumentException($shapeError);
         }
 
-        return $this->transaction(function () use ($actorId, $actorRole, $account, $targetRoles, $targetRole, $fullName, $username, $passwordHash): int {
+        return $this->transaction(function () use ($actorId, $actorRole, $account, $targetRoles, $targetRole, $firstName, $lastName, $displayName, $username, $passwordHash): int {
             $roleId = $this->roleId($targetRole);
-            $storeId = $this->storeScope->id();
             $statement = $this->pdo->prepare(
-                'INSERT INTO users (full_name, username, email, profile_image, password_hash, role_id, branch_id, must_change_password)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
+                'INSERT INTO users (first_name, last_name, display_name, username, email, profile_image, password_hash, role_id, must_change_password)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
             );
             $statement->execute([
-                $fullName,
+                $firstName,
+                $lastName,
+                $displayName,
                 $username,
                 $this->nullableString($account['email'] ?? null),
                 $this->nullableString($account['profile_image'] ?? null),
                 $passwordHash,
                 $roleId,
-                $storeId,
             ]);
             $userId = (int)$this->pdo->lastInsertId();
             $this->syncUserRoles($userId, $targetRoles, $targetRole);
@@ -152,22 +155,28 @@ final class UserLifecycleService
             if (!in_array('admin', $targetRoles, true)) {
                 $minimum->requireRemovable($userId);
             }
-            $fullName = trim((string)($account['full_name'] ?? ''));
+            $firstName = trim((string)($account['first_name'] ?? ''));
+            $lastName = trim((string)($account['last_name'] ?? ''));
+            $displayName = trim($firstName . ' ' . $lastName);
             $username = trim((string)($account['username'] ?? ''));
-            if ($fullName === '' || $username === '') {
-                throw new InvalidArgumentException('Full name and username are required.');
+            if (mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
+                throw new InvalidArgumentException('Keep each name part under 51 characters and the full display name under 101 characters.');
+            }
+            if ($firstName === '' || $username === '') {
+                throw new InvalidArgumentException('First name and username are required.');
             }
             if ($shapeError = self::usernameShapeError($username)) {
                 throw new InvalidArgumentException($shapeError);
             }
 
-            $parts = ['full_name = ?', 'username = ?', 'email = ?', 'role_id = ?', 'branch_id = ?'];
+            $parts = ['first_name = ?', 'last_name = ?', 'display_name = ?', 'username = ?', 'email = ?', 'role_id = ?'];
             $params = [
-                $fullName,
+                $firstName,
+                $lastName,
+                $displayName,
                 $username,
                 $this->nullableString($account['email'] ?? null),
                 $this->roleId($targetRole),
-                $this->storeScope->id(),
             ];
             if (array_key_exists('profile_image', $account)) {
                 $parts[] = 'profile_image = ?';
@@ -361,7 +370,7 @@ final class UserLifecycleService
                 }
                 $this->pdo->prepare('DELETE FROM users WHERE user_id = ?')->execute([$userId]);
                 $snapshot = $this->auditSnapshot($before);
-                $snapshot['full_name'] = (string)$before['full_name'];
+                $snapshot['display_name'] = (string)$before['display_name'];
                 $snapshot['email'] = $before['email'];
                 $this->audit($actorId, $actorRole, 'User permanently deleted', $userId, $snapshot, ['sessions_revoked' => true]);
             });
@@ -394,7 +403,6 @@ final class UserLifecycleService
                 WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME = 'user_id'
                 UNION SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE() AND (
-                    (TABLE_NAME = 'branches' AND COLUMN_NAME = 'created_by') OR
                     (TABLE_NAME = 'sales' AND COLUMN_NAME = 'discount_authorized_by') OR
                     (TABLE_NAME = 'inventory_adjustment_revisions' AND COLUMN_NAME = 'actor_id') OR
                     (TABLE_NAME = 'backup_operations' AND COLUMN_NAME = 'requested_by') OR
@@ -629,7 +637,6 @@ final class UserLifecycleService
             'role' => (string)$user['role_name'],
             'roles' => array_values(array_map('strval', $user['roles'] ?? [$user['role_name']])),
             'status' => (string)$user['status'],
-            'store_id' => $user['branch_id'] !== null ? (int)$user['branch_id'] : null,
         ];
     }
 

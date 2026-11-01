@@ -277,7 +277,6 @@ function get_store_settings(PDO $pdo): array
 function get_forecasting_readiness(PDO $pdo): array
 {
     $dailySalesSql = forecast_daily_sales_sql($pdo);
-    $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
@@ -341,12 +340,12 @@ function get_forecasting_readiness(PDO $pdo): array
                 WHERE fe2.product_id = p.product_id
                 ORDER BY fe2.generated_at DESC, fe2.evaluation_id DESC LIMIT 1
             )
-            WHERE p.status = 'active' AND p.branch_id = ?
+            WHERE p.status = 'active'
             ORDER BY p.product_name";
 
     try {
         $statement = $pdo->prepare($sql);
-        $statement->execute([$storeId]);
+        $statement->execute();
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
         // Keep the page usable while forecasting migrations are being applied.

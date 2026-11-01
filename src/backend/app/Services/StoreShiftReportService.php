@@ -69,8 +69,8 @@ final class StoreShiftReportService
             'SELECT cs.shift_id, cs.cashier_id, cs.register_id, cs.opened_at, cs.closed_at,
                     cs.status, cs.opening_cash, cs.expected_cash, cs.actual_cash,
                     cs.cash_variance, cs.variance_review_required, cs.closing_notes,
-                    cs.closed_by, cs.intervention_reason, u.full_name AS cashier,
-                    r.name AS register_name, closer.full_name AS closer_name
+                    cs.closed_by, cs.intervention_reason, u.display_name AS cashier,
+                    r.name AS register_name, closer.display_name AS closer_name
              FROM cashier_shifts cs
              LEFT JOIN users u ON u.user_id = cs.cashier_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
@@ -192,13 +192,13 @@ final class StoreShiftReportService
             $params[] = (int)$cashier;
         }
         $stmt = $this->pdo->prepare(
-            "SELECT DATE(s.sale_date) AS report_date, s.cashier_id, u.full_name AS cashier,
+            "SELECT DATE(s.sale_date) AS report_date, s.cashier_id, u.display_name AS cashier,
                     COUNT(*) AS sale_count, SUM(s.total_amount) AS total_sales,
                     SUM(CASE WHEN s.payment_method='cash' THEN s.total_amount ELSE 0 END) AS cash_sales,
                     SUM(CASE WHEN s.payment_method='card' THEN s.total_amount ELSE 0 END) AS card_sales,
                     SUM(CASE WHEN s.payment_method='ewallet' THEN s.total_amount ELSE 0 END) AS ewallet_sales
              FROM sales s LEFT JOIN users u ON u.user_id=s.cashier_id
-             WHERE " . implode(' AND ', $where) . ' GROUP BY DATE(s.sale_date), s.cashier_id, u.full_name'
+             WHERE " . implode(' AND ', $where) . ' GROUP BY DATE(s.sale_date), s.cashier_id, u.display_name'
         );
         $stmt->execute($params);
         $rows = [];
@@ -224,11 +224,11 @@ final class StoreShiftReportService
         $reversalWhere = ["sr.status='approved'", 'sr.approved_at >= ?', 'sr.approved_at < ?'];
         if ($cashier !== '') $reversalWhere[] = 'sr.requested_by = ?';
         $reversals = $this->pdo->prepare(
-            "SELECT DATE(sr.approved_at) AS report_date, sr.requested_by AS cashier_id, u.full_name AS cashier,
+            "SELECT DATE(sr.approved_at) AS report_date, sr.requested_by AS cashier_id, u.display_name AS cashier,
                     sr.settlement_method, SUM(sr.refund_amount) AS amount
              FROM sale_reversals sr LEFT JOIN users u ON u.user_id=sr.requested_by
              WHERE " . implode(' AND ', $reversalWhere) .
-            ' GROUP BY DATE(sr.approved_at), sr.requested_by, u.full_name, sr.settlement_method'
+            ' GROUP BY DATE(sr.approved_at), sr.requested_by, u.display_name, sr.settlement_method'
         );
         $reversals->execute($params);
         foreach ($reversals->fetchAll(PDO::FETCH_ASSOC) as $reversal) {

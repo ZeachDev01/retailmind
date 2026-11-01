@@ -3,7 +3,6 @@
 namespace App\Receipts;
 
 use App\Services\PhilippineTime;
-use App\Store\StoreScope;
 use DateTimeImmutable;
 use PDO;
 
@@ -19,7 +18,7 @@ final class ReceiptTableService
     private const ORDER_COLUMNS = [
         0 => 's.sale_id',
         1 => 's.sale_date',
-        2 => 'u.full_name',
+        2 => 'u.display_name',
         3 => 'item_count',
         4 => 's.total_amount',
         5 => 's.payment_method',
@@ -29,11 +28,8 @@ final class ReceiptTableService
     ];
     private const REVERSAL_STATUSES = ['pending', 'approved', 'rejected', 'none'];
 
-    private readonly StoreScope $storeScope;
-
-    public function __construct(private readonly PDO $pdo, ?StoreScope $storeScope = null)
+    public function __construct(private readonly PDO $pdo)
     {
-        $this->storeScope = $storeScope ?? new StoreScope($pdo);
     }
 
     /**
@@ -61,7 +57,7 @@ final class ReceiptTableService
         $whereSql = $whereClauses ? 'WHERE ' . implode(' AND ', $whereClauses) : '';
         $orderSql = $this->orderSql($normalized['order_column'], $normalized['order_direction']);
         $sql = "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-                    u.full_name AS cashier_name,
+                    u.display_name AS cashier_name,
                     (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS item_count,
                     COALESCE(reversal_summary.pending_count, 0) AS pending_reversals,
                     COALESCE(reversal_summary.approved_count, 0) AS approved_reversals,
@@ -171,15 +167,8 @@ final class ReceiptTableService
     /** @return array{0: array<int, string>, 1: array<string, int|string>} */
     private function scopeConditions(?int $cashierId): array
     {
-        $clauses = [
-            '(u.branch_id = :scope_store_id OR EXISTS (
-                SELECT 1 FROM sale_items scope_si
-                JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = :scope_store_product_id
-            ))',
-        ];
-        $storeId = $this->storeScope->id();
-        $params = [':scope_store_id' => $storeId, ':scope_store_product_id' => $storeId];
+        $clauses = [];
+        $params = [];
         if ($cashierId !== null) {
             $clauses[] = 's.cashier_id = :scope_cashier_id';
             $params[':scope_cashier_id'] = $cashierId;

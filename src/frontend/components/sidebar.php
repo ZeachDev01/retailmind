@@ -10,7 +10,7 @@ try {
 } catch (Throwable $e) {
     $notificationCount = 0;
 }
-$sidebarUserName = trim((string)($_SESSION['full_name'] ?? 'RetailMind User'));
+$sidebarUserName = trim((string)($_SESSION['display_name'] ?? 'RetailMind User'));
 $sidebarProfileImage = isset($_SESSION['profile_image']) ? (string)$_SESSION['profile_image'] : null;
 $sidebarRoleLabel = ucwords(str_replace('_', ' ', (string)$role));
 $workspaceChoices = [

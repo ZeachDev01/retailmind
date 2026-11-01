@@ -21,7 +21,7 @@ final class ProtectedAuditRecordService
         [$whereSql, $params] = $this->where($actorRole, $filters);
         $sql = "SELECT al.log_id, al.user_id, al.action, al.category, al.module, al.record_id,
                        al.previous_value, al.new_value, al.metadata, al.ip_address, al.created_at,
-                       CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' ELSE u.full_name END AS full_name,
+                       CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' ELSE u.display_name END AS display_name,
                        CASE WHEN u.is_recovery_account = 1 THEN NULL ELSE u.username END AS username
                 FROM activity_log al
                 LEFT JOIN users u ON al.user_id = u.user_id
@@ -79,7 +79,7 @@ final class ProtectedAuditRecordService
                             'original' => $m['original_details'] === null ? null : json_decode($m['original_details'], true, 512, JSON_THROW_ON_ERROR),
                         ];
                         $record['actor_provenance'] = $identity;
-                        $record['full_name'] = $identity['original']['full_name'] ?? $record['full_name'];
+                        $record['display_name'] = $identity['original']['display_name'] ?? $record['display_name'];
                         $record['username'] = $identity['original']['username'] ?? $record['username'];
                     }
                     unset($record);
@@ -248,7 +248,7 @@ final class ProtectedAuditRecordService
     {
         return [
             "CAST(al.created_at AS CHAR)",
-            "CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' WHEN al.user_id IS NULL THEN 'System / Unknown' ELSE CONCAT_WS(' ', u.full_name, u.username) END",
+            "CASE WHEN u.is_recovery_account = 1 THEN 'Recovery Account' WHEN al.user_id IS NULL THEN 'System / Unknown' ELSE CONCAT_WS(' ', u.display_name, u.username) END",
             'al.action',
             "REPLACE(al.category, '_', ' ')",
             "COALESCE(al.module, '-')",

@@ -283,6 +283,7 @@ try {
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50), (2, 30)');
 
     $pdo->exec('CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT)');
+    $pdo->exec('CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type))');
     $shifts = new CashierShiftService($pdo);
     $held = new HeldSaleService($pdo, $shifts);
 

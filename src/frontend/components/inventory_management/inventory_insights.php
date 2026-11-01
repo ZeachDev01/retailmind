@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$dueSchedules = $pdo->query("SELECT c.*,p.sku,p.product_name,u.full_name assigned_name
+$dueSchedules = $pdo->query("SELECT c.*,p.sku,p.product_name,u.display_name assigned_name
     FROM cycle_count_schedules c JOIN products p ON p.product_id=c.product_id
     LEFT JOIN users u ON u.user_id=c.assigned_to
     WHERE c.status='scheduled' ORDER BY c.next_count_date,c.priority_score DESC LIMIT 25")->fetchAll(PDO::FETCH_ASSOC);

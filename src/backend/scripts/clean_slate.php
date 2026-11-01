@@ -23,6 +23,7 @@ $tablesToTruncate = [
     'sale_receipt_details',
     'sale_items',
     'sales',
+    'held_sale_items',
     'held_sales',
     'checkout_attempts',
     'cash_drawer_movements',
@@ -110,15 +111,15 @@ echo "Removed non-superadmin users\n";
 $hash = password_hash('RetailMind@2026', PASSWORD_DEFAULT);
 $stmt = $pdo->prepare("
     INSERT INTO users (
-        user_id, full_name, username, email, password_hash, role_id,
+        user_id, first_name, last_name, display_name, username, email, password_hash, role_id,
         status, failed_login_attempts, locked_until, session_version,
-        must_change_password, branch_id, is_recovery_account, disabled_at, created_at
+        must_change_password, is_recovery_account, disabled_at, created_at
     ) VALUES (
-        1, 'Super Admin', 'superadmin', 'superadmin@inventory.local', :hash, 1,
+        1, 'Super', 'Admin', 'Super Admin', 'superadmin', 'superadmin@inventory.local', :hash, 1,
         'active', 0, NULL, 1,
-        0, 1, 0, NULL, NOW()
+        0, 0, NULL, NOW()
     ) ON DUPLICATE KEY UPDATE
-        full_name = 'Super Admin',
+        display_name = 'Super Admin',
         username = 'superadmin',
         email = 'superadmin@inventory.local',
         password_hash = :hash_update,
@@ -128,7 +129,6 @@ $stmt = $pdo->prepare("
         locked_until = NULL,
         session_version = 1,
         must_change_password = 0,
-        branch_id = 1,
         is_recovery_account = 0,
         disabled_at = NULL
 ");

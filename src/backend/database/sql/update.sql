@@ -126,6 +126,28 @@ CREATE TABLE IF NOT EXISTS held_sales (
         INDEX idx_held_sales_cashier_status (cashier_id, status),
         INDEX idx_held_sales_expiry (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS held_sale_items (
+        held_sale_item_id INT AUTO_INCREMENT PRIMARY KEY,
+        held_sale_id INT NOT NULL,
+        cart_key VARCHAR(100) NOT NULL,
+        line_position INT NOT NULL,
+        product_id INT NOT NULL,
+        selling_form ENUM('piece','pack') NOT NULL,
+        pack_size INT NULL,
+        product_name TEXT NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(12,2) NOT NULL,
+        server_price DECIMAL(12,2) NOT NULL,
+        stock INT NULL,
+        reorder_level INT NOT NULL DEFAULT 0,
+        safety_stock INT NOT NULL DEFAULT 0,
+        sku VARCHAR(255) NULL,
+        barcode VARCHAR(255) NULL,
+        product_image VARCHAR(255) NULL,
+        UNIQUE KEY uq_held_sale_items_key (held_sale_id, cart_key),
+        INDEX idx_held_sale_items_order (held_sale_id, line_position),
+        CONSTRAINT fk_held_sale_items_sale FOREIGN KEY (held_sale_id) REFERENCES held_sales (held_sale_id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS promotions (
         promotion_id INT AUTO_INCREMENT PRIMARY KEY,
         promotion_name VARCHAR(150) NOT NULL,
@@ -299,17 +321,7 @@ EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
--- 202609130001_branch_management: Branches, branch-scoped users and privilege assignments
-CREATE TABLE IF NOT EXISTS branches (
-            branch_id INT AUTO_INCREMENT PRIMARY KEY,
-            branch_name VARCHAR(100) NOT NULL UNIQUE,
-            branch_code VARCHAR(30) NOT NULL UNIQUE,
-            status ENUM('active','inactive') NOT NULL DEFAULT 'active',
-            created_by INT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_branches_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- 202609130001_branch_management: Keep legacy scope columns for single-store compatibility.
 CREATE TABLE IF NOT EXISTS privileges (
             privilege_id INT AUTO_INCREMENT PRIMARY KEY,
             privilege_key VARCHAR(80) NOT NULL UNIQUE,
@@ -330,30 +342,6 @@ CREATE TABLE IF NOT EXISTS user_privileges (
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
             FOREIGN KEY (privilege_id) REFERENCES privileges(privilege_id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='branch_id'), 'ALTER TABLE `users` ADD COLUMN `branch_id` INT NULL AFTER role_id', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='products' AND column_name='branch_id'), 'ALTER TABLE `products` ADD COLUMN `branch_id` INT NULL AFTER created_by', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='users' AND index_name='idx_users_branch_id'), 'ALTER TABLE `users` ADD INDEX `idx_users_branch_id` (branch_id)', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='idx_products_branch_id'), 'ALTER TABLE `products` ADD INDEX `idx_products_branch_id` (branch_id)', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='users' AND column_name='branch_id' AND referenced_table_name='branches' AND referenced_column_name='branch_id'), 'ALTER TABLE `users` ADD CONSTRAINT `fk_users_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage WHERE constraint_schema=DATABASE() AND table_name='products' AND column_name='branch_id' AND referenced_table_name='branches' AND referenced_column_name='branch_id'), 'ALTER TABLE `products` ADD CONSTRAINT `fk_products_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
 INSERT IGNORE INTO roles (role_name) VALUES ('seller');
 INSERT IGNORE INTO privileges (privilege_key, privilege_name) VALUES
             ('manage_users', 'Manage user accounts'),
@@ -371,7 +359,7 @@ INSERT IGNORE INTO role_privileges (role_id, privilege_id)
 INSERT IGNORE INTO role_privileges (role_id, privilege_id)
             SELECT r.role_id, p.privilege_id FROM roles r CROSS JOIN privileges p
             WHERE r.role_name IN ('seller', 'cashier') AND p.privilege_key = 'view_inventory';
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Branches, branch-scoped users and privilege assignments') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Retired branch storage; retained legacy single-store scope fields') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609130002_role_access_update: Make administrator inventory access read-only
 DELETE rp FROM role_privileges rp
@@ -401,32 +389,8 @@ DELETE rp FROM role_privileges rp JOIN roles r ON r.role_id=rp.role_id WHERE r.r
 DELETE r FROM roles r WHERE r.role_name='seller' AND EXISTS (SELECT 1 FROM (SELECT role_name FROM roles) available WHERE available.role_name='cashier');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130004_remove_seller_role','Replace the duplicate seller role with cashier') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
--- 202609140001_branch_scoped_product_identifiers: Allow product identifiers to be reused across branches
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_sku'), 'ALTER TABLE `products` ADD UNIQUE KEY `uq_products_branch_sku` (`branch_id`, `sku`)', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='sku'), 'ALTER TABLE products DROP INDEX `sku`', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_barcode'), 'ALTER TABLE `products` ADD UNIQUE KEY `uq_products_branch_barcode` (`branch_id`, `barcode`)', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='barcode'), 'ALTER TABLE products DROP INDEX `barcode`', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_case_barcode'), 'ALTER TABLE `products` ADD UNIQUE KEY `uq_products_branch_case_barcode` (`branch_id`, `case_barcode`)', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='case_barcode'), 'ALTER TABLE products DROP INDEX `case_barcode`', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches') ON DUPLICATE KEY UPDATE description=VALUES(description);
+-- 202609140001_branch_scoped_product_identifiers is superseded by single-store product keys.
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Single-store product identifiers') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609170001_profile_images: Optional generated profile image filename for user accounts
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='profile_image'), 'ALTER TABLE `users` ADD COLUMN `profile_image` VARCHAR(80) NULL AFTER email', 'DO 0');
@@ -435,12 +399,7 @@ EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_profile_images','Optional generated profile image filename for user accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
--- 202609180001_singleton_store_scope: Resolve the singleton Store compatibility identity
-INSERT INTO branches (branch_name,branch_code,status) SELECT 'RetailMind Store','RETAILMIND-STORE','active' WHERE NOT EXISTS (SELECT 1 FROM branches);
-SET @rm_sql = IF((SELECT COUNT(*) FROM branches b WHERE EXISTS (SELECT 1 FROM users u WHERE u.branch_id=b.branch_id) OR EXISTS (SELECT 1 FROM products p WHERE p.branch_id=b.branch_id)) > 1 OR EXISTS (SELECT 1 FROM branches b WHERE b.status<>'active' AND (EXISTS (SELECT 1 FROM users u WHERE u.branch_id=b.branch_id) OR EXISTS (SELECT 1 FROM products p WHERE p.branch_id=b.branch_id))) OR ((SELECT COUNT(*) FROM branches WHERE status='active')<>1 AND NOT EXISTS (SELECT 1 FROM branches b WHERE EXISTS (SELECT 1 FROM users u WHERE u.branch_id=b.branch_id) OR EXISTS (SELECT 1 FROM products p WHERE p.branch_id=b.branch_id))), 'SELECT * FROM `__retailmind_error_store_consolidation_required`', 'DO 0');
-PREPARE rm_stmt FROM @rm_sql;
-EXECUTE rm_stmt;
-DEALLOCATE PREPARE rm_stmt;
+-- 202609180001_singleton_store_scope is superseded by the fixed single-store scope.
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180001_singleton_store_scope','Resolve the singleton Store compatibility identity') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609180002_audit_record_categories: Categorize Protected Audit Records for authority-scoped visibility
@@ -493,7 +452,7 @@ DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609180003_emergency_access','Durable reason-bound Emergency Access sessions and audit correlation') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609180004_recovery_account: Sealed Recovery Account identity and offline lifecycle state
-SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='is_recovery_account'), 'ALTER TABLE `users` ADD COLUMN `is_recovery_account` BOOLEAN NOT NULL DEFAULT FALSE AFTER `branch_id`', 'DO 0');
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='is_recovery_account'), 'ALTER TABLE `users` ADD COLUMN `is_recovery_account` BOOLEAN NOT NULL DEFAULT FALSE AFTER `must_change_password`', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
@@ -1638,6 +1597,7 @@ ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_draft_notes'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_draft_notes` TEXT NULL AFTER `reviewed_at`', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_notes'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_notes` TEXT NULL AFTER `review_draft_notes`', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='review_shortage'), 'ALTER TABLE `cashier_shifts` ADD COLUMN `review_shortage` DECIMAL(12,2) NULL AFTER `review_notes`', 'DO 0');
@@ -1777,3 +1737,126 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE t
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611010001_retire_branches and 202611010002_remove_branch_id.
+SET @rm_guard = IF(
+    EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='branch_id')
+    AND EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND COLUMN_NAME='branch_id'),
+    'SELECT COUNT(DISTINCT store_id) INTO @rm_store_count FROM (SELECT branch_id AS store_id FROM users WHERE branch_id IS NOT NULL UNION SELECT branch_id FROM products WHERE branch_id IS NOT NULL) AS store_ids',
+    'SET @rm_store_count=0'
+);
+PREPARE rm_stmt FROM @rm_guard; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(@rm_store_count > 1, 'SELECT * FROM `__retailmind_error_multiple_stores_require_consolidation`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_guard = IF(
+    EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='store_calendar' AND COLUMN_NAME='branch_id')
+    AND EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='branch_id')
+    AND EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND COLUMN_NAME='branch_id'),
+    'SELECT COUNT(DISTINCT store_id) INTO @rm_store_count FROM (SELECT branch_id AS store_id FROM users WHERE branch_id IS NOT NULL UNION SELECT branch_id FROM products WHERE branch_id IS NOT NULL UNION SELECT branch_id FROM store_calendar WHERE branch_id IS NOT NULL) AS store_ids',
+    'SET @rm_store_count=0'
+);
+PREPARE rm_stmt FROM @rm_guard; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(@rm_store_count > 1, 'SELECT * FROM `__retailmind_error_multiple_stores_require_consolidation`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SELECT GROUP_CONCAT(CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ')
+INTO @rm_drops FROM information_schema.KEY_COLUMN_USAGE
+WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='users' AND REFERENCED_TABLE_NAME='branches';
+SET @rm_sql = IF(@rm_drops IS NULL, 'DO 0', CONCAT('ALTER TABLE `users` ', @rm_drops));
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SELECT GROUP_CONCAT(CONCAT('DROP FOREIGN KEY `', REPLACE(CONSTRAINT_NAME, '`', '``'), '`') SEPARATOR ', ')
+INTO @rm_drops FROM information_schema.KEY_COLUMN_USAGE
+WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='products' AND REFERENCED_TABLE_NAME='branches';
+SET @rm_sql = IF(@rm_drops IS NULL, 'DO 0', CONCAT('ALTER TABLE `products` ', @rm_drops));
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+DROP TABLE IF EXISTS `branches`;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire branch storage for the single-store application') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(
+    EXISTS (SELECT sku FROM products GROUP BY sku HAVING COUNT(*) > 1)
+    OR EXISTS (SELECT barcode FROM products GROUP BY barcode HAVING COUNT(*) > 1)
+    OR EXISTS (SELECT case_barcode FROM products WHERE case_barcode IS NOT NULL GROUP BY case_barcode HAVING COUNT(*) > 1)
+    OR EXISTS (SELECT pack_barcode FROM products WHERE pack_barcode IS NOT NULL GROUP BY pack_barcode HAVING COUNT(*) > 1),
+    'SELECT * FROM `__retailmind_error_duplicate_product_identifiers`',
+    'DO 0'
+);
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND INDEX_NAME='sku' AND NON_UNIQUE=1), 'ALTER TABLE products DROP INDEX sku', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND INDEX_NAME='barcode' AND NON_UNIQUE=1), 'ALTER TABLE products DROP INDEX barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND INDEX_NAME='case_barcode' AND NON_UNIQUE=1), 'ALTER TABLE products DROP INDEX case_barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND INDEX_NAME='pack_barcode' AND NON_UNIQUE=1), 'ALTER TABLE products DROP INDEX pack_barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_sku'), 'ALTER TABLE products DROP INDEX uq_products_branch_sku', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_barcode'), 'ALTER TABLE products DROP INDEX uq_products_branch_barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_case_barcode'), 'ALTER TABLE products DROP INDEX uq_products_branch_case_barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='uq_products_branch_pack_barcode'), 'ALTER TABLE products DROP INDEX uq_products_branch_pack_barcode', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='idx_products_branch_id'), 'ALTER TABLE products DROP INDEX idx_products_branch_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='products' AND COLUMN_NAME='branch_id'), 'ALTER TABLE products DROP COLUMN branch_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='branch_id'), 'ALTER TABLE users DROP COLUMN branch_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='store_calendar' AND COLUMN_NAME='branch_id'), 'ALTER TABLE store_calendar DROP COLUMN branch_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='sku'), 'ALTER TABLE products ADD UNIQUE KEY sku (sku)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='barcode'), 'ALTER TABLE products ADD UNIQUE KEY barcode (barcode)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='case_barcode'), 'ALTER TABLE products ADD UNIQUE KEY case_barcode (case_barcode)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='products' AND index_name='pack_barcode'), 'ALTER TABLE products ADD UNIQUE KEY pack_barcode (pack_barcode)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='users' AND index_name='idx_users_branch_id'), 'ALTER TABLE users DROP INDEX idx_users_branch_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_remove_branch_id','Remove obsolete branch identifiers from the single-store schema') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611010005_users_atomic_names: keep legacy text as display_name; leave name parts for manual review.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='first_name'), 'ALTER TABLE users ADD COLUMN first_name VARCHAR(50) NULL AFTER user_id', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='last_name'), 'ALTER TABLE users ADD COLUMN last_name VARCHAR(50) NULL AFTER first_name', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='display_name'), 'ALTER TABLE users ADD COLUMN display_name VARCHAR(100) NULL AFTER last_name', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='full_name'), 'UPDATE users SET display_name=full_name WHERE display_name IS NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='display_name' AND is_nullable='YES'), 'ALTER TABLE users MODIFY display_name VARCHAR(100) NOT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='full_name'), 'ALTER TABLE users DROP COLUMN full_name', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010005_users_atomic_names','Split user names into first and last name fields') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611010006_normalize_shift_payment_totals: preserve saved tender totals as one amount per shift and type.
+CREATE TABLE IF NOT EXISTS cashier_shift_payment_totals (
+    shift_id INT NOT NULL,
+    payment_type ENUM('cash','card','ewallet') NOT NULL,
+    amount DECIMAL(12,2) NOT NULL,
+    PRIMARY KEY (shift_id, payment_type),
+    CONSTRAINT fk_shift_payment_totals_shift FOREIGN KEY (shift_id) REFERENCES cashier_shifts (shift_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SET @rm_has_payment_totals = EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals');
+SET @rm_invalid_payment_totals = 0;
+SET @rm_sql = IF(@rm_has_payment_totals, 'SELECT COUNT(*) INTO @rm_invalid_payment_totals FROM cashier_shifts WHERE payment_totals IS NOT NULL AND CASE WHEN JSON_VALID(payment_totals)=0 THEN 1 ELSE JSON_TYPE(payment_totals) <> ''OBJECT'' OR JSON_LENGTH(payment_totals) <> 3 OR JSON_CONTAINS_PATH(payment_totals, ''one'', ''$.cash'')=0 OR JSON_CONTAINS_PATH(payment_totals, ''one'', ''$.card'')=0 OR JSON_CONTAINS_PATH(payment_totals, ''one'', ''$.ewallet'')=0 OR JSON_TYPE(JSON_EXTRACT(payment_totals, ''$.cash'')) NOT IN (''INTEGER'',''DOUBLE'',''DECIMAL'') OR JSON_TYPE(JSON_EXTRACT(payment_totals, ''$.card'')) NOT IN (''INTEGER'',''DOUBLE'',''DECIMAL'') OR JSON_TYPE(JSON_EXTRACT(payment_totals, ''$.ewallet'')) NOT IN (''INTEGER'',''DOUBLE'',''DECIMAL'') END', 'SET @rm_invalid_payment_totals = 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(@rm_invalid_payment_totals > 0, 'SELECT * FROM `__retailmind_error_invalid_cashier_shift_payment_totals`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals'), 'INSERT INTO cashier_shift_payment_totals (shift_id,payment_type,amount) SELECT shift_id, ''cash'', CAST(JSON_UNQUOTE(JSON_EXTRACT(payment_totals, ''$.cash'')) AS DECIMAL(12,2)) FROM cashier_shifts WHERE payment_totals IS NOT NULL AND JSON_EXTRACT(payment_totals, ''$.cash'') IS NOT NULL ON DUPLICATE KEY UPDATE amount=VALUES(amount)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals'), 'INSERT INTO cashier_shift_payment_totals (shift_id,payment_type,amount) SELECT shift_id, ''card'', CAST(JSON_UNQUOTE(JSON_EXTRACT(payment_totals, ''$.card'')) AS DECIMAL(12,2)) FROM cashier_shifts WHERE payment_totals IS NOT NULL AND JSON_EXTRACT(payment_totals, ''$.card'') IS NOT NULL ON DUPLICATE KEY UPDATE amount=VALUES(amount)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals'), 'INSERT INTO cashier_shift_payment_totals (shift_id,payment_type,amount) SELECT shift_id, ''ewallet'', CAST(JSON_UNQUOTE(JSON_EXTRACT(payment_totals, ''$.ewallet'')) AS DECIMAL(12,2)) FROM cashier_shifts WHERE payment_totals IS NOT NULL AND JSON_EXTRACT(payment_totals, ''$.ewallet'') IS NOT NULL ON DUPLICATE KEY UPDATE amount=VALUES(amount)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals'), 'ALTER TABLE cashier_shifts DROP COLUMN payment_totals', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010006_normalize_shift_payment_totals','Store Cashier Shift payment totals as atomic payment-type rows') ON DUPLICATE KEY UPDATE description=VALUES(description);

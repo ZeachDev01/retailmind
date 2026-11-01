@@ -845,8 +845,8 @@ class InventoryCountService
         $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
         $stmt = $this->pdo->prepare(
             "SELECT ic.*, p.sku, p.product_name{$packSelect},
-                    counted_user.full_name AS counted_by_name,
-                    approved_user.full_name AS approved_by_name,
+                    counted_user.display_name AS counted_by_name,
+                    approved_user.display_name AS approved_by_name,
                     (SELECT COUNT(*) FROM inventory_count_batches icb WHERE icb.count_id = ic.count_id) AS batch_count
              FROM inventory_counts ic
              JOIN products p ON p.product_id = ic.product_id

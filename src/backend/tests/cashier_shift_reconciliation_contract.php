@@ -10,6 +10,7 @@ $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
     INSERT INTO users VALUES (1, 'Casey'),(2, 'Morgan');
     CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT);
     INSERT INTO registers VALUES (10, 'Front');
+    CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type));
     CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, cashier_id INTEGER, register_id INTEGER,
         status TEXT, locked_at TEXT, opening_cash REAL, opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
         closed_at TEXT, expected_cash REAL, actual_cash REAL, cash_variance REAL, closing_notes TEXT,
@@ -52,8 +53,8 @@ $summary = $service->closeShift(1, 320, 'Drawer was short after count', $denomin
 $check((float)$summary['expected_cash'] === $expected && (float)$summary['cash_variance'] === -100.00,
     'Cashier receives expected cash and variance after submission');
 $check((int)$summary['variance_review_required'] === 1, 'exactly PHP 100 needs review');
-$totals = json_decode((string)$summary['payment_totals'], true);
-$check($totals === ['cash' => 250, 'card' => 75, 'ewallet' => 50], 'closure stores payment-method totals');
+$totals = $pdo->query('SELECT payment_type, amount FROM cashier_shift_payment_totals WHERE shift_id=20 ORDER BY payment_type')->fetchAll(PDO::FETCH_KEY_PAIR);
+$check($totals === ['card' => 75.0, 'cash' => 250.0, 'ewallet' => 50.0], 'closure stores atomic payment-method totals');
 $audit = $pdo->query("SELECT * FROM activity_log WHERE action='Cashier Shift closed'")->fetch(PDO::FETCH_ASSOC);
 $details = $audit ? json_decode((string)$audit['new_value'], true) : null;
 $check($audit !== false && (int)$audit['record_id'] === 20 && $audit['category'] === 'store_operation',

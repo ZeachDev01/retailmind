@@ -1118,8 +1118,8 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    reporter.full_name AS cashier_name,
-                    reviewer.full_name AS reviewer_name
+                    reporter.display_name AS cashier_name,
+                    reviewer.display_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
              JOIN users reporter ON reporter.user_id = ia.reported_by
@@ -1152,7 +1152,7 @@ class StockIssueService
 
         $movementStmt = $this->pdo->prepare(
             'SELECT sm.movement_id, sm.product_id, sm.change_qty, sm.reason, sm.moved_by, sm.adjustment_id, sm.moved_at,
-                    mover.full_name AS moved_by_name
+                    mover.display_name AS moved_by_name
              FROM stock_movements sm
              LEFT JOIN users mover ON mover.user_id = sm.moved_by
              WHERE sm.adjustment_id = ?
@@ -1191,8 +1191,8 @@ class StockIssueService
                     ic.difference_qty{$formCols}, ic.discrepancy_reason, ic.counted_by, ic.approved_by,
                     ic.counted_at, ic.approved_at, ic.status, ic.related_adjustment_id,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    counter.full_name AS counted_by_name,
-                    approver.full_name AS approved_by_name
+                    counter.display_name AS counted_by_name,
+                    approver.display_name AS approved_by_name
              FROM inventory_counts ic
              JOIN products p ON p.product_id = ic.product_id
              LEFT JOIN users counter ON counter.user_id = ic.counted_by
@@ -1213,8 +1213,8 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    reporter.full_name AS cashier_name,
-                    reviewer.full_name AS reviewer_name
+                    reporter.display_name AS cashier_name,
+                    reviewer.display_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
              JOIN users reporter ON reporter.user_id = ia.reported_by
@@ -1236,7 +1236,7 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             'SELECT r.revision_id, r.adjustment_id, r.actor_id, r.action, r.old_status, r.new_status,
                     r.old_values, r.new_values, r.created_at,
-                    actor.full_name AS actor_name
+                    actor.display_name AS actor_name
              FROM inventory_adjustment_revisions r
              LEFT JOIN users actor ON actor.user_id = r.actor_id
              WHERE r.adjustment_id = ?
@@ -1255,7 +1255,7 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    u.full_name AS cashier_name,
+                    u.display_name AS cashier_name,
                     COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
@@ -1278,8 +1278,8 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    reporter.full_name AS cashier_name,
-                    reviewer.full_name AS reviewer_name
+                    reporter.display_name AS cashier_name,
+                    reviewer.display_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
              JOIN users reporter ON reporter.user_id = ia.reported_by
@@ -1319,7 +1319,7 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    reviewer.full_name AS reviewer_name
+                    reviewer.display_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
              LEFT JOIN users reviewer ON reviewer.user_id = ia.approved_by
@@ -1342,8 +1342,8 @@ class StockIssueService
         $stmt = $this->pdo->prepare(
             "SELECT ia.*,
                     p.sku, p.product_name{$this->packSizeSelect()},
-                    reporter.full_name AS cashier_name,
-                    reviewer.full_name AS reviewer_name
+                    reporter.display_name AS cashier_name,
+                    reviewer.display_name AS reviewer_name
              FROM inventory_adjustments ia
              JOIN products p ON p.product_id = ia.product_id
              JOIN users reporter ON reporter.user_id = ia.reported_by

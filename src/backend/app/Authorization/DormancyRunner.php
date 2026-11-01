@@ -85,8 +85,8 @@ final class DormancyRunner
         $placeholders = implode(', ', array_fill(0, count(self::SCOPE_ROLES), '?'));
         $lock = $userId !== null && $this->pdo->inTransaction() && $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
         $statement = $this->pdo->prepare(
-            "SELECT u.user_id, u.full_name, u.username, u.email, u.status, u.session_version,
-                    u.branch_id, u.is_recovery_account, u.last_login_at, u.created_at, r.role_name,
+            "SELECT u.user_id, u.display_name, u.username, u.email, u.status, u.session_version,
+                    u.is_recovery_account, u.last_login_at, u.created_at, r.role_name,
                     EXISTS (SELECT 1 FROM user_roles ur JOIN roles ar ON ar.role_id = ur.role_id
                             WHERE ur.user_id = u.user_id AND ar.role_name = 'admin'{$lock}) AS has_admin
              FROM users u
@@ -127,8 +127,8 @@ final class DormancyRunner
             return false;
         }
 
-        $title = 'Dormant Account warning: ' . (string)$account['full_name'];
-        $message = (string)$account['full_name'] . ' has not signed in for ' . $days
+        $title = 'Dormant Account warning: ' . (string)$account['display_name'];
+        $message = (string)$account['display_name'] . ' has not signed in for ' . $days
             . ' days. Under the Dormancy Policy, the account is disabled automatically after '
             . $disableDays . ' days without a sign-in.';
         $stamp = $now->format('Y-m-d H:i:s');
@@ -220,14 +220,12 @@ final class DormancyRunner
 
     private function snapshot(array $account, string $status): array
     {
-        $branchId = $account['branch_id'] ?? null;
         return [
             'user_id' => (int)$account['user_id'],
             'username' => (string)$account['username'],
             'role' => (string)$account['role_name'],
             'has_admin' => $account['role_name'] === 'admin' || (bool)$account['has_admin'],
             'status' => $status,
-            'store_id' => $branchId !== null && $branchId !== '' ? (int)$branchId : null,
         ];
     }
 

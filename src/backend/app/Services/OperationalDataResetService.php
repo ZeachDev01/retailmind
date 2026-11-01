@@ -6,7 +6,6 @@ use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\DatabaseBackupService;
 use App\Backup\RecoveryStore;
-use App\Store\StoreScope;
 use App\Store\StoreWriteGate;
 use DomainException;
 use PDO;
@@ -18,7 +17,7 @@ final class OperationalDataResetService
     public const TABLES = [
         'forecast_decisions', 'cash_refund_exception_access', 'refund_receipt_details',
         'cash_refund_items', 'cash_refunds', 'sale_reversal_items', 'sale_reversals',
-        'sale_receipt_details', 'sale_item_batches', 'held_sales', 'checkout_attempts',
+        'sale_receipt_details', 'sale_item_batches', 'held_sale_items', 'held_sales', 'checkout_attempts',
         'sale_items', 'sales', 'inventory_adjustment_revisions', 'inventory_counts',
         'stock_movements', 'inventory_adjustments', 'supplier_pullouts', 'product_batches', 'stock_receiving', 'stock_receiving_groups',
         'purchase_history',
@@ -71,11 +70,10 @@ final class OperationalDataResetService
         $actor->execute([$actorId]);
         $hash = $actor->fetchColumn();
         if (!$hash || !password_verify($password, $hash)) throw new DomainException('Your current password is incorrect.');
-        $storeId = (new StoreScope($this->pdo))->id();
         StoreWriteGate::begin($this->pdo);
         try {
-            $statement = $this->pdo->prepare('SELECT * FROM products WHERE product_id = ? AND branch_id = ? FOR UPDATE');
-            $statement->execute([$productId, $storeId]);
+            $statement = $this->pdo->prepare('SELECT * FROM products WHERE product_id = ? FOR UPDATE');
+            $statement->execute([$productId]);
             $product = $statement->fetch(PDO::FETCH_ASSOC);
             if (!$product) throw new DomainException('Product not found in this store.');
             $stock = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id = ? FOR UPDATE');
@@ -116,7 +114,6 @@ final class OperationalDataResetService
         $actor->execute([$actorId]);
         $hash = $actor->fetchColumn();
         if (!$hash || !password_verify($password, $hash)) throw new DomainException('Your current password is incorrect.');
-        (new StoreScope($this->pdo))->id();
         if ($this->blockers()) throw new DomainException(implode(' ', $this->blockers()));
         $tables = $this->tables();
         foreach (array_merge(self::TABLES, ['inventory', 'users', 'activity_log']) as $table) {

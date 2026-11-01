@@ -7,10 +7,7 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Authorization\DormancyStatusTab;
 use App\Authorization\AdministratorAccessMinimum;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
-
-$storeId = store_scope_id($pdo);
-$lifecycle = new UserLifecycleService($pdo, role_capability_policy(), new StoreScope($pdo));
+$lifecycle = new UserLifecycleService($pdo, role_capability_policy());
 $dormancyStatusTab = new DormancyStatusTab($pdo);
 $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
@@ -96,7 +93,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $profileImage = profile_image_storage()->store($_FILES['profile_image'] ?? null);
             try {
                 $lifecycle->create($actorId, $actorRole, [
-                    'full_name' => trim($firstName . ' ' . $lastName),
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
                     'username' => $createFormValues['username'],
                     'email' => $createFormValues['email'],
                     'profile_image' => $profileImage,
@@ -124,7 +122,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $selectedRoles = (array)($before['roles'] ?? [$before['role_name']]);
             }
             $account = [
-                'full_name' => trim($firstName . ' ' . $lastName),
+                'first_name' => $firstName,
+                'last_name' => $lastName,
                 'username' => trim((string)($_POST['username'] ?? '')),
                 'email' => trim((string)($_POST['email'] ?? '')),
                 'roles' => $selectedRoles,
@@ -154,7 +153,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 profile_image_storage()->delete((string)$before['profile_image']);
             }
             if ($userId === $actorId) {
-                $_SESSION['full_name'] = $after['full_name'];
+                $_SESSION['display_name'] = $after['display_name'];
                 $_SESSION['profile_image'] = $after['profile_image'] ?? null;
             }
             $message = 'User account updated successfully.';
@@ -260,11 +259,11 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                         $hasImage = !empty($user['profile_image']) && profile_image_storage()->exists((string)$user['profile_image']);
                         $canViewImage = $hasImage && $lifecycle->canViewPicture($actorId, $actorRole, $pictureTarget);
                         $statusView = $dormancyStatusTab->view($user);
-                        $displayName = display_person_name((string)$user['full_name']);
+                        $displayName = display_person_name((string)$user['display_name']);
                         $pendingDuties = $lifecycle->pendingDuties((int)$user['user_id']);
                     ?>
                         <tr>
-                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['full_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
+                            <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['display_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
                             <td><?= htmlspecialchars((string)($user['email'] ?: $user['username'])) ?></td>
                             <td><?= htmlspecialchars(implode(', ', array_map('display_label', array_filter(explode(',', (string)($user['assigned_roles'] ?? $user['role_name'])))))) ?></td>
                             <td><span class="<?= $user['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= htmlspecialchars(display_label((string)$user['status'])) ?></span></td>
@@ -277,7 +276,9 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                     <button type="button" class="btn btn-secondary btn-small open-user-drawer"
                                         aria-label="Manage <?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>"
                                         data-user-id="<?= (int)$user['user_id'] ?>"
-                                        data-full-name="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                        data-first-name="<?= htmlspecialchars((string)($user['first_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-last-name="<?= htmlspecialchars((string)($user['last_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-name-review="<?= empty($user['first_name']) ? '1' : '0' ?>"
                                         data-username="<?= htmlspecialchars((string)$user['username'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-email="<?= htmlspecialchars((string)($user['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-role-id="<?= (int)$user['role_id'] ?>"
@@ -289,7 +290,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                         data-auto-disable-date="<?= htmlspecialchars((string)($statusView['auto_disable_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-policy-disabled="<?= htmlspecialchars((string)($statusView['policy_disabled_line'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                         data-is-self="<?= $isSelf ? '1' : '0' ?>" data-is-super-admin="<?= $isSuper ? '1' : '0' ?>"
-                                        data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['full_name'])) ?>"
+                                        data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['display_name'])) ?>"
                                         data-profile-url="<?= $canViewImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
                                         data-has-profile-image="<?= $hasImage ? '1' : '0' ?>"
                                         data-pending-duties="<?= htmlspecialchars(json_encode($pendingDuties), ENT_QUOTES, 'UTF-8') ?>">Manage</button>
@@ -388,7 +389,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }, true);
 
     document.querySelectorAll('.open-user-drawer').forEach(button => button.addEventListener('click', function () {
-        const parts = (button.dataset.fullName || '').trim().split(/\s+/).filter(Boolean);
         document.getElementById('drawerUserId').value = button.dataset.userId || '';
         document.getElementById('drawerRevokeUserId').value = button.dataset.userId || '';
         document.getElementById('drawerDeleteUserId').value = button.dataset.userId || '';
@@ -397,8 +397,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('drawerDeleteButton').disabled = Boolean(button.dataset.deletionRestriction);
         document.getElementById('drawerDeleteHelp').textContent = button.dataset.deletionRestriction || 'Permanently removes this account and access. This cannot be undone.';
         document.getElementById('drawerUsername').value = button.dataset.username || '';
-        document.getElementById('drawerFirstName').value = parts.shift() || '';
-        document.getElementById('drawerLastName').value = parts.join(' ');
+        document.getElementById('drawerFirstName').value = button.dataset.firstName || '';
+        document.getElementById('drawerLastName').value = button.dataset.lastName || '';
+        document.getElementById('drawerNameReview').hidden = button.dataset.nameReview !== '1';
         document.getElementById('drawerEmail').value = button.dataset.email || '';
         const drawerPassword = document.getElementById('drawerPassword');
         if (drawerPassword) {

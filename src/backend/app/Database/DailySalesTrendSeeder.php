@@ -2,7 +2,6 @@
 
 namespace App\Database;
 
-use App\Store\StoreScope;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -32,25 +31,24 @@ final class DailySalesTrendSeeder
     {
         $this->assertSafeEnvironment();
         $this->assertRequiredSchema();
-        $storeId = (new StoreScope($this->pdo))->id();
-        $products = $this->loadProductSeedDependency($storeId);
+        $products = $this->loadProductSeedDependency();
         $plan = $this->buildPlan($products);
 
         $this->pdo->beginTransaction();
         try {
             $seedUserId = $this->resolveSeedUser(
                 self::USERNAME,
-                'RetailMind Sales Trend Seed',
+                'RetailMind',
+                'Sales Trend Seed',
                 'rm-seed-sales-trend@example.test',
-                'cashier',
-                $storeId
+                'cashier'
             );
             $receiverUserId = $this->resolveSeedUser(
                 self::RECEIVER_USERNAME,
-                'RetailMind Sales Seed Receiver',
+                'RetailMind Sales Seed',
+                'Receiver',
                 'rm-seed-sales-receiver@example.test',
-                'admin',
-                $storeId
+                'admin'
             );
             $this->removePreviousRun($seedUserId, $receiverUserId);
             $batches = $this->receiveSimulationStock($products, $plan['units_by_product'], $receiverUserId);
@@ -109,7 +107,7 @@ final class DailySalesTrendSeeder
 
     private function assertRequiredSchema(): void
     {
-        foreach (['users', 'roles', 'branches', 'products', 'inventory', 'sales', 'sale_items',
+        foreach (['users', 'roles', 'products', 'inventory', 'sales', 'sale_items',
                   'stock_movements', 'stock_receiving', 'purchase_history', 'product_batches',
                   'sale_item_batches', 'cashier_shifts', 'fiscal_periods', 'fiscal_period_locks'] as $table) {
             if (!Schema::tableExists($this->pdo, $table)) {
@@ -132,18 +130,18 @@ final class DailySalesTrendSeeder
         }
     }
 
-    private function loadProductSeedDependency(int $storeId): array
+    private function loadProductSeedDependency(): array
     {
         $placeholders = implode(',', array_fill(0, count(self::PRODUCT_SKUS), '?'));
         $stmt = $this->pdo->prepare(
             "SELECT p.product_id, p.sku, p.product_name, p.unit_price, p.cost_price
              FROM products p
              JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.branch_id = ? AND p.sku IN ({$placeholders})
+             WHERE p.sku IN ({$placeholders})
                AND p.status = 'active' AND p.unit_price > 0
              ORDER BY FIELD(p.sku, {$placeholders})"
         );
-        $stmt->execute(array_merge([$storeId], self::PRODUCT_SKUS, self::PRODUCT_SKUS));
+        $stmt->execute(array_merge(self::PRODUCT_SKUS, self::PRODUCT_SKUS));
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (count($products) < 8) {
             throw new RuntimeException(
@@ -253,12 +251,13 @@ final class DailySalesTrendSeeder
 
     private function resolveSeedUser(
         string $username,
-        string $fullName,
+        string $firstName,
+        string $lastName,
         string $email,
-        string $roleName,
-        int $storeId
+        string $roleName
     ): int
     {
+        $displayName = trim($firstName . ' ' . $lastName);
         $roleStmt = $this->pdo->prepare('SELECT role_id FROM roles WHERE role_name = ? LIMIT 1');
         $roleStmt->execute([$roleName]);
         $roleId = (int)$roleStmt->fetchColumn();
@@ -266,24 +265,24 @@ final class DailySalesTrendSeeder
             throw new RuntimeException("The {$roleName} role is required before seeding sales.");
         }
 
-        $stmt = $this->pdo->prepare('SELECT user_id, full_name, email FROM users WHERE username = ? LIMIT 1 FOR UPDATE');
+        $stmt = $this->pdo->prepare('SELECT user_id, display_name, email FROM users WHERE username = ? LIMIT 1 FOR UPDATE');
         $stmt->execute([$username]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($existing) {
-            if ($existing['full_name'] !== $fullName || $existing['email'] !== $email) {
+            if ($existing['display_name'] !== $displayName || $existing['email'] !== $email) {
                 throw new RuntimeException("The reserved seed username '{$username}' is owned by an unexpected user.");
             }
-            $this->pdo->prepare("UPDATE users SET role_id = ?, status = 'disabled', branch_id = ? WHERE user_id = ?")
-                ->execute([$roleId, $storeId, (int)$existing['user_id']]);
+            $this->pdo->prepare("UPDATE users SET role_id = ?, status = 'disabled' WHERE user_id = ?")
+                ->execute([$roleId, (int)$existing['user_id']]);
             return (int)$existing['user_id'];
         }
 
         $insert = $this->pdo->prepare(
             "INSERT INTO users
-                (full_name, username, email, password_hash, role_id, status, must_change_password, branch_id)
-             VALUES (?, ?, ?, '!RM_SEED_LOGIN_DISABLED!', ?, 'disabled', 1, ?)"
+                (first_name, last_name, display_name, username, email, password_hash, role_id, status, must_change_password)
+             VALUES (?, ?, ?, ?, ?, '!RM_SEED_LOGIN_DISABLED!', ?, 'disabled', 1)"
         );
-        $insert->execute([$fullName, $username, $email, $roleId, $storeId]);
+        $insert->execute([$firstName, $lastName, $displayName, $username, $email, $roleId]);
         return (int)$this->pdo->lastInsertId();
     }
 

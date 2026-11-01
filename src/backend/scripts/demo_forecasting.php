@@ -29,12 +29,11 @@ if ($action === 'setup') {
     preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../database/sql/schema.sql'), $tables);
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
-    $pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Isolated Demo','DEMO')");
     foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $index => $role) {
         $id = $index + 1;
         $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
-        $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES (?,?,?,?,?,1,0)')
-            ->execute([$id,'Demo ' . $role,'demo_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
+        $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,?,?,0)')
+            ->execute([$id,'Demo',$role,'Demo ' . $role,'demo_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
     }
     (new App\Database\MigrationRunner($pdo, __DIR__ . '/../database/migrations'))->runPending();
     // MySQL 8's charset default differs from legacy model_training_runs metadata.

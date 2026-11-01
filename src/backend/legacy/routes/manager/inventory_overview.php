@@ -16,7 +16,7 @@ $out_of_stock = $pdo->query("SELECT COUNT(*) FROM inventory WHERE quantity_on_ha
 $pending_counts = $pdo->query("SELECT COUNT(*) FROM inventory_counts WHERE status = 'pending'")->fetchColumn();
 
 $recent_movements = $pdo->query(
-    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.full_name AS moved_by_name
+    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.display_name AS moved_by_name
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      LEFT JOIN users u ON sm.moved_by = u.user_id
@@ -38,7 +38,7 @@ $recent_movements = $pdo->query(
     <div class="main-content">
         <div class="topbar">
             <h1>Inventory Overview</h1>
-            <span class="badge-role">Inventory Manager: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+            <span class="badge-role">Inventory Manager: <?= htmlspecialchars($_SESSION['display_name']) ?></span>
         </div>
 
         <div class="card-grid">

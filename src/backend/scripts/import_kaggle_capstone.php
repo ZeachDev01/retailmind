@@ -192,17 +192,15 @@ require_once __DIR__ . '/../config/db.php';
 $pdo->beginTransaction();
 
 try {
-    $storeScopeId = (new App\Store\StoreScope($pdo))->id();
     // Ensure demo category exists
     $pdo->exec("INSERT INTO categories (category_id, category_name) 
                 VALUES (999, 'Demo Inventory (Kaggle)') 
                 ON DUPLICATE KEY UPDATE category_name = 'Demo Inventory (Kaggle)'");
 
     // Ensure demo products 1..20 exist with stable mappings
-    $stmtProd = $pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, category_id, unit_price, cost_price, branch_id)
-                               VALUES (?, ?, ?, ?, 999, ?, ?, ?)
+    $stmtProd = $pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, category_id, unit_price, cost_price)
+                               VALUES (?, ?, ?, ?, 999, ?, ?)
                                ON DUPLICATE KEY UPDATE 
-                                 branch_id = VALUES(branch_id),
                                  product_name = VALUES(product_name),
                                  unit_price = VALUES(unit_price),
                                  cost_price = VALUES(cost_price)");
@@ -211,12 +209,12 @@ try {
         $sku = "DEMO-{$pCode}";
         $barcode = "BAR-{$pCode}";
         $name = "Demo Product {$pNum} ({$pCode})";
-        $stmtProd->execute([$pNum, $sku, $barcode, $name, 25.00, 15.00, $storeScopeId]);
+        $stmtProd->execute([$pNum, $sku, $barcode, $name, 25.00, 15.00]);
     }
 
     // System cashier user 999
-    $pdo->exec("INSERT IGNORE INTO users (user_id, full_name, username, password_hash, role_id, branch_id) 
-                VALUES (999, 'Kaggle Importer System', 'kaggle_sys', 'none', 1, 1)");
+    $pdo->exec("INSERT IGNORE INTO users (user_id, first_name, last_name, display_name, username, password_hash, role_id)
+                VALUES (999, 'Kaggle', 'Importer System', 'Kaggle Importer System', 'kaggle_sys', 'none', 1)");
 
     // Clean slate for demo cashier 999 to guarantee idempotency
     $pdo->exec("DELETE FROM sale_items WHERE sale_id IN (SELECT sale_id FROM sales WHERE cashier_id = 999)");

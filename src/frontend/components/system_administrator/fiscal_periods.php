@@ -107,7 +107,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-$periodsStatement = $pdo->query("SELECT fp.*, u.full_name AS created_by_name, cu.full_name AS closed_by_name
+$periodsStatement = $pdo->query("SELECT fp.*, u.display_name AS created_by_name, cu.display_name AS closed_by_name
                                  FROM fiscal_periods fp
                                  LEFT JOIN users u ON fp.created_by = u.user_id
                                  LEFT JOIN users cu ON fp.closed_by = cu.user_id

@@ -166,6 +166,7 @@ try {
         (11, 'Back Counter', 'active')");
 
     $pdo->exec('CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT)');
+    $pdo->exec('CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type))');
     $service = new CashierShiftService($pdo, new RoleCapabilityPolicy());
 
     // --- Locking needs an open shift, the Cashier workspace, and once only ---

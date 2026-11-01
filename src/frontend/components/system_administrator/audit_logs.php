@@ -96,7 +96,7 @@ function audit_log_table_cells(array $log): array
     $newValue = audit_log_display_value($log['new_value'] ?? null);
     $formattedTimestamp = format_display_datetime($log['created_at']);
     if ($log['user_id']) {
-        $fullName = trim((string)($log['full_name'] ?? ''));
+        $fullName = trim((string)($log['display_name'] ?? ''));
         $username = trim((string)($log['username'] ?? ''));
         if ($fullName !== '' && $fullName !== $username) {
             $user = '<strong>' . htmlspecialchars($fullName) . '</strong><small>@' . htmlspecialchars($username) . '</small>';
@@ -191,7 +191,7 @@ if ($isExport) {
     $rows = array_map(static function (array $log): array {
         return [
             format_display_datetime($log['created_at']),
-            $log['full_name'] ?: ($log['username'] ?: 'System / Unknown'),
+            $log['display_name'] ?: ($log['username'] ?: 'System / Unknown'),
             $log['action'],
             $log['category'],
             $log['module'] ?? '-',

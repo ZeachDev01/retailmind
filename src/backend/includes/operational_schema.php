@@ -57,7 +57,6 @@ function ensure_operational_updates_schema(PDO $pdo): void
         cash_variance DECIMAL(12,2) NULL,
         variance_threshold DECIMAL(12,2) NULL,
         variance_review_required TINYINT(1) NOT NULL DEFAULT 0,
-        payment_totals TEXT NULL,
         closing_notes TEXT NULL,
         closed_by INT NULL,
         intervention_reason TEXT NULL,
@@ -72,6 +71,14 @@ function ensure_operational_updates_schema(PDO $pdo): void
         INDEX idx_cashier_shifts_closed_by (closed_by),
         INDEX idx_cashier_shifts_opened_at (opened_at),
         INDEX idx_cashier_shifts_variance_review (variance_review_required, status, closed_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS cashier_shift_payment_totals (
+        shift_id INT NOT NULL,
+        payment_type ENUM('cash','card','ewallet') NOT NULL,
+        amount DECIMAL(12,2) NOT NULL,
+        PRIMARY KEY (shift_id, payment_type),
+        CONSTRAINT fk_shift_payment_totals_shift FOREIGN KEY (shift_id) REFERENCES cashier_shifts (shift_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS cash_drawer_movements (
@@ -93,7 +100,6 @@ function ensure_operational_updates_schema(PDO $pdo): void
         shift_id INT NULL,
         reference_no VARCHAR(50) NOT NULL UNIQUE,
         customer_label VARCHAR(120) NULL,
-        cart_json LONGTEXT NOT NULL,
         item_count INT NOT NULL DEFAULT 0,
         total_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
         status ENUM('held','resumed','cancelled','expired') NOT NULL DEFAULT 'held',
@@ -102,6 +108,29 @@ function ensure_operational_updates_schema(PDO $pdo): void
         resolved_at DATETIME NULL,
         INDEX idx_held_sales_cashier_status (cashier_id, status),
         INDEX idx_held_sales_expiry (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS held_sale_items (
+        held_sale_item_id INT AUTO_INCREMENT PRIMARY KEY,
+        held_sale_id INT NOT NULL,
+        cart_key VARCHAR(100) NOT NULL,
+        line_position INT NOT NULL,
+        product_id INT NOT NULL,
+        selling_form ENUM('piece','pack') NOT NULL,
+        pack_size INT NULL,
+        product_name TEXT NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(12,2) NOT NULL,
+        server_price DECIMAL(12,2) NOT NULL,
+        stock INT NULL,
+        reorder_level INT NOT NULL DEFAULT 0,
+        safety_stock INT NOT NULL DEFAULT 0,
+        sku VARCHAR(255) NULL,
+        barcode VARCHAR(255) NULL,
+        product_image VARCHAR(255) NULL,
+        UNIQUE KEY uq_held_sale_items_key (held_sale_id, cart_key),
+        INDEX idx_held_sale_items_order (held_sale_id, line_position),
+        CONSTRAINT fk_held_sale_items_sale FOREIGN KEY (held_sale_id) REFERENCES held_sales (held_sale_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $pdo->exec("CREATE TABLE IF NOT EXISTS promotions (

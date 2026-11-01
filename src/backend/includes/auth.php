@@ -157,7 +157,7 @@ function resolve_login_user(PDO $pdo, string $identifier): array
         return ['user' => null, 'identifier_type' => 'unknown'];
     }
 
-    $select = "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
+    $select = "SELECT u.user_id, u.display_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
             u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id";
@@ -244,7 +244,7 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             ? user_role_names($pdo, (int)$user['user_id'], (string)$user['role_name'])
             : [(string)$user['role_name']];
         $_SESSION['user_id'] = (int)$user['user_id'];
-        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['display_name'] = $user['display_name'];
         $_SESSION['role'] = $assignedRoles[0] ?? (string)$user['role_name'];
         $_SESSION['roles'] = $assignedRoles;
         $_SESSION['profile_image'] = $user['profile_image'];
@@ -301,7 +301,7 @@ function validate_current_session(PDO $pdo): void
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
+        "SELECT u.status, u.session_version, u.display_name, u.profile_image, u.must_change_password,
             u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
          WHERE u.user_id = ?"
@@ -316,7 +316,7 @@ function validate_current_session(PDO $pdo): void
         }
         exit;
     }
-    $_SESSION['full_name'] = $user['full_name'];
+    $_SESSION['display_name'] = $user['display_name'];
     $selectedWorkspace = current_role();
     $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
     $_SESSION['roles'] = $assignedRoles;
@@ -457,7 +457,7 @@ function store_product_scope(string $alias = 'p'): array
     if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
         throw new RuntimeException('Invalid product scope alias.');
     }
-    return [" AND {$alias}.branch_id = ?", [store_scope_id($pdo)]];
+    return ['', []];
 }
 
 function logout_user(): void

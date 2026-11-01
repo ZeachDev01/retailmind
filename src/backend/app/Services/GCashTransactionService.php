@@ -231,8 +231,8 @@ final class GCashTransactionService
             }
         }
 
-        $ncSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username,
-                         ru.full_name AS responsible_user_name, ru.username AS responsible_username
+        $ncSql = "SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username,
+                         ru.display_name AS responsible_user_name, ru.username AS responsible_username
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   LEFT JOIN users ru ON t.responsible_user_id = ru.user_id
@@ -284,7 +284,7 @@ final class GCashTransactionService
     {
         $offset = (max(1, min(100000, $page)) - 1) * 25;
         $stmt = $this->pdo()->prepare(
-            'SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+            'SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username
              FROM gcash_transactions t
              JOIN users u ON t.cashier_id = u.user_id
              WHERE t.cashier_id = ?
@@ -381,7 +381,7 @@ final class GCashTransactionService
             throw new DomainException('Select All, Cash-In, or Cash-Out.');
         }
         if ($search !== '') {
-            $whereConditions[] = "(t.reference_number LIKE ? ESCAPE '!' OR CONCAT('#', t.shift_id) LIKE ? ESCAPE '!' OR u.full_name LIKE ? ESCAPE '!' OR u.username LIKE ? ESCAPE '!')";
+            $whereConditions[] = "(t.reference_number LIKE ? ESCAPE '!' OR CONCAT('#', t.shift_id) LIKE ? ESCAPE '!' OR u.display_name LIKE ? ESCAPE '!' OR u.username LIKE ? ESCAPE '!')";
             $term = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
             array_push($whereParams, $term, $term, $term, $term);
         }
@@ -399,7 +399,7 @@ final class GCashTransactionService
 
     private function reportingTransactions(string $whereSql, array $whereParams, int $limit, int $offset = 0): array
     {
-        $txSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username
+        $txSql = "SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   {$whereSql}
@@ -521,7 +521,7 @@ final class GCashTransactionService
             $sessionStatus = 'open';
         } else {
             $closedStmt = $this->pdo()->prepare(
-                "SELECT s.*, u.full_name AS cashier_name, u.username AS cashier_username
+                "SELECT s.*, u.display_name AS cashier_name, u.username AS cashier_username
                  FROM gcash_service_sessions s
                  JOIN users u ON s.cashier_id = u.user_id
                  WHERE s.status = 'closed'
@@ -602,8 +602,8 @@ final class GCashTransactionService
         $feesCharged = round($grossFeesCash + $grossFeesWallet, 2);
         $feesAfterReturns = round($feesCharged - $feesReturned, 2);
 
-        $ncSql = "SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username,
-                         ru.full_name AS responsible_user_name, ru.username AS responsible_username
+        $ncSql = "SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username,
+                         ru.display_name AS responsible_user_name, ru.username AS responsible_username
                   FROM gcash_transactions t
                   JOIN users u ON t.cashier_id = u.user_id
                   LEFT JOIN users ru ON t.responsible_user_id = ru.user_id
@@ -643,11 +643,11 @@ final class GCashTransactionService
         }
 
         $diffSql = "SELECT s.*,
-                           u.full_name AS cashier_name,
+                           u.display_name AS cashier_name,
                            u.username AS cashier_username,
-                           cb.full_name AS closed_by_name,
-                           wb.full_name AS waived_by_name,
-                           ru.full_name AS responsible_user_name,
+                           cb.display_name AS closed_by_name,
+                           wb.display_name AS waived_by_name,
+                           ru.display_name AS responsible_user_name,
                            ru.username AS responsible_username
                     FROM gcash_service_sessions s
                     JOIN users u ON s.cashier_id = u.user_id
@@ -722,11 +722,11 @@ final class GCashTransactionService
         $cashiers = [];
         try {
             $cashierStmt = $this->pdo()->query(
-                "SELECT DISTINCT u.user_id, u.full_name, u.username
+                "SELECT DISTINCT u.user_id, u.display_name, u.username
                  FROM users u
                  JOIN roles r ON u.role_id = r.role_id
                  WHERE r.role_name = 'cashier' OR u.user_id IN (SELECT DISTINCT cashier_id FROM gcash_transactions)
-                 ORDER BY u.full_name ASC"
+                 ORDER BY u.display_name ASC"
             );
             $cashiers = $cashierStmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable) {}
@@ -810,7 +810,7 @@ final class GCashTransactionService
     public function getCurrentSession(): ?array
     {
         $stmt = $this->pdo()->prepare(
-            "SELECT s.*, u.full_name AS cashier_name, u.username AS cashier_username
+            "SELECT s.*, u.display_name AS cashier_name, u.username AS cashier_username
              FROM gcash_service_sessions s
              JOIN users u ON s.cashier_id = u.user_id
              WHERE s.status = 'open'
@@ -1038,7 +1038,7 @@ final class GCashTransactionService
     public function eligibleHandoverRecipients(): array
     {
         return $this->pdo()->query(
-            "SELECT DISTINCT u.user_id, u.full_name, u.username, r.role_name
+            "SELECT DISTINCT u.user_id, u.display_name, u.username, r.role_name
              FROM users u
              JOIN roles r ON r.role_id = u.role_id
              JOIN cashier_shifts cs ON cs.cashier_id = u.user_id
@@ -1049,7 +1049,7 @@ final class GCashTransactionService
                    SELECT 1 FROM user_roles ur JOIN roles assigned ON assigned.role_id = ur.role_id
                    WHERE ur.user_id = u.user_id AND assigned.role_name = 'super_admin'
                )
-             ORDER BY u.full_name, u.user_id"
+             ORDER BY u.display_name, u.user_id"
         )->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -1885,7 +1885,7 @@ final class GCashTransactionService
         $items = [];
 
         // 1. Funding movements
-        $sql = "SELECT fm.*, u.full_name AS recorder_name, au.full_name AS authorizer_name
+        $sql = "SELECT fm.*, u.display_name AS recorder_name, au.display_name AS authorizer_name
                 FROM gcash_funding_movements fm
                 LEFT JOIN users u ON fm.recorded_by = u.user_id
                 LEFT JOIN users au ON fm.authorized_by = au.user_id";
@@ -1919,7 +1919,7 @@ final class GCashTransactionService
 
         // 2. Adjustments / Corrections
         $hasRecorder = in_array('recorded_by', $this->adjustmentColumns(), true);
-        $adjSql = "SELECT a.*, au.full_name AS authorizer_name, " . ($hasRecorder ? 'rec.full_name' : 'NULL') . " AS recorder_name FROM gcash_adjustments a LEFT JOIN users au ON a.authorized_by = au.user_id";
+        $adjSql = "SELECT a.*, au.display_name AS authorizer_name, " . ($hasRecorder ? 'rec.display_name' : 'NULL') . " AS recorder_name FROM gcash_adjustments a LEFT JOIN users au ON a.authorized_by = au.user_id";
         if ($hasRecorder) $adjSql .= ' LEFT JOIN users rec ON rec.user_id=a.recorded_by';
         $adjParams = [];
         if ($sessionId) {
@@ -1949,7 +1949,7 @@ final class GCashTransactionService
             ];
         }
 
-        $sql = "SELECT t.*, u.full_name AS recorder_name, v.full_name AS authorizer_name FROM gcash_transactions t LEFT JOIN users u ON u.user_id=t.cashier_id LEFT JOIN users v ON v.user_id=t.verified_by";
+        $sql = "SELECT t.*, u.display_name AS recorder_name, v.display_name AS authorizer_name FROM gcash_transactions t LEFT JOIN users u ON u.user_id=t.cashier_id LEFT JOIN users v ON v.user_id=t.verified_by";
         if ($sessionId) $sql .= ' WHERE t.session_id = ?';
         $stmt = $this->pdo()->prepare($sql);
         $stmt->execute($sessionId ? [$sessionId] : []);
@@ -2644,7 +2644,7 @@ final class GCashTransactionService
                 }
             }
 
-            $uStmt = $this->pdo()->prepare('SELECT full_name FROM users WHERE user_id = ?');
+            $uStmt = $this->pdo()->prepare('SELECT display_name FROM users WHERE user_id = ?');
             $uStmt->execute([$adminId]);
             $adminName = (string)($uStmt->fetchColumn() ?: "User #{$adminId}");
 
@@ -2769,7 +2769,7 @@ final class GCashTransactionService
                 throw new DomainException('Only reviewed sessions can be reopened.', 422);
             }
 
-            $uStmt = $this->pdo()->prepare('SELECT full_name FROM users WHERE user_id = ?');
+            $uStmt = $this->pdo()->prepare('SELECT display_name FROM users WHERE user_id = ?');
             $uStmt->execute([$adminId]);
             $adminName = (string)($uStmt->fetchColumn() ?: "User #{$adminId}");
 

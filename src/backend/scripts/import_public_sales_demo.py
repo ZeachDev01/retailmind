@@ -161,9 +161,9 @@ def main():
             cursor.execute('INSERT INTO categories (category_id, category_name) VALUES (999, %s)', ('External Demo - ' + label,))
             for code, product_id in mapping.items():
                 cursor.execute('''INSERT INTO products
-                    (product_id, sku, barcode, product_name, category_id, unit_price, cost_price, branch_id,
+                    (product_id, sku, barcode, product_name, category_id, unit_price, cost_price,
                      reorder_level, safety_stock, supplier_lead_time_days, minimum_order_quantity, units_per_package)
-                    VALUES (%s,%s,%s,%s,999,0,0,1,20,10,7,1,1)''',
+                    VALUES (%s,%s,%s,%s,999,0,0,20,10,7,1,1)''',
                                (product_id, prefix + code, prefix + code, 'Demo: ' + products.loc[code, 'description']))
                 cursor.execute('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (%s,0)', (product_id,))
             cursor.executemany('''INSERT INTO forecast_sales_imports

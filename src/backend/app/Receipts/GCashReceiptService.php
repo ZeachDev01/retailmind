@@ -17,7 +17,7 @@ final class GCashReceiptService
         if (!$this->pdo->inTransaction()) {
             throw new RuntimeException('GCash receipt details require the completion transaction.');
         }
-        $statement = $this->pdo->prepare("SELECT t.*, u.full_name AS cashier_name, u.username AS cashier_username, r.name AS register_name
+        $statement = $this->pdo->prepare("SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username, r.name AS register_name
             FROM gcash_transactions t JOIN users u ON u.user_id = t.cashier_id
             LEFT JOIN cashier_shifts cs ON cs.shift_id = t.shift_id
             LEFT JOIN registers r ON r.register_id = cs.register_id

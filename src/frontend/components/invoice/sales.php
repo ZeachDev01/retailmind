@@ -51,15 +51,15 @@ if ($action === 'data') {
 $receiptCashiers = [];
 if ($can_manage_all) {
     $cashierStatement = $pdo->query(
-        "SELECT DISTINCT u.user_id, u.full_name
+        "SELECT DISTINCT u.user_id, u.display_name
          FROM users u
          JOIN sales s ON s.cashier_id = u.user_id
-         WHERE u.branch_id = " . (int)$storeId . " OR EXISTS (
+         WHERE 1 = " . (int)$storeId . " OR EXISTS (
              SELECT 1 FROM sale_items scope_si
              JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-             WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = " . (int)$storeId . "
+             WHERE scope_si.sale_id = s.sale_id AND 1 = " . (int)$storeId . "
          )
-         ORDER BY u.full_name, u.user_id"
+         ORDER BY u.display_name, u.user_id"
     );
     $receiptCashiers = $cashierStatement->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -158,7 +158,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                         <select id="receiptCashier">
                             <option value="">All cashiers</option>
                             <?php foreach ($receiptCashiers as $cashier): ?>
-                                <option value="<?= (int)$cashier['user_id'] ?>"><?= htmlspecialchars($cashier['full_name']) ?></option>
+                                <option value="<?= (int)$cashier['user_id'] ?>"><?= htmlspecialchars($cashier['display_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </label>

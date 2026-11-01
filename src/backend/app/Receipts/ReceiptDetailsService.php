@@ -32,20 +32,14 @@ final class ReceiptDetailsService
                     ' . $optional('discount_amount', '0.00') . ' AS discount_amount,
                     ' . $optional('promotion_name', 'NULL') . ' AS promotion_name,
                     ' . $optional('discount_reason', 'NULL') . ' AS discount_reason,
-                    u.full_name AS cashier_name, r.name AS register_name
+                    u.display_name AS cashier_name, r.name AS register_name
              FROM sales s
              JOIN users u ON u.user_id = s.cashier_id
              LEFT JOIN cashier_shifts cs ON cs.shift_id = s.shift_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
-             WHERE s.sale_id = ?' . ($storeId === null ? '' : ' AND (
-                 u.branch_id = ? OR EXISTS (
-                     SELECT 1 FROM sale_items scope_si
-                     JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                     WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-                 )
-             )')
+             WHERE s.sale_id = ?'
         );
-        $statement->execute($storeId === null ? [$saleId] : [$saleId, $storeId, $storeId]);
+        $statement->execute([$saleId]);
         $sale = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
         if ($sale === null) {
             return null;

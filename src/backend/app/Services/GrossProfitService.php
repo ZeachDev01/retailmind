@@ -132,8 +132,8 @@ class GrossProfitService
         $filterExists = 'EXISTS (
             SELECT 1 FROM sale_items si_f
             JOIN products p_f ON p_f.product_id = si_f.product_id
-            WHERE si_f.sale_id = s.sale_id AND p_f.branch_id = ?';
-        $filterParams = [$storeId];
+            WHERE si_f.sale_id = s.sale_id';
+        $filterParams = [];
         if ($productId > 0) {
             $filterExists .= ' AND p_f.product_id = ?';
             $filterParams[] = $productId;
@@ -174,7 +174,7 @@ class GrossProfitService
             $linesStmt = $this->pdo->prepare(
                 "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity,
                         {$lineUnitsExpr} AS base_unit_quantity, si.unit_price, si.subtotal,
-                        p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id, p.branch_id,
+                        p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name
                  FROM sale_items si
                  JOIN products p ON p.product_id = si.product_id
@@ -215,9 +215,6 @@ class GrossProfitService
                 $allocatedCents = $cumulativeNet;
 
                 // Check if line matches scope filters
-                if ((int)$line['branch_id'] !== $storeId) {
-                    continue;
-                }
                 if ($productId > 0 && (int)$line['product_id'] !== $productId) {
                     continue;
                 }
@@ -272,8 +269,8 @@ class GrossProfitService
             $refundPackExpr
         );
 
-        $refundWhere = ['cr.created_at >= ?', 'cr.created_at <= ?', 'p.branch_id = ?'];
-        $refundParams = [$range['from_start'], $range['to_end'], $storeId];
+        $refundWhere = ['cr.created_at >= ?', 'cr.created_at <= ?'];
+        $refundParams = [$range['from_start'], $range['to_end']];
         if ($productId > 0) {
             $refundWhere[] = 'p.product_id = ?';
             $refundParams[] = $productId;
@@ -288,7 +285,7 @@ class GrossProfitService
                     cri.refund_item_id, cri.sale_item_id, cri.product_id, cri.quantity,
                     ' . $refundUnitsExpr . ' AS base_unit_quantity,
                     cri.unit_price, cri.subtotal, cri.disposition,
-                    p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id, p.branch_id,
+                    p.sku, COALESCE(p.barcode, p.sku) AS barcode_or_sku, p.product_name, p.category_id,
                     COALESCE(c.category_name, ' . "'Uncategorized'" . ') AS category_name
              FROM cash_refunds cr
              JOIN cash_refund_items cri ON cri.refund_id = cr.refund_id
@@ -843,7 +840,6 @@ class GrossProfitService
      */
     public function establishHistoricalCosts(?array $saleIds = null, array $options = []): array
     {
-        $storeId = max(0, (int)($options['store_id'] ?? 0));
         $force = !empty($options['force']);
         $fallbackToProductCost = $options['fallback_to_product_cost'] ?? true;
 
@@ -858,11 +854,6 @@ class GrossProfitService
                     JOIN sale_items si ON si.sale_id = s.sale_id";
             $where = [];
             $params = [];
-            if ($storeId > 0) {
-                $sql .= " JOIN products p ON p.product_id = si.product_id";
-                $where[] = "p.branch_id = ?";
-                $params[] = $storeId;
-            }
             if (!$force) {
                 $where[] = "(
                     NOT EXISTS (SELECT 1 FROM sale_item_batches sib WHERE sib.sale_item_id = si.sale_item_id)
@@ -908,12 +899,11 @@ class GrossProfitService
         foreach ($targetSaleIds as $sId) {
             $prodCols = $this->getTableColumns('products');
             $costCol = isset($prodCols['cost_price']) ? 'p.cost_price' : 'NULL AS cost_price';
-            $branchCol = isset($prodCols['branch_id']) ? 'p.branch_id' : '1 AS branch_id';
 
             $itemStmt = $this->pdo->prepare(
                 "SELECT si.sale_item_id, si.sale_id, si.product_id, si.quantity, {$lineUnitsExpr} AS base_unit_quantity,
                         si.unit_price, si.subtotal,
-                        {$costCol} AS product_cost_price, {$branchCol} AS branch_id
+                        {$costCol} AS product_cost_price
                  FROM sale_items si
                  JOIN products p ON p.product_id = si.product_id
                  WHERE si.sale_id = ?
@@ -923,10 +913,6 @@ class GrossProfitService
             $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
 
             foreach ($items as $si) {
-                if ($storeId > 0 && (int)$si['branch_id'] !== $storeId) {
-                    continue;
-                }
-
                 $siId = (int)$si['sale_item_id'];
                 $lineQty = (int)$si['base_unit_quantity'];
                 $prodCost = $si['product_cost_price'] !== null && $si['product_cost_price'] !== ''

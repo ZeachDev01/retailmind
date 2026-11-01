@@ -46,8 +46,8 @@ final class RecoveryAccountService
 
             $statement = $this->pdo->prepare(
                 "INSERT INTO users
-                    (full_name, username, email, password_hash, role_id, status, must_change_password, branch_id, is_recovery_account)
-                 VALUES ('Recovery Account', ?, NULL, ?, ?, 'disabled', 0, NULL, 1)"
+                    (first_name, last_name, display_name, username, email, password_hash, role_id, status, must_change_password, is_recovery_account)
+                 VALUES ('Recovery', 'Account', 'Recovery Account', ?, NULL, ?, ?, 'disabled', 0, 1)"
             );
             $statement->execute([$username, $passwordHash, (int)$role]);
             $userId = (int)$this->pdo->lastInsertId();

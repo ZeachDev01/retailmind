@@ -203,7 +203,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                 <tbody>
                                     <?php foreach ($review['destination_users'] as $person): ?>
                                         <tr>
-                                            <td><span class="reconcile-id">#<?= $escape($person['user_id']) ?></span> <?= $escape($person['full_name']) ?></td>
+                                            <td><span class="reconcile-id">#<?= $escape($person['user_id']) ?></span> <?= $escape($person['display_name']) ?></td>
                                             <td><code><?= $escape($person['username']) ?></code><span class="reconcile-sub"><?= $escape($person['email'] ?? 'No email') ?></span></td>
                                             <td>
                                                 <span class="<?= $person['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= $escape(ucfirst((string)$person['status'])) ?></span>
@@ -244,10 +244,10 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                 $choice = $decisions[$id] ?? [];
                             ?>
                                 <fieldset class="resolution-card">
-                                    <legend class="sr-only">Source #<?= $id ?>: <?= $escape($person['full_name']) ?></legend>
+                                    <legend class="sr-only">Source #<?= $id ?>: <?= $escape($person['display_name']) ?></legend>
                                     <div class="resolution-head">
                                         <div>
-                                            <h3><span class="reconcile-id">#<?= $id ?></span> <?= $escape($person['full_name']) ?></h3>
+                                            <h3><span class="reconcile-id">#<?= $id ?></span> <?= $escape($person['display_name']) ?></h3>
                                             <p class="identity-meta"><code><?= $escape($person['username']) ?></code> <span><?= $escape($person['email'] ?? 'No email') ?></span></p>
                                         </div>
                                         <div class="resolution-badges">
@@ -277,7 +277,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                                     <option value="">Choose only when linking</option>
                                                     <?php foreach ($review['destination_users'] as $target): ?>
                                                         <option value="<?= (int)$target['user_id'] ?>" <?= (int)($choice['destination_id'] ?? 0) === (int)$target['user_id'] ? 'selected' : '' ?>>
-                                                            #<?= (int)$target['user_id'] ?>: <?= $escape($target['full_name']) ?> (<?= $escape($target['username']) ?>)
+                                                            #<?= (int)$target['user_id'] ?>: <?= $escape($target['display_name']) ?> (<?= $escape($target['username']) ?>)
                                                         </option>
                                                     <?php endforeach; ?>
                                                 </select>
