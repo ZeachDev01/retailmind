@@ -92,23 +92,20 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
             <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
 
-            <div class="card-grid">
-                <article class="stat-card with-icon">
-                    <span class="stat-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                    <div class="label">Latest backup</div>
-                    <div class="value"><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></div>
-                </article>
-                <article class="stat-card with-icon">
-                    <span class="stat-icon"><i class="bi bi-archive" aria-hidden="true"></i></span>
-                    <div class="label">Backups created</div>
-                    <div class="value"><?= $totalSnapshots ?></div>
-                </article>
-                <article class="stat-card with-icon <?= $storePaused ? 'status-warning' : 'status-healthy' ?>">
-                    <span class="stat-icon"><i class="bi <?= $storePaused ? 'bi-exclamation-triangle' : 'bi-shield-check' ?>" aria-hidden="true"></i></span>
-                    <div class="label">Store status</div>
-                    <div class="value"><?= $storePaused ? 'Recovery Paused' : 'Operational' ?></div>
-                </article>
-            </div>
+            <dl class="backup-summary" aria-label="Backup overview">
+                <div>
+                    <dt>Latest backup</dt>
+                    <dd><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></dd>
+                </div>
+                <div>
+                    <dt>Backups created</dt>
+                    <dd><?= $totalSnapshots ?></dd>
+                </div>
+                <div>
+                    <dt>Store status</dt>
+                    <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
+                </div>
+            </dl>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
@@ -126,21 +123,21 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
 
             <section class="dashboard-section backup-create" aria-labelledby="backup-create-title">
                 <div class="backup-create-main">
-                    <span class="backup-create-icon"><i class="bi bi-database-lock" aria-hidden="true"></i></span>
                     <div class="backup-create-copy">
                         <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
+                        <p>Save a copy of Store records and images.</p>
                     </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
                 </div>
                 <div class="backup-create-footer">
-                    <p><i class="bi bi-download" aria-hidden="true"></i> Download your backup and keep it off-server.</p>
+                    <p><i class="bi bi-download" aria-hidden="true"></i> Download each backup and store it away from this server.</p>
                     <details class="backup-tips">
-                        <summary>Backup tips</summary>
+                        <summary>What to keep</summary>
                         <ul class="backup-guidance-list">
                             <li>No backup passphrase is needed.</li>
-                            <li>Save the recovery key separately, once per installation.</li>
+                            <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
                         </ul>
                     </details>
                 </div>
@@ -149,7 +146,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
                 <div class="restore-guidance" data-restore-guidance>
                     <div class="restore-status-heading">
-                        <h2 id="backup-recovery-title"><i class="bi bi-wrench-adjustable" aria-hidden="true"></i> Restore &amp; recovery</h2>
+                        <h2 id="backup-recovery-title">Restore &amp; recovery</h2>
                         <p class="restore-stage" role="status"><span class="sr-only">Restore status: </span><span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
                     </div>
                     <?php if (\App\Backup\RecoveryStore::isPaused()): ?>
@@ -175,7 +172,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="backup-history-title">
                 <div class="backup-section-heading">
                     <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
-                    <span class="backup-record-count"><?= count($history) ?> records</span>
+                    <span class="backup-record-count"><?= $historyTotal ?> <?= $historyTotal === 1 ? 'record' : 'records' ?></span>
                 </div>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
                     <table data-no-smart-table>
@@ -193,7 +190,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                                 <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong></td>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>

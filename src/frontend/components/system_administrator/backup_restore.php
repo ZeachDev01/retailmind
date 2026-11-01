@@ -117,6 +117,14 @@ try {
     $history = $service->history($actorRole);
 }
 
+$historyPerPage = 10;
+$historyTotal = count($history);
+$historyPages = max(1, (int)ceil($historyTotal / $historyPerPage));
+$historyPage = min($historyPages, max(1, (int)($_GET['history_page'] ?? 1)));
+$historyOffset = ($historyPage - 1) * $historyPerPage;
+$historyRows = array_slice($history, $historyOffset, $historyPerPage);
+$restoreGuidance = $restorer->workflowGuidance();
+
 $completedHistory = array_filter($history, static fn(array $row): bool => ($row['status'] ?? '') === 'completed');
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
 $totalSnapshots = count($completedHistory);
@@ -131,92 +139,112 @@ $storePaused = RecoveryStore::isPaused();
     <title>Backup &amp; Restore</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
-    <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup_restore.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup_restore.css')) ?>">
 </head>
 
-<body class="database-backup-page database-restore-page" data-rm-authenticated="true"
+<body class="manage-users-page database-backup-page administrator-backup-page" data-rm-authenticated="true"
     data-rm-backup-status="<?= $escape(app_url('components/backup/backup_status.php')) ?>">
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-            <header class="topbar recovery-heading">
-                <div>
-                    <h1>Backup &amp; Restore</h1>
-                </div>
-                <div class="recovery-heading-actions">
+            <header class="page-heading">
+                <div><h1>Backup &amp; Restore</h1></div>
+                <div class="backup-pagination-actions">
                     <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>"><i class="bi bi-person-check" aria-hidden="true"></i> Identity Reconciliation</a>
-                    <a class="recovery-history-link" href="#backup-history"><i class="bi bi-clock-history" aria-hidden="true"></i> View history</a>
+                    <a class="backup-history-link" href="#backup-history"><i class="bi bi-clock-history" aria-hidden="true"></i> View history</a>
                 </div>
             </header>
 
-            <?php if ($message): ?><div id="recovery-feedback" class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-warning' ? 'alert' : 'status' ?>"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($message): ?><div id="recovery-feedback" class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
 
-            <div class="card-grid">
-                <article class="stat-card with-icon">
-                    <span class="stat-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                    <div class="label">Latest Snapshot</div>
-                    <div class="value"><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></div>
-                    <?php if ($latestBackup): ?><div class="hint"><?= number_format($latestBackup['file_size'] / 1024, 1) ?> KB &bull; <?= $escape(ucfirst((string)($latestBackup['backup_type'] ?? 'manual'))) ?></div><?php endif; ?>
-                </article>
-                <article class="stat-card with-icon">
-                    <span class="stat-icon"><i class="bi bi-archive" aria-hidden="true"></i></span>
-                    <div class="label">Total Snapshots</div>
-                    <div class="value"><?= $totalSnapshots ?></div>
-                </article>
-                <article class="stat-card with-icon <?= $storePaused ? 'status-warning' : 'status-healthy' ?>">
-                    <span class="stat-icon"><i class="bi <?= $storePaused ? 'bi-exclamation-triangle' : 'bi-shield-check' ?>" aria-hidden="true"></i></span>
-                    <div class="label">Store Status</div>
-                    <div class="value"><?= $storePaused ? 'Recovery Paused' : 'Operational' ?></div>
-                </article>
-            </div>
+            <dl class="backup-summary" aria-label="Backup overview">
+                <div>
+                    <dt>Latest backup</dt>
+                    <dd><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></dd>
+                </div>
+                <div>
+                    <dt>Backups created</dt>
+                    <dd><?= $totalSnapshots ?></dd>
+                </div>
+                <div>
+                    <dt>Store status</dt>
+                    <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
+                </div>
+            </dl>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
                     <h2 id="backup-ready-title"><i class="bi bi-check2-circle" aria-hidden="true"></i> Backup ready for download</h2>
-                    <p class="backup-ready-actions"><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download <?= $escape($download['filename']) ?></a> <span class="backup-hint"><?= number_format($download['size'] / 1024, 1) ?> KB</span></p>
+                    <div class="backup-ready-details">
+                        <p class="backup-filename">
+                            <i class="bi bi-file-earmark-lock2" aria-hidden="true"></i>
+                            <span><?= $escape($download['filename']) ?></span>
+                            <span class="tag tag-success"><?= number_format($download['size'] / 1024, 1) ?> KB</span>
+                        </p>
+                        <p><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a></p>
+                    </div>
                 </section>
             <?php endif; ?>
 
-            <div class="recovery-workspace">
-                <section class="dashboard-section backup-create-panel" aria-labelledby="create-title">
-                    <div class="recovery-panel-heading">
-                        <h2 id="create-title"><i class="bi bi-shield-lock" aria-hidden="true"></i> Create backup</h2>
+            <section class="dashboard-section backup-create" aria-labelledby="backup-create-title">
+                <div class="backup-create-main">
+                    <div class="backup-create-copy">
+                        <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
+                        <p>Save a copy of Store records and images.</p>
                     </div>
-                    <form method="post" class="backup-create-form"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
-                        <p>Database records and uploaded images are encrypted automatically. No backup passphrase needed.</p>
-                        <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-shield-plus" aria-hidden="true"></i> Create encrypted backup</button>
+                    <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
+                        <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
-                    <div class="backup-storage-note"><i class="bi bi-shield-check" aria-hidden="true"></i> <strong>Scope:</strong> Includes database records and uploaded media. Save the backup off-server. Save the recovery key separately, once per installation.</div>
-                    <details class="restore-details">
-                        <summary><i class="bi bi-info-circle" aria-hidden="true"></i> Backup guidelines</summary>
-                        <ul class="backup-guidance">
-                            <li>Transactions pause momentarily during snapshot capture.</li>
+                </div>
+                <div class="backup-create-footer">
+                    <p><i class="bi bi-download" aria-hidden="true"></i> Download each backup and store it away from this server.</p>
+                    <details class="backup-tips">
+                        <summary>What to keep</summary>
+                        <ul class="backup-guidance-list">
                             <li>Server creation does not confirm the file is saved locally; download immediately.</li>
-                            <li>Save the recovery key once so backups remain usable after server loss.</li>
+                            <li>No backup passphrase is needed.</li>
+                            <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
                         </ul>
                     </details>
-                    <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
-                        <div class="backup-safety"><a href="<?= $escape(app_url('components/backup/safety_download.php')) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download latest pre-restore safety backup</a></div>
+                </div>
+            </section>
+
+            <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
+                <div class="restore-guidance" data-restore-guidance>
+                    <div class="restore-status-heading">
+                        <h2 id="backup-recovery-title">Restore &amp; recovery</h2>
+                        <p class="restore-stage" role="status"><span class="sr-only">Restore status: </span><span data-restore-stage="<?= $escape($restoreGuidance['stage']) ?>"><?= $escape($restoreGuidance['stage_label']) ?></span></p>
+                    </div>
+                    <?php if (\App\Backup\RecoveryStore::isPaused()): ?>
+                        <p data-restore-next-action><?= $escape($restoreGuidance['next_permitted_action']) ?></p>
+                        <p><a class="btn btn-primary" href="<?= $escape(app_url('components/backup/recovery.php')) ?>">Continue recovery</a></p>
                     <?php endif; ?>
-                </section>
-                <details class="dashboard-section backup-restore-panel"<?= in_array($_POST['action'] ?? '', ['preflight', 'restore'], true) ? ' open' : '' ?>><summary>Advanced: validate without restoring</summary>
-                <section class="dashboard-section backup-restore-panel" aria-labelledby="restore-title">
+                </div>
+                <div class="backup-recovery-tabs" role="tablist" aria-label="Restore and recovery tools" hidden>
+                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true">Restore</button>
+                    <button type="button" id="safety-tab" role="tab" aria-controls="safety-panel" aria-selected="false" tabindex="-1">Safety copy</button>
+                    <button type="button" id="key-tab" role="tab" aria-controls="key-panel" aria-selected="false" tabindex="-1">Recovery key</button>
+                </div>
+                <div id="restore-panel" role="tabpanel" aria-labelledby="restore-tab" tabindex="0">
+                    <?php require __DIR__ . '/../backup/restore_form.php'; ?>
+                <details class="backup-tips"<?= in_array($_POST['action'] ?? '', ['preflight', 'restore'], true) ? ' open' : '' ?>><summary>Advanced: validate without restoring</summary>
+                <section aria-labelledby="restore-title">
                     <div class="recovery-panel-heading">
                         <h2 id="restore-title"><i class="bi bi-patch-check" aria-hidden="true"></i> Validate backup</h2>
                     </div>
-                    <div class="restore-warning" id="restore-warning">
+                    <div class="restore-introduction" id="restore-warning">
                         <strong><i class="bi bi-shield-check" aria-hidden="true"></i> Read-only validation</strong>
                         <p>Verifies integrity and checks identity conflicts before restoring. No store records or files are replaced.</p>
                     </div>
                     <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
                         <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>">
                             <label for="backup-file">Encrypted RetailMind package</label>
-                            <p class="restore-file-hint" id="backup-file-hint">.rmpkg only &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p>
+                            <p class="backup-hint" id="backup-file-hint">.rmpkg only &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p>
                             <div class="restore-file-field">
                                 <input id="backup-file" type="file" name="backup_file" accept=".rmpkg" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="restore-password">Administrator password</label>
-                            <p class="restore-file-hint" id="restore-password-hint">Current session password for authorization.</p>
+                            <p class="backup-hint" id="restore-password-hint">Current session password for authorization.</p>
                             <input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required>
                         </div>
                         <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
@@ -237,50 +265,60 @@ $storePaused = RecoveryStore::isPaused();
                     <?php endif; ?>
                 </section>
                 </details>
-            </div>
-
-            <?php require __DIR__ . '/../backup/restore_form.php'; ?>
-            <details class="dashboard-section"<?= ($_POST['action'] ?? '') === 'safety' ? ' open' : '' ?>><summary>Advanced backup tools</summary>
-                <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
-                </details>
-                <?php require __DIR__ . '/../backup/recovery_key_form.php'; ?>
-
-            <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="history-title">
-                <div class="recovery-panel-heading"><h2 id="history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2><span class="history-total"><?= count($history) ?> <?= count($history) === 1 ? 'record' : 'records' ?></span></div>
-                <?php if ($history): ?>
-                    <div class="history-tools" hidden data-history-tools>
-                        <div class="history-search"><label for="history-search">Search history</label><input id="history-search" type="search" placeholder="File, date, user or notes"></div>
-                        <div class="history-filter"><label for="history-outcome">Outcome</label><select id="history-outcome"><option value="">All outcomes</option><?php foreach (array_unique(array_column($history, 'status')) as $status): ?><option value="<?= $escape($status) ?>"><?= $escape(ucfirst((string)$status)) ?></option><?php endforeach; ?></select></div>
-                        <p class="history-count" data-history-count role="status" aria-live="polite"></p>
-                    </div>
-                <?php endif; ?>
-                <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
-                    <table data-no-smart-table>
-                        <thead><tr><th scope="col">File / activity</th><th scope="col">Created</th><th scope="col">Outcome</th><th scope="col" class="history-size">Size</th><th scope="col">Requested by</th></tr></thead>
-                        <tbody><?php foreach ($history as $row): ?>
-                            <tr data-history-row data-outcome="<?= $escape($row['status']) ?>">
-                                <td class="history-file"><span class="history-filename"><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <?= $escape($row['filename']) ?></span><span class="history-type"><?= $escape(ucfirst((string)$row['backup_type'])) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="history-notes"><summary aria-label="View notes for <?= $escape($row['filename']) ?> (<?= $escape(format_display_datetime((string)$row['created_at'])) ?>)">View notes</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
-                                <td class="history-date"><?= $escape(format_display_datetime((string)$row['created_at'])) ?></td>
-                                <td>
-                                    <?php
-                                    $statusVal = (string)$row['status'];
-                                    $statusClass = $statusVal === 'completed' ? 'is-completed' : ($statusVal === 'failed' ? 'is-failed' : 'is-pending');
-                                    ?>
-                                    <span class="history-status <?= $statusClass ?>"><?= $escape(ucfirst($statusVal)) ?></span>
-                                </td>
-                                <td class="history-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
-                                <td class="history-user"><?= $escape($row['requested_by']) ?></td>
-                            </tr><?php endforeach; ?>
-                            <tr data-history-empty <?= $history ? 'hidden' : '' ?>><td colspan="5"><div class="recovery-empty"><strong><?= $history ? 'No matching records' : 'No backups yet' ?></strong></div></td></tr>
-                        </tbody>
-                    </table>
+                </div>
+                <div id="safety-panel" role="tabpanel" aria-labelledby="safety-tab" tabindex="0">
+                    <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
+                    <?php if (is_file(RecoveryStore::path('latest-safety.sql'))): ?>
+                    <p><a class="backup-history-link" href="<?= $escape(app_url('components/backup/safety_download.php')) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download latest pre-restore safety backup</a></p>
+                    <?php endif; ?>
+                </div>
+                <div id="key-panel" role="tabpanel" aria-labelledby="key-tab" tabindex="0">
+                    <?php $recoveryTabbed = true; require __DIR__ . '/../backup/recovery_key_form.php'; ?>
                 </div>
             </section>
+            <section class="dashboard-section backup-history" id="backup-history" aria-labelledby="backup-history-title">
+                <div class="backup-section-heading">
+                    <h2 id="backup-history-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Backup history</h2>
+                    <span class="backup-record-count"><?= $historyTotal ?> <?= $historyTotal === 1 ? 'record' : 'records' ?></span>
+                </div>
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
+                    <table data-no-smart-table>
+                        <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
+                        <thead><tr>
+                            <th scope="col">Backup date</th>
+                            <th scope="col">Backup file</th>
+                            <th scope="col" class="backup-size">Size</th>
+                            <th scope="col">Outcome</th>
+                            <th scope="col">Requested by</th>
+                        </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
+                                <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
+                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
+                                <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
+                                <td><?= $escape($row['requested_by']) ?></td>
+                            </tr><?php endforeach; ?><?php if (!$history): ?><tr>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
+                            </tr><?php endif; ?></tbody>
+                    </table>
+                </div>
+                <?php if ($historyTotal > 0): ?>
+                <nav class="backup-pagination" aria-label="Backup history pagination">
+                    <p>Showing <?= $historyOffset + 1 ?>–<?= min($historyOffset + $historyPerPage, $historyTotal) ?> of <?= $historyTotal ?></p>
+                    <div class="backup-pagination-actions">
+                        <?php if ($historyPage > 1): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage - 1 ?>#backup-history" rel="prev">Previous</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Previous</span><?php endif; ?>
+                        <span class="backup-page-number" aria-current="page">Page <?= $historyPage ?> of <?= $historyPages ?></span>
+                        <?php if ($historyPage < $historyPages): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage + 1 ?>#backup-history" rel="next">Next</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Next</span><?php endif; ?>
+                    </div>
+                </nav>
+                <?php endif; ?>
+            </section>
+
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_review.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_restore.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_restore.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_recovery_tabs.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_recovery_tabs.js')) ?>"></script>
 </body>
 
 </html>

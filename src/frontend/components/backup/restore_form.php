@@ -7,6 +7,7 @@ $reviewFirst = $restoreReviewFirst ?? true;
 <section class="dashboard-section" id="restore-package" aria-labelledby="restore-package-title">
     <h2 id="restore-package-title">Restore backup</h2>
     <?php if ($restoreError !== ''): ?><p class="alert tag-warning" role="alert"><?= $escape($restoreError) ?></p><?php endif; ?>
+    <p class="recovery-tool-description">Choose a backup to review its contents and account matches before replacing Store records.</p>
     <div class="restore-introduction">
     <p id="restore-package-warning"><strong>Restore replaces newer records, including sales.</strong> Stop source sales and background workers. The Store stays closed until recovery is verified.</p>
     </div>

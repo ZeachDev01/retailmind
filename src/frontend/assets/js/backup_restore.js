@@ -12,7 +12,7 @@
             button.dataset.rmRestorePending = "true";
             button.setAttribute("aria-busy", "true");
             button.disabled = true;
-            button.textContent = "Verifying & restoring database…";
+            button.textContent = "Validating package…";
         });
     }
 
