@@ -206,7 +206,7 @@ if ($argv[1] === 'governance_state') {
     foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods'] as $table) {
         $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
     }
-    $state['users'] = $pdo->query('SELECT user_id,username,full_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+    $state['users'] = $pdo->query('SELECT user_id,username,display_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode($state); exit;
 }
 if ($argv[1] === 'state') {
