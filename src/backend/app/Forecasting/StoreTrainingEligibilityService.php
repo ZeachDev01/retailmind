@@ -39,7 +39,7 @@ class StoreTrainingEligibilityService
                 SELECT DATE(s.sale_date) AS sale_date FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE si.product_id = ? AND s.sale_date <= ?
                 UNION ALL
                 SELECT sale_date FROM forecast_sales_imports WHERE product_id = ? AND sale_date <= ?
-            )");
+            ) AS dates");
             $stmt->execute([$productId, $throughDate . ' 23:59:59', $productId, $throughDate]);
             $firstDateStr = $stmt->fetchColumn();
 

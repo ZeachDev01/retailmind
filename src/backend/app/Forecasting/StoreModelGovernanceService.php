@@ -649,6 +649,9 @@ class StoreModelGovernanceService
             $rollbackRecord = json_decode($settings['ml_store_rollback_record'], true);
         }
 
+        $schedulerService = new ForecastingSchedulerService($this->pdo);
+        $effectiveSchedule = $schedulerService->getEffectiveSchedule();
+
         return [
             'rollback_history' => json_decode($this->getSetting('ml_store_rollback_history', '[]'), true) ?: [],
             'approved_model_version' => $approvedModel,
@@ -659,9 +662,12 @@ class StoreModelGovernanceService
             'activation_record' => $activationRecord,
             'rollback_record' => $rollbackRecord,
             'schedule' => [
-                'daily_forecast_time' => $settings['schedule_daily_forecast_time'] ?? '23:00',
-                'weekly_retrain_day' => $settings['schedule_weekly_retrain_day'] ?? 'Sunday',
-                'weekly_retrain_time' => $settings['schedule_weekly_retrain_time'] ?? '01:00',
+                'daily_forecast_time' => $effectiveSchedule['daily_forecast_time'],
+                'weekly_retrain_day' => $effectiveSchedule['weekly_retrain_day'],
+                'weekly_retrain_time' => $effectiveSchedule['weekly_retrain_time'],
+                'timezone' => $effectiveSchedule['timezone'] ?? 'Asia/Manila',
+                'source' => $effectiveSchedule['source'] ?? 'default_policy',
+                'is_explicit' => $effectiveSchedule['is_explicit'] ?? false,
             ],
         ];
     }

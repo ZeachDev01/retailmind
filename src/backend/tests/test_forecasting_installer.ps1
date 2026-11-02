@@ -43,7 +43,26 @@ try {
     if ($savedConfig.service_account -ne 'NT AUTHORITY\SYSTEM') {
         throw "Failed: saved service_account does not match 'NT AUTHORITY\SYSTEM'."
     }
-    Write-Output "  ok - Installer retains configuration without interactive PATH assumptions"
+    if ($savedConfig.effective_schedule.daily_forecast_time -ne '01:00') {
+        throw "Failed: effective_schedule.daily_forecast_time must be '01:00'. Got $($savedConfig.effective_schedule.daily_forecast_time)"
+    }
+    if ($savedConfig.effective_schedule.weekly_retrain_day -ne 'Sunday') {
+        throw "Failed: effective_schedule.weekly_retrain_day must be 'Sunday'."
+    }
+    if ($savedConfig.effective_schedule.weekly_retrain_time -ne '01:00') {
+        throw "Failed: effective_schedule.weekly_retrain_time must be '01:00'."
+    }
+    if ($savedConfig.effective_schedule.timezone -ne 'Asia/Manila') {
+        throw "Failed: effective_schedule.timezone must be 'Asia/Manila'."
+    }
+    # Verify no credentials are retained in runner configuration
+    $rawConfigText = Get-Content -LiteralPath $configPath -Raw
+    foreach ($secretPattern in @('password', 'secret', 'token', 'db_pass', 'credential')) {
+        if ($rawConfigText -match $secretPattern) {
+            throw "Failed: runner configuration must retain no credentials ($secretPattern found)."
+        }
+    }
+    Write-Output "  ok - Installer retains configuration and 01:00 Asia/Manila schedule without credentials or interactive PATH assumptions"
 
     # 2. Test mapped network drive rejection
     $fakeNetworkException = $false
