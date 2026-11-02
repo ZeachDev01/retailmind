@@ -102,7 +102,7 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
         if ($guidanceParam !== '') {
             $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $guidanceParam);
             $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
-            if ($topic && str_ends_with($scriptName, $topic['path'])) {
+            if ($topic && !empty($topic['steps']) && (str_ends_with($scriptName, $topic['path']) || basename($scriptName) === basename($topic['path']))) {
                 $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
                 $isReplay = !empty($_GET['replay']);
                 $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
