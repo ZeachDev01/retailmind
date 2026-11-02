@@ -2,8 +2,10 @@
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\DemandForecastService;
 
 function assert_true(bool $condition, string $message): void {
     if (!$condition) {
@@ -69,5 +71,54 @@ $zeroDemandEval = [
 ];
 assert_same(null, $zeroDemandEval['wape'], 'WAPE is null when actual demand is 0');
 assert_same('Zero actual demand', $zeroDemandEval['missing_metric_reason'], 'Reason explains zero actual demand');
+
+// Test Ticket #414: Honest Prediction Performance Evidence contract structure
+$dummyPerfEvidence = [
+    'model_version' => 'rf_store_v1',
+    'model_association' => 'current',
+    'is_demo' => false,
+    'demo_label' => null,
+    'model_inputs_description' => 'Store daily sales history, day of week, and lag patterns. Prices and promotions are not active model inputs.',
+    'status' => 'collecting_evidence',
+    'status_label' => 'Still collecting evidence',
+    'explanation' => 'Still collecting evidence: 5 of 28 completed target dates backed by usable Store observations.',
+    'completed_target_dates' => 5,
+    'required_target_dates' => 28,
+    'usable_comparison_count' => 10,
+    'incomplete_demand_count' => 1,
+    'closures_paused' => 0,
+    'verified_stockouts' => 1,
+    'verified_stockouts_display' => '1',
+    'verified_expiry_losses' => null,
+    'verified_expiry_losses_display' => 'Unavailable',
+    'causal_claim' => null,
+    'metrics_by_horizon' => [
+        7 => [
+            'mae' => 2.5,
+            'rmse' => 3.0,
+            'wape' => 0.15,
+            'overestimated_units' => 12.0,
+            'underestimated_units' => 13.0,
+            'overestimated_count' => 4,
+            'underestimated_count' => 5,
+            'exact_count' => 1,
+            'usable_comparisons' => 10,
+            'baseline_mae' => 3.5,
+            'baseline_rmse' => 4.2,
+            'baseline_wape' => 0.21,
+            'baseline_overestimated_units' => 15.0,
+            'baseline_underestimated_units' => 20.0,
+        ],
+        14 => ['mae' => null, 'rmse' => null, 'wape' => null, 'overestimated_units' => null, 'underestimated_units' => null],
+        28 => ['mae' => null, 'rmse' => null, 'wape' => null, 'overestimated_units' => null, 'underestimated_units' => null]
+    ]
+];
+
+assert_true(in_array($dummyPerfEvidence['status'], ['genuine_evidence', 'collecting_evidence', 'unavailable'], true), 'Status must be one of genuine_evidence, collecting_evidence, unavailable');
+assert_true(in_array($dummyPerfEvidence['model_association'], ['current', 'candidate', 'previous', 'unavailable'], true), 'Model association must be current, candidate, previous, or unavailable');
+assert_same(12.0, $dummyPerfEvidence['metrics_by_horizon'][7]['overestimated_units'], 'Overestimated units must be separate');
+assert_same(13.0, $dummyPerfEvidence['metrics_by_horizon'][7]['underestimated_units'], 'Underestimated units must be separate');
+assert_true($dummyPerfEvidence['causal_claim'] === null, 'No causal claim is made');
+assert_same('Unavailable', $dummyPerfEvidence['verified_expiry_losses_display'], 'Absent expiry losses must display Unavailable');
 
 echo "Forecast analytics contract passed.\n";

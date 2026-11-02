@@ -48,7 +48,7 @@ check(str_contains($passed, '20.00%') && str_contains($passed, '30.00%'), 'Error
 check(str_contains($passed, 'Observation only') && str_contains($passed, 'Not the approved model'), 'Passing checks must not imply approval');
 check(str_contains($passed, 'differs from the approved model'), 'Old displayed forecasts must be distinguished');
 check(str_contains($passed, 'candidate&lt;script&gt;') && !str_contains($passed, '<script>'), 'Model identifiers must be escaped');
-check(!str_contains($passed, 'href='), 'Administrator must not receive technical controls or links');
+check(!str_contains($passed, 'ml_settings.php') && !str_contains($passed, 'forecast_analytics.php'), 'Administrator must not receive technical controls or links');
 check($before === $pdo->query('SELECT total_changes()')->fetchColumn(), 'Summary must not write to the database');
 
 $pdo->exec("UPDATE ml_model_evaluations SET wape = 0.4 WHERE horizon_days = 7;

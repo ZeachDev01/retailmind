@@ -61,6 +61,19 @@ def test_metrics_zero_error_boundary():
     assert metrics['exact_count'] == 3
     assert metrics['missing_metric_reason'] is None
 
+def test_opposite_signed_errors_do_not_cancel():
+    # Opposing errors: item 1 predicted 15 vs actual 10 (+5 overestimation)
+    #                  item 2 predicted 15 vs actual 20 (-5 underestimation)
+    # Signed sum would be 0, but honest evidence must separate over/underestimation units
+    actual = np.array([10.0, 20.0])
+    predicted = np.array([15.0, 15.0])
+    metrics = calculate_metrics(actual, predicted)
+    assert metrics['overprediction_units'] == 5.0
+    assert metrics['underprediction_units'] == 5.0
+    assert metrics['mae'] == 5.0
+    assert metrics['overprediction_count'] == 1
+    assert metrics['underprediction_count'] == 1
+
 def test_metrics_insufficient_coverage_empty():
     actual = np.array([])
     predicted = np.array([])
@@ -78,5 +91,6 @@ if __name__ == '__main__':
     test_seasonal_naive_forecast_short_history()
     test_metrics_diagnostics_and_population()
     test_metrics_zero_error_boundary()
+    test_opposite_signed_errors_do_not_cancel()
     test_metrics_insufficient_coverage_empty()
     print("All metrics tests passed.")

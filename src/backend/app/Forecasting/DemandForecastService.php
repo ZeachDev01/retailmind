@@ -667,4 +667,72 @@ class DemandForecastService
             return false;
         }
     }
+
+    public function getPredictionPerformanceEvidence(?string $asOfDate = null, ?string $modelVersion = null): array
+    {
+        $timezone = new \DateTimeZone('Asia/Manila');
+        if ($asOfDate === null) {
+            $asOfDate = (new \DateTime('now', $timezone))->modify('-1 day')->format('Y-m-d');
+        }
+
+        // Determine settings
+        $settings = [];
+        try {
+            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('ml_approved_model_version', 'ml_observation_mode', 'demo_import_metadata')");
+            $settings = $stmt ? $stmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+        } catch (\Throwable) {}
+
+        $approvedModel = $settings['ml_approved_model_version'] ?? null;
+        $isObservation = in_array($settings['ml_observation_mode'] ?? '0', ['1', 'true'], true);
+
+        // Resolve model version to evaluate
+        $modelAssociation = 'candidate';
+        if ($modelVersion === null) {
+            // Check usable job first
+            $usableJobId = $this->getLatestUsableJobId($asOfDate);
+            if ($usableJobId) {
+                try {
+                    $mStmt = $this->pdo->prepare("SELECT model_version FROM demand_forecasts WHERE job_id = ? LIMIT 1");
+                    $mStmt->execute([$usableJobId]);
+                    $modelVersion = $mStmt->fetchColumn() ?: null;
+                } catch (\Throwable) {}
+            }
+            if (!$modelVersion) {
+                $modelVersion = $approvedModel;
+            }
+            if (!$modelVersion) {
+                // Check latest completed training run
+                try {
+                    $rStmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                    $modelVersion = $rStmt ? ($rStmt->fetchColumn() ?: null) : null;
+                } catch (\Throwable) {}
+            }
+        }
+
+        if (!$modelVersion) {
+            $evalService = new CandidateEvaluationService($this->pdo);
+            return $evalService->getPredictionPerformanceEvidence($this->pdo, 'none', $asOfDate, 'unavailable');
+        }
+
+        // Determine model association
+        if ($approvedModel !== null && $modelVersion === $approvedModel) {
+            $modelAssociation = $isObservation ? 'candidate' : 'current';
+        } else {
+            // Check if it is the latest candidate from training runs
+            $latestCandidate = null;
+            try {
+                $rStmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                $latestCandidate = $rStmt ? ($rStmt->fetchColumn() ?: null) : null;
+            } catch (\Throwable) {}
+
+            if ($latestCandidate !== null && $modelVersion === $latestCandidate) {
+                $modelAssociation = 'candidate';
+            } else {
+                $modelAssociation = 'previous';
+            }
+        }
+
+        $evalService = new CandidateEvaluationService($this->pdo);
+        return $evalService->getPredictionPerformanceEvidence($this->pdo, $modelVersion, $asOfDate, $modelAssociation);
+    }
 }
