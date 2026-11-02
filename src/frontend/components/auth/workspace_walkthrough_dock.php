@@ -58,7 +58,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
             <span class="guidance-checkmark" aria-hidden="true">✓</span>
             <div>
                 <strong>Guidance finished.</strong>
-                <p><?= htmlspecialchars($topic['title']) ?> walkthrough completed. Your operational records were not modified.</p>
+                <p><?= htmlspecialchars($topic['title']) ?> walkthrough completed. Your operational settings and records were not modified.</p>
             </div>
         </div>
         <button type="button" class="btn btn-primary u-mt-1" id="guidance-btn-done">Close</button>
@@ -158,7 +158,12 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         });
         const currentTarget = steps[currentStep] ? document.querySelector(steps[currentStep].target) : null;
         dock.remove();
-        if (currentTarget) currentTarget.focus();
+        if (currentTarget) {
+            if (!currentTarget.hasAttribute('tabindex') && !/^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/i.test(currentTarget.tagName)) {
+                currentTarget.setAttribute('tabindex', '-1');
+            }
+            currentTarget.focus();
+        }
     }
 
     backBtn.addEventListener('click', function() {

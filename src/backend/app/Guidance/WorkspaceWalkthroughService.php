@@ -53,14 +53,52 @@ class WorkspaceWalkthroughService
                             'title' => 'Registers',
                             'path' => 'components/administrator/registers.php',
                             'summary' => 'Review or create named till records and receipt-width settings.',
-                            'steps' => [],
+                            'steps' => [
+                                [
+                                    'target' => '#register-name',
+                                    'action' => 'Review named till records',
+                                    'description' => 'Name each physical checkout counter or till to match its location in the Store, such as Front Counter.',
+                                    'learn_more' => 'Named till records track Cashier Shifts and identify which till issued a receipt. Hardware drivers and printer installation remain managed by your operating system, outside RetailMind.',
+                                ],
+                                [
+                                    'target' => '#register-paper-width',
+                                    'action' => 'Configure receipt width',
+                                    'description' => 'Choose standard 80 mm or compact 58 mm rolls to match the paper width used by this till\'s receipt printer.',
+                                    'learn_more' => 'RetailMind formats sales slips to fit the selected width. Platform Settings and operating system print queues are not required or modified here.',
+                                ],
+                                [
+                                    'target' => '#store-registers-heading',
+                                    'action' => 'Review existing till availability',
+                                    'description' => 'Inspect configured registers, availability for new Cashier Shifts, and paper widths without creating duplicate records.',
+                                    'learn_more' => 'You can rename tills, adjust receipt widths, or disable a register from future shifts anytime. Existing Cashier Shifts and sales records preserve their original till history.',
+                                ],
+                            ],
                         ],
                         'fiscal_periods' => [
                             'id' => 'fiscal_periods',
                             'title' => 'Fiscal Periods',
                             'path' => 'components/administrator/fiscal_periods.php',
                             'summary' => 'Find and understand the existing period workflow.',
-                            'steps' => [],
+                            'steps' => [
+                                [
+                                    'target' => '#period_name',
+                                    'action' => 'Name fiscal accounting periods',
+                                    'description' => 'Identify accounting windows such as monthly or quarterly periods to group Store trading records.',
+                                    'learn_more' => 'Fiscal periods establish formal accounting boundaries for sales and inventory auditing. They do not alter opening hours or trading days defined in your Store calendar.',
+                                ],
+                                [
+                                    'target' => '#start_date',
+                                    'action' => 'Set period date range',
+                                    'description' => 'Specify start and end dates to define which trading days and transactions fall within this accounting window.',
+                                    'learn_more' => 'Transactions are evaluated against open periods. Start dates must precede end dates, and dates remain subject to Store Operations authorization rules.',
+                                ],
+                                [
+                                    'target' => '#period-list-title',
+                                    'action' => 'Review period workflow and status',
+                                    'description' => 'Inspect existing periods across open, closed, and locked statuses without creating duplicate periods.',
+                                    'learn_more' => 'Open periods allow active trading. Closing prevents new entries while preserving records for review. Locking permanently seals the period for compliance under existing authorization rules.',
+                                ],
+                            ],
                         ],
                         'user_manager' => [
                             'id' => 'user_manager',
@@ -334,5 +372,28 @@ class WorkspaceWalkthroughService
     {
         $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, active_topic, active_step) VALUES (?, ?, ?, 0) ON DUPLICATE KEY UPDATE active_topic = VALUES(active_topic), active_step = 0');
         $stmt->execute([$userId, $workspace, $topicId]);
+    }
+
+    public static function inviteAdministrator(PDO $pdo, int $userId): void
+    {
+        $stmt = $pdo->prepare('SELECT status, invitation_status FROM workspace_guidance WHERE user_id = ? AND workspace = ?');
+        $stmt->execute([$userId, 'admin']);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, invitation_status) VALUES (?, ?, ?)');
+            $stmt->execute([$userId, 'admin', 'invited']);
+        } elseif (empty($existing['invitation_status']) && empty($existing['status'])) {
+            $stmt = $pdo->prepare('UPDATE workspace_guidance SET invitation_status = ? WHERE user_id = ? AND workspace = ?');
+            $stmt->execute(['invited', $userId, 'admin']);
+        }
+    }
+
+    public static function recordInvitationChoice(PDO $pdo, int $userId, string $workspace, string $choice): void
+    {
+        if (!in_array($choice, ['started', 'dismissed'], true)) {
+            throw new InvalidArgumentException('Invalid invitation choice.');
+        }
+        $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, invitation_status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE invitation_status = VALUES(invitation_status)');
+        $stmt->execute([$userId, $workspace, $choice]);
     }
 }

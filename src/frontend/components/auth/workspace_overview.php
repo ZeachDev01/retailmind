@@ -135,16 +135,13 @@ $primaryActionLabel = $isAdmin
 ?>
 <?php if ($guidanceIsHelp): ?>
     <?php if ($isAdmin): ?>
-        <?php if ($activeTopicDef && !empty($activeTopicDef['steps'])):
-            $activeStepNum = (int)($walkthroughProgress['active_step'] ?? 0) + 1;
-            $activeTotalSteps = count($activeTopicDef['steps']);
-        ?>
+<?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
             <section class="guidance-continue-card" aria-label="Continue guidance">
                 <div>
                     <h2>Continue where you left off</h2>
-                    <p>Resume <?= htmlspecialchars($activeTopicDef['title']) ?> walkthrough (Step <?= $activeStepNum ?> of <?= $activeTotalSteps ?>)</p>
+                    <p>Resume <?= htmlspecialchars($activeTopicDef['title']) ?> walkthrough (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</p>
                 </div>
-                <a href="<?= htmlspecialchars(app_url($activeTopicDef['path'] . '?guidance=' . $activeTopicDef['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($activeTopicDef['title']) ?> (Step <?= $activeStepNum ?> of <?= $activeTotalSteps ?>)</a>
+                <a href="<?= htmlspecialchars(app_url($activeTopicDef['path'] . '?guidance=' . $activeTopicDef['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($activeTopicDef['title']) ?> (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</a>
             </section>
         <?php endif; ?>
         <section class="guidance-walkthroughs" aria-labelledby="get-oriented-title">
@@ -154,10 +151,7 @@ $primaryActionLabel = $isAdmin
             </div>
             <div class="walkthrough-topics-list">
                 <?php
-                $getOrientedTopics = \App\Guidance\WorkspaceWalkthroughService::paths(current_role())['get_oriented']['topics'] ?? [];
-                $completedList = $walkthroughProgress['completed_topics'] ?? [];
-                $activeTopicKey = $walkthroughProgress['active_topic'] ?? null;
-                $activeStepVal = (int)($walkthroughProgress['active_step'] ?? 0);
+                $getOrientedTopics = \App\Guidance\WorkspaceWalkthroughService::paths('admin')['get_oriented']['topics'] ?? [];
                 $topicIcons = [
                     'store_settings' => 'shop',
                     'registers' => 'self_service_kiosk',
@@ -165,48 +159,36 @@ $primaryActionLabel = $isAdmin
                     'user_manager' => 'conference_call',
                     'store_calendar' => 'calendar',
                 ];
-                foreach ($getOrientedTopics as $tId => $tMeta):
-                    $hasSteps = !empty($tMeta['steps']);
-                    $isDone = in_array($tId, $completedList, true);
-                    $isInProgress = ($activeTopicKey === $tId);
-                    $stepCount = count($tMeta['steps'] ?? []);
+                foreach ($getOrientedTopics as $tId => $tDef):
+                    $isDone = in_array($tId, $walkthroughProgress['completed_topics'] ?? [], true);
+                    $isInProgress = (($walkthroughProgress['active_topic'] ?? null) === $tId);
+                    $hasSteps = !empty($tDef['steps']);
                     $icon = $topicIcons[$tId] ?? 'shop';
                 ?>
-                    <?php if ($hasSteps): ?>
-                        <div class="walkthrough-topic-card">
-                            <div class="walkthrough-topic-main">
-                                <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($icon) ?></span>
-                                <div>
-                                    <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tMeta['title']) ?></h4>
-                                    <p class="walkthrough-topic-desc"><?= htmlspecialchars($tMeta['summary']) ?></p>
-                                </div>
-                            </div>
-                            <div class="walkthrough-topic-actions">
-                                <?php if ($isDone): ?>
-                                    <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
-                                    <a href="<?= htmlspecialchars(app_url($tMeta['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
-                                <?php elseif ($isInProgress): ?>
-                                    <span class="guidance-progress-badge">In progress (Step <?= $activeStepVal + 1 ?> of <?= $stepCount ?>)</span>
-                                    <a href="<?= htmlspecialchars(app_url($tMeta['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
-                                <?php else: ?>
-                                    <a href="<?= htmlspecialchars(app_url($tMeta['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
-                                <?php endif; ?>
-                            </div>
+                <div class="walkthrough-topic-card<?= $hasSteps ? '' : ' walkthrough-topic-upcoming' ?>">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($icon) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
                         </div>
-                    <?php else: ?>
-                        <div class="walkthrough-topic-card walkthrough-topic-upcoming">
-                            <div class="walkthrough-topic-main">
-                                <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($icon) ?></span>
-                                <div>
-                                    <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tMeta['title']) ?></h4>
-                                    <p class="walkthrough-topic-desc"><?= htmlspecialchars($tMeta['summary']) ?></p>
-                                </div>
-                            </div>
-                            <div class="walkthrough-topic-actions">
-                                <a href="<?= htmlspecialchars(app_url($tMeta['path'])) ?>" class="btn btn-secondary">Go to <?= htmlspecialchars($tMeta['title']) ?></a>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($hasSteps): ?>
+                            <?php if ($isDone): ?>
+                                <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                            <?php elseif ($isInProgress): ?>
+                                <span class="guidance-progress-badge">In progress (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($tDef['steps']) ?>)</span>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
+                            <?php else: ?>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'])) ?>" class="btn btn-secondary">Go to <?= htmlspecialchars($tDef['title']) ?></a>
+                        <?php endif; ?>
+                    </div>
+                </div>
                 <?php endforeach; ?>
             </div>
         </section>
@@ -284,6 +266,8 @@ $primaryActionLabel = $isAdmin
     <p>
         <?php if ($isAdmin): ?>
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/registers.php?guidance=registers')) ?>">Get oriented: Registers</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?guidance=user_manager')) ?>">Staff accounts</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php?guidance=store_calendar')) ?>">Store calendar</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
@@ -297,6 +281,8 @@ $primaryActionLabel = $isAdmin
         <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
         <?php if ($isAdmin): ?>
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/registers.php?guidance=registers')) ?>">Get oriented: Registers</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?guidance=user_manager')) ?>">Staff accounts</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php?guidance=store_calendar')) ?>">Store calendar</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
