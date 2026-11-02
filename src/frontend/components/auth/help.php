@@ -28,6 +28,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $error = \App\Support\OperatorAlert::message($e, 'Unable to save your confirmation. Please try again.');
         }
+    } elseif (isset($_POST['walkthrough_action']) || isset($_POST['walkthrough_topic'])) {
+        $isJson = ($_SERVER['HTTP_ACCEPT'] ?? '') === 'application/json';
+        try {
+            $validated = \App\Guidance\WorkspaceWalkthroughService::validateMutation((int)$_SESSION['user_id'], current_role(), $_POST);
+            $userId = (int)$_SESSION['user_id'];
+            $workspace = current_role();
+            match ($validated['action']) {
+                'start' => \App\Guidance\WorkspaceWalkthroughService::updateStep($pdo, $userId, $workspace, $validated['topic_id'], 0),
+                'step' => \App\Guidance\WorkspaceWalkthroughService::updateStep($pdo, $userId, $workspace, $validated['topic_id'], $validated['step']),
+                'complete' => \App\Guidance\WorkspaceWalkthroughService::completeTopic($pdo, $userId, $workspace, $validated['topic_id']),
+                'exit' => \App\Guidance\WorkspaceWalkthroughService::exitWalkthrough($pdo, $userId, $workspace, $validated['topic_id'], $validated['step']),
+                'replay' => \App\Guidance\WorkspaceWalkthroughService::replayTopic($pdo, $userId, $workspace, $validated['topic_id']),
+            };
+            if ($isJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['saved' => true, 'action' => $validated['action'], 'step' => $validated['step']]);
+                exit;
+            }
+            $redirectTarget = !empty($_POST['return_to']) ? $sanitizeRedirect($_POST['return_to']) : app_url($validated['topic']['path']);
+            header('Location: ' . $redirectTarget, true, 303);
+            exit;
+        } catch (DomainException $e) {
+            http_response_code(403);
+            if ($isJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['saved' => false, 'error' => $e->getMessage()]);
+                exit;
+            }
+            $error = $e->getMessage();
+        } catch (InvalidArgumentException $e) {
+            http_response_code(422);
+            if ($isJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['saved' => false, 'error' => $e->getMessage()]);
+                exit;
+            }
+            $error = $e->getMessage();
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            $error = \App\Support\OperatorAlert::message($e, 'Unable to save your walkthrough progress.');
+            if ($isJson) {
+                header('Content-Type: application/json');
+                echo json_encode(['saved' => false, 'error' => $error]);
+                exit;
+            }
+        }
     } else {
         $status = $_POST['guidance_status'] ?? '';
         if (!is_string($status) || !in_array($status, ['skipped', 'deferred', 'completed'], true)) {

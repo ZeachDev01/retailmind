@@ -2062,12 +2062,18 @@ DROP TABLE IF EXISTS `workspace_guidance`;
 CREATE TABLE `workspace_guidance` (
   `user_id` INT NOT NULL,
   `workspace` VARCHAR(30) NOT NULL,
-  `status` ENUM('skipped','deferred','completed') NOT NULL,
+  `status` ENUM('skipped','deferred','completed') DEFAULT NULL,
+  `active_topic` VARCHAR(60) DEFAULT NULL,
+  `active_step` INT NOT NULL DEFAULT 0,
+  `completed_topics` TEXT DEFAULT NULL,
+  `invitation_status` VARCHAR(30) DEFAULT NULL,
   PRIMARY KEY (`user_id`, `workspace`),
   CONSTRAINT `fk_workspace_guidance_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_workspace_guidance','Remember optional guidance per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020002_workspace_walkthrough_progress','Persist interactive walkthrough progress per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 
 DROP TABLE IF EXISTS `store_setup_confirmations`;
