@@ -34,6 +34,40 @@ def test_rolling_origin_split():
     assert test2['date'].min() == pd.Timestamp("2026-01-24")
     assert test2['date'].max() == pd.Timestamp("2026-01-30")
 
+def test_rolling_origin_temporal_isolation_28day_holdouts():
+    # 3 holdouts of 28 days = 84 days test + 56 days training = 140 days
+    dates = pd.date_range(start="2026-01-01", periods=140, freq='D')
+    df = pd.DataFrame({'date': dates, 'units_sold': 10.0})
+    
+    splits = rolling_origin_split(df, 'date', horizon_days=28, n_splits=3)
+    assert len(splits) == 3
+    
+    for i, (train_df, test_df) in enumerate(splits):
+        # Permitted past strictly before test period
+        assert train_df['date'].max() < test_df['date'].min()
+        # Test period is exactly 28 days
+        assert (test_df['date'].max() - test_df['date'].min()).days == 27
+        # No overlap between train and test
+        assert set(train_df['date']).isdisjoint(set(test_df['date']))
+
+def test_rolling_origin_mon_fri_store_with_weekend_closures():
+    # Mon-Fri store across 28 calendar weeks (196 calendar days, 140 trading days)
+    dates = [d for d in pd.date_range(start="2026-01-01", periods=196, freq='D') if d.dayofweek < 5]
+    df = pd.DataFrame({'date': dates, 'units_sold': 5.0})
+    
+    splits = rolling_origin_split(df, 'date', horizon_days=28, n_splits=3)
+    assert len(splits) == 3
+    
+    for train_df, test_df in splits:
+        assert train_df['date'].max() < test_df['date'].min()
+        # In a 28-calendar-day window, Mon-Fri store has 20 trading days
+        assert len(test_df) == 20
+        # No weekend dates in either train or test
+        assert (train_df['date'].dt.dayofweek < 5).all()
+        assert (test_df['date'].dt.dayofweek < 5).all()
+
 if __name__ == '__main__':
     test_rolling_origin_split()
+    test_rolling_origin_temporal_isolation_28day_holdouts()
+    test_rolling_origin_mon_fri_store_with_weekend_closures()
     print("All CV tests passed.")

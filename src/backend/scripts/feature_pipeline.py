@@ -1,4 +1,4 @@
-"""One cutoff-aware feature contract for observed daily demand (#365)."""
+"""One cutoff-aware feature contract for observed daily demand (#365, #366)."""
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -70,7 +70,7 @@ def history_at(df, cutoff_date):
 
 def build_feature_matrix(df, cutoff_date, horizon_days=28):
     """
-    Construct supported dated feature windows (#365).
+    Construct supported dated feature windows (#365, #366).
     Lag 1 is the observed origin day; preserves calendar dates without inventing zero demand.
     Skips unsupported product/origin combinations and records reasons.
     """
@@ -241,20 +241,28 @@ def _fit_model(rows):
 
 def train_and_evaluate(df):
     """
-    Three rolling 28-day holdouts; score per-product 7/14/28-day totals (#365).
-    Evaluates complete usable Product/horizon totals; reports included/excluded products.
+    Three rolling 28-day holdouts; score per-product 7/14/28-day totals (#365, #366).
+    Evaluates complete usable Product/horizon totals after worker's nonnegative daily rounding.
+    Applies identical explicit closure treatment to candidate and baseline.
+    Reports included/excluded products, fractional diagnostics, and under/overprediction.
     """
     history = normalize_history(df)
     data = history_at(history, history.date.max())
     training = build_training_rows(history, data.date.max())
     folds = []
-    totals = {h: {"actual": [], "predicted": [], "baseline": []} for h in (7, 14, 28)}
+    totals = {
+        h: {
+            "actual": [], "predicted": [], "baseline": [],
+            "predicted_fractional": [], "baseline_fractional": []
+        }
+        for h in (7, 14, 28)
+    }
 
     splits = rolling_origin_split(data, "date", 28, n_splits=3)
     if len(splits) != 3:
         raise ValueError("Insufficient history for three chronological holdouts")
 
-    all_products = sorted(data.product_id.unique())
+    all_products = [int(p) for p in sorted(data.product_id.unique())]
     product_holdout_complete = {pid: True for pid in all_products}
     product_exclusion_reasons = {}
 
@@ -286,19 +294,60 @@ def train_and_evaluate(df):
         fold_actual = {7: [], 14: [], 28: []}
         fold_predicted = {7: [], 14: [], 28: []}
         fold_baseline = {7: [], 14: [], 28: []}
+        fold_predicted_frac = {7: [], 14: [], 28: []}
+        fold_baseline_frac = {7: [], 14: [], 28: []}
 
         for pid, pfeatures in features.groupby("product_id"):
-            p_held_out = held_out[held_out.product_id == pid]
+            pid = int(pid)
+            p_history = history[history.product_id == pid]
+            has_classification = "classification" in p_history.columns
+            weekend_operating = (p_history.date.dt.dayofweek >= 5).any() and not has_classification
 
-            # Check holdout completeness (no stockout or missing evidence)
-            if "classification" in p_held_out.columns:
-                has_gap = p_held_out["classification"].isin(["stockout_censored", "missing_evidence"]).any()
-            else:
-                has_gap = False
+            # Check holdout completeness across all 28 calendar days (#366)
+            holdout_valid = True
+            holdout_actual = {}
+            is_recorded_closure = {}
 
-            if has_gap:
+            for h in range(1, 29):
+                tdate = origin + pd.Timedelta(days=h)
+                match = p_history[p_history.date == tdate]
+
+                if not match.empty:
+                    row = match.iloc[-1]
+                    if has_classification:
+                        cls = str(row.get("classification", ""))
+                        if cls == "closed":
+                            is_recorded_closure[h] = True
+                            holdout_actual[h] = 0.0
+                        elif cls in ("valid_demand", "genuine_zero"):
+                            is_recorded_closure[h] = False
+                            units = row.get("units_sold")
+                            holdout_actual[h] = float(units) if pd.notna(units) else 0.0
+                        else:  # stockout_censored or missing_evidence
+                            holdout_valid = False
+                            break
+                    else:
+                        units = row.get("units_sold")
+                        if pd.notna(units):
+                            is_recorded_closure[h] = False
+                            holdout_actual[h] = float(units)
+                        elif tdate.dayofweek >= 5 and not weekend_operating:
+                            is_recorded_closure[h] = True
+                            holdout_actual[h] = 0.0
+                        else:
+                            holdout_valid = False
+                            break
+                else:
+                    if tdate.dayofweek >= 5 and not weekend_operating:
+                        is_recorded_closure[h] = True
+                        holdout_actual[h] = 0.0
+                    else:
+                        holdout_valid = False
+                        break
+
+            if not holdout_valid:
                 product_holdout_complete[pid] = False
-                reason = f"Stockout or missing evidence during holdout {origin.date()}"
+                reason = f"Missing trading evidence or stockout during holdout at {origin.date()}"
                 product_exclusion_reasons[pid] = reason
                 fold_products_excluded.append(pid)
                 continue
@@ -307,40 +356,75 @@ def train_and_evaluate(df):
             preds = model.predict(pfeatures[FEATURE_COLUMNS])
             pred_map = dict(zip(pfeatures.horizon_day, preds))
 
-            actual_map = {}
-            for h in range(1, 29):
-                tdate = origin + pd.Timedelta(days=h)
-                match = p_held_out[p_held_out.date == tdate]
-                if not match.empty:
-                    actual_map[h] = float(match.units_sold.values[0])
-                else:
-                    actual_map[h] = 0.0
-
+            # Weekly Seasonal Naive from permitted past 28 calendar days
+            w_dates = pd.date_range(origin - pd.Timedelta(days=27), origin)
             p_past = past_at_origin[past_at_origin.product_id == pid]
-            base_forecast = seasonal_naive_forecast(p_past.units_sold.to_numpy(), 28)
+            past_sales_by_date = dict(zip(p_past.date, p_past.units_sold))
+            past_28_units = np.array([float(past_sales_by_date.get(d, 0.0)) for d in w_dates], dtype=float)
+            base_forecast = seasonal_naive_forecast(past_28_units, 28, season_length=7)
             base_map = dict(zip(range(1, 29), base_forecast))
 
+            # Daily predictions with nonnegative integer rounding & explicit closure treatment (#366)
+            pred_daily_map = {}
+            base_daily_map = {}
+            pred_frac_map = {}
+            base_frac_map = {}
+
+            for h in range(1, 29):
+                if is_recorded_closure.get(h, False):
+                    # Identical explicit closure treatment: 0 demand when Store is closed
+                    pred_daily_map[h] = 0
+                    base_daily_map[h] = 0
+                    pred_frac_map[h] = 0.0
+                    base_frac_map[h] = 0.0
+                else:
+                    p_val = float(pred_map.get(h, 0.0))
+                    b_val = float(base_map.get(h, 0.0))
+                    pred_daily_map[h] = max(0, int(round(p_val)))
+                    base_daily_map[h] = max(0, int(round(b_val)))
+                    pred_frac_map[h] = p_val
+                    base_frac_map[h] = b_val
+
             for horizon in (7, 14, 28):
-                a = sum(actual_map[h] for h in range(1, horizon + 1))
-                p = sum(pred_map.get(h, 0.0) for h in range(1, horizon + 1))
-                b = sum(base_map.get(h, 0.0) for h in range(1, horizon + 1))
+                a = sum(holdout_actual[h] for h in range(1, horizon + 1))
+                p = sum(pred_daily_map[h] for h in range(1, horizon + 1))
+                b = sum(base_daily_map[h] for h in range(1, horizon + 1))
+                p_frac = sum(pred_frac_map[h] for h in range(1, horizon + 1))
+                b_frac = sum(base_frac_map[h] for h in range(1, horizon + 1))
 
                 fold_actual[horizon].append(a)
                 fold_predicted[horizon].append(p)
                 fold_baseline[horizon].append(b)
+                fold_predicted_frac[horizon].append(p_frac)
+                fold_baseline_frac[horizon].append(b_frac)
+
                 totals[horizon]["actual"].append(a)
                 totals[horizon]["predicted"].append(p)
                 totals[horizon]["baseline"].append(b)
+                totals[horizon]["predicted_fractional"].append(p_frac)
+                totals[horizon]["baseline_fractional"].append(b_frac)
 
         if not fold_products_included:
             raise ValueError("Insufficient holdout coverage for candidate evaluation")
 
         for horizon in (7, 14, 28):
-            a_arr = np.array(fold_actual[horizon])
-            p_arr = np.array(fold_predicted[horizon])
-            b_arr = np.array(fold_baseline[horizon])
+            a_arr = np.array(fold_actual[horizon], dtype=float)
+            p_arr = np.array(fold_predicted[horizon], dtype=float)
+            b_arr = np.array(fold_baseline[horizon], dtype=float)
+            p_frac_arr = np.array(fold_predicted_frac[horizon], dtype=float)
+            b_frac_arr = np.array(fold_baseline_frac[horizon], dtype=float)
+
             m = calculate_metrics(a_arr, p_arr)
             m.update({f"baseline_{k}": v for k, v in calculate_metrics(a_arr, b_arr).items()})
+            frac_m = calculate_metrics(a_arr, p_frac_arr)
+            frac_b = calculate_metrics(a_arr, b_frac_arr)
+            m["mae_fractional"] = frac_m["mae"]
+            m["rmse_fractional"] = frac_m["rmse"]
+            m["wape_fractional"] = frac_m["wape"]
+            m["baseline_mae_fractional"] = frac_b["mae"]
+            m["baseline_rmse_fractional"] = frac_b["rmse"]
+            m["baseline_wape_fractional"] = frac_b["wape"]
+            m["coverage"] = len(fold_products_included)
             fold_evaluations[str(horizon)] = m
 
         folds.append({
@@ -355,15 +439,32 @@ def train_and_evaluate(df):
         })
 
     evaluations = {}
+    eligible_pids = [int(p) for p in all_products if product_holdout_complete.get(p, False)]
     for horizon, values in totals.items():
-        actual = np.array(values["actual"])
-        metrics = calculate_metrics(actual, np.array(values["predicted"]))
-        metrics.update({f"baseline_{k}": v for k, v in
-                        calculate_metrics(actual, np.array(values["baseline"])).items()})
+        actual = np.array(values["actual"], dtype=float)
+        predicted = np.array(values["predicted"], dtype=float)
+        baseline = np.array(values["baseline"], dtype=float)
+        pred_frac = np.array(values["predicted_fractional"], dtype=float)
+        base_frac = np.array(values["baseline_fractional"], dtype=float)
+
+        metrics = calculate_metrics(actual, predicted)
+        base_metrics = calculate_metrics(actual, baseline)
+        metrics.update({f"baseline_{k}": v for k, v in base_metrics.items()})
+
+        frac_m = calculate_metrics(actual, pred_frac)
+        frac_b = calculate_metrics(actual, base_frac)
+        metrics["mae_fractional"] = frac_m["mae"]
+        metrics["rmse_fractional"] = frac_m["rmse"]
+        metrics["wape_fractional"] = frac_m["wape"]
+        metrics["baseline_mae_fractional"] = frac_b["mae"]
+        metrics["baseline_rmse_fractional"] = frac_b["rmse"]
+        metrics["baseline_wape_fractional"] = frac_b["wape"]
+
+        metrics["coverage"] = len(eligible_pids)
+        metrics["population"] = int(len(actual))
         evaluations[horizon] = metrics
 
     model = _fit_model(training)
-    eligible_products = [pid for pid in all_products if product_holdout_complete.get(pid, False)]
 
     return {
         "model": model,
@@ -375,10 +476,10 @@ def train_and_evaluate(df):
             "training_window_end": str(training.target_date.max().date()),
             "data_window_start": str(data.date.min().date()),
             "data_window_end": str(data.date.max().date()),
-            "products": eligible_products if eligible_products else all_products,
-            "included_products": eligible_products,
-            "excluded_products": [pid for pid in all_products if pid not in eligible_products],
-            "exclusion_reasons": product_exclusion_reasons,
+            "products": eligible_pids if eligible_pids else all_products,
+            "included_products": eligible_pids,
+            "excluded_products": [int(pid) for pid in all_products if pid not in eligible_pids],
+            "exclusion_reasons": {int(k): v for k, v in product_exclusion_reasons.items()},
             "observations": len(data), "folds": folds,
         },
     }

@@ -349,6 +349,18 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
               row.horizon_day, max(0, int(round(float(predicted)))), version, readiness, limitation))
 
 
+def _json_default(obj):
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, (pd.Timestamp, datetime)):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def run_model_retraining(conn, cursor, job_id):
     context = dataset_context(cursor)
     data = load_history(cursor, context, training=True)
@@ -370,10 +382,19 @@ def run_model_retraining(conn, cursor, job_id):
     for horizon, metrics in artifact['evaluations'].items():
         threshold = thresholds.get(f'ml_max_wape_{horizon}d')
         wape, baseline = metrics['wape'], metrics['baseline_wape']
-        if threshold is None or wape is None or baseline is None:
+        coverage = metrics.get('coverage', len(meta.get('products', [])))
+
+        # Snapshot effective configured threshold and baseline comparison (#366)
+        metrics['effective_max_wape'] = threshold
+
+        if threshold is None or wape is None or baseline is None or coverage <= 0:
             outcome = 'incomplete'
+            if threshold is None and not metrics.get('missing_metric_reason'):
+                metrics['missing_metric_reason'] = f"Missing configured threshold ml_max_wape_{horizon}d"
+            elif coverage <= 0 and not metrics.get('missing_metric_reason'):
+                metrics['missing_metric_reason'] = "Insufficient holdout coverage"
         else:
-            outcome = 'passed' if wape <= threshold and wape < baseline else 'failed'
+            outcome = 'passed' if (wape <= threshold and wape < baseline) else 'failed'
         outcomes.append(outcome)
         metrics['candidate_gate_outcome'] = outcome
         cursor.execute("""
@@ -402,7 +423,8 @@ def run_model_retraining(conn, cursor, job_id):
          sales_records_used, eligible_products, started_at, completed_at)
         VALUES (%s, %s, 'cli', 'completed', %s, %s, %s, NOW(), NOW())
     """, (model_name, version, json.dumps({'metadata': meta, 'evaluations': artifact['evaluations'],
-                                          'model_version': version, 'outcome': meta['outcome']}),
+                                          'model_version': version, 'outcome': meta['outcome']},
+                                         default=_json_default),
           meta['observations'], len(meta['products'])))
     directory = artifact_directory(context)
     directory.mkdir(parents=True, exist_ok=True)
