@@ -8,6 +8,34 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'create_admin_with_temp_password') {
+    $pdo->exec("USE `{$database}`");
+    $username = $argv[3] ?? 'new_admin';
+    $tempPassword = 'TempPassword123';
+    $stmt = $pdo->prepare("INSERT INTO users (display_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, 1, 1)");
+    $stmt->execute(['New Admin ' . $username, $username, password_hash($tempPassword, PASSWORD_DEFAULT)]);
+    $newId = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, 1, 1)")->execute([$newId]);
+    echo json_encode(['user_id' => $newId, 'username' => $username, 'password' => $tempPassword]);
+    exit;
+}
+if ($argv[1] === 'complete_store_setup') {
+    $pdo->exec("USE `{$database}`");
+    $tasks = ['catalog_ready', 'opening_stock_ready', 'calendar_reviewed'];
+    foreach ($tasks as $task) {
+        $pdo->prepare("INSERT INTO store_setup_confirmations (task_key, confirmed_by_user_id, confirmed_workspace) VALUES (?, 1, 'admin') ON DUPLICATE KEY UPDATE confirmed_at = CURRENT_TIMESTAMP")->execute([$task]);
+    }
+    exit;
+}
+if ($argv[1] === 'get_guidance_row') {
+    $pdo->exec("USE `{$database}`");
+    $userId = (int)($argv[3] ?? 1);
+    $workspace = $argv[4] ?? 'admin';
+    $stmt = $pdo->prepare("SELECT * FROM workspace_guidance WHERE user_id = ? AND workspace = ?");
+    $stmt->execute([$userId, $workspace]);
+    echo json_encode($stmt->fetch(PDO::FETCH_ASSOC) ?: null);
+    exit;
+}
 if (in_array($argv[1], ['stock_issue_loading_failure', 'stock_issue_loading_allow'], true)) {
     $pdo->exec("USE `{$database}`");
     $pdo->exec($argv[1] === 'stock_issue_loading_failure'

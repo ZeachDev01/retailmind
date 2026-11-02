@@ -297,4 +297,27 @@ class WorkspaceWalkthroughService
         $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, active_topic, active_step) VALUES (?, ?, ?, 0) ON DUPLICATE KEY UPDATE active_topic = VALUES(active_topic), active_step = 0');
         $stmt->execute([$userId, $workspace, $topicId]);
     }
+
+    public static function inviteAdministrator(PDO $pdo, int $userId): void
+    {
+        $stmt = $pdo->prepare('SELECT status, invitation_status FROM workspace_guidance WHERE user_id = ? AND workspace = ?');
+        $stmt->execute([$userId, 'admin']);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existing) {
+            $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, invitation_status) VALUES (?, ?, ?)');
+            $stmt->execute([$userId, 'admin', 'invited']);
+        } elseif (empty($existing['invitation_status']) && empty($existing['status'])) {
+            $stmt = $pdo->prepare('UPDATE workspace_guidance SET invitation_status = ? WHERE user_id = ? AND workspace = ?');
+            $stmt->execute(['invited', $userId, 'admin']);
+        }
+    }
+
+    public static function recordInvitationChoice(PDO $pdo, int $userId, string $workspace, string $choice): void
+    {
+        if (!in_array($choice, ['started', 'dismissed'], true)) {
+            throw new InvalidArgumentException('Invalid invitation choice.');
+        }
+        $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, invitation_status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE invitation_status = VALUES(invitation_status)');
+        $stmt->execute([$userId, $workspace, $choice]);
+    }
 }
