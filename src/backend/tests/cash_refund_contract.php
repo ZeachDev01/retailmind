@@ -17,8 +17,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../app/Services/CashRefundService.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
-require_once __DIR__ . '/../app/Receipts/RefundReceiptPresentation.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptPaperService.php';
+require_once __DIR__ . '/../app/Receipts/ReceiptEngine.php';
 
 use App\Services\CashierShiftService;
 use App\Services\CashRefundService;
@@ -1044,7 +1043,7 @@ try {
         'later Store, footer, product, Register, and Cashier edits cannot rewrite the receipt');
     foreach ([58, 80, 123] as $width) {
         ob_start();
-        \App\Receipts\RefundReceiptPresentation::render($saved, $width);
+        \App\Receipts\ReceiptEngine::renderRefund($saved, $width);
         $customerHtml = ob_get_clean();
         foreach (['Refund #' . $otherRefundId, 'Original Sale Receipt #' . $saleId, 'Date/Time:', 'Cashier:', 'Register:', 'Other', 'Total refunded', 'Original payment method',
             $saved['store']['footer'], $saved['items'][0]['product_name']] as $required) {
@@ -1112,7 +1111,7 @@ try {
                 'each My refunds row opens its corresponding receipt');
         }
         ob_start();
-        \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm);
+        \App\Receipts\ReceiptEngine::renderRefund($receipt, $paperWidthMm);
         $browserFixtures[$width] = ['history' => $historyHtml, 'receipt' => ob_get_clean(), 'id' => $reprintId];
     }
     $assert($refundCount($pdo) === $refundsBeforeReprint, 'direct GET and reprint leave refund count unchanged');
@@ -1241,7 +1240,7 @@ try {
     );
     $packReceipt = $receiptService->forCashier($packRefund1, $casey, 1);
     ob_start();
-    \App\Receipts\RefundReceiptPresentation::render($packReceipt, 80);
+    \App\Receipts\ReceiptEngine::renderRefund($packReceipt, 80);
     $packReceiptHtml = ob_get_clean();
     $assert(!str_contains($packReceiptHtml, 'Selling Form:') && !str_contains($packReceiptHtml, 'Pack (6 pcs)'), 'Refund Receipt omits selling form and pack size');
 

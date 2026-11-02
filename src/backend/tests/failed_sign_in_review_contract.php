@@ -64,15 +64,15 @@ $rejects(fn() => $reviews->clearReviewed('super_admin', 1, $lastShown, 'unconfir
 $rejects(fn() => $reviews->clearReviewed('super_admin', 1, $lastShown + 100, 'unconfirmed', 'Checked.', '192.0.2.1'));
 
 $center = new AttentionCenter($pdo, $clock);
-$refresh = static fn() => $center->refresh(1, 'super_admin', ['failed_login_count' => ['value' => $reviews->pendingCount(), 'count' => $reviews->pendingCount()]]);
+$refresh = static fn() => array_values(array_filter($center->synchronize(1, 'super_admin')->dashboardItems(), static fn(array $item): bool => $item['key'] === 'platform.security.failed-logins'));
 $assert(count($refresh()) === 1, 'Five failures should trigger the warning');
 $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM login_attempts')->fetchColumn();
 $newArrival = $addAttempt('unknown:stranger');
 $reviews->clearReviewed('super_admin', 1, $lastShown, 'user_mistake', 'Cashier confirmed a typing mistake by phone.', '192.0.2.1');
 $assert($reviews->pendingCount() === 1, 'Failure arriving after the displayed batch must remain unreviewed');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM login_attempts')->fetchColumn() === $beforeCount + 1, 'Manual clearing must not delete attempts');
-$assert((int)$pdo->query('SELECT is_active FROM attention_states')->fetchColumn() === 0, 'Manual clearing must resolve the old warning state');
-$assert((int)$pdo->query('SELECT is_read FROM notifications')->fetchColumn() === 1, 'Old warning notification should be marked read for its reviewer');
+$assert((int)$pdo->query("SELECT is_active FROM attention_states WHERE attention_key = 'platform.security.failed-logins'")->fetchColumn() === 0, 'Manual clearing must resolve the old warning state');
+$assert((int)$pdo->query("SELECT is_read FROM notifications WHERE attention_key = 'platform.security.failed-logins'")->fetchColumn() === 1, 'Old warning notification should be marked read for its reviewer');
 $history = $pdo->query('SELECT * FROM activity_log')->fetch(PDO::FETCH_ASSOC);
 $snapshot = json_decode($history['new_value'], true, flags: JSON_THROW_ON_ERROR);
 $evidence = json_decode($history['metadata'], true, flags: JSON_THROW_ON_ERROR);
@@ -87,7 +87,7 @@ for ($index = 0; $index < 4; $index++) {
     $addAttempt();
 }
 $assert(count($refresh()) === 1, 'Five new failures must trigger another warning');
-$assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === 2, 'New failures must generate a fresh notification');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'platform.security.failed-logins'")->fetchColumn() === 2, 'New failures must generate a fresh notification');
 
 // Failure while resolving state must roll back the checkpoint and notification update.
 $pdo->exec("CREATE TRIGGER reject_resolution BEFORE UPDATE ON attention_states BEGIN SELECT RAISE(ABORT, 'resolution rejected'); END");

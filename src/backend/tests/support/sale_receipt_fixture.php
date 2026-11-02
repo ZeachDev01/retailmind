@@ -1,7 +1,7 @@
 <?php
 // Synthetic data exercises the shipped paper renderer without changing Store data.
 require_once __DIR__ . '/../../app/Receipts/ReceiptDetailsService.php';
-require_once __DIR__ . '/../../app/Receipts/SaleReceiptPresentation.php';
+require_once __DIR__ . '/../../app/Receipts/ReceiptEngine.php';
 
 $paperWidthMm = (int)($argv[2] ?? 80);
 $long = ($argv[1] ?? 'short') === 'long';
@@ -16,7 +16,7 @@ if (($argv[1] ?? '') === 'gcash') {
     $receipt = ['store' => $store, 'transaction_id' => 103, 'cashier_name' => str_repeat('Long Cashier ', 10), 'register_name' => str_repeat('Long Register ', 10),
         'completed_at' => '2026-10-24 10:11:12', 'transaction_type' => 'Cash-In', 'principal_amount' => '12345.00', 'fee_amount' => '123.45', 'fee_method' => 'Fee in cash',
         'cash_collected' => '12468.45', 'wallet_sent' => '12345.00', 'cash_paid_out' => '0.00', 'wallet_received' => '0.00', 'reference_number' => '00000000000000000000000000123456'];
-    App\Receipts\GCashReceiptPresentation::render($receipt, $paperWidthMm);
+    App\Receipts\ReceiptEngine::renderGCash($receipt, $paperWidthMm);
     exit;
 }
 $items = [];
@@ -36,5 +36,5 @@ $sale = ['sale_id' => 103, 'sale_date' => '2026-09-30 10:11:12',
     'payment_reference' => $long ? 'NONCASH-REFERENCE-' . str_repeat('0123456789', 15) : null,
     'verification_code' => 'SALE-103-EXAMPLE'];
 echo '<div class="receipt-container"><div class="no-print">Payment completed — synthetic example</div><button type="button" class="no-print" onclick="printReceiptSection(this)">Print Receipt</button>';
-App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm);
+App\Receipts\ReceiptEngine::renderSale($sale, $items, $store, $paperWidthMm);
 echo '</div>';

@@ -43,9 +43,6 @@ final class DashboardWorkspace
             $platform = $this->platformState($now, $healthChecks);
             $attention = array_values(array_filter(
                 (new AttentionCenter($this->pdo, $this->clock))->getAttention(0, $actorRole, $healthChecks),
-
-
-
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
 
