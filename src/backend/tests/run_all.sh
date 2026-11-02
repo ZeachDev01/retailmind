@@ -66,6 +66,10 @@ node src/backend/tests/administrator_workflow_guidance_browser_test.js
 node src/backend/tests/inventory_workflow_guidance_browser_test.js
 node src/backend/tests/workspace_walkthrough_store_settings_browser_test.js
 node src/backend/tests/workspace_walkthrough_registers_fiscal_periods_browser_test.js
+node src/backend/tests/workspace_walkthrough_staff_and_calendar_browser_test.js
+node src/backend/tests/workspace_walkthrough_daily_oversight_browser_test.js
+node src/backend/tests/workspace_walkthrough_inventory_manager_browser_test.js
+node src/backend/tests/workspace_walkthrough_invitation_browser_test.js
 php src/backend/tests/cashier_workspace_authorization_contract.php
 php src/backend/tests/store_scope_contract.php
 php src/backend/tests/inventory_load_contract.php

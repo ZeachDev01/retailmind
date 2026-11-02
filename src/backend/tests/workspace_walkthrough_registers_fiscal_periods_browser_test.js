@@ -12,6 +12,7 @@ if (process.env.RUN_DB_TESTS !== '1') {
     process.exit(0);
 }
 
+const root = path.resolve(__dirname, '../../..');
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-walkthrough-reg-fp-'));
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(directory, 'recovery')};
@@ -20,7 +21,7 @@ const fixture = (action, extra) => {
     const args = ['src/backend/tests/support/theme_fixture.php', action, database];
     if (extra) args.push(extra);
     const result = spawnSync(process.env.PHP_BINARY || 'php', args, {
-        cwd: 'c:/xampp/htdocs/retailmind/.worktrees/ticket-405',
+        cwd: root,
         env,
         encoding: 'utf8'
     });
@@ -39,7 +40,7 @@ const fixture = (action, extra) => {
         const origin = 'http://127.0.0.1:' + port;
 
         server = spawn(process.env.PHP_BINARY || 'php', ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'], {
-            cwd: 'c:/xampp/htdocs/retailmind/.worktrees/ticket-405',
+            cwd: root,
             env: {...env, RM_THEME_TEST_DATABASE: database},
             stdio: 'ignore'
         });

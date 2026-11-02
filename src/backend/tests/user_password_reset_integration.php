@@ -32,7 +32,7 @@ try {
         $ids[$role] = (int)$pdo->lastInsertId();
         $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1)')->execute([$ids[$role], $roleId]);
     }
-    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
+    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
     foreach (['super_admin', 'admin'] as $actorRole) {
         foreach (['cashier', 'inventory_manager'] as $targetRole) {
             foreach ([['admin'], [$targetRole, 'admin']] as $roles) {

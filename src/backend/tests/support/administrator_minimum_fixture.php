@@ -18,7 +18,7 @@ $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$dat
 $notifier = new class extends UserAccountNotifier {
     protected function deliver(string $email, string $subject, string $message): bool { return true; }
 };
-$service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo), $notifier);
+$service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), $notifier);
 if ($argv[1] === 'seed') {
     $first = (int)($argv[3] ?? 100);
     $second = $first + 1;
