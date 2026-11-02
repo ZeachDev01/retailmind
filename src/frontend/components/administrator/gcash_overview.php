@@ -194,7 +194,7 @@ function gcash_admin_money(mixed $val): string {
                 <div class="pos-panel-title">
                     <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-admin-balances-title">Recorded service funds</h2>
+                        <h2 id="gcash-admin-balances-title">Service balances</h2>
                     </div>
                 </div>
                 <span class="gcash-badge" id="admin-session-status">Latest session</span>
@@ -270,7 +270,7 @@ function gcash_admin_money(mixed $val): string {
 
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-outstanding-title" id="gcash-outstanding-reviews">
             <div class="pos-panel-header">
-                <h2 id="gcash-outstanding-title">Outstanding reviews</h2>
+                <h2 id="gcash-outstanding-title">Needs review</h2>
             </div>
             <?php if ($overview === null): ?>
                 <p role="alert">Outstanding reviews unavailable. Refresh to try again.</p>
@@ -299,24 +299,27 @@ function gcash_admin_money(mixed $val): string {
             </div>
             <div class="gcash-overview-grid gcash-metrics-grid">
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Cash-in principal</span>
+                    <span class="gcash-card-label">Cash-in amount</span>
                     <div class="gcash-card-value" id="admin-metric-cash-in-principal"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['cash_in_principal']) ?></div>
                 </div>
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Cash-out principal</span>
+                    <span class="gcash-card-label">Cash-out amount</span>
                     <div class="gcash-card-value" id="admin-metric-cash-out-principal"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['cash_out_principal']) ?></div>
                 </div>
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Gross cash fees</span>
+                    <span class="gcash-card-label">Cash fees</span>
                     <div class="gcash-card-value" id="admin-metric-gross-fees-cash"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['gross_fees_cash']) ?></div>
                 </div>
                 <div class="gcash-card">
-                    <span class="gcash-card-label">Gross wallet fees</span>
+                    <span class="gcash-card-label">Wallet fees</span>
                     <div class="gcash-card-value" id="admin-metric-gross-fees-wallet"><?= $overview === null ? 'Unavailable' : gcash_admin_money($overview['gross_fees_wallet']) ?></div>
                 </div>
             </div>
             <div class="gcash-activity-footer">
-                <p>Principal excludes fees. Gross fees precede fee returns.</p>
+                <details class="gcash-totals-help">
+                    <summary>About these totals</summary>
+                    <p>Cash-in and cash-out amounts exclude fees. Fees are shown before fee returns.</p>
+                </details>
                 <button type="button" class="btn btn-secondary" data-review-tab="transactions">View transactions<i class="bi bi-arrow-right" aria-hidden="true"></i></button>
             </div>
         </section>

@@ -43,16 +43,56 @@ const fixture = action => {
         if (process.env.SWAL_TEST_CSS) {
             await page.route('https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css', route => route.fulfill({contentType: 'text/css', body: fs.readFileSync(process.env.SWAL_TEST_CSS, 'utf8')}));
         }
+        for (const username of ['theme_admin', 'theme_super_admin']) {
+            const context = await browser.newContext();
+            const oversight = await context.newPage();
+            await oversight.goto(origin + '/?login=1');
+            await oversight.locator('#landing-login-username').fill(username);
+            await oversight.locator('#landing-login-password').fill(data.password);
+            await Promise.all([oversight.waitForNavigation(), oversight.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            if (username === 'theme_super_admin') {
+                await oversight.goto(origin + '/components/auth/workspace.php');
+                await oversight.locator('form.workspace-option').filter({has: oversight.locator('input[name="workspace"][value="admin"]')})
+                    .getByRole('button', {name: 'Open', exact: true}).click();
+                await oversight.waitForURL('**/administrator/dashboard.php');
+            }
+            for (const sidebar of [false, true]) {
+                if (sidebar) {
+                    await oversight.goto(origin + '/components/administrator/dashboard.php');
+                    await oversight.getByRole('link', {name: 'Stock Issue Oversight', exact: true}).click();
+                    await oversight.waitForURL('**/administrator/stock_issues.php');
+                } else await oversight.goto(origin + '/components/administrator/stock_issues.php');
+                assert.equal(await oversight.getByRole('alert').count(), 0,
+                    `${username}: authorized navigation must not show an access warning: ${await oversight.locator('main').innerText()}`);
+                await oversight.getByRole('table', {name: 'Stock issue reports', exact: true}).getByText('Theme Test Item', {exact: true}).waitFor();
+                await oversight.getByLabel('Product', {exact: true}).fill('THEME-ITEM');
+                await oversight.getByLabel('Status', {exact: true}).selectOption('pending');
+                await oversight.getByRole('button', {name: 'Apply filters', exact: true}).click();
+                await oversight.waitForURL('**/stock_issues.php?*product=THEME-ITEM*');
+                await oversight.getByRole('table', {name: 'Stock issue reports', exact: true}).getByText('Theme Test Item', {exact: true}).waitFor();
+                assert.equal(await oversight.getByRole('alert').count(), 0, `${username}: filters remain authorized`);
+                await oversight.getByRole('link', {name: 'Open report #1', exact: true}).click();
+                await oversight.waitForURL('**/stock_issues.php?*detail=1');
+                await oversight.locator('.detail-reason-box').filter({hasText: 'Disposable theme Stock Issue'}).waitFor();
+                assert.equal(await oversight.getByRole('alert').count(), 0, `${username}: report details remain authorized`);
+                assert.equal(await oversight.locator('.history-section form[method="POST" i]').count(), 0, 'Administrator oversight stays read-only');
+                assert.equal(new URL(oversight.url()).searchParams.has('error'), false, 'Report navigation carries no stale error feedback');
+            }
+            const denied = await oversight.request.post(origin + '/components/administrator/stock_issues.php', {form: {action: 'approve', adjustment_id: '1'}});
+            assert.equal(denied.status(), 403, 'Administrator POSTs remain forbidden');
+            await context.close();
+        }
         await page.goto(origin + '/?login=1');
         await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
         await page.locator('#landing-login-username').fill('theme_admin');
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         for (const partial of [false, true]) {
-            const destination = origin + '/components/administrator/stock_issues.php?error=' + encodeURIComponent('Stock issue oversight is limited to Administrators, Inventory Managers, and Cashiers viewing their own reports.');
+            const destination = origin + '/components/administrator/stock_issues.php?error=' + encodeURIComponent('Feedback presentation test.');
             if (partial) await page.evaluate(url => RetailMindNavigation.navigate(url), destination);
             else await page.goto(destination);
             await page.locator('.rm-toast.error').waitFor();
+            assert.ok((await page.getByRole('alert').innerText()).includes('Feedback presentation test.'), 'Unrelated URL feedback remains visible');
             assert.equal(await page.locator('.swal2-container').count(), 0, 'URL feedback uses a nonblocking toast');
             await page.locator('.rm-toast.error .rm-toast-close').click();
             await page.locator('.rm-toast.error').waitFor({state: 'detached'});
@@ -86,6 +126,14 @@ const fixture = action => {
             assert.equal(await page.locator('.swal2-container').count(), 0, 'No blocking modal is raised on read-only oversight page');
             await page.goto(origin + '/components/administrator/dashboard.php');
         }
+        fixture('stock_issue_loading_failure');
+        try {
+            await page.goto(origin + '/components/administrator/stock_issues.php');
+            await page.getByRole('alert').filter({hasText: 'Stock issue reports could not be loaded.'}).waitFor();
+        } finally {
+            fixture('stock_issue_loading_allow');
+        }
+        await page.goto(origin + '/components/administrator/dashboard.php');
         await page.evaluate(() => {
             const dialog = document.createElement('dialog');
             dialog.id = 'alert-parent-dialog';

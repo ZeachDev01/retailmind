@@ -1036,15 +1036,15 @@ class StockIssueService
     }
 
     /**
-     * Read-only oversight list (ticket #31). The viewer's role is derived from
-     * the database, never trusted from the caller: Administrators and Inventory
+     * Read-only oversight list (ticket #31). The authenticated active Workspace
+     * takes precedence over the primary account role: Administrators and Inventory
      * Managers see every report for operational review; Cashiers see only their
      * own. Filters: status, category, product_id, product (text), cashier_id,
      * approver_id, date_from, date_to (Y-m-d). Never mutates.
      */
     public function getOversightReports(array $filters, int $viewerId): array
     {
-        $viewerRole = $this->roleOf($viewerId);
+        $viewerRole = $this->activeWorkspace ?? $this->roleOf($viewerId);
         $this->assertOversightRole($viewerRole);
 
         $where = ['1 = 1'];
@@ -1135,12 +1135,12 @@ class StockIssueService
     /**
      * Full read-only report detail for oversight: the report row, append-only
      * revisions, linked stock movements, and any correction inventory counts.
-     * Returns null when the report does not exist; the viewer's role is
-     * derived from the database and Cashiers may only open their own reports.
+     * Returns null when the report does not exist; the active Workspace applies
+     * and Cashiers may only open their own reports.
      */
     public function getReportDetail(int $adjustmentId, int $viewerId): ?array
     {
-        $viewerRole = $this->roleOf($viewerId);
+        $viewerRole = $this->activeWorkspace ?? $this->roleOf($viewerId);
         $this->assertOversightRole($viewerRole);
         $report = $this->getReport($adjustmentId);
         if ($report === null) {

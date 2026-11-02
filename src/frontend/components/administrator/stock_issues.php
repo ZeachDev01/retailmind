@@ -92,19 +92,6 @@ try {
     $error = $error !== '' ? $error : 'Staff filter options are unavailable.';
 }
 
-$kpiTotals = [
-    'total' => count($reports),
-    'pending' => 0,
-    'approved' => 0,
-    'returned' => 0,
-    'rejected' => 0,
-];
-foreach ($reports as $r) {
-    $st = strtolower((string)($r['status'] ?? ''));
-    if (isset($kpiTotals[$st])) {
-        $kpiTotals[$st]++;
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -125,7 +112,6 @@ foreach ($reports as $r) {
             <header class="page-heading">
                 <div>
                     <h1>Stock Issue Oversight</h1>
-                    <p class="page-subheading">Track cashier-reported discrepancies and loss resolutions.</p>
                 </div>
                 <?php if ($detail !== null): ?>
                     <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>" aria-label="Back to reports list">Back to list</a>
@@ -135,29 +121,6 @@ foreach ($reports as $r) {
             <?php if ($error): ?>
                 <div class="message error" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
-
-            <section class="stock-kpi-grid" aria-label="Stock issues summary">
-                <div class="stock-kpi-card">
-                    <span class="stock-kpi-label">In View</span>
-                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['total'] ?></strong>
-                    <span class="stock-kpi-meta"><?= $appliedFilters !== [] ? count($appliedFilters) . ' filtered' : 'All records' ?></span>
-                </div>
-                <div class="stock-kpi-card <?= $kpiTotals['pending'] > 0 ? 'stock-kpi-card--warning' : '' ?>">
-                    <span class="stock-kpi-label">Pending Review</span>
-                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['pending'] ?></strong>
-                    <span class="stock-kpi-meta"><?= $kpiTotals['pending'] > 0 ? 'Awaiting manager' : 'All clear' ?></span>
-                </div>
-                <div class="stock-kpi-card stock-kpi-card--success">
-                    <span class="stock-kpi-label">Approved</span>
-                    <strong class="stock-kpi-value"><?= (int)$kpiTotals['approved'] ?></strong>
-                    <span class="stock-kpi-meta">Deductions applied</span>
-                </div>
-                <div class="stock-kpi-card">
-                    <span class="stock-kpi-label">Returned / Rejected</span>
-                    <strong class="stock-kpi-value"><?= (int)($kpiTotals['returned'] + $kpiTotals['rejected']) ?></strong>
-                    <span class="stock-kpi-meta"><?= (int)$kpiTotals['returned'] ?> ret · <?= (int)$kpiTotals['rejected'] ?> rej</span>
-                </div>
-            </section>
 
             <?php if ($detail !== null): ?>
                 <?php
@@ -169,8 +132,7 @@ foreach ($reports as $r) {
                 ?>
                 <section class="history-section" aria-labelledby="detail-heading">
                     <div class="section-header">
-                        <h2 id="detail-heading">Report #<?= (int)$report['adjustment_id'] ?> Details</h2>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php' . ($filterQuery !== '' ? '?' . rtrim($filterQuery, '&') : ''))) ?>" aria-label="Back to reports list">Back to list</a>
+                        <h2 id="detail-heading">Report #<?= (int)$report['adjustment_id'] ?></h2>
                     </div>
 
                     <div class="adjustment-card <?= htmlspecialchars($report['status']) ?>">
@@ -353,38 +315,6 @@ foreach ($reports as $r) {
                     <?php endif; ?>
                 </div>
 
-                <div class="stock-status-pills" role="tablist" aria-label="Filter reports by status">
-                    <?php
-                    $statusTabs = [
-                        '' => 'All',
-                        'pending' => 'Pending',
-                        'approved' => 'Approved',
-                        'returned' => 'Returned',
-                        'rejected' => 'Rejected',
-                    ];
-                    foreach ($statusTabs as $statusVal => $statusLabel):
-                        $isActive = $filters['status'] === $statusVal;
-                        $pillParams = $filters;
-                        if ($statusVal === '') {
-                            unset($pillParams['status']);
-                        } else {
-                            $pillParams['status'] = $statusVal;
-                        }
-                        $cleanParams = array_filter($pillParams, static fn($v) => $v !== '' && $v !== 0);
-                        $pillUrl = app_url('components/administrator/stock_issues.php' . ($cleanParams !== [] ? '?' . http_build_query($cleanParams) : ''));
-                    ?>
-                        <a href="<?= htmlspecialchars($pillUrl) ?>" 
-                           class="stock-status-pill <?= $isActive ? 'is-active' : '' ?>" 
-                           role="tab" 
-                           aria-selected="<?= $isActive ? 'true' : 'false' ?>">
-                            <?= htmlspecialchars($statusLabel) ?>
-                            <?php if ($statusVal !== '' && isset($kpiTotals[$statusVal])): ?>
-                                <span class="pill-badge"><?= (int)$kpiTotals[$statusVal] ?></span>
-                            <?php endif; ?>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-
                 <form method="GET">
                     <div class="report-filter-grid">
                         <div class="form-group">
@@ -464,13 +394,7 @@ foreach ($reports as $r) {
                 <h2 id="reports-heading">Stock Issue reports <span class="issue-count"><?= count($reports) ?></span></h2>
                 <?php if (empty($reports)): ?>
                     <div class="issue-empty">
-                        <svg class="issue-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M9 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3" />
-                            <rect x="9" y="2" width="6" height="5" rx="1" />
-                            <path d="m8 14 3 3 5-6" />
-                        </svg>
-                        <h3>No stock issue reports match the current filters</h3>
-                        <p>Adjust your search keywords, status, or date range to find reports.</p>
+                        <h3>No matching reports</h3>
                         <?php if ($appliedFilters !== []): ?>
                             <a class="btn btn-secondary u-mt-05" href="<?= htmlspecialchars(app_url('components/administrator/stock_issues.php')) ?>" aria-label="Reset all filters">Clear all filters</a>
                         <?php endif; ?>

@@ -8,6 +8,13 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['stock_issue_loading_failure', 'stock_issue_loading_allow'], true)) {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec($argv[1] === 'stock_issue_loading_failure'
+        ? 'RENAME TABLE inventory_adjustments TO unavailable_stock_issues'
+        : 'RENAME TABLE unavailable_stock_issues TO inventory_adjustments');
+    exit;
+}
 if (in_array($argv[1], ['store_settings_state', 'store_settings_failure', 'store_settings_allow'], true)) {
     $pdo->exec("USE `{$database}`");
     if ($argv[1] === 'store_settings_state') {
@@ -262,13 +269,12 @@ $forecastImportMigration = require __DIR__ . '/../../database/migrations/2026101
 $forecastImportMigration['up']($pdo);
 $backupMigration['up']($pdo);
 $fresh = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
-$pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Theme Test Store','THEME')");
 $password = 'ThemeTest@2026';
 $roles = ['admin','super_admin','inventory_manager','cashier'];
 foreach ($roles as $index => $role) {
     $id = $index + 1;
     $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
-    $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES (?,?,?,?,?,1,0)')
+    $pdo->prepare('INSERT INTO users (user_id,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,0)')
         ->execute([$id,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
     if ($pdo->query('SELECT theme_preference FROM users WHERE user_id=' . $id)->fetchColumn() !== 'system') {
         throw new RuntimeException('Fresh accounts must default to System.');
@@ -287,9 +293,10 @@ if ((int)$pdo->query("SELECT COUNT(*) FROM users WHERE theme_preference='system'
 (new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
 $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')");
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
-$pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount) VALUES (4,1,?,?,?,?,?)')
-    ->execute(['THEME-HELD', 'Unfinished theme customer', json_encode([1 => ['qty' => 1, 'name' => 'Theme Test Item', 'price' => 25]]), 1, 25]);
-$pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3,1)");
+$pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,item_count,total_amount) VALUES (4,1,?,?,?,?)')
+    ->execute(['THEME-HELD', 'Unfinished theme customer', 1, 25]);
+$pdo->exec("INSERT INTO held_sale_items (held_sale_id,cart_key,line_position,product_id,selling_form,product_name,quantity,price,server_price) VALUES (1,'1',0,1,'piece','Theme Test Item',1,25,25)");
+$pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3)");
 $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
 $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
