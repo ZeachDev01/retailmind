@@ -251,6 +251,302 @@ class DemandForecastService
         return $jobId !== false ? (int)$jobId : null;
     }
 
+    public function getLatestJob(): ?array
+    {
+        try {
+            $stmt = $this->pdo->query("
+                SELECT job_id, trigger_type, status, queued_at, completed_at, error_message
+                FROM ml_jobs
+                WHERE trigger_type IN ('forecast_generation', 'forecast_observation')
+                ORDER BY job_id DESC
+                LIMIT 1
+            ");
+            $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+            if (!$row) {
+                return null;
+            }
+            $row['job_id'] = (int)$row['job_id'];
+            return $row;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    public function getLatestUsableJobId(?string $asOfDate = null): ?int
+    {
+        $today = new \DateTimeImmutable($asOfDate ?? 'today', new \DateTimeZone('Asia/Manila'));
+        $acceptedOrigin = $today->modify('-1 day')->format('Y-m-d');
+
+        $approvedVersion = '';
+        $isObservation = false;
+        $isSuspended = false;
+        try {
+            $evalService = new CandidateEvaluationService($this->pdo);
+            $isObservation = $evalService->isObservationMode();
+            $isSuspended = $evalService->isRecommendationsSuspended();
+        } catch (Throwable $e) {}
+
+        if ($isObservation || $isSuspended) {
+            return null;
+        }
+
+        try {
+            $approvedVersion = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
+        } catch (Throwable $e) {}
+
+        if ($approvedVersion === '') {
+            return null;
+        }
+
+        $isDemoDb = false;
+        try {
+            $isDemoDb = (bool)($this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn() ?: false);
+        } catch (Throwable $e) {}
+
+        try {
+            $stmt = $this->pdo->query("
+                SELECT job_id, completed_at
+                FROM ml_jobs
+                WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
+                ORDER BY completed_at DESC, job_id DESC
+                LIMIT 10
+            ");
+            $jobs = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        } catch (Throwable $e) {
+            return null;
+        }
+
+        foreach ($jobs as $jobRow) {
+            $jid = (int)$jobRow['job_id'];
+            $meta = $this->getJobMetadata($jid);
+            if (!$meta) {
+                $stmt = $this->pdo->prepare("SELECT model_version FROM demand_forecasts WHERE job_id = ? LIMIT 1");
+                $stmt->execute([$jid]);
+                $mv = (string)$stmt->fetchColumn();
+                if ($mv !== $approvedVersion) {
+                    continue;
+                }
+            } else {
+                if ($meta['model_version'] !== $approvedVersion) {
+                    continue;
+                }
+                if (!$isDemoDb && !empty($meta['is_demo'])) {
+                    continue;
+                }
+                if ($isDemoDb && empty($meta['is_demo']) && ($meta['dataset_kind'] ?? null) === 'store') {
+                    continue;
+                }
+                if (!empty($meta['feature_version']) && $meta['feature_version'] !== '2.0.0') {
+                    continue;
+                }
+            }
+
+            $stmt = $this->pdo->prepare("
+                SELECT 1 FROM demand_forecasts
+                WHERE job_id = ? AND forecast_origin = ?
+                  AND readiness_level IN ('Low', 'Medium', 'High')
+                LIMIT 1
+            ");
+            $stmt->execute([$jid, $acceptedOrigin]);
+            if ($stmt->fetchColumn()) {
+                return $jid;
+            }
+        }
+
+        return null;
+    }
+
+    public function getCoverage(
+        ?int $jobId = null,
+        ?string $asOfDate = null,
+        ?string $search = null,
+        ?string $reasonFilter = null
+    ): array {
+        $today = new \DateTimeImmutable($asOfDate ?? 'today', new \DateTimeZone('Asia/Manila'));
+        $acceptedOrigin = $today->modify('-1 day')->format('Y-m-d');
+
+        $latestJob = $this->getLatestJob();
+        $latestAttemptStatus = $latestJob ? (string)$latestJob['status'] : 'none';
+        $isUpdating = in_array($latestAttemptStatus, ['queued', 'running', 'processing'], true);
+
+        $usableJobId = $this->getLatestUsableJobId($asOfDate);
+        $effectiveJobId = $jobId ?? $usableJobId ?? $this->getLatestSuccessfulJobId();
+
+        $queueService = new ReplenishmentQueueService($this->pdo);
+        $products = $queueService->getRecommendations($effectiveJobId, $asOfDate);
+
+        $scopeCount = count($products);
+        $forecastBackedCount = 0;
+        $stockRuleCount = 0;
+
+        foreach ($products as $p) {
+            if (!empty($p['is_forecast_backed'])) {
+                $forecastBackedCount++;
+            } else {
+                $stockRuleCount++;
+            }
+        }
+
+        $isGuidanceUsable = ($forecastBackedCount > 0);
+
+        $approvedVersion = '';
+        $isObservation = false;
+        $isSuspended = false;
+        try {
+            $evalService = new CandidateEvaluationService($this->pdo);
+            $isObservation = $evalService->isObservationMode();
+            $isSuspended = $evalService->isRecommendationsSuspended();
+            $approvedVersion = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
+        } catch (Throwable $e) {}
+
+        if ($scopeCount === 0) {
+            $storeStatus = 'empty';
+        } elseif ($isObservation) {
+            $storeStatus = 'observation_mode';
+        } elseif ($isSuspended) {
+            $storeStatus = 'suspended';
+        } elseif ($approvedVersion === '') {
+            $storeStatus = 'no_approved_model';
+        } elseif ($forecastBackedCount === 0) {
+            $hasStale = false;
+            $hasUnapproved = false;
+            $hasInsufficient = false;
+            foreach ($products as $p) {
+                $r = (string)($p['exclusion_reason'] ?? '');
+                if (str_contains($r, 'Stale forecast')) {
+                    $hasStale = true;
+                } elseif (str_contains($r, 'Unapproved model')) {
+                    $hasUnapproved = true;
+                } elseif (str_contains($r, 'Insufficient')) {
+                    $hasInsufficient = true;
+                }
+            }
+            if ($hasStale) {
+                $storeStatus = 'stale';
+            } elseif ($hasUnapproved) {
+                $storeStatus = 'unapproved_model';
+            } elseif ($hasInsufficient) {
+                $storeStatus = 'insufficient_history';
+            } else {
+                $storeStatus = 'stock_rules_only';
+            }
+        } elseif ($forecastBackedCount === $scopeCount) {
+            $storeStatus = 'full';
+        } else {
+            $storeStatus = 'partial';
+        }
+
+        if ($scopeCount === 0) {
+            $summaryText = 'No active products available in catalog.';
+        } elseif ($latestAttemptStatus === 'failed') {
+            if ($forecastBackedCount > 0) {
+                $summaryText = sprintf(
+                    'Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. Automatic retry scheduled; no action needed.',
+                    $forecastBackedCount, $scopeCount, $stockRuleCount
+                );
+            } else {
+                $summaryText = sprintf(
+                    'Forecast update failed. Buying suggestions are using stock rules for all %d products. Automatic retry scheduled; no action needed.',
+                    $scopeCount
+                );
+            }
+        } elseif ($isUpdating) {
+            if ($forecastBackedCount > 0) {
+                $summaryText = sprintf(
+                    'Forecasts available for %d of %d products; %d use stock rules. Background update in progress; existing guidance remains valid.',
+                    $forecastBackedCount, $scopeCount, $stockRuleCount
+                );
+            } else {
+                $summaryText = sprintf(
+                    'Forecast generation in progress for all %d products. Buying suggestions use stock rules until run completes.',
+                    $scopeCount
+                );
+            }
+        } elseif ($forecastBackedCount === $scopeCount) {
+            $summaryText = sprintf('Forecasts available for all %d products.', $scopeCount);
+        } elseif ($forecastBackedCount > 0) {
+            $summaryText = sprintf('Forecasts available for %d of %d products; %d use stock rules.', $forecastBackedCount, $scopeCount, $stockRuleCount);
+        } elseif ($storeStatus === 'no_approved_model') {
+            $summaryText = sprintf('No approved Store model. All %d products use stock rules.', $scopeCount);
+        } elseif ($storeStatus === 'stale') {
+            $summaryText = sprintf('Forecast is stale. All %d products use stock rules.', $scopeCount);
+        } else {
+            $summaryText = sprintf('Stock rules used for all %d products.', $scopeCount);
+        }
+
+        $excludedProducts = [];
+        $exclusionReasons = [];
+        foreach ($products as $p) {
+            if (empty($p['is_forecast_backed'])) {
+                $excludedProducts[] = $p;
+                $reason = $p['exclusion_reason'] ?? 'Forecast unavailable';
+                $exclusionReasons[$reason] = ($exclusionReasons[$reason] ?? 0) + 1;
+            }
+        }
+
+        $filtered = null;
+        $isFiltered = ($search !== null && trim($search) !== '') || ($reasonFilter !== null && trim($reasonFilter) !== '');
+        if ($isFiltered) {
+            $searchTerm = mb_strtolower(trim((string)$search));
+            $filterReason = trim((string)$reasonFilter);
+
+            $matched = array_values(array_filter($products, static function (array $p) use ($searchTerm, $filterReason): bool {
+                if ($searchTerm !== '') {
+                    $name = mb_strtolower((string)($p['product_name'] ?? ''));
+                    $sku = mb_strtolower((string)($p['sku'] ?? ''));
+                    $idStr = (string)($p['product_id'] ?? '');
+                    if (!str_contains($name, $searchTerm) && !str_contains($sku, $searchTerm) && $idStr !== $searchTerm) {
+                        return false;
+                    }
+                }
+                if ($filterReason !== '') {
+                    $reason = (string)($p['exclusion_reason'] ?? '');
+                    if ($reason !== $filterReason && ($p['exclusion_category'] ?? '') !== $filterReason) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+
+            $fbCount = count(array_filter($matched, static fn($p) => !empty($p['is_forecast_backed'])));
+            $filtered = [
+                'is_filtered' => true,
+                'count' => count($matched),
+                'forecast_backed_count' => $fbCount,
+                'stock_rule_count' => count($matched) - $fbCount,
+                'products' => $matched,
+            ];
+        }
+
+        return [
+            'scope_count' => $scopeCount,
+            'forecast_backed_count' => $forecastBackedCount,
+            'stock_rule_count' => $stockRuleCount,
+            'coverage_summary_text' => $summaryText,
+            'is_guidance_usable' => $isGuidanceUsable,
+            'store_status' => $storeStatus,
+            'as_of_date' => $today->format('Y-m-d'),
+            'accepted_origin' => $acceptedOrigin,
+            'effective_job_id' => $effectiveJobId,
+            'latest_job' => $latestJob,
+            'latest_attempt_status' => $latestAttemptStatus,
+            'is_updating' => $isUpdating,
+            'approved_model_version' => $approvedVersion ?: null,
+            'is_observation_mode' => $isObservation,
+            'is_recommendations_suspended' => $isSuspended,
+            'products' => $products,
+            'excluded_products' => $excludedProducts,
+            'exclusion_reasons' => $exclusionReasons,
+            'filtered' => $filtered ?? [
+                'is_filtered' => false,
+                'count' => $scopeCount,
+                'forecast_backed_count' => $forecastBackedCount,
+                'stock_rule_count' => $stockRuleCount,
+                'products' => $products,
+            ],
+        ];
+    }
+
     public function getJobMetadata(int $jobId): ?array
     {
         $stmt = $this->pdo->prepare("

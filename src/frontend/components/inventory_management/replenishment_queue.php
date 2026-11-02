@@ -33,9 +33,11 @@ $isHistoricalDemo = false;
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
 $jobId = null;
+$coverage = null;
 try {
     $forecastService = new DemandForecastService($pdo);
-    $jobId = $forecastService->getLatestSuccessfulJobId();
+    $jobId = $forecastService->getLatestUsableJobId() ?? $forecastService->getLatestSuccessfulJobId();
+    $coverage = $forecastService->getCoverage($jobId);
     
     $queue = [];
     if ($jobId) {
@@ -44,7 +46,6 @@ try {
         $isDemo = $jobMeta['is_demo'] ?? false;
         $demoSource = $jobMeta['source_label'] ?? '';
         $isProduction = ($jobMeta['dataset_kind'] ?? null) === 'store';
-
     }
 } catch (Throwable $e) {
     $jobId = null;
@@ -121,6 +122,14 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <span><?= htmlspecialchars($error) ?></span>
                     <a class="btn btn-secondary no-print" href="replenishment_queue.php">Reload</a>
                 </div>
+            <?php endif; ?>
+
+            <?php if ($coverage && $coverage['latest_attempt_status'] === 'failed'): ?>
+                <div class="alert tag-warning" role="alert">
+                    <strong>Notice:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
+                </div>
+            <?php elseif ($coverage && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
+                <p class="muted"><strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?> <a href="../report/forecast_exceptions.php">View excluded products</a>.</p>
             <?php endif; ?>
 
             <?php if ($isDemo): ?>
