@@ -222,6 +222,22 @@ function render_model_review(PDO $pdo, string $role = 'admin', array $post = [])
 echo "--- Test 1: Empty / Initial Candidate Rendering (Under evaluation) ---\n";
 // =========================================================================
 $candidateV1 = 'store_rf_v20261102';
+$modelsDir = dirname(__DIR__) . '/storage/ml_models';
+if (!is_dir($modelsDir)) {
+    mkdir($modelsDir, 0777, true);
+}
+$v1Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json';
+file_put_contents($v1Artifact, json_encode([
+    'model_version' => $candidateV1,
+    'dataset_kind' => 'store',
+    'feature_version' => '2.0.0',
+]));
+
+register_shutdown_function(function() use ($modelsDir, $candidateV1) {
+    @unlink($modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json');
+    @unlink($modelsDir . '/random_forest_candidate_store_rf_v20261115.json');
+    @unlink($modelsDir . '/random_forest_candidate_store_rf_v_corrupt.json');
+});
 foreach ([7 => [0.19, 0.28, 4.8, 7.1], 14 => [0.22, 0.32, 6.2, 9.4], 28 => [0.26, 0.36, 7.9, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, candidate_gate_outcome, data_window_start, data_window_end, created_at)
@@ -315,6 +331,12 @@ assert_test($stmtResumed->fetchColumn() === '0', 'Recommendations marked active 
 echo "\n--- Test 5: Replacement & Incumbent Comparison Rendering ---\n";
 // =========================================================================
 $candidateV2 = 'store_rf_v20261115';
+$v2Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV2 . '.json';
+file_put_contents($v2Artifact, json_encode([
+    'model_version' => $candidateV2,
+    'dataset_kind' => 'store',
+    'feature_version' => '2.0.0',
+]));
 foreach ([7 => [0.15, 0.28, 4.0, 7.1], 14 => [0.18, 0.32, 5.5, 9.4], 28 => [0.21, 0.36, 7.0, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, candidate_gate_outcome, data_window_start, data_window_end, created_at)
@@ -362,6 +384,45 @@ assert_test(
 
 $stmtRolled = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
 assert_test($stmtRolled->fetchColumn() === $candidateV1, 'Approved model restored to V1');
+
+// =========================================================================
+echo "\n--- Test 6: Recovery Guardrails, Unavailable Notice & Local-Only Mutability (Ticket #370) ---\n";
+// =========================================================================
+
+// 6.1 Set previous model to a corrupted/unreadable artifact and verify notice in UI
+$corruptVer = 'store_rf_v_corrupt';
+file_put_contents($modelsDir . '/random_forest_candidate_' . $corruptVer . '.json', 'CORRUPT_BYTES_DATA');
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute([$corruptVer]);
+
+$htmlIncompatNotice = render_model_review($pdo, 'admin');
+assert_test(str_contains($htmlIncompatNotice, 'Rollback to previous model') && str_contains($htmlIncompatNotice, 'unavailable'), 'Rollback unavailable notice is rendered when artifact is corrupted');
+assert_test(!str_contains($htmlIncompatNotice, 'Roll Back to ' . $corruptVer . '</button>'), 'Rollback submit button is omitted when recovery artifact is invalid');
+
+// Clean up corrupt artifact and restore empty previous model
+@unlink($modelsDir . '/random_forest_candidate_' . $corruptVer . '.json');
+$pdo->prepare("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_previous_approved_model_version'")->execute();
+
+// 6.2 Local-only mutation enforcement on POST (reject remote requests)
+$_SESSION['is_remote'] = true;
+assert_test(is_remote_request() === true, 'Remote session is detected as remote request');
+unset($_SESSION['is_remote']);
+
+$_SERVER['RETAILMIND_REMOTE'] = '1';
+assert_test(is_remote_request() === true, 'Remote environment is detected as remote request');
+unset($_SERVER['RETAILMIND_REMOTE']);
+
+assert_test(is_remote_request() === false, 'Local Store console is detected as non-remote request');
+
+$policy = new RoleCapabilityPolicy();
+$remoteCtx = \App\Authorization\AuthorizationContext::standard(true);
+assert_test(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $remoteCtx), 'Remote request is denied APPROVE_MODELS capability');
+assert_test(!$policy->allows('admin', RoleCapabilityPolicy::ROLL_BACK_MODELS, null, $remoteCtx), 'Remote request is denied ROLL_BACK_MODELS capability');
+
+// 6.3 CSRF Protection Enforcement
+$_SESSION['csrf_token'] = 'valid-test-csrf-token';
+assert_test(!csrf_token_is_valid('invalid-tampered-token'), 'CSRF verification rejects invalid token');
+assert_test(!csrf_token_is_valid(''), 'CSRF verification rejects empty token');
+assert_test(csrf_token_is_valid('valid-test-csrf-token'), 'CSRF verification accepts authentic token');
 
 echo "\n=========================================================================\n";
 echo "PASS: All Administrator Model Review Component Tests Passed!\n";

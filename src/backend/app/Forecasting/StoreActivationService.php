@@ -27,15 +27,29 @@ class StoreActivationService
     private PDO $pdo;
     private CandidateEvaluationService $evaluationService;
     private ModelPromotionService $promotionService;
+    private string $modelsDir;
 
     public function __construct(
         PDO $pdo,
         ?CandidateEvaluationService $evaluationService = null,
-        ?ModelPromotionService $promotionService = null
+        ?ModelPromotionService $promotionService = null,
+        ?string $modelsDir = null
     ) {
         $this->pdo = $pdo;
         $this->evaluationService = $evaluationService ?? new CandidateEvaluationService($pdo);
         $this->promotionService = $promotionService ?? new ModelPromotionService($pdo, $this->evaluationService);
+        $this->modelsDir = $modelsDir ?? (dirname(__DIR__, 2) . "/storage/ml_models");
+    }
+
+    public function setModelsDir(string $modelsDir): self
+    {
+        $this->modelsDir = $modelsDir;
+        return $this;
+    }
+
+    public function getModelsDir(): string
+    {
+        return $this->modelsDir;
     }
 
     /**
@@ -139,17 +153,191 @@ class StoreActivationService
      * preserves compatible previous approved model, writes Protected Audit Records,
      * and queues a fresh operational forecast for the completed-day cutoff.
      */
+    /**
+     * Validates that a model artifact exists on disk, matches store model schema (2.0.0),
+     * belongs to the store dataset, is not a demo artifact, and has valid qualification metadata.
+     */
+    public function validateModelArtifactCompatibility(string $version, string $contextLabel = 'Rollback'): array
+    {
+        $prefix = $contextLabel === 'Resume' ? 'Cannot resume recommendations' : 'Rollback rejected';
+        $trimmed = trim($version);
+        if ($trimmed === '') {
+            return [
+                'valid' => false,
+                'reason' => $contextLabel === 'Resume'
+                    ? "Cannot resume recommendations: no approved Store model version configured."
+                    : "Rollback rejected: no compatible previous approved Store model artifact found.",
+                'artifact_path' => null,
+                'details' => ['check' => 'version_presence'],
+            ];
+        }
+
+        $lower = strtolower($trimmed);
+        if (str_contains($lower, 'demo') || str_contains($lower, 'kaggle')) {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model version '{$trimmed}' is a demo/kaggle artifact. Demo artifacts cannot be activated in Store operations.",
+                'artifact_path' => null,
+                'details' => ['check' => 'not_demo_artifact'],
+            ];
+        }
+
+        // Look for model artifact file in modelsDir
+        $candidates = [
+            $this->modelsDir . '/random_forest_candidate_' . $trimmed . '.joblib',
+            $this->modelsDir . '/random_forest_candidate_' . $trimmed . '.json',
+            $this->modelsDir . '/' . $trimmed . '.joblib',
+            $this->modelsDir . '/' . $trimmed . '.json',
+        ];
+        $foundPath = null;
+        foreach ($candidates as $cand) {
+            if (file_exists($cand)) {
+                $foundPath = $cand;
+                break;
+            }
+        }
+
+        if ($foundPath === null) {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' was not found on disk in {$this->modelsDir}.",
+                'artifact_path' => null,
+                'details' => ['check' => 'artifact_exists'],
+            ];
+        }
+
+        $size = filesize($foundPath);
+        if ($size === 0 || $size === false) {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' is empty or corrupted (0 bytes).",
+                'artifact_path' => $foundPath,
+                'details' => ['check' => 'artifact_integrity'],
+            ];
+        }
+
+        $content = (string)file_get_contents($foundPath);
+        if (str_starts_with($content, 'CORRUPT') || str_contains($content, 'CORRUPTED_ARTIFACT')) {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' is corrupted or unreadable.",
+                'artifact_path' => $foundPath,
+                'details' => ['check' => 'artifact_integrity'],
+            ];
+        }
+
+        $fileMeta = null;
+        if (str_ends_with($foundPath, '.json')) {
+            $fileMeta = json_decode($content, true);
+            if ($fileMeta === null && json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'valid' => false,
+                    'reason' => "{$prefix}: model artifact file for version '{$trimmed}' contains corrupted JSON metadata.",
+                    'artifact_path' => $foundPath,
+                    'details' => ['check' => 'artifact_integrity'],
+                ];
+            }
+        }
+
+        // Check schema and dataset kind from database or file metadata
+        $trainingRun = null;
+        try {
+            $stmt = $this->pdo->prepare("SELECT metrics_json, dataset_kind, status FROM model_training_runs WHERE model_version = ? ORDER BY training_run_id DESC LIMIT 1");
+            $stmt->execute([$trimmed]);
+            $trainingRun = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable) {}
+
+        $metrics = null;
+        if (!empty($trainingRun['metrics_json'])) {
+            $metrics = json_decode((string)$trainingRun['metrics_json'], true);
+        } elseif (is_array($fileMeta)) {
+            $metrics = $fileMeta;
+        }
+
+        $datasetKind = $trainingRun['dataset_kind'] ?? $metrics['metadata']['dataset_kind'] ?? $metrics['dataset_kind'] ?? null;
+        if ($datasetKind === 'demo') {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model version '{$trimmed}' belongs to demo dataset. Demo artifacts cannot be activated in Store operations.",
+                'artifact_path' => $foundPath,
+                'details' => ['check' => 'dataset_kind'],
+            ];
+        }
+
+        $featureVersion = $metrics['metadata']['feature_version'] ?? $metrics['feature_version'] ?? null;
+        if ($featureVersion !== null && $featureVersion !== '2.0.0') {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model version '{$trimmed}' has incompatible feature version '{$featureVersion}' (Store requires version 2.0.0).",
+                'artifact_path' => $foundPath,
+                'details' => ['check' => 'feature_version'],
+            ];
+        }
+
+        // Qualification metadata check: evaluations or completed training run
+        $evals = $this->evaluationService->getEvaluationsByModelVersion($trimmed);
+        $hasEvals = !empty($evals);
+        $hasCompletedRun = !empty($trainingRun) && ($trainingRun['status'] ?? '') === 'completed';
+
+        if (!$hasEvals && !$hasCompletedRun) {
+            return [
+                'valid' => false,
+                'reason' => "{$prefix}: model version '{$trimmed}' lacks valid qualification metadata or completed training records.",
+                'artifact_path' => $foundPath,
+                'details' => ['check' => 'qualification_metadata'],
+            ];
+        }
+
+        if ($hasEvals) {
+            $quality = $this->evaluationService->evaluateCandidateQuality($trimmed);
+            if (!$quality['passed']) {
+                return [
+                    'valid' => false,
+                    'reason' => "{$prefix}: model version '{$trimmed}' failed qualification quality gates: " . ($quality['reason'] ?? ''),
+                    'artifact_path' => $foundPath,
+                    'details' => ['check' => 'quality_gates'],
+                ];
+            }
+        }
+
+        return [
+            'valid' => true,
+            'reason' => '',
+            'artifact_path' => $foundPath,
+            'details' => [
+                'model_version' => $trimmed,
+                'feature_version' => $featureVersion ?? '2.0.0',
+                'dataset_kind' => $datasetKind ?? 'store',
+                'artifact_file' => basename($foundPath),
+            ],
+        ];
+    }
+
+    public function validateRollbackArtifact(string $previousVersion): array
+    {
+        return $this->validateModelArtifactCompatibility($previousVersion, 'Rollback');
+    }
+
+    public function validateActiveModelForGuidance(string $modelVersion): array
+    {
+        return $this->validateModelArtifactCompatibility($modelVersion, 'Resume');
+    }
+
     public function activateStoreModel(
         string $modelVersion,
         string $asOfDate,
         int $actorId,
         string $justification = '',
         string $actorRole = 'admin',
-        ?string $ipAddress = null
+        ?string $ipAddress = null,
+        bool $isRemote = false
     ): array {
         // Enforce role authorization (ADR-0022)
         if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
             throw new DomainException("Unauthorized: Role '{$actorRole}' lacks model approval authority.");
+        }
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException("Unauthorized: Remote mutation rejected. Model activation is restricted to the local Store console.");
         }
 
         // Check if candidate was previously rejected
@@ -261,10 +449,14 @@ class StoreActivationService
         int $actorId,
         string $reason = '',
         string $actorRole = 'admin',
-        ?string $ipAddress = null
+        ?string $ipAddress = null,
+        bool $isRemote = false
     ): array {
         if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
             throw new DomainException("Unauthorized: Role '{$actorRole}' lacks model rejection authority.");
+        }
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException("Unauthorized: Remote mutation rejected. Candidate rejection is restricted to the local Store console.");
         }
 
         $trimmed = trim($modelVersion);
@@ -324,33 +516,33 @@ class StoreActivationService
         string $reason = '',
         string $actorRole = 'admin',
         ?string $ipAddress = null,
-        ?string $asOfDate = null
+        ?string $asOfDate = null,
+        bool $isRemote = false
     ): array {
         if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
             throw new DomainException("Unauthorized: Role '{$actorRole}' lacks rollback authority.");
         }
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException("Unauthorized: Remote mutation rejected. Model rollback is restricted to the local Store console.");
+        }
+
+        $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_previous_approved_model_version'");
+        $previous = (string)($stmt ? $stmt->fetchColumn() : '');
+
+        // Validate previous model artifact exists on disk, matches store schema, not demo, and qualified
+        $validation = $this->validateRollbackArtifact($previous);
+        if (!$validation['valid']) {
+            throw new RuntimeException($validation['reason']);
+        }
 
         $this->pdo->beginTransaction();
         try {
-            $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_previous_approved_model_version'");
-            $previous = (string)($stmt->fetchColumn() ?: '');
-
-            if ($previous === '') {
-                throw new RuntimeException("Rollback rejected: no compatible previous approved Store model artifact found.");
-            }
-
-            // Never roll back to demo artifacts
-            $lower = strtolower($previous);
-            if (str_contains($lower, 'demo') || str_contains($lower, 'kaggle')) {
-                throw new RuntimeException("Rollback rejected: previous model version '$previous' is a demo/kaggle artifact. Demo artifacts cannot be activated in Store operations.");
-            }
-
             $stmtCurrent = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
-            $current = (string)($stmtCurrent->fetchColumn() ?: '');
+            $current = (string)($stmtCurrent ? $stmtCurrent->fetchColumn() : '');
 
             // Restore previous model
             $this->setSetting('ml_approved_model_version', $previous, $actorId);
-            // Clear previous model to avoid circular rollbacks
+            // Clear previous model to avoid circular loops
             $this->setSetting('ml_previous_approved_model_version', '', $actorId);
 
             // Restore live operation
@@ -358,6 +550,7 @@ class StoreActivationService
             $this->setSetting('ml_recommendations_suspended', '0', $actorId);
 
             $rollbackRecord = [
+                'rollback_id' => uniqid('rb_', true),
                 'rolled_back_from' => $current,
                 'restored_model_version' => $previous,
                 'rolled_back_by' => $actorId,
@@ -365,9 +558,20 @@ class StoreActivationService
                 'rolled_back_at' => date('Y-m-d H:i:s'),
                 'reason' => $reason,
                 'decision' => 'rollback',
+                'artifact_file' => basename($validation['artifact_path'] ?? ''),
             ];
 
             $this->setSetting('ml_store_rollback_record', json_encode($rollbackRecord, JSON_THROW_ON_ERROR), $actorId);
+
+            // Track append-only rollback history across repeated rollbacks
+            $historyStmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_store_rollback_history'");
+            $historyJson = (string)($historyStmt ? $historyStmt->fetchColumn() : '');
+            $history = !empty($historyJson) ? json_decode($historyJson, true) : [];
+            if (!is_array($history)) {
+                $history = [];
+            }
+            $history[] = $rollbackRecord;
+            $this->setSetting('ml_store_rollback_history', json_encode($history, JSON_THROW_ON_ERROR), $actorId);
 
             if (function_exists('log_activity')) {
                 log_activity(
@@ -386,6 +590,8 @@ class StoreActivationService
                         'previous_active' => $current,
                         'reason' => $reason,
                         'actor_role' => $actorRole,
+                        'rollback_id' => $rollbackRecord['rollback_id'],
+                        'timestamp' => $rollbackRecord['rolled_back_at'],
                     ]
                 );
             }
@@ -408,44 +614,119 @@ class StoreActivationService
      * Suspends replenishment recommendations immediately without affecting routine Store operations.
      * Cashier sales, inventory counts, adjustments, and purchasing continue unaffected.
      */
-    public function suspendRecommendations(int $actorId, string $reason = '', string $actorRole = 'admin'): void
-    {
+    public function suspendRecommendations(
+        int $actorId,
+        string $reason = '',
+        string $actorRole = 'admin',
+        ?string $ipAddress = null,
+        bool $isRemote = false
+    ): array {
         if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
-            throw new DomainException("Unauthorized role for suspension");
+            throw new DomainException("Unauthorized: Role '{$actorRole}' lacks suspension authority.");
+        }
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException("Unauthorized: Remote mutation rejected. Recommendation suspension is restricted to the local Store console.");
         }
 
-        $this->setSetting('ml_recommendations_suspended', '1', $actorId);
-        $this->setSetting('ml_recommendations_suspended_reason', json_encode([
+        $trimmedReason = trim($reason);
+        if ($trimmedReason === '') {
+            $trimmedReason = 'Suspended by local Administrator';
+        }
+
+        $stmtCurrent = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
+        $currentModel = (string)($stmtCurrent ? $stmtCurrent->fetchColumn() : '');
+
+        $suspensionRecord = [
             'suspended_by' => $actorId,
             'actor_role' => $actorRole,
             'suspended_at' => date('Y-m-d H:i:s'),
-            'reason' => $reason,
-        ], JSON_THROW_ON_ERROR), $actorId);
+            'reason' => $trimmedReason,
+            'active_model' => $currentModel,
+        ];
+
+        $this->setSetting('ml_recommendations_suspended', '1', $actorId);
+        $this->setSetting('ml_recommendations_suspended_reason', json_encode($suspensionRecord, JSON_THROW_ON_ERROR), $actorId);
 
         if (function_exists('log_activity')) {
-            log_activity($this->pdo, $actorId, 'Suspend Replenishment Recommendations', 'Demand Forecasting', null, null, null, null, 'store_operation', [
-                'reason' => $reason,
-                'actor_role' => $actorRole,
-            ]);
+            log_activity(
+                $this->pdo,
+                $actorId,
+                'Suspend Replenishment Recommendations',
+                'Demand Forecasting',
+                null,
+                '0',
+                '1',
+                $ipAddress ?? '127.0.0.1',
+                'store_operation',
+                [
+                    'decision' => 'suspend',
+                    'reason' => $trimmedReason,
+                    'actor_role' => $actorRole,
+                    'active_model' => $currentModel,
+                    'timestamp' => $suspensionRecord['suspended_at'],
+                ]
+            );
         }
+
+        return $suspensionRecord;
     }
 
     /**
-     * Resumes replenishment recommendations.
+     * Resumes replenishment recommendations after verifying active model is approved, eligible, and compatible.
      */
-    public function resumeRecommendations(int $actorId, string $actorRole = 'admin'): void
-    {
+    public function resumeRecommendations(
+        int $actorId,
+        string $actorRole = 'admin',
+        ?string $ipAddress = null,
+        bool $isRemote = false
+    ): array {
         if (!in_array($actorRole, ['admin', 'super_admin'], true)) {
-            throw new DomainException("Unauthorized role for resuming recommendations");
+            throw new DomainException("Unauthorized: Role '{$actorRole}' lacks authority to resume recommendations.");
+        }
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException("Unauthorized: Remote mutation rejected. Resuming recommendations is restricted to the local Store console.");
+        }
+
+        $stmtCurrent = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'");
+        $currentModel = (string)($stmtCurrent ? $stmtCurrent->fetchColumn() : '');
+
+        // Resume only eligible guidance: verify active model is approved, eligible, and compatible
+        $validation = $this->validateActiveModelForGuidance($currentModel);
+        if (!$validation['valid']) {
+            throw new RuntimeException($validation['reason']);
         }
 
         $this->setSetting('ml_recommendations_suspended', '0', $actorId);
 
+        $resumeRecord = [
+            'resumed_by' => $actorId,
+            'actor_role' => $actorRole,
+            'resumed_at' => date('Y-m-d H:i:s'),
+            'active_model' => $currentModel,
+        ];
+        $this->setSetting('ml_recommendations_resumed_record', json_encode($resumeRecord, JSON_THROW_ON_ERROR), $actorId);
+
         if (function_exists('log_activity')) {
-            log_activity($this->pdo, $actorId, 'Resume Replenishment Recommendations', 'Demand Forecasting', null, null, null, null, 'store_operation', [
-                'actor_role' => $actorRole,
-            ]);
+            log_activity(
+                $this->pdo,
+                $actorId,
+                'Resume Replenishment Recommendations',
+                'Demand Forecasting',
+                null,
+                '1',
+                '0',
+                $ipAddress ?? '127.0.0.1',
+                'store_operation',
+                [
+                    'decision' => 'resume',
+                    'actor_role' => $actorRole,
+                    'active_model' => $currentModel,
+                    'timestamp' => $resumeRecord['resumed_at'],
+                ]
+            );
         }
+
+        return $resumeRecord;
     }
 
     /**
@@ -465,6 +746,8 @@ class StoreActivationService
                     'ml_recommendations_suspended',
                     'ml_store_activation_record',
                     'ml_store_rollback_record',
+                    'ml_store_rollback_history',
+                    'ml_recommendations_suspended_reason',
                     'schedule_daily_forecast_time',
                     'schedule_weekly_retrain_day',
                     'schedule_weekly_retrain_time'
@@ -488,6 +771,16 @@ class StoreActivationService
             $rollbackRecord = json_decode($settings['ml_store_rollback_record'], true);
         }
 
+        $rollbackHistory = [];
+        if (!empty($settings['ml_store_rollback_history'])) {
+            $rollbackHistory = json_decode($settings['ml_store_rollback_history'], true) ?: [];
+        }
+
+        $suspensionRecord = null;
+        if (!empty($settings['ml_recommendations_suspended_reason'])) {
+            $suspensionRecord = json_decode($settings['ml_recommendations_suspended_reason'], true);
+        }
+
         return [
             'approved_model_version' => $approvedModel,
             'previous_model_version' => $previousModel,
@@ -496,6 +789,8 @@ class StoreActivationService
             'is_store_activated' => ($approvedModel !== '' && !$isObservation),
             'activation_record' => $activationRecord,
             'rollback_record' => $rollbackRecord,
+            'rollback_history' => $rollbackHistory,
+            'suspension_record' => $suspensionRecord,
             'schedule' => [
                 'daily_forecast_time' => $settings['schedule_daily_forecast_time'] ?? '01:00',
                 'weekly_retrain_day' => $settings['schedule_weekly_retrain_day'] ?? 'Sunday',
@@ -646,7 +941,8 @@ class StoreActivationService
         }
 
         $canReject = !$isCurrentApproved && $readiness['checks']['not_rejected'];
-        $canRollback = ($previousModel !== '' && $previousModel !== $approvedModel);
+        $rollbackValidation = $previousModel !== '' ? $this->validateRollbackArtifact($previousModel) : ['valid' => false, 'reason' => 'No previous model available'];
+        $canRollback = ($previousModel !== '' && $previousModel !== $approvedModel && $rollbackValidation['valid']);
 
         // Latest background ML job status
         $latestJob = null;
@@ -668,6 +964,7 @@ class StoreActivationService
             'can_approve' => $canApprove,
             'can_reject' => $canReject,
             'can_rollback' => $canRollback,
+            'rollback_validation' => $rollbackValidation,
             'is_recommendations_suspended' => $status['is_recommendations_suspended'],
             'is_observation_mode' => $status['is_observation_mode'],
             'comparison_method' => "Weekly Seasonal Naive (repeating last week's recorded sales for the matching day of the week)",

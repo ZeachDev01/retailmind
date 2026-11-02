@@ -17,6 +17,8 @@ require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreTrainingEligibilityService.php';
+require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
+require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Services/MlJobService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
@@ -26,6 +28,8 @@ use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ModelPromotionService;
 use App\Forecasting\StoreActivationService;
 use App\Forecasting\StoreTrainingEligibilityService;
+use App\Forecasting\ReplenishmentQueueService;
+use App\Forecasting\DemandForecastService;
 use App\Services\MlJobService;
 
 function assert_true(bool $condition, string $message): void {
@@ -71,7 +75,13 @@ $pdo->exec("
         model_version VARCHAR(100),
         status VARCHAR(50),
         dataset_kind VARCHAR(50) DEFAULT 'store',
+        metrics_json TEXT,
         created_at DATETIME
+    );
+
+    CREATE TABLE inventory (
+        product_id INT PRIMARY KEY,
+        quantity_on_hand INT DEFAULT 0
     );
 
     CREATE TABLE demand_forecasts (
@@ -96,6 +106,9 @@ $pdo->exec("
         cost_price DECIMAL(10,2),
         supplier_lead_time_days INT DEFAULT 7,
         minimum_order_quantity INT DEFAULT 1,
+        reorder_level INT DEFAULT 10,
+        safety_stock INT DEFAULT 5,
+        units_per_package INT DEFAULT 1,
         status VARCHAR(20) DEFAULT 'active'
     );
 
@@ -172,10 +185,23 @@ $pdo->exec("
 // Populate initial products: P1 (mature), P2 (immature/excluded)
 $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, cost_price, status) VALUES (1, 'STORE-P1', 'Standard Store Product 1', 100.0, 60.0, 'active')");
 $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, cost_price, status) VALUES (2, 'STORE-P2', 'Immature Product 2', 50.0, 30.0, 'active')");
+$pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)");
+$pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 5)");
 
 $evalService = new CandidateEvaluationService($pdo);
 $promotionService = new ModelPromotionService($pdo, $evalService);
-$activationService = new StoreActivationService($pdo, $evalService, $promotionService);
+$testModelsDir = sys_get_temp_dir() . '/retailmind_test_models_' . uniqid();
+mkdir($testModelsDir, 0777, true);
+$activationService = new StoreActivationService($pdo, $evalService, $promotionService, $testModelsDir);
+
+register_shutdown_function(function() use ($testModelsDir) {
+    if (is_dir($testModelsDir)) {
+        foreach (glob($testModelsDir . '/*') as $f) {
+            @unlink($f);
+        }
+        @rmdir($testModelsDir);
+    }
+});
 
 // =========================================================================
 echo "--- Section 1: Role Capability Boundaries (ADR-0022) ---\n";
@@ -208,6 +234,12 @@ assert_true(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_
 echo "\n--- Section 2: Server-Side Gating & Automated Qualification ---\n";
 // =========================================================================
 $candidateV1 = 'store_rf_candidate_20261015';
+file_put_contents($testModelsDir . '/random_forest_candidate_' . $candidateV1 . '.json', json_encode([
+    'model_version' => $candidateV1,
+    'dataset_kind' => 'store',
+    'feature_version' => '2.0.0',
+    'features' => ["product_id", "horizon_day", "lag_1", "lag_7", "lag_14", "lag_28"],
+]));
 
 // 2.1 Demo artifact rejection server-side
 $demoThrown = false;
@@ -449,6 +481,8 @@ assert_true(isset($rollback['operational_forecast_job_id']), 'Rollback queued op
 $statusRollback = $activationService->getActivationStatus();
 assert_true($statusRollback['approved_model_version'] === $candidateV1, 'Active model restored to V1');
 assert_true($statusRollback['previous_model_version'] === '', 'Previous model cleared to prevent circular loops');
+assert_true(!empty($statusRollback['rollback_history']), 'Rollback history preserved in activation status');
+assert_true($statusRollback['rollback_history'][0]['restored_model_version'] === $candidateV1, 'Rollback history records restored model V1');
 
 // Re-attempting rollback without previous model throws
 $circularBlocked = false;
@@ -470,6 +504,306 @@ $activationService->resumeRecommendations($adminId, 'admin');
 $statusResumed = $activationService->getActivationStatus();
 assert_true($statusResumed['is_recommendations_suspended'] === false, 'Recommendations resumed locally');
 
+// =========================================================================
+echo "\n--- Section 9: Recovery Artifact Validation & Rejection Matrix (Ticket #370) ---\n";
+// =========================================================================
+
+// 9.1 Reject absent recovery artifact (file does not exist on disk)
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_absent']);
+$absentThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to absent file', 'admin');
+} catch (RuntimeException $e) {
+    $absentThrown = true;
+    assert_true(str_contains($e->getMessage(), 'not found on disk'), 'Rollback rejection mentions artifact not found on disk');
+}
+assert_true($absentThrown, 'Rollback rejects absent model artifact on disk');
+// Verify state unmodified
+$statusAbsentCheck = $activationService->getActivationStatus();
+assert_true($statusAbsentCheck['approved_model_version'] === $candidateV1, 'Approved model unmodified following absent artifact rejection');
+
+// 9.2 Reject 0-byte / empty recovery artifact
+file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_empty.json', '');
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_empty']);
+$emptyThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to 0-byte file', 'admin');
+} catch (RuntimeException $e) {
+    $emptyThrown = true;
+    assert_true(str_contains($e->getMessage(), 'empty or corrupted'), 'Rollback rejection mentions empty or corrupted file');
+}
+assert_true($emptyThrown, 'Rollback rejects 0-byte recovery artifact');
+
+// 9.3 Reject corrupted content recovery artifact
+file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_corrupt.json', 'CORRUPT_BYTES_DATA_UNREADABLE');
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_corrupt']);
+$corruptThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to corrupted file', 'admin');
+} catch (RuntimeException $e) {
+    $corruptThrown = true;
+    assert_true(str_contains($e->getMessage(), 'corrupted or unreadable'), 'Rollback rejection mentions corrupted or unreadable');
+}
+assert_true($corruptThrown, 'Rollback rejects corrupted content recovery artifact');
+
+// 9.4 Reject demo recovery artifact by name
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['demo_rf_recovery_v1']);
+$demoNameThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to demo artifact', 'admin');
+} catch (RuntimeException $e) {
+    $demoNameThrown = true;
+    assert_true(str_contains($e->getMessage(), 'demo/kaggle artifact'), 'Rollback rejection cites demo isolation');
+}
+assert_true($demoNameThrown, 'Rollback rejects demo recovery artifact by name');
+
+// 9.5 Reject demo recovery artifact by metadata
+file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_isolatedmeta.json', json_encode([
+    'model_version' => 'store_rf_candidate_isolatedmeta',
+    'dataset_kind' => 'demo',
+    'feature_version' => '2.0.0',
+]));
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_isolatedmeta']);
+$demoMetaThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to demo metadata', 'admin');
+} catch (RuntimeException $e) {
+    $demoMetaThrown = true;
+    assert_true(str_contains($e->getMessage(), 'demo dataset'), 'Rollback rejection cites demo dataset');
+}
+assert_true($demoMetaThrown, 'Rollback rejects demo recovery artifact by metadata');
+
+// 9.6 Reject incompatible recovery artifact (obsolete feature schema != 2.0.0)
+file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_v1schema.json', json_encode([
+    'model_version' => 'store_rf_candidate_v1schema',
+    'dataset_kind' => 'store',
+    'feature_version' => '1.0.0',
+]));
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_v1schema']);
+$incompatThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback to v1.0.0 schema', 'admin');
+} catch (RuntimeException $e) {
+    $incompatThrown = true;
+    assert_true(str_contains($e->getMessage(), 'incompatible feature version'), 'Rollback rejection cites incompatible feature version');
+}
+assert_true($incompatThrown, 'Rollback rejects incompatible recovery artifact schema');
+
+// 9.7 Reject unqualified recovery artifact (lacks evaluations & training records)
+file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_noeval.json', json_encode([
+    'model_version' => 'store_rf_candidate_noeval',
+    'dataset_kind' => 'store',
+    'feature_version' => '2.0.0',
+]));
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_noeval']);
+$noEvalThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Attempt rollback without evals', 'admin');
+} catch (RuntimeException $e) {
+    $noEvalThrown = true;
+    assert_true(str_contains($e->getMessage(), 'lacks valid qualification metadata'), 'Rollback rejection cites lack of qualification metadata');
+}
+assert_true($noEvalThrown, 'Rollback rejects unqualified recovery artifact');
+
+// 9.8 Remote rollback rejection server-side
+$remoteThrown = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Remote attempt', 'admin', null, null, true);
+} catch (DomainException $e) {
+    $remoteThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Remote mutation rejected'), 'Rejection identifies remote mutation refusal');
+}
+assert_true($remoteThrown, 'Server-side rollback rejects remote mutation');
+
+// Reset previous model to empty
+$pdo->prepare("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_previous_approved_model_version'")->execute();
+
+// =========================================================================
+echo "\n--- Section 10: Local Pause & Resume Guardrails & Eligible Guidance Verification (Ticket #370) ---\n";
+// =========================================================================
+
+// 10.1 Remote pause and resume rejected
+$remotePauseThrown = false;
+try {
+    $activationService->suspendRecommendations($adminId, 'Remote pause', 'admin', null, true);
+} catch (DomainException $e) {
+    $remotePauseThrown = true;
+}
+assert_true($remotePauseThrown, 'Server-side pause rejects remote mutation');
+
+$remoteResumeThrown = false;
+try {
+    $activationService->resumeRecommendations($adminId, 'admin', null, true);
+} catch (DomainException $e) {
+    $remoteResumeThrown = true;
+}
+assert_true($remoteResumeThrown, 'Server-side resume rejects remote mutation');
+
+// 10.2 Authenticated local pause
+$pauseRecord = $activationService->suspendRecommendations($adminId, 'Routine physical store inventory audit', 'admin', '192.168.1.50');
+assert_true($pauseRecord['reason'] === 'Routine physical store inventory audit', 'Pause record contains reason');
+$statusPaused = $activationService->getActivationStatus();
+assert_true($statusPaused['is_recommendations_suspended'] === true, 'Recommendations marked suspended');
+
+// Verify Protected Audit Record for pause
+$stmtLogPause = $pdo->query("SELECT action, user_id, ip_address, metadata FROM activity_log WHERE action = 'Suspend Replenishment Recommendations' ORDER BY log_id DESC LIMIT 1");
+$logPause = $stmtLogPause->fetch(PDO::FETCH_ASSOC);
+assert_true($logPause !== false, 'Protected Audit Record logged for pause');
+assert_true((int)$logPause['user_id'] === $adminId, 'Pause audit attributed to local Administrator');
+assert_true($logPause['ip_address'] === '192.168.1.50', 'Pause audit records IP address');
+
+// 10.3 Resume verification: refuse when active model is missing
+$pdo->prepare("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_approved_model_version'")->execute();
+$resumeEmptyThrown = false;
+try {
+    $activationService->resumeRecommendations($adminId, 'admin');
+} catch (RuntimeException $e) {
+    $resumeEmptyThrown = true;
+    assert_true(str_contains($e->getMessage(), 'no approved Store model version configured'), 'Resume rejection cites missing approved model');
+}
+assert_true($resumeEmptyThrown, 'Resume refused when no approved model is configured');
+assert_true($activationService->getActivationStatus()['is_recommendations_suspended'] === true, 'Recommendations remain suspended after failed resume');
+
+// 10.4 Resume verification: refuse when active model is demo artifact
+$pdo->prepare("UPDATE platform_settings SET setting_value = 'demo_rf_store_model' WHERE setting_key = 'ml_approved_model_version'")->execute();
+$resumeDemoThrown = false;
+try {
+    $activationService->resumeRecommendations($adminId, 'admin');
+} catch (RuntimeException $e) {
+    $resumeDemoThrown = true;
+    assert_true(str_contains($e->getMessage(), 'demo/kaggle artifact'), 'Resume rejection cites demo isolation');
+}
+assert_true($resumeDemoThrown, 'Resume refused when active model is demo artifact');
+
+// 10.5 Resume verification: refuse when active model artifact is missing from disk
+$pdo->prepare("UPDATE platform_settings SET setting_value = 'store_rf_candidate_absent' WHERE setting_key = 'ml_approved_model_version'")->execute();
+$resumeAbsentThrown = false;
+try {
+    $activationService->resumeRecommendations($adminId, 'admin');
+} catch (RuntimeException $e) {
+    $resumeAbsentThrown = true;
+    assert_true(str_contains($e->getMessage(), 'not found on disk'), 'Resume rejection cites artifact missing on disk');
+}
+assert_true($resumeAbsentThrown, 'Resume refused when active model artifact missing from disk');
+
+// 10.6 Resume verification: refuse when active model is incompatible schema
+$pdo->prepare("UPDATE platform_settings SET setting_value = 'store_rf_candidate_v1schema' WHERE setting_key = 'ml_approved_model_version'")->execute();
+$resumeIncompatThrown = false;
+try {
+    $activationService->resumeRecommendations($adminId, 'admin');
+} catch (RuntimeException $e) {
+    $resumeIncompatThrown = true;
+    assert_true(str_contains($e->getMessage(), 'incompatible feature version'), 'Resume rejection cites incompatible schema');
+}
+assert_true($resumeIncompatThrown, 'Resume refused when active model has incompatible schema');
+
+// 10.7 Resume verification: success when active model is approved, eligible, and compatible
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_approved_model_version'")->execute([$candidateV1]);
+$resumeRecord = $activationService->resumeRecommendations($adminId, 'admin', '192.168.1.50');
+assert_true($resumeRecord['active_model'] === $candidateV1, 'Resume record records eligible active model');
+assert_true($activationService->getActivationStatus()['is_recommendations_suspended'] === false, 'Recommendations successfully resumed');
+
+// Verify Protected Audit Record for resume
+$stmtLogResume = $pdo->query("SELECT action, user_id, ip_address FROM activity_log WHERE action = 'Resume Replenishment Recommendations' ORDER BY log_id DESC LIMIT 1");
+$logResume = $stmtLogResume->fetch(PDO::FETCH_ASSOC);
+assert_true($logResume !== false, 'Protected Audit Record logged for resume');
+assert_true((int)$logResume['user_id'] === $adminId, 'Resume audit attributed to local Administrator');
+
+// =========================================================================
+echo "\n--- Section 11: Rollback & Purchasing Guidance / Stock-Rule Fallback (Ticket #370) ---\n";
+// =========================================================================
+
+// Set up replenishment scenario:
+// Product 1 has inventory = 50, reorder_level = 10, safety_stock = 5 (In stock, stock_rule_qty = 0)
+// Product 2 has inventory = 5, reorder_level = 10, safety_stock = 5 (Low stock, deficit = 10, stock_rule_qty = 10)
+$queueService = new ReplenishmentQueueService($pdo);
+
+// 11.1 Simulate active Candidate V2 with completed forecast generation run #100
+$job100Date = '2026-10-31';
+$pdo->prepare("INSERT INTO ml_jobs (job_id, trigger_type, status, requester_id, evidence_cutoff, model_version, attempts, queued_at, completed_at) VALUES (100, 'forecast_generation', 'succeeded', ?, ?, ?, 1, '2026-10-31 01:00:00', '2026-10-31 01:05:00')")->execute([$adminId, $job100Date, $candidateV2]);
+// Seed 28 forecast rows for Product 1 under candidate V2
+for ($d = 1; $d <= 28; $d++) {
+    $tDate = sprintf('2026-11-%02d', $d);
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level) VALUES (100, 1, '2026-10-31', ?, ?, 2, ?, 'High')")->execute([$tDate, $d, $candidateV2]);
+}
+
+// 11.2 Administrator rolls back from V2 to V1
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_approved_model_version'")->execute([$candidateV2]);
+$pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute([$candidateV1]);
+
+$rollbackResult = $activationService->rollbackStoreModel($adminId, 'V2 distribution drift observed; restoring V1', 'admin', '192.168.1.10', '2026-11-01');
+assert_true($rollbackResult['restored_model_version'] === $candidateV1, 'Rollback restored V1');
+$freshJobId = (int)$rollbackResult['operational_forecast_job_id'];
+assert_true($freshJobId > 0, 'Fresh operational forecast job queued');
+
+// 11.3 While fresh forecast is still pending (status = queued), purchasing uses labelled stock-rule fallback
+$recsBeforeFreshSuccess = $queueService->getRecommendations(100, '2026-11-01');
+$recsByPid = array_column($recsBeforeFreshSuccess, null, 'product_id');
+
+assert_true($recsByPid[1]['basis'] === 'Stock-rule suggestion', 'Product 1 falls back to Stock-rule suggestion before fresh forecast succeeds');
+assert_true($recsByPid[1]['expected_sales_28_day'] === null, 'Expected sales cleared on unapproved/rolled-back model');
+assert_true($recsByPid[1]['recommended_quantity'] === $recsByPid[1]['stock_rule_quantity'], 'Recommended quantity equals stock-rule quantity');
+// Dated history is preserved
+assert_true($recsByPid[1]['forecast_origin'] === '2026-10-31', 'Dated history forecast origin is preserved');
+assert_true($recsByPid[1]['model_version'] === $candidateV2, 'Dated history model version is preserved');
+assert_true(str_contains($recsByPid[1]['forecast_status'], 'Unapproved model'), 'Forecast status indicates unapproved model');
+
+// Product 2 (low stock, no forecast) also uses stock-rule suggestion
+assert_true($recsByPid[2]['basis'] === 'Stock-rule suggestion', 'Product 2 uses stock-rule suggestion');
+assert_true($recsByPid[2]['recommended_quantity'] === 10, 'Product 2 suggests 10 units based on reorder + safety stock deficit');
+
+// 11.4 When fresh operational forecast succeeds for restored model V1
+$pdo->prepare("UPDATE ml_jobs SET status = 'succeeded', completed_at = '2026-11-01 01:10:00' WHERE job_id = ?")->execute([$freshJobId]);
+for ($d = 1; $d <= 28; $d++) {
+    $tDate = sprintf('2026-11-%02d', $d);
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level) VALUES (?, 1, '2026-10-31', ?, ?, 3, ?, 'High')")->execute([$freshJobId, $tDate, $d, $candidateV1]);
+}
+
+$recsAfterFreshSuccess = $queueService->getRecommendations($freshJobId, '2026-11-01');
+$recsFreshByPid = array_column($recsAfterFreshSuccess, null, 'product_id');
+assert_true($recsFreshByPid[1]['basis'] === 'Demand Forecast', 'Product 1 uses Demand Forecast once fresh forecast succeeds');
+assert_true($recsFreshByPid[1]['model_version'] === $candidateV1, 'Product 1 uses restored model V1');
+assert_true($recsFreshByPid[1]['expected_sales_28_day'] === 84, 'Expected sales 28-day populated (28 * 3 = 84)');
+
+// =========================================================================
+echo "\n--- Section 12: Repeated & Circular Rollback Audit Preservation (Ticket #370) ---\n";
+// =========================================================================
+
+// 12.1 Circular rollback prevention: previous model is currently empty
+$secondRollbackBlocked = false;
+try {
+    $activationService->rollbackStoreModel($adminId, 'Circular rollback attempt', 'admin');
+} catch (RuntimeException $e) {
+    $secondRollbackBlocked = true;
+    assert_true(str_contains($e->getMessage(), 'no compatible previous approved Store model artifact found'), 'Rejection identifies empty previous model');
+}
+assert_true($secondRollbackBlocked, 'Circular rollback prevented without previous model');
+
+// 12.2 Multi-step rollback: Administrator upgrades to candidate V2 again, then rolls back to V1 a second time
+$activationService->activateStoreModel($candidateV2, '2026-11-01', $adminId, 'Re-approving V2 with updated hyperparameters', 'admin');
+assert_true($activationService->getActivationStatus()['approved_model_version'] === $candidateV2, 'Candidate V2 re-approved');
+assert_true($activationService->getActivationStatus()['previous_model_version'] === $candidateV1, 'Candidate V1 preserved as previous');
+
+// Execute second rollback
+$secondRollback = $activationService->rollbackStoreModel($adminId, 'Second distribution drift detected; returning to stable V1', 'admin', '192.168.1.10', '2026-11-02');
+assert_true($secondRollback['restored_model_version'] === $candidateV1, 'Second rollback restored V1');
+assert_true($secondRollback['rolled_back_from'] === $candidateV2, 'Second rollback from V2');
+
+// Verify rollback history contains both rollback records
+$finalStatus = $activationService->getActivationStatus();
+assert_true(count($finalStatus['rollback_history']) >= 2, 'Rollback history preserved across repeated rollbacks');
+$histories = $finalStatus['rollback_history'];
+assert_true($histories[0]['rollback_id'] !== $histories[1]['rollback_id'], 'Rollback IDs are distinct');
+
+// Verify activity_log contains every activation, pause, resume, and rollback event without overwrite
+$stmtAllLogs = $pdo->query("SELECT action, COUNT(*) as cnt FROM activity_log GROUP BY action");
+$logCounts = $stmtAllLogs->fetchAll(PDO::FETCH_KEY_PAIR);
+
+assert_true(($logCounts['Activate Store Forecasting Model'] ?? 0) >= 3, 'All activation audit records preserved');
+assert_true(($logCounts['Rollback Store Forecasting Model'] ?? 0) >= 2, 'All rollback audit records preserved');
+assert_true(($logCounts['Suspend Replenishment Recommendations'] ?? 0) >= 1, 'Pause audit records preserved');
+assert_true(($logCounts['Resume Replenishment Recommendations'] ?? 0) >= 1, 'Resume audit records preserved');
+
 echo "\n=========================================================================\n";
-echo "PASS: All Ticket #368 Model Review & Approval Contract Tests Passed!\n";
+echo "PASS: All Ticket #368 and Ticket #370 Model Review, Pause, Resume & Rollback Tests Passed!\n";
 echo "=========================================================================\n";
