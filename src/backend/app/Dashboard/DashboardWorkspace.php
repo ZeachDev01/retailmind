@@ -2,6 +2,7 @@
 
 namespace App\Dashboard;
 
+use App\Attention\AttentionCenter;
 use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
@@ -44,10 +45,10 @@ final class DashboardWorkspace
             $healthChecks = $this->health->checks();
             $platform = $this->platformState($now, $healthChecks);
             $attention = array_values(array_filter(
-                (new AttentionRuleService(
-                    new AttentionSettingsService($this->pdo, $this->clock),
-                    $this->clock
-                ))->evaluate($actorRole, $platform['signals']),
+                (new AttentionCenter($this->pdo, $this->clock))->getAttention((int)$actorUserId, $actorRole, $healthChecks),
+
+
+
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
 

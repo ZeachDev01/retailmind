@@ -14,7 +14,12 @@ final class DatabaseAttentionSignalSource
     public function platform(array $healthChecks = []): array
     {
         $dayAgo = $this->clock->now()->modify('-24 hours')->format('Y-m-d H:i:s');
-        $failedLogins = (new FailedSignInReviewService($this->pdo, $this->clock))->pendingCount();
+        try {
+            $failedLogins = (new FailedSignInReviewService($this->pdo, $this->clock))->pendingCount();
+        } catch (Throwable $exception) {
+            error_log('Attention signal query skipped: ' . $exception->getMessage());
+            $failedLogins = 0;
+        }
         $lockedAccounts = $this->scalar(
             "SELECT COUNT(*) FROM users WHERE status = 'active' AND locked_until > ?",
             [$this->now()]

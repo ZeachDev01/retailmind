@@ -346,6 +346,24 @@ try {
         (int)$pdo->query('SELECT inapp_enabled FROM notifications WHERE user_id = 501')->fetchColumn() === 1,
         'A createInApp=false required condition must override the optional in-app preference'
     );
+    // --- Deepened AttentionCenter interface tests ---
+    $deepCenter = new AttentionCenter($pdo, $clock, $settings);
+    $assert($deepCenter->getAttention(1, 'cashier') === [], 'Deep AttentionCenter must short-circuit cashier to empty array');
+    $assert($deepCenter->getAttention(1, 'inventory_manager') === [], 'Deep AttentionCenter must short-circuit inventory manager to empty array');
+
+    $superAttention = $deepCenter->getAttention(1, 'super_admin', [
+        'service_unhealthy_count' => ['value' => 2, 'count' => 2],
+    ]);
+    $assert(count($superAttention) > 0, 'Deep AttentionCenter must evaluate super_admin rules with external signals');
+    $superKeys = array_map(static fn($item): string => $item->key, $superAttention);
+    $assert(in_array('platform.service.unhealthy', $superKeys, true), 'Deep AttentionCenter must surface platform service unhealthy item');
+
+    $syncResult = $deepCenter->synchronize(600, 'super_admin', [
+        'service_unhealthy_count' => ['value' => 2, 'count' => 2],
+    ]);
+    $assert($syncResult instanceof \App\Attention\AttentionRefreshResult, 'Deep AttentionCenter::synchronize must return AttentionRefreshResult');
+    $notifRow = $pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 600 AND workspace = 'super_admin'")->fetchColumn();
+    $assert((int)$notifRow > 0, 'Deep AttentionCenter::synchronize must persist notifications');
 } catch (Throwable $exception) {
     $failures[] = 'Attention rules contract threw: ' . $exception->getMessage();
 }

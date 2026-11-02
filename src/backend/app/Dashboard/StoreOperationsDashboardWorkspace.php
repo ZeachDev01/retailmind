@@ -4,6 +4,7 @@ namespace App\Dashboard;
 
 require_once __DIR__ . '/../Services/GrossProfitService.php';
 
+use App\Attention\AttentionCenter;
 use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
@@ -161,9 +162,10 @@ final class StoreOperationsDashboardWorkspace
         try {
             $settings = new AttentionSettingsService($this->pdo, $this->clock);
             $thresholds = $settings->thresholdsFor($actorRole);
-            $signals = (new DatabaseAttentionSignalSource($this->pdo, $this->clock))->store();
+            $attentionCenter = new AttentionCenter($this->pdo, $this->clock);
+            $actorUserId = (int)($_SESSION['user_id'] ?? 0);
             $attention = array_values(array_filter(
-                (new AttentionRuleService($settings, $this->clock))->evaluate($actorRole, $signals),
+                $attentionCenter->getAttention($actorUserId, $actorRole),
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
             $exceptions = $this->exceptions($now, $days, $thresholds);
@@ -522,12 +524,12 @@ final class StoreOperationsDashboardWorkspace
     {
         $items = [];
         $cashVarianceSql = $this->hasVarianceReviewRequiredColumn()
-            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
+            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, " . $this->userDisplayNameColumn() . "
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL
                  AND (cs.variance_review_required = 1 OR (cs.variance_review_required IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))))
                ORDER BY cs.closed_at ASC LIMIT 20"
-            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
+            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, " . $this->userDisplayNameColumn() . "
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))
                ORDER BY cs.closed_at ASC LIMIT 20";
@@ -840,6 +842,18 @@ final class StoreOperationsDashboardWorkspace
             return $hasColumn = true;
         } catch (\Throwable) {
             return $hasColumn = false;
+        }
+    }
+
+    private function userDisplayNameColumn(): string
+    {
+        static $col = null;
+        if ($col !== null) return $col;
+        try {
+            $this->pdo->query("SELECT display_name FROM users LIMIT 0");
+            return $col = "u.display_name";
+        } catch (\Throwable) {
+            return $col = "u.full_name AS display_name";
         }
     }
     public function gcashAttention(): array
