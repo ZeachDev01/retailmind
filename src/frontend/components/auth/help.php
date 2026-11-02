@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userId = (int)$_SESSION['user_id'];
         $workspace = current_role();
         try {
+            if ($workspace !== 'admin') {
+                throw new DomainException('Walkthrough invitations are only available for the Administrator Workspace.');
+            }
             if (isset($_POST['user_id']) && (int)$_POST['user_id'] !== $userId) {
                 throw new DomainException('Forged user identity rejected.');
             }

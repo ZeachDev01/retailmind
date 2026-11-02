@@ -113,7 +113,7 @@ try {
     };
 
     $adminId = $insertActor('Store Admin', 'admin');
-    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
+    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
     $countUsers = static fn(): int => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
     $buildAccount = static fn(string $username, $email): array => [
         'full_name' => 'Contract Staff',

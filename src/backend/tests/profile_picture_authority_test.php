@@ -33,7 +33,7 @@ foreach ([1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 4, 6 => 4, 7 => 1, 8 => 1] as $id
 }
 // Secondary privileged assignments and a primary privilege missing from mapping.
 $pdo->exec('INSERT INTO user_roles VALUES (7, 1, 1), (7, 3, 0), (8, 1, 1), (8, 4, 0), (5, 1, 1)');
-$service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
+$service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
 $directory = sys_get_temp_dir() . '/rm-picture-authority-' . bin2hex(random_bytes(6));
 mkdir($directory);
 // Generate valid PNG bytes with installed GD, avoiding an external fixture.

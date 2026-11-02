@@ -95,7 +95,7 @@ try {
 
     $superId = $insertActor('Super Owner', 'super_admin');
     $adminId = $insertActor('Store Admin', 'admin');
-    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
+    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
     $countUsers = static fn(): int => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
 
     // Live check is advisory: it flags the collision before submit.

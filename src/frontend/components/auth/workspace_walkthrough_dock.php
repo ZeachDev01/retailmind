@@ -88,6 +88,18 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     const bodyEl = document.getElementById('guidance-step-content');
     const footerEl = dock.querySelector('.guidance-dock-footer');
 
+    function closeProductModal() {
+        const modal = document.getElementById('add-product-modal');
+        if (modal && modal.classList.contains('open')) {
+            if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
+                window.RetailMindUI.closeOverlay(modal);
+            } else {
+                modal.classList.remove('open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+        }
+    }
+
     function applySpotlight(stepIndex) {
         document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
             el.classList.remove('guidance-spotlight-target');
@@ -122,15 +134,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
                     if (saveBtn) saveBtn.hidden = (stepNum !== 5);
                 }
             } else {
-                const openModalEl = document.getElementById('add-product-modal');
-                if (openModalEl && openModalEl.classList.contains('open')) {
-                    if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
-                        window.RetailMindUI.closeOverlay(openModalEl);
-                    } else {
-                        openModalEl.classList.remove('open');
-                        openModalEl.setAttribute('aria-hidden', 'true');
-                    }
-                }
+                closeProductModal();
             }
 
             targetEl.classList.add('guidance-spotlight-target');
@@ -193,15 +197,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
             el.classList.remove('guidance-spotlight-target');
         });
-        const modal = document.getElementById('add-product-modal');
-        if (modal && modal.classList.contains('open')) {
-            if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
-                window.RetailMindUI.closeOverlay(modal);
-            } else {
-                modal.classList.remove('open');
-                modal.setAttribute('aria-hidden', 'true');
-            }
-        }
+        closeProductModal();
         const currentTarget = steps[currentStep] ? document.querySelector(steps[currentStep].target) : null;
         dock.remove();
         if (currentTarget) {
@@ -229,15 +225,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
             document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
                 el.classList.remove('guidance-spotlight-target');
             });
-            const modal = document.getElementById('add-product-modal');
-            if (modal && modal.classList.contains('open')) {
-                if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
-                    window.RetailMindUI.closeOverlay(modal);
-                } else {
-                    modal.classList.remove('open');
-                    modal.setAttribute('aria-hidden', 'true');
-                }
-            }
+            closeProductModal();
             bodyEl.style.display = 'none';
             footerEl.style.display = 'none';
             completionEl.classList.remove('u-hidden');
@@ -248,15 +236,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     exitBtn.addEventListener('click', exitWalkthrough);
 
     doneBtn.addEventListener('click', function() {
-        const modal = document.getElementById('add-product-modal');
-        if (modal && modal.classList.contains('open')) {
-            if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
-                window.RetailMindUI.closeOverlay(modal);
-            } else {
-                modal.classList.remove('open');
-                modal.setAttribute('aria-hidden', 'true');
-            }
-        }
+        closeProductModal();
         dock.remove();
     });
 

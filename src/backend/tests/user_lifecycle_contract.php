@@ -93,7 +93,7 @@ try {
             return true;
         }
     };
-    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo), $notifier);
+    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), $notifier);
 
     foreach ([['admin', 'cashier', 'inventory_manager'], ['cashier', 'admin'], ['admin']] as $roles) {
         $before = $service->get($adminId);

@@ -73,29 +73,25 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             });
             </script>
             <?php
-        } elseif (!$allTasksComplete && empty($guidanceProgress['invitation_status'])) {
-            $guidanceQuery = $pdo->prepare('SELECT status FROM workspace_guidance WHERE user_id = ? AND workspace = ?');
-            $guidanceQuery->execute([(int)$_SESSION['user_id'], current_role()]);
-            if (!$guidanceQuery->fetchColumn()) {
-                ob_start();
-                $guidanceIsHelp = false;
-                ?>
-                <section id="workspace-guidance" class="workspace-guidance" aria-labelledby="workspace-guidance-title">
-                    <?php include __DIR__ . '/workspace_overview.php'; ?>
-                    <?php include __DIR__ . '/store_setup_checklist.php'; ?>
-                    <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>
-                </section>
-                <?php $guidanceHtml = ob_get_clean(); ?>
-                <script>
-                document.addEventListener('DOMContentLoaded', function () {
-                    const main = document.querySelector('.main-content');
-                    if (main && !document.getElementById('workspace-guidance')) {
-                        main.insertAdjacentHTML('afterbegin', <?= json_encode($guidanceHtml, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
-                    }
-                });
-                </script>
-                <?php
-            }
+        } elseif (!$allTasksComplete && empty($guidanceProgress['invitation_status']) && empty($guidanceProgress['status'])) {
+            ob_start();
+            $guidanceIsHelp = false;
+            ?>
+            <section id="workspace-guidance" class="workspace-guidance" aria-labelledby="workspace-guidance-title">
+                <?php include __DIR__ . '/workspace_overview.php'; ?>
+                <?php include __DIR__ . '/store_setup_checklist.php'; ?>
+                <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>
+            </section>
+            <?php $guidanceHtml = ob_get_clean(); ?>
+            <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const main = document.querySelector('.main-content');
+                if (main && !document.getElementById('workspace-guidance')) {
+                    main.insertAdjacentHTML('afterbegin', <?= json_encode($guidanceHtml, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+                }
+            });
+            </script>
+            <?php
         }
 
         $guidanceParam = isset($_GET['guidance']) ? trim((string)$_GET['guidance']) : '';
@@ -114,7 +110,7 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
                 }
             }
             if ($topic && !empty($topic['steps']) && (str_ends_with($scriptName, $topic['path']) || basename($scriptName) === basename($topic['path']))) {
-                $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], $role);
+                $walkthroughProgress = $guidanceProgress;
                 $isReplay = !empty($_GET['replay']);
                 $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
                 include __DIR__ . '/workspace_walkthrough_dock.php';

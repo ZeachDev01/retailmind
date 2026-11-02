@@ -125,7 +125,7 @@ try {
     $recoveryId = $insertUser('Technical Recovery', 'admin', ['admin'], 1);
 
     $policy = new RoleCapabilityPolicy();
-    $service = new UserLifecycleService($pdo, $policy, new StoreScope($pdo));
+    $service = new UserLifecycleService($pdo, $policy);
     $auditService = new ProtectedAuditRecordService($pdo, $policy);
 
     // =========================================================================

@@ -439,8 +439,7 @@ class WorkspaceWalkthroughService
 
     public static function exitWalkthrough(PDO $pdo, int $userId, string $workspace, string $topicId, int $step): void
     {
-        $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, active_topic, active_step) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE active_topic = VALUES(active_topic), active_step = VALUES(active_step)');
-        $stmt->execute([$userId, $workspace, $topicId, $step]);
+        self::updateStep($pdo, $userId, $workspace, $topicId, $step);
     }
 
     public static function completeTopic(PDO $pdo, int $userId, string $workspace, string $topicId): void
