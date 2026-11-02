@@ -21,7 +21,6 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/NotificationService.php';
-require_once __DIR__ . '/../app/Attention/AttentionNotificationService.php';
 require_once __DIR__ . '/../app/Attention/AttentionCenter.php';
 require_once __DIR__ . '/../app/Attention/AttentionSettingsService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
@@ -29,7 +28,6 @@ require_once __DIR__ . '/../app/Dashboard/StoreOperationsDashboardWorkspace.php'
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 
 use App\Attention\AttentionCenter;
-use App\Attention\AttentionNotificationService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
 use App\Authorization\RoleCapabilityPolicy;
@@ -301,7 +299,6 @@ $assert(!str_contains($failureItem?->explanation ?? '', 'Trace: InsufficientData
 $assert($failureItem !== null, 'Forecasting failure produces attention item for Administrator');
 $assert($failureItem?->severity === 'critical', 'Failure notice has critical severity');
 $assert($failureItem?->destination === 'components/report/predictions.php', 'Failure notice destination is permitted predictions.php');
-$assert(AttentionNotificationService::workspace($failureItem->key) === 'admin', 'Failure notice is scoped to admin workspace');
 
 // Synchronize notification
 $notificationService->checkAndNotifyForecasts();

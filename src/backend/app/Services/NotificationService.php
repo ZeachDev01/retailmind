@@ -77,8 +77,8 @@ class NotificationService
 
     private function synchronize(array $user, array $items, bool $inApp, string $scope): void
     {
-        (new \App\Attention\AttentionNotificationService($this->pdo, $this->clock))
-            ->synchronize((int)$user['user_id'], $items, $inApp, $scope);
+        (new \App\Attention\AttentionCenter($this->pdo, $this->clock))
+            ->synchronizeItems((int)$user['user_id'], $items, $inApp, $scope);
     }
 
     public function checkAndNotifyForecasts(): void
@@ -116,9 +116,9 @@ class NotificationService
                 null, false, 'system', (int)$spike['product_id'], 'product'
             );
         }
-        $conditionNotifications = new \App\Attention\AttentionNotificationService($this->pdo, $this->clock);
+        $conditionNotifications = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
         foreach ($this->recipients('inventory_manager') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $demandItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
         }
         $failedRun = null;
@@ -137,7 +137,7 @@ class NotificationService
             'system', (int)$failedRun['training_run_id'], 'model_training'
         )] : [];
         foreach ($this->recipients('super_admin') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
         }
         $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
@@ -146,7 +146,7 @@ class NotificationService
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
         ));
         foreach ($this->recipients('admin') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $adminForecastingItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $adminForecastingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'store.forecasting.');
         }
     }
@@ -215,7 +215,7 @@ class NotificationService
             $reminders[] = $batch + [
                 'type' => 'expired_stock',
                 'reference_type' => 'product_batch',
-                'title' => 'Expired stock—waiting for supplier collection: ' . $batch['product_name'],
+                'title' => 'Expired stockâ€”waiting for supplier collection: ' . $batch['product_name'],
                 'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
             ];
         }
@@ -247,7 +247,7 @@ class NotificationService
             $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
                 && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
             $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
-                ? 'Expired stock—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
+                ? 'Expired stockâ€”waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
             $batch['message'] = "Batch {$batch['batch_number']} (#{$batch['batch_id']}) of {$batch['product_name']} ({$batch['sku']}). Expiration: "
                 . ($expiration ?? 'Not recorded') . ". Remaining: {$batch['remaining_quantity']}.";
             $reminders[(int)$batch['batch_id']] = $batch;
