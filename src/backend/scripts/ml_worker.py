@@ -186,6 +186,7 @@ def process_job(conn, job):
                 'No active products have 140',
                 'No trained products have 28 consecutive observed days for generation',
                 'No trained products have supported feature windows',
+                'requires 28 consecutive observed days',
                 'Invalid observation model version',
                 'Imported Demo history does not match',
             ]
@@ -344,13 +345,9 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None, evid
     data = load_history(cursor, context)
     origin = data.date.max() if is_demo else pd.Timestamp(context['history_cutoff'])
     if not is_demo:
-        known = history_at(data, origin)
-        window = pd.date_range(origin - pd.Timedelta(days=27), origin)
-        counts = known[known.date.isin(window)].groupby('product_id').date.nunique()
-        products = counts.index[(counts == 28) & counts.index.isin(meta['products'])]
-        data = data[data.product_id.isin(products)]
+        data = data[data.product_id.isin(meta.get('products', []))]
         if data.empty:
-            raise ValueError('No trained products have 28 consecutive observed days for generation')
+            raise ValueError('No trained products have supported feature windows')
     features = build_feature_matrix(data, origin)
     predictions = artifact['model'].predict(features[FEATURE_COLUMNS])
     if not np.isfinite(predictions).all():

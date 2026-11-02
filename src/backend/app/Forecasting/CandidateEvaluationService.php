@@ -291,6 +291,9 @@ class CandidateEvaluationService
             'status' => $eval['status'],
             'status_label' => $eval['status_label'],
             'explanation' => $eval['explanation'],
+            'closures_paused' => $eval['closures_paused'] ?? 0,
+            'stockouts_excluded' => $eval['stockouts_excluded'] ?? 0,
+            'missing_excluded' => $eval['missing_excluded'] ?? 0,
             'metrics_by_horizon' => $eval['metrics_by_horizon'],
         ];
     }
