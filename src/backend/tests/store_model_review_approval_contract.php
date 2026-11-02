@@ -271,6 +271,36 @@ try {
 }
 assert_true($unauthThrown, 'Server-side activation rejects unauthorized role');
 
+// 2.3b Inventory Manager role rejection
+$imThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 6, 'Inventory Manager approving', 'inventory_manager');
+} catch (DomainException $e) {
+    $imThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Unauthorized'), 'Inventory Manager rejection identifies unauthorized role');
+}
+assert_true($imThrown, 'Server-side activation rejects Inventory Manager role');
+
+// 2.3c Wrong-active-Workspace rejection (e.g. multi-role account whose active workspace is Cashier or Inventory Manager)
+$wrongWsThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 2, 'Admin operating in wrong active Cashier workspace', 'cashier');
+} catch (DomainException $e) {
+    $wrongWsThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Unauthorized'), 'Wrong active workspace rejection identifies unauthorized workspace');
+}
+assert_true($wrongWsThrown, 'Server-side activation rejects wrong active workspace');
+
+// 2.3d Remote activation rejection
+$remoteActivationThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 2, 'Remote administrator approval attempt', 'admin', '192.168.1.100', true);
+} catch (DomainException $e) {
+    $remoteActivationThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Remote mutation rejected'), 'Remote activation rejection identifies remote mutation refusal');
+}
+assert_true($remoteActivationThrown, 'Server-side activation rejects remote mutation');
+
 // Configure quality thresholds: 7d <= 0.25, 14d <= 0.30, 28d <= 0.35
 $evalService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
 
@@ -297,7 +327,8 @@ assert_true(!$readinessObsIncomplete['ready'], 'Candidate without 28 observation
 assert_true($readinessObsIncomplete['status'] === 'under_evaluation', 'Status is under_evaluation while checks remain');
 assert_true($readinessObsIncomplete['status_label'] === 'Under evaluation', 'Status label is "Under evaluation"');
 
-// Seed 28 days of prospective observation for candidateV1
+// Seed 28 days of prospective observation for candidateV1 (synthetic workflow evidence)
+echo "  [INFO] Synthetic observation evidence is isolated workflow evidence only.\n";
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 500, 'receive', '2026-09-01 07:00:00')");
 for ($i = 1; $i <= 28; $i++) {
     $tDate = sprintf('2026-09-%02d', $i);
