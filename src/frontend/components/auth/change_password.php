@@ -46,6 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['session_version'] = $newVersion;
             $_SESSION['must_change_password'] = false;
             $_SESSION['_flash_success'] = 'Password changed successfully.';
+            if ($isMandatory) {
+                $userRoles = $_SESSION['roles'] ?? [current_role()];
+                if (in_array('admin', $userRoles, true) || current_role() === 'admin') {
+                    \App\Guidance\WorkspaceWalkthroughService::inviteAdministrator($pdo, (int)$_SESSION['user_id']);
+                }
+            }
             log_activity(
                 $pdo,
                 (int)$_SESSION['user_id'],
@@ -81,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div>
                     <h1 id="auth_title" class="u-auth-title"><?= $isMandatory ? 'Create a new password' : 'Change password' ?></h1>
                     <p class="section-description">
-                        <?= $isMandatory ? 'Replace your temporary password to access RetailMind.' : 'Enter your current password to choose a new one.' ?>
+                        <?= $isMandatory ? 'The temporary password must be replaced before you can access RetailMind.' : 'You are changing your password voluntarily. Enter your current password to choose a new one.' ?>
                     </p>
                 </div>
             </div>

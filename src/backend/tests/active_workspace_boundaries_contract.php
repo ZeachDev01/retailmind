@@ -392,7 +392,7 @@ try {
     }
 
     // 9. Preserved User Lifecycle & Recovery Account boundaries:
-    $userService = new UserLifecycleService($pdo, $policy, new \App\Store\StoreScope($pdo));
+    $userService = new UserLifecycleService($pdo, $policy);
     $recoveryUser = [
         'user_id' => 99,
         'username' => 'recovery_admin',

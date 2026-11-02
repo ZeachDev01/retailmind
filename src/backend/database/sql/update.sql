@@ -1901,3 +1901,15 @@ CREATE TABLE IF NOT EXISTS `store_weekly_schedule` (
 ALTER TABLE `store_calendar` ADD COLUMN `source` VARCHAR(50) NOT NULL DEFAULT 'manual' AFTER `recorded_by`;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_store_weekly_schedule','Configurable weekly store schedule revisions with effective dates') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+ALTER TABLE `workspace_guidance` MODIFY COLUMN `status` ENUM('skipped','deferred','completed') NULL DEFAULT NULL;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='active_topic'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `active_topic` VARCHAR(60) NULL DEFAULT NULL AFTER `status`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='active_step'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `active_step` INT NOT NULL DEFAULT 0 AFTER `active_topic`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='completed_topics'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `completed_topics` TEXT NULL DEFAULT NULL AFTER `active_step`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='invitation_status'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `invitation_status` VARCHAR(30) NULL DEFAULT NULL AFTER `completed_topics`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020002_workspace_walkthrough_progress','Persist interactive walkthrough progress per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);

@@ -85,7 +85,7 @@ try {
     };
 
     $insertStaff('TakenUser', 'taken@example.test');
-    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy(), new StoreScope($pdo));
+    $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
 
     // Existing username reports taken; free value reports free.
     $assert($service->availability('admin', 'TakenUser', '')['username_taken'] === true, 'existing username must report taken');

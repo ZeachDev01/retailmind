@@ -22,8 +22,8 @@ try {
     $nextId = 100;
     $seed = static function (string $status = 'active', int $roleId = 4) use ($pdo, &$nextId): int {
         $id = $nextId++;
-        $pdo->prepare('INSERT INTO users (user_id,full_name,username,email,password_hash,role_id,branch_id,must_change_password,status) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?)')
-            ->execute([$id, 'Imported ' . $id, 'imported_' . $id, $id . '@example.test', password_hash('ImportedPassword123', PASSWORD_DEFAULT), $roleId, $status]);
+        $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,email,password_hash,role_id,must_change_password,status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)')
+            ->execute([$id, 'Imported', (string)$id, 'Imported ' . $id, 'imported_' . $id, $id . '@example.test', password_hash('ImportedPassword123', PASSWORD_DEFAULT), $roleId, $status]);
         $pdo->prepare('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (?, ?, 1)')->execute([$id, $roleId]);
         return $id;
     };
@@ -42,7 +42,7 @@ try {
         $id = $seed($status, 1);
         $pdo->exec("INSERT INTO password_reset_tokens (user_id,token_hash,expires_at) VALUES ($id, 'token_$id', DATE_ADD(NOW(), INTERVAL 1 HOUR))");
         $pdo->exec("INSERT INTO notification_preferences (user_id) VALUES ($id)");
-        $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status) VALUES ($id,'admin','skipped')");
+        $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status,active_topic,active_step,completed_topics) VALUES ($id,'admin','skipped','store_settings',2,'[\"store_settings\"]')");
         $pdo->exec("INSERT INTO notifications (user_id,title,message,type) VALUES ($id,'Notice','Disposable','system')");
         $pdo->exec("INSERT INTO attention_states (user_id,attention_key,fingerprint,first_detected_at,last_detected_at) VALUES ($id,'test','test',NOW(),NOW())");
         $denied(fn() => $service->delete(1, 'admin', $id), 'Confirm');
@@ -57,7 +57,7 @@ try {
         $before = json_decode($audit['previous_value'], true, 512, JSON_THROW_ON_ERROR);
         $after = json_decode($audit['new_value'], true, 512, JSON_THROW_ON_ERROR);
         $assert((int)$audit['user_id'] === 1 && $audit['category'] === 'store_operation' && $after['actor_role'] === 'admin', 'Actor attribution and protected category retained');
-        $assert($before['user_id'] === $id && $before['username'] === 'imported_' . $id && $before['full_name'] === 'Imported ' . $id && $before['roles'] === ['admin'], 'Deleted identity retained without target FK');
+        $assert($before['user_id'] === $id && $before['username'] === 'imported_' . $id && ($before['display_name'] ?? $before['full_name'] ?? '') === 'Imported ' . $id && $before['roles'] === ['admin'], 'Deleted identity retained without target FK');
     }
     $history = App\Services\UserLifecycleService::DELETION_HISTORY_MESSAGE;
     foreach ([
@@ -65,7 +65,6 @@ try {
         'logical discount authorizer' => 'UPDATE sales SET discount_authorized_by = ? WHERE sale_id = 1',
         'shift reviewer (SET NULL)' => 'UPDATE cashier_shifts SET reviewed_by = ? WHERE shift_id = 1',
         'stock' => 'UPDATE inventory_adjustments SET approved_by = ? WHERE adjustment_id = 1',
-        'logical branch creator' => 'UPDATE branches SET created_by = ? WHERE branch_id = 1',
         'GCash' => "INSERT INTO gcash_transactions (cashier_id,transaction_type,amount,reference_number) VALUES (?,'Cash-In',100,'DELETE-HISTORY')",
         'refund' => "INSERT INTO cash_refunds (sale_id,shift_id,cashier_id,refund_amount,reason) VALUES (1,1,?,1,'Deletion test')",
         'logical correction actor' => "INSERT INTO inventory_adjustment_revisions (adjustment_id,actor_id,action) VALUES (1,?,'correct')",
@@ -86,7 +85,7 @@ try {
         $assert($service->get($id)['status'] === 'active' && $auditCount() === $count, "$label rejection preserves account and history");
         $pdo->rollBack();
     }
-    $id = $service->create(1, 'admin', ['full_name' => 'Created Account', 'username' => 'created_account', 'password_hash' => 'unused', 'roles' => ['cashier']]);
+    $id = $service->create(1, 'admin', ['first_name' => 'Created', 'last_name' => 'Account', 'full_name' => 'Created Account', 'username' => 'created_account', 'password_hash' => 'unused', 'roles' => ['cashier']]);
     $nextId = $id + 1;
     $denied(fn() => $service->delete(1, 'admin', $id, true), $history);
     foreach (['previous_value', 'new_value', 'metadata'] as $column) {

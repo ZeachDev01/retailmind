@@ -21,7 +21,7 @@ final class UserLifecycleService
         private RoleCapabilityPolicy $policy,
         private ?UserAccountNotifier $notifier = null
     ) {
-        $this->notifier = $notifier ?? new UserAccountNotifier();
+        $this->notifier = $this->notifier ?? new UserAccountNotifier();
     }
 
     public function get(int $userId, bool $lock = false): array

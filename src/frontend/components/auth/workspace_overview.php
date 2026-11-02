@@ -111,6 +111,28 @@ if (isset($workflows[$currentScript])) {
         }
     }
 }
+$walkthroughProgress = isset($pdo, $_SESSION['user_id'])
+    ? \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role())
+    : ['status' => null, 'active_topic' => null, 'active_step' => 0, 'completed_topics' => [], 'invitation_status' => null];
+$activeTopicId = $walkthroughProgress['active_topic'] ?? null;
+$activeTopicDef = $activeTopicId ? \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $activeTopicId) : null;
+$completedTopics = $walkthroughProgress['completed_topics'] ?? [];
+$allWalkthroughPaths = \App\Guidance\WorkspaceWalkthroughService::paths(current_role());
+$topicIcons = [
+    'store_settings' => 'shop',
+    'registers' => 'self_service_kiosk',
+    'fiscal_periods' => 'calendar',
+    'user_manager' => 'conference_call',
+    'store_calendar' => 'calendar',
+    'dashboard' => 'shop',
+    'report_generation' => 'statistics',
+    'replenishment_queue' => 'workflow',
+    'products' => 'package',
+    'stock_receiving' => 'shipped',
+];
+$getOrientedTopics = $allWalkthroughPaths['get_oriented']['topics'] ?? [];
+$dailyOversightTopics = $allWalkthroughPaths['daily_oversight']['topics'] ?? [];
+$imTopics = $allWalkthroughPaths['first_useful_tasks']['topics'] ?? [];
 ?>
 <h2 id="workspace-guidance-title">
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
@@ -128,6 +150,130 @@ $primaryActionLabel = $isAdmin
     : 'Review replenishment needs';
 ?>
 <?php if ($guidanceIsHelp): ?>
+    <?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
+        <section class="guidance-continue-card" aria-label="Continue guidance">
+            <div>
+                <h2>Continue where you left off</h2>
+                <p>Resume <?= htmlspecialchars($activeTopicDef['title']) ?> walkthrough (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</p>
+            </div>
+            <a href="<?= htmlspecialchars(app_url($activeTopicDef['path'] . '?guidance=' . $activeTopicDef['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($activeTopicDef['title']) ?> (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</a>
+        </section>
+    <?php endif; ?>
+    <?php if ($isAdmin): ?>
+        <section class="guidance-walkthroughs" aria-labelledby="get-oriented-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="get-oriented-title">Get oriented</h2>
+                <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <?php
+                foreach ($getOrientedTopics as $tId => $tDef):
+                    $isDone = in_array($tId, $walkthroughProgress['completed_topics'] ?? [], true);
+                    $isInProgress = (($walkthroughProgress['active_topic'] ?? null) === $tId);
+                    $hasSteps = !empty($tDef['steps']);
+                    $icon = $topicIcons[$tId] ?? 'shop';
+                ?>
+                <div class="walkthrough-topic-card<?= $hasSteps ? '' : ' walkthrough-topic-upcoming' ?>">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($icon) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($hasSteps): ?>
+                            <?php if ($isDone): ?>
+                                <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                            <?php elseif ($isInProgress): ?>
+                                <span class="guidance-progress-badge">In progress (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($tDef['steps']) ?>)</span>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
+                            <?php else: ?>
+                                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'])) ?>" class="btn btn-secondary">Go to <?= htmlspecialchars($tDef['title']) ?></a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        <section class="guidance-walkthroughs-daily" aria-labelledby="daily-oversight-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="daily-oversight-title">Daily oversight</h2>
+                <p>Learn recurring review workflows for your Workspace.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <?php
+                foreach ($dailyOversightTopics as $tKey => $tDef):
+                    $isDone = in_array($tKey, $completedTopics, true);
+                    $isInProgress = (($walkthroughProgress['active_topic'] ?? null) === $tKey);
+                    $stepTotal = count($tDef['steps']);
+                    $icon = $topicIcons[$tKey] ?? 'shop';
+                ?>
+                <div class="walkthrough-topic-card" id="topic-card-<?= htmlspecialchars($tKey) ?>">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($icon) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($isDone): ?>
+                            <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tKey . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                        <?php elseif ($isInProgress): ?>
+                            <span class="guidance-progress-badge">In progress (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= $stepTotal ?>)</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tKey)) ?>" class="btn btn-primary">Continue</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tKey)) ?>" class="btn btn-primary">Start walkthrough</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php else: ?>
+        <section class="guidance-walkthroughs" aria-labelledby="first-useful-tasks-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="first-useful-tasks-title">First useful tasks</h2>
+                <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <?php
+                foreach ($imTopics as $tId => $tDef):
+                    $isDone = in_array($tId, $completedTopics, true);
+                    $isInProgress = ($walkthroughProgress['active_topic'] === $tId);
+                    $stepTotal = count($tDef['steps']);
+                    $iconName = $imIcons[$tId] ?? 'workflow';
+                ?>
+                <div class="walkthrough-topic-card" id="topic-card-<?= htmlspecialchars($tId) ?>">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($iconName) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($isDone): ?>
+                            <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                        <?php elseif ($isInProgress): ?>
+                            <span class="guidance-progress-badge">In progress (Step <?= $walkthroughProgress['active_step'] + 1 ?> of <?= $stepTotal ?>)</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
     <ul class="workspace-guidance-links">
         <?php foreach ($workflows as $wf): ?>
         <li>
@@ -147,10 +293,25 @@ $primaryActionLabel = $isAdmin
     </ul>
 <?php elseif ($activeWorkflow): ?>
     <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-    <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
+    <p>
+        <?php foreach ($allWalkthroughPaths as $pDef): ?>
+            <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
+                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>"><?= htmlspecialchars($pDef['title'] . ': ' . $tDef['title']) ?></a> &middot;
+            <?php endforeach; ?>
+        <?php endforeach; ?>
+        <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
+    </p>
 <?php else: ?>
     <p><?= htmlspecialchars($introText) ?></p>
-    <p><a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
+    <p>
+        <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
+        <?php foreach ($allWalkthroughPaths as $pDef): ?>
+            <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
+                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>"><?= htmlspecialchars($pDef['title'] . ': ' . $tDef['title']) ?></a> &middot;
+            <?php endforeach; ?>
+        <?php endforeach; ?>
+        <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
+    </p>
 <?php endif; ?>
 <?php if (!$guidanceIsHelp): ?>
 <p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>
