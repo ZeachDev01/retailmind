@@ -70,45 +70,78 @@ def history_at(df, cutoff_date):
 
 def build_feature_matrix(df, cutoff_date, horizon_days=28):
     """
-    Construct supported dated feature windows (#365, #366).
-    Lag 1 is the observed origin day; preserves calendar dates without inventing zero demand.
-    Skips unsupported product/origin combinations and records reasons.
+    Construct supported dated feature windows (#365, #366, #415).
+    Lag 1 is the observed origin day or latest observed trading day for supported closures;
+    preserves calendar dates without inventing zero demand.
+    Skips unsupported product/origin combinations (stockouts, missing evidence) and records reasons.
     """
-    data = history_at(df, cutoff_date)
+    raw_history = normalize_history(df)
     cutoff = pd.Timestamp(cutoff_date)
+    raw_history = raw_history[raw_history.date <= cutoff]
+    data = history_at(df, cutoff_date)
     expected = pd.date_range(cutoff - pd.Timedelta(days=27), cutoff)
     rows = []
     exclusion_reasons = {}
 
     for pid, group in data.groupby("product_id", sort=True):
+        p_raw = raw_history[raw_history.product_id == pid]
         window = group[group.date.isin(expected)]
         sales_by_date = dict(zip(window.date, window.units_sold))
 
-        # Check origin day observation (lag 1)
-        if cutoff not in sales_by_date:
-            exclusion_reasons[pid] = f"Product {pid} requires origin observation at {cutoff.date()}"
-            continue
+        has_classification = 'classification' in p_raw.columns
+        weekend_operating = (p_raw.loc[p_raw.units_sold.notna(), 'date'].dt.dayofweek >= 5).any() and not has_classification
 
-        # Check if window has unsupported gaps (#365)
-        # Operating mode: if product has regular weekend sales in history, weekends are operating days
-        has_classification = 'classification' in group.columns
-        weekend_operating = (group.date.dt.dayofweek >= 5).any() and not has_classification
+        # Check origin day: must be observed trading day or supported closure (#415)
+        if cutoff not in sales_by_date:
+            origin_is_closure = False
+            if has_classification:
+                match_cutoff = p_raw[p_raw.date == cutoff]
+                if not match_cutoff.empty:
+                    if str(match_cutoff.iloc[-1].get('classification', '')) == 'closed':
+                        origin_is_closure = True
+                elif cutoff.dayofweek >= 5:
+                    origin_is_closure = True
+            elif cutoff.dayofweek >= 5 and not weekend_operating:
+                origin_is_closure = True
+
+            if not origin_is_closure:
+                exclusion_reasons[pid] = f"Product {pid} requires origin observation at {cutoff.date()}"
+                continue
+
+        # Check if window has unsupported gaps (#365, #415)
         has_unsupported_gap = False
+        gap_reason = None
         for d in expected:
-            if d not in sales_by_date:
-                if weekend_operating:
-                    has_unsupported_gap = True
-                    break
-                elif d.dayofweek < 5:
-                    has_unsupported_gap = True
-                    break
+            if d in sales_by_date:
+                continue
+            if has_classification:
+                match = p_raw[p_raw.date == d]
+                if not match.empty:
+                    cls = str(match.iloc[-1].get('classification', ''))
+                    if cls == 'closed':
+                        continue
+                    if cls in ('stockout_censored', 'missing_evidence'):
+                        has_unsupported_gap = True
+                        gap_reason = f"Product {pid} unsupported inputs in feature window ({cls} at {d.date()})"
+                        break
+                if d.dayofweek >= 5:
+                    continue
+                has_unsupported_gap = True
+                gap_reason = f"Product {pid} requires 28 consecutive observed days or supported closures at {cutoff.date()}"
+                break
+            else:
+                if d.dayofweek >= 5 and not weekend_operating:
+                    continue
+                has_unsupported_gap = True
+                gap_reason = f"Product {pid} requires 28 consecutive observed days or supported closures at {cutoff.date()}"
+                break
 
         if has_unsupported_gap:
-            exclusion_reasons[pid] = f"Product {pid} requires 28 consecutive observed days or supported closures at {cutoff.date()}"
+            exclusion_reasons[pid] = gap_reason or f"Product {pid} requires 28 consecutive observed days or supported closures at {cutoff.date()}"
             continue
 
         # Calculate lag dates:
-        # lag_1: cutoff
+        # lag_1: cutoff (or latest observed trading day if cutoff is a supported closure)
         # lag_7: cutoff - 6 days
         # lag_14: cutoff - 13 days
         # lag_28: cutoff - 27 days
@@ -119,7 +152,7 @@ def build_feature_matrix(df, cutoff_date, horizon_days=28):
             28: cutoff - pd.Timedelta(days=27),
         }
 
-        # Resolve lag observations preserving calendar dates and supported closures (#365)
+        # Resolve lag observations preserving calendar dates and supported closures (#365, #415)
         lags = {}
         lags_valid = True
         group_history_sales = dict(zip(group.loc[group.date <= cutoff, "date"], group.loc[group.date <= cutoff, "units_sold"]))
@@ -147,6 +180,13 @@ def build_feature_matrix(df, cutoff_date, horizon_days=28):
         w7_dates = pd.date_range(cutoff - pd.Timedelta(days=6), cutoff)
         s7 = [float(sales_by_date[d]) for d in w7_dates if d in sales_by_date]
         s28 = [float(sales_by_date[d]) for d in expected if d in sales_by_date]
+
+        if not s7:
+            prev_s = [float(group_history_sales[d]) for d in sorted_history_dates if d <= cutoff]
+            s7 = prev_s[-7:] if prev_s else [0.0]
+        if not s28:
+            prev_s = [float(group_history_sales[d]) for d in sorted_history_dates if d <= cutoff]
+            s28 = prev_s[-28:] if prev_s else [0.0]
 
         rolling = {
             "rolling_mean_7": float(np.mean(s7)),
@@ -474,8 +514,8 @@ def train_and_evaluate(df):
             "parameters": MODEL_PARAMETERS, "training_rows": len(training),
             "training_window_start": str((training.origin_date.min() - pd.Timedelta(days=27)).date()),
             "training_window_end": str(training.target_date.max().date()),
-            "data_window_start": str(data.date.min().date()),
-            "data_window_end": str(data.date.max().date()),
+            "data_window_start": str(history.date.min().date()),
+            "data_window_end": str(history.date.max().date()),
             "products": eligible_pids if eligible_pids else all_products,
             "included_products": eligible_pids,
             "excluded_products": [int(pid) for pid in all_products if pid not in eligible_pids],
