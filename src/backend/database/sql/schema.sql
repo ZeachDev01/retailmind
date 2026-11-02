@@ -1916,6 +1916,7 @@ CREATE TABLE `store_calendar` (
   `calendar_date` date NOT NULL,
   `status` enum('open','closed','holiday','exceptional-closure') NOT NULL,
   `recorded_by` int DEFAULT NULL,
+  `source` varchar(50) NOT NULL DEFAULT "manual",
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`calendar_id`),
   KEY `fk_store_calendar_user` (`recorded_by`),
@@ -2067,3 +2068,25 @@ CREATE TABLE `store_setup_confirmations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+DROP TABLE IF EXISTS `store_weekly_schedule`;
+CREATE TABLE `store_weekly_schedule` (
+  `schedule_id` int NOT NULL AUTO_INCREMENT,
+  `effective_date` date NOT NULL,
+  `monday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `tuesday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `wednesday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `thursday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `friday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `saturday_open` tinyint(1) NOT NULL DEFAULT 0,
+  `sunday_open` tinyint(1) NOT NULL DEFAULT 0,
+  `recorded_by` int DEFAULT NULL,
+  `source` varchar(50) NOT NULL DEFAULT "manual",
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`schedule_id`),
+  KEY `fk_store_weekly_schedule_user` (`recorded_by`),
+  KEY `idx_store_weekly_schedule_history` (`effective_date`,`recorded_at` DESC),
+  CONSTRAINT `fk_store_weekly_schedule_user` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ("202611020001_store_weekly_schedule","Configurable weekly store schedule revisions with effective dates") ON DUPLICATE KEY UPDATE description=VALUES(description);
