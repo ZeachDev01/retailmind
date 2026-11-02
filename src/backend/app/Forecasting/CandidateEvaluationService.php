@@ -10,10 +10,20 @@ use Throwable;
 class CandidateEvaluationService
 {
     private PDO $pdo;
+    private ?StoreModelGovernanceService $governance = null;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, ?StoreModelGovernanceService $governance = null)
     {
         $this->pdo = $pdo;
+        $this->governance = $governance;
+    }
+
+    private function governance(): StoreModelGovernanceService
+    {
+        if ($this->governance === null) {
+            $this->governance = new StoreModelGovernanceService($this->pdo, $this);
+        }
+        return $this->governance;
     }
 
     /**
@@ -41,12 +51,7 @@ class CandidateEvaluationService
      */
     public function setThresholds(array $thresholds, int $updatedBy): void
     {
-        foreach (['7', '14', '28'] as $horizon) {
-            $key = "ml_max_wape_{$horizon}d";
-            if (isset($thresholds[$key])) {
-                $this->setSetting($key, (string)$thresholds[$key], $updatedBy);
-            }
-        }
+        $this->governance()->setThresholds($thresholds, $updatedBy);
     }
 
     /**
@@ -54,22 +59,7 @@ class CandidateEvaluationService
      */
     public function getThresholds(): array
     {
-        try {
-            $stmt = $this->pdo->query("
-                SELECT setting_key, setting_value 
-                FROM platform_settings 
-                WHERE setting_key IN ('ml_max_wape_7d', 'ml_max_wape_14d', 'ml_max_wape_28d')
-            ");
-            $rows = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-        } catch (Throwable $e) {
-            $rows = [];
-        }
-
-        return [
-            '7' => isset($rows['ml_max_wape_7d']) && is_numeric($rows['ml_max_wape_7d']) ? (float)$rows['ml_max_wape_7d'] : null,
-            '14' => isset($rows['ml_max_wape_14d']) && is_numeric($rows['ml_max_wape_14d']) ? (float)$rows['ml_max_wape_14d'] : null,
-            '28' => isset($rows['ml_max_wape_28d']) && is_numeric($rows['ml_max_wape_28d']) ? (float)$rows['ml_max_wape_28d'] : null,
-        ];
+        return $this->governance()->getThresholds();
     }
 
     /**
@@ -228,46 +218,21 @@ class CandidateEvaluationService
 
     public function isObservationMode(): bool
     {
-        try {
-            $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_observation_mode'");
-            $val = $stmt->fetchColumn();
-            return $val === '1' || $val === 'true';
-        } catch (Throwable $e) {
-            return false;
-        }
+        return $this->governance()->isObservationMode();
     }
 
     public function setObservationMode(bool $enabled, int $updatedBy): void
     {
-        $this->setSetting('ml_observation_mode', $enabled ? '1' : '0', $updatedBy);
+        $this->governance()->setObservationMode($enabled, $updatedBy);
     }
 
     public function isRecommendationsSuspended(): bool
     {
-        try {
-            $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_recommendations_suspended'");
-            $val = $stmt->fetchColumn();
-            return $val === '1' || $val === 'true';
-        } catch (Throwable $e) {
-            return false;
-        }
+        return $this->governance()->isRecommendationsSuspended();
     }
 
     public function setRecommendationsSuspended(bool $suspended, int $updatedBy): void
     {
-        $this->setSetting('ml_recommendations_suspended', $suspended ? '1' : '0', $updatedBy);
-    }
-
-    private function setSetting(string $key, string $value, int $updatedBy): void
-    {
-        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = ?");
-        $stmt->execute([$key]);
-        if ((int)$stmt->fetchColumn() > 0) {
-            $update = $this->pdo->prepare("UPDATE platform_settings SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?");
-            $update->execute([$value, $updatedBy, $key]);
-        } else {
-            $insert = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value, updated_by, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)");
-            $insert->execute([$key, $value, $updatedBy]);
-        }
+        $this->governance()->setRecommendationsSuspended($suspended, $updatedBy);
     }
 }
