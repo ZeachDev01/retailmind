@@ -134,6 +134,15 @@ class ReplenishmentQueueService
                 $product['forecast_status'] = $forecast['readiness_level'] . ' readiness forecast';
                 $product['job_id'] = $forecast['job_id'] ?? $jobId;
                 $product['limitation_marker'] = $forecast['limitation_marker'] ?? null;
+                $product['is_forecast_backed'] = true;
+                $product['forecast_quantity'] = (int)$forecast['forecast_28_day'];
+                $product['exclusion_reason'] = null;
+                $product['exclusion_category'] = null;
+                $product['exclusion_action'] = null;
+
+                if ((int)$product['recommended_quantity'] === 0) {
+                    $product['explanation'] .= ' Stock on hand is sufficient; no purchase needed today.';
+                }
             } else {
                 $product['recommended_quantity'] = $product['stock_rule_quantity'];
                 $product['expected_sales_28_day'] = null;
@@ -141,8 +150,70 @@ class ReplenishmentQueueService
                 $product['urgency_label'] = 'Unknown';
                 $product['stock_exposure'] = null;
                 $product['basis'] = 'Stock-rule suggestion';
-                $product['explanation'] = sprintf('%d on hand; reorder level %d + safety stock %d. Stock-rule suggestion rounded to the minimum quantity and package size.',
-                    $stock, $reorder, (int)$product['safety_stock']);
+                $product['is_forecast_backed'] = false;
+                $product['forecast_quantity'] = null;
+
+                if ($product['stock_rule_quantity'] === 0) {
+                    $product['explanation'] = sprintf('%d on hand is above reorder level %d (safety stock %d). Stock is sufficient; no purchase needed today.',
+                        $stock, $reorder, (int)$product['safety_stock']);
+                } else {
+                    $product['explanation'] = sprintf('%d on hand; reorder level %d + safety stock %d. Stock-rule suggestion rounded to the minimum quantity and package size.',
+                        $stock, $reorder, (int)$product['safety_stock']);
+                }
+
+                $exclusionReason = 'Forecast unavailable';
+                $exclusionCategory = 'evidence';
+                $exclusionAction = 'Replenishment continues on stock rules';
+
+                if ($observation || $isJobObservation) {
+                    $exclusionReason = 'Observation Mode: forecast is observation telemetry only';
+                    $exclusionCategory = 'restriction';
+                    $exclusionAction = 'Administrator: Complete candidate observation';
+                } elseif ($suspended) {
+                    $exclusionReason = 'Recommendations Suspended by Administrator';
+                    $exclusionCategory = 'restriction';
+                    $exclusionAction = 'Administrator: Resume forecast recommendations';
+                } elseif ($isJobFailed) {
+                    $exclusionReason = 'Failed forecast: run #' . $jobId;
+                    $exclusionCategory = 'recovery';
+                    $exclusionAction = 'Automatic retry scheduled; no action needed';
+                } elseif ($approvedVersion === '') {
+                    $exclusionReason = 'Unapproved model: no approved Store model';
+                    $exclusionCategory = 'approval';
+                    $exclusionAction = 'Administrator: Review and approve candidate model in Model Review';
+                } elseif ($isIncompatibleModel) {
+                    $exclusionReason = 'Incompatible model: ' . $incompatibilityReason;
+                    $exclusionCategory = 'recovery';
+                    $exclusionAction = 'Super Administrator: Verify model schema and database environment';
+                } elseif ($isSuperseded) {
+                    $exclusionReason = 'Superseded forecast: run #' . $jobId;
+                    $exclusionCategory = 'freshness';
+                    $exclusionAction = 'Use latest forecast run';
+                } elseif (!$hasForecast) {
+                    $exclusionReason = 'Forecast unavailable: no forecast generated for this product';
+                    $exclusionCategory = 'evidence';
+                    $exclusionAction = 'Accumulate sales history or wait for next scheduled forecast run';
+                } elseif ($forecast['forecast_origin'] !== $origin) {
+                    $exclusionReason = 'Stale forecast: ' . $forecast['forecast_origin'] . ' (expected ' . $origin . ')';
+                    $exclusionCategory = 'freshness';
+                    $exclusionAction = 'Wait for next scheduled forecast run at 01:00 Asia/Manila';
+                } elseif ($forecast['model_version'] !== $approvedVersion) {
+                    $exclusionReason = 'Unapproved model: model ' . ($forecast['model_version'] ?: 'none') . ' is not approved';
+                    $exclusionCategory = 'approval';
+                    $exclusionAction = 'Administrator: Review and approve candidate model in Model Review';
+                } elseif (empty($forecast['complete_forecast'])) {
+                    $exclusionReason = 'Incomplete forecast: missing full 28-day predictions';
+                    $exclusionCategory = 'evidence';
+                    $exclusionAction = 'Wait for next scheduled forecast run';
+                } elseif (!in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)) {
+                    $exclusionReason = 'Insufficient history: readiness level is ' . ($forecast['readiness_level'] ?? 'Insufficient');
+                    $exclusionCategory = 'evidence';
+                    $exclusionAction = 'Accumulate more sales history; replenishment continues on stock rules';
+                }
+
+                $product['exclusion_reason'] = $exclusionReason;
+                $product['exclusion_category'] = $exclusionCategory;
+                $product['exclusion_action'] = $exclusionAction;
 
                 if (!$hasForecast) {
                     $product['forecast_status'] = 'Forecast unavailable';
