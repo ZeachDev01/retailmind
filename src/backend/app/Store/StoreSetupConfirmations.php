@@ -41,7 +41,7 @@ final class StoreSetupConfirmations
     public static function all(PDO $pdo): array
     {
         try {
-            $stmt = $pdo->query('SELECT c.task_key, c.confirmed_by_user_id, c.confirmed_workspace, c.confirmed_at, u.full_name AS confirmed_by_name FROM store_setup_confirmations c LEFT JOIN users u ON u.user_id = c.confirmed_by_user_id ORDER BY c.confirmed_at ASC');
+            $stmt = $pdo->query('SELECT c.task_key, c.confirmed_by_user_id, c.confirmed_workspace, c.confirmed_at, u.display_name AS confirmed_by_name FROM store_setup_confirmations c LEFT JOIN users u ON u.user_id = c.confirmed_by_user_id ORDER BY c.confirmed_at ASC');
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $result = [];
             foreach ($rows as $row) {

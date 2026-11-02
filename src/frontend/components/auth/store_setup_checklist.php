@@ -31,14 +31,17 @@ $currentRole = current_role();
         <li class="setup-task-item <?= $isConfirmed ? 'is-confirmed' : 'is-pending' ?>">
             <div class="setup-task-body">
                 <div class="setup-task-heading-row">
+                    <?php if ($guidanceIsHelp): ?>
+                        <span class="help-task-icon"><?= sidebar_icon($key === 'products' ? 'package' : 'calendar') ?></span>
+                    <?php endif; ?>
                     <strong class="setup-task-title"><?= htmlspecialchars($task['title']) ?></strong>
                     <span class="setup-task-owner"><?= htmlspecialchars($task['role_label']) ?></span>
                 </div>
-                <p class="setup-task-desc"><?= htmlspecialchars($task['description']) ?></p>
+                <?php if (!$guidanceIsHelp): ?><p class="setup-task-desc"><?= htmlspecialchars($task['description']) ?></p><?php endif; ?>
                 <div class="setup-task-links">
                     <?php if ($isPermittedLink): ?>
                         <a href="<?= htmlspecialchars(app_url('components/' . $task['link'])) ?>" class="setup-task-link"><?= htmlspecialchars($task['link_label']) ?></a>
-                    <?php else: ?>
+                    <?php elseif (!$guidanceIsHelp): ?>
                         <span class="setup-task-restricted-note"><?= htmlspecialchars($task['title']) ?> (<?= htmlspecialchars($task['role_label']) ?> review)</span>
                     <?php endif; ?>
                 </div>

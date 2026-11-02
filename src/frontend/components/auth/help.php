@@ -38,10 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Reopening Help cannot reset a completed overview.
                 $query = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = IF(status = \'completed\', status, VALUES(status))');
                 $query->execute([(int)$_SESSION['user_id'], current_role(), $status]);
+                if (($_SERVER['HTTP_ACCEPT'] ?? '') === 'application/json') {
+                    header('Content-Type: application/json');
+                    echo json_encode(['saved' => true]);
+                    exit;
+                }
                 header('Location: ' . $sanitizeRedirect($_POST['return_to'] ?? null), true, 303);
                 exit;
             } catch (Throwable $e) {
                 $error = \App\Support\OperatorAlert::message($e, 'Unable to save your guidance choice. Please try again.');
+                if (($_SERVER['HTTP_ACCEPT'] ?? '') === 'application/json') {
+                    http_response_code(500);
+                    header('Content-Type: application/json');
+                    echo json_encode(['saved' => false]);
+                    exit;
+                }
             }
         }
     }
@@ -54,21 +65,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace Help</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/workspace-help.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/workspace-help.css')) ?>">
 </head>
-<body>
+<body class="workspace-help-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="page-heading"><h1>Workspace Help</h1></header>
+        <header class="page-heading help-heading">
+            <div>
+                <h1>Workspace Help</h1>
+            </div>
+            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url(current_role() === 'admin' ? 'components/administrator/dashboard.php' : 'components/inventory_management/inventory_overview.php')) ?>">Back to workspace</a>
+        </header>
         <?php if ($error !== ''): ?><div class="alert tag-warning" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
         <?php if (!empty($_SESSION['store_setup_just_completed'])): unset($_SESSION['store_setup_just_completed']); ?>
             <div id="store-setup-completion" class="alert tag-success store-setup-completion" role="status" data-rm-alert-processed="1">
                 <strong>Store setup complete.</strong> Essential product, opening-stock, and Store calendar setup tasks are confirmed. Automatic onboarding reminders are now turned off. You can revisit guidance anytime from Help in your account menu.
             </div>
         <?php endif; ?>
-        <section class="workspace-guidance" aria-labelledby="workspace-guidance-title">
-            <?php $guidanceIsHelp = true; include __DIR__ . '/workspace_overview.php'; ?>
-            <?php include __DIR__ . '/store_setup_checklist.php'; ?>
+        <div class="help-layout">
+            <section class="workspace-guidance help-workflows" aria-labelledby="workspace-guidance-title">
+                <?php $guidanceIsHelp = true; include __DIR__ . '/workspace_overview.php'; ?>
+            </section>
+            <aside class="help-setup" aria-labelledby="store-setup-checklist-title">
+                <?php include __DIR__ . '/store_setup_checklist.php'; ?>
+                <p class="help-setup-note">Complete the work before confirming setup.</p>
+            </aside>
+        </div>
+        <section class="help-preferences" aria-labelledby="help-preferences-title">
+            <div>
+                <h2 id="help-preferences-title">All set?</h2>
+                <p>Reopen Help anytime from your account menu.</p>
+            </div>
             <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>
         </section>
     </main>

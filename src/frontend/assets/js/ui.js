@@ -827,6 +827,38 @@
       const closeBtn = event.target.closest("[data-close-modal], [data-close-drawer], .rm-close, .modal-close, .user-modal-close, .user-drawer-close");
       if (closeBtn) RM.closeOverlay(overlay);
     });
+    document.addEventListener("submit", async (event) => {
+      const form = event.target;
+      if (!form.matches('.workspace-guidance-actions') || event.defaultPrevented) return;
+      event.preventDefault();
+      if (form.getAttribute('aria-busy') === 'true') return;
+      const body = new FormData(form, event.submitter);
+      const buttons = qsa('button', form);
+      form.setAttribute('aria-busy', 'true');
+      buttons.forEach(button => button.disabled = true);
+      try {
+        const response = await fetch(form.action, {method: 'POST', body, headers: {Accept: 'application/json'}});
+        if (!response.ok || !(await response.json()).saved) throw new Error('Guidance was not saved');
+      } catch {
+        form.removeAttribute('aria-busy');
+        buttons.forEach(button => button.disabled = false);
+        RM.toast('Unable to save your guidance choice. Please try again.', 'error');
+        event.submitter?.focus();
+        return;
+      }
+      const panel = form.closest('.help-preferences, #workspace-guidance') || form;
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      await panel.animate([{opacity: 1}, {opacity: 0}], {duration: reducedMotion ? 80 : 150, easing: 'ease-out'}).finished;
+      const message = document.createElement('div');
+      message.className = 'alert tag-success workspace-guidance-saved';
+      message.setAttribute('role', 'status');
+      message.setAttribute('tabindex', '-1');
+      message.dataset.rmAlertProcessed = '1';
+      message.textContent = 'Need help later? Open your profile menu and choose Help.';
+      panel.replaceWith(message);
+      message.focus({preventScroll: true});
+      message.animate([{opacity: 0}, {opacity: 1}], {duration: reducedMotion ? 80 : 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)'});
+    });
     document.addEventListener("submit", (event) => {
       const form = event.target;
       if (!form || event.defaultPrevented) return;

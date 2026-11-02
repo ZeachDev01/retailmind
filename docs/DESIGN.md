@@ -246,6 +246,10 @@ Tables are operational records, not decorative card grids. Use clear column head
 
 Alerts favor easy words and calm hierarchy. Dialogs use the strongest depth token, an 18px outer radius, a clear title/action structure, and an obvious exit. Technical detail never becomes a visual motif in live Store use.
 
+### Workspace Help
+
+Workspace Help retains the incumbent visual system: compact action rows pair existing navigation icons in square tiles with destination labels and arrows. Circular icon wells distinguish setup tasks. Native “How it works” disclosures contain the full workflow guidance; default-view summaries and repeated subtext are omitted. Entrance Navy anchors the Store setup header; blue actions and theme-aware reading surfaces preserve hierarchy in both themes. Its approved composition, responsive behavior, screenshot matrix, review limits and **Ship** verdict are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). This surface decision adds no global tokens or visual-world rules.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -263,3 +267,7 @@ Alerts favor easy words and calm hierarchy. Dialogs use the strongest depth toke
 - **Don't** create public-only typography or shape tokens; the entrance uses the same system-UI voice and measured corner progression as the application.
 - **Don't** use heavy elevation on static cards or flatten true overlays into the page.
 - **Don't** expose raw technical failures through visually dominant alerts in the live Store.
+
+## Workspace guidance feedback — 2026-11-02
+
+Overview preferences now save in place and replace their controls with a persistent profile-menu Help reminder. Reuse the semantic success alert and visible keyboard focus. Motion is a 150 ms exit and 220 ms arrival, reduced to 80 ms opacity feedback for reduced motion. Save failures retain the controls; JavaScript-disabled submissions keep the server redirect fallback. See `.impeccable/surfaces/workspace-help.md` for the scope and verification verdict. No global tokens, dependencies or image assets added.

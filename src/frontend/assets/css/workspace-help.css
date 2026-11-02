@@ -1,0 +1,94 @@
+.workspace-help-page .help-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.help-heading h1 { margin: 0; font-size: 2rem; letter-spacing: -.025em; }
+.help-preferences p { color: var(--muted); margin: 0; }
+.help-heading > a { flex-shrink: 0; text-decoration: none; }
+
+.help-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+    gap: 1.5rem;
+}
+
+.workspace-help-page .help-workflows {
+    min-width: 0;
+    margin: 0;
+    padding: 1.5rem;
+    background: var(--theme-surface, #fff);
+}
+
+.workspace-help-page .help-workflows h2 { margin: 0 0 1rem; font-size: 1.125rem; line-height: 1.4; }
+.help-workflows .workspace-guidance-links { list-style: none; padding: 0; margin: 0; }
+.help-workflows .workspace-guidance-links li { margin: 0; padding: .75rem 0; border-top: 1px solid var(--border); }
+.help-workflows .workspace-guidance-links li:last-child { padding-bottom: 0; }
+.help-workflows .workspace-workflow-heading { margin: 0; font-size: 1rem; line-height: 1.4; }
+.help-workflows .workspace-guidance-links a { display: grid; grid-template-columns: 48px minmax(0, 1fr) 20px; align-items: center; min-height: 56px; gap: 1rem; padding: .25rem; border-radius: 10px; color: var(--theme-info-text, #1d4ed8); font-size: 1rem; font-weight: 600; text-decoration: none; }
+.help-workflows .workspace-guidance-links a svg { flex-shrink: 0; }
+.help-workflows .workspace-guidance-links a:hover { background: var(--theme-surface-soft, #f8fafc); }
+.help-workflows .workspace-guidance-links a:hover > span:nth-child(2) { text-decoration: underline; text-underline-offset: .2em; }
+.help-function-icon, .help-task-icon { display: grid; place-items: center; flex-shrink: 0; background: var(--theme-surface-soft, #f4f6f9); }
+.help-function-icon { width: 48px; height: 48px; border-radius: 12px; }
+.help-function-icon img { width: 30px; height: 30px; }
+.help-task-icon { width: 40px; height: 40px; border-radius: 50%; }
+.help-task-icon img { width: 26px; height: 26px; }
+.help-workflow-details { margin-left: 4.25rem; }
+.help-workflow-details summary { width: fit-content; max-width: 100%; min-height: 44px; padding: .6rem 0; color: var(--muted); font-size: .875rem; cursor: pointer; }
+.help-workflow-details summary:hover { color: var(--text); text-decoration: underline; text-underline-offset: .2em; }
+.help-workflow-details[open] { margin-left: .25rem; }
+.help-workflows .help-workflow-details p { max-width: 70ch; margin: 0 0 .5rem; font-size: .95rem; line-height: 1.6; }
+
+.help-setup { min-width: 0; }
+.help-setup .store-setup-checklist { margin: 0; padding: 1.5rem; background: var(--theme-surface, #fff); border-radius: 14px; }
+.help-setup .store-setup-checklist-header { align-items: flex-start; gap: .75rem; margin: -1.5rem -1.5rem 1.25rem; padding: 1.5rem; background: #0f1f3d; color: #fff; border-radius: 14px 14px 0 0; }
+.help-setup .store-setup-checklist-header h3 { width: 100%; color: inherit; font-size: 1.25rem; line-height: 1.3; }
+.help-setup .setup-progress-badge { padding: 0; background: transparent; color: #bfdbfe; font-variant-numeric: tabular-nums; }
+.help-setup .setup-progress-badge.tag-success { color: #bbf7d0; }
+.help-setup .setup-task-list { gap: 0; }
+.help-setup .setup-task-item { padding: 1.25rem 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; gap: .75rem; }
+.help-setup .setup-task-item:last-child { padding-bottom: 0; border-bottom: 0; }
+.help-setup .setup-task-body { flex-basis: 100%; }
+.help-setup .setup-task-heading-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: .25rem .75rem; }
+.help-setup .help-task-icon { grid-row: 1 / 3; }
+.help-setup .setup-task-title { display: block; line-height: 1.4; }
+.help-setup .setup-task-owner { display: block; grid-column: 2; padding: 0; background: transparent; color: var(--muted); font-size: .8rem; }
+.help-setup .setup-task-links a { display: inline-flex; align-items: center; min-height: 44px; color: var(--theme-info-text, #1d4ed8); text-underline-offset: .2em; }
+.help-setup .setup-task-action { max-width: 100%; }
+.help-setup .setup-task-action .btn { min-height: 44px; white-space: normal; }
+.help-setup-note { margin: 1rem .25rem 0; color: var(--muted); font-size: .875rem; line-height: 1.6; }
+
+.help-preferences { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; margin-top: 2rem; padding: 1.5rem 0; border-top: 1px solid var(--border); }
+.help-preferences h2 { margin: 0 0 .35rem; font-size: 1.05rem; }
+.help-preferences p { max-width: 55ch; font-size: .875rem; }
+.help-preferences .btn { min-height: 44px; }
+.workspace-help-page .workspace-guidance-saved { margin-top: 2rem; }
+.workspace-help-page .main-content :focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.workspace-help-page .main-content ::selection { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); }
+
+@media (max-width: 1180px) {
+    .help-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 1.25rem; }
+    .workspace-help-page .help-workflows, .help-setup .store-setup-checklist { padding: 1.25rem; }
+    .help-setup .store-setup-checklist-header { margin: -1.25rem -1.25rem 1.25rem; padding: 1.25rem; }
+}
+
+@media (max-width: 980px) {
+    .help-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 480px) {
+    .workspace-help-page .help-heading { margin-bottom: 1.5rem; }
+    .workspace-help-page .help-workflows, .help-setup .store-setup-checklist { padding: 1rem; }
+    .help-setup .store-setup-checklist-header { margin: -1rem -1rem 1rem; padding: 1rem; }
+    .help-heading h1 { font-size: 1.8rem; }
+    .help-workflows .workspace-guidance-links a { gap: .75rem; }
+    .help-workflow-details { margin-left: 4rem; }
+    .help-workflow-details[open] { margin-left: .25rem; }
+    .help-preferences .workspace-guidance-actions { flex-direction: column; width: 100%; }
+}

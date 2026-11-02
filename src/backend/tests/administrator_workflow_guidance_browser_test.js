@@ -203,20 +203,24 @@ const fixture = action => {
         await page.goto(origin + '/components/auth/help.php');
         await page.waitForLoadState('domcontentloaded');
 
-        // Verify Help renders all 5 Administrator workflows with links and detailed explanations
+        // Help names each action and reveals the full guidance on demand.
         const helpMain = page.locator('.main-content');
+        assert.deepEqual(await helpMain.locator('.help-workflow-details summary').evaluateAll(elements => elements.map(el => el.getAttribute('aria-label'))), [
+            'How it works: Store setup & calendar',
+            'How it works: Staff management',
+            'How it works: Store reports',
+            'How it works: Forecasting oversight',
+            'How it works: Store operations & exceptions',
+        ]);
+        for (const summary of await helpMain.locator('.help-workflow-details summary').all()) await summary.click();
         const helpText = await helpMain.innerText();
-        assert.match(helpText, /Store setup & calendar/);
-        assert.match(helpText, /Staff management/);
-        assert.match(helpText, /Store reports/);
-        assert.match(helpText, /Forecasting oversight/);
-        assert.match(helpText, /Store operations & exceptions/);
 
         // Check explanations in Help
         assert.match(helpText, /separate from customer sales history|separate from genuine customer sales history/i);
         assert.match(helpText, /Stock receiving does not establish customer demand history/i);
         assert.match(helpText, /technical workflow/i);
         assert.match(helpText, /Nonfunctional approval actions are not advertised|does not advertise a nonfunctional approval action/i);
+        for (const summary of await helpMain.locator('.help-workflow-details summary').all()) await summary.click();
 
         // Check links in Help match active permissions
         assert.equal(await helpMain.getByRole('link', {name: 'Review the Store calendar'}).count(), 1);
@@ -230,7 +234,11 @@ const fixture = action => {
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
-                await page.screenshot({animations: 'disabled', path: path.join(screenshots, `help-${theme}-${width}.png`)});
+                assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow on Help at ' + width + 'px');
+                const guideBox = await helpMain.locator('.help-workflows').boundingBox();
+                const setupBox = await helpMain.locator('.help-setup').boundingBox();
+                assert.ok(width === 1440 ? setupBox.x >= guideBox.x + guideBox.width : setupBox.y >= guideBox.y + guideBox.height, 'Setup panel follows the responsive reading layout');
+                await page.screenshot({fullPage: true, animations: 'disabled', path: path.join(screenshots, `help-${theme}-${width}.png`)});
             }
         }
         await page.setViewportSize({width: 1440, height: 900});

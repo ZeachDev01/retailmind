@@ -6,6 +6,7 @@ $guidanceTitle = $isAdmin ? 'Administrator Workspace' : 'Inventory Manager Works
 $adminWorkflows = [
     'store_calendar.php' => [
         'title' => 'Store setup & calendar',
+        'icon' => 'calendar',
         'path' => 'administrator/store_calendar.php',
         'link_label' => 'Review the Store calendar',
         'summary' => 'Set trading days and planned closures.',
@@ -13,6 +14,7 @@ $adminWorkflows = [
     ],
     'user_manager.php' => [
         'title' => 'Staff management',
+        'icon' => 'conference_call',
         'path' => 'user_manager/user_manager.php',
         'link_label' => 'Manage staff',
         'summary' => 'Maintain operational staff accounts and access.',
@@ -20,6 +22,7 @@ $adminWorkflows = [
     ],
     'report_generation.php' => [
         'title' => 'Store reports',
+        'icon' => 'statistics',
         'path' => 'report/report_generation.php',
         'link_label' => 'Review Store Reports',
         'summary' => 'Check Store performance and reporting.',
@@ -27,6 +30,7 @@ $adminWorkflows = [
     ],
     'forecast_exceptions.php' => [
         'title' => 'Forecasting oversight',
+        'icon' => 'disclaimer',
         'path' => 'report/forecast_exceptions.php',
         'link_label' => 'Review forecast exceptions',
         'summary' => 'Check readiness and available oversight actions.',
@@ -34,6 +38,7 @@ $adminWorkflows = [
     ],
     'dashboard.php' => [
         'title' => 'Store operations & exceptions',
+        'icon' => 'shop',
         'path' => 'administrator/dashboard.php',
         'link_label' => 'Review Store operations',
         'summary' => 'Find exceptions and work needing attention.',
@@ -44,6 +49,7 @@ $adminWorkflows = [
 $inventoryWorkflows = [
     'replenishment_queue.php' => [
         'title' => 'Replenishment recommendations',
+        'icon' => 'workflow',
         'path' => 'inventory_management/replenishment_queue.php',
         'link_label' => 'Review replenishment needs',
         'summary' => 'Start daily buying review: buying quantities, basis and reasons. Forecast details are optional supporting information.',
@@ -51,6 +57,7 @@ $inventoryWorkflows = [
     ],
     'products.php' => [
         'title' => 'Product setup',
+        'icon' => 'package',
         'path' => 'inventory_management/products.php',
         'link_label' => 'Set up Products',
         'summary' => 'Use Add Product for details, counted opening stock, package sizes and stock rules.',
@@ -58,6 +65,7 @@ $inventoryWorkflows = [
     ],
     'inventory_overview.php' => [
         'title' => 'Stock monitoring',
+        'icon' => 'deployment',
         'path' => 'inventory_management/inventory_overview.php',
         'link_label' => 'Monitor stock',
         'summary' => 'Check availability, low stock and expiry risk across the Store catalog.',
@@ -65,6 +73,7 @@ $inventoryWorkflows = [
     ],
     'stock_receiving.php' => [
         'title' => 'Stock Receiving',
+        'icon' => 'shipped',
         'path' => 'report/stock_receiving.php',
         'link_label' => 'Record Stock Receiving',
         'summary' => 'Record the actual goods and quantities that arrived at the Store.',
@@ -72,6 +81,7 @@ $inventoryWorkflows = [
     ],
     'inventory_counts.php' => [
         'title' => 'Inventory counts',
+        'icon' => 'survey',
         'path' => 'inventory_management/inventory_counts.php',
         'link_label' => 'Check inventory counts',
         'summary' => 'Count stock and resolve differences through Inventory Control.',
@@ -79,6 +89,7 @@ $inventoryWorkflows = [
     ],
     'stock_issues.php' => [
         'title' => 'Stock Issue review',
+        'icon' => 'high_priority',
         'path' => 'inventory_management/stock_issues.php',
         'link_label' => 'Review Stock Issues',
         'summary' => 'Review damage, loss or shrinkage reports and decide permitted stock corrections.',
@@ -117,13 +128,20 @@ $primaryActionLabel = $isAdmin
     : 'Review replenishment needs';
 ?>
 <?php if ($guidanceIsHelp): ?>
-    <p><?= htmlspecialchars($introText) ?></p>
     <ul class="workspace-guidance-links">
         <?php foreach ($workflows as $wf): ?>
         <li>
-            <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>"><?= htmlspecialchars($wf['link_label']) ?></a>
-            <strong class="workspace-workflow-heading"><?= htmlspecialchars($wf['title']) ?></strong>
-            <p><?= htmlspecialchars($wf['guidance']) ?></p>
+            <h3 class="workspace-workflow-heading">
+                <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>">
+                    <span class="help-function-icon"><?= sidebar_icon($wf['icon']) ?></span>
+                    <span><?= htmlspecialchars($wf['link_label']) ?></span>
+                    <svg class="help-function-arrow" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                </a>
+            </h3>
+            <details class="help-workflow-details">
+                <summary aria-label="How it works: <?= htmlspecialchars($wf['title']) ?>">How it works</summary>
+                <p><?= htmlspecialchars($wf['guidance']) ?></p>
+            </details>
         </li>
         <?php endforeach; ?>
     </ul>
@@ -134,4 +152,6 @@ $primaryActionLabel = $isAdmin
     <p><?= htmlspecialchars($introText) ?></p>
     <p><a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
 <?php endif; ?>
+<?php if (!$guidanceIsHelp): ?>
 <p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>
+<?php endif; ?>
