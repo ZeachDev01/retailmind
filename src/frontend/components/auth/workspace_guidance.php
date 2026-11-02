@@ -51,17 +51,16 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             }
         }
 
-        if (isset($_GET['guidance']) && is_string($_GET['guidance'])) {
-            $requestedTopicId = (string)$_GET['guidance'];
-            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $requestedTopicId);
-            if ($topic && !empty($topic['steps'])) {
-                $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
-                if (str_ends_with($scriptPath, $topic['path'])) {
-                    $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
-                    $isReplay = !empty($_GET['replay']);
-                    $initialStep = $isReplay ? 0 : (($walkthroughProgress['active_topic'] === $topic['id']) ? ($walkthroughProgress['active_step'] ?? 0) : 0);
-                    include __DIR__ . '/workspace_walkthrough_dock.php';
-                }
+        $guidanceParam = isset($_GET['guidance']) ? trim((string)$_GET['guidance']) : '';
+        if ($guidanceParam !== '') {
+            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $guidanceParam);
+            $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+            if ($topic && !empty($topic['steps']) && str_ends_with($scriptName, $topic['path'])) {
+                $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
+                $isReplay = !empty($_GET['replay']);
+                $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
+                include __DIR__ . '/workspace_walkthrough_dock.php';
+            }
             }
         }
     } catch (Throwable $e) {
