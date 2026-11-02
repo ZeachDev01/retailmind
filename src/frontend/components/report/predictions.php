@@ -29,25 +29,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
 }
 
 $service = new DemandForecastService($pdo);
-$latestJobId = $service->getLatestSuccessfulJobId();
-$forecasts = $latestJobId ? $service->getForecastAggregates($latestJobId) : [];
-$displayedForecastModel = $forecasts[0]['model_version'] ?? null;
+$searchQuery = trim($_GET['search'] ?? '');
+$coverage = $service->getCoverage(null, null, $searchQuery);
 
-// Check if there is currently a running or pending job
-$stmt = $pdo->query("SELECT status, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type = 'forecast_generation' ORDER BY job_id DESC LIMIT 1");
-$latestJob = $stmt->fetch(PDO::FETCH_ASSOC);
-$latestJobStatus = $latestJob['status'] ?? 'none';
-$isGenerating = in_array($latestJobStatus, ['queued', 'running', 'processing'], true);
-$forecastOrigin = !empty($forecasts[0]['forecast_origin']) ? $forecasts[0]['forecast_origin'] : null;
+$effectiveJobId = $coverage['effective_job_id'];
+$isGenerating = $coverage['is_updating'];
+$latestJobStatus = $coverage['latest_attempt_status'];
+
+// Forecast origin
+$forecastOrigin = null;
+$displayedForecastModel = $coverage['approved_model_version'];
+foreach ($coverage['products'] as $p) {
+    if (!empty($p['forecast_origin'])) {
+        $forecastOrigin = $p['forecast_origin'];
+        if (!empty($p['model_version'])) {
+            $displayedForecastModel = $p['model_version'];
+        }
+        break;
+    }
+}
+
 $originTimestamp = $forecastOrigin ? strtotime($forecastOrigin) : null;
 $now = time();
 $originAgeDays = $originTimestamp ? (int)floor(($now - $originTimestamp) / 86400) : null;
 $originAgeText = $originAgeDays !== null ? ($originAgeDays === 0 ? 'Today' : ($originAgeDays === 1 ? '1 day old' : "{$originAgeDays} days old")) : 'Unavailable';
+
 if ($isGenerating) {
     $generationStatus = 'updating';
     $statusBadgeClass = 'tag-info';
     $statusBadgeLabel = 'Updating';
-} elseif (empty($forecasts) || !$latestJobId) {
+} elseif ($coverage['store_status'] === 'empty' || !$coverage['is_guidance_usable']) {
     $generationStatus = 'unavailable';
     $statusBadgeClass = 'tag-danger';
     $statusBadgeLabel = 'Unavailable';
@@ -61,38 +72,7 @@ if ($isGenerating) {
     $statusBadgeLabel = 'Ready';
 }
 
-// Enrich forecasts with product details & stock
-$productMap = [];
-if (!empty($forecasts)) {
-    $pIds = array_column($forecasts, 'product_id');
-    $inClause = implode(',', array_map('intval', $pIds));
-    $pStmt = $pdo->query("
-        SELECT p.product_id, p.product_name, p.sku, COALESCE(i.quantity_on_hand, 0) as current_stock
-        FROM products p
-        LEFT JOIN inventory i ON p.product_id = i.product_id
-        WHERE p.product_id IN ($inClause)
-    ");
-    while ($row = $pStmt->fetch(PDO::FETCH_ASSOC)) {
-        $productMap[(int)$row['product_id']] = $row;
-    }
-}
-
-// Search filter
-$searchQuery = trim($_GET['search'] ?? '');
-if ($searchQuery !== '') {
-    $filtered = [];
-    foreach ($forecasts as $f) {
-        $meta = $productMap[$f['product_id']] ?? [];
-        $name = $meta['product_name'] ?? '';
-        $sku = $meta['sku'] ?? '';
-        $idStr = (string)$f['product_id'];
-
-        if (stripos($name, $searchQuery) !== false || stripos($sku, $searchQuery) !== false || $idStr === $searchQuery) {
-            $filtered[] = $f;
-        }
-    }
-    $forecasts = $filtered;
-}
+$displayProducts = $coverage['filtered']['is_filtered'] ? $coverage['filtered']['products'] : $coverage['products'];
 
 // Check if demo metadata exists
 $isDemoMode = false;
@@ -177,17 +157,23 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             </div>
         <?php endif; ?>
 
-        <?php if ($latestJobStatus === 'failed'): ?>
-            <div class="alert tag-warning" role="alert">
-                <strong>Notice:</strong> The latest forecast generation attempt did not complete. Showing last verified results.
-            </div>
-        <?php endif; ?>
+        <div class="alert <?= $coverage['store_status'] === 'full' ? 'tag-success' : ($coverage['forecast_backed_count'] > 0 ? 'tag-info' : 'tag-warning') ?>" role="status" style="margin-bottom: 1.25rem;">
+            <strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
+            <?php if ($coverage['stock_rule_count'] > 0): ?>
+                <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>" class="alert-link" style="text-decoration:underline; font-weight:600; margin-left:0.5rem;">Inspect exclusions &amp; next actions</a>
+            <?php endif; ?>
+        </div>
 
         <div class="card-grid">
             <div class="stat-card">
+                <div class="label">Forecast Coverage</div>
+                <div class="value"><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?></div>
+                <div class="hint"><?= (int)$coverage['stock_rule_count'] ?> use stock rules<?= $coverage['filtered']['is_filtered'] ? ' (filtered: ' . (int)$coverage['filtered']['forecast_backed_count'] . ' of ' . (int)$coverage['filtered']['count'] . ')' : '' ?></div>
+            </div>
+            <div class="stat-card">
                 <div class="label">Generation Status</div>
                 <div class="value"><span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span></div>
-                <div class="hint">Job #<?= htmlspecialchars((string)($latestJobId ?? 'None')) ?></div>
+                <div class="hint">Job #<?= htmlspecialchars((string)($effectiveJobId ?? 'None')) ?></div>
             </div>
             <div class="stat-card">
                 <div class="label">Forecast Origin</div>
@@ -195,20 +181,17 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <div class="hint"><?= htmlspecialchars($originAgeText) ?></div>
             </div>
             <div class="stat-card">
-                <div class="label">Forecasted Products</div>
-                <div class="value"><?= count($forecasts) ?></div>
-                <div class="hint"><?= $searchQuery !== '' ? 'Matching search query' : 'Active forecasts' ?></div>
-            </div>
-            <div class="stat-card">
                 <div class="label">Model Version</div>
                 <div class="value" style="font-size: 1.1rem; font-family: ui-monospace, monospace;"><?= htmlspecialchars($displayedForecastModel ?? 'Unavailable') ?></div>
-                <div class="hint">Active algorithm</div>
+                <div class="hint"><?= $coverage['is_observation_mode'] ? 'Observation mode' : ($coverage['is_recommendations_suspended'] ? 'Recommendations suspended' : 'Approved algorithm') ?></div>
             </div>
         </div>
 
         <div class="card">
             <div class="table-toolbar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
-                <h2 style="font-size:1.15rem; margin:0;">Product Forecasts (<?= count($forecasts) ?>)</h2>
+                <h2 style="font-size:1.15rem; margin:0;">
+                    Product Forecasts (<?= count($displayProducts) ?><?= $coverage['filtered']['is_filtered'] ? ' matching search of ' . (int)$coverage['scope_count'] : '' ?>)
+                </h2>
                 <form method="get" action="" class="search-form" role="search" style="display:flex; gap:0.5rem; align-items:center; margin:0;">
                     <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text" style="min-width:240px;">
                     <button type="submit" class="btn btn-secondary">Search</button>
@@ -218,11 +201,11 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </form>
             </div>
         
-            <?php if (empty($forecasts)): ?>
+            <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
                 <div class="empty-state">
                     <i class="bi bi-graph-up-arrow empty-icon"></i>
                     <h2>No Forecasts Available</h2>
-                    <p><?= $searchQuery !== '' ? 'No matching products found in current forecast run.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
+                    <p><?= $searchQuery !== '' ? 'No matching products found in current catalog.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
                 </div>
             <?php else: ?>
                 <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">
@@ -235,31 +218,37 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 <th scope="col">7-Day Demand</th>
                                 <th scope="col">14-Day Demand</th>
                                 <th scope="col">28-Day Demand</th>
-                                <th scope="col">Readiness</th>
+                                <th scope="col">Buying Guidance</th>
                                 <th scope="col">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($forecasts as $f): 
-                                $meta = $productMap[$f['product_id']] ?? [];
-                                $name = $meta['product_name'] ?? "Product #{$f['product_id']}";
-                                $sku = $meta['sku'] ?? "PRD-{$f['product_id']}";
-                                $stock = (int)($meta['current_stock'] ?? 0);
+                            <?php foreach ($displayProducts as $f): 
+                                $name = $f['product_name'] ?? "Product #{$f['product_id']}";
+                                $sku = $f['sku'] ?? "PRD-{$f['product_id']}";
+                                $stock = (int)($f['current_stock'] ?? 0);
+                                $isForecastBacked = !empty($f['is_forecast_backed']);
                                 $readiness = $f['readiness_level'] ?? 'Insufficient';
                             ?>
                                 <tr>
                                     <td>
-                                        <strong><?= htmlspecialchars($name) ?></strong>
+                                        <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars($name) ?></a></strong>
                                     </td>
                                     <td><code><?= htmlspecialchars($sku) ?></code></td>
                                     <td><?= htmlspecialchars((string)$stock) ?></td>
-                                    <td><?= htmlspecialchars((string)$f['forecast_7_day']) ?></td>
-                                    <td><?= htmlspecialchars((string)$f['forecast_14_day']) ?></td>
-                                    <td><?= htmlspecialchars((string)$f['forecast_28_day']) ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_7_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_14_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_28_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
                                     <td>
-                                        <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
-                                            <?= htmlspecialchars($readiness) ?>
-                                        </span>
+                                        <?php if ($isForecastBacked): ?>
+                                            <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
+                                                <?= htmlspecialchars($readiness) ?>
+                                            </span>
+                                            <small class="muted" style="display:block;"><?= htmlspecialchars($f['basis']) ?></small>
+                                        <?php else: ?>
+                                            <span class="badge tag-secondary">Stock-rule</span>
+                                            <small class="muted" style="display:block;"><?= htmlspecialchars($f['exclusion_reason'] ?? 'Stock rules') ?></small>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
