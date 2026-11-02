@@ -17,9 +17,15 @@ try {
     $reviewApproved = (string)($reviewSettings['ml_approved_model_version'] ?? '');
     $reviewCandidate = $pdo->query("SELECT model_version FROM model_training_runs
         WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $reviewObsProgress = null;
     if ($reviewCandidate) {
-        $reviewQuality = (new \App\Forecasting\CandidateEvaluationService($pdo))
-            ->evaluateCandidateQuality($reviewCandidate['model_version']);
+        $evalService = new \App\Forecasting\CandidateEvaluationService($pdo);
+        $reviewQuality = $evalService->evaluateCandidateQuality($reviewCandidate['model_version']);
+        try {
+            $reviewObsProgress = $evalService->getCandidateObservationProgress($reviewCandidate['model_version']);
+        } catch (Throwable) {
+            $reviewObsProgress = null;
+        }
     }
 } catch (Throwable $e) {
     error_log('Forecast evaluation summary unavailable: ' . $e->getMessage());
@@ -36,13 +42,13 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
     <div>
         <h2 id="model-review-title">Can we use these forecasts?</h2>
         <?php if ($reviewError): ?>
-            <p>Model checks could not be loaded. Ask the Super Administrator to review the model before relying on its suggestions.</p>
+            <p>Model checks could not be loaded. Ask the Administrator to review the model in Model Review & Approval before relying on its suggestions.</p>
         <?php else: ?>
             <p><strong>Approved model:</strong> <?= $reviewApproved !== '' ? htmlspecialchars($reviewApproved) : 'None yet' ?>.</p>
             <?php if (!empty($displayedForecastModel)): ?>
                 <p><strong>Model behind the forecasts below:</strong> <?= htmlspecialchars($displayedForecastModel) ?>.
                 <?php if ($displayedForecastModel !== $reviewApproved): ?>
-                    This differs from the approved model. Ask the Super Administrator to review it before using these suggestions.
+                    This differs from the approved model. Ask the Administrator to review it in Model Review & Approval before using these suggestions.
                 <?php endif; ?></p>
             <?php endif; ?>
             <?php if (in_array($reviewSettings['ml_recommendations_suspended'] ?? '', ['1', 'true'], true)): ?>
@@ -82,12 +88,22 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                         </tbody>
                     </table>
                 </div>
+                <?php if (!empty($reviewObsProgress)): ?>
+                    <p><strong>Observation progress:</strong> <?= htmlspecialchars($reviewObsProgress['status_label'] ?? 'Under evaluation') ?>
+                       (<?= (int)($reviewObsProgress['usable_observed_days'] ?? 0) ?> of <?= (int)($reviewObsProgress['required_observed_days'] ?? 28) ?> completed target dates backed by usable Store observations).</p>
+                    <?php if (!empty($reviewObsProgress['explanation']) && empty($reviewObsProgress['observation_complete'])): ?>
+                        <p class="muted"><?= htmlspecialchars($reviewObsProgress['explanation']) ?></p>
+                    <?php endif; ?>
+                <?php endif; ?>
                 <p>These results combine products. Some products may perform worse. Recorded sales cannot show all demand lost during stockouts, and these tests do not guarantee future results.</p>
             <?php else: ?>
-                <p>No completed model training is available yet. The Super Administrator can train and review a model in ML Operation.</p>
+                <p>No completed model training is available yet. Once a candidate is trained and evaluated, the Administrator can review and approve it in Model Review & Approval.</p>
             <?php endif; ?>
         <?php endif; ?>
         <p>Forecasts guide staff decisions. They do not place orders or change stock.</p>
+        <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS)): ?>
+            <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a></p>
+        <?php endif; ?>
         <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
             <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Train and review models</a>
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">View detailed model results</a></p>

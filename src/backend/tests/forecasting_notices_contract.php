@@ -368,13 +368,13 @@ $assert($reviewItem !== null, 'Qualified candidate awaiting review produces acti
 $assert(str_contains($reviewItem?->explanation ?? '', 'rf_candidate_v3'), 'Signal explanation mentions candidate model version');
 $assert($reviewItem !== null, 'Qualified candidate produces attention item for Administrator');
 $assert($reviewItem?->severity === 'warning', 'Review item has warning severity');
-$assert($reviewItem?->destination === 'components/report/predictions.php', 'Review item links to predictions.php');
+$assert($reviewItem?->destination === 'components/administrator/model_review.php', 'Review item links to model review');
 
 $notificationService->checkAndNotifyForecasts();
 $reviewNotif = $pdo->query("SELECT * FROM notifications WHERE attention_key = 'store.forecasting.candidate-review'")->fetch(PDO::FETCH_ASSOC);
 $assert($reviewNotif !== false, 'Candidate review notification inserted into notifications table');
 $assert($reviewNotif['workspace'] === 'admin', 'Candidate review notification workspace is admin');
-$assert($reviewNotif['attention_destination'] === 'components/report/predictions.php', 'Notification links to model review');
+$assert($reviewNotif['attention_destination'] === 'components/administrator/model_review.php', 'Notification links to model review');
 
 // Deduplication on candidate review
 $revCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.forecasting.candidate-review'")->fetchColumn();
@@ -424,6 +424,54 @@ $dashboardExceptions = $dashboardData['exceptions'] ?? [];
 $dashboardExceptionTitles = array_column($dashboardExceptions, 'title');
 
 $assert(in_array('Forecasting failure', $dashboardExceptionTitles, true), 'Administrator dashboard exceptions include forecasting failure');
+
+// --- Phase 7: Ticket #361 Notice Extensions ---
+// 7a. Model retraining failure notifies Administrator
+$signalSource = new \App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts, operator_message, diagnostic_reference) VALUES
+    (5, 'model_retraining', 'failed', '2026-11-01 10:30:00', '2026-11-01 10:35:00', 3, 'Model candidate training failed on cross-validation.', 'EXHAUSTED:CVException')");
+$signals = $signalSource->store();
+$assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Model retraining failure produces failure signal');
+$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'Model candidate training failed'), 'Signal explains retraining failure');
+
+// Synchronize and verify notification deduplication
+$notificationService->checkAndNotifyForecasts();
+$retrainCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.forecasting.failure'")->fetchColumn();
+$notificationService->checkAndNotifyForecasts();
+$retrainCountAfter = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.forecasting.failure'")->fetchColumn();
+$assert($retrainCountBefore === $retrainCountAfter, 'Repeated retraining failure check does not duplicate notifications');
+
+// 7b. Persistent background inactivity notice
+$pdo->exec("DELETE FROM ml_jobs WHERE job_id = 5;
+    INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, attempts) VALUES
+    (6, 'forecast_generation', 'queued', '2026-11-01 07:00:00', 0)");
+$signals = $signalSource->store();
+$assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Persistent background inactivity produces failure signal');
+$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'inactive or stalled'), 'Signal explains background worker inactivity');
+
+// 7c. Preserved local diagnostics during database outage surfaced after recovery
+$logDir = dirname(__DIR__) . '/storage/logs';
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0777, true);
+}
+$diagFile = $logDir . '/forecasting_diagnostics.json';
+$pdo->exec("DELETE FROM ml_jobs;
+    INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts) VALUES
+    (7, 'forecast_generation', 'succeeded', '2026-11-01 05:00:00', '2026-11-01 05:05:00', 1)");
+$outageEntry = [
+    [
+        'timestamp' => '2026-11-01 09:30:00',
+        'error' => 'Database connection refused on port 3306',
+        'diagnostic_reference' => 'DB_UNAVAILABLE'
+    ]
+];
+file_put_contents($diagFile, json_encode($outageEntry));
+
+$signals = $signalSource->store();
+$assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Preserved local diagnostic from database outage produces failure signal');
+$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'connection refused'), 'Signal explanation contains preserved outage diagnostic');
+
+@unlink($diagFile);
 
 if ($failures) {
     fwrite(STDERR, "\nForecasting notices contract failed (" . count($failures) . " errors):\n- " . implode("\n- ", $failures) . "\n");

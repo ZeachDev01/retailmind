@@ -8,6 +8,8 @@ use RuntimeException;
 use InvalidArgumentException;
 use DomainException;
 use Throwable;
+use DateTime;
+use DateTimeZone;
 
 /**
  * Service governing Store Demand Forecasting model lifecycle, automated quality gates,
@@ -354,6 +356,7 @@ class StoreModelGovernanceService
             'technical_review_accepted' => false,
             'operational_review_accepted' => false,
             'observation_period_completed' => false,
+            'not_rejected' => true,
         ];
 
         // 1. Version format & Demo isolation check
@@ -397,6 +400,7 @@ class StoreModelGovernanceService
         if ($opDecision === 'accepted') {
             $checks['operational_review_accepted'] = true;
         } elseif ($opDecision === 'rejected') {
+            $checks['not_rejected'] = false;
             $reasons[] = 'Administrator operational review rejected this candidate.';
         } else {
             $reasons[] = 'Administrator operational review is missing or not accepted.';
@@ -410,6 +414,8 @@ class StoreModelGovernanceService
             $checks['observation_period_completed'] = true;
         }
 
+        $automatedTechPassed = $checks['quality_gates_passed'] && $checks['observation_period_completed'] && $checks['not_demo_artifact'] && $checks['valid_version_format'];
+
         if (empty($reasons)) {
             $artifact = $this->validateModelArtifactCompatibility($modelVersion);
             if (!$artifact['valid']) $reasons[] = $artifact['reason'];
@@ -418,6 +424,8 @@ class StoreModelGovernanceService
 
         return [
             'ready' => $ready,
+            'status' => $automatedTechPassed ? ($checks['not_rejected'] ? 'awaiting_approval' : 'rejected') : 'under_evaluation',
+            'status_label' => $automatedTechPassed ? 'Awaiting approval' : 'Under evaluation',
             'model_version' => $modelVersion,
             'as_of_date' => $asOfDate,
             'reasons' => $reasons,
@@ -435,15 +443,17 @@ class StoreModelGovernanceService
     public function activateStoreModel(string $modelVersion, string $asOfDate, int $actorId, string $justification = '', string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
     {
         $this->requireLocalAdministrator($actorRole, $isRemote);
-        $readiness = $this->validateActivationReadiness($modelVersion, $asOfDate);
-        if (!$readiness['ready']) {
-            throw new InvalidArgumentException(
-                "Store model activation blocked: " . implode(' ', $readiness['reasons'])
-            );
+        $review = $this->getReviewStatus($modelVersion);
+        if (($review['operational_review']['decision'] ?? null) === 'rejected') {
+            throw new InvalidArgumentException('Store model activation blocked: Administrator operational review rejected this candidate.');
         }
-
         $this->pdo->beginTransaction();
         try {
+            $this->recordOperationalReview($modelVersion, 'accepted', $justification ?: 'Approved for Store demand forecasting by local Administrator', $actorId, $actorRole);
+            $readiness = $this->validateActivationReadiness($modelVersion, $asOfDate);
+            if (!$readiness['ready']) {
+                throw new InvalidArgumentException('Store model activation blocked: ' . implode(' ', $readiness['reasons']));
+            }
             $currentApproved = $this->getApprovedModelVersion();
 
             // Preserve previous approved model (if not already current and not empty)
@@ -468,6 +478,10 @@ class StoreModelGovernanceService
                 'actor_role' => $actorRole,
                 'activated_at' => date('Y-m-d H:i:s'),
                 'justification' => $justification,
+                'decision' => 'approved',
+                'effective_gates' => $this->getThresholds(),
+                'quality_details' => $readiness['quality_details'],
+                'observation_details' => $readiness['observation_details'],
                 'previous_model_version' => $currentApproved,
                 'observation_completed_days' => $readiness['observation_details']['completed_days'] ?? null,
                 'quality_summary' => $readiness['quality_details']['reason'] ?? '',
@@ -478,7 +492,7 @@ class StoreModelGovernanceService
             $this->setSetting('ml_store_activation_record', json_encode($activationRecord, JSON_THROW_ON_ERROR), $actorId);
 
             $this->audit($actorId, 'Activate Store Forecasting Model', $activationRecord, $ipAddress);
-            $activationRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress);
+            $activationRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress, $asOfDate, $modelVersion);
 
             $this->pdo->commit();
             return $activationRecord;
@@ -509,6 +523,8 @@ class StoreModelGovernanceService
             $this->setSetting('ml_previous_approved_model_version', '', $actorId);
 
             $rollbackRecord = [
+                'rollback_id' => uniqid('rb_', true),
+                'decision' => 'rollback',
                 'rolled_back_from' => $current,
                 'restored_model_version' => $previous,
                 'rolled_back_by' => $actorId,
@@ -517,12 +533,17 @@ class StoreModelGovernanceService
                 'reason' => $reason,
             ];
 
+            $history = json_decode($this->getSetting('ml_store_rollback_history', '[]'), true);
+            if (!is_array($history)) $history = [];
+            $history[] = $rollbackRecord;
+            $this->setSetting('ml_store_rollback_history', json_encode($history, JSON_THROW_ON_ERROR), $actorId);
+
             $this->setSetting('ml_store_rollback_record', json_encode($rollbackRecord, JSON_THROW_ON_ERROR), $actorId);
 
             $this->setSetting('ml_observation_mode', '0', $actorId);
             $this->setSetting('ml_recommendations_suspended', '0', $actorId);
             $this->audit($actorId, 'Rollback Store Forecasting Model', $rollbackRecord, $ipAddress);
-            $rollbackRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress);
+            $rollbackRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress, $asOfDate, $previous);
 
             $this->pdo->commit();
             return $rollbackRecord;
@@ -629,6 +650,7 @@ class StoreModelGovernanceService
         }
 
         return [
+            'rollback_history' => json_decode($this->getSetting('ml_store_rollback_history', '[]'), true) ?: [],
             'approved_model_version' => $approvedModel,
             'previous_model_version' => $previousModel,
             'is_observation_mode' => $isObservation,
@@ -662,6 +684,369 @@ class StoreModelGovernanceService
             'storage_models_writable' => $storageReady,
             'storage_logs_writable' => $logsReady,
             'supported_runtime' => in_array($osFamily, ['Windows', 'Linux'], true),
+        ];
+    }
+
+    public function rejectCandidate(
+        string $modelVersion,
+        int $actorId,
+        string $reason = '',
+        string $actorRole = 'admin',
+        ?string $ipAddress = null,
+        bool $isRemote = false
+    ): array {
+        $this->requireLocalAdministrator($actorRole, $isRemote);
+
+        $trimmed = trim($modelVersion);
+        if ($trimmed === '') {
+            throw new InvalidArgumentException('Candidate model version cannot be empty.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $rejectionRecord = [
+                'model_version' => $trimmed,
+                'rejected_by' => $actorId,
+                'actor_role' => $actorRole,
+                'rejected_at' => date('Y-m-d H:i:s'),
+                'decision' => 'rejected',
+                'reason' => $reason,
+            ];
+
+            $this->setSetting("ml_store_rejection_{$trimmed}", json_encode($rejectionRecord, JSON_THROW_ON_ERROR), $actorId);
+            $this->recordOperationalReview($trimmed, 'rejected', $reason ?: 'Rejected by local Administrator', $actorId, $actorRole);
+
+            if (function_exists('log_activity')) {
+                log_activity(
+                    $this->pdo,
+                    $actorId,
+                    'Reject Store Forecasting Candidate',
+                    'Demand Forecasting',
+                    null,
+                    null,
+                    $trimmed,
+                    $ipAddress ?? '127.0.0.1',
+                    'store_operation',
+                    [
+                        'decision' => 'rejected',
+                        'candidate' => $trimmed,
+                        'reason' => $reason,
+                        'actor_role' => $actorRole,
+                        'rejected_at' => date('Y-m-d H:i:s'),
+                    ]
+                );
+            }
+
+            $this->pdo->commit();
+            return $rejectionRecord;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    public function getApprovalSummary(?string $modelVersion = null, ?string $asOfDate = null): array
+    {
+        if ($asOfDate === null) {
+            $asOfDate = (new DateTime('now', new DateTimeZone('Asia/Manila')))->modify('-1 day')->format('Y-m-d');
+        }
+
+        $status = $this->getActivationStatus();
+        $approvedModel = $status['approved_model_version'];
+        $previousModel = $status['previous_model_version'];
+
+        // Determine candidate model version
+        if ($modelVersion === null || trim($modelVersion) === '') {
+            try {
+                $stmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                $modelVersion = (string)($stmt->fetchColumn() ?: '');
+            } catch (Throwable) {
+                $modelVersion = '';
+            }
+            if ($modelVersion === '') {
+                try {
+                    $stmt = $this->pdo->query("SELECT model_version FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 1");
+                    $modelVersion = (string)($stmt->fetchColumn() ?: '');
+                } catch (Throwable) {
+                    $modelVersion = '';
+                }
+            }
+        }
+
+        if ($modelVersion === '') {
+            return [
+                'has_candidate' => false,
+                'candidate_version' => '',
+                'approved_version' => $approvedModel,
+                'previous_version' => $previousModel,
+                'overall_status' => 'no_candidate',
+                'status_label' => 'No candidate available',
+                'operational_status' => $approvedModel !== '' ? 'Ready to generate forecasts' : 'Not approved for routine use',
+                'message' => 'No completed candidate model training is available for review yet.',
+                'can_approve' => false,
+                'can_reject' => false,
+                'can_rollback' => ($previousModel !== ''),
+                'limitations' => $this->getStandardLimitations(),
+            ];
+        }
+
+        // 1. Candidate Quality Evaluation
+        $qualityResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
+        $candidateEvals = $this->evaluationService->getEvaluationsByModelVersion($modelVersion);
+        $thresholds = $this->evaluationService->getThresholds();
+
+        $horizonsData = [];
+        $dataWindowStart = null;
+        $dataWindowEnd = null;
+
+        foreach ($candidateEvals as $row) {
+            $h = (int)$row['horizon_days'];
+            $maxWape = $thresholds[(string)$h] ?? null;
+            $dataWindowStart ??= $row['data_window_start'] ?? null;
+            $dataWindowEnd = $row['data_window_end'] ?? $dataWindowEnd;
+
+            $horizonsData[$h] = [
+                'horizon_days' => $h,
+                'mae' => $row['mae'] !== null ? round((float)$row['mae'], 4) : null,
+                'rmse' => $row['rmse'] !== null ? round((float)$row['rmse'], 4) : null,
+                'wape' => $row['wape'] !== null ? round((float)$row['wape'], 4) : null,
+                'baseline_mae' => $row['baseline_mae'] !== null ? round((float)$row['baseline_mae'], 4) : null,
+                'baseline_rmse' => $row['baseline_rmse'] !== null ? round((float)$row['baseline_rmse'], 4) : null,
+                'baseline_wape' => $row['baseline_wape'] !== null ? round((float)$row['baseline_wape'], 4) : null,
+                'max_wape_limit' => $maxWape,
+                'gate_outcome' => $row['candidate_gate_outcome'] ?? 'pending',
+                'gate_status' => $this->determineHorizonGateStatus($row, $maxWape),
+            ];
+        }
+
+        // 2. Incumbent Model Comparison
+        $incumbentComparison = [
+            'available' => false,
+            'version' => $approvedModel,
+            'status_message' => 'No previous approved model available for comparison (First Store model qualification)',
+            'horizons' => [],
+        ];
+
+        if ($approvedModel !== '' && $approvedModel !== $modelVersion) {
+            $incumbentEvals = $this->evaluationService->getEvaluationsByModelVersion($approvedModel);
+            if (!empty($incumbentEvals)) {
+                $incumbentHorizons = [];
+                foreach ($incumbentEvals as $iRow) {
+                    $ih = (int)$iRow['horizon_days'];
+                    $incumbentHorizons[$ih] = [
+                        'horizon_days' => $ih,
+                        'mae' => $iRow['mae'] !== null ? round((float)$iRow['mae'], 4) : null,
+                        'rmse' => $iRow['rmse'] !== null ? round((float)$iRow['rmse'], 4) : null,
+                        'wape' => $iRow['wape'] !== null ? round((float)$iRow['wape'], 4) : null,
+                    ];
+                }
+                $incumbentComparison = [
+                    'available' => true,
+                    'version' => $approvedModel,
+                    'status_message' => "Matching incumbent comparison against approved model {$approvedModel}",
+                    'horizons' => $incumbentHorizons,
+                ];
+            } else {
+                $incumbentComparison['status_message'] = "Approved model {$approvedModel} lacks recorded holdout evaluations for comparison.";
+            }
+        }
+
+        // 3. Observation Progress (28 target dates holdout)
+        $obsProgress = $this->evaluationService->getCandidateObservationProgress($modelVersion, $asOfDate);
+
+        // 4. Products Covered and Excluded with Blocked Actions
+        $productSummary = $this->getProductCoverageSummary($asOfDate, $modelVersion);
+
+        // 5. Readiness and Status Wording
+        $readiness = $this->validateActivationReadiness($modelVersion, $asOfDate);
+        $isCurrentApproved = ($approvedModel === $modelVersion);
+        $automatedTechPassed = $readiness['checks']['quality_gates_passed'] && $readiness['checks']['observation_period_completed'] && $readiness['checks']['not_demo_artifact'] && $readiness['checks']['valid_version_format'];
+        $isQualified = $automatedTechPassed && $readiness['checks']['not_rejected']
+            && ($readiness['review_details']['technical_review']['decision'] ?? null) !== 'rejected';
+
+        if ($isCurrentApproved) {
+            $overallStatus = 'approved';
+            $statusLabel = 'Selected as approved model';
+            $operationalStatus = !empty($productSummary['covered']) ? 'Ready to generate forecasts' : 'Blocked: missing valid current inputs';
+            $canApprove = false;
+        } elseif ($isQualified) {
+            $overallStatus = 'awaiting_approval';
+            $statusLabel = 'Awaiting approval';
+            $operationalStatus = 'Awaiting local Administrator approval';
+            $canApprove = true;
+        } else {
+            $overallStatus = 'under_evaluation';
+            $statusLabel = 'Under evaluation';
+            $operationalStatus = 'Under evaluation: technical qualification incomplete';
+            $canApprove = false;
+        }
+
+        $canReject = !$isCurrentApproved && $readiness['checks']['not_rejected'];
+        $rollbackValidation = $previousModel !== '' ? $this->validateRollbackArtifact($previousModel) : ['valid' => false, 'reason' => 'No previous model available'];
+        $canRollback = ($previousModel !== '' && $previousModel !== $approvedModel && $rollbackValidation['valid']);
+
+        // Latest background ML job status
+        $latestJob = null;
+        try {
+            $jobStmt = $this->pdo->query("SELECT job_id, trigger_type, status, attempts, queued_at, completed_at, operator_message FROM ml_jobs ORDER BY job_id DESC LIMIT 1");
+            $latestJob = $jobStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Throwable) {}
+
+        return [
+            'has_candidate' => true,
+            'candidate_version' => $modelVersion,
+            'approved_version' => $approvedModel,
+            'previous_version' => $previousModel,
+            'as_of_date' => $asOfDate,
+            'overall_status' => $overallStatus,
+            'status_label' => $statusLabel,
+            'operational_status' => $operationalStatus,
+            'is_current_approved' => $isCurrentApproved,
+            'can_approve' => $canApprove,
+            'can_reject' => $canReject,
+            'can_rollback' => $canRollback,
+            'rollback_validation' => $rollbackValidation,
+            'is_recommendations_suspended' => $status['is_recommendations_suspended'],
+            'is_observation_mode' => $status['is_observation_mode'],
+            'comparison_method' => "Weekly Seasonal Naive (repeating last week's recorded sales for the matching day of the week)",
+            'evaluation_periods' => [
+                'start' => $dataWindowStart ?? 'Chronological start',
+                'end' => $dataWindowEnd ?? 'Chronological end',
+                'holdouts' => '3 chronological 28-day holdout folds (84 days total)',
+            ],
+            'candidate_quality' => [
+                'passed' => $qualityResult['passed'],
+                'reason' => $qualityResult['reason'],
+                'horizons' => $horizonsData,
+            ],
+            'incumbent_comparison' => $incumbentComparison,
+            'observation_progress' => [
+                'usable_days' => $obsProgress['usable_observed_days'],
+                'required_days' => $obsProgress['required_observed_days'],
+                'completed_days' => $obsProgress['completed_days'],
+                'observation_complete' => $obsProgress['observation_complete'],
+                'status_label' => $obsProgress['status_label'],
+                'explanation' => $obsProgress['explanation'],
+            ],
+            'products' => $productSummary,
+            'required_checks' => [
+                'valid_version_format' => [
+                    'label' => 'Valid model version format',
+                    'passed' => $readiness['checks']['valid_version_format'],
+                ],
+                'not_demo_artifact' => [
+                    'label' => 'Store production dataset (not Demo/Kaggle artifact)',
+                    'passed' => $readiness['checks']['not_demo_artifact'],
+                ],
+                'quality_gates_passed' => [
+                    'label' => '7/14/28-day quality gates pass configured WAPE limits',
+                    'passed' => $readiness['checks']['quality_gates_passed'],
+                ],
+                'baseline_outperformed' => [
+                    'label' => 'Outperforms weekly Seasonal Naive baseline across horizons',
+                    'passed' => $qualityResult['passed'],
+                ],
+                'observation_period_completed' => [
+                    'label' => '28 completed target dates backed by usable Store observations',
+                    'passed' => $readiness['checks']['observation_period_completed'],
+                ],
+                'not_rejected' => [
+                    'label' => 'Candidate not rejected in operational review',
+                    'passed' => $readiness['checks']['not_rejected'],
+                ],
+            ],
+            'limitations' => $this->getStandardLimitations(),
+            'latest_job' => $latestJob,
+        ];
+    }
+
+    private function determineHorizonGateStatus(array $row, ?float $maxWape): string
+    {
+        if ($maxWape === null) {
+            return 'blocked';
+        }
+        $w = isset($row['wape']) ? (float)$row['wape'] : null;
+        $bw = isset($row['baseline_wape']) ? (float)$row['baseline_wape'] : null;
+        if ($w === null) {
+            return 'blocked';
+        }
+        if ($w > $maxWape || ($bw !== null && $w >= $bw)) {
+            return 'failed';
+        }
+        return 'passed';
+    }
+
+    private function getProductCoverageSummary(string $asOfDate, string $candidateVersion): array
+    {
+        $covered = [];
+        $excluded = [];
+
+        try {
+            $stmt = $this->pdo->query("SELECT product_id, sku, product_name, status FROM products ORDER BY product_id ASC");
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            $products = [];
+        }
+
+        $eligibilityService = new StoreTrainingEligibilityService();
+
+        foreach ($products as $p) {
+            $pid = (int)$p['product_id'];
+            $name = $p['product_name'] ?: "Product #{$pid}";
+            $sku = $p['sku'] ?: "SKU-{$pid}";
+
+            try {
+                $eval = $eligibilityService->evaluateProductEligibility($this->pdo, $pid, $asOfDate);
+            } catch (Throwable $e) {
+                $eval = ['eligible' => false, 'reason' => $e->getMessage(), 'accumulated_usable_days' => 0];
+            }
+
+            if (!empty($eval['eligible'])) {
+                $covered[] = [
+                    'product_id' => $pid,
+                    'sku' => $sku,
+                    'product_name' => $name,
+                    'accumulated_usable_days' => $eval['accumulated_usable_days'] ?? 140,
+                    'status' => 'Ready for training',
+                    'guidance' => 'Included in candidate model evaluation and eligible for operational forecasts upon approval.',
+                ];
+            } else {
+                $days = $eval['accumulated_usable_days'] ?? 0;
+                $reason = $eval['reason'] ?? "Insufficient usable history (has {$days}/140 accumulated days)";
+                $needed = max(0, 140 - $days);
+                $blockedAction = $needed > 0
+                    ? "Accumulate {$needed} more usable sales days; replenishment continues on stock rules."
+                    : "Resolve recent feature window / holdout gap; replenishment continues on stock rules.";
+
+                $excluded[] = [
+                    'product_id' => $pid,
+                    'sku' => $sku,
+                    'product_name' => $name,
+                    'accumulated_usable_days' => $days,
+                    'status' => 'Insufficient Data',
+                    'exclusion_reason' => $reason,
+                    'blocked_next_action' => $blockedAction,
+                ];
+            }
+        }
+
+        return [
+            'covered' => $covered,
+            'excluded' => $excluded,
+            'covered_count' => count($covered),
+            'excluded_count' => count($excluded),
+        ];
+    }
+
+    private function getStandardLimitations(): array
+    {
+        return [
+            'Prediction error (WAPE) measures deviation from recorded sales; it is an error metric, not an accuracy percentage.',
+            'Technical qualification (passing quality gates and 28-day observation) does not constitute automatic approval; local Administrator review is required.',
+            'Recorded sales reflect completed transactions; customer demand lost during stockout intervals cannot be observed or reconstructed.',
+            'Seasonal Naive comparison repeats weekly sales; sudden seasonal or market shifts require manual inventory oversight.',
+            'Past chronological holdout evaluation does not guarantee future prediction accuracy.',
+            'Excluded products with insufficient history or feature window gaps automatically fall back to stock rules.',
         ];
     }
 }

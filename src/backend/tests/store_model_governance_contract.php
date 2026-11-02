@@ -407,6 +407,24 @@ $governance->rollback($superAdminId);
 assert_test($governance->getApprovedModelVersion() === $candidateVersion, 'Platform rollback restored previous version');
 assert_test($governance->getPreviousApprovedModelVersion() === '', 'Platform rollback cleared previous version');
 
+// The merged review workflow must use the shared owner and retain atomic qualification.
+$summary = $governance->getApprovalSummary($candidateVersion, '2026-09-28');
+assert_test($summary['is_current_approved'], 'Review summary sees the shared approved model');
+$pdo->prepare('DELETE FROM platform_settings WHERE setting_key = ?')->execute(['ml_review_operational_' . $candidateVersion]);
+$record = $governance->activateStoreModel($candidateVersion, '2026-09-28', $adminId, 'Approve from review screen');
+assert_test($governance->getReviewStatus($candidateVersion)['operational_review']['decision'] === 'accepted', 'Activation records local approval through shared governance');
+assert_test($record['decision'] === 'approved', 'Activation records the approval decision');
+assert_test($governance->getReviewStatus('non_existent_unqualified_model')['operational_review'] === null, 'Failed qualification rolls back the approval review');
+$rejected = 'store_rf_rejected';
+$governance->rejectCandidate($rejected, $adminId, 'Unsuitable candidate');
+assert_test($governance->getReviewStatus($rejected)['operational_review']['decision'] === 'rejected', 'Rejection reaches the shared review store');
+try {
+    $governance->activateStoreModel($rejected, '2026-09-28', $adminId);
+    assert_test(false, 'Rejected candidate cannot be approved');
+} catch (InvalidArgumentException $e) {
+    assert_test($governance->getApprovedModelVersion() === $candidateVersion, 'Rejected candidate preserves the approved model');
+}
+
 echo "\n========================================================\n";
 echo "PASS: All Unified Store Model Governance Contract Tests Passed (Ticket #395)\n";
 echo "========================================================\n";

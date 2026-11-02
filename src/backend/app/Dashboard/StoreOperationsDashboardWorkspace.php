@@ -570,7 +570,7 @@ final class StoreOperationsDashboardWorkspace
                         'Candidate model awaiting review',
                         $attentionItem->explanation,
                         $attentionItem->detectedAt->format('Y-m-d H:i:s'),
-                        'components/report/predictions.php'
+                        'components/administrator/model_review.php'
                     );
                 }
             }

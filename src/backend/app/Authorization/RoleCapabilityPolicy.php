@@ -69,6 +69,12 @@ final class RoleCapabilityPolicy
             self::MANAGE_REGISTERS,
             self::VIEW_FORECASTS,
             self::GENERATE_FORECASTS,
+            // Scoped model review, approval/replacement, and rollback for the
+            // local Administrator (ADR-0022). Retains technical setup authority
+            // (CONFIGURE_MODELS, RETRAIN_MODELS) with the Super Administrator.
+            self::APPROVE_MODELS,
+            self::REPLACE_MODELS,
+            self::ROLL_BACK_MODELS,
         ],
         'inventory_manager' => [
             self::VIEW_INVENTORY,

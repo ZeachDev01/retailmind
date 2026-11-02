@@ -53,7 +53,9 @@ foreach (['success', 'error', 'warning', 'info'] as $flashType) {
 
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 $currentPath = '/' . trim(str_replace('\\', '/', $currentPath), '/');
+$GLOBALS['currentPath'] = $currentPath;
 
+if (!function_exists("sidebar_path")) {
 function sidebar_path(string $path): string
 {
     $urlPath = parse_url(app_url($path), PHP_URL_PATH) ?: app_url($path);
@@ -154,17 +156,25 @@ function sidebar_render_section(array $section): void
     </div>
 <?php
 }
+}
 
 $superAdministratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'privacy', 'label' => 'Users & Access'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'inspection', 'label' => 'Protected Audit Records'],
     ['path' => 'components/system_administrator/recovery_account.php', 'icon' => 'safe', 'label' => 'Recovery Account'],
     ['path' => 'components/system_administrator/system_health.php', 'icon' => 'support', 'label' => 'System Health'],
-    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'ML Operation'],
     ['path' => 'components/administrator/reset_data.php', 'icon' => 'delete_database', 'label' => 'Reset Data'],
     ['path' => 'components/system_administrator/backup_restore.php', 'icon' => 'data_recovery', 'label' => 'Backup & Restore'],
     ['path' => 'components/system_administrator/system_settings.php', 'icon' => 'data_configuration', 'label' => 'Platform Settings'],
+];
+
+$superAdministratorForecastingItems = [
+    ['path' => 'components/system_administrator/forecast_import.php', 'icon' => 'filing_cabinet', 'label' => 'Import Sales History'],
+    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
+    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'ML Operation'],
     ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Model Governance'],
+    ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
+    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
 ];
 
 $administratorSystemItems = [
@@ -179,12 +189,16 @@ $administratorSystemItems = [
 
 $managerInventoryItems = [];
 
+$administratorForecastingItems = [
+    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
+    ['path' => 'components/administrator/model_review.php', 'icon' => 'combo_chart', 'label' => 'Model Review & Approval'],
+    ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
+    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
+];
+
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'overtime', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
-
-    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
-    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Generate Report'],
 ];
 
@@ -194,6 +208,7 @@ $superAdministratorSections = [
         'items' => [
             ['path' => 'components/super_administrator/dashboard.php', 'icon' => 'services', 'label' => 'Control Center'],
             ['icon' => 'privacy', 'label' => 'Platform Administration', 'items' => $superAdministratorSystemItems],
+            ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $superAdministratorForecastingItems],
         ],
     ],
 ];
@@ -208,6 +223,7 @@ $administratorSections = [
             ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
+            ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $administratorForecastingItems],
             ['icon' => 'statistics', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],
@@ -236,8 +252,6 @@ $roleSections = [
                 ['icon' => 'statistics', 'label' => 'Reports', 'items' => [
 
                     ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
-                    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
-                    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
                     ['path' => 'components/inventory_management/inventory_insights.php', 'icon' => 'idea', 'label' => 'Insights & Risk'],
                     ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
                     ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Generate Report'],
@@ -445,7 +459,11 @@ $GLOBALS['rm_navigation_shell'] = [
 <?php
 require_once __DIR__ . '/../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../backend/app/Services/HeldSaleService.php';
-$cartRecoveryShift = $role === 'cashier' ? (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) : null;
+try {
+    $cartRecoveryShift = ($role === 'cashier' && isset($pdo)) ? (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) : null;
+} catch (Throwable) {
+    $cartRecoveryShift = null;
+}
 $cartWorkspaceContext = [
     'cashier' => (int)$_SESSION['user_id'], 'shift' => (int)($cartRecoveryShift['shift_id'] ?? 0),
     'workspace' => $role, 'locked' => !empty($cartRecoveryShift['locked_at']),

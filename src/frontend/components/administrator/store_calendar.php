@@ -22,79 +22,125 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
 
     try {
-        $date = trim($_POST['calendar_date'] ?? '');
-        $throughDate = trim($_POST['through_date'] ?? '');
-        $status = trim($_POST['status'] ?? '');
+        $action = trim($_POST['action'] ?? 'save_date');
 
-        // Validate date
-        try {
-            $formattedDate = PhilippineTime::dayStart($date);
-            $date = substr($formattedDate, 0, 10);
-        } catch (Throwable) {
-            throw new RuntimeException("Invalid calendar date.");
-        }
-
-        if ($throughDate !== '') {
+        if ($action === 'save_weekly_schedule') {
+            $effectiveDate = trim($_POST['effective_date'] ?? '');
             try {
-                $formattedThrough = PhilippineTime::dayStart($throughDate);
-                $throughDate = substr($formattedThrough, 0, 10);
+                $formattedDate = PhilippineTime::dayStart($effectiveDate);
+                $effectiveDate = substr($formattedDate, 0, 10);
             } catch (Throwable) {
-                throw new RuntimeException("Invalid through date.");
+                throw new RuntimeException("Invalid effective date for weekly schedule.");
             }
-        }
 
-        $status = StoreCalendar::normalizeStatus($status);
-        if (!in_array($status, ['open', 'closed', 'holiday', 'exceptional_closure'], true)) {
-            throw new RuntimeException("Invalid status provided.");
-        }
+            $daysOpen = [
+                'monday' => !empty($_POST['monday_open']),
+                'tuesday' => !empty($_POST['tuesday_open']),
+                'wednesday' => !empty($_POST['wednesday_open']),
+                'thursday' => !empty($_POST['thursday_open']),
+                'friday' => !empty($_POST['friday_open']),
+                'saturday' => !empty($_POST['saturday_open']),
+                'sunday' => !empty($_POST['sunday_open']),
+            ];
 
-        $pdo->beginTransaction();
-        try {
-            if ($throughDate !== '' && $throughDate !== $date) {
-                // Range save
-                $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id']);
-                foreach ($changed as $item) {
-                    log_activity(
-                        $pdo,
-                        (int)$_SESSION['user_id'],
-                        'Recorded Store calendar date',
-                        'Store Settings',
-                        null,
-                        $item['previous_status'],
-                        $item['new_status'],
-                        null,
-                        null,
-                        ['calendar_date' => $item['date']]
-                    );
-                }
-                $count = count($changed);
-                $message = "Store calendar status recorded for {$count} changed date(s) from {$date} through {$throughDate}.";
-            } else {
-                // Single date save
-                $cutoff = date('Y-m-d H:i:s');
-                $previousStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff);
-                if ($previousStatus !== $status) {
-                    $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
-                    log_activity(
-                        $pdo,
-                        (int)$_SESSION['user_id'],
-                        'Recorded Store calendar date',
-                        'Store Settings',
-                        null,
-                        $previousStatus,
-                        $status,
-                        null,
-                        null,
-                        ['calendar_date' => $date]
-                    );
-                }
-                $message = "Store calendar status recorded for {$date}.";
-            }
-            $pdo->commit();
+            $scheduleId = $calendar->recordWeeklySchedule(
+                $pdo,
+                $effectiveDate,
+                $daysOpen,
+                (int)$_SESSION['user_id'],
+                'manual'
+            );
+
+            log_activity(
+                $pdo,
+                (int)$_SESSION['user_id'],
+                'Recorded Store weekly schedule',
+                'Store Settings',
+                null,
+                null,
+                'effective_' . $effectiveDate,
+                null,
+                null,
+                ['schedule_id' => $scheduleId, 'effective_date' => $effectiveDate]
+            );
+
+            $message = "Weekly store schedule recorded effective {$effectiveDate}.";
             $messageClass = 'tag-success';
-        } catch (Throwable $e) {
-            $pdo->rollBack();
-            throw $e;
+        } else {
+            $date = trim($_POST['calendar_date'] ?? '');
+            $throughDate = trim($_POST['through_date'] ?? '');
+            $status = trim($_POST['status'] ?? '');
+
+            // Validate date
+            try {
+                $formattedDate = PhilippineTime::dayStart($date);
+                $date = substr($formattedDate, 0, 10);
+            } catch (Throwable) {
+                throw new RuntimeException("Invalid calendar date.");
+            }
+
+            if ($throughDate !== '') {
+                try {
+                    $formattedThrough = PhilippineTime::dayStart($throughDate);
+                    $throughDate = substr($formattedThrough, 0, 10);
+                } catch (Throwable) {
+                    throw new RuntimeException("Invalid through date.");
+                }
+            }
+
+            $status = StoreCalendar::normalizeStatus($status);
+            if (!in_array($status, ['open', 'closed', 'holiday', 'exceptional_closure'], true)) {
+                throw new RuntimeException("Invalid status provided.");
+            }
+
+            $pdo->beginTransaction();
+            try {
+                if ($throughDate !== '' && $throughDate !== $date) {
+                    // Range save
+                    $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id']);
+                    foreach ($changed as $item) {
+                        log_activity(
+                            $pdo,
+                            (int)$_SESSION['user_id'],
+                            'Recorded Store calendar date',
+                            'Store Settings',
+                            null,
+                            $item['previous_status'],
+                            $item['new_status'],
+                            null,
+                            null,
+                            ['calendar_date' => $item['date']]
+                        );
+                    }
+                    $count = count($changed);
+                    $message = "Store calendar status recorded for {$count} changed date(s) from {$date} through {$throughDate}.";
+                } else {
+                    // Single date save
+                    $cutoff = date('Y-m-d H:i:s');
+                    $previousStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff);
+                    if ($previousStatus !== $status) {
+                        $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
+                        log_activity(
+                            $pdo,
+                            (int)$_SESSION['user_id'],
+                            'Recorded Store calendar date',
+                            'Store Settings',
+                            null,
+                            $previousStatus,
+                            $status,
+                            null,
+                            null,
+                            ['calendar_date' => $date]
+                        );
+                    }
+                    $message = "Store calendar status recorded for {$date}.";
+                }
+                $pdo->commit();
+                $messageClass = 'tag-success';
+            } catch (Throwable $e) {
+                $pdo->rollBack();
+                throw $e;
+            }
         }
     } catch (Throwable $exception) {
         $message = OperatorAlert::message($exception, 'The calendar date could not be recorded. Check the date and try again.');
@@ -131,7 +177,25 @@ if ($nextMonth > 12) {
     $nextYear++;
 }
 
-$monthStatuses = $calendar->getCalendarDateRangeAtCutoff($pdo, $firstOfMonth, $lastOfMonth, date('Y-m-d H:i:s'));
+// Active weekly schedule for form defaults
+$activeWeeklySchedule = $calendar->getWeeklyScheduleAtCutoff($pdo, $today, date('Y-m-d H:i:s'));
+$schedMon = $activeWeeklySchedule ? (int)$activeWeeklySchedule['monday_open'] : 1;
+$schedTue = $activeWeeklySchedule ? (int)$activeWeeklySchedule['tuesday_open'] : 1;
+$schedWed = $activeWeeklySchedule ? (int)$activeWeeklySchedule['wednesday_open'] : 1;
+$schedThu = $activeWeeklySchedule ? (int)$activeWeeklySchedule['thursday_open'] : 1;
+$schedFri = $activeWeeklySchedule ? (int)$activeWeeklySchedule['friday_open'] : 1;
+$schedSat = $activeWeeklySchedule ? (int)$activeWeeklySchedule['saturday_open'] : 0;
+$schedSun = $activeWeeklySchedule ? (int)$activeWeeklySchedule['sunday_open'] : 0;
+$schedEffective = $activeWeeklySchedule ? $activeWeeklySchedule['effective_date'] : $today;
+
+// Query resolved calendar evidence across the month
+$monthEvidence = $calendar->getCalendarDateEvidenceRangeAtCutoff($pdo, $firstOfMonth, $lastOfMonth, date('Y-m-d H:i:s'));
+$monthStatuses = [];
+foreach ($monthEvidence as $d => $ev) {
+    if ($ev['status'] !== null) {
+        $monthStatuses[$d] = $ev['status'];
+    }
+}
 $monthTitle = date('F Y', strtotime($firstOfMonth));
 ?>
 <!DOCTYPE html>
@@ -236,6 +300,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .status-closed, .status-unrecorded { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted); }
         .status-holiday { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
         .status-exceptional_closure { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #991b1b); }
+        .status-sale { background: #bbf7d0; color: #14532d; font-weight: 600; }
         .calendar-status-badge::before {
             content: '';
             display: inline-block;
@@ -249,6 +314,26 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
         .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
         .calendar-scroll { overflow-x: auto; }
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .schedule-checkbox-card {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--theme-surface, #ffffff);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .schedule-checkbox-card:hover {
+            border-color: var(--primary-color, #2563eb);
+        }
     </style>
 </head>
 <body>
@@ -257,7 +342,11 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     <main class="main-content">
         <header class="page-heading">
             <h1>Store Calendar</h1>
-            <button type="button" class="btn btn-primary" id="record-date-btn"><i class="bi bi-calendar-event" aria-hidden="true"></i> Record Status</button>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="btn btn-secondary" id="weekly-schedule-btn"><i class="bi bi-calendar-week" aria-hidden="true"></i> Weekly Schedule</button>
+                <a href="<?= htmlspecialchars(theme_url('components/report/predictions.php')) ?>" class="btn btn-secondary"><i class="bi bi-graph-up" aria-hidden="true"></i> Forecasting</a>
+                <button type="button" class="btn btn-primary" id="record-date-btn"><i class="bi bi-calendar-event" aria-hidden="true"></i> Record Status</button>
+            </div>
         </header>
 
         <?php if ($message): ?>
@@ -295,6 +384,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <span class="calendar-status-badge status-holiday">Holiday</span>
                 <span class="calendar-status-badge status-exceptional_closure">Closure</span>
                 <span class="calendar-status-badge status-unrecorded">Unrecorded</span>
+                <span class="calendar-status-badge status-sale" title="Completed product sale automatically established open">Sale Provenance</span>
             </div>
             <div class="calendar-scroll" tabindex="0" role="region" aria-label="Store calendar for <?= htmlspecialchars($monthTitle) ?>">
             <div class="calendar-grid">
@@ -330,12 +420,26 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 // Month day cells
                 for ($day = 1; $day <= $daysInMonth; $day++):
                     $dateStr = sprintf('%04d-%02d-%02d', $viewYear, $viewMonth, $day);
-                    $rawStatus = $monthStatuses[$dateStr] ?? null;
+                    $ev = $monthEvidence[$dateStr] ?? null;
+                    $rawStatus = $ev['status'] ?? ($monthStatuses[$dateStr] ?? null);
                     $statusKey = $rawStatus ? StoreCalendar::normalizeStatus($rawStatus) : 'unrecorded';
+                    $source = $ev['source'] ?? 'unrecorded';
+                    $hasSaleOverride = !empty($ev['has_sale_override']);
+                    $isException = !empty($ev['is_exception']);
+
                     $isToday = ($dateStr === $today);
                     $isSelected = ($dateStr === $activeSelectedDate);
                     $label = $statusLabels[$statusKey] ?? 'Unrecorded';
                     $fullLabel = $statusFullNames[$statusKey] ?? 'Unrecorded';
+
+                    $badgeClass = 'status-' . htmlspecialchars($statusKey);
+                    if ($source === 'sale') {
+                        $label = 'Open (Sale)';
+                        $fullLabel .= ' (Completed Sales Provenance)';
+                        $badgeClass .= ' status-sale';
+                    } elseif ($isException) {
+                        $label .= ' (Ex)';
+                    }
                 ?>
                     <button type="button" class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?> <?= $isSelected ? 'selected-day' : '' ?>"
                          data-date="<?= htmlspecialchars($dateStr) ?>"
@@ -345,7 +449,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                          aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($fullLabel) ?>">
                         <span class="day-number"><?= $day ?></span>
                         <span class="day-status">
-                            <span class="calendar-status-badge status-<?= htmlspecialchars($statusKey) ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
+                            <span class="calendar-status-badge <?= $badgeClass ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
                     </button>
                 <?php endfor; ?>
@@ -356,6 +460,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
     </main>
 </div>
 
+<!-- Modal 1: Date Exception Editor -->
 <div class="rm-modal-overlay" id="calendar-editor" aria-hidden="true">
         <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-editor-title">
             <header class="rm-modal-header">
@@ -364,6 +469,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             </header>
             <form method="post" id="calendar-form">
                 <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_date">
                 <div class="rm-modal-body">
                 <div class="form-grid">
                     <div class="form-group">
@@ -393,6 +499,60 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         </section>
 </div>
 
+<!-- Modal 2: Weekly Schedule Editor -->
+<div class="rm-modal-overlay" id="weekly-schedule-modal" aria-hidden="true">
+        <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="weekly-schedule-title">
+            <header class="rm-modal-header">
+                <h2 id="weekly-schedule-title">Weekly Store Schedule</h2>
+                <button type="button" class="rm-close" data-close-modal aria-label="Close weekly schedule"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </header>
+            <form method="post" id="weekly-schedule-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_weekly_schedule">
+                <div class="rm-modal-body">
+                    <p class="muted" style="margin-bottom: 1rem; font-size: 0.85rem;">
+                        Configure regular open/closed weekdays. Date exceptions and completed product sales automatically override this schedule without rewriting past history.
+                    </p>
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label for="schedule_effective_date">Effective Date</label>
+                        <input id="schedule_effective_date" type="date" name="effective_date" required value="<?= htmlspecialchars($schedEffective) ?>">
+                        <small class="form-hint">Date from which this weekly schedule takes effect.</small>
+                    </div>
+                    <fieldset class="form-group" style="border: none; padding: 0; margin: 0;">
+                        <legend style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">Regular Trading Days</legend>
+                        <div class="schedule-grid">
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="monday_open" value="1" <?= $schedMon ? 'checked' : '' ?>> Monday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="tuesday_open" value="1" <?= $schedTue ? 'checked' : '' ?>> Tuesday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="wednesday_open" value="1" <?= $schedWed ? 'checked' : '' ?>> Wednesday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="thursday_open" value="1" <?= $schedThu ? 'checked' : '' ?>> Thursday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="friday_open" value="1" <?= $schedFri ? 'checked' : '' ?>> Friday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="saturday_open" value="1" <?= $schedSat ? 'checked' : '' ?>> Saturday
+                            </label>
+                            <label class="schedule-checkbox-card">
+                                <input type="checkbox" name="sunday_open" value="1" <?= $schedSun ? 'checked' : '' ?>> Sunday
+                            </label>
+                        </div>
+                    </fieldset>
+                </div>
+                <footer class="rm-modal-actions">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Cancel</button>
+                    <button class="btn btn-primary" type="submit" id="save-weekly-btn">Save Schedule</button>
+                </footer>
+            </form>
+        </section>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('calendar_date');
@@ -402,6 +562,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const dayCells = document.querySelectorAll('.calendar-day-cell:not(.is-empty)');
     const cellArray = Array.from(dayCells);
     const editor = document.getElementById('calendar-editor');
+    const weeklyBtn = document.getElementById('weekly-schedule-btn');
+    const weeklyModal = document.getElementById('weekly-schedule-modal');
+
+    if (weeklyBtn && weeklyModal) {
+        weeklyBtn.addEventListener('click', function() {
+            RetailMindUI.openOverlay(weeklyModal);
+        });
+    }
 
     function updateRangeHint() {
         const start = dateInput.value;
@@ -438,7 +606,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        hint.textContent = diffDays + " days: " + start + " to " + end + " (" + statusText + ")";
+        hint.textContent = diffDays + " inclusive days: " + start + " to " + end + " (" + statusText + ")";
         hint.style.color = "var(--theme-success-text, #166534)";
     }
 

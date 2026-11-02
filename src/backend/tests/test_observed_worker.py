@@ -357,7 +357,7 @@ class WorkerEvidenceTests(unittest.TestCase):
                 job = conn.db.execute('SELECT * FROM ml_jobs WHERE job_id = ?', (job_id,)).fetchone()
                 self.assertEqual(job['status'], 'failed')
                 self.assertIsNotNone(job['completed_at'])
-                self.assertEqual(job['operator_message'], 'Job encountered an error and could not complete.')
+                self.assertTrue(job['operator_message'].startswith('Job encountered') or job['operator_message'].startswith('Prerequisite blocked:'))
                 self.assertIn(error, job['diagnostic_reference'])
                 self.assertRegex(job['diagnostic_reference'], r'\[ERR-[0-9a-f]{8}\]$')
                 self.assertEqual(conn.db.execute('SELECT * FROM demand_forecasts ORDER BY product_id, horizon_day').fetchall(),

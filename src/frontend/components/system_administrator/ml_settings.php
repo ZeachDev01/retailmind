@@ -366,6 +366,13 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
 $candidateEvidence = json_decode($latestCandidate['metrics_json'] ?? '{}', true);
 $candidateQuality = $latestCandidate
     ? (new \App\Forecasting\CandidateEvaluationService($pdo))->evaluateCandidateQuality($latestCandidate['model_version']) : null;
+$candidateObsProgress = null;
+if ($latestCandidate) {
+    try {
+        $candidateObsProgress = (new \App\Forecasting\CandidateEvaluationService($pdo))
+            ->getCandidateObservationProgress($latestCandidate['model_version']);
+    } catch (Throwable) {}
+}
 $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='ml_approved_model_version'")->fetchColumn() ?: '');
 ?>
 <!DOCTYPE html>
@@ -479,6 +486,12 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
 
                     <?php if (!empty($candidateQuality['reason'])): ?>
                         <p class="ml-eval-reason">WAPE measures error (lower is better). <?= htmlspecialchars($candidateQuality['reason']) ?></p>
+                    <?php endif; ?>
+                    <?php if (!empty($candidateObsProgress)): ?>
+                        <p class="ml-eval-meta"><strong>Observation progress:</strong> <?= htmlspecialchars($candidateObsProgress['status_label'] ?? 'Under evaluation') ?> (<?= (int)($candidateObsProgress['usable_observed_days'] ?? 0) ?> of <?= (int)($candidateObsProgress['required_observed_days'] ?? 28) ?> usable target dates completed).</p>
+                        <?php if (!empty($candidateObsProgress['explanation']) && empty($candidateObsProgress['observation_complete'])): ?>
+                            <p class="ml-eval-reason"><?= htmlspecialchars($candidateObsProgress['explanation']) ?></p>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <?php if ($isLocalDemo): ?>

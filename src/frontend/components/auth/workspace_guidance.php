@@ -52,6 +52,8 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
         }
     } catch (Throwable $e) {
         // Guidance must not block Store work when its state cannot be read.
-        \App\Support\OperatorAlert::message($e, 'Workspace guidance is unavailable. You can continue working.');
+        if (class_exists('App\\Support\\OperatorAlert')) {
+            \App\Support\OperatorAlert::message($e, 'Workspace guidance is unavailable. You can continue working.');
+        }
     }
 }

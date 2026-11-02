@@ -45,7 +45,7 @@ $capabilities = [
 // Super Administrator (ADR-0003).
 $expected = [
     'super_admin' => [true, false, true, false, false, true, true, true, true, true, true, true, false, true, true, true, true, true, true, true, true],
-    'admin' => [false, true, true, false, false, true, false, true, true, false, true, true, true, true, true, true, false, false, false, false, false],
+    'admin' => [false, true, true, false, false, true, false, true, true, false, true, true, true, true, true, true, false, false, true, true, true],
     'inventory_manager' => [false, false, true, true, false, false, false, false, false, false, true, true, false, false, true, false, false, false, false, false, false],
     'cashier' => [false, false, true, false, true, false, false, false, false, false, true, false, false, false, false, false, false, false, false, false, false],
 ];
