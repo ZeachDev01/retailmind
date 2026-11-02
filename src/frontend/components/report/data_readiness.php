@@ -10,6 +10,7 @@ $rows = get_forecasting_readiness($pdo);
 $counts = [
     'total' => count($rows),
     'Forecast Generated' => 0,
+    'Ready for training' => 0,
     'Ready for Forecasting' => 0,
     'Insufficient Data' => 0,
     'Model Requires Retraining' => 0,
@@ -31,8 +32,15 @@ $statusFilter = trim((string)($_GET['status'] ?? ''));
 $filteredRows = $rows;
 if ($search !== '' || $statusFilter !== '') {
     $filteredRows = array_filter($rows, static function (array $row) use ($search, $statusFilter): bool {
-        if ($statusFilter !== '' && ($row['forecast_status'] ?? '') !== $statusFilter) {
-            return false;
+        if ($statusFilter !== '') {
+            $rowStatus = $row['forecast_status'] ?? '';
+            if (in_array($statusFilter, ['Ready for training', 'Ready for Forecasting'], true)) {
+                if (!in_array($rowStatus, ['Ready for training', 'Ready for Forecasting'], true)) {
+                    return false;
+                }
+            } elseif ($rowStatus !== $statusFilter) {
+                return false;
+            }
         }
         if ($search !== '') {
             $term = mb_strtolower($search);
@@ -166,8 +174,8 @@ function build_query(array $params): string {
                 <div class="label">Forecast Generated</div>
             </div>
             <div class="stat-card">
-                <div class="value"><?= number_format($counts['Ready for Forecasting']) ?></div>
-                <div class="label">Ready for Forecasting</div>
+                <div class="value"><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></div>
+                <div class="label">Ready for training</div>
             </div>
             <div class="stat-card warning">
                 <div class="value"><?= number_format($counts['Insufficient Data']) ?></div>
@@ -187,7 +195,7 @@ function build_query(array $params): string {
                     <select name="status" class="input-select" aria-label="Filter by forecast status">
                         <option value="">All Statuses</option>
                         <option value="Forecast Generated" <?= $statusFilter === 'Forecast Generated' ? 'selected' : '' ?>>Forecast Generated</option>
-                        <option value="Ready for Forecasting" <?= $statusFilter === 'Ready for Forecasting' ? 'selected' : '' ?>>Ready for Forecasting</option>
+                        <option value="Ready for training" <?= in_array($statusFilter, ['Ready for training', 'Ready for Forecasting'], true) ? 'selected' : '' ?>>Ready for training</option>
                         <option value="Model Requires Retraining" <?= $statusFilter === 'Model Requires Retraining' ? 'selected' : '' ?>>Model Requires Retraining</option>
                         <option value="Insufficient Data" <?= $statusFilter === 'Insufficient Data' ? 'selected' : '' ?>>Insufficient Data</option>
                     </select>
@@ -217,7 +225,7 @@ function build_query(array $params): string {
                             $status = $row['forecast_status'] ?? 'Insufficient Data';
                             $badgeClass = match ($status) {
                                 'Forecast Generated' => 'status-badge-gen',
-                                'Ready for Forecasting' => 'status-badge-ready',
+                                'Ready for training', 'Ready for Forecasting' => 'status-badge-ready',
                                 'Model Requires Retraining' => 'status-badge-retrain',
                                 default => 'status-badge-need',
                             };
@@ -241,8 +249,8 @@ function build_query(array $params): string {
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <strong><?= (int)$row['calendar_history_days'] ?> days</strong><br>
-                                    <span class="u-text-muted" style="font-size:0.75rem;"><?= $historyRange ?></span>
+                                    <strong><?= (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days']) ?> usable days</strong> (<?= (int)($row['required_usable_days'] ?? 140) ?> req)<br>
+                                    <span class="u-text-muted" style="font-size:0.75rem;"><?= (int)$row['calendar_history_days'] ?> cal days &middot; <?= $historyRange ?></span>
                                 </td>
                                 <td>
                                     <span><?= (int)$row['nonzero_sales_days'] ?> active</span><br>

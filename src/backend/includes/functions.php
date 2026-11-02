@@ -211,6 +211,15 @@ function ensure_key_value_table(PDO $pdo, string $table): void
     if ($pdo->inTransaction()) {
         return;
     }
+    if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_by INT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )");
+        return;
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
         setting_key VARCHAR(100) PRIMARY KEY,
         setting_value TEXT NOT NULL,
@@ -278,7 +287,7 @@ function get_store_settings(PDO $pdo): array
     ]);
 }
 
-function get_forecasting_readiness(PDO $pdo): array
+function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
 {
     $dailySalesSql = forecast_daily_sales_sql($pdo);
     $storeId = store_scope_id($pdo);
@@ -358,6 +367,17 @@ function get_forecasting_readiness(PDO $pdo): array
         return [];
     }
 
+    $throughDate = $throughDate ?? date('Y-m-d', strtotime('-1 day'));
+    $eligibilityMap = [];
+    try {
+        $eligService = new App\Forecasting\StoreTrainingEligibilityService();
+        $eligList = $eligService->evaluateAllProducts($pdo, $throughDate);
+        foreach ($eligList as $item) {
+            $eligibilityMap[(int)$item['product_id']] = $item;
+        }
+    } catch (Throwable) {
+    }
+
     foreach ($rows as &$row) {
         $calendarDays = (int)$row['calendar_history_days'];
         $nonzeroDays = (int)$row['nonzero_sales_days'];
@@ -377,12 +397,25 @@ function get_forecasting_readiness(PDO $pdo): array
             $minimumNonzeroDays
         );
 
-        if ($calendarDays < $minimumHistoryDays || $nonzeroDays < $minimumNonzeroDays) {
-            continue;
-        }
+        $pid = (int)$row['product_id'];
+        $elig = $eligibilityMap[$pid] ?? null;
+        $accumulatedUsable = $elig ? (int)$elig['accumulated_usable_days'] : (int)$row['nonzero_sales_days'];
+        $row['accumulated_usable_days'] = $accumulatedUsable;
+        $row['required_usable_days'] = App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS;
+        $row['has_feature_window'] = $elig ? (bool)$elig['has_feature_window'] : false;
+        $row['has_holdout_coverage'] = $elig ? (bool)$elig['has_holdout_coverage'] : false;
+        $isEligible = $elig ? (bool)$elig['eligible'] : false;
+
         if (!$hasPrediction) {
-            $row['forecast_status'] = 'Ready for Forecasting';
-            $row['forecast_reason'] = 'The product has enough data. Run the Random Forest retraining job to generate a forecast.';
+            if ($isEligible) {
+                $row['forecast_status'] = 'Ready for training';
+                $row['forecast_reason'] = 'Ready for training. Product meets all prerequisites (' . $accumulatedUsable . ' usable days, supported feature window, and holdout coverage).';
+            } else {
+                $row['forecast_status'] = 'Insufficient Data';
+                $row['forecast_reason'] = ($elig && !empty($elig['reason']))
+                    ? $elig['reason']
+                    : sprintf('%d accumulated usable days available. At least %d accumulated usable days are required.', $accumulatedUsable, App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS);
+            }
             continue;
         }
         if ($modelVersion !== $currentModelVersion) {
@@ -404,7 +437,7 @@ function get_forecasting_readiness(PDO $pdo): array
     }
     unset($row);
 
-    $priority = ['Model Requires Retraining' => 0, 'Ready for Forecasting' => 1, 'Forecast Generated' => 2, 'Insufficient Data' => 3];
+    $priority = ['Model Requires Retraining' => 0, 'Ready for training' => 1, 'Ready for Forecasting' => 1, 'Forecast Generated' => 2, 'Insufficient Data' => 3];
     usort($rows, static function (array $a, array $b) use ($priority): int {
         return ($priority[$a['forecast_status']] ?? 4) <=> ($priority[$b['forecast_status']] ?? 4)
             ?: strcasecmp((string)$a['product_name'], (string)$b['product_name']);

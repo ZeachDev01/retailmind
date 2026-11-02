@@ -1,4 +1,4 @@
-"""One cutoff-aware feature contract for observed daily demand."""
+"""One cutoff-aware feature contract for observed daily demand (#365)."""
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
@@ -33,12 +33,12 @@ def normalize_history(df):
             columns.append(extra)
     data = renamed[columns].copy()
     data["date"] = pd.to_datetime(data["date"], errors="raise")
-    data["units_sold"] = pd.to_numeric(data["units_sold"], errors="raise")
+    data["units_sold"] = pd.to_numeric(data["units_sold"], errors="coerce")
     if data.empty or data[["date", "product_id"]].isna().any().any():
         raise ValueError("No usable demand history or missing observations")
     if (data.date != data.date.dt.normalize()).any():
         raise ValueError("Demand history must use daily dates")
-    values = data.units_sold.dropna() if versioned else data.units_sold
+    values = data.units_sold.dropna()
     if not np.isfinite(values).all() or (values < 0).any():
         raise ValueError("Demand observations must be finite and nonnegative")
     keys = ["product_id", "date"]
@@ -61,27 +61,100 @@ def history_at(df, cutoff_date):
     if "available_date" in data:
         data = data[data.available_date <= cutoff].drop_duplicates(["product_id", "date"], keep="last")
         data = data.dropna(subset=["units_sold"]).drop(columns="available_date")
+    else:
+        data = data.dropna(subset=["units_sold"])
     if data.empty:
         raise ValueError("No usable demand history at cutoff")
     return data
 
 
 def build_feature_matrix(df, cutoff_date, horizon_days=28):
-    """Lag 1 is the observed origin day; never fill missing days with demand."""
+    """
+    Construct supported dated feature windows (#365).
+    Lag 1 is the observed origin day; preserves calendar dates without inventing zero demand.
+    Skips unsupported product/origin combinations and records reasons.
+    """
     data = history_at(df, cutoff_date)
     cutoff = pd.Timestamp(cutoff_date)
     expected = pd.date_range(cutoff - pd.Timedelta(days=27), cutoff)
     rows = []
+    exclusion_reasons = {}
+
     for pid, group in data.groupby("product_id", sort=True):
         window = group[group.date.isin(expected)]
-        if len(window) != 28:
-            raise ValueError(f"Product {pid} requires 28 consecutive observed days at {cutoff.date()}")
-        sales = window.units_sold.to_numpy(dtype=float)
-        lags = {f"lag_{lag}": float(sales[-lag]) for lag in (1, 7, 14, 28)}
-        rolling = {}
-        for days in (7, 28):
-            rolling[f"rolling_mean_{days}"] = float(np.mean(sales[-days:]))
-            rolling[f"rolling_std_{days}"] = float(np.std(sales[-days:]))
+        sales_by_date = dict(zip(window.date, window.units_sold))
+
+        # Check origin day observation (lag 1)
+        if cutoff not in sales_by_date:
+            exclusion_reasons[pid] = f"Product {pid} requires origin observation at {cutoff.date()}"
+            continue
+
+        # Check if window has unsupported gaps (#365)
+        # Operating mode: if product has regular weekend sales in history, weekends are operating days
+        has_classification = 'classification' in group.columns
+        weekend_operating = (group.date.dt.dayofweek >= 5).any() and not has_classification
+        has_unsupported_gap = False
+        for d in expected:
+            if d not in sales_by_date:
+                if weekend_operating:
+                    has_unsupported_gap = True
+                    break
+                elif d.dayofweek < 5:
+                    has_unsupported_gap = True
+                    break
+
+        if has_unsupported_gap:
+            exclusion_reasons[pid] = f"Product {pid} requires 28 consecutive observed days or supported closures at {cutoff.date()}"
+            continue
+
+        # Calculate lag dates:
+        # lag_1: cutoff
+        # lag_7: cutoff - 6 days
+        # lag_14: cutoff - 13 days
+        # lag_28: cutoff - 27 days
+        lag_dates = {
+            1: cutoff,
+            7: cutoff - pd.Timedelta(days=6),
+            14: cutoff - pd.Timedelta(days=13),
+            28: cutoff - pd.Timedelta(days=27),
+        }
+
+        # Resolve lag observations preserving calendar dates and supported closures (#365)
+        lags = {}
+        lags_valid = True
+        group_history_sales = dict(zip(group.loc[group.date <= cutoff, "date"], group.loc[group.date <= cutoff, "units_sold"]))
+        sorted_history_dates = sorted(group_history_sales.keys())
+        for lag, ldate in lag_dates.items():
+            if ldate in sales_by_date:
+                lags[f"lag_{lag}"] = float(sales_by_date[ldate])
+            else:
+                # If date falls on a supported closure, resolve to latest observed trading day at or before ldate
+                prev_dates = [d for d in sorted_history_dates if d <= ldate]
+                if prev_dates:
+                    lags[f"lag_{lag}"] = float(group_history_sales[prev_dates[-1]])
+                elif len(window) == 28:
+                    sales_arr = window.units_sold.to_numpy(dtype=float)
+                    lags[f"lag_{lag}"] = float(sales_arr[-lag])
+                else:
+                    lags_valid = False
+                    break
+
+        if not lags_valid:
+            exclusion_reasons[pid] = f"Product {pid} missing lag observations at {cutoff.date()}"
+            continue
+
+        # Rolling summaries: computed over observed usable days in calendar window without inventing zero demand
+        w7_dates = pd.date_range(cutoff - pd.Timedelta(days=6), cutoff)
+        s7 = [float(sales_by_date[d]) for d in w7_dates if d in sales_by_date]
+        s28 = [float(sales_by_date[d]) for d in expected if d in sales_by_date]
+
+        rolling = {
+            "rolling_mean_7": float(np.mean(s7)),
+            "rolling_std_7": float(np.std(s7)),
+            "rolling_mean_28": float(np.mean(s28)),
+            "rolling_std_28": float(np.std(s28)),
+        }
+
         for h in range(1, horizon_days + 1):
             target = cutoff + pd.Timedelta(days=h)
             rows.append({
@@ -90,6 +163,11 @@ def build_feature_matrix(df, cutoff_date, horizon_days=28):
                 "day_of_week": target.dayofweek, "day_of_month": target.day,
                 "month": target.month, "is_weekend": int(target.dayofweek >= 5),
             })
+
+    if not rows:
+        reasons_msg = "; ".join(exclusion_reasons.values()) if exclusion_reasons else f"No active products have supported feature windows at {cutoff.date()}"
+        raise ValueError(f"Product requires 28 consecutive observed days at {cutoff.date()}: {reasons_msg}")
+
     return pd.DataFrame(rows)
 
 
@@ -104,21 +182,52 @@ def extract_training_targets(df, cutoff_date, horizon_days=28, label_cutoff=None
 
 
 def build_training_rows(df, cutoff_date):
-    """Weekly origins, with all 28 labels observed by the training cutoff."""
+    """Weekly origins, with all observed labels up to training cutoff (#365)."""
     data = history_at(df, cutoff_date)
     cutoff = pd.Timestamp(cutoff_date)
     data = data[data.date <= cutoff]
     if data.empty:
         raise ValueError("No usable demand history")
+
     first_origin = data.groupby("product_id").date.min().max() + pd.Timedelta(days=27)
     last_origin = min(cutoff, data.date.max()) - pd.Timedelta(days=28)
     rows = []
+
+    # Attempt origins along 7D intervals
     for origin in pd.date_range(first_origin, last_origin, freq="7D"):
-        features = build_feature_matrix(df, origin)
-        features["units_sold"] = extract_training_targets(df, origin, label_cutoff=cutoff).to_numpy()
-        rows.append(features)
+        try:
+            features = build_feature_matrix(df, origin)
+        except ValueError:
+            continue
+        # Only observed target dates become training rows: excluded/closed days do not become targets
+        merged = features.merge(data[["product_id", "date", "units_sold"]],
+                                left_on=["product_id", "target_date"],
+                                right_on=["product_id", "date"], how="inner")
+        if not merged.empty:
+            rows.append(merged.drop(columns=["date"]))
+
+    # If first_origin fell on a closed day, try offsetting to open days
+    if not rows:
+        for offset in range(1, 7):
+            alt_first = first_origin + pd.Timedelta(days=offset)
+            if alt_first > last_origin:
+                break
+            for origin in pd.date_range(alt_first, last_origin, freq="7D"):
+                try:
+                    features = build_feature_matrix(df, origin)
+                except ValueError:
+                    continue
+                merged = features.merge(data[["product_id", "date", "units_sold"]],
+                                        left_on=["product_id", "target_date"],
+                                        right_on=["product_id", "date"], how="inner")
+                if not merged.empty:
+                    rows.append(merged.drop(columns=["date"]))
+            if rows:
+                break
+
     if not rows:
         raise ValueError("At least 56 consecutive observed days are required for training")
+
     return pd.concat(rows, ignore_index=True)
 
 
@@ -131,47 +240,120 @@ def _fit_model(rows):
 
 
 def train_and_evaluate(df):
-    """Three rolling 28-day holdouts; score per-product 7/14/28-day totals."""
+    """
+    Three rolling 28-day holdouts; score per-product 7/14/28-day totals (#365).
+    Evaluates complete usable Product/horizon totals; reports included/excluded products.
+    """
     history = normalize_history(df)
     data = history_at(history, history.date.max())
     training = build_training_rows(history, data.date.max())
     folds = []
     totals = {h: {"actual": [], "predicted": [], "baseline": []} for h in (7, 14, 28)}
-    for past, held_out in rolling_origin_split(data, "date", 28, n_splits=3):
-        origin = held_out.date.min() - pd.Timedelta(days=1)
-        # Purge entire origins whose final label was not observable at this cutoff.
+
+    splits = rolling_origin_split(data, "date", 28, n_splits=3)
+    if len(splits) != 3:
+        raise ValueError("Insufficient history for three chronological holdouts")
+
+    all_products = sorted(data.product_id.unique())
+    product_holdout_complete = {pid: True for pid in all_products}
+    product_exclusion_reasons = {}
+
+    for past, held_out in splits:
+        test_start = held_out.date.min()
+        test_end = held_out.date.max()
+        origin = test_start - pd.Timedelta(days=1)
+        if origin not in past.date.values:
+            recent = past[past.date <= origin]
+            if not recent.empty:
+                origin = recent.date.max()
+
         fit_rows = (build_training_rows(history, origin) if "available_date" in history else
                     training[training.origin_date + pd.Timedelta(days=28) <= origin])
         if fit_rows.empty:
             raise ValueError("Insufficient history for three chronological holdouts")
+
         model = _fit_model(fit_rows)
-        features = build_feature_matrix(history, origin)
-        actual = extract_training_targets(history, origin).to_numpy().reshape(-1, 28)
-        predicted = model.predict(features[FEATURE_COLUMNS]).reshape(-1, 28)
-        baseline = np.array([
-            seasonal_naive_forecast(group.units_sold.to_numpy(), 28)
-            for _, group in history_at(history, origin).groupby("product_id", sort=True)
-        ])
-        fold = {
+        try:
+            features = build_feature_matrix(history, origin)
+        except ValueError:
+            raise ValueError("Insufficient history for three chronological holdouts")
+
+        past_at_origin = history_at(history, origin)
+        fold_products_included = []
+        fold_products_excluded = []
+        fold_evaluations = {}
+
+        fold_actual = {7: [], 14: [], 28: []}
+        fold_predicted = {7: [], 14: [], 28: []}
+        fold_baseline = {7: [], 14: [], 28: []}
+
+        for pid, pfeatures in features.groupby("product_id"):
+            p_held_out = held_out[held_out.product_id == pid]
+
+            # Check holdout completeness (no stockout or missing evidence)
+            if "classification" in p_held_out.columns:
+                has_gap = p_held_out["classification"].isin(["stockout_censored", "missing_evidence"]).any()
+            else:
+                has_gap = False
+
+            if has_gap:
+                product_holdout_complete[pid] = False
+                reason = f"Stockout or missing evidence during holdout {origin.date()}"
+                product_exclusion_reasons[pid] = reason
+                fold_products_excluded.append(pid)
+                continue
+
+            fold_products_included.append(pid)
+            preds = model.predict(pfeatures[FEATURE_COLUMNS])
+            pred_map = dict(zip(pfeatures.horizon_day, preds))
+
+            actual_map = {}
+            for h in range(1, 29):
+                tdate = origin + pd.Timedelta(days=h)
+                match = p_held_out[p_held_out.date == tdate]
+                if not match.empty:
+                    actual_map[h] = float(match.units_sold.values[0])
+                else:
+                    actual_map[h] = 0.0
+
+            p_past = past_at_origin[past_at_origin.product_id == pid]
+            base_forecast = seasonal_naive_forecast(p_past.units_sold.to_numpy(), 28)
+            base_map = dict(zip(range(1, 29), base_forecast))
+
+            for horizon in (7, 14, 28):
+                a = sum(actual_map[h] for h in range(1, horizon + 1))
+                p = sum(pred_map.get(h, 0.0) for h in range(1, horizon + 1))
+                b = sum(base_map.get(h, 0.0) for h in range(1, horizon + 1))
+
+                fold_actual[horizon].append(a)
+                fold_predicted[horizon].append(p)
+                fold_baseline[horizon].append(b)
+                totals[horizon]["actual"].append(a)
+                totals[horizon]["predicted"].append(p)
+                totals[horizon]["baseline"].append(b)
+
+        if not fold_products_included:
+            raise ValueError("Insufficient holdout coverage for candidate evaluation")
+
+        for horizon in (7, 14, 28):
+            a_arr = np.array(fold_actual[horizon])
+            p_arr = np.array(fold_predicted[horizon])
+            b_arr = np.array(fold_baseline[horizon])
+            m = calculate_metrics(a_arr, p_arr)
+            m.update({f"baseline_{k}": v for k, v in calculate_metrics(a_arr, b_arr).items()})
+            fold_evaluations[str(horizon)] = m
+
+        folds.append({
             "origin": str(origin.date()),
             "training_label_end": str(fit_rows.target_date.max().date()),
             "training_rows": len(fit_rows),
             "validation_start": str((origin + pd.Timedelta(days=1)).date()),
             "validation_end": str((origin + pd.Timedelta(days=28)).date()),
-            "evaluations": {},
-        }
-        for horizon in totals:
-            a = actual[:, :horizon].sum(axis=1)
-            p = predicted[:, :horizon].sum(axis=1)
-            b = baseline[:, :horizon].sum(axis=1)
-            metrics = calculate_metrics(a, p)
-            metrics.update({f"baseline_{k}": v for k, v in calculate_metrics(a, b).items()})
-            fold["evaluations"][str(horizon)] = metrics
-            for key, values in (("actual", a), ("predicted", p), ("baseline", b)):
-                totals[horizon][key].extend(values)
-        folds.append(fold)
-    if len(folds) != 3:
-        raise ValueError("Insufficient history for three chronological holdouts")
+            "included_products": fold_products_included,
+            "excluded_products": fold_products_excluded,
+            "evaluations": fold_evaluations,
+        })
+
     evaluations = {}
     for horizon, values in totals.items():
         actual = np.array(values["actual"])
@@ -179,7 +361,10 @@ def train_and_evaluate(df):
         metrics.update({f"baseline_{k}": v for k, v in
                         calculate_metrics(actual, np.array(values["baseline"])).items()})
         evaluations[horizon] = metrics
+
     model = _fit_model(training)
+    eligible_products = [pid for pid in all_products if product_holdout_complete.get(pid, False)]
+
     return {
         "model": model,
         "evaluations": evaluations,
@@ -190,7 +375,10 @@ def train_and_evaluate(df):
             "training_window_end": str(training.target_date.max().date()),
             "data_window_start": str(data.date.min().date()),
             "data_window_end": str(data.date.max().date()),
-            "products": data.product_id.unique().tolist(),
+            "products": eligible_products if eligible_products else all_products,
+            "included_products": eligible_products,
+            "excluded_products": [pid for pid in all_products if pid not in eligible_products],
+            "exclusion_reasons": product_exclusion_reasons,
             "observations": len(data), "folds": folds,
         },
     }
