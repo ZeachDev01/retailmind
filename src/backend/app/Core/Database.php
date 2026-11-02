@@ -52,6 +52,49 @@ final class Database
         return self::$connection;
     }
 
+    public static function resetConnection(): void
+    {
+        self::$connection = null;
+    }
+
+    public static function connectionWithRetry(
+        ?array $config = null,
+        int $maxAttempts = 5,
+        int $delaySeconds = 2,
+        ?callable $sleepFn = null,
+        ?callable $connector = null
+    ): PDO {
+        $lastException = null;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                if ($connector !== null) {
+                    $conn = $connector();
+                    if ($conn instanceof PDO) {
+                        self::$connection = $conn;
+                        return $conn;
+                    }
+                }
+                return self::connection($config);
+            } catch (Throwable $exception) {
+                $lastException = $exception;
+                if ($attempt >= $maxAttempts) {
+                    break;
+                }
+                if ($sleepFn !== null) {
+                    $sleepFn($delaySeconds);
+                } else {
+                    sleep($delaySeconds);
+                }
+            }
+        }
+
+        throw new RuntimeException(
+            'Unable to connect to the database after ' . $maxAttempts . ' attempts. Last error: ' . ($lastException ? $lastException->getMessage() : 'unknown'),
+            0,
+            $lastException
+        );
+    }
+
     public static function transaction(callable $callback)
     {
         $pdo = self::connection();

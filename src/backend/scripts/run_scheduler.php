@@ -21,7 +21,24 @@ if ($lock === false) {
 if (!flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
-$pdo = \App\Core\Database::connection();
+
+// Load retained configuration if present
+$runnerConfigPath = dirname(__DIR__) . '/config/forecasting_runner.json';
+$runnerConfig = [];
+if (file_exists($runnerConfigPath)) {
+    $runnerConfig = json_decode((string)file_get_contents($runnerConfigPath), true) ?: [];
+}
+
+try {
+    $pdo = \App\Core\Database::connectionWithRetry();
+} catch (\Throwable $e) {
+    ForecastingSchedulerService::recordLocalDiagnostic(
+        'Database service unavailable after startup retries: ' . $e->getMessage(),
+        'DB_STARTUP_TIMEOUT'
+    );
+    fwrite(STDERR, "Forecasting scheduler: database unavailable after startup retries: " . $e->getMessage() . PHP_EOL);
+    exit(1);
+}
 
 $scheduler = new ForecastingSchedulerService($pdo);
 $result = $scheduler->runScheduler();
@@ -33,9 +50,9 @@ foreach ($result['training_eligibility'] as $product) {
 
 $queued = $result['forecast_jobs_queued'] + $result['retrain_jobs_queued'];
 
-function triggerWorkerAsync(string $workerScript): void {
+function triggerWorkerAsync(string $workerScript, string $pythonBinary = 'python'): void {
     if (!file_exists($workerScript)) return;
-    $command = 'python ' . escapeshellarg($workerScript) . ' --run-once';
+    $command = escapeshellarg($pythonBinary) . ' ' . escapeshellarg($workerScript) . ' --run-once';
     echo "Triggering ml_worker.py asynchronously...\n";
     if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
         pclose(popen('start /B "" ' . $command . ' > NUL 2>&1', 'r'));
@@ -44,14 +61,15 @@ function triggerWorkerAsync(string $workerScript): void {
     }
 }
 
+$pythonBinary = $runnerConfig['python_binary'] ?? 'python';
 $workerScript = dirname(__DIR__) . '/scripts/ml_worker.py';
 if ($queued > 0) {
     echo "Scheduler queued {$queued} jobs.\n";
-    triggerWorkerAsync($workerScript);
+    triggerWorkerAsync($workerScript, $pythonBinary);
 } else {
     // Check for queued or stalled jobs needing worker execution
     $stmt = $pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE status IN ('queued', 'running')");
     if ((int)$stmt->fetchColumn() > 0) {
-        triggerWorkerAsync($workerScript);
+        triggerWorkerAsync($workerScript, $pythonBinary);
     }
 }
