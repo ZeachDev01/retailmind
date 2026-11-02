@@ -70,17 +70,44 @@ class CashierShiftService
 
     private RoleCapabilityPolicy $policy;
     private \FiscalPeriodGuardService $fiscalPeriodGuard;
+    private ShiftReconciliationCalculator $calculator;
+    private ?string $cachedDisplayNameCol = null;
 
-    public function __construct(private PDO $pdo, ?RoleCapabilityPolicy $policy = null)
-    {
+    public function __construct(
+        private PDO $pdo,
+        ?RoleCapabilityPolicy $policy = null,
+        ?ShiftReconciliationCalculator $calculator = null
+    ) {
         $this->policy = $policy ?? new RoleCapabilityPolicy();
         $this->fiscalPeriodGuard = new \FiscalPeriodGuardService($pdo);
+        $this->calculator = $calculator ?? new ShiftReconciliationCalculator($pdo);
+    }
+
+    private function userDisplayNameColumn(string $alias = "u"): string
+    {
+        if ($this->cachedDisplayNameCol === null) {
+            try {
+                $this->pdo->query("SELECT display_name FROM users LIMIT 0");
+                $this->cachedDisplayNameCol = "display_name";
+            } catch (\Throwable) {
+                $this->cachedDisplayNameCol = "full_name AS display_name";
+            }
+        }
+        return "{$alias}.{$this->cachedDisplayNameCol}";
+    }
+
+    private function userNameField(): string
+    {
+        if ($this->cachedDisplayNameCol === null) {
+            $this->userDisplayNameColumn();
+        }
+        return $this->cachedDisplayNameCol;
     }
 
     public function getOpenShift(int $cashierId): ?array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT cs.*, u.display_name, r.name AS register_name
+            "SELECT cs.*, " . $this->userDisplayNameColumn("u") . ", r.name AS register_name
              FROM cashier_shifts cs
              JOIN users u ON u.user_id = cs.cashier_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
@@ -588,7 +615,7 @@ class CashierShiftService
         // this array and the page writes it into the closing Protected Audit
         // Record, so the record names the Register the drawer was reconciled on.
         $stmt = $this->pdo->prepare(
-            "SELECT cs.*, u.display_name, r.name AS register_name
+            "SELECT cs.*, " . $this->userDisplayNameColumn("u") . ", r.name AS register_name
              FROM cashier_shifts cs
              JOIN users u ON u.user_id = cs.cashier_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
@@ -597,64 +624,11 @@ class CashierShiftService
         $stmt->execute([$shiftId]);
         $shift = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$shift) {
-            throw new RuntimeException('Shift not found.');
+            throw new RuntimeException("Shift not found.");
         }
 
-        $salesStmt = $this->pdo->prepare(
-            "SELECT COUNT(*) AS sale_count,
-                    COALESCE(SUM(total_amount),0) AS total_sales,
-                    COALESCE(SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END),0) AS cash_sales,
-                    COALESCE(SUM(CASE WHEN payment_method='card' THEN total_amount ELSE 0 END),0) AS card_sales,
-                    COALESCE(SUM(CASE WHEN payment_method='ewallet' THEN total_amount ELSE 0 END),0) AS ewallet_sales,
-                    COALESCE(SUM(discount_amount),0) AS discounts
-             FROM sales WHERE shift_id = ?"
-        );
-        $salesStmt->execute([$shiftId]);
-        $sales = $salesStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $moveStmt = $this->pdo->prepare(
-            "SELECT COALESCE(SUM(CASE WHEN movement_type IN ('cash_in','pay_in') THEN amount ELSE 0 END),0) AS cash_in,
-                    COALESCE(SUM(CASE WHEN movement_type IN ('cash_out','pay_out') THEN amount ELSE 0 END),0) AS cash_out,
-                    COALESCE(SUM(CASE WHEN movement_type='safe_drop' THEN amount ELSE 0 END),0) AS safe_drop
-             FROM cash_drawer_movements WHERE shift_id = ?"
-        );
-        $moveStmt->execute([$shiftId]);
-        $movements = $moveStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        $refundStmt = $this->pdo->prepare(
-            "SELECT COALESCE(SUM(sr.refund_amount),0)
-             FROM sale_reversals sr JOIN sales s ON s.sale_id = sr.sale_id
-             WHERE s.shift_id = ? AND sr.status='approved' AND sr.settlement_method='cash'"
-        );
-        $refundStmt->execute([$shiftId]);
-        $approvedReversalCash = (float)$refundStmt->fetchColumn();
-
-        // Ticket #92. An append-only Cash Refund takes cash out of the drawer of
-        // the Cashier Shift that *issued* it, which is not necessarily the shift
-        // the sale ran under: a refund is paid out of the drawer in front of the
-        // Cashier holding the money now, and that is the drawer whose expected
-        // cash has to fall. Joining through the refunded sale's own shift would
-        // charge the refund to a drawer that was already handed back.
-        //
-        // Only cash is subtracted. A refund settled on the original card or
-        // e-wallet method never entered a drawer, so it cannot come out of one.
-        $cashRefundStmt = $this->pdo->prepare(
-            "SELECT COALESCE(SUM(cr.refund_amount),0)
-             FROM cash_refunds cr
-             WHERE cr.shift_id = ? AND cr.payment_method = 'cash'"
-        );
-        $cashRefundStmt->execute([$shiftId]);
-        $cashRefunds = (float)$cashRefundStmt->fetchColumn();
-
-        $expected = (float)$shift['opening_cash'] + (float)($sales['cash_sales'] ?? 0)
-            + (float)($movements['cash_in'] ?? 0) - (float)($movements['cash_out'] ?? 0)
-            - (float)($movements['safe_drop'] ?? 0)
-            - $cashRefunds - $approvedReversalCash;
-
-        return array_merge($shift, $sales, $movements, [
-            'cash_refunds' => round($cashRefunds, 2),
-            'calculated_expected_cash' => round($expected, 2),
-        ]);
+        $summary = $this->calculator->calculateForShift($shiftId, (float)$shift["opening_cash"]);
+        return array_merge($shift, $summary);
     }
 
     /**
@@ -905,7 +879,9 @@ class CashierShiftService
     public function recentShifts(?int $cashierId = null, int $limit = 30): array
     {
         $limit = max(1, min(100, $limit));
-        $sql = "SELECT cs.*, u.display_name, closer.display_name AS closing_actor_name, r.name AS register_name
+        $uCol = $this->userDisplayNameColumn("u");
+        $closerCol = str_contains($this->userDisplayNameColumn("closer"), "AS") ? "closer.full_name" : "closer.display_name";
+        $sql = "SELECT cs.*, {$uCol}, {$closerCol} AS closing_actor_name, r.name AS register_name
                 FROM cashier_shifts cs
                 JOIN users u ON u.user_id=cs.cashier_id
                 LEFT JOIN users closer ON closer.user_id=cs.closed_by
@@ -924,7 +900,7 @@ class CashierShiftService
     public function drawerMovements(int $shiftId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT cdm.*, u.display_name FROM cash_drawer_movements cdm
+            "SELECT cdm.*, " . $this->userDisplayNameColumn("u") . " FROM cash_drawer_movements cdm
              JOIN users u ON u.user_id=cdm.recorded_by WHERE cdm.shift_id=? ORDER BY cdm.created_at DESC"
         );
         $stmt->execute([$shiftId]);
@@ -972,7 +948,7 @@ class CashierShiftService
             }
         }
 
-        $uStmt = $this->pdo->prepare('SELECT display_name FROM users WHERE user_id = ?');
+        $uStmt = $this->pdo->prepare("SELECT {$this->userNameField()} FROM users WHERE user_id = ?");
         $uStmt->execute([$reviewerId]);
         $reviewerName = (string)($uStmt->fetchColumn() ?: "User #{$reviewerId}");
 
@@ -1028,7 +1004,7 @@ class CashierShiftService
             throw new DomainException('Only reviewed Cashier Shifts can be reopened.');
         }
 
-        $uStmt = $this->pdo->prepare('SELECT display_name FROM users WHERE user_id = ?');
+        $uStmt = $this->pdo->prepare("SELECT {$this->userNameField()} FROM users WHERE user_id = ?");
         $uStmt->execute([$actorId]);
         $actorName = (string)($uStmt->fetchColumn() ?: "User #{$actorId}");
 

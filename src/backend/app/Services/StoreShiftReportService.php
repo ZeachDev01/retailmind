@@ -22,9 +22,15 @@ final class StoreShiftReportService
         'Counted Cash', 'Variance', 'Variance Explanation', 'Material Variance', 'Closing Notes',
     ];
 
-    public function __construct(private PDO $pdo, private ?RoleCapabilityPolicy $policy = null)
-    {
+    private ShiftReconciliationCalculator $calculator;
+
+    public function __construct(
+        private PDO $pdo,
+        private ?RoleCapabilityPolicy $policy = null,
+        ?ShiftReconciliationCalculator $calculator = null
+    ) {
         $this->policy ??= new RoleCapabilityPolicy();
+        $this->calculator = $calculator ?? new ShiftReconciliationCalculator($pdo);
     }
 
     public function report(string $role, array $filters): array
@@ -79,47 +85,17 @@ final class StoreShiftReportService
         $summaries = [];
         $selectedShifts = 'SELECT cs.shift_id FROM cashier_shifts cs WHERE ' . implode(' AND ', $where);
         if ($records) {
-            foreach ([
-                "SELECT shift_id, COUNT(*) AS sale_count, SUM(total_amount) AS total_sales,
-                        SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END) AS cash_sales,
-                        SUM(CASE WHEN payment_method='card' THEN total_amount ELSE 0 END) AS card_sales,
-                        SUM(CASE WHEN payment_method='ewallet' THEN total_amount ELSE 0 END) AS ewallet_sales
-                 FROM sales WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
-                "SELECT shift_id,
-                        SUM(CASE WHEN movement_type IN ('cash_in','pay_in') THEN amount ELSE 0 END) AS cash_in,
-                        SUM(CASE WHEN movement_type IN ('cash_out','pay_out') THEN amount ELSE 0 END) AS cash_out,
-                        SUM(CASE WHEN movement_type='safe_drop' THEN amount ELSE 0 END) AS safe_drop
-                 FROM cash_drawer_movements WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
-                "SELECT shift_id,
-                        SUM(CASE WHEN payment_method='cash' THEN refund_amount ELSE 0 END) AS cash_refunds,
-                        SUM(CASE WHEN payment_method='card' THEN refund_amount ELSE 0 END) AS card_refunds,
-                        SUM(CASE WHEN payment_method='ewallet' THEN refund_amount ELSE 0 END) AS ewallet_refunds
-                 FROM cash_refunds WHERE shift_id IN ($selectedShifts) GROUP BY shift_id",
-                "SELECT s.shift_id, SUM(sr.refund_amount) AS reversal_cash
-                 FROM sale_reversals sr JOIN sales s ON s.sale_id=sr.sale_id
-                 WHERE s.shift_id IN ($selectedShifts) AND sr.status='approved' AND sr.settlement_method='cash'
-                 GROUP BY s.shift_id",
-            ] as $sql) {
-                $aggregate = $this->pdo->prepare($sql);
-                $aggregate->execute($params);
-                foreach ($aggregate->fetchAll(PDO::FETCH_ASSOC) as $totals) {
-                    $id = (int)$totals['shift_id'];
-                    $summaries[$id] = array_merge($summaries[$id] ?? [], $totals);
-                }
+            $openingCashes = [];
+            foreach ($records as $record) {
+                $openingCashes[(int)$record['shift_id']] = (float)$record['opening_cash'];
             }
+            $summaries = $this->calculator->calculateForSubquery($selectedShifts, $params, $openingCashes);
         }
         $rows = [];
         foreach ($records as $record) {
             $id = (int)$record['shift_id'];
-            $summary = array_merge($record, array_fill_keys([
-                'sale_count', 'total_sales', 'cash_sales', 'card_sales', 'ewallet_sales',
-                'cash_in', 'cash_out', 'safe_drop', 'cash_refunds', 'card_refunds', 'ewallet_refunds', 'reversal_cash',
-            ], 0), $summaries[$id] ?? []);
+            $summary = array_merge($record, $summaries[$id] ?? ShiftReconciliationCalculator::defaultSummary((float)$record['opening_cash']));
             $refunds = ['cash' => $summary['cash_refunds'], 'card' => $summary['card_refunds'], 'ewallet' => $summary['ewallet_refunds']];
-            // Cash Refunds belong to the issuing drawer; legacy reversals follow the original sale.
-            $summary['calculated_expected_cash'] = round((float)$record['opening_cash'] + (float)$summary['cash_sales']
-                + (float)$summary['cash_in'] - (float)$summary['cash_out'] - (float)$summary['safe_drop']
-                - (float)$summary['cash_refunds'] - (float)$summary['reversal_cash'], 2);
             $closed = $record['status'] === 'closed';
             $rows[] = [
                 'Record' => 'Cashier Shift', 'Date' => substr((string)$record['opened_at'], 0, 10),
