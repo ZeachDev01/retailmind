@@ -21,16 +21,17 @@ MODEL_PARAMETERS = {"n_estimators": 15, "max_depth": 8, "random_state": 42}
 def normalize_history(df):
     if "Store ID" in df and df["Store ID"].nunique() != 1:
         raise ValueError("Select exactly one isolated dataset Store")
+    renamed = df.rename(columns={
+        "Date": "date", "Product ID": "product_id", "Units Sold": "units_sold",
+    })
     columns = ["date", "product_id", "units_sold"]
-    versioned = "available_date" in df
+    versioned = "available_date" in renamed
     if versioned:
         columns.append("available_date")
-    for extra in ("price", "is_on_promotion", "out_of_stock"):
-        if extra in df:
+    for extra in ["price", "is_on_promotion", "out_of_stock", "classification", "source", "recorded_sales_units"]:
+        if extra in renamed:
             columns.append(extra)
-    data = df.rename(columns={
-        "Date": "date", "Product ID": "product_id", "Units Sold": "units_sold",
-    })[columns].copy()
+    data = renamed[columns].copy()
     data["date"] = pd.to_datetime(data["date"], errors="raise")
     data["units_sold"] = pd.to_numeric(data["units_sold"], errors="raise")
     if data.empty or data[["date", "product_id"]].isna().any().any():

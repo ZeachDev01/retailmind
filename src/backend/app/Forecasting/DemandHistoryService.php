@@ -88,113 +88,304 @@ class DemandHistoryService
                     'price' => $futurePrice,
                     'is_on_promotion' => $futurePromo,
                     'out_of_stock' => null,
+                    'source' => null,
+                    'recorded_sales_units' => 0,
                 ];
                 $current->modify('+1 day');
                 continue;
             }
 
             // 1. Calendar Status at cutoff
-            $calStatus = $this->calendar->getCalendarDateStatusAtCutoff($pdo, $dateStr, $cutoff);
-            
-            // 2. Stock context reconstruction from audited movements at cutoff
-            $stockMovementsStmt = $pdo->prepare("
-                SELECT COUNT(*) AS cnt, COALESCE(SUM(change_qty), 0) AS total_qty
-                FROM stock_movements
-                WHERE product_id = ? AND moved_at <= ?
-            ");
-            $stockMovementsStmt->execute([$productId, $effectiveEnd]);
-            $stockRow = $stockMovementsStmt->fetch(PDO::FETCH_ASSOC);
-            $hasStockEvidence = ((int)($stockRow['cnt'] ?? 0)) > 0;
-            $endOfDayStock = (int)($stockRow['total_qty'] ?? 0);
-            
-            // 3. Observed Sales & Historical Attribution
-            // Sold units within the day up to the effective cutoff, in Base Units.
-            $soldStmt = $pdo->prepare("
-                SELECT COUNT(*) AS records, COALESCE(SUM(" . $this->saleUnitsExpression($pdo, 'si') . "), 0) AS units
-                FROM sale_items si
-                JOIN sales s ON si.sale_id = s.sale_id
-                WHERE si.product_id = ?
-                  AND s.sale_date >= ? AND s.sale_date <= ?
-            ");
-            $soldStmt->execute([$productId, $startOfDay, $effectiveEnd]);
-            $sales = $soldStmt->fetch(PDO::FETCH_ASSOC);
-            $sold = (int)$sales['units'];
-            $imported = false;
-            if ((int)$sales['records'] === 0 && $endOfDay <= $cutoff) {
-                // Imported totals certify historical observations, not their upload date.
-                $importStmt = $pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?
-                    AND NOT EXISTS (SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-                        WHERE si.product_id = ? AND s.sale_date >= ? AND s.sale_date <= ?)');
-                $importStmt->execute([$productId, $dateStr, $productId, $startOfDay, $endOfDay]);
-                $imported = $importStmt->fetchColumn();
-                if ($imported !== false) $sold = (int)$imported;
+            $calEvidence = null;
+            if (method_exists($this->calendar, 'getCalendarDateEvidenceAtCutoff')) {
+                try {
+                    $calEvidence = $this->calendar->getCalendarDateEvidenceAtCutoff($pdo, $dateStr, $cutoff);
+                } catch (Throwable) {
+                }
             }
-            
+            $calStatus = $calEvidence ? $calEvidence['status'] : $this->calendar->getCalendarDateStatusAtCutoff($pdo, $dateStr, $cutoff);
+            $hasSaleOpening = $calEvidence
+                ? (!empty($calEvidence['has_sale_override']) || ($calEvidence['source'] ?? null) === 'sale')
+                : false;
+
+            // 2. Store-level sales evidence at cutoff
+            $storeSalesCount = 0;
+            $firstStoreSale = null;
+            try {
+                $storeSalesStmt = $pdo->prepare("
+                    SELECT COUNT(*) AS cnt, MIN(sale_date) AS first_sale
+                    FROM sales
+                    WHERE sale_date >= ? AND sale_date <= ?
+                ");
+                $storeSalesStmt->execute([$startOfDay, $effectiveEnd]);
+                $storeSalesRow = $storeSalesStmt->fetch(PDO::FETCH_ASSOC);
+                $storeSalesCount = (int)($storeSalesRow['cnt'] ?? 0);
+                $firstStoreSale = $storeSalesRow['first_sale'] ?? null;
+            } catch (Throwable) {
+            }
+
+            // 3. Stock context reconstruction from audited movements at cutoff
+            $allMovements = [];
+            try {
+                $hasMovementId = isset($this->columns($pdo, 'stock_movements')['movement_id']);
+                $orderClause = $hasMovementId ? "ORDER BY moved_at ASC, movement_id ASC" : "ORDER BY moved_at ASC";
+                $movementsStmt = $pdo->prepare("
+                    SELECT change_qty, moved_at
+                    FROM stock_movements
+                    WHERE product_id = ? AND moved_at <= ?
+                    {$orderClause}
+                ");
+                $movementsStmt->execute([$productId, $effectiveEnd]);
+                $allMovements = $movementsStmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable) {
+            }
+
+            $hasStockEvidence = count($allMovements) > 0;
+            $priorCount = 0;
+            $priorBalance = 0;
+            $dayMovements = [];
+
+            foreach ($allMovements as $mov) {
+                if ($mov['moved_at'] < $startOfDay) {
+                    $priorCount++;
+                    $priorBalance += (int)$mov['change_qty'];
+                } else {
+                    $dayMovements[] = $mov;
+                }
+            }
+
+            $endOfDayStock = $priorBalance;
+            foreach ($dayMovements as $mov) {
+                $endOfDayStock += (int)$mov['change_qty'];
+            }
+
+            // 4. Observed Sales & Historical Attribution
+            $sold = 0;
+            $salesRecords = 0;
+            try {
+                $soldStmt = $pdo->prepare("
+                    SELECT COUNT(*) AS records, COALESCE(SUM(" . $this->saleUnitsExpression($pdo, 'si') . "), 0) AS units
+                    FROM sale_items si
+                    JOIN sales s ON si.sale_id = s.sale_id
+                    WHERE si.product_id = ?
+                      AND s.sale_date >= ? AND s.sale_date <= ?
+                ");
+                $soldStmt->execute([$productId, $startOfDay, $effectiveEnd]);
+                $sales = $soldStmt->fetch(PDO::FETCH_ASSOC);
+                $sold = (int)($sales['units'] ?? 0);
+                $salesRecords = (int)($sales['records'] ?? 0);
+            } catch (Throwable) {
+            }
+
+            $source = 'pos';
+            $imported = false;
+            if ($salesRecords === 0 && $endOfDay <= $cutoff) {
+                try {
+                    $importStmt = $pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?
+                        AND NOT EXISTS (SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                            WHERE si.product_id = ? AND s.sale_date >= ? AND s.sale_date <= ?)');
+                    $importStmt->execute([$productId, $dateStr, $productId, $startOfDay, $endOfDay]);
+                    $imported = $importStmt->fetchColumn();
+                    if ($imported !== false) {
+                        $sold = (int)$imported;
+                        $source = 'import';
+                    }
+                } catch (Throwable) {
+                }
+            }
+
             // Approved sale reversals known by the cutoff, in Base Units
-            $reversedStmt = $pdo->prepare("
-                SELECT COALESCE(SUM(" . $this->reversalUnitsExpression($pdo, 'sri', 'si') . "), 0)
-                FROM sale_reversal_items sri
-                JOIN sale_reversals sr ON sri.reversal_id = sr.reversal_id
-                JOIN sale_items si ON sri.sale_item_id = si.sale_item_id
-                JOIN sales s ON si.sale_id = s.sale_id
-                WHERE sri.product_id = ?
-                  AND s.sale_date >= ? AND s.sale_date <= ?
-                  AND sr.status = 'approved'
-                  AND sr.approved_at <= ?
-            ");
-            $reversedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
-            $reversed = (int)$reversedStmt->fetchColumn();
-            
+            $reversed = 0;
+            try {
+                $reversedStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(" . $this->reversalUnitsExpression($pdo, 'sri', 'si') . "), 0)
+                    FROM sale_reversal_items sri
+                    JOIN sale_reversals sr ON sri.reversal_id = sr.reversal_id
+                    JOIN sale_items si ON sri.sale_item_id = si.sale_item_id
+                    JOIN sales s ON si.sale_id = s.sale_id
+                    WHERE sri.product_id = ?
+                      AND s.sale_date >= ? AND s.sale_date <= ?
+                      AND sr.status = 'approved'
+                      AND sr.approved_at <= ?
+                ");
+                $reversedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
+                $reversed = (int)$reversedStmt->fetchColumn();
+            } catch (Throwable) {
+            }
+
             // Cash refunds created before the cutoff, in Base Units
-            $refundedStmt = $pdo->prepare("
-                SELECT COALESCE(SUM(" . $this->refundUnitsExpression($pdo, 'cri', 'si') . "), 0)
-                FROM cash_refund_items cri
-                JOIN cash_refunds cr ON cri.refund_id = cr.refund_id
-                JOIN sale_items si ON cri.sale_item_id = si.sale_item_id
-                JOIN sales s ON si.sale_id = s.sale_id
-                WHERE cri.product_id = ?
-                  AND s.sale_date >= ? AND s.sale_date <= ?
-                  AND cr.created_at <= ?
-            ");
-            $refundedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
-            $refunded = (int)$refundedStmt->fetchColumn();
-            
+            $refunded = 0;
+            try {
+                $refundedStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(" . $this->refundUnitsExpression($pdo, 'cri', 'si') . "), 0)
+                    FROM cash_refund_items cri
+                    JOIN cash_refunds cr ON cri.refund_id = cr.refund_id
+                    JOIN sale_items si ON cri.sale_item_id = si.sale_item_id
+                    JOIN sales s ON si.sale_id = s.sale_id
+                    WHERE cri.product_id = ?
+                      AND s.sale_date >= ? AND s.sale_date <= ?
+                      AND cr.created_at <= ?
+                ");
+                $refundedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
+                $refunded = (int)$refundedStmt->fetchColumn();
+            } catch (Throwable) {
+            }
+
             $validSalesUnits = max(0, $sold - $reversed - $refunded);
-            
-            // 4. Scheduled Demand Drivers known by cutoff
+
+            // 5. Scheduled Demand Drivers known by cutoff
             $effectiveDrivers = [];
             try {
                 $effectiveDrivers = $this->driverService->getEffectiveDrivers($pdo, $productId, $dateStr, $cutoff);
-            } catch (Throwable $e) {
-                // Degrade gracefully if drivers table not initialized in minimal tests
+            } catch (Throwable) {
             }
-            
-            // 5. Semantic Classification: distinguish Open, Closed, Stockout, Missing
+
+            // 6. Semantic Classification: distinguish Open, Closed, Stockout, Missing
+            $hadIntradayStockout = false;
+            $availabilityUnknown = false;
+            $outOfStock = null;
             $classification = 'missing_evidence';
-            if ($calStatus === 'closed' || $calStatus === 'holiday' || $calStatus === 'exceptional_closure') {
+
+            $isClosed = in_array($calStatus, ['closed', 'holiday', 'exceptional_closure'], true);
+
+            if ($isClosed) {
                 $classification = 'closed';
+                $outOfStock = null;
             } elseif ($imported !== false) {
-                if ($validSalesUnits > 0) {
-                    $classification = 'valid_demand';
-                } elseif ($hasStockEvidence && $endOfDayStock <= 0) {
-                    $classification = 'stockout_censored';
+                if ($hasStockEvidence) {
+                    $running = $priorBalance;
+                    if ($priorCount > 0 && $priorBalance <= 0) {
+                        $replenishedEarly = false;
+                        foreach ($dayMovements as $m) {
+                            $running += (int)$m['change_qty'];
+                            if ($running > 0 && substr($m['moved_at'], 11, 8) <= '08:00:00') {
+                                $replenishedEarly = true;
+                            }
+                        }
+                        if (!$replenishedEarly) {
+                            $hadIntradayStockout = true;
+                        }
+                    }
+                    $running = $priorBalance;
+                    foreach ($dayMovements as $m) {
+                        $running += (int)$m['change_qty'];
+                        if ($running <= 0) {
+                            $hadIntradayStockout = true;
+                        }
+                    }
+                    if ($endOfDayStock <= 0) {
+                        $hadIntradayStockout = true;
+                    }
+
+                    if ($hadIntradayStockout) {
+                        $classification = 'stockout_censored';
+                        $outOfStock = true;
+                    } elseif ($validSalesUnits > 0) {
+                        $classification = 'valid_demand';
+                        $outOfStock = false;
+                    } else {
+                        $classification = 'genuine_zero';
+                        $outOfStock = false;
+                    }
                 } else {
-                    $classification = 'genuine_zero';
+                    if ($validSalesUnits > 0) {
+                        $classification = 'valid_demand';
+                        $outOfStock = null;
+                    } else {
+                        // Imported zero without stock evidence: availability unproven
+                        $classification = 'genuine_zero';
+                        $outOfStock = null;
+                    }
                 }
-            } elseif ($calStatus === 'open') {
-                if ($validSalesUnits > 0) {
-                    $classification = 'valid_demand';
-                } elseif ($hasStockEvidence && $endOfDayStock > 0) {
-                    $classification = 'genuine_zero';
-                } elseif ($hasStockEvidence && $endOfDayStock <= 0) {
-                    $classification = 'stockout_censored';
-                } else {
-                    // Store open but no stock tracking evidence exists: unknown evidence
+            } else {
+                $storeIsOpen = ($calStatus === 'open');
+                $storeHasSalesOpening = $hasSaleOpening;
+                if (!$storeIsOpen && $storeSalesCount > 0) {
+                    $storeIsOpen = true;
+                    $storeHasSalesOpening = true;
+                }
+
+                if (!$storeIsOpen) {
                     $classification = 'missing_evidence';
+                    $outOfStock = null;
+                } elseif (!$hasStockEvidence) {
+                    if ($validSalesUnits > 0) {
+                        $classification = 'valid_demand';
+                        $outOfStock = null;
+                    } else {
+                        $classification = 'missing_evidence';
+                        $outOfStock = null;
+                    }
+                } else {
+                    $tradingStartTime = '08:00:00';
+                    if ($firstStoreSale !== null && substr($firstStoreSale, 11, 8) < $tradingStartTime) {
+                        $tradingStartTime = substr($firstStoreSale, 11, 8);
+                    }
+
+                    if ($priorCount === 0) {
+                        if (!empty($dayMovements)) {
+                            $firstMoveTime = substr($dayMovements[0]['moved_at'], 11, 8);
+                            if ($firstMoveTime > $tradingStartTime) {
+                                $availabilityUnknown = true;
+                            }
+                        } else {
+                            $availabilityUnknown = true;
+                        }
+                    } elseif ($priorBalance <= 0) {
+                        $replenishedBeforeTrading = false;
+                        $earlyBal = $priorBalance;
+                        foreach ($dayMovements as $m) {
+                            $mTime = substr($m['moved_at'], 11, 8);
+                            if ($mTime <= $tradingStartTime) {
+                                $earlyBal += (int)$m['change_qty'];
+                                if ($earlyBal > 0) {
+                                    $replenishedBeforeTrading = true;
+                                }
+                            }
+                        }
+                        if (!$replenishedBeforeTrading) {
+                            $hadIntradayStockout = true;
+                        }
+                    }
+
+                    if ($storeHasSalesOpening && $validSalesUnits === 0) {
+                        $availabilityUnknown = true;
+                    }
+
+                    $runningBal = $priorBalance;
+                    foreach ($dayMovements as $m) {
+                        $runningBal += (int)$m['change_qty'];
+                        $mTime = substr($m['moved_at'], 11, 8);
+                        if ($runningBal <= 0 && ($mTime >= $tradingStartTime || $priorBalance > 0)) {
+                            $hadIntradayStockout = true;
+                        }
+                    }
+
+                    if ($endOfDayStock <= 0) {
+                        $hadIntradayStockout = true;
+                    }
+
+                    if ($availabilityUnknown) {
+                        if ($hadIntradayStockout) {
+                            $classification = 'stockout_censored';
+                            $outOfStock = true;
+                        } else {
+                            $classification = 'missing_evidence';
+                            $outOfStock = null;
+                        }
+                    } elseif ($hadIntradayStockout) {
+                        $classification = 'stockout_censored';
+                        $outOfStock = true;
+                    } elseif ($validSalesUnits > 0) {
+                        $classification = 'valid_demand';
+                        $outOfStock = false;
+                    } else {
+                        $classification = 'genuine_zero';
+                        $outOfStock = false;
+                    }
                 }
             }
-            
-            // 6. Dated Price, Promotion, and Stockout Evidence
+            // Dated Price and Promotion Evidence
             $price = null;
             try {
                 $price = $this->driverService->getEffectivePrice($pdo, $productId, $dateStr, $effectiveEnd);
@@ -215,11 +406,6 @@ class DemandHistoryService
             } catch (Throwable) {
             }
 
-            $outOfStock = null;
-            if ($hasStockEvidence) {
-                $outOfStock = ($endOfDayStock <= 0);
-            }
-
             $results[] = [
                 'date' => $dateStr,
                 'valid_sales_units' => $validSalesUnits,
@@ -235,8 +421,10 @@ class DemandHistoryService
                 'price' => $price,
                 'is_on_promotion' => $isOnPromotion,
                 'out_of_stock' => $outOfStock,
+                'source' => $source,
+                'recorded_sales_units' => $validSalesUnits,
             ];
-            
+
             $current->modify('+1 day');
         }
         
@@ -306,9 +494,12 @@ class DemandHistoryService
                         'product_id' => (int)$product['product_id'],
                         'units_sold' => $known ? $evidence['valid_sales_units'] : null,
                         'available_date' => $cutoff,
+                        'recorded_sales_units' => $evidence['valid_sales_units'],
                         'price' => $evidence['price'],
                         'is_on_promotion' => $evidence['is_on_promotion'],
                         'out_of_stock' => $evidence['out_of_stock'],
+                        'classification' => $evidence['classification'],
+                        'source' => $evidence['source'],
                     ];
                 }
                 $day->modify('+1 day');
