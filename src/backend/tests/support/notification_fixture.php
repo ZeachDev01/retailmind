@@ -64,7 +64,9 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
     } elseif (str_starts_with($argv[1], 'workspace_')) {
         // #262 Workspace-scoped coverage. User 2 holds super_admin plus the admin,
         // inventory_manager, and cashier secondary roles (see theme_fixture.php).
-        if ($argv[1] === 'workspace_seed') {
+        if ($argv[1] === 'workspace_check_stock') {
+            (new NotificationService($pdo))->checkAndNotifyLowStock();
+        } elseif ($argv[1] === 'workspace_seed') {
             $pdo->exec('DELETE FROM notifications WHERE user_id = 2');
             $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,workspace,is_read,created_at) VALUES (?,2,?,?,'Disposable Workspace fixture.',?,?,?)");
             foreach ([
@@ -96,7 +98,7 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
 require __DIR__ . '/theme_fixture.php';
 if ($argv[1] !== 'create') exit;
 $pdo->exec('DELETE FROM notifications');
-$product = $pdo->prepare('INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (?,?,?,?,1,1,1)');
+$product = $pdo->prepare('INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (?,?,?,?,1,1)');
 $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,reference_type,reference_id,workspace,is_read,created_at) VALUES (?,?,?,?,?,?,?,'inventory_manager',FALSE,'2026-10-01 12:00:00')");
 for ($id = 1; $id <= 27; $id++) {
     if ($id <= 13) {

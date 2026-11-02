@@ -171,7 +171,7 @@ class NotificationService
                 'destination' => 'components/' . ($workspace === 'cashier' ? 'cashier' : 'inventory_management') . '/stock_issues.php',
             ], $stmt->fetchAll(PDO::FETCH_ASSOC));
         }
-        $stmt = $this->pdo->prepare("SELECT n.title, n.message, n.attention_destination AS destination
+        $stmt = $this->pdo->prepare("SELECT n.type, n.title, n.message, n.attention_destination AS destination
             FROM attention_states s JOIN notifications n ON n.user_id = s.user_id AND n.attention_key = s.attention_key
             WHERE s.user_id = ? AND s.is_active = 1 AND n.workspace = ? AND n.inapp_enabled = 1
                 AND s.attention_key <> 'platform.settings.changed'

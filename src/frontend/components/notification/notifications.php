@@ -104,7 +104,7 @@ $active_batch_reminders = $inventory_workspace
                     <?php foreach ($required_work as $work): ?>
                         <article class="notification-required-item">
                             <span class="notification-category rounded-md px-3 py-1" hidden>Low stock</span>
-                            <h3><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></a></h3>
+                            <h3><?php if (current_role() === 'admin' && ($work['type'] ?? null) === 'low_stock'): ?><?= htmlspecialchars($work['title']) ?><?php else: ?><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></a><?php endif; ?></h3>
                             <dl class="notification-quantities" hidden>
                                 <div><dt>Current</dt><dd class="notification-current"></dd></div>
                                 <div><dt>Threshold</dt><dd class="notification-threshold"></dd></div>
@@ -226,7 +226,7 @@ $active_batch_reminders = $inventory_workspace
                             <div class="notification-details">
                                 <div class="min-h-0 overflow-hidden">
                                     <div class="notification-description p-5 sm:p-6"><p><?= htmlspecialchars($notif['message']) ?></p><?php
-                                        $destination = $notif['attention_destination'];
+                                        $destination = current_role() === 'admin' && $notif['type'] === 'low_stock' ? null : $notif['attention_destination'];
                                         if ($destination === null && $notif['reference_type'] === 'stock_issue') {
                                             $destination = match (current_role()) {
                                                 'admin' => 'components/administrator/stock_issues.php?detail=' . (int)$notif['reference_id'],
@@ -257,10 +257,10 @@ $active_batch_reminders = $inventory_workspace
         const quantities = description.textContent.match(/Current: (-?\d+(?:\.\d+)?), Threshold: (-?\d+(?:\.\d+)?)\s*$/);
         if (quantities) {
             if (item.classList.contains('notification-required-item')) {
-                const link = item.querySelector('h3 a');
-                const title = link.textContent.match(/^(?:Out of stock|Low Stock Alert): (.+)$/);
+                const heading = item.querySelector('h3 a') || item.querySelector('h3');
+                const title = heading.textContent.match(/^(?:Out of stock|Low Stock Alert): (.+)$/);
                 if (!title) return;
-                link.firstChild.textContent = title[1];
+                heading.firstChild.textContent = title[1];
                 item.querySelector('.notification-category').hidden = false;
             }
             item.querySelector('.notification-current').textContent = quantities[1];
