@@ -1100,7 +1100,6 @@ CREATE TABLE IF NOT EXISTS `barcode_pairings` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`pairing_id`),
   UNIQUE KEY `code` (`code`),
-  KEY `idx_barcode_pairings_code` (`code`),
   KEY `idx_barcode_pairings_expires_at` (`expires_at`),
   KEY `created_by` (`created_by`),
   CONSTRAINT `barcode_pairings_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE

@@ -111,6 +111,24 @@ function login_attempt_count(PDO $pdo, string $identityKey, string $ipAddress, i
     return (int)$stmt->fetchColumn();
 }
 
+function login_attempts_locked(PDO $pdo, string $identityKey, string $ipAddress, array $limits): bool
+{
+    if (login_attempt_count($pdo, $identityKey, $ipAddress, $limits['window_minutes']) < $limits['max_attempts']) {
+        return false;
+    }
+
+    $cutoff = date('Y-m-d H:i:s', time() - max(1, $limits['window_minutes']) * 60);
+    $stmt = $pdo->prepare(
+        'SELECT MAX(attempted_at) FROM login_attempts
+         WHERE username = ? AND ip_address = ? AND was_successful = 0 AND attempted_at >= ?'
+    );
+    $stmt->execute([$identityKey, $ipAddress, $cutoff]);
+    $lastAttempt = $stmt->fetchColumn();
+    $lastAttemptTime = is_string($lastAttempt) ? strtotime($lastAttempt) : false;
+
+    return $lastAttemptTime === false || $lastAttemptTime + max(1, $limits['lockout_minutes']) * 60 > time();
+}
+
 function record_login_attempt(PDO $pdo, string $identityKey, string $ipAddress, bool $success): void
 {
     // The identity key is the resolved-identity throttle key from
@@ -210,6 +228,22 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     $user = $resolved['user'];
     $identifierType = $resolved['identifier_type'];
 
+    $throttleIdentity = null;
+    $throttleIp = null;
+    if (function_exists('login_throttle_identity') && function_exists('record_login_attempt')
+        && function_exists('login_attempts_locked') && function_exists('login_security_limits')) {
+        $throttleIdentity = login_throttle_identity($user, $identifier);
+        $throttleIp = get_client_ip_address();
+        try {
+            if (login_attempts_locked($pdo, $throttleIdentity, $throttleIp, login_security_limits())) {
+                $_SESSION['_login_error'] = 'Invalid username or password.';
+                return false;
+            }
+        } catch (Throwable $throttleException) {
+            error_log('Login throttle check skipped: ' . $throttleException->getMessage());
+        }
+    }
+
     $passwordMatches = $user && password_verify($password, (string)$user['password_hash']);
     $valid = $user
         && $user['status'] === 'active'
@@ -221,9 +255,9 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     // extracted-function contract harnesses (which eval only the named entry
     // points) keep working; accounting must never break sign-in, so a
     // storage failure is logged and swallowed here.
-    if (function_exists('login_throttle_identity') && function_exists('record_login_attempt')) {
+    if ($throttleIdentity !== null && $throttleIp !== null) {
         try {
-            record_login_attempt($pdo, login_throttle_identity($user, $identifier), get_client_ip_address(), $valid);
+            record_login_attempt($pdo, $throttleIdentity, $throttleIp, $valid);
         } catch (Throwable $throttleException) {
             error_log('Login throttle accounting skipped: ' . $throttleException->getMessage());
         }
@@ -366,7 +400,7 @@ function is_remote_request(): bool
     if (!empty($_SESSION['is_remote'])) {
         return true;
     }
-    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_SERVER['HTTP_X_RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
+    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
         return true;
     }
     if (!empty($_SERVER['HTTP_CF_RAY']) || !empty($_SERVER['HTTP_CF_CONNECTING_IP']) || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])) {

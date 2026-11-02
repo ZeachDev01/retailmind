@@ -20,7 +20,6 @@ function pairing_ensure_schema(PDO $pdo): void
         access_token_hash VARCHAR(255) NULL,
         joined_ip VARCHAR(45) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_barcode_pairings_code (code),
         INDEX idx_barcode_pairings_expires_at (expires_at),
         FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE CASCADE
     )");

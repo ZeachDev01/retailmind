@@ -5,19 +5,8 @@
 
 function get_client_ip_address(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
-        $value = $_SERVER[$key] ?? '';
-        if ($value === '') {
-            continue;
-        }
-
-        $ip = trim(explode(',', $value)[0]);
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $ip;
-        }
-    }
-
-    return 'unknown';
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : 'unknown';
 }
 
 function format_audit_value($value): ?string
@@ -558,7 +547,7 @@ function check_and_notify_low_stock(PDO $pdo): void
 }
 
 /**
- * Load PHPMailer from Composer, or from the bundled backend/phpmailer copy.
+ * Load PHPMailer from Composer, or from the bundled frontend/components copy.
  */
 function ensure_phpmailer_loaded(): bool
 {
@@ -574,7 +563,7 @@ function ensure_phpmailer_loaded(): bool
         return true;
     }
 
-    $phpmailerPath = dirname(__DIR__) . '/phpmailer/PHPMailer/src';
+    $phpmailerPath = dirname(__DIR__, 2) . '/frontend/components/phpmailer/PHPMailer/src';
     $requiredFiles = [
         $phpmailerPath . '/Exception.php',
         $phpmailerPath . '/PHPMailer.php',

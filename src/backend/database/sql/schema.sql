@@ -142,7 +142,6 @@ CREATE TABLE `barcode_pairings` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`pairing_id`),
   UNIQUE KEY `code` (`code`),
-  KEY `idx_barcode_pairings_code` (`code`),
   KEY `idx_barcode_pairings_expires_at` (`expires_at`),
   KEY `created_by` (`created_by`),
   CONSTRAINT `barcode_pairings_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
@@ -2000,6 +1999,7 @@ INSERT INTO schema_migrations (migration_key,description) VALUES
 ('202611010004_normalize_held_sale_items','Store held sale cart lines as atomic rows'),
 ('202611010005_users_atomic_names','Split user names into first and last name fields'),
 ('202611010006_normalize_shift_payment_totals','Store Cashier Shift payment totals as atomic payment-type rows'),
+('202611010007_drop_duplicate_barcode_pairing_index','Remove redundant barcode pairing code index'),
 ('202610100000_ml_tables','Create ML jobs, evaluation, and demand forecasts tables'),
 ('202611010003_demand_forecast_lookup','Index forecast job and product lookups'),
 ('202610100001_forecast_history_import','Imported daily demand history for forecasting'),

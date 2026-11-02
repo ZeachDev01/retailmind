@@ -55,16 +55,34 @@ final class MigrationRunner
     public function runPending(callable $output = null): int
     {
         $this->ensureRepository();
-        $count = 0;
-        foreach ($this->pending() as $migration) {
-            $output && $output("Applying {$migration['key']}: {$migration['description']}");
-            ($migration['up'])($this->pdo);
-            $stmt = $this->pdo->prepare(
-                'INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)'
-            );
-            $stmt->execute([$migration['key'], $migration['description']]);
-            $count++;
+        $lockName = null;
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $database = (string)$this->pdo->query('SELECT DATABASE()')->fetchColumn();
+            $lockName = 'rm:mig:' . substr(hash('sha256', $database), 0, 56);
+            $lock = $this->pdo->prepare('SELECT GET_LOCK(?, 30)');
+            $lock->execute([$lockName]);
+            if ((int)$lock->fetchColumn() !== 1) {
+                throw new RuntimeException('Unable to acquire the database migration lock.');
+            }
         }
-        return $count;
+
+        try {
+            $count = 0;
+            foreach ($this->pending() as $migration) {
+                $output && $output("Applying {$migration['key']}: {$migration['description']}");
+                ($migration['up'])($this->pdo);
+                $stmt = $this->pdo->prepare(
+                    'INSERT INTO schema_migrations (migration_key, description) VALUES (?, ?)'
+                );
+                $stmt->execute([$migration['key'], $migration['description']]);
+                $count++;
+            }
+            return $count;
+        } finally {
+            if ($lockName !== null) {
+                $release = $this->pdo->prepare('SELECT RELEASE_LOCK(?)');
+                $release->execute([$lockName]);
+            }
+        }
     }
 }

@@ -153,7 +153,7 @@ $chartDataJson = json_encode([
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
         <header class="page-heading"><div>
-            <div class="overview-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
+            <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
             </div>
@@ -250,7 +250,7 @@ $chartDataJson = json_encode([
 
         <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
             <div class="overview-product-view-header">
-                <button type="button" class="btn btn-quiet" id="overview-back">View stock movements</button>
+                <button type="button" class="btn btn-quiet" id="overview-back">Return to Stock Overview</button>
                 <div class="overview-view-filter-group">
                     <div class="overview-filter-field overview-search-field">
                         <input type="search" id="overview-product-search" class="form-control" placeholder="Search products" aria-label="Search products" aria-controls="overview-product-table-body">

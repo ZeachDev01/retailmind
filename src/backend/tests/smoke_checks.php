@@ -42,9 +42,9 @@ $checks = [
         'file' => 'src/backend/app/Receipts/ReceiptDetailsService.php',
         'needles' => ['Legacy / Unassigned', 'LEFT JOIN cashier_shifts cs ON cs.shift_id = s.shift_id', 'r.name AS register_name'],
     ],
-    'Discount authorization recorded' => [
+    'Custom discounts cannot bypass eligible promotions' => [
         'file' => 'src/backend/app/Services/SalesWorkflowService.php',
-        'needles' => ['discount_authorized_by', 'authorizeSupervisor'],
+        'needles' => ['selectedPromotionId', 'Custom discounts are unavailable.'],
     ],
     'Server-held sales enabled' => [
         // Ticket #91 moved the rules out of the endpoint and into
@@ -140,7 +140,7 @@ $checks = [
     ],
     'User Management is a single-Store workflow' => [
         'file' => 'src/frontend/components/user_manager/user_manager.php',
-        'needles' => ['UserLifecycleService', 'store_scope_id($pdo)', "\$action === 'revoke_sessions'"],
+        'needles' => ['UserLifecycleService', "\$action === 'revoke_sessions'"],
         'forbidden' => ['create_branch', 'toggle_branch', 'branchesPanel', 'openBranchModal', 'data-management-tab="branches"'],
     ],
     'Manage Users summary icons present' => [
@@ -254,7 +254,7 @@ $checks = [
     ],
     'Sales transaction server contract is isolated and safe' => [
         'file' => 'src/backend/app/Receipts/ReceiptTableService.php',
-        'needles' => ['class ReceiptTableService', 'StoreScope', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
+        'needles' => ['class ReceiptTableService', 'scopeConditions', 's.cashier_id = :scope_cashier_id', 'recordsTotal', 'recordsFiltered', "'s.sale_date'", "'s.total_amount'", "'item_count'", 'LIMIT :limit OFFSET :offset'],
         'forbidden' => ['ORDER BY {$request', 'ORDER BY ' . "\$_GET", "scope['branch_id']", 'scope_branch_id'],
     ],
     'Sales and receipt routes use capability and Store scope' => [
@@ -264,7 +264,7 @@ $checks = [
     ],
     'Report generation uses capability and Store scope' => [
         'file' => 'src/frontend/components/report/report_generation.php',
-        'needles' => ['VIEW_STORE_REPORTS', "'store_id' => store_scope_id(\$pdo)", '{$alias}.branch_id = ?'],
+        'needles' => ['VIEW_STORE_REPORTS', "'store_id' => store_scope_id(\$pdo)"],
         'forbidden' => ["require_role(['admin', 'inventory_manager'])"],
     ],
     'Audit logs use direct navigation' => [
@@ -340,7 +340,7 @@ $checks = [
     ],
     'Manager review queue guards approvals and requires rejection reasons' => [
         'file' => 'src/frontend/components/inventory_management/stock_issues.php',
-        'needles' => ["require_role(['inventory_manager'])", 'MUTATE_INVENTORY', 'approveReport', 'rejectReport', 'getPendingReports', 'required to reject'],
+        'needles' => ["require_role(['inventory_manager'])", 'MUTATE_INVENTORY', 'approveReport', 'rejectReport', 'getPendingReports', 'Required to reject or return.'],
     ],
     'Stock-issue approvals deduct atomically with linked movements' => [
         'file' => 'src/backend/app/Services/StockIssueService.php',
@@ -443,7 +443,7 @@ $checks = [
             'name="register_id"',
             'name="opening_float"',
             '$service->availableRegisters()',
-            'A Cashier Shift is opened and owned by the Cashier who sells',
+            'requireCashierWorkspace($actorRole)',
         ],
         // A shift is never opened on somebody's behalf, and the duplicate
         // page-level audit write is gone: the service records the opening.

@@ -140,13 +140,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <div class="topbar">
-                <div>
-                    <h1>Inventory Counts</h1>
-                </div>
-                <span class="badge-role"><?= (int)$pendingTotal ?> pending approval</span>
-            </div>
-
             <?php if ($message): ?>
                 <div class="alert tag-success"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
@@ -157,8 +150,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             <div class="count-layout">
                 <div class="count-panel">
                     <h3>New count</h3>
-                    <p class="section-description">System stock is captured on submission. Stock changes only after approval.</p>
-
                     <?php if ($correctionFormActive): ?>
                         <div class="message success">
                             Correcting approved stock issue report #<?= (int)$correctReport['adjustment_id'] ?>
