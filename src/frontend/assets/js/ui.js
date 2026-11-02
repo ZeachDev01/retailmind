@@ -836,14 +836,28 @@
       const buttons = qsa('button', form);
       form.setAttribute('aria-busy', 'true');
       buttons.forEach(button => button.disabled = true);
+      let result;
       try {
         const response = await fetch(form.action, {method: 'POST', body, headers: {Accept: 'application/json'}});
-        if (!response.ok || !(await response.json()).saved) throw new Error('Guidance was not saved');
+        result = await response.json();
+        if (!response.ok || !result.saved) throw new Error('Guidance was not saved');
       } catch {
         form.removeAttribute('aria-busy');
         buttons.forEach(button => button.disabled = false);
         RM.toast('Unable to save your guidance choice. Please try again.', 'error');
         event.submitter?.focus();
+        return;
+      }
+      if (body.get('guidance_status') === 'deferred') {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Guidance deferred',
+          text: 'Need help later? Open your profile menu and choose Help.',
+          confirmButtonText: 'Okay',
+          allowEscapeKey: false,
+          allowOutsideClick: false
+        });
+        window.location.assign(result.redirect);
         return;
       }
       const panel = form.closest('.help-preferences, #workspace-guidance') || form;

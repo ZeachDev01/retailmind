@@ -148,12 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Reopening Help cannot reset a completed overview.
                 $query = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, status) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE status = IF(status = \'completed\', status, VALUES(status))');
                 $query->execute([(int)$_SESSION['user_id'], current_role(), $status]);
+                $redirectTarget = $sanitizeRedirect($_POST['return_to'] ?? null);
                 if (($_SERVER['HTTP_ACCEPT'] ?? '') === 'application/json') {
                     header('Content-Type: application/json');
-                    echo json_encode(['saved' => true]);
+                    echo json_encode(['saved' => true, 'redirect' => $redirectTarget]);
                     exit;
                 }
-                header('Location: ' . $sanitizeRedirect($_POST['return_to'] ?? null), true, 303);
+                header('Location: ' . $redirectTarget, true, 303);
                 exit;
             } catch (Throwable $e) {
                 $error = \App\Support\OperatorAlert::message($e, 'Unable to save your guidance choice. Please try again.');
