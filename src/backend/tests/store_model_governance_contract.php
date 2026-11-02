@@ -172,6 +172,8 @@ $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, cos
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)");
 
 $governance = new StoreModelGovernanceService($pdo);
+require_once __DIR__ . '/support/governance_fixture.php';
+governance_fixture($pdo, $governance, ['store_rf_candidate_20261010', 'store_rf_candidate_20261101', 'store_rf_promo_v1']);
 
 // =========================================================================
 echo "--- Test 1: Synthetic Demo Model Exclusion & Isolation Barrier ---\n";
@@ -331,6 +333,19 @@ try {
     $secondRollbackFailed = true;
 }
 assert_test($secondRollbackFailed, 'Subsequent rollback blocked when previous pointer is cleared');
+
+// Failed rollback must preserve current state, including on metadata mismatch.
+$pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_previous_approved_model_version', 'missing_model')
+    ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value")->execute();
+$before = $pdo->query('SELECT setting_key, setting_value FROM platform_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_KEY_PAIR);
+try {
+    $governance->rollbackStoreModel($adminId, 'Missing artifact');
+    throw new RuntimeException('Missing rollback artifact was accepted');
+} catch (RuntimeException $e) {
+    assert_test($before === $pdo->query('SELECT setting_key, setting_value FROM platform_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_KEY_PAIR),
+        'Invalid rollback leaves all lifecycle state unchanged');
+}
+$pdo->exec("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_previous_approved_model_version'");
 
 // =========================================================================
 echo "\n--- Test 5: Backwards Compatibility Shims ---\n";

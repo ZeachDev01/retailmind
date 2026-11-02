@@ -214,6 +214,8 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)"
 $evalService = new CandidateEvaluationService($pdo);
 $promotionService = new ModelPromotionService($pdo, $evalService);
 $activationService = new StoreActivationService($pdo, $evalService, $promotionService);
+require_once __DIR__ . '/support/governance_fixture.php';
+governance_fixture($pdo, $activationService, ['store_rf_candidate_20261010', 'store_rf_candidate_20261101', 'store_rf_promo_v1']);
 
 // =========================================================================
 echo "--- Test 1: Demo Isolation Barrier ---\n";
