@@ -341,7 +341,7 @@ try {
     $pdo->exec("UPDATE users SET full_name='Changed cashier display' WHERE user_id=4");
     $pdo->exec("UPDATE registers SET name='Changed Register display', paper_width_mm='58' WHERE register_id=1");
     $check($receipts->fetch($cashInTxId, 4, 'cashier') === $receipt, 'Reprint retains completion-time Store, footer, Cashier and Register');
-    $check((new App\Receipts\ReceiptPaperService($pdo))->currentWidth(4, 'cashier') === 58, 'Only receipt paper follows current printing Register');
+    $check((new App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth(4, 'cashier') === 58, 'Only receipt paper follows current printing Register');
 } finally { $pdo->rollBack(); }
 $check($receipts->fetch($id2, 4, 'cashier') === null, 'Historical record is not reconstructed as a saved receipt');
 

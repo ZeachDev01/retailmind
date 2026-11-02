@@ -123,15 +123,19 @@ class CandidateEvaluationService
      */
     public function evaluateCompletedTargetDates(PDO $pdo, string $modelVersion, string $asOfDate): array
     {
-        $stmt = $pdo->prepare("
-            SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day
-            FROM demand_forecasts df
-            WHERE df.model_version = ?
-              AND df.target_date <= ?
-            ORDER BY df.target_date ASC
-        ");
-        $stmt->execute([$modelVersion, $asOfDate]);
-        $forecasts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $pdo->prepare("
+                SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day
+                FROM demand_forecasts df
+                WHERE df.model_version = ?
+                  AND df.target_date <= ?
+                ORDER BY df.target_date ASC
+            ");
+            $stmt->execute([$modelVersion, $asOfDate]);
+            $forecasts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $e) {
+            $forecasts = [];
+        }
 
         if (empty($forecasts)) {
             return [

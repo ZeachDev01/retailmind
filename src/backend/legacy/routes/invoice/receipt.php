@@ -39,47 +39,13 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 
 if (!function_exists('receipt_send_cache_headers')) {
     function receipt_send_cache_headers(array $sale): bool {
-        if (headers_sent()) {
-            return false;
-        }
-
-        $etag = '"sale-' . (int)$sale['sale_id'] . '-' . substr(md5(($sale['sale_date'] ?? '') . '-' . ($sale['verification_code'] ?? ($sale['total_amount'] ?? ''))), 0, 16) . '"';
-        header('Cache-Control: private, max-age=86400, immutable');
-        header('ETag: ' . $etag);
-        if (!empty($sale['sale_date'])) {
-            $timestamp = strtotime($sale['sale_date']);
-            if ($timestamp > 0) {
-                header('Last-Modified: ' . gmdate('D, d M Y H:i:s \G\M\T', $timestamp));
-            }
-        }
-
-        $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-        if ($ifNoneMatch !== '') {
-            $candidates = array_map('trim', explode(',', $ifNoneMatch));
-            foreach ($candidates as $candidate) {
-                $candidateClean = trim($candidate, 'W/');
-                if ($candidate === '*' || $candidate === $etag || $candidateClean === $etag) {
-                    http_response_code(304);
-                    return true;
-                }
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']) && !empty($sale['sale_date'])) {
-            $since = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-            if ($since !== false && $since >= strtotime($sale['sale_date'])) {
-                http_response_code(304);
-                return true;
-            }
-        }
-
-        return false;
+        return (new App\Receipts\ReceiptEngine(App\Core\Database::connection()))->sendCacheHeaders($sale);
     }
 }
 
 function receipt_render_details(array $sale, array $items): void {
-    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
-        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
+    $paperWidthMm = (new \App\Receipts\ReceiptEngine(\App\Core\Database::connection()))
+        ->resolvePaperWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     ?>
     <div class="receipt-container">
@@ -87,13 +53,13 @@ function receipt_render_details(array $sale, array $items): void {
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)">Print</button>
             <button type="button" class="btn" onclick="exportReceiptPdf(this)">PDF</button>
         </div>
-        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm); ?>
+        <?php \App\Receipts\ReceiptEngine::renderSale($sale, $items, $store, $paperWidthMm); ?>
     </div>
     <?php
 }
 
 // Fetch receipts for list view
-if ($action === 'list' || $action === 'view') {
+if ($action === 'list' || ($action === 'view' && !isset($_GET['ajax']))) {
     $query = "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
               u.display_name AS cashier_name, COUNT(si.sale_item_id) as item_count,
               COALESCE(reversal_summary.pending_count, 0) AS pending_reversals,
@@ -147,6 +113,11 @@ if ($action === 'list' || $action === 'view') {
 
 // Handle AJAX view request
 if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
+    $receiptEngine = new App\Receipts\ReceiptEngine($pdo);
+    if ($receiptEngine->checkConditionalHit($sale_id, $can_manage_all, (int)($_SESSION['user_id'] ?? 0))) {
+        exit;
+    }
+
     $sale = receipt_fetch_sale($pdo, $sale_id);
     
     if (!$sale) {
@@ -165,7 +136,7 @@ if ($action === 'view' && isset($_GET['ajax']) && $sale_id > 0) {
         exit;
     }
 
-    receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id));
+    receipt_render_details($sale, $sale['receipt_items'] ?? receipt_fetch_items($pdo, $sale_id));
     exit;
 }
 
@@ -180,7 +151,7 @@ if ($sale_id > 0) {
         $selected_error = 'Access denied.';
         $selected_sale = null;
     } else {
-        $selected_items = receipt_fetch_items($pdo, $sale_id);
+        $selected_items = $selected_sale['receipt_items'] ?? receipt_fetch_items($pdo, $sale_id);
     }
 }
 ?>

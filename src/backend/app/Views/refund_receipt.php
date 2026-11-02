@@ -1,42 +1,45 @@
-<?php // Customer copy deliberately excludes operational notes and classifications. ?>
-<div class="sale-receipt receipt-print-area" data-paper-width-mm="<?= $paperWidthMm ?>" aria-label="Refund Receipt">
+<?php
+// Customer copy deliberately excludes operational notes and classifications.
+$v = $view ?? \App\Receipts\ReceiptEngine::prepareRefundViewData($details ?? [], $paperWidthMm ?? 80);
+?>
+<div class="sale-receipt receipt-print-area" data-paper-width-mm="<?= $v['paper_width_mm'] ?>" aria-label="Refund Receipt">
     <div class="receipt-header">
         <div class="receipt-brand">
-            <h3><?= $escape($store['name']) ?></h3>
+            <h3><?= $v['store']['name'] ?></h3>
             <div class="receipt-store-line">Refund Receipt</div>
-            <div><?= $escape($store['address']) ?></div>
-            <div><?= $escape($store['contact']) ?></div>
-            <div><?= $escape($store['tin']) ?></div>
+            <div><?= $v['store']['address'] ?></div>
+            <div><?= $v['store']['contact'] ?></div>
+            <div><?= $v['store']['tin'] ?></div>
         </div>
         <div class="receipt-meta">
-            <div><strong>Refund #<?= (int)$refund['refund_id'] ?></strong></div>
-            <div>Original Sale Receipt #<?= (int)$refund['sale_id'] ?></div>
-            <div>Date/Time: <?= $escape(\App\Services\PhilippineTime::format($refund['created_at'])) ?></div>
-            <div>Cashier: <?= $escape($refund['cashier_name']) ?></div>
-            <div>Register: <?= $escape($refund['register_name'] ?: 'Legacy / Unassigned') ?></div>
-            <div>Reason: <?= $escape($refund['reason']) ?></div>
+            <div><strong>Refund #<?= (int)$v['refund']['refund_id'] ?></strong></div>
+            <div>Original Sale Receipt #<?= (int)$v['refund']['sale_id'] ?></div>
+            <div>Date/Time: <?= $v['refund']['created_at_formatted'] ?></div>
+            <div>Cashier: <?= $v['refund']['cashier_name'] ?></div>
+            <div>Register: <?= $v['refund']['register_name'] ?></div>
+            <div>Reason: <?= $v['refund']['reason'] ?></div>
         </div>
     </div>
     <div class="sale-receipt-items" aria-label="Refunded items">
-        <?php foreach ($items as $item): ?>
+        <?php foreach ($v['items'] as $item): ?>
         <div class="sale-receipt-item">
-            <strong class="sale-receipt-item-name"><?= $escape($item['product_name']) ?></strong>
-            <div class="sale-receipt-sku">SKU: <?= $escape($item['sku']) ?></div>
-            <div class="sale-receipt-line"><span>Quantity: <?= (int)$item['quantity'] ?></span><strong class="sale-receipt-money"><?= $money($item['subtotal']) ?></strong></div>
+            <strong class="sale-receipt-item-name"><?= $item['name'] ?></strong>
+            <div class="sale-receipt-sku">SKU: <?= $item['sku'] ?></div>
+            <div class="sale-receipt-line"><span>Quantity: <?= (int)$item['quantity'] ?></span><strong class="sale-receipt-money"><?= $item['subtotal_formatted'] ?></strong></div>
         </div>
         <?php endforeach; ?>
     </div>
     <div class="sale-receipt-totals">
-        <div><span>Original payment method</span><strong><?= $escape(strtoupper($refund['payment_method'])) ?></strong></div>
-        <div class="sale-receipt-grand-total"><span>Total refunded</span><strong class="sale-receipt-money"><?= $money($refund['refund_amount']) ?></strong></div>
+        <div><span>Original payment method</span><strong><?= $v['refund']['payment_method'] ?></strong></div>
+        <div class="sale-receipt-grand-total"><span>Total refunded</span><strong class="sale-receipt-money"><?= $v['refund']['refund_amount_formatted'] ?></strong></div>
     </div>
-    <?php if ($refund['payment_method'] !== 'cash'): ?>
-    <?php if (!empty($refund['payment_reference'])): ?>
+    <?php if ($v['refund']['payment_method_raw'] !== 'cash'): ?>
+    <?php if (!empty($v['refund']['payment_reference'])): ?>
     <p>Refund completed externally and recorded in RetailMind.</p>
-    <p>Payment Reference: <?= $escape($refund['payment_reference']) ?></p>
+    <p>Payment Reference: <?= $v['refund']['payment_reference'] ?></p>
     <?php else: ?>
     <p>Noncash refund recorded. External settlement evidence is unavailable on this receipt.</p>
     <?php endif; ?>
     <?php endif; ?>
-    <div class="sale-receipt-footer"><?= $escape($store['footer']) ?></div>
+    <div class="sale-receipt-footer"><?= $v['store']['footer'] ?></div>
 </div>

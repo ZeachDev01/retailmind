@@ -6,6 +6,7 @@ namespace App\Forecasting;
 use PDO;
 use RuntimeException;
 use InvalidArgumentException;
+use DomainException;
 use Throwable;
 
 /**
@@ -22,12 +23,15 @@ class StoreModelGovernanceService
 {
     protected PDO $pdo;
     protected CandidateEvaluationService $evaluationService;
+    private string $modelsDir;
 
     public function __construct(
         PDO $pdo,
-        ?CandidateEvaluationService $evaluationService = null
+        ?CandidateEvaluationService $evaluationService = null,
+        ?string $modelsDir = null
     ) {
         $this->pdo = $pdo;
+        $this->modelsDir = $modelsDir ?? dirname(__DIR__, 2) . '/storage/ml_models';
         $this->evaluationService = $evaluationService ?? new CandidateEvaluationService($pdo, $this);
     }
 
@@ -49,7 +53,7 @@ class StoreModelGovernanceService
     /**
      * Centralized platform settings setter.
      */
-    public function setSetting(string $key, string $value, int $updatedBy): void
+    protected function setSetting(string $key, string $value, int $updatedBy): void
     {
         $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = ?");
         $stmt->execute([$key]);
@@ -119,22 +123,118 @@ class StoreModelGovernanceService
         }
     }
 
-    public function suspendRecommendations(int $updatedBy, string $reason = ''): void
+    private function requireLocalAdministrator(string $actorRole, bool $isRemote = false): void
     {
-        $this->setRecommendationsSuspended(true, $updatedBy, $reason);
-        if (function_exists('log_activity')) {
-            log_activity($this->pdo, $updatedBy, 'Suspend Replenishment Recommendations', 'Forecasting', null, null, [
-                'reason' => $reason
-            ]);
+        if (!in_array($actorRole, ['admin', 'super_admin'], true)
+            || $isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new DomainException('Model lifecycle changes require a local Administrator workspace.');
         }
     }
 
-    public function resumeRecommendations(int $updatedBy): void
+    public function suspendRecommendations(int $actorId, string $reason = '', string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
     {
-        $this->setRecommendationsSuspended(false, $updatedBy);
-        if (function_exists('log_activity')) {
-            log_activity($this->pdo, $updatedBy, 'Resume Replenishment Recommendations', 'Forecasting', null, null, null);
+        $this->requireLocalAdministrator($actorRole, $isRemote);
+        $this->pdo->beginTransaction();
+        try {
+            $record = ['suspended_by' => $actorId, 'actor_role' => $actorRole,
+                'suspended_at' => date('Y-m-d H:i:s'), 'reason' => trim($reason) ?: 'Suspended by local Administrator',
+                'active_model' => $this->getApprovedModelVersion()];
+            $this->setSetting('ml_recommendations_suspended', '1', $actorId);
+            $this->setSetting('ml_recommendations_suspended_reason', json_encode($record, JSON_THROW_ON_ERROR), $actorId);
+            $this->audit($actorId, 'Suspend Replenishment Recommendations', $record, $ipAddress);
+            $this->pdo->commit();
+            return $record;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
         }
+    }
+
+    public function resumeRecommendations(int $actorId, string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
+    {
+        $this->requireLocalAdministrator($actorRole, $isRemote);
+        $this->pdo->beginTransaction();
+        try {
+            $version = $this->getApprovedModelVersion();
+            $validation = $this->validateModelArtifactCompatibility($version);
+            if ($this->isObservationMode() || !$validation['valid']) {
+                throw new RuntimeException('Cannot resume recommendations: approved, compatible Store guidance is required. ' . $validation['reason']);
+            }
+            $record = ['resumed_by' => $actorId, 'actor_role' => $actorRole,
+                'resumed_at' => date('Y-m-d H:i:s'), 'active_model' => $version];
+            $this->setSetting('ml_recommendations_suspended', '0', $actorId);
+            $this->setSetting('ml_recommendations_resumed_record', json_encode($record, JSON_THROW_ON_ERROR), $actorId);
+            $this->audit($actorId, 'Resume Replenishment Recommendations', $record, $ipAddress);
+            $this->pdo->commit();
+            return $record;
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    private function audit(int $actorId, string $action, array $record, ?string $ipAddress = null): void
+    {
+        \log_activity($this->pdo, $actorId, $action, 'Demand Forecasting', null, null, $record,
+            $ipAddress, 'store_operation', $record);
+    }
+
+    public function setModelsDir(string $modelsDir): self
+    {
+        $this->modelsDir = $modelsDir;
+        return $this;
+    }
+
+    public function getModelsDir(): string
+    {
+        return $this->modelsDir;
+    }
+
+    public function validateModelArtifactCompatibility(string $version): array
+    {
+        $invalid = static fn(string $reason): array => ['valid' => false, 'reason' => $reason, 'artifact_path' => null];
+        if (!preg_match('/^[A-Za-z0-9_-]{1,50}$/D', $version)
+            || preg_match('/demo|kaggle/i', $version)) {
+            return $invalid('No compatible non-demo Store model version configured.');
+        }
+        $statement = $this->pdo->prepare("SELECT metrics_json FROM model_training_runs WHERE model_version = ? AND status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+        $statement->execute([$version]);
+        $metrics = json_decode((string)$statement->fetchColumn(), true);
+        $metadata = $metrics['metadata'] ?? [];
+        $features = ['product_id', 'horizon_day', 'lag_1', 'lag_7', 'lag_14', 'lag_28',
+            'rolling_mean_7', 'rolling_std_7', 'rolling_mean_28', 'rolling_std_28',
+            'day_of_week', 'day_of_month', 'month', 'is_weekend'];
+        if (($metadata['dataset_kind'] ?? '') !== 'store' || ($metadata['model_version'] ?? '') !== $version
+            || ($metadata['feature_version'] ?? '') !== '2.0.0' || ($metadata['features'] ?? []) !== $features) {
+            return $invalid('Completed Store training metadata does not match the model feature contract.');
+        }
+        foreach (['dataset_host' => 'DB_HOST', 'dataset_port' => 'DB_PORT', 'dataset_database' => 'DB_NAME'] as $key => $envKey) {
+            $expected = (string)\env($envKey, $envKey === 'DB_PORT' ? '3306' : '');
+            if ((string)($metadata[$key] ?? '') !== $expected || $expected === '') {
+                return $invalid('Model artifact belongs to another Store dataset.');
+            }
+        }
+        $identity = $metadata['dataset_host'] . ':' . $metadata['dataset_port'] . ':' . $metadata['dataset_database'];
+        $path = $this->modelsDir . '/store/' . substr(hash('sha256', $identity), 0, 16)
+            . '/random_forest_candidate_' . $version . '.joblib';
+        if (!is_file($path) || !is_readable($path) || filesize($path) === 0) {
+            return $invalid('Qualified Store model artifact is missing or unreadable.');
+        }
+        $quality = $this->evaluationService->evaluateCandidateQuality($version);
+        if (!$quality['passed']) {
+            return $invalid('Store model failed qualification quality gates: ' . $quality['reason']);
+        }
+        return ['valid' => true, 'reason' => '', 'artifact_path' => $path];
+    }
+
+    public function validateRollbackArtifact(string $version): array
+    {
+        return $this->validateModelArtifactCompatibility($version);
+    }
+
+    public function validateActiveModelForGuidance(string $version): array
+    {
+        return $this->validateModelArtifactCompatibility($version);
     }
 
     public function getThresholds(): array
@@ -157,8 +257,10 @@ class StoreModelGovernanceService
         }
     }
 
-    public function recordTechnicalReview(string $modelVersion, string $decision, string $notes, int $superAdminId): void
+    public function recordTechnicalReview(string $modelVersion, string $decision, string $notes, int $superAdminId, string $actorRole = 'super_admin'): void
     {
+        $this->requireLocalAdministrator($actorRole);
+        if ($actorRole !== 'super_admin') throw new DomainException('Technical review requires Super Administrator workspace.');
         if (!in_array($decision, ['accepted', 'rejected'], true)) {
             throw new InvalidArgumentException("Technical review decision must be 'accepted' or 'rejected'.");
         }
@@ -182,8 +284,9 @@ class StoreModelGovernanceService
         }
     }
 
-    public function recordOperationalReview(string $modelVersion, string $decision, string $notes, int $adminId): void
+    public function recordOperationalReview(string $modelVersion, string $decision, string $notes, int $adminId, string $actorRole = 'admin'): void
     {
+        $this->requireLocalAdministrator($actorRole);
         if (!in_array($decision, ['accepted', 'rejected'], true)) {
             throw new InvalidArgumentException("Operational review decision must be 'accepted' or 'rejected'.");
         }
@@ -237,6 +340,7 @@ class StoreModelGovernanceService
      */
     public function validateActivationReadiness(string $modelVersion, string $asOfDate): array
     {
+        \App\Services\PhilippineTime::dayStart($asOfDate);
         $reasons = [];
         $checks = [
             'valid_version_format' => false,
@@ -301,6 +405,10 @@ class StoreModelGovernanceService
             $checks['observation_period_completed'] = true;
         }
 
+        if (empty($reasons)) {
+            $artifact = $this->validateModelArtifactCompatibility($modelVersion);
+            if (!$artifact['valid']) $reasons[] = $artifact['reason'];
+        }
         $ready = empty($reasons);
 
         return [
@@ -319,8 +427,9 @@ class StoreModelGovernanceService
      * Activates a candidate Store model after verifying all gating criteria.
      * Transitions the model out of observation mode into live Store forecasting.
      */
-    public function activateStoreModel(string $modelVersion, string $asOfDate, int $actorId, string $justification = ''): array
+    public function activateStoreModel(string $modelVersion, string $asOfDate, int $actorId, string $justification = '', string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
     {
+        $this->requireLocalAdministrator($actorRole, $isRemote);
         $readiness = $this->validateActivationReadiness($modelVersion, $asOfDate);
         if (!$readiness['ready']) {
             throw new InvalidArgumentException(
@@ -351,6 +460,7 @@ class StoreModelGovernanceService
                 'model_version' => $modelVersion,
                 'as_of_date' => $asOfDate,
                 'activated_by' => $actorId,
+                'actor_role' => $actorRole,
                 'activated_at' => date('Y-m-d H:i:s'),
                 'justification' => $justification,
                 'previous_model_version' => $currentApproved,
@@ -362,17 +472,8 @@ class StoreModelGovernanceService
 
             $this->setSetting('ml_store_activation_record', json_encode($activationRecord, JSON_THROW_ON_ERROR), $actorId);
 
-            if (function_exists('log_activity')) {
-                log_activity(
-                    $this->pdo,
-                    $actorId,
-                    'Activate Store Forecasting Model',
-                    'Platform Settings',
-                    null,
-                    $currentApproved ?: null,
-                    $modelVersion
-                );
-            }
+            $this->audit($actorId, 'Activate Store Forecasting Model', $activationRecord, $ipAddress);
+            $activationRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress);
 
             $this->pdo->commit();
             return $activationRecord;
@@ -385,21 +486,15 @@ class StoreModelGovernanceService
     /**
      * Performs a clean, reversible rollback to the previous approved Store model version.
      */
-    public function rollbackStoreModel(int $actorId, string $reason = ''): array
+    public function rollbackStoreModel(int $actorId, string $reason = '', string $actorRole = 'admin', ?string $ipAddress = null, ?string $asOfDate = null, bool $isRemote = false): array
     {
+        $this->requireLocalAdministrator($actorRole, $isRemote);
         $this->pdo->beginTransaction();
         try {
             $previous = $this->getPreviousApprovedModelVersion();
 
-            if ($previous === '') {
-                throw new RuntimeException("Rollback rejected: no compatible previous approved Store model artifact found.");
-            }
-
-            // Never roll back to demo artifacts
-            $lower = strtolower($previous);
-            if (str_contains($lower, 'demo') || str_contains($lower, 'kaggle')) {
-                throw new RuntimeException("Rollback rejected: previous model version '$previous' is a demo/kaggle artifact. Demo artifacts cannot be activated in Store operations.");
-            }
+            $validation = $this->validateRollbackArtifact($previous);
+            if (!$validation['valid']) throw new RuntimeException('Rollback rejected: ' . $validation['reason']);
 
             $current = $this->getApprovedModelVersion();
 
@@ -412,23 +507,17 @@ class StoreModelGovernanceService
                 'rolled_back_from' => $current,
                 'restored_model_version' => $previous,
                 'rolled_back_by' => $actorId,
+                'actor_role' => $actorRole,
                 'rolled_back_at' => date('Y-m-d H:i:s'),
                 'reason' => $reason,
             ];
 
             $this->setSetting('ml_store_rollback_record', json_encode($rollbackRecord, JSON_THROW_ON_ERROR), $actorId);
 
-            if (function_exists('log_activity')) {
-                log_activity(
-                    $this->pdo,
-                    $actorId,
-                    'Rollback Store Forecasting Model',
-                    'Platform Settings',
-                    null,
-                    $current ?: null,
-                    $previous
-                );
-            }
+            $this->setSetting('ml_observation_mode', '0', $actorId);
+            $this->setSetting('ml_recommendations_suspended', '0', $actorId);
+            $this->audit($actorId, 'Rollback Store Forecasting Model', $rollbackRecord, $ipAddress);
+            $rollbackRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress);
 
             $this->pdo->commit();
             return $rollbackRecord;
@@ -445,74 +534,58 @@ class StoreModelGovernanceService
     {
         $evaluations = $this->evaluationService->getEvaluationsByModelVersion($modelVersion);
         if (count($evaluations) < 3) {
-            throw new InvalidArgumentException("Incomplete candidate: missing chronological evaluations for $modelVersion");
+            throw new \InvalidArgumentException("Incomplete candidate: missing chronological evaluations for $modelVersion");
         }
-
         foreach ($evaluations as $eval) {
             if ($eval['candidate_gate_outcome'] !== 'passed') {
-                throw new InvalidArgumentException("Candidate $modelVersion failed evaluation gate at horizon " . $eval['horizon_days']);
+                throw new \InvalidArgumentException("Candidate $modelVersion failed evaluation gate at horizon " . $eval['horizon_days']);
             }
         }
-
-        $thresholds = $this->getThresholds();
+        $thresholds = $this->evaluationService->getThresholds();
         $hasThresholds = ($thresholds['7'] !== null || $thresholds['14'] !== null || $thresholds['28'] !== null);
         if ($hasThresholds) {
             $gateResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
             if (!$gateResult['passed']) {
-                throw new InvalidArgumentException("Candidate $modelVersion failed quality gate: " . $gateResult['reason']);
+                throw new \InvalidArgumentException("Candidate $modelVersion failed quality gate: " . ($gateResult['reason'] ?? ''));
             }
         }
-
         $this->pdo->beginTransaction();
         try {
-            $current = $this->getApprovedModelVersion();
-
+            $current = $this->getSetting('ml_approved_model_version');
             if ($current === $modelVersion) {
                 $this->pdo->commit();
                 return;
             }
-
-            if ($current !== '') {
-                $this->setSetting('ml_previous_approved_model_version', $current, $superAdminId);
+            if ($current !== '' && $current !== null && $current !== false) {
+                $this->setSetting('ml_previous_approved_model_version', (string)$current, $superAdminId);
             }
-
             $this->setSetting('ml_approved_model_version', $modelVersion, $superAdminId);
-
             if (function_exists('log_activity')) {
                 log_activity($this->pdo, $superAdminId, 'Promote Forecasting Model', 'Platform Settings', null, $current ?: null, $modelVersion);
             }
-
             $this->pdo->commit();
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
     }
 
-    /**
-     * Direct / Super Admin model rollback (legacy platform promotion entry point).
-     */
     public function rollback(int $superAdminId): void
     {
         $this->pdo->beginTransaction();
         try {
-            $previous = $this->getPreviousApprovedModelVersion();
-
-            if ($previous === '') {
-                throw new RuntimeException("No compatible previous approved artifact found for rollback");
+            $previous = $this->getSetting('ml_previous_approved_model_version');
+            if (!$previous) {
+                throw new \RuntimeException("No compatible previous approved artifact found for rollback");
             }
-
-            $current = $this->getApprovedModelVersion();
-
-            $this->setSetting('ml_approved_model_version', $previous, $superAdminId);
+            $current = $this->getSetting('ml_approved_model_version');
+            $this->setSetting('ml_approved_model_version', (string)$previous, $superAdminId);
             $this->setSetting('ml_previous_approved_model_version', '', $superAdminId);
-
             if (function_exists('log_activity')) {
                 log_activity($this->pdo, $superAdminId, 'Rollback Forecasting Model', 'Platform Settings', null, $current ?: null, $previous);
             }
-
             $this->pdo->commit();
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
@@ -537,8 +610,8 @@ class StoreModelGovernanceService
 
         $approvedModel = $settings['ml_approved_model_version'] ?? '';
         $previousModel = $settings['ml_previous_approved_model_version'] ?? '';
-        $isObservation = ($settings['ml_observation_mode'] ?? '0') === '1';
-        $isSuspended = ($settings['ml_recommendations_suspended'] ?? '0') === '1';
+        $isObservation = in_array($settings['ml_observation_mode'] ?? '0', ['1', 'true'], true);
+        $isSuspended = in_array($settings['ml_recommendations_suspended'] ?? '0', ['1', 'true'], true);
 
         $activationRecord = null;
         if (!empty($settings['ml_store_activation_record'])) {
