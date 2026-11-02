@@ -100,10 +100,21 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
 
         $guidanceParam = isset($_GET['guidance']) ? trim((string)$_GET['guidance']) : '';
         if ($guidanceParam !== '') {
-            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $guidanceParam);
+            $role = current_role();
+            $topic = ($guidanceParam !== '1') ? \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $guidanceParam) : null;
             $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+            if (!$topic) {
+                foreach (\App\Guidance\WorkspaceWalkthroughService::paths($role) as $p) {
+                    foreach ($p['topics'] as $t) {
+                        if (str_ends_with($scriptName, $t['path']) || basename($scriptName) === basename($t['path'])) {
+                            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $t['id']);
+                            break 2;
+                        }
+                    }
+                }
+            }
             if ($topic && !empty($topic['steps']) && (str_ends_with($scriptName, $topic['path']) || basename($scriptName) === basename($topic['path']))) {
-                $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
+                $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], $role);
                 $isReplay = !empty($_GET['replay']);
                 $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
                 include __DIR__ . '/workspace_walkthrough_dock.php';

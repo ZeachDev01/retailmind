@@ -7,7 +7,7 @@ $stepCount = count($topic['steps']);
 $currentStep = max(0, min($stepCount - 1, (int)($initialStep ?? 0)));
 $csrfToken = csrf_token();
 $helpPostUrl = app_url('components/auth/help.php');
-$pathKey = $topic['path_key'] ?? 'get_oriented';
+$pathKey = $topic['path_key'] ?? array_key_first(\App\Guidance\WorkspaceWalkthroughService::paths(current_role()));
 $allTopics = \App\Guidance\WorkspaceWalkthroughService::paths(current_role())[$pathKey]['topics'] ?? [];
 $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
 $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
@@ -96,6 +96,43 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         if (!step || !step.target) return;
         const targetEl = document.querySelector(step.target);
         if (targetEl) {
+            const modal = targetEl.closest('#add-product-modal');
+            if (modal) {
+                if (window.RetailMindUI && typeof window.RetailMindUI.openOverlay === 'function') {
+                    window.RetailMindUI.openOverlay(modal);
+                } else {
+                    modal.classList.add('open');
+                    modal.removeAttribute('aria-hidden');
+                }
+                const panel = targetEl.closest('.wizard-panel');
+                if (panel && panel.dataset.panel) {
+                    const stepNum = Number(panel.dataset.panel);
+                    document.querySelectorAll('.wizard-panel').forEach(p => {
+                        p.classList.toggle('active', p === panel);
+                    });
+                    document.querySelectorAll('.wizard-step-indicator').forEach((ind, i) => {
+                        ind.classList.toggle('active', i + 1 === stepNum);
+                        ind.classList.toggle('complete', i + 1 < stepNum);
+                    });
+                    const backBtn = document.getElementById('wizard-back');
+                    const nextBtn = document.getElementById('wizard-next');
+                    const saveBtn = document.getElementById('wizard-save');
+                    if (backBtn) backBtn.hidden = (stepNum === 1);
+                    if (nextBtn) nextBtn.hidden = (stepNum === 5);
+                    if (saveBtn) saveBtn.hidden = (stepNum !== 5);
+                }
+            } else {
+                const openModalEl = document.getElementById('add-product-modal');
+                if (openModalEl && openModalEl.classList.contains('open')) {
+                    if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
+                        window.RetailMindUI.closeOverlay(openModalEl);
+                    } else {
+                        openModalEl.classList.remove('open');
+                        openModalEl.setAttribute('aria-hidden', 'true');
+                    }
+                }
+            }
+
             targetEl.classList.add('guidance-spotlight-target');
             targetEl.scrollIntoView({behavior: 'smooth', block: 'center'});
         }
@@ -156,6 +193,15 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
             el.classList.remove('guidance-spotlight-target');
         });
+        const modal = document.getElementById('add-product-modal');
+        if (modal && modal.classList.contains('open')) {
+            if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
+                window.RetailMindUI.closeOverlay(modal);
+            } else {
+                modal.classList.remove('open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+        }
         const currentTarget = steps[currentStep] ? document.querySelector(steps[currentStep].target) : null;
         dock.remove();
         if (currentTarget) {
@@ -183,6 +229,15 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
             document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
                 el.classList.remove('guidance-spotlight-target');
             });
+            const modal = document.getElementById('add-product-modal');
+            if (modal && modal.classList.contains('open')) {
+                if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
+                    window.RetailMindUI.closeOverlay(modal);
+                } else {
+                    modal.classList.remove('open');
+                    modal.setAttribute('aria-hidden', 'true');
+                }
+            }
             bodyEl.style.display = 'none';
             footerEl.style.display = 'none';
             completionEl.classList.remove('u-hidden');
@@ -193,6 +248,15 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     exitBtn.addEventListener('click', exitWalkthrough);
 
     doneBtn.addEventListener('click', function() {
+        const modal = document.getElementById('add-product-modal');
+        if (modal && modal.classList.contains('open')) {
+            if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
+                window.RetailMindUI.closeOverlay(modal);
+            } else {
+                modal.classList.remove('open');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+        }
         dock.remove();
     });
 

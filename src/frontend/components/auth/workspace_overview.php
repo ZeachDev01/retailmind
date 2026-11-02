@@ -120,6 +120,7 @@ $activeTopicDef = $activeTopicId ? \App\Guidance\WorkspaceWalkthroughService::fi
 $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
 $isStoreSettingsDone = in_array('store_settings', $completedTopics, true);
 $isStoreSettingsInProgress = ($walkthroughProgress['active_topic'] === 'store_settings');
+$imTopics = \App\Guidance\WorkspaceWalkthroughService::paths('inventory_manager')['first_useful_tasks']['topics'] ?? [];
 ?>
 <h2 id="workspace-guidance-title">
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
@@ -195,7 +196,6 @@ $primaryActionLabel = $isAdmin
                 <?php endforeach; ?>
             </div>
         </section>
-
         <section class="guidance-walkthroughs-daily" aria-labelledby="daily-oversight-title">
             <div class="guidance-walkthroughs-header">
                 <h2 id="daily-oversight-title">Daily oversight</h2>
@@ -246,6 +246,57 @@ $primaryActionLabel = $isAdmin
                 <?php endforeach; ?>
             </div>
         </section>
+    <?php elseif (!$isAdmin): ?>
+        <?php if ($activeTopicDef): ?>
+            <section class="guidance-continue-card" aria-label="Continue guidance">
+                <div>
+                    <h2>Continue where you left off</h2>
+                    <p>Resume <?= htmlspecialchars($activeTopicDef['title']) ?> walkthrough (Step <?= $walkthroughProgress['active_step'] + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</p>
+                </div>
+                <a href="<?= htmlspecialchars(app_url($activeTopicDef['path'] . '?guidance=' . $activeTopicDef['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($activeTopicDef['title']) ?> (Step <?= $walkthroughProgress['active_step'] + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</a>
+            </section>
+        <?php endif; ?>
+        <section class="guidance-walkthroughs" aria-labelledby="first-useful-tasks-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="first-useful-tasks-title">First useful tasks</h2>
+                <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <?php
+                $imIcons = [
+                    'replenishment_queue' => 'workflow',
+                    'products' => 'package',
+                    'stock_receiving' => 'shipped',
+                ];
+                foreach ($imTopics as $tId => $tDef):
+                    $isDone = in_array($tId, $completedTopics, true);
+                    $isInProgress = ($walkthroughProgress['active_topic'] === $tId);
+                    $stepTotal = count($tDef['steps']);
+                    $iconName = $imIcons[$tId] ?? 'workflow';
+                ?>
+                <div class="walkthrough-topic-card" id="topic-card-<?= htmlspecialchars($tId) ?>">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($iconName) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($isDone): ?>
+                            <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                        <?php elseif ($isInProgress): ?>
+                            <span class="guidance-progress-badge">In progress (Step <?= $walkthroughProgress['active_step'] + 1 ?> of <?= $stepTotal ?>)</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
     <?php endif; ?>
     <ul class="workspace-guidance-links">
         <?php foreach ($workflows as $wf): ?>
@@ -273,6 +324,8 @@ $primaryActionLabel = $isAdmin
             <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/report/report_generation.php?guidance=report_generation')) ?>">Daily oversight: Store Reports</a> &middot;
+        <?php else: ?>
+            <a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php?guidance=replenishment_queue')) ?>">First useful tasks: Replenishment needs</a> &middot;
         <?php endif; ?>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>
@@ -286,6 +339,8 @@ $primaryActionLabel = $isAdmin
             <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/report/report_generation.php?guidance=report_generation')) ?>">Daily oversight: Store Reports</a> &middot;
+        <?php else: ?>
+            <a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php?guidance=replenishment_queue')) ?>">First useful tasks: Replenishment needs</a> &middot;
         <?php endif; ?>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>

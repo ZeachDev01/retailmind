@@ -167,7 +167,7 @@
 /* Walkthrough spotlight, pulse, and dock */
 .guidance-spotlight-target {
     position: relative !important;
-    z-index: 1050 !important;
+    z-index: 2501 !important;
     outline: 3px solid var(--primary, #2563eb) !important;
     outline-offset: 4px !important;
     border-radius: 6px;
@@ -202,7 +202,7 @@
     width: min(440px, calc(100vw - 2rem));
     max-height: calc(100vh - 3rem);
     overflow-y: auto;
-    z-index: 1100;
+    z-index: 2500;
     background: var(--card-bg, #ffffff);
     color: var(--text, #1e293b);
     border: 1px solid var(--border, #e2e8f0);
