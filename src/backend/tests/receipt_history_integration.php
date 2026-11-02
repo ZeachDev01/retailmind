@@ -22,12 +22,11 @@ try {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     foreach ($tables[0] as $ddl) $pdo->exec($ddl);
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
-    $pdo->exec("INSERT INTO branches(branch_id,branch_name,branch_code) VALUES(1,'Receipt Store','RECEIPT');
-        INSERT INTO roles(role_id,role_name) VALUES(1,'cashier'),(2,'admin');
-        INSERT INTO users(user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES(1,'Saved Seller','receipt-one','unused',1,1,0),(2,'Other Seller','receipt-two','unused',1,1,0),(3,'Receipt Administrator','receipt-admin','unused',2,1,0);
+    $pdo->exec("INSERT INTO roles(role_id,role_name) VALUES(1,'cashier'),(2,'admin');
+        INSERT INTO users(user_id,display_name,username,password_hash,role_id,must_change_password) VALUES(1,'Saved Seller','receipt-one','unused',1,0),(2,'Other Seller','receipt-two','unused',1,0),(3,'Receipt Administrator','receipt-admin','unused',2,0);
         INSERT INTO registers(register_id,name) VALUES(1,'Saved Till'),(2,'Other Till');
         INSERT INTO cashier_shifts(shift_id,cashier_id,register_id,opening_cash,locked_at) VALUES(1,1,1,100,CURRENT_TIMESTAMP),(2,2,2,100,NULL);
-        INSERT INTO products(product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES(1,'REC-1','REC-1','Saved Product',10,3,1)");
+        INSERT INTO products(product_id,sku,barcode,product_name,unit_price,cost_price) VALUES(1,'REC-1','REC-1','Saved Product',10,3)");
     $dates=[1=>'2026-09-30 23:59:59',2=>'2026-10-01 00:00:00',3=>'2026-10-01 23:59:59',4=>'2026-10-02 00:00:00',5=>'2026-10-01 08:39:18',6=>'2026-10-01 08:39:18'];
     $insert=$pdo->prepare("INSERT INTO sales(sale_id,cashier_id,shift_id,total_amount,payment_method,cash_received,change_due,sale_date) VALUES(?,?,?,10,'cash',20,10,?)");
     foreach($dates as $id=>$date) {
@@ -42,7 +41,7 @@ try {
     (new ReceiptDetailsService($pdo))->preserveSale(6);
     $pdo->commit();
     $saved=$pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id=6')->fetchColumn();
-    $pdo->exec("UPDATE registers SET name='Renamed Till' WHERE register_id=1; UPDATE users SET full_name='Renamed Seller' WHERE user_id=1; UPDATE products SET product_name='Renamed Product' WHERE product_id=1");
+    $pdo->exec("UPDATE registers SET name='Renamed Till' WHERE register_id=1; UPDATE users SET display_name='Renamed Seller' WHERE user_id=1; UPDATE products SET product_name='Renamed Product' WHERE product_id=1");
     $service=new ReceiptTableService($pdo);
     $request=['date_from'=>'2026-10-01','date_to'=>'2026-10-01'];
     $rows=$service->fetch($request,1)['data'];

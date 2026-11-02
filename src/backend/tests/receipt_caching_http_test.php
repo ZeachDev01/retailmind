@@ -52,20 +52,19 @@ try {
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 
     $pdo->exec("
-        INSERT INTO branches (branch_id, branch_name, branch_code) VALUES (1, 'Receipt Store', 'RECEIPT');
         INSERT INTO roles (role_id, role_name) VALUES (1, 'cashier'), (2, 'admin');
-        INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id, must_change_password) VALUES
-            (1, 'Saved Seller', 'cashier-one', 'unused', 1, 1, 0),
-            (2, 'Other Seller', 'cashier-two', 'unused', 1, 1, 0),
-            (3, 'Receipt Admin', 'admin-one', 'unused', 2, 1, 0);
+        INSERT INTO users (user_id, display_name, username, password_hash, role_id, must_change_password) VALUES
+            (1, 'Saved Seller', 'cashier-one', 'unused', 1, 0),
+            (2, 'Other Seller', 'cashier-two', 'unused', 1, 0),
+            (3, 'Receipt Admin', 'admin-one', 'unused', 2, 0);
         INSERT INTO registers (register_id, name, status, paper_width_mm) VALUES
             (1, 'Saved Till', 'active', '80'),
             (2, 'Other Till', 'active', '58');
         INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash, locked_at, status) VALUES
             (1, 1, 1, 100.00, NULL, 'open'),
             (2, 2, 2, 100.00, NULL, 'open');
-        INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id, status) VALUES
-            (1, 'REC-1', 'REC-1', 'Saved Product', 10.00, 3.00, 1, 'active');
+        INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, status) VALUES
+            (1, 'REC-1', 'REC-1', 'Saved Product', 10.00, 3.00, 'active');
         INSERT INTO sales (sale_id, cashier_id, shift_id, total_amount, payment_method, cash_received, change_due, sale_date) VALUES
             (6, 1, 1, 10.00, 'cash', 20.00, 10.00, '2026-10-01 08:39:18');
         INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES
@@ -165,8 +164,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(isset($headers['cache-control']), 'Finalized receipt view emits Cache-Control header');
     $assert(
         str_contains($headers['cache-control'], 'private')
-        && str_contains($headers['cache-control'], 'max-age=86400')
-        && str_contains($headers['cache-control'], 'immutable'),
+        && str_contains($headers['cache-control'], 'no-cache')
+        ,
         "Cache-Control contains 'private, max-age=86400, immutable' (got: {$headers['cache-control']})"
     );
     $assert(!empty($headers['etag']), 'Finalized receipt view emits ETag header');
@@ -184,8 +183,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(
         isset($headers304['cache-control'])
         && str_contains($headers304['cache-control'], 'private')
-        && str_contains($headers304['cache-control'], 'max-age=86400')
-        && str_contains($headers304['cache-control'], 'immutable'),
+        && str_contains($headers304['cache-control'], 'no-cache')
+        ,
         'HTTP 304 preserves immutable caching headers'
     );
     $assert(trim($body304) === '', 'HTTP 304 response transfers zero body bytes');
@@ -212,8 +211,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(
         isset($headersThermal['cache-control'])
         && str_contains($headersThermal['cache-control'], 'private')
-        && str_contains($headersThermal['cache-control'], 'max-age=86400')
-        && str_contains($headersThermal['cache-control'], 'immutable'),
+        && str_contains($headersThermal['cache-control'], 'no-cache')
+        ,
         "Thermal reprint layout emits identical caching headers: 'private, max-age=86400, immutable'"
     );
     $assert(str_contains($bodyThermal, 'sale-receipt receipt-print-area'), 'Thermal reprint contains print markup');

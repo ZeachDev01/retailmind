@@ -12,5 +12,5 @@ if (!$receipt) {
     http_response_code(404);
     exit('Saved GCash Service Receipt unavailable.');
 }
-$width = (new \App\Receipts\ReceiptPaperService($pdo))->currentWidth((int)$_SESSION['user_id'], (string)current_role());
-\App\Receipts\GCashReceiptPresentation::render($receipt, $width);
+$width = (new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth((int)$_SESSION['user_id'], (string)current_role());
+\App\Receipts\ReceiptEngine::renderGCash($receipt, $width);
