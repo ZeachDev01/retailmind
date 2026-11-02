@@ -295,6 +295,8 @@ try {
 assert_check($unusableBlocked, 'Activation refuses 28 elapsed dates with no usable evidence');
 
 // Seed 10 days of observation forecasts and sales (insufficient)
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 1000, 'receive', '2026-08-31 07:00:00')");
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (2, 1000, 'receive', '2026-08-31 07:00:00')");
 for ($i = 1; $i <= 10; $i++) {
     $tDate = sprintf('2026-09-%02d', $i);
     $pdo->prepare("

@@ -77,6 +77,7 @@ class ForecastingSchedulerService {
         $result = [
             'forecast_jobs_queued' => 0,
             'retrain_jobs_queued' => 0,
+            'observation_jobs_queued' => 0,
             'training_eligibility' => [],
             'cutoff' => $targetCutoff,
         ];
@@ -140,7 +141,18 @@ class ForecastingSchedulerService {
             $result
         );
 
-        // 3. Candidate Model Retraining Scheduling & Catch-up
+        // 3. Candidate Observation Forecasting & Catch-up (#367)
+        $this->handleCandidateObservation(
+            $jobService,
+            $now,
+            $targetCutoff,
+            $currentDate,
+            $currentTime,
+            $dailyTime,
+            $result
+        );
+
+        // 4. Candidate Model Retraining Scheduling & Catch-up
         $this->handleModelRetraining(
             $jobService,
             $now,
@@ -231,6 +243,221 @@ class ForecastingSchedulerService {
 
         $jobService->enqueueSystem('forecast_generation', $targetCutoff, (string)$approvedModel);
         $result['forecast_jobs_queued']++;
+    }
+
+    private function handleCandidateObservation(
+        MlJobService $jobService,
+        DateTime $now,
+        string $targetCutoff,
+        string $currentDate,
+        string $currentTime,
+        string $dailyTime,
+        array &$result
+    ): void {
+        $nowStr = $now->format('Y-m-d H:i:s');
+        $candidate = $this->getCandidateUnderObservation();
+        if ($candidate === null) {
+            return;
+        }
+
+        $latestSuccessfulCutoff = $this->getLatestSuccessfulObservationCutoff($candidate);
+
+        $isScheduledDue = ($currentTime >= $dailyTime);
+        $isDowntimeCatchup = false;
+
+        if ($latestSuccessfulCutoff !== null) {
+            if ($latestSuccessfulCutoff < $targetCutoff) {
+                $daysGap = (int)round((strtotime($targetCutoff) - strtotime($latestSuccessfulCutoff)) / 86400);
+                if ($daysGap >= 2) {
+                    $isDowntimeCatchup = true;
+                }
+            }
+        }
+
+        if (!$isScheduledDue && !$isDowntimeCatchup) {
+            return;
+        }
+
+        // Check existing job for (forecast_observation, $candidate, $targetCutoff)
+        $existingJob = $this->findObservationJob($candidate, $targetCutoff, $currentDate);
+
+        if ($existingJob) {
+            $status = (string)($existingJob['status'] ?? '');
+            if ($status === 'succeeded' || $status === 'queued') {
+                return;
+            }
+            if ($status === 'running') {
+                $leaseExpires = $existingJob['lease_expires_at'] ?? null;
+                if ($leaseExpires && $leaseExpires > $nowStr) {
+                    return;
+                }
+            }
+            if ($status === 'failed') {
+                $diag = (string)($existingJob['diagnostic_reference'] ?? '');
+                $attempts = (int)($existingJob['attempts'] ?? 0);
+                if (str_starts_with($diag, 'BLOCKED:') || $attempts >= 3) {
+                    return;
+                }
+                $jobService->retryJob((int)$existingJob['job_id']);
+                return;
+            }
+        }
+
+        // Enqueue candidate observation forecast (non-operational)
+        $jobService->enqueueSystem('forecast_observation', $targetCutoff, $candidate);
+        $result['observation_jobs_queued']++;
+    }
+
+    public function getCandidateUnderObservation(): ?string {
+        $approvedModel = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
+
+        // 1. Check explicit platform setting
+        $obsCandidate = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key IN ('ml_observation_candidate_version', 'ml_candidate_under_observation') ORDER BY setting_key DESC LIMIT 1")->fetchColumn() ?: '');
+
+        if ($obsCandidate !== '') {
+            // Check if review finished:
+            // (a) Is it approved?
+            if ($approvedModel !== '' && $obsCandidate === $approvedModel) {
+                $this->setCandidateUnderObservation('');
+                $obsCandidate = '';
+            } elseif ($this->isCandidateRejected($obsCandidate)) {
+                // (b) Is it rejected?
+                $this->setCandidateUnderObservation('');
+                $obsCandidate = '';
+            } else {
+                return $obsCandidate;
+            }
+        }
+
+        // 2. If no candidate currently locked under observation, pick earliest completed Store candidate whose review is unfinished
+        try {
+            $hasModelVersionCol = false;
+            try {
+                $check = $this->pdo->query("SELECT model_version FROM model_training_runs LIMIT 0");
+                $hasModelVersionCol = ($check !== false);
+            } catch (\Throwable) {}
+
+            if ($hasModelVersionCol) {
+                $stmt = $this->pdo->query("
+                    SELECT model_version, metrics_json FROM model_training_runs 
+                    WHERE status = 'completed' 
+                      AND (model_version IS NULL OR (model_version NOT LIKE '%demo%' AND model_version NOT LIKE '%kaggle%'))
+                    ORDER BY training_run_id ASC
+                ");
+            } else {
+                $stmt = $this->pdo->query("
+                    SELECT NULL as model_version, metrics_json FROM model_training_runs 
+                    WHERE status = 'completed'
+                    ORDER BY training_run_id ASC
+                ");
+            }
+
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $ver = (string)($row['model_version'] ?? '');
+                if ($ver === '') {
+                    $meta = json_decode((string)($row['metrics_json'] ?? ''), true);
+                    $ver = (string)($meta['model_version'] ?? $meta['metadata']['model_version'] ?? '');
+                }
+                if ($ver === '' || str_contains($ver, 'demo') || str_contains($ver, 'kaggle')) {
+                    continue;
+                }
+                if ($approvedModel !== '' && $ver === $approvedModel) {
+                    continue;
+                }
+                if ($this->isCandidateRejected($ver)) {
+                    continue;
+                }
+                // Lock this candidate into platform_settings so subsequent weekly retraining runs cannot replace it
+                $this->setCandidateUnderObservation($ver);
+                return $ver;
+            }
+        } catch (\Throwable) {}
+
+        return null;
+    }
+
+    public function isCandidateRejected(string $version): bool {
+        try {
+            $stmt = $this->pdo->prepare("SELECT setting_value FROM platform_settings WHERE setting_key IN (?, ?)");
+            $stmt->execute(["ml_review_technical_{$version}", "ml_review_operational_{$version}"]);
+            while ($val = $stmt->fetchColumn()) {
+                $dec = json_decode((string)$val, true)['decision'] ?? null;
+                if ($dec === 'rejected') {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {}
+        return false;
+    }
+
+    public function setCandidateUnderObservation(?string $version): void {
+        try {
+            $val = (string)($version ?? '');
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = 'ml_observation_candidate_version'");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn() > 0) {
+                $up = $this->pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_observation_candidate_version'");
+                $up->execute([$val]);
+            } else {
+                $ins = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_observation_candidate_version', ?)");
+                $ins->execute([$val]);
+            }
+        } catch (\Throwable) {}
+    }
+
+    public function findObservationJob(string $candidateVersion, string $cutoff, string $currentDate): ?array {
+        if ($this->hasCutoffColumn()) {
+            $stmt = $this->pdo->prepare("
+                SELECT * FROM ml_jobs 
+                WHERE trigger_type = 'forecast_observation' 
+                  AND (model_version = :version OR model_version IS NULL)
+                  AND (evidence_cutoff = :cutoff OR (evidence_cutoff IS NULL AND DATE(queued_at) = :today))
+                ORDER BY job_id DESC LIMIT 1
+            ");
+            $stmt->execute(['version' => $candidateVersion, 'cutoff' => $cutoff, 'today' => $currentDate]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                SELECT * FROM ml_jobs 
+                WHERE trigger_type = 'forecast_observation' 
+                  AND (model_version = :version OR model_version IS NULL)
+                  AND DATE(queued_at) = :today
+                ORDER BY job_id DESC LIMIT 1
+            ");
+            $stmt->execute(['version' => $candidateVersion, 'today' => $currentDate]);
+        }
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    public function getLatestSuccessfulObservationCutoff(string $candidateVersion): ?string {
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT forecast_origin FROM demand_forecasts 
+                WHERE model_version = ?
+                ORDER BY forecast_origin DESC LIMIT 1
+            ");
+            $stmt->execute([$candidateVersion]);
+            $origin = $stmt->fetchColumn();
+            if ($origin !== false && !empty($origin)) {
+                return (string)$origin;
+            }
+            if ($this->hasCutoffColumn()) {
+                $stmt2 = $this->pdo->prepare("
+                    SELECT evidence_cutoff FROM ml_jobs 
+                    WHERE trigger_type = 'forecast_observation' 
+                      AND model_version = ? 
+                      AND status = 'succeeded' 
+                      AND evidence_cutoff IS NOT NULL 
+                    ORDER BY evidence_cutoff DESC LIMIT 1
+                ");
+                $stmt2->execute([$candidateVersion]);
+                $cutoff = $stmt2->fetchColumn();
+                if ($cutoff !== false && !empty($cutoff)) {
+                    return (string)$cutoff;
+                }
+            }
+        } catch (\Throwable) {}
+        return null;
     }
 
     private function handleModelRetraining(

@@ -131,13 +131,29 @@ class CandidateEvaluationService
     /**
      * Evaluates completed forecast target dates against actual Store demand history.
      */
+    private function hasColumn(PDO $pdo, string $table, string $column): bool
+    {
+        try {
+            $pdo->query("SELECT {$column} FROM {$table} LIMIT 0");
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function evaluateCompletedTargetDates(PDO $pdo, string $modelVersion, string $asOfDate): array
     {
+        $hasOrigin = $this->hasColumn($pdo, 'demand_forecasts', 'forecast_origin');
+        $originCondition = $hasOrigin ? "AND df.forecast_origin IS NOT NULL AND df.forecast_origin < df.target_date" : "";
+
         $stmt = $pdo->prepare("
             SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day
             FROM demand_forecasts df
             WHERE df.model_version = ?
               AND df.target_date <= ?
+              AND df.predicted_units IS NOT NULL
+              AND df.predicted_units >= 0
+              {$originCondition}
             ORDER BY df.target_date ASC
         ");
         $stmt->execute([$modelVersion, $asOfDate]);
@@ -147,13 +163,21 @@ class CandidateEvaluationService
             return [
                 'completed_days' => 0,
                 'min_required_days' => 28,
+                'usable_observed_days' => 0,
+                'required_observed_days' => 28,
                 'observation_complete' => false,
+                'status' => 'under_evaluation',
+                'status_label' => 'Under evaluation',
+                'explanation' => 'Under evaluation: no completed target dates available for evaluation yet (0/28). Requires at least 28 completed target dates backed by usable Store observations.',
                 'message' => 'No completed target dates available for evaluation yet.',
                 'metrics_by_horizon' => []
             ];
         }
 
         $targetDates = [];
+        $closuresEncountered = 0;
+        $stockoutsEncountered = 0;
+        $missingEncountered = 0;
 
         $historyService = new DemandHistoryService();
         $byHorizon = [];
@@ -165,10 +189,24 @@ class CandidateEvaluationService
             $pred = (float)$fc['predicted_units'];
 
             $ev = $historyService->getDailyEvidence($pdo, $pid, $date, $date, $asOfDate . ' 23:59:59');
-            if (empty($ev)) continue;
+            if (empty($ev)) {
+                $missingEncountered++;
+                continue;
+            }
 
             $day = $ev[0];
-            if (!in_array($day['classification'], ['valid_demand', 'genuine_zero'], true)) {
+            $class = $day['classification'] ?? '';
+
+            if ($class === 'closed') {
+                $closuresEncountered++;
+                continue;
+            }
+            if ($class === 'stockout_censored') {
+                $stockoutsEncountered++;
+                continue;
+            }
+            if (!in_array($class, ['valid_demand', 'genuine_zero'], true)) {
+                $missingEncountered++;
                 continue;
             }
 
@@ -218,11 +256,48 @@ class CandidateEvaluationService
         }
 
         $completedDaysCount = count($targetDates);
+        $isComplete = ($completedDaysCount >= 28 && !empty($metrics[28]['count']));
+        $status = $isComplete ? 'awaiting_approval' : 'under_evaluation';
+        $statusLabel = $isComplete ? 'Awaiting approval' : 'Under evaluation';
+        $explanation = $isComplete
+            ? 'Observation period completed: 28+ usable target days evaluated against Store sales.'
+            : "Under evaluation: requires at least 28 completed target dates backed by usable Store observations (currently {$completedDaysCount}/28). Missing or Stockout Day targets cannot advance observation; recorded closures pause accumulation without resetting progress.";
+
         return [
             'completed_days' => $completedDaysCount,
             'min_required_days' => 28,
-            'observation_complete' => ($completedDaysCount >= 28 && $metrics[28]['count'] > 0),
+            'usable_observed_days' => $completedDaysCount,
+            'required_observed_days' => 28,
+            'observation_complete' => $isComplete,
+            'status' => $status,
+            'status_label' => $statusLabel,
+            'explanation' => $explanation,
+            'message' => $isComplete ? 'Observation completed' : 'Observation incomplete',
+            'closures_paused' => $closuresEncountered,
+            'stockouts_excluded' => $stockoutsEncountered,
+            'missing_excluded' => $missingEncountered,
             'metrics_by_horizon' => $metrics
+        ];
+    }
+
+    public function getCandidateObservationProgress(string $modelVersion, ?string $asOfDate = null): array
+    {
+        if ($asOfDate === null) {
+            $asOfDate = (new \DateTime('now', new \DateTimeZone('Asia/Manila')))->modify('-1 day')->format('Y-m-d');
+        }
+        $eval = $this->evaluateCompletedTargetDates($this->pdo, $modelVersion, $asOfDate);
+        return [
+            'model_version' => $modelVersion,
+            'as_of_date' => $asOfDate,
+            'usable_observed_days' => $eval['usable_observed_days'],
+            'required_observed_days' => $eval['required_observed_days'],
+            'completed_days' => $eval['completed_days'],
+            'min_required_days' => $eval['min_required_days'],
+            'observation_complete' => $eval['observation_complete'],
+            'status' => $eval['status'],
+            'status_label' => $eval['status_label'],
+            'explanation' => $eval['explanation'],
+            'metrics_by_horizon' => $eval['metrics_by_horizon'],
         ];
     }
 

@@ -17,9 +17,15 @@ try {
     $reviewApproved = (string)($reviewSettings['ml_approved_model_version'] ?? '');
     $reviewCandidate = $pdo->query("SELECT model_version FROM model_training_runs
         WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $reviewObsProgress = null;
     if ($reviewCandidate) {
-        $reviewQuality = (new \App\Forecasting\CandidateEvaluationService($pdo))
-            ->evaluateCandidateQuality($reviewCandidate['model_version']);
+        $evalService = new \App\Forecasting\CandidateEvaluationService($pdo);
+        $reviewQuality = $evalService->evaluateCandidateQuality($reviewCandidate['model_version']);
+        try {
+            $reviewObsProgress = $evalService->getCandidateObservationProgress($reviewCandidate['model_version']);
+        } catch (Throwable) {
+            $reviewObsProgress = null;
+        }
     }
 } catch (Throwable $e) {
     error_log('Forecast evaluation summary unavailable: ' . $e->getMessage());
@@ -82,6 +88,13 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                         </tbody>
                     </table>
                 </div>
+                <?php if (!empty($reviewObsProgress)): ?>
+                    <p><strong>Observation progress:</strong> <?= htmlspecialchars($reviewObsProgress['status_label'] ?? 'Under evaluation') ?>
+                       (<?= (int)($reviewObsProgress['usable_observed_days'] ?? 0) ?> of <?= (int)($reviewObsProgress['required_observed_days'] ?? 28) ?> completed target dates backed by usable Store observations).</p>
+                    <?php if (!empty($reviewObsProgress['explanation']) && empty($reviewObsProgress['observation_complete'])): ?>
+                        <p class="muted"><?= htmlspecialchars($reviewObsProgress['explanation']) ?></p>
+                    <?php endif; ?>
+                <?php endif; ?>
                 <p>These results combine products. Some products may perform worse. Recorded sales cannot show all demand lost during stockouts, and these tests do not guarantee future results.</p>
             <?php else: ?>
                 <p>No completed model training is available yet. The Super Administrator can train and review a model in ML Operation.</p>
