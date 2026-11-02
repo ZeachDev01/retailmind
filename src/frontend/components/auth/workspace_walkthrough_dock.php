@@ -7,8 +7,10 @@ $stepCount = count($topic['steps']);
 $currentStep = max(0, min($stepCount - 1, (int)($initialStep ?? 0)));
 $csrfToken = csrf_token();
 $helpPostUrl = app_url('components/auth/help.php');
-$allTopics = \App\Guidance\WorkspaceWalkthroughService::paths(current_role())['get_oriented']['topics'] ?? [];
+$pathKey = $topic['path_key'] ?? 'get_oriented';
+$allTopics = \App\Guidance\WorkspaceWalkthroughService::paths(current_role())[$pathKey]['topics'] ?? [];
 $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
+$completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
 ?>
 <aside id="guidance-dock" class="guidance-dock" role="region" aria-label="Interactive guidance walkthrough">
     <div class="guidance-dock-header">
@@ -20,7 +22,7 @@ $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
     </div>
 
     <details class="guidance-topic-checklist">
-        <summary>Topic checklist (<?= count($completedTopics) ?> of <?= count($allTopics) ?> completed)</summary>
+        <summary>Topic checklist (<?= count($completedInPath) ?> of <?= count($allTopics) ?> completed)</summary>
         <ul class="guidance-checklist-items">
             <?php foreach ($allTopics as $tId => $tDef):
                 $isDone = in_array($tId, $completedTopics, true);
@@ -56,7 +58,7 @@ $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
             <span class="guidance-checkmark" aria-hidden="true">✓</span>
             <div>
                 <strong>Guidance finished.</strong>
-                <p>Store settings walkthrough completed. Your operational settings were not modified.</p>
+                <p><?= htmlspecialchars($topic['title']) ?> walkthrough completed. Your operational records were not modified.</p>
             </div>
         </div>
         <button type="button" class="btn btn-primary u-mt-1" id="guidance-btn-done">Close</button>
