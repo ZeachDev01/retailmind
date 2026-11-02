@@ -155,8 +155,11 @@ def process_job(conn, job):
                 'Model artifact belongs to another dataset',
                 'Model feature contract is obsolete',
                 'Model artifact version does not match',
+                'No active products have 140 accumulated usable days for training',
                 'No active products have 140 consecutive usable days for training',
+                'No active products have 140',
                 'No trained products have 28 consecutive observed days for generation',
+                'No trained products have supported feature windows',
                 'Invalid observation model version',
                 'Imported Demo history does not match',
             ]
@@ -279,7 +282,7 @@ def load_history(cursor, context, training=False):
             context['training_eligibility'] = exported['eligibility']
             exported = exported['history']
             if not exported:
-                raise ValueError('No active products have 140 consecutive usable days for training')
+                raise ValueError('No active products have 140 accumulated usable days for training')
         data = normalize_history(pd.DataFrame(exported))
     return data
 
