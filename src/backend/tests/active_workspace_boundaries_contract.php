@@ -37,7 +37,8 @@ try {
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $localContext), 'admin lacks inventory mutation');
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::OPERATE_POINT_OF_SALE, null, $localContext), 'admin lacks POS');
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localContext), 'admin lacks model retrain authority');
-    $assert(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $localContext), 'admin lacks model approval authority');
+    $assert($policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $localContext), 'admin has model approval authority locally (ADR-0022)');
+    $assert(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $remoteContext), 'admin lacks model approval authority remotely');
 
     $assert($policy->allows('cashier', RoleCapabilityPolicy::OPERATE_POINT_OF_SALE, null, $localContext), 'cashier has POS locally');
     $assert(!$policy->allows('cashier', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP, null, $localContext), 'cashier lacks backup capability');
@@ -365,18 +366,29 @@ try {
     }
     $assert($superCorrectionFailed, 'super_admin cannot record linked correction');
 
-    // 8. Preserved technical model maintenance boundaries:
-    $modelCaps = [
+    // 8. Preserved technical model maintenance boundaries (ADR-0022):
+    // Super Administrator retains configuration and retraining authority.
+    // Local Administrator has scoped approval/replacement/rollback, but lacks technical configuration/retraining.
+    // Both are refused model mutations remotely.
+    $techMaintenanceCaps = [
         RoleCapabilityPolicy::RETRAIN_MODELS,
         RoleCapabilityPolicy::CONFIGURE_MODELS,
+    ];
+    foreach ($techMaintenanceCaps as $cap) {
+        $assert($policy->allows('super_admin', $cap, null, $localContext), "super_admin retains {$cap}");
+        $assert(!$policy->allows('admin', $cap, null, $localContext), "admin lacks {$cap}");
+        $assert(!$policy->allows('super_admin', $cap, null, $remoteContext), "{$cap} refused remotely");
+    }
+    $scopedApprovalCaps = [
         RoleCapabilityPolicy::APPROVE_MODELS,
         RoleCapabilityPolicy::REPLACE_MODELS,
         RoleCapabilityPolicy::ROLL_BACK_MODELS,
     ];
-    foreach ($modelCaps as $cap) {
+    foreach ($scopedApprovalCaps as $cap) {
         $assert($policy->allows('super_admin', $cap, null, $localContext), "super_admin retains {$cap}");
-        $assert(!$policy->allows('admin', $cap, null, $localContext), "admin lacks {$cap}");
-        $assert(!$policy->allows('super_admin', $cap, null, $remoteContext), "{$cap} refused remotely");
+        $assert($policy->allows('admin', $cap, null, $localContext), "admin has {$cap} locally (ADR-0022)");
+        $assert(!$policy->allows('admin', $cap, null, $remoteContext), "admin lacks {$cap} remotely");
+        $assert(!$policy->allows('super_admin', $cap, null, $remoteContext), "super_admin lacks {$cap} remotely");
     }
 
     // 9. Preserved User Lifecycle & Recovery Account boundaries:

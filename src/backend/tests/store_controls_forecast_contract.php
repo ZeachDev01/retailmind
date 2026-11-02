@@ -29,8 +29,8 @@ $assert($policy->allows('admin', RoleCapabilityPolicy::VIEW_FORECASTS), 'Admin c
 $assert($policy->allows('admin', RoleCapabilityPolicy::GENERATE_FORECASTS), 'Admin can generate forecasts');
 $assert(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS), 'Admin cannot retrain models');
 $assert(!$policy->allows('admin', RoleCapabilityPolicy::CONFIGURE_MODELS), 'Admin cannot configure models');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS), 'Admin cannot approve models');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Admin cannot roll back models');
+$assert($policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS), 'Admin can approve models locally under ADR-0022');
+$assert($policy->allows('admin', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Admin can roll back models locally under ADR-0022');
 
 $assert($policy->allows('inventory_manager', RoleCapabilityPolicy::VIEW_FORECASTS), 'Inventory Manager can view forecasts');
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::GENERATE_FORECASTS), 'Inventory Manager cannot generate forecasts');

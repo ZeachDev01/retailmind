@@ -42,13 +42,13 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
     <div>
         <h2 id="model-review-title">Can we use these forecasts?</h2>
         <?php if ($reviewError): ?>
-            <p>Model checks could not be loaded. Ask the Super Administrator to review the model before relying on its suggestions.</p>
+            <p>Model checks could not be loaded. Ask the Administrator to review the model in Model Review & Approval before relying on its suggestions.</p>
         <?php else: ?>
             <p><strong>Approved model:</strong> <?= $reviewApproved !== '' ? htmlspecialchars($reviewApproved) : 'None yet' ?>.</p>
             <?php if (!empty($displayedForecastModel)): ?>
                 <p><strong>Model behind the forecasts below:</strong> <?= htmlspecialchars($displayedForecastModel) ?>.
                 <?php if ($displayedForecastModel !== $reviewApproved): ?>
-                    This differs from the approved model. Ask the Super Administrator to review it before using these suggestions.
+                    This differs from the approved model. Ask the Administrator to review it in Model Review & Approval before using these suggestions.
                 <?php endif; ?></p>
             <?php endif; ?>
             <?php if (in_array($reviewSettings['ml_recommendations_suspended'] ?? '', ['1', 'true'], true)): ?>
@@ -97,7 +97,7 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                 <?php endif; ?>
                 <p>These results combine products. Some products may perform worse. Recorded sales cannot show all demand lost during stockouts, and these tests do not guarantee future results.</p>
             <?php else: ?>
-                <p>No completed model training is available yet. The Super Administrator can train and review a model in ML Operation.</p>
+                <p>No completed model training is available yet. Once a candidate is trained and evaluated, the Administrator can review and approve it in Model Review & Approval.</p>
             <?php endif; ?>
         <?php endif; ?>
         <p>Forecasts guide staff decisions. They do not place orders or change stock.</p>
