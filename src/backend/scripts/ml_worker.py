@@ -88,15 +88,26 @@ def claim_job(conn):
     """Atomically claim a queued job or eligible expired lease."""
     recover_expired_leases(conn)
     with conn.cursor() as cursor:
-        cursor.execute("""
-            SELECT job_id, trigger_type, attempts 
-            FROM ml_jobs 
-            WHERE status = 'queued' 
-               OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
-            ORDER BY queued_at ASC 
-            LIMIT 1 
-            FOR UPDATE
-        """)
+        try:
+            cursor.execute("""
+                SELECT job_id, trigger_type, attempts, model_version, evidence_cutoff 
+                FROM ml_jobs 
+                WHERE status = 'queued' 
+                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                ORDER BY queued_at ASC 
+                LIMIT 1 
+                FOR UPDATE
+            """)
+        except Exception:
+            cursor.execute("""
+                SELECT job_id, trigger_type, attempts 
+                FROM ml_jobs 
+                WHERE status = 'queued' 
+                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                ORDER BY queued_at ASC 
+                LIMIT 1 
+                FOR UPDATE
+            """)
         job = cursor.fetchone()
         if not job:
             conn.commit()
@@ -104,7 +115,9 @@ def claim_job(conn):
 
         # Handle tuple vs dict return
         if isinstance(job, (tuple, list)):
-            job = {'job_id': job[0], 'trigger_type': job[1], 'attempts': job[2]}
+            job = {'job_id': job[0], 'trigger_type': job[1], 'attempts': job[2],
+                   'model_version': job[3] if len(job) > 3 else None,
+                   'evidence_cutoff': job[4] if len(job) > 4 else None}
 
         job_id = job['job_id']
         cursor.execute("""
@@ -125,11 +138,24 @@ def process_job(conn, job):
     with conn.cursor() as cursor:
         try:
             if trigger == 'forecast_generation':
-                run_forecast_generation(conn, cursor, job_id)
+                run_forecast_generation(conn, cursor, job_id, evidence_cutoff=job.get('evidence_cutoff'))
             elif trigger == 'forecast_observation':
-                if not job.get('observation_version'):
+                obs_ver = job.get('observation_version') or job.get('model_version')
+                if not obs_ver:
+                    cursor.execute("SELECT model_version FROM ml_jobs WHERE job_id = %s", (job_id,))
+                    row = cursor.fetchone()
+                    obs_ver = (row['model_version'] if isinstance(row, dict) else row[0]) if row else None
+                if not obs_ver:
                     raise ValueError("Observation generation requires an explicit candidate version")
-                run_forecast_generation(conn, cursor, job_id, job.get('observation_version'))
+                evidence_cutoff = job.get('evidence_cutoff')
+                if not evidence_cutoff:
+                    try:
+                        cursor.execute("SELECT evidence_cutoff FROM ml_jobs WHERE job_id = %s", (job_id,))
+                        row_c = cursor.fetchone()
+                        evidence_cutoff = (row_c['evidence_cutoff'] if isinstance(row_c, dict) else row_c[0]) if row_c else None
+                    except Exception:
+                        pass
+                run_forecast_generation(conn, cursor, job_id, observation_version=obs_ver, evidence_cutoff=evidence_cutoff)
             elif trigger == 'model_retraining':
                 artifact_file = run_model_retraining(conn, cursor, job_id)
             else:
@@ -287,8 +313,10 @@ def load_history(cursor, context, training=False):
     return data
 
 
-def run_forecast_generation(conn, cursor, job_id, observation_version=None):
+def run_forecast_generation(conn, cursor, job_id, observation_version=None, evidence_cutoff=None):
     context = dataset_context(cursor)
+    if evidence_cutoff:
+        context['history_cutoff'] = str(evidence_cutoff)
     cursor.execute("""
         SELECT setting_value FROM platform_settings
         WHERE setting_key = 'ml_approved_model_version'

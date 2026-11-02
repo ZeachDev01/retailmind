@@ -255,4 +255,99 @@ assert_same(1, count($queue), 'Replenishment queue returns product');
 assert_same('Stock-rule suggestion', $queue[0]['basis'], 'Falls back cleanly to Stock-rule suggestion');
 assert_same(12, $queue[0]['stock_rule_quantity'], 'Stock-rule quantity is accurately calculated');
 
-echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation).\n";
+// =========================================================================
+// Ticket #367 Requirements: Candidate Observation Forecasting & Preservation
+// =========================================================================
+
+// --- 10A. First-installation candidate observation (no approved model) ---
+// When no approved model exists, operational forecast generation is blocked,
+// but candidate observation forecast is queued automatically without needing approval.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM platform_settings WHERE setting_key = 'ml_approved_model_version';");
+$pdo->exec("INSERT INTO model_training_runs (training_run_id, status, metrics_json)
+    VALUES (10, 'completed', '{\"model_version\":\"v_candidate_store_1\",\"metadata\":{\"data_window_end\":\"2024-06-09\"}}');");
+
+// Scheduler tick at 23:05 on 2024-06-10
+$obsRes1 = $tick('2024-06-10 23:05:00');
+assert_same(0, $obsRes1['forecast_jobs_queued'], 'Operational generation blocked when no approved model');
+assert_same(1, $obsRes1['observation_jobs_queued'], 'Candidate observation forecast queued automatically without approval');
+
+$obsJob1 = $pdo->query("SELECT trigger_type, model_version, evidence_cutoff, status FROM ml_jobs WHERE trigger_type = 'forecast_observation'")->fetch(PDO::FETCH_ASSOC);
+assert_same('forecast_observation', $obsJob1['trigger_type'], 'Observation trigger type is forecast_observation');
+assert_same('v_candidate_store_1', $obsJob1['model_version'], 'Observation job is tied to candidate 1');
+assert_same('2024-06-09', $obsJob1['evidence_cutoff'], 'Evidence cutoff is yesterday');
+assert_same('queued', $obsJob1['status'], 'Job is queued for worker processing');
+
+// Repeated tick on the same day does not duplicate observation job
+$obsResDup = $tick('2024-06-10 23:10:00');
+assert_same(0, $obsResDup['observation_jobs_queued'], 'Repeated ticks do not duplicate candidate observation job');
+
+// Mark observation job 1 succeeded and insert 28 forecast rows
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded', completed_at = '2024-06-10 23:15:00' WHERE trigger_type = 'forecast_observation'");
+for ($h = 1; $h <= 28; $h++) {
+    $tDate = date('Y-m-d', strtotime("2024-06-09 +$h days"));
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level, limitation_marker)
+        VALUES (1, 1, '2024-06-09', ?, ?, 5, 'v_candidate_store_1', 'Medium', 'Observation only')")->execute([$tDate, $h]);
+}
+
+// --- 10B. Replacement candidate observation & independent operational generation ---
+// When an approved model exists, daily operational generation from approved model continues
+// independently alongside daily observation forecasting for candidate under observation.
+$pdo->exec("DELETE FROM ml_jobs;");
+$pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'v_approved_incumbent');");
+
+// Next daily tick at 23:05 on 2024-06-11
+$obsRes2 = $tick('2024-06-11 23:05:00');
+assert_same(1, $obsRes2['forecast_jobs_queued'], 'Approved model operational forecast is queued');
+assert_same(1, $obsRes2['observation_jobs_queued'], 'Candidate observation forecast is queued simultaneously');
+
+$jobs2 = $pdo->query("SELECT trigger_type, model_version, evidence_cutoff FROM ml_jobs ORDER BY job_id ASC")->fetchAll(PDO::FETCH_ASSOC);
+assert_same(2, count($jobs2), 'Exactly two jobs queued: operational and candidate observation');
+assert_same('forecast_generation', $jobs2[0]['trigger_type'], 'First job is operational generation');
+assert_same('v_approved_incumbent', $jobs2[0]['model_version'], 'Operational job uses approved model');
+assert_same('forecast_observation', $jobs2[1]['trigger_type'], 'Second job is candidate observation');
+assert_same('v_candidate_store_1', $jobs2[1]['model_version'], 'Observation job is tied to candidate 1');
+
+// --- 10C. Preserving candidate under observation across later weekly retraining ---
+// A later weekly candidate training runs and produces candidate 2.
+// Candidate 1 remains under observation; candidate 2 does NOT replace it or erase progress.
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded';");
+$pdo->exec("INSERT INTO model_training_runs (training_run_id, status, metrics_json)
+    VALUES (11, 'completed', '{\"model_version\":\"v_candidate_store_2_weekly\",\"metadata\":{\"data_window_end\":\"2024-06-11\"}}');");
+
+// Next daily tick at 23:05 on 2024-06-12
+$obsRes3 = $tick('2024-06-12 23:05:00');
+assert_same(1, $obsRes3['observation_jobs_queued'], 'Daily observation forecast queued on next day');
+
+$obsJob3 = $pdo->query("SELECT model_version FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_1', $obsJob3['model_version'], 'Candidate 1 is preserved under observation; candidate 2 does NOT replace it');
+
+// --- 10D. Observation continuity across downtime catch-up ---
+// Machine is powered off for multiple days (from June 12 to June 15).
+// Startup tick on June 15 at 08:00 AM catches up with ONE current observation forecast for yesterday.
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded';");
+$catchupObs = $tick('2024-06-15 08:00:00');
+assert_same(1, $catchupObs['forecast_jobs_queued'], 'Catchup queues one operational forecast');
+assert_same(1, $catchupObs['observation_jobs_queued'], 'Catchup queues one current observation forecast');
+
+$obsCatchupJob = $pdo->query("SELECT model_version, evidence_cutoff FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_1', $obsCatchupJob['model_version'], 'Catchup observation is for candidate 1');
+assert_same('2024-06-14', $obsCatchupJob['evidence_cutoff'], 'Catchup observation uses yesterday cutoff');
+
+// Repeated tick does not duplicate catchup observation job
+$catchupObsDup = $tick('2024-06-15 08:05:00');
+assert_same(0, $catchupObsDup['observation_jobs_queued'], 'Repeated ticks do not duplicate catchup observation job');
+
+// --- 10E. Finishing review advances observation to next candidate ---
+// When candidate 1 review finishes (e.g. approved or rejected):
+// 1. Mark candidate 1 as approved
+$pdo->exec("UPDATE platform_settings SET setting_value = 'v_candidate_store_1' WHERE setting_key = 'ml_approved_model_version';");
+// Now candidate 1 is the approved model; review is finished.
+// Next daily tick at 23:05 on June 15:
+$pdo->exec("DELETE FROM ml_jobs WHERE trigger_type = 'forecast_observation';");
+$obsRes4 = $tick('2024-06-15 23:05:00');
+assert_same(1, $obsRes4['observation_jobs_queued'], 'Next candidate enters observation once candidate 1 is approved');
+
+$obsJob4 = $pdo->query("SELECT model_version FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_2_weekly', $obsJob4['model_version'], 'Candidate 2 enters observation now that candidate 1 is approved');
+
+echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation, candidate observation queueing, candidate preservation, downtime observation catch-up, review transition).\n";
