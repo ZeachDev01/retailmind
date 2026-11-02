@@ -248,7 +248,7 @@ Alerts favor easy words and calm hierarchy. Dialogs use the strongest depth toke
 
 ### Workspace Help
 
-Workspace Help retains the incumbent visual system: compact action rows pair existing navigation icons in square tiles with destination labels and arrows. Circular icon wells distinguish setup tasks. Native “How it works” disclosures contain the full workflow guidance; default-view summaries and repeated subtext are omitted. Entrance Navy anchors the Store setup header; blue actions and theme-aware reading surfaces preserve hierarchy in both themes. Its approved composition, responsive behavior, screenshot matrix, review limits and **Ship** verdict are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). This surface decision adds no global tokens or visual-world rules.
+Workspace Help presents role-specific walkthroughs as divided rows within task groups, using existing navigation icons, summaries, and Start / Continue / Replay actions. Wide layouts place each group introduction beside its topic list; intermediate and mobile layouts stack them, with full-width actions on small screens. An active walkthrough appears in a separate resume panel. Button labels retain explicit contrasting foregrounds in both themes, and Help-only CSS avoids changing the shared onboarding presentation. The current implementation, verification and limits are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). No global tokens or visual-world rules were added.
 
 ## Do's and Don'ts
 

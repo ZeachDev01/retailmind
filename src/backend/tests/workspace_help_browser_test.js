@@ -38,7 +38,6 @@ const fixture = action => {
         browser = await chromium.launch({headless: true});
         const page = await browser.newPage();
         await page.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
-        fs.mkdirSync('.impeccable/review', {recursive: true});
         const before = JSON.parse(fixture('inventory_state'));
         for (const role of ['admin', 'inventory_manager']) {
             await page.goto(origin + '/components/auth/logout.php');
@@ -47,109 +46,78 @@ const fixture = action => {
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
             const workspaceUrl = page.url();
+            const csrf = await page.locator('#workspace-guidance input[name="csrf_token"]').first().inputValue();
             await page.locator('#workspace-guidance').getByRole('button', {name: 'Not now', exact: true}).click();
             await page.locator('.workspace-guidance-saved').waitFor();
             assert.equal(await page.locator('#workspace-guidance').count(), 0, 'Workspace overview disappears in place');
             assert.equal(page.url(), workspaceUrl);
             await page.goto(origin + '/components/auth/help.php');
-            assert.equal(await page.locator('.workspace-guidance-links h3').count(), role === 'admin' ? 5 : 6);
-            assert.equal(await page.locator('.help-workflow-details').count(), role === 'admin' ? 5 : 6);
-            assert.equal(await page.locator('.help-function-icon img').count(), role === 'admin' ? 5 : 6);
-            assert.equal(await page.locator('.help-task-icon img').count(), 2);
-            assert.equal(await page.locator('.workspace-guidance-links > li > p, .help-setup .setup-task-desc').count(), 0, 'Task actions have no redundant subtext');
-            for (const icon of await page.locator('.help-function-icon img, .help-task-icon img').all()) {
-                await icon.scrollIntoViewIfNeeded();
-                await icon.evaluate(image => image.decode());
-                assert.equal(await icon.getAttribute('alt'), '', 'Visible labels identify decorative icons');
+            assert.equal(await page.locator('.workspace-guidance-links, .help-setup, .help-preferences').count(), 0, 'Legacy Help sections are removed');
+            assert.ok(await page.locator('.walkthrough-topic-card').count() > 0, 'Current walkthroughs remain available');
+            if (role === 'inventory_manager') {
+                assert.deepEqual(await page.locator('.walkthrough-topic-icon img').evaluateAll(images => images.map(img => img.src.split('/').pop())), ['workflow.svg', 'package.svg', 'shipped.svg'], 'Topics use their own function icons');
             }
-            for (const details of await page.locator('.help-workflow-details').all()) {
-                assert.equal(await details.locator('p').isVisible(), false, 'Long guidance starts collapsed');
-                await details.locator('summary').focus();
-                await page.keyboard.press('Enter');
-                assert.equal(await details.locator('p').isVisible(), true, 'Keyboard reveals full guidance');
-                assert.ok((await details.locator('p').innerText()).length > 100);
-                await page.keyboard.press('Enter');
-            }
-            assert.equal(await page.locator('.setup-task-confirm-form').count(), 1, 'Only the permitted setup action is rendered');
             for (const theme of ['light', 'dark']) {
                 for (const width of [1440, 1024, 390, 320]) {
                     await page.setViewportSize({width, height: 900});
                     await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
                     await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))));
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Help fits ' + width);
-                    const guide = await page.locator('.help-workflows').boundingBox();
-                    const setup = await page.locator('.help-setup').boundingBox();
-                    assert.ok(width >= 1024 ? setup.x >= guide.x + guide.width : setup.y >= guide.y + guide.height, 'Responsive reading layout at ' + width);
-                    const contrast = await page.locator('.workspace-guidance-links a, .help-workflow-details summary, .store-setup-checklist-header h3, .setup-progress-badge, .setup-task-links a').evaluateAll(elements => {
-                        const rgb = value => value.match(/[\d.]+/g).map(Number);
-                        const luminance = color => rgb(color).slice(0, 3).map(v => {
-                            v /= 255;
-                            return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
-                        }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
-                        return elements.map(element => {
-                            let parent = element;
-                            while (parent.parentElement && (rgb(getComputedStyle(parent).backgroundColor)[3] ?? 1) === 0) parent = parent.parentElement;
-                            const foreground = luminance(getComputedStyle(element).color);
-                            const background = luminance(getComputedStyle(parent).backgroundColor);
-                            return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05);
-                        });
-                    });
-                    assert.ok(contrast.every(ratio => ratio >= 4.5), 'Help text contrast in ' + theme + ': ' + Math.min(...contrast));
+                    for (const card of await page.locator('.walkthrough-topic-card').all()) {
+                        assert.ok((await card.boundingBox()).height < 300, 'Topic rows do not stretch on mobile');
+                    }
                     await page.keyboard.press('Tab');
-                    for (const action of await page.locator('.help-setup button, .workspace-guidance-actions button, .help-heading a, .help-workflow-details summary, .workspace-guidance-links a').all()) {
+                    for (const action of await page.locator('.help-heading a, .walkthrough-topic-actions a').all()) {
                         await action.focus();
                         assert.notEqual(await action.evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+                        if (await action.evaluate(el => el.classList.contains('btn-primary'))) {
+                            const contrast = await action.evaluate(el => {
+                                const luminance = color => {
+                                    const [r, g, b] = color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => {
+                                        v /= 255;
+                                        return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
+                                    });
+                                    return .2126 * r + .7152 * g + .0722 * b;
+                                };
+                                const style = getComputedStyle(el);
+                                const values = [luminance(style.color), luminance(style.backgroundColor)].sort((a, b) => a - b);
+                                return (values[1] + .05) / (values[0] + .05);
+                            });
+                            assert.ok(contrast >= 4.5, 'Walkthrough button text remains readable in ' + theme);
+                        }
                         const box = await action.boundingBox();
                         assert.ok(box.x >= 0 && box.x + box.width <= width && box.height >= 44, 'Action fits and has a comfortable target');
                     }
                     await page.evaluate(() => scrollTo(0, 0));
-                    await page.screenshot({fullPage: true, animations: 'disabled', path: `.impeccable/review/${role}-${theme}-${width}.png`});
-                    if (width === 390) {
-                        const details = page.locator('.help-workflow-details').first();
-                        await details.locator('summary').click();
-                        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Expanded guidance fits mobile');
-                        await page.screenshot({fullPage: true, animations: 'disabled', path: `.impeccable/review/${role}-${theme}-expanded.png`});
-                        await details.locator('summary').click();
+                    await page.screenshot({fullPage: true, animations: 'disabled', path: path.join(directory, `${role}-${theme}-${width}.png`)});
+                }
+            }
+            const firstTopic = page.locator('.walkthrough-topic-card').first();
+            const topic = new URL(await firstTopic.locator('a').getAttribute('href'), origin).searchParams.get('guidance');
+            for (const [action, label] of [['start', 'Continue'], ['complete', 'Replay']]) {
+                const response = await page.request.post(origin + '/components/auth/help.php', {
+                    headers: {Accept: 'application/json'},
+                    form: {csrf_token: csrf, walkthrough_action: action, walkthrough_topic: topic, walkthrough_step: '0'},
+                });
+                assert.equal(response.status(), 200, await response.text());
+                await page.goto(origin + '/components/auth/help.php');
+                assert.equal(await firstTopic.getByRole('link', {name: label, exact: true}).count(), 1);
+                assert.equal(await page.locator('.guidance-continue-card').count(), action === 'start' ? 1 : 0);
+                for (const width of [1440, 320]) {
+                    await page.setViewportSize({width, height: 900});
+                    for (const theme of ['light', 'dark']) {
+                        await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), label + ' state fits');
+                        const badge = firstTopic.locator('.guidance-progress-badge, .guidance-completion-badge');
+                        const box = await badge.boundingBox();
+                        assert.ok(box.x >= 0 && box.x + box.width <= width, label + ' badge fits');
+                        await page.screenshot({fullPage: true, animations: 'disabled', path: path.join(directory, `${role}-${theme}-${width}-${action}.png`)});
                     }
                 }
             }
-            await page.route('**/components/auth/help.php', route => route.request().method() === 'POST'
-                ? route.fulfill({status: 500, contentType: 'application/json', body: '{"saved":false}'}) : route.continue());
-            await page.getByRole('button', {name: 'Not now', exact: true}).click();
-            await page.getByRole('alert').filter({hasText: 'Unable to save your guidance choice'}).waitFor();
-            assert.equal(await page.locator('.help-preferences').isVisible(), true, 'Failed save keeps the controls');
-            assert.equal(await page.getByRole('button', {name: 'Not now', exact: true}).isEnabled(), true, 'Failed save allows retry');
-            await page.unroute('**/components/auth/help.php');
-            for (const [label, status] of [['Not now', 'deferred'], ['Skip guidance', 'skipped'], ['Finish overview', 'completed']]) {
-                await page.goto(origin + '/components/auth/help.php');
-                await page.emulateMedia({reducedMotion: status === 'completed' ? 'reduce' : 'no-preference'});
-                await page.getByRole('button', {name: label, exact: true}).focus();
-                await page.keyboard.press('Enter');
-                const message = page.locator('.workspace-guidance-saved');
-                await message.waitFor();
-                assert.ok(JSON.parse(fixture('guidance_state')).some(row => row.workspace === role && row.status === status), label + ' saves the selected preference');
-                assert.equal(page.url(), origin + '/components/auth/help.php', 'Choice saves without navigating');
-                assert.equal(await page.locator('.help-preferences').count(), 0, label + ' removes the controls');
-                assert.match(await message.innerText(), /profile menu and choose Help/);
-                assert.equal(await message.evaluate(el => document.activeElement === el), true, 'Focus moves to confirmation');
-                assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-                if (status === 'skipped') {
-                    await page.setViewportSize({width: 1440, height: 900});
-                    await page.screenshot({fullPage: true, animations: 'disabled', path: `.impeccable/review/${role}-guidance-saved-1440.png`});
-                    await page.setViewportSize({width: 320, height: 900});
-                }
-                if (status === 'completed') await page.screenshot({fullPage: true, animations: 'disabled', path: `.impeccable/review/${role}-guidance-saved-320.png`});
-            }
-            const fallbackContext = await browser.newContext({javaScriptEnabled: false, storageState: await page.context().storageState()});
-            await fallbackContext.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
-            const fallback = await fallbackContext.newPage();
-            await fallback.goto(origin + '/components/auth/help.php');
-            await fallback.getByRole('button', {name: 'Finish overview', exact: true}).click();
-            await fallback.waitForURL(workspaceUrl);
-            await fallbackContext.close();
         }
         assert.deepEqual(JSON.parse(fixture('inventory_state')), before, 'Help does not change inventory');
-        console.log('Workspace Help: both roles, themes, responsive layout, keyboard targets and overview actions passed');
+        console.log('Workspace Help: both roles, legacy sections removed, walkthroughs, themes, responsive layout and keyboard targets passed');
     } finally {
         if (browser) await browser.close();
         if (server) { server.kill(); await new Promise(resolve => server.once('exit', resolve)); }
