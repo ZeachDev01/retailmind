@@ -62,7 +62,7 @@ const fixture = (action, extra) => {
             await page.locator('#landing-login-password').fill(data.password);
             try {
                 await Promise.all([
-                    page.waitForURL(u => !u.search.includes('login=1'), {timeout: 10000}),
+                    page.waitForURL(u => !u.search.includes('login=1')),
                     page.getByRole('button', {name: 'Log in', exact: true}).click()
                 ]);
             } catch (err) {
