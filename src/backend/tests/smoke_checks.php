@@ -443,7 +443,7 @@ $checks = [
             'name="register_id"',
             'name="opening_float"',
             '$service->availableRegisters()',
-            'requireCashierWorkspace($actorRole)',
+            "require_role(['admin', 'super_admin', 'cashier'])",
         ],
         // A shift is never opened on somebody's behalf, and the duplicate
         // page-level audit write is gone: the service records the opening.

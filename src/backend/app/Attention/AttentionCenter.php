@@ -32,13 +32,13 @@ final class AttentionCenter
      *
      * @return AttentionItem[]
      */
-    public function getAttention(int $userId = 0, string $role = '', array $externalSignals = []): array
+    public function getAttention(int $userId = 0, string $role = '', array $healthChecks = []): array
     {
         if ($role !== 'admin' && $role !== 'super_admin') {
             return [];
         }
 
-        $signals = $this->collectSignals($role, $externalSignals);
+        $signals = $this->collectSignals($role, $healthChecks);
         return $this->rules->evaluate($role, $signals);
     }
 
@@ -48,59 +48,35 @@ final class AttentionCenter
     public function synchronize(
         int $userId,
         string $role,
-        array $externalSignals = [],
+        array $healthChecks = [],
         bool $createInApp = true
     ): AttentionRefreshResult {
         if ($role !== 'admin' && $role !== 'super_admin') {
             return new AttentionRefreshResult([], []);
         }
 
-        $signals = $this->collectSignals($role, $externalSignals);
+        $signals = $this->collectSignals($role, $healthChecks);
         $evaluatedItems = $this->rules->evaluate($role, $signals);
         $workspacePrefix = $role === 'super_admin' ? 'platform.' : 'store.';
-        return $this->notifications->synchronize($userId, $evaluatedItems, $createInApp, $workspacePrefix);
+        return $this->synchronizeItems($userId, $evaluatedItems, $createInApp, $workspacePrefix);
     }
 
-    /**
-     * Forwarding alias for synchronize() returning array representation of items.
-     */
-    public function refresh(int $userId, string $role, array $signals = [], bool $createInApp = true): array
+    /** @param AttentionItem[] $items Prepared conditions from other operational workflows. */
+    public function synchronizeItems(int $userId, array $items, bool $createInApp = true, string $scope = ''): AttentionRefreshResult
     {
-        return $this->refreshResult($userId, $role, $signals, $createInApp)->dashboardItems();
+        return $this->notifications->synchronize($userId, $items, $createInApp, $scope);
     }
 
-    /**
-     * Forwarding alias for synchronize().
-     */
-    public function refreshResult(
-        int $userId,
-        string $role,
-        array $signals = [],
-        bool $createInApp = true
-    ): AttentionRefreshResult {
-        if (!empty($signals)) {
-            return $this->notifications->synchronize(
-                $userId,
-                $this->rules->evaluate($role, $signals),
-                $createInApp,
-                $role === 'super_admin' ? 'platform.' : 'store.'
-            );
-        }
-        return $this->synchronize($userId, $role, $signals, $createInApp);
-    }
-
-    private function collectSignals(string $role, array $externalSignals = []): array
+    private function collectSignals(string $role, array $healthChecks = []): array
     {
         if ($role === 'super_admin') {
-            $platform = $this->signals->platform($externalSignals);
-            return array_merge($platform, $externalSignals);
+            return $this->signals->platform($healthChecks);
         }
 
         if ($role === 'admin') {
-            $store = $this->signals->store();
-            return array_merge($store, $externalSignals);
+            return $this->signals->store();
         }
 
-        return $externalSignals;
+        return [];
     }
 }
