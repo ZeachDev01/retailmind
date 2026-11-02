@@ -101,6 +101,9 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
             <?php endif; ?>
         <?php endif; ?>
         <p>Forecasts guide staff decisions. They do not place orders or change stock.</p>
+        <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS)): ?>
+            <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a></p>
+        <?php endif; ?>
         <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
             <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Train and review models</a>
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">View detailed model results</a></p>
