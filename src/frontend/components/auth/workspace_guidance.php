@@ -61,7 +61,6 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
                 $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
                 include __DIR__ . '/workspace_walkthrough_dock.php';
             }
-            }
         }
     } catch (Throwable $e) {
         // Guidance must not block Store work when its state cannot be read.
