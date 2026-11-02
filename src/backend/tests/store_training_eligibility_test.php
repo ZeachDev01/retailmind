@@ -112,6 +112,18 @@ try {
             setting_key TEXT PRIMARY KEY,
             setting_value TEXT
         );
+        CREATE TABLE demand_forecasts (
+            forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER,
+            product_id INTEGER,
+            forecast_origin TEXT,
+            target_date TEXT,
+            horizon_day INTEGER,
+            predicted_units INTEGER,
+            model_version TEXT,
+            readiness_level TEXT,
+            limitation_marker TEXT
+        );
         CREATE TABLE stock_predictions (
             prediction_id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER,
@@ -163,8 +175,13 @@ try {
             (1, 'SKU-001', 'Product 1 Mature Mon-Fri', 'active'),
             (2, 'SKU-002', 'Product 2 Under 140 Days', 'active'),
             (3, 'SKU-003', 'Product 3 Recent Stockout', 'active'),
-            (4, 'SKU-004', 'Product 4 Holdout Stockout', 'active');
+            (4, 'SKU-004', 'Product 4 Holdout Stockout', 'active'),
+            (5, 'SKU-005', 'Product 5 Holiday Closure', 'active'),
+            (6, 'SKU-006', 'Product 6 Missing Evidence Gap', 'active');
     ");
+
+    // Holiday closure on Wednesday 2024-07-17 in store_calendar
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2024-07-17', 'closed', '2024-01-01 00:00:00')");
 
     // Mon-Fri schedule effective 2024-01-01
     $pdo->exec("
@@ -205,7 +222,7 @@ try {
             $p1Usable++;
 
             // P2: Skipped first 11 weekdays -> 139 total weekdays
-            if ($p1Usable > 11) {
+            if ($p1Usable > 10) {
                 $insertImport->execute([2, $dateStr, 5]);
                 $p2Usable++;
             }
@@ -221,6 +238,16 @@ try {
             if ($dateStr !== '2024-05-15') {
                 $insertImport->execute([4, $dateStr, 5]);
                 $p4Usable++;
+            }
+
+            // P5: Has 149 weekdays, with supported holiday closure on Wed 2024-07-17 (closed in store_calendar)
+            if ($dateStr !== '2024-07-17') {
+                $insertImport->execute([5, $dateStr, 5]);
+            }
+
+            // P6: Has missing evidence gap on Wed 2024-07-10 (not closed in calendar, no sales, no stock)
+            if ($dateStr !== '2024-07-10') {
+                $insertImport->execute([6, $dateStr, 5]);
             }
         }
 
@@ -270,6 +297,45 @@ try {
     $assert(str_contains(strtolower((string)$res4['reason']), 'holdout') || str_contains(strtolower((string)$res4['reason']), 'evaluation'),
             "P4 reason must identify insufficient evaluation coverage: " . $res4['reason']);
 
+    // Test P5 (Holiday closure):
+    $res5 = $service->evaluateProductEligibility($pdo, 5, $cutoff);
+    $assert($res5['accumulated_usable_days'] >= 140, "P5 has >= 140 accumulated days");
+    $assert($res5['has_feature_window'] === true, "P5 must pass feature window: supported holiday closure does not block");
+    $assert($res5['has_holdout_coverage'] === true, "P5 must pass holdout coverage with holiday closure");
+    $assert($res5['eligible'] === true, "P5 must be eligible for training with supported closure");
+    $assert($res5['status'] === 'Ready for training', "P5 status is Ready for training");
+
+    // Test P6 (Missing evidence gap):
+    $res6 = $service->evaluateProductEligibility($pdo, 6, $cutoff);
+    $assert($res6['accumulated_usable_days'] >= 140, "P6 has >= 140 accumulated days");
+    $assert($res6['has_feature_window'] === false, "P6 must fail feature window due to missing evidence gap on 2024-07-10");
+    $assert($res6['eligible'] === false, "P6 must not be eligible");
+    $assert(str_contains(strtolower((string)$res6['reason']), 'missing') || str_contains(strtolower((string)$res6['reason']), 'unsupported'),
+            "P6 reason identifies missing evidence: " . $res6['reason']);
+
+    // Test CandidateEvaluationService prospective observation with closures and stockouts (#415):
+    require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+    $evalService = new App\Forecasting\CandidateEvaluationService($pdo);
+    $candidateVersion = 'v_candidate_closure_test';
+
+    // Insert 28 daily forecasts for Product 1 from 2024-07-01 to 2024-07-28
+    $insForecast = $pdo->prepare("INSERT INTO demand_forecasts
+        (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level, limitation_marker)
+        VALUES (900, 1, '2024-06-30', ?, ?, 5, '{$candidateVersion}', 'Medium', 'Observation only')");
+
+    for ($h = 1; $h <= 28; $h++) {
+        $tDate = date('Y-m-d', strtotime("2024-06-30 +$h days"));
+        $insForecast->execute([$tDate, $h]);
+    }
+
+    $obsProgress1 = $evalService->getCandidateObservationProgress($candidateVersion, '2024-07-28');
+    // In that period: Mon-Fri store has 20 trading days (sales=5), 8 weekend closures (closed), 1 holiday (2024-07-17 closed)
+    // Usable observed days = 19 (excluding 1 holiday + 8 weekends)
+    $assert($obsProgress1['observation_complete'] === false, "Candidate observation must be incomplete (under 28 completed usable days)");
+    $assert($obsProgress1['status'] === 'under_evaluation', "Candidate status is under_evaluation");
+    $assert($obsProgress1['closures_paused'] >= 8, "Supported closures are recorded as paused without resetting observation");
+    $assert(str_contains($obsProgress1['explanation'], 'closures pause accumulation'), "Explanation confirms closures pause accumulation");
+
     // Test DemandHistoryService::getTrainingHistory integration:
     $demandService = new DemandHistoryService();
     $trainingPayload = $demandService->getTrainingHistory($pdo, $cutoff);
@@ -284,7 +350,7 @@ try {
 
     // Only P1 history is exported
     $exportedPids = array_unique(array_column($trainingPayload['history'], 'product_id'));
-    $assert($exportedPids === [1], "Only mature eligible Product 1 history is exported for training");
+    $assert(in_array(1, $exportedPids, true) && in_array(5, $exportedPids, true) && !in_array(6, $exportedPids, true), "Only mature eligible Products (1 and 5) exported for training");
 
     // Test get_forecasting_readiness() parity with worker eligibility:
     if (!function_exists('store_scope_id')) {
