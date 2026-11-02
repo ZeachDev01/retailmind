@@ -161,7 +161,12 @@ function build_query(array $params): string {
             <div>
                 <h1>Forecast Data Readiness</h1>
             </div>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Demand Forecasts</a>
+            <div class="page-heading-actions">
+                <?php if (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)): ?>
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
+                <?php endif; ?>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Demand Forecasts</a>
+            </div>
         </header>
 
         <section class="card-grid" aria-label="Readiness overview stats">

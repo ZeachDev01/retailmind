@@ -381,13 +381,13 @@ foreach ($items as $item) {
 }
 $assert($reviewItem !== null, 'Qualified candidate produces attention item for Administrator');
 $assert($reviewItem->severity === 'warning', 'Review item has warning severity');
-$assert($reviewItem->destination === 'components/report/predictions.php', 'Review item links to predictions.php');
+$assert($reviewItem->destination === 'components/administrator/model_review.php', 'Review item links to predictions.php');
 
 $notificationService->checkAndNotifyForecasts();
 $reviewNotif = $pdo->query("SELECT * FROM notifications WHERE attention_key = 'store.forecasting.candidate-review'")->fetch(PDO::FETCH_ASSOC);
 $assert($reviewNotif !== false, 'Candidate review notification inserted into notifications table');
 $assert($reviewNotif['workspace'] === 'admin', 'Candidate review notification workspace is admin');
-$assert($reviewNotif['attention_destination'] === 'components/report/predictions.php', 'Notification links to model review');
+$assert($reviewNotif['attention_destination'] === 'components/administrator/model_review.php', 'Notification links to model review');
 
 // Deduplication on candidate review
 $revCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.forecasting.candidate-review'")->fetchColumn();

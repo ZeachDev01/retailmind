@@ -574,7 +574,7 @@ final class StoreOperationsDashboardWorkspace
                     'Candidate model awaiting review',
                     (string)($cand['explanation'] ?? 'A qualified candidate forecast model is awaiting local review.'),
                     (string)($cand['detected_at'] ?? $now->format('Y-m-d H:i:s')),
-                    'components/report/predictions.php'
+                    'components/administrator/model_review.php'
                 );
             }
         } catch (\Throwable) {}
