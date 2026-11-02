@@ -10,6 +10,7 @@ $helpPostUrl = app_url('components/auth/help.php');
 $pathKey = $topic['path_key'] ?? array_key_first(\App\Guidance\WorkspaceWalkthroughService::paths(current_role()));
 $allTopics = \App\Guidance\WorkspaceWalkthroughService::paths(current_role())[$pathKey]['topics'] ?? [];
 $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
+$completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
 ?>
 <aside id="guidance-dock" class="guidance-dock" role="region" aria-label="Interactive guidance walkthrough">
     <div class="guidance-dock-header">
@@ -21,7 +22,7 @@ $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
     </div>
 
     <details class="guidance-topic-checklist">
-        <summary>Topic checklist (<?= count(array_intersect(array_keys($allTopics), $completedTopics)) ?> of <?= count($allTopics) ?> completed)</summary>
+        <summary>Topic checklist (<?= count($completedInPath) ?> of <?= count($allTopics) ?> completed)</summary>
         <ul class="guidance-checklist-items">
             <?php foreach ($allTopics as $tId => $tDef):
                 $isDone = in_array($tId, $completedTopics, true);

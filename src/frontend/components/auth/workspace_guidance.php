@@ -51,28 +51,25 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             }
         }
 
-        $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        if (isset($_GET['guidance'])) {
-            $guidanceParam = (string)$_GET['guidance'];
+        $guidanceParam = isset($_GET['guidance']) ? trim((string)$_GET['guidance']) : '';
+        if ($guidanceParam !== '') {
             $role = current_role();
-            $topic = null;
-            if ($guidanceParam !== '' && $guidanceParam !== '1') {
-                $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $guidanceParam);
-            }
+            $topic = ($guidanceParam !== '1') ? \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $guidanceParam) : null;
+            $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
             if (!$topic) {
                 foreach (\App\Guidance\WorkspaceWalkthroughService::paths($role) as $p) {
                     foreach ($p['topics'] as $t) {
-                        if (basename($t['path']) === $currentScript) {
+                        if (str_ends_with($scriptName, $t['path'])) {
                             $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $t['id']);
                             break 2;
                         }
                     }
                 }
             }
-            if ($topic && !empty($topic['steps']) && basename($topic['path']) === $currentScript) {
+            if ($topic && !empty($topic['steps']) && str_ends_with($scriptName, $topic['path'])) {
                 $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], $role);
                 $isReplay = !empty($_GET['replay']);
-                $initialStep = $isReplay ? 0 : (($walkthroughProgress['active_topic'] === $topic['id']) ? ($walkthroughProgress['active_step'] ?? 0) : 0);
+                $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
                 include __DIR__ . '/workspace_walkthrough_dock.php';
             }
         }

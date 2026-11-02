@@ -412,7 +412,8 @@
     min-height: 44px;
 }
 
-.guidance-walkthroughs {
+.guidance-walkthroughs,
+.guidance-walkthroughs-daily {
     margin-bottom: 2rem;
     padding: 1.25rem;
     background: var(--theme-surface, #ffffff);
