@@ -8,7 +8,10 @@
 }
 .workspace-guidance h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
 .workspace-guidance p { max-width: 72ch; margin: .5rem 0 1rem; line-height: 1.5; }
-.workspace-guidance-note { font-size: .95rem; }
+.workspace-guidance-note { max-width: 72ch; margin-top: 1.25rem !important; padding-top: .9rem; border-top: 1px solid var(--border); font-size: .9rem; color: var(--text-muted); }
+.workspace-guidance-nav { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: none !important; margin: 1rem 0 1.25rem !important; font-size: 0; }
+.workspace-guidance-nav a { padding: .35rem .75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--theme-surface-soft, var(--card-bg)); font-size: .9rem; font-weight: 600; line-height: 1.35; text-decoration: none; transition: background-color .15s ease, border-color .15s ease; }
+.workspace-guidance-nav a:hover { border-color: var(--primary); background: var(--theme-surface, var(--card-bg)); text-decoration: underline; text-underline-offset: .2em; }
 .workspace-guidance-actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .workspace-guidance-links { padding-left: 1.2rem; }
 .workspace-guidance-links li { margin-top: 1.2rem; }

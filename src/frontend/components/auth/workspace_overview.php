@@ -275,8 +275,7 @@ $primaryActionLabel = $isAdmin
         </section>
     <?php endif; ?>
 <?php elseif ($activeWorkflow): ?>
-    <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-    <p>
+    <p class="workspace-guidance-nav">
         <?php foreach ($allWalkthroughPaths as $pDef): ?>
             <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
                 <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>"><?= htmlspecialchars($pDef['title'] . ': ' . $tDef['title']) ?></a> &middot;
@@ -286,7 +285,7 @@ $primaryActionLabel = $isAdmin
     </p>
 <?php else: ?>
     <p><?= htmlspecialchars($introText) ?></p>
-    <p>
+    <p class="workspace-guidance-nav">
         <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
         <?php foreach ($allWalkthroughPaths as $pDef): ?>
             <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
