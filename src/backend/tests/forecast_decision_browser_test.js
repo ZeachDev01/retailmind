@@ -236,10 +236,7 @@ async function checkQueueAccessibility(page) {
         await page.locator('.queue-list').press('Tab');
         assert.equal(await page.evaluate(() => !!document.activeElement.closest('.queue-list')), true, 'Keyboard enters product links');
         await page.setViewportSize({width: 1280, height: 900});
-        await page.locator('.queue-guidance summary').click();
-        assert.equal(await page.locator('.queue-guidance details').getAttribute('open'), '');
-        await page.locator('.queue-guidance summary').press('Enter');
-        assert.equal(await page.locator('.queue-guidance details').getAttribute('open'), null);
+        assert.doesNotMatch(await page.locator('main').textContent(), /Non-binding buying guidance|Stock rules suggest how much to buy\. Expected sales estimate customer purchases\. The Inventory Manager decides how much to buy\./);
         await page.locator('#queue-stock').selectOption('Out of stock');
         const filteredVisible = await page.locator('.queue-item:visible').count();
         assert.ok(filteredVisible < 1002);

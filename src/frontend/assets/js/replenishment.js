@@ -92,7 +92,7 @@
         const onHand = Number(item.onHand || 0);
         const qty = Number(item.quantity || 0);
         return `<tr class="queue-item queue-${rowClass}" data-stock="${esc(stockStatus)}" data-name="${esc(item.name)}" data-sku="${esc(item.sku)}" data-on-hand="${onHand}" data-quantity="${qty}" data-expected-sales="${esc(item.expectedSales)}" data-forecast-period="${esc(item.forecastPeriod)}">` +
-            `<td><a class="queue-product" href="../products/product_detail.php?id=${encodeURIComponent(String(item.productId || 0))}">${esc(item.name)}</a><small class="muted queue-sku">${esc(item.sku)}</small><span class="queue-priority ${stockClass}">${esc(stockStatus)}</span></td>` +
+            `<td><div class="queue-product-cell"><div class="queue-product-identity"><a class="queue-product" href="../products/product_detail.php?id=${encodeURIComponent(String(item.productId || 0))}">${esc(item.name)}</a><small class="muted queue-sku">${esc(item.sku)}</small></div><span class="queue-priority ${stockClass}">${esc(stockStatus)}</span></div></td>` +
             `<td><strong class="queue-number ${onHand <= 0 ? 'queue-out' : ''}">${onHand}</strong> <small class="muted">units</small></td>` +
             `<td><strong class="queue-number">${qty}</strong> <small class="muted">units</small></td>` +
             `<td>${item.expectedSales == null || item.expectedSales === '' ? '<span class="muted">Not available yet</span>' : `<strong class="queue-number">${esc(item.expectedSales)}</strong> <small class="muted">units</small><small class="muted queue-forecast-period">${esc(item.forecastPeriod)}</small>`}</td>` +

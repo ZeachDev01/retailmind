@@ -9,7 +9,8 @@ function render(variant) {
     const source = fs.readFileSync(path.join(root, 'src/frontend/components/administrator/shift_report.php'), 'utf8');
     // Exercise production presentation and summary calculations without writing Store data.
     const template = source.slice(source.indexOf('function shift_report_e('))
-        .replace(/<\?php include __DIR__ .*?\?>/, '');
+        .replace(/<\?php include __DIR__ .*?\?>/, '<aside class="sidebar" aria-hidden="true"></aside>')
+        .replaceAll('__DIR__', `'${path.join(root, 'src/frontend/components/administrator').replaceAll('\\', '/')}'`);
     return execFileSync(process.env.PHP_BINARY || 'C:/xampp/php/php.exe', ['-r', `
         function retailmind_theme_head() {}
         function app_url($path) { return '/'.$path; }
@@ -64,6 +65,10 @@ function render(variant) {
         const page = await browser.newPage({reducedMotion: 'reduce'});
         for (const variant of ['list', 'empty', 'error', 'action-error', 'review', 'reviewed', 'many']) {
             await page.setContent(render(variant));
+            for (const asset of ['reports.css', 'shift-report.css']) {
+                const version = Math.floor(fs.statSync(path.join(root, 'src/frontend/assets/css', asset)).mtimeMs / 1000);
+                assert.equal(await page.locator(`link[href*="/${asset}"]`).getAttribute('href'), `/assets/css/${asset}?v=${version}`, 'Report styles change URL when updated so cached CSS cannot hide the layout');
+            }
             for (const asset of ['style.css', 'reports.css', 'shift-report.css', 'theme.css']) {
                 await page.addStyleTag({path: path.join(root, 'src/frontend/assets/css', asset)});
             }
@@ -77,6 +82,11 @@ function render(variant) {
                     await page.setViewportSize({width, height: width === 667 ? 375 : 960});
                     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${variant}/${theme}/${width}: page fits`);
                     assert(await page.locator('.report-filter-grid').evaluate(el => el.scrollWidth <= el.clientWidth), `${variant}/${theme}/${width}: filters fit`);
+                    if (width === 375) {
+                        const from = await page.locator('#from').boundingBox();
+                        const to = await page.locator('#to').boundingBox();
+                        assert.equal(from.y, to.y, 'Mobile date range stays together');
+                    }
                     const lookup = page.getByLabel('Jump to Shift', {exact: true});
                     await lookup.fill('99999');
                     assert(await lookup.evaluate(el => el.checkValidity()), 'Historical shift outside suggestions can be entered');

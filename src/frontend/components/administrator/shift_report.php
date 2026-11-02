@@ -167,15 +167,14 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cashier Shift Report</title>
     <link rel="stylesheet" href="<?= shift_report_e(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/reports.css')) ?>">
-    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/shift-report.css')) ?>">
+    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= shift_report_e(app_url('assets/css/shift-report.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/shift-report.css')) ?>">
 </head>
 <body class="shift-report-page"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
     <header class="page-heading shift-page-header">
         <div>
-            <p class="shift-eyebrow">Store reports / Cash management</p>
             <h1>Cashier Shift Report</h1>
             <p class="shift-page-subtitle">Track shift performance. Reconcile every drawer.</p>
         </div>

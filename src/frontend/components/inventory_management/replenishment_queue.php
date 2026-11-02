@@ -142,12 +142,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <p>No active products available for recommendations.</p>
                         </div>
                     <?php else: ?>
-                        <section class="queue-guidance no-print" aria-label="Replenishment guidance">
-                            <details>
-                                <summary>Non-binding buying guidance</summary>
-                                <p class="muted">Stock rules suggest how much to buy. Expected sales estimate customer purchases. The Inventory Manager decides how much to buy.</p>
-                            </details>
-                        </section>
                         <div class="queue-filters no-print" role="search" aria-label="Filter recommendations">
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU"></div></label>
                             <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">🔵 Needs replenishment</option><option value="Out of stock">🔴 Out of stock</option><option value="Low stock">🟡 Low stock</option><option value="In stock">🟢 In stock</option></select></label>
@@ -187,24 +181,33 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                     ?>
                                         <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['stock_rule_quantity'] ?>" data-expected-sales="<?= $item['expected_sales_28_day'] === null ? '' : (int)$item['expected_sales_28_day'] ?>" data-forecast-period="<?= htmlspecialchars($item['expected_sales_period'] ?? '') ?>">
                                             <td>
+                                                <div class="queue-product-cell">
+                                                <div class="queue-product-identity">
                                                 <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
+                                                </div>
                                                 <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
+                                                <?php if ($item['basis'] === 'Demand Forecast'): ?>
                                                 <details class="queue-details">
-                                                    <summary><?= $item['basis'] === 'Demand Forecast' ? 'Forecast details' : 'Stock-rule details' ?></summary>
+                                                    <summary>Forecast details</summary>
                                                     <strong class="queue-basis"><?= htmlspecialchars($item['basis']) ?></strong>
                                                     <p class="queue-reason"><?= htmlspecialchars($item['explanation']) ?></p>
-                                                    <?php if ($item['basis'] === 'Demand Forecast'): ?>
                                                         <p class="queue-recommended">Recommended buying quantity: <strong><?= (int)$item['recommended_quantity'] ?> units</strong></p>
-                                                    <?php endif; ?>
                                                     <p class="queue-forecast-status"><?= htmlspecialchars($item['forecast_status']) ?></p>
                                                     <?php if (!empty($item['forecast_origin']) && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
                                                         <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
                                                     <?php endif; ?>
                                                 </details>
+                                                <?php endif; ?>
+                                                </div>
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
-                                            <td><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></td>
+                                            <td>
+                                                <span class="info-tooltip queue-stock-tooltip">
+                                                    <button class="info-tooltip-trigger" type="button" aria-describedby="queue-stock-rule-<?= (int)$item['product_id'] ?>"><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></button>
+                                                    <span class="tooltip-box no-print" id="queue-stock-rule-<?= (int)$item['product_id'] ?>" role="tooltip">Reorder level: <?= (int)$item['reorder_level'] ?> units + Safety stock: <?= (int)$item['safety_stock'] ?> units</span>
+                                                </span>
+                                            </td>
                                             <td><?php if ($item['expected_sales_28_day'] !== null): ?>
                                                 <strong class="queue-number"><?= (int)$item['expected_sales_28_day'] ?></strong> <small class="muted">units</small>
                                                 <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['expected_sales_context'] ?? ($item['readiness_level'] . ' readiness')) ?></small>

@@ -63,13 +63,6 @@ try {
             <div>
                 <h1 class="rh-m-0 rh-text-2xl rh-font-bold"><?= $canReceive ? 'My Receiving History' : 'Store Receiving History' ?></h1>
             </div>
-        <nav class="rh-flex rh-flex-col rh-gap-2 sm:rh-flex-row sm:rh-flex-wrap" aria-label="Stock replenishment">
-            <?php if ($canReceive): ?>
-                <a class="btn btn-primary" href="stock_receiving.php">Record bought stock</a>
-            <?php endif; ?>
-            <a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Check stock</a>
-            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Review recommendations</a>
-        </nav>
         </header>
 
         <form class="rh-mb-5 rh-flex rh-flex-wrap rh-items-center rh-gap-2 rh-rounded-[14px] rh-border rh-border-solid rh-border-[var(--border)] rh-bg-[var(--theme-surface,#fff)] rh-p-3" method="get" role="search" aria-label="Receiving history">
