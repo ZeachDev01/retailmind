@@ -8,7 +8,8 @@ param(
     [string]$ServiceAccount = 'NT AUTHORITY\SYSTEM',
     [string]$TaskName = 'RetailMind ML Scheduler',
     [switch]$Force,
-    [switch]$SkipTaskRegistration
+    [switch]$SkipTaskRegistration,
+    [switch]$Sync
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,7 +68,9 @@ if ($Run) {
     Push-Location -LiteralPath $projectRoot
     try {
         $ErrorActionPreference = 'Continue'
-        & $phpBinary -f $schedulerScript *>> (Join-Path $logDirectory 'forecasting-scheduler.log')
+        $scriptArgs = @('-f', $schedulerScript)
+        if ($Sync) { $scriptArgs += '--sync' }
+        & $phpBinary @scriptArgs *>> (Join-Path $logDirectory 'forecasting-scheduler.log')
         $schedulerResult = $LASTEXITCODE
         if ($null -eq $schedulerResult) { exit 1 }
         exit $schedulerResult
@@ -145,12 +148,18 @@ New-Item -ItemType Directory -Path $modelStorage -Force | Out-Null
 
 # Retain resolved paths and local service configuration
 $runnerConfig = [ordered]@{
-    php_binary      = $phpBinary
-    python_binary   = $pythonBinary
-    project_root    = $projectRoot
-    model_storage   = $modelStorage
-    service_account = $ServiceAccount
-    installed_at    = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+    php_binary         = $phpBinary
+    python_binary      = $pythonBinary
+    project_root       = $projectRoot
+    model_storage      = $modelStorage
+    service_account    = $ServiceAccount
+    installed_at       = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+    effective_schedule = [ordered]@{
+        daily_forecast_time = '01:00'
+        weekly_retrain_day  = 'Sunday'
+        weekly_retrain_time = '01:00'
+        timezone            = 'Asia/Manila'
+    }
 }
 $runnerConfig | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configPath -Encoding UTF8
 Write-Output "Retained forecasting runner configuration in $configPath"
