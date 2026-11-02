@@ -6,34 +6,24 @@ use PDO;
 
 final class AttentionCenter
 {
-    private ?DatabaseAttentionSignalSource $signals = null;
+    private DatabaseAttentionSignalSource $signals;
     private AttentionRuleService $rules;
-    private ?AttentionNotificationService $notifications = null;
-    private ?AttentionSettingsService $settings = null;
+    private AttentionNotificationService $notifications;
+    private AttentionSettingsService $settings;
     private Clock $clock;
-    private ?PDO $pdo = null;
+    private PDO $pdo;
 
-    /**
-     * Deepened constructor accepts PDO + optional Clock + optional AttentionSettingsService.
-     * Also supports legacy test instantiation passing (AttentionRuleService, ?AttentionNotificationService).
-     */
     public function __construct(
-        PDO|AttentionRuleService $pdoOrRules,
-        Clock|AttentionNotificationService|null $clockOrNotifications = null,
+        PDO $pdo,
+        ?Clock $clock = null,
         ?AttentionSettingsService $settings = null
     ) {
-        if ($pdoOrRules instanceof AttentionRuleService) {
-            $this->rules = $pdoOrRules;
-            $this->notifications = $clockOrNotifications instanceof AttentionNotificationService ? $clockOrNotifications : null;
-            $this->clock = new SystemClock();
-        } else {
-            $this->pdo = $pdoOrRules;
-            $this->clock = $clockOrNotifications instanceof Clock ? $clockOrNotifications : new SystemClock();
-            $this->settings = $settings ?? new AttentionSettingsService($this->pdo, $this->clock);
-            $this->signals = new DatabaseAttentionSignalSource($this->pdo, $this->clock);
-            $this->rules = new AttentionRuleService($this->settings, $this->clock);
-            $this->notifications = new AttentionNotificationService($this->pdo, $this->clock);
-        }
+        $this->pdo = $pdo;
+        $this->clock = $clock ?? new SystemClock();
+        $this->settings = $settings ?? new AttentionSettingsService($this->pdo, $this->clock);
+        $this->signals = new DatabaseAttentionSignalSource($this->pdo, $this->clock);
+        $this->rules = new AttentionRuleService($this->settings, $this->clock);
+        $this->notifications = new AttentionNotificationService($this->pdo, $this->clock);
     }
 
     /**
@@ -42,7 +32,7 @@ final class AttentionCenter
      *
      * @return AttentionItem[]
      */
-    public function getAttention(int $userId, string $role, array $externalSignals = []): array
+    public function getAttention(int $userId = 0, string $role = '', array $externalSignals = []): array
     {
         if ($role !== 'admin' && $role !== 'super_admin') {
             return [];
@@ -65,10 +55,6 @@ final class AttentionCenter
             return new AttentionRefreshResult([], []);
         }
 
-        if ($this->notifications === null) {
-            return new AttentionRefreshResult([], []);
-        }
-
         $signals = $this->collectSignals($role, $externalSignals);
         $evaluatedItems = $this->rules->evaluate($role, $signals);
         $workspacePrefix = $role === 'super_admin' ? 'platform.' : 'store.';
@@ -76,19 +62,15 @@ final class AttentionCenter
     }
 
     /**
-     * Forwarding alias for getAttention() during migration.
+     * Forwarding alias for synchronize() returning array representation of items.
      */
     public function refresh(int $userId, string $role, array $signals = [], bool $createInApp = true): array
     {
-        if (!empty($signals) || $this->signals === null) {
-            return $this->refreshResult($userId, $role, $signals, $createInApp)->dashboardItems();
-        }
-        $items = $this->getAttention($userId, $role, $signals);
-        return array_map(static fn(AttentionItem $item): array => $item->toArray(), $items);
+        return $this->refreshResult($userId, $role, $signals, $createInApp)->dashboardItems();
     }
 
     /**
-     * Forwarding alias for synchronize() during migration.
+     * Forwarding alias for synchronize().
      */
     public function refreshResult(
         int $userId,
@@ -96,10 +78,7 @@ final class AttentionCenter
         array $signals = [],
         bool $createInApp = true
     ): AttentionRefreshResult {
-        if (!empty($signals) || $this->signals === null) {
-            if ($this->notifications === null) {
-                return new AttentionRefreshResult([], []);
-            }
+        if (!empty($signals)) {
             return $this->notifications->synchronize(
                 $userId,
                 $this->rules->evaluate($role, $signals),
@@ -112,10 +91,6 @@ final class AttentionCenter
 
     private function collectSignals(string $role, array $externalSignals = []): array
     {
-        if ($this->signals === null) {
-            return $externalSignals;
-        }
-
         if ($role === 'super_admin') {
             $platform = $this->signals->platform($externalSignals);
             return array_merge($platform, $externalSignals);

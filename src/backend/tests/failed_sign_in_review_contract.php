@@ -2,9 +2,6 @@
 require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Attention\AttentionCenter;
-use App\Attention\AttentionNotificationService;
-use App\Attention\AttentionRuleService;
-use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
 use App\Attention\FailedSignInReviewService;
 
@@ -66,7 +63,7 @@ $rejects(fn() => $reviews->clearReviewed('super_admin', 1, $lastShown, 'unconfir
 $rejects(fn() => $reviews->clearReviewed('super_admin', 1, $lastShown, 'unconfirmed', str_repeat('x', 1001), '192.0.2.1'));
 $rejects(fn() => $reviews->clearReviewed('super_admin', 1, $lastShown + 100, 'unconfirmed', 'Checked.', '192.0.2.1'));
 
-$center = new AttentionCenter(new AttentionRuleService(new AttentionSettingsService($pdo, $clock), $clock), new AttentionNotificationService($pdo, $clock));
+$center = new AttentionCenter($pdo, $clock);
 $refresh = static fn() => $center->refresh(1, 'super_admin', ['failed_login_count' => ['value' => $reviews->pendingCount(), 'count' => $reviews->pendingCount()]]);
 $assert(count($refresh()) === 1, 'Five failures should trigger the warning');
 $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM login_attempts')->fetchColumn();

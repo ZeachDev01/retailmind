@@ -5,10 +5,8 @@ namespace App\Dashboard;
 require_once __DIR__ . '/../Services/GrossProfitService.php';
 
 use App\Attention\AttentionCenter;
-use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\GrossProfitService;
 use DateTimeImmutable;
@@ -556,28 +554,25 @@ final class StoreOperationsDashboardWorkspace
         }
 
         try {
-            $signalSource = new \App\Attention\DatabaseAttentionSignalSource($this->pdo, $this->clock);
-            $signals = $signalSource->store();
-            $fail = $signals['forecasting_failure'] ?? null;
-            if ($fail && !empty($fail['value']) && (float)$fail['value'] >= 1.0) {
-                $items[] = $this->exception(
-                    'critical',
-                    'Forecasting failure',
-                    (string)($fail['explanation'] ?? 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.'),
-                    (string)($fail['detected_at'] ?? $now->format('Y-m-d H:i:s')),
-                    'components/report/predictions.php'
-                );
-            }
-
-            $cand = $signals['forecasting_candidate_review'] ?? null;
-            if ($cand && !empty($cand['value']) && (float)$cand['value'] >= 1.0) {
-                $items[] = $this->exception(
-                    'warning',
-                    'Candidate model awaiting review',
-                    (string)($cand['explanation'] ?? 'A qualified candidate forecast model is awaiting local review.'),
-                    (string)($cand['detected_at'] ?? $now->format('Y-m-d H:i:s')),
-                    'components/report/predictions.php'
-                );
+            $attentionCenter = new AttentionCenter($this->pdo, $this->clock);
+            foreach ($attentionCenter->getAttention(0, 'admin') as $attentionItem) {
+                if ($attentionItem->key === 'store.forecasting.failure') {
+                    $items[] = $this->exception(
+                        'critical',
+                        'Forecasting failure',
+                        $attentionItem->explanation,
+                        $attentionItem->detectedAt->format('Y-m-d H:i:s'),
+                        'components/report/predictions.php'
+                    );
+                } elseif ($attentionItem->key === 'store.forecasting.candidate-review') {
+                    $items[] = $this->exception(
+                        'warning',
+                        'Candidate model awaiting review',
+                        $attentionItem->explanation,
+                        $attentionItem->detectedAt->format('Y-m-d H:i:s'),
+                        'components/report/predictions.php'
+                    );
+                }
             }
         } catch (\Throwable) {}
 

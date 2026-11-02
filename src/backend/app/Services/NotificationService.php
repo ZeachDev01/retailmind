@@ -140,9 +140,9 @@ class NotificationService
             $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
         }
-        $storeSignals = (new \App\Attention\DatabaseAttentionSignalSource($this->pdo, $this->clock))->store();
+        $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
         $adminForecastingItems = array_values(array_filter(
-            (new \App\Attention\AttentionRuleService(new \App\Attention\AttentionSettingsService($this->pdo, $this->clock), $this->clock))->evaluate('admin', $storeSignals),
+            $attentionCenter->getAttention(0, 'admin'),
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
         ));
         foreach ($this->recipients('admin') as $recipient) {

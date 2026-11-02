@@ -87,7 +87,7 @@ try {
 
     $rules = new AttentionRuleService($settings, $clock);
     $notifications = new AttentionNotificationService($pdo, $clock);
-    $center = new AttentionCenter($rules, $notifications);
+    $center = new AttentionCenter($pdo, $clock, $settings);
 
     $platformSignals = [
         'failed_login_count' => ['value' => 6, 'count' => 6, 'detected_at' => '2026-09-18 09:10:00'],
@@ -364,6 +364,48 @@ try {
     $assert($syncResult instanceof \App\Attention\AttentionRefreshResult, 'Deep AttentionCenter::synchronize must return AttentionRefreshResult');
     $notifRow = $pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 600 AND workspace = 'super_admin'")->fetchColumn();
     $assert((int)$notifRow > 0, 'Deep AttentionCenter::synchronize must persist notifications');
+    // Comprehensive public-interface verification for AttentionCenter
+    // 1. Unauthorized roles return empty array and do not mutate database
+    foreach (['cashier', 'inventory_manager', 'viewer', ''] as $unauthRole) {
+        $assert($deepCenter->getAttention(99, $unauthRole) === [], "getAttention must return empty array for unauthorized role: {$unauthRole}");
+        $unauthSync = $deepCenter->synchronize(99, $unauthRole);
+        $assert($unauthSync->items() === [] && $unauthSync->newItems() === [], "synchronize must return empty result for unauthorized role: {$unauthRole}");
+    }
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 99")->fetchColumn() === 0, 'Unauthorized role must not create notifications');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE user_id = 99")->fetchColumn() === 0, 'Unauthorized role must not create attention states');
+
+    // 2. Both administrator workspaces scoped correctly
+    $adminSync = $deepCenter->synchronize(701, 'admin', ['cash_variance_amount' => ['value' => 600, 'count' => 1]]);
+    $adminNotif = $pdo->query("SELECT workspace, attention_key FROM notifications WHERE user_id = 701")->fetch(PDO::FETCH_ASSOC);
+    $assert($adminNotif !== false && $adminNotif['workspace'] === 'admin', 'Admin attention notifications must carry admin workspace');
+    $assert(str_starts_with($adminNotif['attention_key'], 'store.'), 'Admin attention keys must use store. prefix');
+
+    $superSync = $deepCenter->synchronize(702, 'super_admin', ['failed_login_count' => ['value' => 10, 'count' => 10]]);
+    $superNotif = $pdo->query("SELECT workspace, attention_key FROM notifications WHERE user_id = 702")->fetch(PDO::FETCH_ASSOC);
+    $assert($superNotif !== false && $superNotif['workspace'] === 'super_admin', 'Super admin attention notifications must carry super_admin workspace');
+    $assert(str_starts_with($superNotif['attention_key'], 'platform.'), 'Super admin attention keys must use platform. prefix');
+
+    // 3. Repeated synchronization idempotency (deduplication)
+    $repeatSync = $deepCenter->synchronize(701, 'admin', ['cash_variance_amount' => ['value' => 600, 'count' => 1]]);
+    $assert($repeatSync->newItems() === [], 'Repeated synchronize with unchanged condition must return empty newItems');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 701")->fetchColumn() === 1, 'Repeated synchronize must not duplicate notifications');
+
+    // 4. Changing conditions: resolution and reactivation
+    $resolveSync = $deepCenter->synchronize(701, 'admin', ['cash_variance_amount' => ['value' => 0, 'count' => 0]]);
+    $assert((int)$pdo->query("SELECT is_active FROM attention_states WHERE user_id = 701 AND attention_key = 'store.cash.variance'")->fetchColumn() === 0, 'Condition resolution must mark attention state inactive');
+    $reactivateSync = $deepCenter->synchronize(701, 'admin', ['cash_variance_amount' => ['value' => 600, 'count' => 1]]);
+    $assert(count($reactivateSync->newItems()) === 1, 'Reactivated condition must produce new notification');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 701")->fetchColumn() === 2, 'Reactivation must add second notification');
+
+    // 5. Severity ordering invariant across getAttention
+    $orderedItems = $deepCenter->getAttention(1, 'super_admin', [
+        'failed_login_count' => ['value' => 6, 'count' => 6],
+        'ml_model_age_days' => ['value' => 10],
+        'platform_setting_change_count' => ['value' => 2, 'count' => 2],
+    ]);
+    for ($i = 1; $i < count($orderedItems); $i++) {
+        $assert($severityOrder[$orderedItems[$i - 1]->severity] <= $severityOrder[$orderedItems[$i]->severity], 'getAttention items must be strictly severity-ordered');
+    }
 } catch (Throwable $exception) {
     $failures[] = 'Attention rules contract threw: ' . $exception->getMessage();
 }
