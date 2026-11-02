@@ -235,8 +235,7 @@ def load_history(cursor, context, training=False):
             exported = exported['history']
             if not exported:
                 raise ValueError('No active products have 140 consecutive usable days for training')
-        data = normalize_history(pd.DataFrame(exported,
-                                             columns=['date', 'product_id', 'units_sold', 'available_date']))
+        data = normalize_history(pd.DataFrame(exported))
     return data
 
 
