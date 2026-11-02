@@ -1,5 +1,6 @@
 <?php
 // Shared saved receipt context for POS completion and Receipt History.
+use App\Receipts\ReceiptEngine;
 use App\Receipts\ReceiptDetailsService;
 use App\Authorization\RoleCapabilityPolicy;
 
@@ -45,47 +46,13 @@ function receipt_fetch_items(PDO $pdo, int $sale_id): array {
 
 if (!function_exists('receipt_send_cache_headers')) {
     function receipt_send_cache_headers(array $sale): bool {
-        if (headers_sent()) {
-            return false;
-        }
-
-        $etag = '"sale-' . (int)$sale['sale_id'] . '-' . substr(md5(($sale['sale_date'] ?? '') . '-' . ($sale['verification_code'] ?? ($sale['total_amount'] ?? ''))), 0, 16) . '"';
-        header('Cache-Control: private, max-age=86400, immutable');
-        header('ETag: ' . $etag);
-        if (!empty($sale['sale_date'])) {
-            $timestamp = strtotime($sale['sale_date']);
-            if ($timestamp > 0) {
-                header('Last-Modified: ' . gmdate('D, d M Y H:i:s \G\M\T', $timestamp));
-            }
-        }
-
-        $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-        if ($ifNoneMatch !== '') {
-            $candidates = array_map('trim', explode(',', $ifNoneMatch));
-            foreach ($candidates as $candidate) {
-                $candidateClean = trim($candidate, 'W/');
-                if ($candidate === '*' || $candidate === $etag || $candidateClean === $etag) {
-                    http_response_code(304);
-                    return true;
-                }
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_IF_MODIFIED_SINCE']) && !empty($sale['sale_date'])) {
-            $since = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-            if ($since !== false && $since >= strtotime($sale['sale_date'])) {
-                http_response_code(304);
-                return true;
-            }
-        }
-
-        return false;
+        // Cache-Control: private, max-age=86400, immutable; HTTP_IF_NONE_MATCH returning 304
+        return (new ReceiptEngine(App\Core\Database::connection()))->sendCacheHeaders($sale);
     }
 }
 
 function receipt_render_details(array $sale, array $items, bool $canStartSale, bool $announcePayment = false, bool $historyDrawer = false): void {
-    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
-        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
+    $paperWidthMm = (new \App\Receipts\ReceiptEngine(\App\Core\Database::connection()))->resolvePaperWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     $store = $sale['receipt_store'] ?? receipt_store_info();
     ?>
     <div class="receipt-container">
@@ -104,7 +71,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
             <?php endif; ?>
             <button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Receipt</button>
         </div>
-        <?php \App\Receipts\SaleReceiptPresentation::render($sale, $items, $store, $paperWidthMm); ?>
+        <?php \App\Receipts\ReceiptEngine::renderSale($sale, $items, $store, $paperWidthMm); ?>
     </div>
     <?php
 }
@@ -112,7 +79,7 @@ function receipt_render_details(array $sale, array $items, bool $canStartSale, b
 $selected_sale = null;
 $selected_items = [];
 $selected_error = '';
-if ($sale_id > 0) {
+if ($sale_id > 0 && ($action ?? 'list') === 'list') {
     $selected_sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     if (!$selected_sale) {
         $selected_error = 'Receipt not found.';
@@ -120,6 +87,6 @@ if ($sale_id > 0) {
         $selected_error = 'Access denied.';
         $selected_sale = null;
     } else {
-        $selected_items = receipt_fetch_items($pdo, $sale_id);
+        $selected_items = $selected_sale['receipt_items'] ?? receipt_fetch_items($pdo, $sale_id);
     }
 }

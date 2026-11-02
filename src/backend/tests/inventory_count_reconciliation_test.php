@@ -254,6 +254,17 @@ try {
         );
     ");
 
+    $pdo->exec("CREATE TABLE attention_states (user_id INTEGER, attention_key TEXT, fingerprint TEXT,
+        notification_level INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1, first_detected_at TEXT,
+        last_detected_at TEXT, resolved_at TEXT, PRIMARY KEY (user_id, attention_key));
+        ALTER TABLE notifications ADD COLUMN workspace TEXT;
+        ALTER TABLE notifications ADD COLUMN attention_key TEXT;
+        ALTER TABLE notifications ADD COLUMN attention_severity TEXT;
+        ALTER TABLE notifications ADD COLUMN attention_count INTEGER;
+        ALTER TABLE notifications ADD COLUMN attention_destination TEXT;
+        ALTER TABLE notifications ADD COLUMN inapp_enabled INTEGER DEFAULT 1;
+        ALTER TABLE notifications ADD COLUMN email_pending INTEGER DEFAULT 0");
+
     // 2b. Run migration 202610180001_inventory_count_batches to create inventory_count_batches
     echo "Running migration 202610180001_inventory_count_batches...\n";
     $migration = require dirname(__DIR__) . '/database/migrations/202610180001_inventory_count_batches.php';

@@ -6,6 +6,7 @@ use InvalidArgumentException;
 use PDO;
 
 require_once __DIR__ . '/PhilippineTime.php';
+require_once __DIR__ . '/ShiftReconciliationCalculator.php';
 
 /** Read-only, identity-scoped operational records for the active Cashier. */
 final class CashierOperationalHistoryService
@@ -50,6 +51,47 @@ final class CashierOperationalHistoryService
     {
     }
 
+    /** Identity must come from the authenticated session, never request filters. */
+    public function resolve(int $authenticatedCashierId, array $query): array
+    {
+        $types = self::types();
+        $type = is_string($query['type'] ?? null) ? $query['type'] : 'sales';
+        if (!isset($types[$type])) {
+            $type = 'sales';
+        }
+        $page = filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT);
+        $page = is_int($page) ? max(1, min(100000, $page)) : 1;
+        $pageSize = filter_var($query['length'] ?? self::PAGE_SIZE, FILTER_VALIDATE_INT);
+        $pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : self::PAGE_SIZE;
+        $recordId = filter_var($query['id'] ?? null, FILTER_VALIDATE_INT);
+        $recordId = is_int($recordId) && $recordId > 0 ? $recordId : null;
+        $fromDay = null;
+        $throughDay = null;
+        $dateError = '';
+        try {
+            $readDay = static function (mixed $input): ?string {
+                if ($input === '') return null;
+                if (!is_string($input)) throw new \InvalidArgumentException('Choose a valid Philippine calendar date.');
+                PhilippineTime::dayStart($input);
+                return $input;
+            };
+            $fromDay = $readDay($query['date_from'] ?? '');
+            $throughDay = $readDay($query['date_to'] ?? '');
+            if ($fromDay !== null && $throughDay !== null && $fromDay > $throughDay) {
+                throw new \InvalidArgumentException('The end date must be on or after the start date.');
+            }
+        } catch (\InvalidArgumentException $exception) {
+            $dateError = $exception->getMessage();
+        }
+
+        $record = $recordId === null ? null : $this->find($type, $authenticatedCashierId, $recordId);
+        $rows = $recordId === null && $dateError === '' ? $this->page($type, $authenticatedCashierId, $page, $pageSize, $fromDay, $throughDay) : [];
+        $totalRows = $recordId === null && $dateError === '' ? $this->count($type, $authenticatedCashierId, $fromDay, $throughDay) : 0;
+        $totalPages = max(1, (int)ceil($totalRows / $pageSize));
+        $hasNext = $page < $totalPages;
+        return compact('types', 'type', 'page', 'pageSize', 'totalRows', 'totalPages', 'recordId', 'record', 'rows', 'hasNext', 'fromDay', 'throughDay', 'dateError');
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function page(string $type, int $cashierId, int $page = 1, int $size = self::PAGE_SIZE, ?string $fromDay = null, ?string $throughDay = null): array
     {
@@ -82,7 +124,8 @@ final class CashierOperationalHistoryService
             $statement->bindValue($name, $value, PDO::PARAM_STR);
         }
         $statement->execute();
-        return $statement->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+        return $type === 'shifts' ? $this->withLiveBalances($rows) : $rows;
     }
 
     public function count(string $type, int $cashierId, ?string $fromDay = null, ?string $throughDay = null): int
@@ -116,7 +159,26 @@ final class CashierOperationalHistoryService
              WHERE {$alias}.cashier_id = :cashier_id AND {$alias}.{$query['id']} = :record_id"
         );
         $statement->execute([':cashier_id' => $cashierId, ':record_id' => $recordId]);
-        return $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+        $row = $statement->fetch(PDO::FETCH_ASSOC) ?: null;
+        return $type === 'shifts' && $row !== null ? $this->withLiveBalances([$row])[0] : $row;
+    }
+
+    private function withLiveBalances(array $rows): array
+    {
+        $openingCashes = [];
+        foreach ($rows as $row) {
+            if ($row['status'] === 'open') {
+                $openingCashes[(int)$row['shift_id']] = (float)$row['opening_cash'];
+            }
+        }
+        $summaries = (new ShiftReconciliationCalculator($this->pdo))->calculateBatch(array_keys($openingCashes), $openingCashes);
+        foreach ($rows as &$row) {
+            if ($row['status'] === 'open') {
+                $row['expected_cash'] = $summaries[(int)$row['shift_id']]['calculated_expected_cash'];
+            }
+        }
+        unset($row);
+        return $rows;
     }
 
     private function query(string $type): array

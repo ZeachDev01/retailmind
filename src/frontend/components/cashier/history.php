@@ -3,10 +3,8 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryService.php';
-require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryRequest.php';
 
 use App\Services\CashierOperationalHistoryService;
-use App\Services\CashierOperationalHistoryRequest;
 use App\Services\PhilippineTime;
 
 require_role(['cashier']);
@@ -14,7 +12,7 @@ require_role(['cashier']);
 $cashierId = (int)$_SESSION['user_id'];
 // The account identifier comes only from the authenticated session. Request
 // filters, URLs, and form data cannot change the owner of any query.
-$request = CashierOperationalHistoryRequest::resolve($pdo, $cashierId, $_GET);
+$request = (new CashierOperationalHistoryService($pdo))->resolve($cashierId, $_GET);
 ['types' => $types, 'type' => $type, 'page' => $page, 'recordId' => $recordId,
     'record' => $record, 'rows' => $rows, 'hasNext' => $hasNext,
     'pageSize' => $pageSize, 'totalRows' => $totalRows, 'totalPages' => $totalPages,

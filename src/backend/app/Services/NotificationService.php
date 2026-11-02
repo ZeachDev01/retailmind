@@ -77,8 +77,8 @@ class NotificationService
 
     private function synchronize(array $user, array $items, bool $inApp, string $scope): void
     {
-        (new \App\Attention\AttentionNotificationService($this->pdo, $this->clock))
-            ->synchronize((int)$user['user_id'], $items, $inApp, $scope);
+        (new \App\Attention\AttentionCenter($this->pdo, $this->clock))
+            ->synchronizeItems((int)$user['user_id'], $items, $inApp, $scope);
     }
 
     public function checkAndNotifyForecasts(): void
@@ -116,9 +116,9 @@ class NotificationService
                 null, false, 'system', (int)$spike['product_id'], 'product'
             );
         }
-        $conditionNotifications = new \App\Attention\AttentionNotificationService($this->pdo, $this->clock);
+        $conditionNotifications = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
         foreach ($this->recipients('inventory_manager') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $demandItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
         }
         $failedRun = null;
@@ -137,16 +137,16 @@ class NotificationService
             'system', (int)$failedRun['training_run_id'], 'model_training'
         )] : [];
         foreach ($this->recipients('super_admin') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
         }
-        $storeSignals = (new \App\Attention\DatabaseAttentionSignalSource($this->pdo, $this->clock))->store();
+        $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
         $adminForecastingItems = array_values(array_filter(
-            (new \App\Attention\AttentionRuleService(new \App\Attention\AttentionSettingsService($this->pdo, $this->clock), $this->clock))->evaluate('admin', $storeSignals),
+            $attentionCenter->getAttention(0, 'admin'),
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
         ));
         foreach ($this->recipients('admin') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $adminForecastingItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $adminForecastingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'store.forecasting.');
         }
     }

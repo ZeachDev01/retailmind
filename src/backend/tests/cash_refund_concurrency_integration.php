@@ -158,7 +158,7 @@ try {
         ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
     $assert($receiptService->forCashier($refundId, 1, 1) === $savedReceipt,
         'Committed customer details survive Store, product, Cashier and Register edits.');
-    $assert((new \App\Receipts\ReceiptPaperService($pdo))->currentWidth(1, 'cashier') === 58,
+    $assert((new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth(1, 'cashier') === 58,
         'Printing uses the current Register width without rewriting preserved details.');
 
     $shifts = new CashierShiftService($pdo);

@@ -2,12 +2,10 @@
 // Contract for Store Overview attention alignment (Ticket #330 / Spec #326).
 require_once __DIR__ . '/../bootstrap/app.php';
 
+use App\Attention\AttentionCenter;
 use App\Attention\AttentionItem;
-use App\Attention\AttentionNotificationService;
-use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 
@@ -171,16 +169,12 @@ try {
     $assert(isset($storeDefaults['inventory_high_value_amount']), 'inventory_high_value_amount must be retained');
     $assert(isset($storeDefaults['fiscal_period_days_to_close']), 'fiscal_period_days_to_close must be retained');
 
-    // DatabaseAttentionSignalSource must not emit reversal_count or max_discount_percent
-    $signals = (new DatabaseAttentionSignalSource($pdo, $clock))->store();
-    $assert(!isset($signals['reversal_count']), 'reversal_count signal must be removed');
-    $assert(!isset($signals['max_discount_percent']), 'max_discount_percent signal must be removed');
-
-    // AttentionRuleService must not generate store.sales.reversals or store.sales.unusual-discounts
-    $ruleItems = (new AttentionRuleService($settings, $clock))->evaluate('admin', $signals);
-    $ruleKeys = array_map(static fn(AttentionItem $item): string => $item->key, $ruleItems);
-    $assert(!in_array('store.sales.reversals', $ruleKeys, true), 'store.sales.reversals rule must be removed');
-    $assert(!in_array('store.sales.unusual-discounts', $ruleKeys, true), 'store.sales.unusual-discounts rule must be removed');
+    // AttentionCenter must not generate store.sales.reversals or store.sales.unusual-discounts
+    $attentionCenter = new AttentionCenter($pdo, $clock, $settings);
+    $attentionItems = $attentionCenter->getAttention(1, 'admin');
+    $attentionKeys = array_map(static fn(AttentionItem $item): string => $item->key, $attentionItems);
+    $assert(!in_array('store.sales.reversals', $attentionKeys, true), 'store.sales.reversals rule must be removed');
+    $assert(!in_array('store.sales.unusual-discounts', $attentionKeys, true), 'store.sales.unusual-discounts rule must be removed');
 
     // 7. Migration retires notifications and deduplication state
     $migration = require __DIR__ . '/../database/migrations/202610280001_retire_unusual_discount_and_reversal_attention.php';

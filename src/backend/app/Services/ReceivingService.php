@@ -3,6 +3,7 @@ require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/ReceivingService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/BatchInventoryLedger.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
@@ -310,14 +311,7 @@ class ReceivingService
             $rejectedQty = 0;
         }
 
-        $inventoryStmt = $this->pdo->prepare('SELECT quantity_on_hand FROM inventory WHERE product_id = ? FOR UPDATE');
-        $inventoryStmt->execute([$productId]);
-        $currentStock = $inventoryStmt->fetchColumn();
-        if ($currentStock === false) {
-            throw new RuntimeException('This product has no inventory record. Ask your Administrator to check the product.');
-        }
-        if ((int)$currentStock + $acceptedQty > 2147483647
-            || (int)$product['quantity_purchased'] + $acceptedQty > 2147483647) {
+        if ((int)$product['quantity_purchased'] + $acceptedQty > 2147483647) {
             throw new RuntimeException('Accepted quantity would exceed the supported stock total. Enter a smaller quantity.');
         }
         if ($acceptedQty <= 0 && $damagedQty <= 0 && $rejectedQty <= 0) {
@@ -394,42 +388,10 @@ class ReceivingService
 
         $receivingId = (int)$this->pdo->lastInsertId();
         if ($acceptedQty > 0) {
-            $hasBatchPacks = $this->hasColumn('product_batches', 'sealed_quantity');
-
-            $batchCols = ['product_id', 'receiving_id', 'batch_number', 'quantity', 'remaining_quantity'];
-            $batchParams = [$productId, $receivingId, $batchNumber !== '' ? $batchNumber : null, $acceptedQty, $acceptedQty];
-
-            if ($hasBatchPacks) {
-                $batchCols[] = 'sealed_quantity';
-                $batchCols[] = 'loose_quantity';
-                $batchParams[] = $acceptedPacks;
-                $batchParams[] = $acceptedLoose;
-            }
-            if ($this->hasColumn('product_batches', 'cost_price')) {
-                $batchCols[] = 'cost_price';
-                $batchParams[] = $costPrice;
-            }
-            $batchCols[] = 'expiration_date';
-            $batchParams[] = $expirationDate;
-
-            $batchCols[] = 'date_received';
-
-            $batchCols[] = 'supplier';
-            $batchParams[] = $supplier !== '' ? $supplier : null;
-
-            $placeholders = [];
-            foreach ($batchCols as $col) {
-                $placeholders[] = $col === 'date_received' ? 'CURRENT_TIMESTAMP' : '?';
-            }
-
-            $batchSql = "INSERT INTO product_batches (" . implode(', ', $batchCols) . ") VALUES (" . implode(', ', $placeholders) . ")";
-            $this->pdo->prepare($batchSql)->execute($batchParams);
-
-            $this->pdo->prepare("UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?")
-                ->execute([$acceptedQty, $productId]);
-            $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
-                                       VALUES (?, ?, 'purchase', ?)")
-                ->execute([$productId, $acceptedQty, $userId]);
+            (new \App\Services\BatchInventoryLedger($this->pdo, $this->fiscalPeriodGuard))->creditReceiving(
+                compact('productId', 'receivingId', 'acceptedQty', 'acceptedPacks', 'acceptedLoose', 'packSizeUsed',
+                    'costPrice', 'batchNumber', 'expirationDate', 'supplier'), $userId
+            );
 
             $productUpdateParts = ['quantity_purchased = quantity_purchased + ?'];
             $productUpdateParams = [$acceptedQty];

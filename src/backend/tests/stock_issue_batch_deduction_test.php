@@ -64,13 +64,14 @@ $roleId = static function (string $name) use ($pdo): int {
 $pdo->exec("CREATE TABLE users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
     full_name VARCHAR(150) NOT NULL DEFAULT 'Test User',
+    display_name VARCHAR(150) NOT NULL DEFAULT 'Test User',
     branch_id INTEGER NULL,
     role_id INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active'
 )");
 $insertUser = static function (string $name, string $role) use ($pdo, $roleId, $storeId): int {
-    $stmt = $pdo->prepare('INSERT INTO users (full_name, branch_id, role_id, status) VALUES (?, ?, ?, ?)');
-    $stmt->execute([$name, $storeId, $roleId($role), 'active']);
+    $stmt = $pdo->prepare('INSERT INTO users (full_name, display_name, branch_id, role_id, status) VALUES (?, ?, ?, ?, ?)');
+    $stmt->execute([$name, $name, $storeId, $roleId($role), 'active']);
     return (int)$pdo->lastInsertId();
 };
 $cashierId = $insertUser('Carl Cashier', 'cashier');
@@ -181,6 +182,7 @@ $pdo->exec("CREATE TABLE fiscal_periods (
     status TEXT NOT NULL DEFAULT 'open'
 )");
 
+$pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES ('FY2026', '2026-01-01', '2026-12-31', 'open')");
 $pdo->exec("CREATE TABLE fiscal_period_locks (
     period_id INTEGER NOT NULL,
     table_name VARCHAR(100) NULL
@@ -566,7 +568,7 @@ $assert(!empty($detail['batches']), 'Report detail includes deducted batches att
 $assert((int)$detail['batches'][0]['quantity'] === 3, 'Batch attribution details match');
 
 // Closed fiscal period blocks approval
-$pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES ('October 2026', '2026-10-01', '2026-10-31', 'closed')");
+$pdo->exec("UPDATE fiscal_periods SET status = 'closed'");
 $periodId = (int)$pdo->lastInsertId();
 $pdo->exec("INSERT INTO fiscal_period_locks (period_id, table_name) VALUES ({$periodId}, 'inventory_adjustments')");
 
@@ -581,7 +583,7 @@ $throws(
 echo "\n--- Test 9: Legacy unbatched product fallback ---\n";
 // Clear fiscal period lock
 $pdo->exec("DELETE FROM fiscal_period_locks");
-$pdo->exec("DELETE FROM fiscal_periods");
+$pdo->exec("UPDATE fiscal_periods SET status = 'open'");
 
 // Product with 0 batches in product_batches
 $pdo->exec("INSERT INTO products (branch_id, sku, barcode, product_name, status)
@@ -596,8 +598,8 @@ $adjIdUnbatched = $service->submitReport([
     'explanation' => 'Five unbatched items damaged.',
 ], $cashierId);
 
-$service->approveReport($adjIdUnbatched, $managerId, 'Approved unbatched stock issue');
-$assert($getInventory($unbatchedId) === 45, 'Unbatched product inventory deducted');
+$throws(static fn() => $service->approveReport($adjIdUnbatched, $managerId, 'Unbatched issue'), 'Missing batches refuse approval');
+$assert($getInventory($unbatchedId) === 50, 'Unbatched product inventory remains unchanged');
 $unbatchedReportBatches = $service->getReportBatches($adjIdUnbatched);
 $assert(empty($unbatchedReportBatches), 'No batch attribution rows created for unbatched product');
 

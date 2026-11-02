@@ -66,6 +66,11 @@ if ($can_manage_all) {
 
 // Handle receipt view / reprint request
 if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
+    $receiptEngine = new \App\Receipts\ReceiptEngine($pdo);
+    if ($receiptEngine->checkConditionalHit($sale_id, $can_manage_all, (int)($_SESSION['user_id'] ?? 0), $storeId)) {
+        exit;
+    }
+
     $sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
 
     if (!$sale) {
@@ -85,12 +90,11 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
     }
 
     if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')) {
-        receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, true);
+        receipt_render_details($sale, $sale['receipt_items'] ?? receipt_fetch_items($pdo, $sale_id), $canStartSale, false, true);
         exit;
     }
 
-    $paperWidthMm = (new \App\Receipts\ReceiptPaperService(\App\Core\Database::connection()))
-        ->currentWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
+    $paperWidthMm = $receiptEngine->resolvePaperWidth((int)($_SESSION['user_id'] ?? 0), (string)current_role());
     ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,7 +107,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
     <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 </head>
 <body class="receipt-standalone-reprint">
-    <?php receipt_render_details($sale, receipt_fetch_items($pdo, $sale_id), $canStartSale, false, false); ?>
+    <?php receipt_render_details($sale, $sale['receipt_items'] ?? receipt_fetch_items($pdo, $sale_id), $canStartSale, false, false); ?>
 </body>
 </html>
     <?php

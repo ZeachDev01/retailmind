@@ -21,20 +21,14 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/NotificationService.php';
-require_once __DIR__ . '/../app/Attention/AttentionRuleService.php';
-require_once __DIR__ . '/../app/Attention/AttentionNotificationService.php';
 require_once __DIR__ . '/../app/Attention/AttentionCenter.php';
-require_once __DIR__ . '/../app/Attention/DatabaseAttentionSignalSource.php';
 require_once __DIR__ . '/../app/Attention/AttentionSettingsService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 
 use App\Attention\AttentionCenter;
-use App\Attention\AttentionNotificationService;
-use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Attention\Clock;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
@@ -269,11 +263,8 @@ $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES
     ('ml_max_wape_28d', '45.0'),
     ('ml_approved_model_version', 'rf_prod_v1')");
 
-$signalSource = new DatabaseAttentionSignalSource($pdo, $clock);
 $settingsService = new AttentionSettingsService($pdo, $clock);
-$ruleService = new AttentionRuleService($settingsService, $clock);
-$notifService = new AttentionNotificationService($pdo, $clock);
-$attentionCenter = new AttentionCenter($ruleService, $notifService);
+$attentionCenter = new AttentionCenter($pdo, $clock, $settingsService);
 $notificationService = new NotificationService($pdo, $clock);
 
 // --- Phase 1: Clean initial state with routine success ---
@@ -281,12 +272,10 @@ $notificationService = new NotificationService($pdo, $clock);
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts) VALUES
     (1, 'forecast_generation', 'succeeded', '2026-11-01 04:00:00', '2026-11-01 04:05:00', 1)");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_candidate_review']['value'] ?? 0) === 0, 'No candidate awaiting review on initial state');
-$assert(($signals['forecasting_failure']['value'] ?? 0) === 0, 'Routine successful run has 0 failure signal');
-
-$items = $ruleService->evaluate('admin', $signals);
-$keys = array_column($items, 'key');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.candidate-review', $keys, true), 'No candidate awaiting review on initial state');
+$assert(!in_array('store.forecasting.failure', $keys, true), 'Routine successful run has 0 failure signal');
 $assert(!in_array('store.forecasting.candidate-review', $keys, true), 'No candidate review notice on initial state');
 $assert(!in_array('store.forecasting.failure', $keys, true), 'No failure notice on routine success');
 
@@ -299,20 +288,17 @@ $assert($notifCountBefore === $notifCountAfter, 'Routine success does not genera
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts, operator_message, diagnostic_reference) VALUES
     (2, 'forecast_generation', 'failed', '2026-11-01 05:00:00', '2026-11-01 05:02:00', 3, 'Insufficient historical sales observations to generate 30-day forecast.', 'Trace: InsufficientDataException at line 42')");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Failed forecast run produces active failure signal');
-$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'Insufficient historical sales'), 'Signal uses safe operator message');
-$assert(!str_contains($signals['forecasting_failure']['explanation'] ?? '', 'Trace: InsufficientDataException'), 'Signal hides raw diagnostic trace from explanation');
-
-$items = $ruleService->evaluate('admin', $signals);
+$items = $attentionCenter->getAttention(0, 'admin');
 $failureItem = null;
 foreach ($items as $item) {
     if ($item->key === 'store.forecasting.failure') $failureItem = $item;
 }
+$assert($failureItem !== null, 'Failed forecast run produces active failure signal');
+$assert(str_contains($failureItem?->explanation ?? '', 'Insufficient historical sales'), 'Signal uses safe operator message');
+$assert(!str_contains($failureItem?->explanation ?? '', 'Trace: InsufficientDataException'), 'Signal hides raw diagnostic trace from explanation');
 $assert($failureItem !== null, 'Forecasting failure produces attention item for Administrator');
-$assert($failureItem->severity === 'critical', 'Failure notice has critical severity');
-$assert($failureItem->destination === 'components/report/predictions.php', 'Failure notice destination is permitted predictions.php');
-$assert(AttentionNotificationService::workspace($failureItem->key) === 'admin', 'Failure notice is scoped to admin workspace');
+$assert($failureItem?->severity === 'critical', 'Failure notice has critical severity');
+$assert($failureItem?->destination === 'components/report/predictions.php', 'Failure notice destination is permitted predictions.php');
 
 // Synchronize notification
 $notificationService->checkAndNotifyForecasts();
@@ -332,8 +318,9 @@ $assert($countBefore === $countAfter, 'Repeated failure check does not duplicate
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts) VALUES
     (3, 'forecast_generation', 'succeeded', '2026-11-01 06:00:00', '2026-11-01 06:05:00', 1)");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_failure']['value'] ?? 0) === 0, 'Subsequent successful run clears failure signal');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.failure', $keys, true), 'Subsequent successful run clears failure signal');
 $notificationService->checkAndNotifyForecasts();
 $state = $pdo->query("SELECT is_active, resolved_at FROM attention_states WHERE attention_key = 'store.forecasting.failure'")->fetch(PDO::FETCH_ASSOC);
 $assert($state !== false && (int)$state['is_active'] === 0, 'Failure attention state marked inactive on resolution');
@@ -348,8 +335,9 @@ $pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape,
     ('rf_candidate_v2', 14, 60.0, 'failed'),
     ('rf_candidate_v2', 28, 65.0, 'failed')");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_candidate_review']['value'] ?? 0) === 0, 'Candidate failing quality gates does not produce review signal');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.candidate-review', $keys, true), 'Candidate failing quality gates does not produce review signal');
 
 // 4b. Demo artifact does NOT notify even if passed
 $pdo->exec("INSERT INTO model_training_runs (training_run_id, model_version, status, started_at, completed_at) VALUES
@@ -359,8 +347,9 @@ $pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape,
     ('demo_candidate_v1', 14, 25.0, 'passed'),
     ('demo_candidate_v1', 28, 30.0, 'passed')");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_candidate_review']['value'] ?? 0) === 0, 'Demo candidate does not produce review signal');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.candidate-review', $keys, true), 'Demo candidate does not produce review signal');
 
 // 4c. Qualified production candidate awaiting review DOES notify
 $pdo->exec("INSERT INTO model_training_runs (training_run_id, model_version, status, started_at, completed_at) VALUES
@@ -370,18 +359,16 @@ $pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape,
     ('rf_candidate_v3', 14, 28.0, 'passed'),
     ('rf_candidate_v3', 28, 33.0, 'passed')");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_candidate_review']['value'] ?? 0) === 1, 'Qualified candidate awaiting review produces active signal');
-$assert(str_contains($signals['forecasting_candidate_review']['explanation'] ?? '', 'rf_candidate_v3'), 'Signal explanation mentions candidate model version');
-
-$items = $ruleService->evaluate('admin', $signals);
+$items = $attentionCenter->getAttention(0, 'admin');
 $reviewItem = null;
 foreach ($items as $item) {
     if ($item->key === 'store.forecasting.candidate-review') $reviewItem = $item;
 }
+$assert($reviewItem !== null, 'Qualified candidate awaiting review produces active signal');
+$assert(str_contains($reviewItem?->explanation ?? '', 'rf_candidate_v3'), 'Signal explanation mentions candidate model version');
 $assert($reviewItem !== null, 'Qualified candidate produces attention item for Administrator');
-$assert($reviewItem->severity === 'warning', 'Review item has warning severity');
-$assert($reviewItem->destination === 'components/report/predictions.php', 'Review item links to predictions.php');
+$assert($reviewItem?->severity === 'warning', 'Review item has warning severity');
+$assert($reviewItem?->destination === 'components/report/predictions.php', 'Review item links to predictions.php');
 
 $notificationService->checkAndNotifyForecasts();
 $reviewNotif = $pdo->query("SELECT * FROM notifications WHERE attention_key = 'store.forecasting.candidate-review'")->fetch(PDO::FETCH_ASSOC);
@@ -398,8 +385,9 @@ $assert($revCountBefore === $revCountAfter, 'Repeated candidate review check doe
 // 4d. Once reviewed/accepted or approved, candidate notice resolves
 $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES
     ('ml_review_operational_rf_candidate_v3', '{\"model_version\":\"rf_candidate_v3\",\"decision\":\"accepted\",\"reviewed_by\":2}')");
-$signals = $signalSource->store();
-$assert(($signals['forecasting_candidate_review']['value'] ?? 0) === 0, 'Reviewed/accepted candidate no longer produces review signal');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.candidate-review', $keys, true), 'Reviewed/accepted candidate no longer produces review signal');
 $notificationService->checkAndNotifyForecasts();
 $revState = $pdo->query("SELECT is_active FROM attention_states WHERE attention_key = 'store.forecasting.candidate-review'")->fetch(PDO::FETCH_ASSOC);
 $assert((int)$revState['is_active'] === 0, 'Review attention state resolved after operational acceptance');
@@ -412,8 +400,9 @@ $pdo->exec("INSERT INTO workspace_guidance (user_id, workspace, status) VALUES (
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts, operator_message) VALUES
     (4, 'forecast_generation', 'failed', '2026-11-01 10:00:00', '2026-11-01 10:02:00', 3, 'Worker timeout during forecast inference.')");
 
-$signals = $signalSource->store();
-$assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Failure signal generated despite onboarding completed');
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(in_array('store.forecasting.failure', $keys, true), 'Failure signal generated despite onboarding completed');
 $notificationService->checkAndNotifyForecasts();
 $failState = $pdo->query("SELECT is_active FROM attention_states WHERE attention_key = 'store.forecasting.failure'")->fetch(PDO::FETCH_ASSOC);
 $assert((int)$failState['is_active'] === 1, 'Forecasting failure alert active despite completed onboarding');
@@ -421,8 +410,9 @@ $assert((int)$failState['is_active'] === 1, 'Forecasting failure alert active de
 // Verify with skipped and deferred status
 foreach (['skipped', 'deferred'] as $onboardingStatus) {
     $pdo->exec("UPDATE workspace_guidance SET status = '{$onboardingStatus}' WHERE user_id = 2 AND workspace = 'admin'");
-    $signals = $signalSource->store();
-    $assert(($signals['forecasting_failure']['value'] ?? 0) === 1, "Failure signal active when onboarding is {$onboardingStatus}");
+    $items = $attentionCenter->getAttention(0, 'admin');
+    $keys = array_map(static fn($item): string => $item->key, $items);
+    $assert(in_array('store.forecasting.failure', $keys, true), "Failure signal active when onboarding is {$onboardingStatus}");
 }
 
 // --- Phase 6: StoreOperationsDashboardWorkspace surfaces exceptions ---
