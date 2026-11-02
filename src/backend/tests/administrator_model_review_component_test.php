@@ -88,6 +88,7 @@ $pdo->exec("
     CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name VARCHAR(255),
+        display_name VARCHAR(255),
         username VARCHAR(100),
         email VARCHAR(255),
         profile_image VARCHAR(255),
@@ -266,7 +267,8 @@ assert_test(str_contains($html1, 'error metric, not an accuracy percentage'), 'L
 // =========================================================================
 echo "\n--- Test 2: Qualified Model Rendering (Awaiting approval) ---\n";
 // =========================================================================
-// Complete 28 observation days for candidate V1
+// Complete 28 observation days for candidate V1 (synthetic workflow evidence)
+echo "  [INFO] Synthetic observation evidence is isolated workflow evidence only.\n";
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 1000, 'receive', '2026-09-01 07:00:00')");
 for ($i = 1; $i <= 28; $i++) {
     $tDate = sprintf('2026-10-%02d', $i);
@@ -423,6 +425,20 @@ $_SESSION['csrf_token'] = 'valid-test-csrf-token';
 assert_test(!csrf_token_is_valid('invalid-tampered-token'), 'CSRF verification rejects invalid token');
 assert_test(!csrf_token_is_valid(''), 'CSRF verification rejects empty token');
 assert_test(csrf_token_is_valid('valid-test-csrf-token'), 'CSRF verification accepts authentic token');
+
+// 6.4 Role Capability & Active-Workspace Boundary Denials
+assert_test(!$policy->allows('cashier', RoleCapabilityPolicy::APPROVE_MODELS), 'Cashier lacks APPROVE_MODELS capability');
+assert_test(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_MODELS), 'Inventory Manager lacks APPROVE_MODELS capability');
+assert_test(!$policy->allows('cashier', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Cashier lacks ROLL_BACK_MODELS capability');
+assert_test(!$policy->allows('inventory_manager', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Inventory Manager lacks ROLL_BACK_MODELS capability');
+
+// Wrong active workspace boundary: active workspace role takes precedence over assigned roles
+$_SESSION['role'] = 'cashier';
+assert_test(!has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Wrong active workspace (cashier) is denied APPROVE_MODELS even for multi-role user');
+$_SESSION['role'] = 'inventory_manager';
+assert_test(!has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Wrong active workspace (inventory_manager) is denied APPROVE_MODELS even for multi-role user');
+$_SESSION['role'] = 'admin';
+assert_test(has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Active admin workspace retains APPROVE_MODELS capability');
 
 echo "\n=========================================================================\n";
 echo "PASS: All Administrator Model Review Component Tests Passed!\n";
