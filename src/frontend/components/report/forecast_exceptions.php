@@ -4,105 +4,22 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Forecasting\DemandForecastService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
-$saleUnitsSql = sales_units_sql($pdo, 'si');
 
-$metrics = get_ml_model_metrics();
-$settings = get_ml_settings($pdo);
-$wapeThreshold = (float)($settings['accuracy_threshold_wape'] ?? 35);
-$staleDays = max(1, (int)($settings['retrain_frequency_days'] ?? 7));
-$productMetricMap = [];
-foreach (($metrics['product_metrics'] ?? []) as $metric) {
-    $productMetricMap[(int)$metric['product_id']] = $metric;
-}
-
-$predictionStatement = $pdo->prepare("SELECT df.forecast_id, SUM(df.predicted_units) OVER(PARTITION BY df.job_id, df.product_id) AS predicted_demand_next_30_days, df.forecast_origin AS generated_at, df.readiness_level,
-           p.product_id, p.sku, p.product_name, i.quantity_on_hand,
-           COALESCE(s.units_30,0) units_30, COALESCE(s.nonzero_days,0) nonzero_days, s.first_sale_date
-    FROM demand_forecasts df
-    JOIN products p ON p.product_id=df.product_id
-    JOIN inventory i ON i.product_id=df.product_id
-    LEFT JOIN (
-      SELECT si.product_id,
-        SUM(CASE WHEN sa.sale_date >= DATE_SUB(NOW(),INTERVAL 30 DAY) THEN {$saleUnitsSql} ELSE 0 END) units_30,
-        COUNT(DISTINCT CASE WHEN sa.sale_date >= DATE_SUB(NOW(),INTERVAL 90 DAY) THEN DATE(sa.sale_date) END) nonzero_days,
-        MIN(sa.sale_date) first_sale_date
-      FROM sale_items si JOIN sales sa ON sa.sale_id=si.sale_id GROUP BY si.product_id
-    ) s ON s.product_id=df.product_id
-    WHERE df.job_id=(
-          SELECT df2.job_id FROM demand_forecasts df2 
-          JOIN ml_jobs j ON j.job_id = df2.job_id
-          WHERE df2.product_id=df.product_id
-            AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
-          ORDER BY df2.forecast_origin DESC, df2.forecast_id DESC LIMIT 1
-      )
-    GROUP BY df.job_id, df.product_id, df.forecast_origin, p.product_name, p.product_id, p.sku, i.quantity_on_hand, s.units_30, s.nonzero_days, s.first_sale_date, df.forecast_id, df.predicted_units, df.readiness_level
-    ORDER BY df.forecast_origin DESC,p.product_name");
-$predictionStatement->execute();
-$predictions = $predictionStatement->fetchAll(PDO::FETCH_ASSOC);
-
-$exceptions = [];
-foreach ($predictions as $row) {
-    $reasons = [];
-    $confidence = isset($row['confidence_score']) && $row['confidence_score'] !== null ? (float)$row['confidence_score'] : null;
-    $pm = $productMetricMap[(int)$row['product_id']] ?? [];
-    $wape = isset($pm['wape']) ? (float)$pm['wape'] : null;
-    if ($confidence !== null && $confidence < .50) {
-        $reasons[] = 'Low confidence';
-    }
-    if ($wape !== null && $wape > $wapeThreshold) {
-        $reasons[] = 'WAPE above threshold';
-    }
-    if ((int)$row['nonzero_days'] < (int)($settings['minimum_nonzero_sales_days'] ?? 5)) {
-        $reasons[] = 'Insufficient nonzero sales days';
-    }
-    if ((int)$row['predicted_demand_next_30_days'] > max(10, (int)$row['units_30'] * 2)) {
-        $reasons[] = 'Forecast spike versus recent demand';
-    }
-    if ((int)$row['units_30'] === 0 && (int)$row['predicted_demand_next_30_days'] > 0) {
-        $reasons[] = 'Forecast despite zero recent sales';
-    }
-    if (strtotime((string)$row['generated_at']) < strtotime('-' . $staleDays . ' days')) {
-        $reasons[] = 'Prediction is stale';
-    }
-    if (!$reasons) {
-        continue;
-    }
-    $row['exception_reasons'] = $reasons;
-    $row['product_wape'] = $wape;
-    $exceptions[] = $row;
-}
-
+$service = new DemandForecastService($pdo);
 $searchQuery = trim($_GET['search'] ?? '');
 $reasonFilter = trim($_GET['reason'] ?? '');
 
-$availableReasons = [];
-foreach ($exceptions as $ex) {
-    foreach ($ex['exception_reasons'] as $r) {
-        $availableReasons[$r] = true;
-    }
-}
-$availableReasons = array_keys($availableReasons);
+$coverage = $service->getCoverage(null, null, $searchQuery, $reasonFilter);
+$exceptions = $coverage['excluded_products'];
+$availableReasons = array_keys($coverage['exclusion_reasons']);
 sort($availableReasons);
 
-$filteredExceptions = $exceptions;
-if ($searchQuery !== '' || $reasonFilter !== '') {
-    $filteredExceptions = array_values(array_filter($exceptions, static function (array $row) use ($searchQuery, $reasonFilter): bool {
-        if ($searchQuery !== '') {
-            $term = mb_strtolower($searchQuery);
-            $sku = mb_strtolower((string)($row['sku'] ?? ''));
-            $name = mb_strtolower((string)($row['product_name'] ?? ''));
-            if (!str_contains($sku, $term) && !str_contains($name, $term)) {
-                return false;
-            }
-        }
-        if ($reasonFilter !== '' && !in_array($reasonFilter, $row['exception_reasons'] ?? [], true)) {
-            return false;
-        }
-        return true;
-    }));
-}
+$filteredExceptions = $coverage['filtered']['is_filtered']
+    ? array_values(array_filter($coverage['filtered']['products'], static fn($p) => empty($p['is_forecast_backed'])))
+    : $exceptions;
 
 $decisionStatement = $pdo->prepare("SELECT fd.*,p.sku,p.product_name,u.display_name decided_by_name
     FROM forecast_decisions fd JOIN products p ON p.product_id=fd.product_id LEFT JOIN users u ON u.user_id=fd.decided_by
@@ -126,11 +43,12 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
-            <h1>Forecast Exceptions</h1>
+            <div>
+                <h1>Forecast Exceptions</h1>
+                <p class="page-subtitle">Excluded products using stock rules and required operational next steps.</p>
+            </div>
             <div class="page-heading-actions">
-                <?php if ($canConfigureModels): ?>
-                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Analytics</a>
-                <?php endif; ?>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Demand Forecast</a>
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review recommendations</a>
             </div>
         </header>
@@ -138,25 +56,33 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
         <div class="card-grid" aria-label="Triage summary cards">
             <div class="stat-card">
                 <div class="value"><?= count($exceptions) ?></div>
-                <div class="label">Products needing review</div>
+                <div class="label">Products using stock rules</div>
+                <div class="hint"><?= $coverage['filtered']['is_filtered'] ? 'Showing ' . count($filteredExceptions) . ' matching' : 'Excluded from forecasts' ?></div>
             </div>
             <div class="stat-card">
-                <div class="value"><?= htmlspecialchars(number_format($wapeThreshold, 0)) ?>%</div>
-                <div class="label">WAPE alert threshold</div>
+                <div class="value"><?= (int)$coverage['scope_count'] ?></div>
+                <div class="label">Active catalog products</div>
+                <div class="hint">Replenishment scope denominator</div>
             </div>
             <div class="stat-card">
-                <div class="value"><?= htmlspecialchars(format_ml_metric($metrics, 'wape')) ?><?= isset($metrics['wape']) ? '%' : '' ?></div>
-                <div class="label">Current model WAPE</div>
+                <div class="value"><?= (int)$coverage['forecast_backed_count'] ?></div>
+                <div class="label">Forecast-backed products</div>
+                <div class="hint"><?= $coverage['scope_count'] > 0 ? round(($coverage['forecast_backed_count'] / $coverage['scope_count']) * 100) . '% coverage' : 'No active products' ?></div>
             </div>
             <div class="stat-card">
-                <div class="value"><?= !empty($metrics['model_beats_baseline']) ? 'Yes' : (array_key_exists('model_beats_baseline', $metrics) ? 'No' : '-') ?></div>
-                <div class="label">Beats 7-day baseline</div>
+                <div class="value"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></div>
+                <div class="label">Store status</div>
+                <div class="hint"><?= $coverage['is_guidance_usable'] ? 'Guidance usable today' : 'Stock rules only' ?></div>
             </div>
+        </div>
+
+        <div class="alert <?= $coverage['forecast_backed_count'] === $coverage['scope_count'] && $coverage['scope_count'] > 0 ? 'tag-success' : 'tag-warning' ?>" role="status" style="margin-bottom:1.5rem;">
+            <strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
         </div>
 
         <section class="dashboard-section">
             <div class="section-header">
-                <h2>Exception queue (<?= count($filteredExceptions) ?>)</h2>
+                <h2>Exception queue (<?= count($filteredExceptions) ?><?= $coverage['filtered']['is_filtered'] ? ' of ' . count($exceptions) : '' ?>)</h2>
             </div>
 
             <form method="get" action="" class="search-form no-print" role="search" aria-label="Filter exception queue" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
@@ -186,12 +112,11 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                     <thead>
                         <tr>
                             <th scope="col">Product</th>
-                            <th scope="col">Forecast 30d</th>
-                            <th scope="col">Recent sales 30d</th>
-                            <th scope="col">Confidence</th>
-                            <th scope="col">WAPE</th>
-                            <th scope="col">Generated</th>
-                            <th scope="col">Reasons</th>
+                            <th scope="col">On hand</th>
+                            <th scope="col">Stock-rule suggestion</th>
+                            <th scope="col">Exclusion reason</th>
+                            <th scope="col">Category</th>
+                            <th scope="col">Action needed</th>
                             <th scope="col">Actions</th>
                         </tr>
                     </thead>
@@ -199,18 +124,19 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                         <?php foreach ($filteredExceptions as $row): ?>
                             <tr>
                                 <td>
-                                    <strong><?= htmlspecialchars($row['product_name']) ?></strong><br>
+                                    <strong><a href="../products/product_detail.php?id=<?= (int)$row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></strong><br>
                                     <span class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></span>
                                 </td>
-                                <td><?= (int)$row['predicted_demand_next_30_days'] ?></td>
-                                <td><?= (int)$row['units_30'] ?></td>
-                                <td><?= isset($row['confidence_score']) && $row['confidence_score'] !== null ? number_format((float)$row['confidence_score'] * 100, 0) . '%' : 'Unavailable' ?></td>
-                                <td><?= $row['product_wape'] === null ? '-' : number_format((float)$row['product_wape'], 2) . '%' ?></td>
-                                <td><?= htmlspecialchars($row['generated_at']) ?></td>
+                                <td><strong><?= (int)$row['current_stock'] ?></strong> units</td>
+                                <td><strong><?= (int)$row['stock_rule_quantity'] ?></strong> units</td>
                                 <td>
-                                    <?php foreach ($row['exception_reasons'] as $reason): ?>
-                                        <span class="reason"><?= htmlspecialchars($reason) ?></span>
-                                    <?php endforeach; ?>
+                                    <span class="reason"><?= htmlspecialchars($row['exclusion_reason'] ?? 'Forecast unavailable') ?></span>
+                                </td>
+                                <td>
+                                    <span class="badge tag-light"><?= htmlspecialchars(ucfirst($row['exclusion_category'] ?? 'evidence')) ?></span>
+                                </td>
+                                <td>
+                                    <small><?= htmlspecialchars($row['exclusion_action'] ?? 'Replenishment continues on stock rules') ?></small>
                                 </td>
                                 <td>
                                     <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="Inspect forecast for <?= htmlspecialchars($row['product_name']) ?>">Inspect</a>
@@ -218,7 +144,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$filteredExceptions): ?>
-                            <tr><td colspan="8" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No current forecast exceptions.' ?></td></tr>
+                            <tr><td colspan="7" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No excluded products. All active products have usable forecasts.' ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
