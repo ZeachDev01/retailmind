@@ -577,6 +577,7 @@ class StockIssueService
             }
             $cashierId = (int)$report['reported_by'];
 
+            // BatchInventoryLedger atomic deduction: verifies quantity_on_hand >= ?; throws Insufficient available stock
             $mutation = $this->ledger->recordStockIssueDeduction(
                 $productId,
                 $reportedQty,
