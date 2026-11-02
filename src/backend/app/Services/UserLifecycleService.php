@@ -16,12 +16,19 @@ final class UserLifecycleService
     private const DISPOSABLE_USER_TABLES = ['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states', 'workspace_guidance'];
     private ?array $identityReferences = null;
 
+    private ?UserAccountNotifier $notifier = null;
+
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy,
-        private ?UserAccountNotifier $notifier = null
+        object|null $scopeOrNotifier = null,
+        ?UserAccountNotifier $notifier = null
     ) {
-        $this->notifier = $notifier ?? new UserAccountNotifier();
+        if ($scopeOrNotifier instanceof UserAccountNotifier) {
+            $this->notifier = $scopeOrNotifier;
+        } else {
+            $this->notifier = $notifier ?? new UserAccountNotifier();
+        }
     }
 
     public function get(int $userId, bool $lock = false): array

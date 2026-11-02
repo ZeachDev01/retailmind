@@ -50,6 +50,15 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
                 <?php
             }
         }
+
+        $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        if ($currentScript === 'store_settings.php' && current_role() === 'admin' && isset($_GET['guidance'])) {
+            $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
+            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic('admin', 'store_settings');
+            $isReplay = !empty($_GET['replay']);
+            $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_step'] ?? 0);
+            include __DIR__ . '/workspace_walkthrough_dock.php';
+        }
     } catch (Throwable $e) {
         // Guidance must not block Store work when its state cannot be read.
         if (class_exists('App\\Support\\OperatorAlert')) {

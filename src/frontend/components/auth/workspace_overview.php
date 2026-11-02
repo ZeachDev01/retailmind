@@ -111,6 +111,11 @@ if (isset($workflows[$currentScript])) {
         }
     }
 }
+$walkthroughProgress = isset($pdo, $_SESSION['user_id'])
+    ? \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role())
+    : ['status' => null, 'active_topic' => null, 'active_step' => 0, 'completed_topics' => [], 'invitation_status' => null];
+$isStoreSettingsDone = in_array('store_settings', $walkthroughProgress['completed_topics'], true);
+$isStoreSettingsInProgress = ($walkthroughProgress['active_topic'] === 'store_settings');
 ?>
 <h2 id="workspace-guidance-title">
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
@@ -128,6 +133,93 @@ $primaryActionLabel = $isAdmin
     : 'Review replenishment needs';
 ?>
 <?php if ($guidanceIsHelp): ?>
+    <?php if ($isAdmin): ?>
+        <?php if ($isStoreSettingsInProgress): ?>
+            <section class="guidance-continue-card" aria-label="Continue guidance">
+                <div>
+                    <h2>Continue where you left off</h2>
+                    <p>Resume Store Settings walkthrough (Step <?= $walkthroughProgress['active_step'] + 1 ?> of 4)</p>
+                </div>
+                <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>" class="btn btn-primary">Resume Store Settings (Step <?= $walkthroughProgress['active_step'] + 1 ?> of 4)</a>
+            </section>
+        <?php endif; ?>
+        <section class="guidance-walkthroughs" aria-labelledby="get-oriented-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="get-oriented-title">Get oriented</h2>
+                <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <div class="walkthrough-topic-card">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon('shop') ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title">Store Settings</h4>
+                            <p class="walkthrough-topic-desc">Review Store identity, customer receipts, and operational attention thresholds.</p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($isStoreSettingsDone): ?>
+                            <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                            <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                        <?php elseif ($isStoreSettingsInProgress): ?>
+                            <span class="guidance-progress-badge">In progress (Step <?= $walkthroughProgress['active_step'] + 1 ?> of 4)</span>
+                            <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>" class="btn btn-primary">Continue</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>" class="btn btn-primary">Start walkthrough</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="walkthrough-topic-card walkthrough-topic-upcoming">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon('self_service_kiosk') ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title">Registers</h4>
+                            <p class="walkthrough-topic-desc">Review or create named till records and receipt-width settings.</p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <a href="<?= htmlspecialchars(app_url('components/administrator/registers.php')) ?>" class="btn btn-secondary">Go to Registers</a>
+                    </div>
+                </div>
+                <div class="walkthrough-topic-card walkthrough-topic-upcoming">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon('calendar') ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title">Fiscal Periods</h4>
+                            <p class="walkthrough-topic-desc">Find and understand the existing fiscal period workflow.</p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php')) ?>" class="btn btn-secondary">Go to Fiscal Periods</a>
+                    </div>
+                </div>
+                <div class="walkthrough-topic-card walkthrough-topic-upcoming">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon('conference_call') ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title">Staff accounts</h4>
+                            <p class="walkthrough-topic-desc">Maintain operational staff accounts and role assignments.</p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php')) ?>" class="btn btn-secondary">Go to Staff Accounts</a>
+                    </div>
+                </div>
+                <div class="walkthrough-topic-card walkthrough-topic-upcoming">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon('calendar') ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title">Store calendar</h4>
+                            <p class="walkthrough-topic-desc">Review trading days and planned closures.</p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php')) ?>" class="btn btn-secondary">Go to Store Calendar</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
     <ul class="workspace-guidance-links">
         <?php foreach ($workflows as $wf): ?>
         <li>
@@ -147,10 +239,21 @@ $primaryActionLabel = $isAdmin
     </ul>
 <?php elseif ($activeWorkflow): ?>
     <p><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-    <p><a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
+    <p>
+        <?php if ($isAdmin): ?>
+            <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+        <?php endif; ?>
+        <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
+    </p>
 <?php else: ?>
     <p><?= htmlspecialchars($introText) ?></p>
-    <p><a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot; <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a></p>
+    <p>
+        <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
+        <?php if ($isAdmin): ?>
+            <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+        <?php endif; ?>
+        <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
+    </p>
 <?php endif; ?>
 <?php if (!$guidanceIsHelp): ?>
 <p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>
