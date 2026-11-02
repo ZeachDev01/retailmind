@@ -522,12 +522,12 @@ final class StoreOperationsDashboardWorkspace
     {
         $items = [];
         $cashVarianceSql = $this->hasVarianceReviewRequiredColumn()
-            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
+            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL
                  AND (cs.variance_review_required = 1 OR (cs.variance_review_required IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))))
                ORDER BY cs.closed_at ASC LIMIT 20"
-            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.full_name
+            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))
                ORDER BY cs.closed_at ASC LIMIT 20";
@@ -536,7 +536,7 @@ final class StoreOperationsDashboardWorkspace
             $items[] = $this->exception(
                 'warning',
                 'Needs review',
-                (string)$row['full_name'] . ' · ' . number_format((float)$row['cash_variance'], 2),
+                (string)$row['display_name'] . ' · ' . number_format((float)$row['cash_variance'], 2),
                 (string)$row['closed_at'],
                 'components/administrator/shift_report.php?shift_id=' . (int)$row['shift_id']
             );

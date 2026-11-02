@@ -29,9 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $pdo->beginTransaction();
+            $consume = $pdo->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE reset_id = ? AND used_at IS NULL AND expires_at >= NOW()');
+            $consume->execute([(int)$reset['reset_id']]);
+            if ($consume->rowCount() !== 1) {
+                throw new DomainException('This reset link is invalid or expired.');
+            }
             $pdo->prepare('UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = session_version + 1, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?')
                 ->execute([password_hash($password, PASSWORD_DEFAULT), (int)$reset['user_id']]);
-            $pdo->prepare('UPDATE password_reset_tokens SET used_at = NOW() WHERE reset_id = ?')->execute([(int)$reset['reset_id']]);
             log_activity(
                 $pdo,
                 (int)$reset['user_id'],

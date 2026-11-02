@@ -7,31 +7,22 @@ require_once __DIR__ . '/../../includes/functions.php';
 class SaleReversalService
 {
     private PDO $pdo;
-    private App\Store\StoreScope $storeScope;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
-        $this->storeScope = new App\Store\StoreScope($pdo);
     }
 
     public function getSaleWithItems(int $saleId): ?array
     {
         $stmt = $this->pdo->prepare(
             "SELECT s.sale_id, s.cashier_id, s.total_amount, s.payment_method, s.sale_date,
-                    u.full_name AS cashier_name
+                    u.display_name AS cashier_name
              FROM sales s
              JOIN users u ON u.user_id = s.cashier_id
-             WHERE s.sale_id = ? AND (
-                 u.branch_id = ? OR EXISTS (
-                     SELECT 1 FROM sale_items scope_si
-                     JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                     WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-                 )
-             )"
+             WHERE s.sale_id = ?"
         );
-        $storeId = $this->storeScope->id();
-        $stmt->execute([$saleId, $storeId, $storeId]);
+        $stmt->execute([$saleId]);
         $sale = $stmt->fetch();
 
         if (!$sale) {
@@ -63,21 +54,16 @@ class SaleReversalService
 
     public function getReversals(?int $saleId = null): array
     {
-        $storeId = $this->storeScope->id();
-        $params = [$storeId, $storeId];
-        $where = 'WHERE (s.sale_id IS NULL OR cashier.user_id IS NULL OR cashier.branch_id = ? OR EXISTS (
-            SELECT 1 FROM sale_items scope_si
-            JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-            WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-        ))';
+        $params = [];
+        $where = 'WHERE 1=1';
         if ($saleId !== null) {
             $where .= ' AND sr.sale_id = ?';
             $params[] = $saleId;
         }
 
         $stmt = $this->pdo->prepare(
-            "SELECT sr.*, s.total_amount, requester.full_name AS requested_by_name,
-                    approver.full_name AS approved_by_name
+            "SELECT sr.*, s.total_amount, requester.display_name AS requested_by_name,
+                    approver.display_name AS approved_by_name
              FROM sale_reversals sr
              LEFT JOIN sales s ON s.sale_id = sr.sale_id
              LEFT JOIN users cashier ON cashier.user_id = s.cashier_id

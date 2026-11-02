@@ -6,7 +6,6 @@ require_once __DIR__ . '/InventoryService.php';
 class DashboardService
 {
     private PDO $pdo;
-    private App\Store\StoreScope $storeScope;
     private App\Audit\ProtectedAuditRecordService $protectedAuditRecords;
     /** @var array<string, true>|null */
     private ?array $saleItemColumns = null;
@@ -14,7 +13,6 @@ class DashboardService
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
-        $this->storeScope = new App\Store\StoreScope($pdo);
         $this->protectedAuditRecords = new App\Audit\ProtectedAuditRecordService(
             $pdo,
             new App\Authorization\RoleCapabilityPolicy()
@@ -47,7 +45,7 @@ class DashboardService
             static fn(array $record): array => [
                 'action' => $record['action'],
                 'created_at' => $record['created_at'],
-                'user_name' => $record['full_name'] ?: ($record['username'] ?: 'System'),
+                'user_name' => $record['display_name'] ?: ($record['username'] ?: 'System'),
             ],
             $this->protectedAuditRecords->records($actorRole, [
                 'critical_only' => true,
@@ -173,18 +171,11 @@ class DashboardService
                     COUNT(*) AS transactions
              FROM sales s
              JOIN users u ON u.user_id = s.cashier_id
-             WHERE (u.branch_id = ? OR EXISTS (
-                 SELECT 1 FROM sale_items scope_si
-                 JOIN products scope_p ON scope_p.product_id = scope_si.product_id
-                 WHERE scope_si.sale_id = s.sale_id AND scope_p.branch_id = ?
-             )) AND s.sale_date >= ? AND s.sale_date < ?
+             WHERE s.sale_date >= ? AND s.sale_date < ?
              GROUP BY DATE(s.sale_date)
              ORDER BY sale_day ASC"
         );
-        $storeId = $this->storeScope->id();
         $stmt->execute([
-            $storeId,
-            $storeId,
             $start->format('Y-m-d H:i:s'),
             $endExclusive->format('Y-m-d H:i:s'),
         ]);

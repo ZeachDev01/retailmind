@@ -2,7 +2,6 @@
 
 namespace App\Store;
 
-use App\Database\Schema;
 use PDO;
 use PDOStatement;
 use RuntimeException;
@@ -100,14 +99,7 @@ final class StoreCalendar
 
     private function prepareCalendarInsert(PDO $pdo): PDOStatement
     {
-        $columns = 'calendar_date, status, recorded_by, recorded_at';
-        $values = '?, ?, ?, CURRENT_TIMESTAMP';
-        // Retain the internal Store identity on legacy schemas without requiring it on fresh installs.
-        if (Schema::columnExists($pdo, 'store_calendar', 'branch_id')) {
-            $columns .= ', branch_id';
-            $values .= ', ' . (new StoreScope($pdo))->id();
-        }
-        return $pdo->prepare("INSERT INTO store_calendar ({$columns}) VALUES ({$values})");
+        return $pdo->prepare('INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)');
     }
 
     /**

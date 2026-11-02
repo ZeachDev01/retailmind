@@ -155,6 +155,12 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             gap: 0.5rem;
             align-items: center;
         }
+        .calendar-month-select {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .calendar-month-select select { min-height: 44px; }
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -265,6 +271,21 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     <a class="btn btn-secondary" href="?year=<?= substr($today, 0, 4) ?>&month=<?= (int)substr($today, 5, 2) ?>">Today</a>
                     <a class="btn btn-secondary" href="?year=<?= $nextYear ?>&month=<?= $nextMonth ?>" aria-label="Next month">Next &raquo;</a>
                 </div>
+                <form class="calendar-month-select" method="get">
+                    <label class="sr-only" for="calendar-month">Month</label>
+                    <select id="calendar-month" name="month" aria-label="Select month">
+                        <?php for ($month = 1; $month <= 12; $month++): ?>
+                            <option value="<?= $month ?>" <?= $month === $viewMonth ? 'selected' : '' ?>><?= htmlspecialchars(date('F', mktime(0, 0, 0, $month, 1))) ?></option>
+                        <?php endfor; ?>
+                    </select>
+                    <label class="sr-only" for="calendar-year">Year</label>
+                    <select id="calendar-year" name="year" aria-label="Select year">
+                        <?php for ($year = $viewYear - 5; $year <= $viewYear + 5; $year++): ?>
+                            <option value="<?= $year ?>" <?= $year === $viewYear ? 'selected' : '' ?>><?= $year ?></option>
+                        <?php endfor; ?>
+                    </select>
+                    <button type="submit" class="btn btn-secondary">Go</button>
+                </form>
                 <h2><?= htmlspecialchars($monthTitle) ?></h2>
             </div>
 

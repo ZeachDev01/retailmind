@@ -44,13 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $summary = $service->summary();
 $blockers = $service->blockers();
 $backupToken = $_SESSION['reset_data_backup'] ?? null;
-$productStatement = $pdo->prepare('SELECT product_id, product_name, sku, status FROM products WHERE branch_id = ? ORDER BY product_name');
-$productStatement->execute([store_scope_id($pdo)]);
+$productStatement = $pdo->query('SELECT product_id, product_name, sku, status FROM products ORDER BY product_name');
 $products = $productStatement->fetchAll();
 $_SESSION['reset_data_nonce'] = bin2hex(random_bytes(24));
 $labels = [
     'products' => 'Products', 'promotions' => 'Product promotions',
-    'sales' => 'Completed sales', 'sale_items' => 'Sale line items', 'held_sales' => 'Held sales',
+    'sales' => 'Completed sales', 'sale_items' => 'Sale line items', 'held_sales' => 'Held sales', 'held_sale_items' => 'Held sale line items',
     'cash_refunds' => 'Cash refunds', 'sale_reversals' => 'Sale reversals', 'cashier_shifts' => 'Closed cashier shifts',
     'inventory_units' => 'Units currently in stock', 'stock_movements' => 'Stock movements',
     'inventory_adjustments' => 'Stock adjustments', 'inventory_counts' => 'Stock counts',
@@ -61,7 +60,7 @@ $labels = [
 ];
 $recordGroups = [
     'products' => ['Product catalog', 'products', 'promotions'],
-    'sales' => ['Sales & cashier activity', 'sales', 'sale_items', 'held_sales', 'cash_refunds', 'sale_reversals', 'cashier_shifts'],
+    'sales' => ['Sales & cashier activity', 'sales', 'sale_items', 'held_sale_items', 'held_sales', 'cash_refunds', 'sale_reversals', 'cashier_shifts'],
     'inventory_units' => ['Inventory & receiving', 'inventory_units', 'stock_movements', 'inventory_adjustments', 'inventory_counts', 'product_batches', 'stock_receiving'],
     'stock_predictions' => ['Forecasting', 'stock_predictions', 'forecast_sales_imports', 'forecast_evaluations', 'model_training_runs'],
 ];

@@ -2,7 +2,6 @@
 
 namespace App\Database;
 
-use App\Store\StoreScope;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -145,9 +144,9 @@ final class ProductSeeder
             throw new RuntimeException('Could not acquire product seed lock.');
         }
         try {
-            $engines = $pdo->query("SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('branches','categories','products','inventory')")->fetchAll(PDO::FETCH_KEY_PAIR);
-            if (count($engines) !== 4 || count(array_filter($engines, static fn ($engine) => strtoupper((string)$engine) !== 'INNODB')) > 0) {
-                throw new RuntimeException('Seed requires existing InnoDB branches, categories, products and inventory tables. No migrations were run.');
+            $engines = $pdo->query("SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('categories','products','inventory')")->fetchAll(PDO::FETCH_KEY_PAIR);
+            if (count($engines) !== 3 || count(array_filter($engines, static fn ($engine) => strtoupper((string)$engine) !== 'INNODB')) > 0) {
+                throw new RuntimeException('Seed requires existing InnoDB categories, products and inventory tables. No migrations were run.');
             }
             $pdo->beginTransaction();
             if ($withStock) {
@@ -156,16 +155,15 @@ final class ProductSeeder
                     throw new RuntimeException('Opening stock requires existing InnoDB batch, purchase and stock movement tables.');
                 }
             }
-            $storeId = (new StoreScope($pdo))->migrate();
-            $find = $pdo->prepare('SELECT product_id, sku, barcode FROM products WHERE branch_id = ? AND (sku IN (?, ?) OR barcode IN (?, ?) OR case_barcode IN (?, ?)) FOR UPDATE');
+            $find = $pdo->prepare('SELECT product_id, sku, barcode FROM products WHERE sku IN (?, ?) OR barcode IN (?, ?) OR case_barcode IN (?, ?) FOR UPDATE');
             $category = $pdo->prepare('SELECT category_id FROM categories WHERE category_name = ? ORDER BY category_id LIMIT 1');
             $addCategory = $pdo->prepare('INSERT INTO categories (category_name) VALUES (?)');
-            $insert = $pdo->prepare('INSERT INTO products (sku, barcode, product_name, brand, category_id, unit_price, cost_price, reorder_level, supplier, preferred_supplier, supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            $insert = $pdo->prepare('INSERT INTO products (sku, barcode, product_name, brand, category_id, unit_price, cost_price, reorder_level, supplier, preferred_supplier, supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             $inventory = $pdo->prepare('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)');
-            $verify = $pdo->prepare('SELECT p.product_id, p.sku, p.barcode, p.product_name, p.status, p.reorder_level, i.quantity_on_hand FROM products p JOIN inventory i ON i.product_id = p.product_id JOIN categories c ON c.category_id = p.category_id WHERE p.product_id = ? AND p.branch_id = ?');
+            $verify = $pdo->prepare('SELECT p.product_id, p.sku, p.barcode, p.product_name, p.status, p.reorder_level, i.quantity_on_hand FROM products p JOIN inventory i ON i.product_id = p.product_id JOIN categories c ON c.category_id = p.category_id WHERE p.product_id = ?');
             $result = ['inserted' => 0, 'skipped' => 0, 'records' => []];
             foreach ($products as $row) {
-                $find->execute([$storeId, $row['sku'], $row['barcode'], $row['sku'], $row['barcode'], $row['sku'], $row['barcode']]);
+                $find->execute([$row['sku'], $row['barcode'], $row['sku'], $row['barcode'], $row['sku'], $row['barcode']]);
                 $matches = $find->fetchAll();
                 if ($matches !== []) {
                     if (count($matches) !== 1 || $matches[0]['sku'] !== $row['sku'] || $matches[0]['barcode'] !== $row['barcode']) {
@@ -180,13 +178,13 @@ final class ProductSeeder
                         $addCategory->execute([$row['category_name']]);
                         $categoryId = $pdo->lastInsertId();
                     }
-                    $insert->execute([$row['sku'], $row['barcode'], $row['product_name'], $row['brand'], $categoryId, $row['unit_price'], $row['cost_price'], $row['reorder_level'], $row['preferred_supplier'], $row['preferred_supplier'], $row['supplier_lead_time_days'], $row['safety_stock'], $row['minimum_order_quantity'], $row['units_per_package'], $storeId]);
+                    $insert->execute([$row['sku'], $row['barcode'], $row['product_name'], $row['brand'], $categoryId, $row['unit_price'], $row['cost_price'], $row['reorder_level'], $row['preferred_supplier'], $row['preferred_supplier'], $row['supplier_lead_time_days'], $row['safety_stock'], $row['minimum_order_quantity'], $row['units_per_package']]);
                     $productId = (int)$pdo->lastInsertId();
                     $inventory->execute([$productId]);
                     $result['inserted']++;
                 }
                 $stockResult = $withStock ? self::seedOpeningStock($pdo, $productId, $row) : 'not_requested';
-                $verify->execute([$productId, $storeId]);
+                $verify->execute([$productId]);
                 $record = $verify->fetch();
                 if (!$record) {
                     throw new RuntimeException('Seed verification failed: missing category or inventory. No existing records repaired.');

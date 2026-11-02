@@ -14,7 +14,7 @@ if ($userId === false || $userId === null || $userId <= 0) {
     http_response_code(404);
     exit;
 }
-$lifecycle = new \App\Services\UserLifecycleService($pdo, role_capability_policy(), new \App\Store\StoreScope($pdo));
+$lifecycle = new \App\Services\UserLifecycleService($pdo, role_capability_policy());
 try {
     $target = $lifecycle->get($userId);
 } catch (InvalidArgumentException) {

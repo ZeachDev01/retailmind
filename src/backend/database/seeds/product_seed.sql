@@ -8,8 +8,6 @@ DROP PROCEDURE IF EXISTS retailmind_import_product_seed;
 DELIMITER $$
 CREATE PROCEDURE retailmind_import_product_seed()
 BEGIN
-    DECLARE store_id INT;
-    DECLARE branch_count INT;
     DECLARE seed_lock INT DEFAULT 0;
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -26,22 +24,12 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Could not acquire product seed lock.';
     END IF;
     IF (SELECT COUNT(*) FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('branches','categories','products','inventory')
-        AND ENGINE = 'InnoDB') <> 4 THEN
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('categories','products','inventory')
+        AND ENGINE = 'InnoDB') <> 3 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seed requires current InnoDB RetailMind tables.';
     END IF;
 
     START TRANSACTION;
-    SELECT COUNT(*), MIN(b.branch_id) INTO branch_count, store_id
-    FROM branches b
-    WHERE EXISTS (SELECT 1 FROM users u WHERE u.branch_id = b.branch_id)
-       OR EXISTS (SELECT 1 FROM products p WHERE p.branch_id = b.branch_id);
-    IF branch_count = 0 THEN
-        SELECT COUNT(*), MIN(branch_id) INTO branch_count, store_id FROM branches WHERE status = 'active';
-    END IF;
-    IF branch_count <> 1 OR NOT EXISTS (SELECT 1 FROM branches WHERE branch_id = store_id AND status = 'active') THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Seed requires one resolved active Store; apply Store setup/consolidation first.';
-    END IF;
 
     CREATE TEMPORARY TABLE retailmind_product_seed (
         sku VARCHAR(50) NOT NULL PRIMARY KEY,
@@ -122,8 +110,7 @@ BEGIN
     ('SKU-PET-002', '890100000060', 'Cat Food Tuna 400g', 'PawPantry', 'Pet Care', '2.9', '1.42', '10', 'PetSupply Wholesale', '7', '5', '12', '12');
 
     IF EXISTS (
-        SELECT 1 FROM retailmind_product_seed s JOIN products p ON p.branch_id = store_id
-        AND (p.sku IN (s.sku, s.barcode) OR p.barcode IN (s.sku, s.barcode)
+        SELECT 1 FROM retailmind_product_seed s JOIN products p ON (p.sku IN (s.sku, s.barcode) OR p.barcode IN (s.sku, s.barcode)
           OR p.case_barcode IN (s.sku, s.barcode) OR p.pack_barcode IN (s.sku, s.barcode))
         WHERE p.sku <> s.sku OR p.barcode <> s.barcode
     ) THEN
@@ -136,17 +123,17 @@ BEGIN
 
     INSERT INTO products (sku, barcode, product_name, brand, category_id, unit_price, cost_price,
         reorder_level, supplier, preferred_supplier, supplier_lead_time_days, safety_stock,
-        minimum_order_quantity, units_per_package, branch_id)
+        minimum_order_quantity, units_per_package)
     SELECT s.sku, s.barcode, s.product_name, s.brand,
         (SELECT MIN(c.category_id) FROM categories c WHERE c.category_name = s.category_name),
         s.unit_price, s.cost_price, s.reorder_level, s.preferred_supplier, s.preferred_supplier,
-        s.supplier_lead_time_days, s.safety_stock, s.minimum_order_quantity, s.units_per_package, store_id
+        s.supplier_lead_time_days, s.safety_stock, s.minimum_order_quantity, s.units_per_package
     FROM retailmind_product_seed s
-    WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.branch_id = store_id AND p.sku = s.sku);
+    WHERE NOT EXISTS (SELECT 1 FROM products p WHERE p.sku = s.sku);
 
     INSERT INTO inventory (product_id, quantity_on_hand)
     SELECT p.product_id, 0 FROM products p JOIN retailmind_product_seed s ON p.sku = s.sku AND p.barcode = s.barcode
-    WHERE p.branch_id = store_id AND NOT EXISTS (SELECT 1 FROM inventory i WHERE i.product_id = p.product_id);
+    WHERE NOT EXISTS (SELECT 1 FROM inventory i WHERE i.product_id = p.product_id);
 
     COMMIT;
     DROP TEMPORARY TABLE retailmind_product_seed;

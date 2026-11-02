@@ -44,7 +44,7 @@ foreach ($products as $p) {
 }
 [$scopeSql, $scopeParams] = store_product_scope('p');
 $recentStmt = $pdo->prepare(
-    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.full_name AS moved_by_name
+    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.product_name, u.display_name AS moved_by_name
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      LEFT JOIN users u ON sm.moved_by = u.user_id
@@ -153,7 +153,7 @@ $chartDataJson = json_encode([
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
         <header class="page-heading"><div>
-            <div class="overview-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
+            <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
             </div>
@@ -250,7 +250,7 @@ $chartDataJson = json_encode([
 
         <section class="overview-product-view" id="overview-product-view" aria-label="Filtered products" hidden>
             <div class="overview-product-view-header">
-                <button type="button" class="btn btn-quiet" id="overview-back">View stock movements</button>
+                <button type="button" class="btn btn-quiet" id="overview-back">Return to Stock Overview</button>
                 <div class="overview-view-filter-group">
                     <div class="overview-filter-field overview-search-field">
                         <input type="search" id="overview-product-search" class="form-control" placeholder="Search products" aria-label="Search products" aria-controls="overview-product-table-body">

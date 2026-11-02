@@ -263,7 +263,7 @@ final class DatabaseBackupService
         $this->authorize($actorRole);
         $limit = max(1, min(100, $limit));
         $sql = 'SELECT bh.backup_id, bh.filename, bh.backup_type, bh.file_size, bh.status, bh.created_at,
-                       bh.snapshot_at, bh.requested_by_role, bh.envelope_version, bh.cipher, bh.notes, u.full_name
+                       bh.snapshot_at, bh.requested_by_role, bh.envelope_version, bh.cipher, bh.notes, u.display_name
                   FROM backup_history bh
                   LEFT JOIN users u ON u.user_id = bh.performed_by';
         $parameters = [];
@@ -286,7 +286,7 @@ final class DatabaseBackupService
                 'status' => (string)$row['status'],
                 'created_at' => (string)$row['created_at'],
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
-                'requested_by' => (string)($row['full_name'] ?? 'Scheduled task'),
+                'requested_by' => (string)($row['display_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
                 'format' => $row['envelope_version'] === StorePackageFormat::KEY_VERSION
                     ? 'Encrypted Store package'

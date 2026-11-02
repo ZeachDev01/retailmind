@@ -21,9 +21,10 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 -- These later migration tables have no DROP in the original dump section.
 DROP TABLE IF EXISTS `cash_refund_exception_access`, `checkout_attempts`, `demand_forecasts`, `forecast_sales_imports`,
-  `gcash_adjustments`, `gcash_funding_movements`, `gcash_service_sessions`, `gcash_transactions`,
+  `gcash_adjustments`, `gcash_funding_movements`, `gcash_service_sessions`, `gcash_transactions`, `held_sale_items`,
   `inventory_draft_keys`, `inventory_submissions`, `ml_jobs`, `ml_model_evaluations`,
   `scheduled_demand_drivers`, `store_calendar`, `store_print_jobs`, `store_record_origins`;
+DROP TABLE IF EXISTS `branches`;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
@@ -141,7 +142,6 @@ CREATE TABLE `barcode_pairings` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`pairing_id`),
   UNIQUE KEY `code` (`code`),
-  KEY `idx_barcode_pairings_code` (`code`),
   KEY `idx_barcode_pairings_expires_at` (`expires_at`),
   KEY `created_by` (`created_by`),
   CONSTRAINT `barcode_pairings_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
@@ -164,28 +164,6 @@ CREATE TABLE `barcode_scans` (
   PRIMARY KEY (`scan_id`),
   KEY `idx_barcode_scans_pairing_scan` (`pairing_id`,`scan_id`),
   CONSTRAINT `barcode_scans_ibfk_1` FOREIGN KEY (`pairing_id`) REFERENCES `barcode_pairings` (`pairing_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `branches`
---
-
-DROP TABLE IF EXISTS `branches`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `branches` (
-  `branch_id` int(11) NOT NULL AUTO_INCREMENT,
-  `branch_name` varchar(100) NOT NULL,
-  `branch_code` varchar(30) NOT NULL,
-  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
-  `created_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`branch_id`),
-  UNIQUE KEY `branch_name` (`branch_name`),
-  UNIQUE KEY `branch_code` (`branch_code`),
-  KEY `idx_branches_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -328,6 +306,7 @@ CREATE TABLE `refund_correction_reviews` (
 -- Table structure for table `cashier_shifts`
 --
 
+DROP TABLE IF EXISTS `cashier_shift_payment_totals`;
 DROP TABLE IF EXISTS `cashier_shifts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
@@ -344,7 +323,6 @@ CREATE TABLE `cashier_shifts` (
   `cash_variance` decimal(12,2) DEFAULT NULL,
   `variance_threshold` decimal(12,2) DEFAULT NULL,
   `variance_review_required` tinyint(1) NOT NULL DEFAULT 0,
-  `payment_totals` text DEFAULT NULL,
   `closing_notes` text DEFAULT NULL,
   `closed_by` int(11) DEFAULT NULL,
   `intervention_reason` text DEFAULT NULL,
@@ -371,6 +349,14 @@ CREATE TABLE `cashier_shifts` (
   CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+CREATE TABLE `cashier_shift_payment_totals` (
+  `shift_id` int(11) NOT NULL,
+  `payment_type` enum('cash','card','ewallet') NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  PRIMARY KEY (`shift_id`,`payment_type`),
+  CONSTRAINT `fk_shift_payment_totals_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Table structure for table `categories`
@@ -593,7 +579,6 @@ CREATE TABLE `held_sales` (
   `shift_id` int(11) DEFAULT NULL,
   `reference_no` varchar(50) NOT NULL,
   `customer_label` varchar(120) DEFAULT NULL,
-  `cart_json` longtext NOT NULL,
   `item_count` int(11) NOT NULL DEFAULT 0,
   `total_amount` decimal(12,2) NOT NULL DEFAULT 0.00,
   `status` enum('held','resumed','discarded','completed','expired') NOT NULL DEFAULT 'held',
@@ -613,6 +598,32 @@ CREATE TABLE `held_sales` (
   CONSTRAINT `fk_held_sales_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_held_sales_discarded_by` FOREIGN KEY (`discarded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+CREATE TABLE `held_sale_items` (
+  `held_sale_item_id` int(11) NOT NULL AUTO_INCREMENT,
+  `held_sale_id` int(11) NOT NULL,
+  `cart_key` varchar(100) NOT NULL,
+  `line_position` int(11) NOT NULL,
+  `product_id` int(11) NOT NULL,
+  `selling_form` enum('piece','pack') NOT NULL,
+  `pack_size` int(11) DEFAULT NULL,
+  `product_name` text NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `price` decimal(12,2) NOT NULL,
+  `server_price` decimal(12,2) NOT NULL,
+  `stock` int(11) DEFAULT NULL,
+  `reorder_level` int(11) NOT NULL DEFAULT 0,
+  `safety_stock` int(11) NOT NULL DEFAULT 0,
+  `sku` varchar(255) DEFAULT NULL,
+  `barcode` varchar(255) DEFAULT NULL,
+  `product_image` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`held_sale_item_id`),
+  UNIQUE KEY `uq_held_sale_items_key` (`held_sale_id`,`cart_key`),
+  KEY `idx_held_sale_items_order` (`held_sale_id`,`line_position`),
+  CONSTRAINT `fk_held_sale_items_sale` FOREIGN KEY (`held_sale_id`) REFERENCES `held_sales` (`held_sale_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -989,21 +1000,18 @@ CREATE TABLE `products` (
   `product_image` varchar(255) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_by` int(11) DEFAULT NULL,
-  `branch_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`product_id`),
-  UNIQUE KEY `uq_products_branch_sku` (`branch_id`,`sku`),
-  UNIQUE KEY `uq_products_branch_barcode` (`branch_id`,`barcode`),
-  UNIQUE KEY `uq_products_branch_case_barcode` (`branch_id`,`case_barcode`),
-  UNIQUE KEY `uq_products_branch_pack_barcode` (`branch_id`,`pack_barcode`),
+  UNIQUE KEY `sku` (`sku`),
+  UNIQUE KEY `barcode` (`barcode`),
+  UNIQUE KEY `case_barcode` (`case_barcode`),
+  UNIQUE KEY `pack_barcode` (`pack_barcode`),
   KEY `idx_products_product_name` (`product_name`),
   KEY `idx_products_status` (`status`),
-  KEY `idx_products_branch_id` (`branch_id`),
   KEY `category_id` (`category_id`),
   KEY `created_by` (`created_by`),
   CONSTRAINT `products_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`),
   CONSTRAINT `products_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `products_ibfk_3` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,
   CONSTRAINT `chk_products_unit_price` CHECK (`unit_price` >= 0),
   CONSTRAINT `chk_products_cost_price` CHECK (`cost_price` >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1158,6 +1166,7 @@ CREATE TABLE `sale_item_batches` (
 DROP TABLE IF EXISTS `sale_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+DROP TABLE IF EXISTS `checkout_attempts`;
 CREATE TABLE `checkout_attempts` (
   `cashier_id` int(11) NOT NULL,
   `attempt_id` char(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -1532,7 +1541,9 @@ DROP TABLE IF EXISTS `users`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `users` (
   `user_id` int(11) NOT NULL AUTO_INCREMENT,
-  `full_name` varchar(100) NOT NULL,
+  `first_name` varchar(50) DEFAULT NULL,
+  `last_name` varchar(50) DEFAULT NULL,
+  `display_name` varchar(100) NOT NULL,
   `username` varchar(50) NOT NULL,
   `email` varchar(100) DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
@@ -1546,17 +1557,14 @@ CREATE TABLE `users` (
   `session_version` int(11) NOT NULL DEFAULT 1,
   `password_changed_at` datetime DEFAULT NULL,
   `must_change_password` tinyint(1) NOT NULL DEFAULT 1,
-  `branch_id` int(11) DEFAULT NULL,
   `is_recovery_account` tinyint(1) NOT NULL DEFAULT 0,
   `disabled_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`),
-  KEY `idx_users_branch_id` (`branch_id`),
   KEY `role_id` (`role_id`),
-  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`),
-  CONSTRAINT `users_ibfk_2` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL
+  CONSTRAINT `users_ibfk_1` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1626,12 +1634,10 @@ CREATE TABLE `user_roles` (
 -- Dump completed
 
 -- Fresh-install identity and application defaults. Product and transaction tables start empty.
-INSERT INTO branches (branch_id,branch_name,branch_code,status)
-VALUES (1,'RetailMind Store','RETAILMIND-STORE','active');
 INSERT INTO roles (role_id,role_name)
 VALUES (1,'super_admin'),(2,'admin'),(3,'inventory_manager'),(4,'cashier');
-INSERT INTO users (user_id,full_name,username,password_hash,role_id,status,must_change_password,branch_id)
-VALUES (1,'Super Administrator','superadmin','$2y$12$NyXeX.4NatKwKV7BTtORJOlgve1O9ZaxtEEs1gUZihUecU6rkPcIS',1,'active',1,1);
+INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,status,must_change_password)
+VALUES (1,'Super','Administrator','Super Administrator','superadmin','$2y$12$NyXeX.4NatKwKV7BTtORJOlgve1O9ZaxtEEs1gUZihUecU6rkPcIS',1,'active',1);
 INSERT INTO store_settings (setting_key,setting_value,updated_by) VALUES
 ('store_name','RetailMind Store',NULL),
 ('store_address','',NULL),
@@ -1648,11 +1654,11 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('2026_07_opera
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases') ON DUPLICATE KEY UPDATE description=VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Branches, branch-scoped users and privilege assignments') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Retired: single-store scope no longer uses branch storage') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130002_role_access_update','Make administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130004_remove_seller_role','Replace the duplicate seller role with cashier') ON DUPLICATE KEY UPDATE description=VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Keep product identifiers unique within the single Store') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_staff_profile_images','Optional profile image filename for staff accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_profile_images','Optional generated profile image filename for user accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
@@ -1860,6 +1866,7 @@ CREATE TABLE ml_jobs (
     operator_message VARCHAR(255) NULL COMMENT 'Safe user-facing message',
     diagnostic_reference TEXT NULL COMMENT 'Technical failure details',
     INDEX (status, queued_at),
+    INDEX `idx_ml_jobs_type_status_completed` (trigger_type, status, completed_at, job_id),
     FOREIGN KEY (requester_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -1958,6 +1965,7 @@ CREATE TABLE `demand_forecasts` (
   PRIMARY KEY (`forecast_id`),
   KEY `idx_demand_forecasts_product_origin` (`product_id`,`forecast_origin`),
   KEY `idx_demand_forecasts_job` (`job_id`),
+  KEY `idx_demand_forecasts_job_product_horizon` (`job_id`,`product_id`,`horizon_day`),
   CONSTRAINT `demand_forecasts_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`) ON DELETE CASCADE,
   CONSTRAINT `demand_forecasts_ibfk_2` FOREIGN KEY (`job_id`) REFERENCES `ml_jobs` (`job_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1988,7 +1996,12 @@ CREATE TABLE `scheduled_demand_drivers` (
 
 INSERT INTO schema_migrations (migration_key,description) VALUES
 ('202610090001_store_business_calendar','Record Store open days, holidays, and exceptional closures'),
+('202611010004_normalize_held_sale_items','Store held sale cart lines as atomic rows'),
+('202611010005_users_atomic_names','Split user names into first and last name fields'),
+('202611010006_normalize_shift_payment_totals','Store Cashier Shift payment totals as atomic payment-type rows'),
+('202611010007_drop_duplicate_barcode_pairing_index','Remove redundant barcode pairing code index'),
 ('202610100000_ml_tables','Create ML jobs, evaluation, and demand forecasts tables'),
+('202611010003_demand_forecast_lookup','Index forecast job and product lookups'),
 ('202610100001_forecast_history_import','Imported daily demand history for forecasting'),
 ('202610100001_scheduled_demand_drivers','Record and track price and promotion schedules over time'),
 ('202610100002_forecast_history_backup_compatibility','Keep imported forecast history compatible with SQL database backups'),
@@ -2067,3 +2080,5 @@ CREATE TABLE `store_setup_confirmations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire the branches table for the single-store application') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_remove_branch_id','Remove obsolete branch identifiers from the single-store schema') ON DUPLICATE KEY UPDATE description=VALUES(description);

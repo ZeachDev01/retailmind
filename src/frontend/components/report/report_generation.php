@@ -62,8 +62,8 @@ function send_csv(string $filename, array $rows, array $headers): void
 
 function product_filters(array $filters, string $alias = 'p'): array
 {
-    $where = ["{$alias}.branch_id = ?"];
-    $params = [$filters['store_id']];
+    $where = [];
+    $params = [];
 
     if ($filters['product_id'] > 0) {
         $where[] = "{$alias}.product_id = ?";
@@ -97,7 +97,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
     switch ($report) {
         case 'refunds':
             $stmt = $pdo->prepare(
-                "SELECT cr.refund_id, cr.sale_id, cr.created_at, u.full_name AS cashier,
+                "SELECT cr.refund_id, cr.sale_id, cr.created_at, u.display_name AS cashier,
                         cr.payment_method, cr.reason, cr.note, cri.quantity, cri.subtotal,
                         cri.disposition, COALESCE(p.barcode, p.sku) AS sku, p.product_name
                  FROM cash_refunds cr
@@ -345,7 +345,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
         case 'sales_cashier':
             $stmt = $pdo->prepare(
-                "SELECT u.full_name AS cashier, COUNT(DISTINCT s.sale_id) AS receipts,
+                "SELECT u.display_name AS cashier, COUNT(DISTINCT s.sale_id) AS receipts,
                         COALESCE(SUM({$saleUnitsSql}), 0) AS units_sold, COALESCE(SUM(si.subtotal), 0) AS total_sales,
                         COALESCE(SUM(refunds.refunded_amount), 0) AS refunds
                  FROM sales s
@@ -354,7 +354,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                  {$refundJoin}
                  LEFT JOIN products p ON p.product_id = si.product_id
                  WHERE s.sale_date BETWEEN ? AND ? {$productSql}
-                 GROUP BY u.user_id, u.full_name
+                 GROUP BY u.user_id, u.display_name
                  ORDER BY total_sales DESC"
             );
             $stmt->execute(array_merge([$fromStart, $toEnd], $productParams));
@@ -556,7 +556,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $stmt = $pdo->prepare(
                 "SELECT sm.moved_at, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        sm.change_qty, sm.reason, COALESCE(u.full_name, 'System') AS moved_by
+                        sm.change_qty, sm.reason, COALESCE(u.display_name, 'System') AS moved_by
                  FROM stock_movements sm
                  JOIN products p ON p.product_id = sm.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -583,8 +583,8 @@ function run_report(PDO $pdo, string $report, array $filters): array
                 "SELECT ia.reported_at, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         ia.adjustment_type, ia.adjustment_qty, ia.status,
-                        COALESCE(reporter.full_name, 'Unknown') AS reported_by,
-                        COALESCE(approver.full_name, '-') AS approved_by, ia.reason
+                        COALESCE(reporter.display_name, 'Unknown') AS reported_by,
+                        COALESCE(approver.display_name, '-') AS approved_by, ia.reason
                  FROM inventory_adjustments ia
                  JOIN products p ON p.product_id = ia.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -752,8 +752,8 @@ function run_report(PDO $pdo, string $report, array $filters): array
                 "SELECT ic.counted_at, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         ic.system_quantity, ic.physical_quantity, ic.difference_qty,
-                        ic.status, COALESCE(counter.full_name, 'Unknown') AS counted_by,
-                        COALESCE(approver.full_name, '-') AS approved_by, ic.discrepancy_reason
+                        ic.status, COALESCE(counter.display_name, 'Unknown') AS counted_by,
+                        COALESCE(approver.display_name, '-') AS approved_by, ic.discrepancy_reason
                  FROM inventory_counts ic
                  JOIN products p ON p.product_id = ic.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -860,17 +860,14 @@ $filters = [
 $productStatement = $pdo->prepare(
     "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name
      FROM products p
-     WHERE p.branch_id = ?
      ORDER BY p.product_name"
 );
-$productStatement->execute([$filters['store_id']]);
 $products = $productStatement->fetchAll();
 $categoryStatement = $pdo->prepare(
     'SELECT DISTINCT c.category_id, c.category_name
      FROM categories c JOIN products p ON p.category_id = c.category_id
-     WHERE p.branch_id = ? ORDER BY c.category_name'
+     ORDER BY c.category_name'
 );
-$categoryStatement->execute([$filters['store_id']]);
 $categories = $categoryStatement->fetchAll();
 
 $reportData = ['headers' => [], 'rows' => [], 'metrics' => [], 'summary' => null];

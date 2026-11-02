@@ -17,7 +17,7 @@
       ]
     },
     "cashier_shifts": {
-      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int NOT NULL AUTO_INCREMENT,\n  `cashier_id` int NOT NULL,\n  `register_id` int DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT '0.00',\n  `status` enum('open','closed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT '0',\n  `payment_totals` text COLLATE utf8mb4_unicode_ci,\n  `closing_notes` text COLLATE utf8mb4_unicode_ci,\n  `closed_by` int DEFAULT NULL,\n  `intervention_reason` text COLLATE utf8mb4_unicode_ci,\n  `reviewed_by` int DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text COLLATE utf8mb4_unicode_ci,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`cashier_id`,NULL)) STORED,\n  `open_register_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int NOT NULL AUTO_INCREMENT,\n  `cashier_id` int NOT NULL,\n  `register_id` int DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT '0.00',\n  `status` enum('open','closed') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT '0',\n  `closing_notes` text COLLATE utf8mb4_unicode_ci,\n  `closed_by` int DEFAULT NULL,\n  `intervention_reason` text COLLATE utf8mb4_unicode_ci,\n  `reviewed_by` int DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_notes` text COLLATE utf8mb4_unicode_ci,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text COLLATE utf8mb4_unicode_ci,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`cashier_id`,NULL)) STORED,\n  `open_register_id` int GENERATED ALWAYS AS (if((`status` = _utf8mb4'open'),`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`) ON DELETE RESTRICT,\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`) ON DELETE RESTRICT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
       "columns": [
         "shift_id",
         "cashier_id",
@@ -31,7 +31,6 @@
         "cash_variance",
         "variance_threshold",
         "variance_review_required",
-        "payment_totals",
         "closing_notes",
         "closed_by",
         "intervention_reason",
@@ -42,6 +41,14 @@
         "review_shortage",
         "review_history",
         "locked_at"
+      ]
+    },
+    "cashier_shift_payment_totals": {
+      "ddl": "CREATE TABLE `cashier_shift_payment_totals` (\n  `shift_id` int NOT NULL,\n  `payment_type` enum('cash','card','ewallet') COLLATE utf8mb4_unicode_ci NOT NULL,\n  `amount` decimal(12,2) NOT NULL,\n  PRIMARY KEY (`shift_id`,`payment_type`),\n  CONSTRAINT `fk_shift_payment_totals_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "shift_id",
+        "payment_type",
+        "amount"
       ]
     },
     "products": {
@@ -111,7 +118,7 @@
       ]
     },
     "cashier_shifts": {
-      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int(11) NOT NULL AUTO_INCREMENT,\n  `cashier_id` int(11) NOT NULL,\n  `register_id` int(11) DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT 0.00,\n  `status` enum('open','closed') NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT 0,\n  `payment_totals` text DEFAULT NULL,\n  `closing_notes` text DEFAULT NULL,\n  `closed_by` int(11) DEFAULT NULL,\n  `intervention_reason` text DEFAULT NULL,\n  `reviewed_by` int(11) DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text DEFAULT NULL,\n  `review_notes` text DEFAULT NULL,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text DEFAULT NULL,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`cashier_id`,NULL)) STORED,\n  `open_register_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "ddl": "CREATE TABLE `cashier_shifts` (\n  `shift_id` int(11) NOT NULL AUTO_INCREMENT,\n  `cashier_id` int(11) NOT NULL,\n  `register_id` int(11) DEFAULT NULL,\n  `opened_at` timestamp NOT NULL DEFAULT current_timestamp(),\n  `opening_cash` decimal(12,2) NOT NULL DEFAULT 0.00,\n  `status` enum('open','closed') NOT NULL DEFAULT 'open',\n  `closed_at` timestamp NULL DEFAULT NULL,\n  `expected_cash` decimal(12,2) DEFAULT NULL,\n  `actual_cash` decimal(12,2) DEFAULT NULL,\n  `cash_variance` decimal(12,2) DEFAULT NULL,\n  `variance_threshold` decimal(12,2) DEFAULT NULL,\n  `variance_review_required` tinyint(1) NOT NULL DEFAULT 0,\n  `closing_notes` text DEFAULT NULL,\n  `closed_by` int(11) DEFAULT NULL,\n  `intervention_reason` text DEFAULT NULL,\n  `reviewed_by` int(11) DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `review_draft_notes` text DEFAULT NULL,\n  `review_notes` text DEFAULT NULL,\n  `review_shortage` decimal(12,2) DEFAULT NULL,\n  `review_history` text DEFAULT NULL,\n  `locked_at` timestamp NULL DEFAULT NULL,\n  `open_cashier_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`cashier_id`,NULL)) STORED,\n  `open_register_id` int(11) GENERATED ALWAYS AS (if(`status` = _utf8mb4'open',`register_id`,NULL)) STORED,\n  PRIMARY KEY (`shift_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_cashier` (`open_cashier_id`),\n  UNIQUE KEY `uq_cashier_shifts_open_register` (`open_register_id`),\n  KEY `idx_cashier_shifts_cashier_status` (`cashier_id`,`status`),\n  KEY `idx_cashier_shifts_register` (`register_id`),\n  KEY `idx_cashier_shifts_variance_review` (`variance_review_required`,`status`,`closed_at`),\n  KEY `reviewed_by` (`reviewed_by`),\n  KEY `idx_cashier_shifts_closed_by` (`closed_by`),\n  CONSTRAINT `cashier_shifts_ibfk_1` FOREIGN KEY (`cashier_id`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `cashier_shifts_ibfk_2` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,\n  CONSTRAINT `fk_cashier_shifts_closed_by` FOREIGN KEY (`closed_by`) REFERENCES `users` (`user_id`),\n  CONSTRAINT `fk_cashier_shifts_register` FOREIGN KEY (`register_id`) REFERENCES `registers` (`register_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
       "columns": [
         "shift_id",
         "cashier_id",
@@ -125,7 +132,6 @@
         "cash_variance",
         "variance_threshold",
         "variance_review_required",
-        "payment_totals",
         "closing_notes",
         "closed_by",
         "intervention_reason",
@@ -136,6 +142,14 @@
         "review_shortage",
         "review_history",
         "locked_at"
+      ]
+    },
+    "cashier_shift_payment_totals": {
+      "ddl": "CREATE TABLE `cashier_shift_payment_totals` (\n  `shift_id` int NOT NULL,\n  `payment_type` enum('cash','card','ewallet') COLLATE utf8mb4_unicode_ci NOT NULL,\n  `amount` decimal(12,2) NOT NULL,\n  PRIMARY KEY (`shift_id`,`payment_type`),\n  CONSTRAINT `fk_shift_payment_totals_shift` FOREIGN KEY (`shift_id`) REFERENCES `cashier_shifts` (`shift_id`) ON DELETE CASCADE\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+      "columns": [
+        "shift_id",
+        "payment_type",
+        "amount"
       ]
     },
     "products": {

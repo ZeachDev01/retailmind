@@ -5,19 +5,8 @@
 
 function get_client_ip_address(): string
 {
-    foreach (['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR'] as $key) {
-        $value = $_SERVER[$key] ?? '';
-        if ($value === '') {
-            continue;
-        }
-
-        $ip = trim(explode(',', $value)[0]);
-        if (filter_var($ip, FILTER_VALIDATE_IP)) {
-            return $ip;
-        }
-    }
-
-    return 'unknown';
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : 'unknown';
 }
 
 function format_audit_value($value): ?string
@@ -281,7 +270,6 @@ function get_store_settings(PDO $pdo): array
 function get_forecasting_readiness(PDO $pdo): array
 {
     $dailySalesSql = forecast_daily_sales_sql($pdo);
-    $storeId = store_scope_id($pdo);
     $settings = get_ml_settings($pdo);
     $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
     $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
@@ -345,12 +333,12 @@ function get_forecasting_readiness(PDO $pdo): array
                 WHERE fe2.product_id = p.product_id
                 ORDER BY fe2.generated_at DESC, fe2.evaluation_id DESC LIMIT 1
             )
-            WHERE p.status = 'active' AND p.branch_id = ?
+            WHERE p.status = 'active'
             ORDER BY p.product_name";
 
     try {
         $statement = $pdo->prepare($sql);
-        $statement->execute([$storeId]);
+        $statement->execute();
         $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $exception) {
         // Keep the page usable while forecasting migrations are being applied.
@@ -563,7 +551,7 @@ function check_and_notify_low_stock(PDO $pdo): void
 }
 
 /**
- * Load PHPMailer from Composer, or from the bundled backend/phpmailer copy.
+ * Load PHPMailer from Composer, or from the bundled frontend/components copy.
  */
 function ensure_phpmailer_loaded(): bool
 {
@@ -579,7 +567,7 @@ function ensure_phpmailer_loaded(): bool
         return true;
     }
 
-    $phpmailerPath = dirname(__DIR__) . '/phpmailer/PHPMailer/src';
+    $phpmailerPath = dirname(__DIR__, 2) . '/frontend/components/phpmailer/PHPMailer/src';
     $requiredFiles = [
         $phpmailerPath . '/Exception.php',
         $phpmailerPath . '/PHPMailer.php',

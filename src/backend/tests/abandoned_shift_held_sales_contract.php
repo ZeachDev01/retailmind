@@ -245,6 +245,7 @@ try {
         ->execute([2, 'SKU-SNACK', 'Potato Chips', 50.00]);
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 100), (2, 100)');
 
+    $pdo->exec('CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type))');
     $shifts = new CashierShiftService($pdo);
     $held = new HeldSaleService($pdo, $shifts);
 

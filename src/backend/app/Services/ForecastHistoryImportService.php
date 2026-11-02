@@ -9,14 +9,13 @@ use Throwable;
 
 final class ForecastHistoryImportService
 {
-    public function __construct(private PDO $pdo, private int $storeId)
+    public function __construct(private PDO $pdo)
     {
     }
 
     public function products(): array
     {
-        $stmt = $this->pdo->prepare("SELECT product_id, sku, product_name FROM products WHERE branch_id = ? AND status = 'active'");
-        $stmt->execute([$this->storeId]);
+        $stmt = $this->pdo->query("SELECT product_id, sku, product_name FROM products WHERE status = 'active'");
         $products = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $product) {
             $products[$product['sku']] = $product;
@@ -63,15 +62,15 @@ final class ForecastHistoryImportService
         $result = ['inserted' => 0, 'skipped' => 0];
         $this->pdo->beginTransaction();
         try {
-            $product = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id = ? AND sku = ? AND branch_id = ? AND status = 'active' FOR UPDATE");
-            $pos = $this->pdo->prepare('SELECT COUNT(*) FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE si.product_id = ? AND DATE(s.sale_date) = ?');
+            $product = $this->pdo->prepare("SELECT product_id FROM products WHERE product_id = ? AND sku = ? AND status = 'active' FOR UPDATE");
+            $pos = $this->pdo->prepare('SELECT COUNT(*) FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE si.product_id = ? AND s.sale_date >= ? AND s.sale_date < DATE_ADD(?, INTERVAL 1 DAY)');
             $insert = $this->pdo->prepare('INSERT INTO forecast_sales_imports (product_id, sale_date, quantity, imported_by) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE product_id = VALUES(product_id)');
             $existing = $this->pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?');
             foreach ($rows as $row) {
-                $product->execute([$row['product_id'], $row['sku'], $this->storeId]);
+                $product->execute([$row['product_id'], $row['sku']]);
                 if (!$product->fetchColumn()) throw new RuntimeException('A product changed after preview. Upload the CSV again.');
                 if ($row['sale_date'] >= date('Y-m-d')) throw new RuntimeException('Import only completed past days.');
-                $pos->execute([$row['product_id'], $row['sale_date']]);
+                $pos->execute([$row['product_id'], $row['sale_date'], $row['sale_date']]);
                 if ((int)$pos->fetchColumn() > 0) {
                     $result['skipped']++;
                     continue;

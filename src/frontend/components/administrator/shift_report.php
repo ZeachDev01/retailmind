@@ -89,7 +89,7 @@ if ($filters['shift_id'] !== '' && $filters['shift_id'] !== 'legacy') {
             $varianceExplanation = $varianceVal < 0 ? 'Shortage: PHP ' . number_format(abs($varianceVal), 2) . ' short' : ($varianceVal > 0 ? 'Overage: PHP ' . number_format($varianceVal, 2) . ' extra' : 'Balanced');
             $targetedShift = [
                 'Shift ID' => $targetId,
-                'Cashier' => $calc['full_name'] ?? StoreShiftReportService::UNASSIGNED,
+                'Cashier' => $calc['display_name'] ?? StoreShiftReportService::UNASSIGNED,
                 'Cashier ID' => $calc['cashier_id'] ?? '',
                 'Register' => $calc['register_name'] ?? StoreShiftReportService::UNASSIGNED,
                 'Register ID' => $calc['register_id'] ?? '',
@@ -114,7 +114,7 @@ if ($filters['shift_id'] !== '' && $filters['shift_id'] !== 'legacy') {
     }
 }
 
-$cashiers = $pdo->query('SELECT u.user_id, u.full_name FROM users u WHERE EXISTS (SELECT 1 FROM cashier_shifts cs WHERE cs.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sales s WHERE s.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sale_reversals sr WHERE sr.requested_by=u.user_id) ORDER BY u.full_name, u.user_id')->fetchAll(PDO::FETCH_ASSOC);
+$cashiers = $pdo->query('SELECT u.user_id, u.display_name FROM users u WHERE EXISTS (SELECT 1 FROM cashier_shifts cs WHERE cs.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sales s WHERE s.cashier_id=u.user_id) OR EXISTS (SELECT 1 FROM sale_reversals sr WHERE sr.requested_by=u.user_id) ORDER BY u.display_name, u.user_id')->fetchAll(PDO::FETCH_ASSOC);
 $registers = $pdo->query('SELECT register_id, name FROM registers ORDER BY name, register_id')->fetchAll(PDO::FETCH_ASSOC);
 $shifts = [];
 foreach ($report['rows'] as $row) {
@@ -392,7 +392,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                 <select id="cashier_id" name="cashier_id">
                     <option value="">All Cashiers</option>
                     <?php foreach ($cashiers as $cashier): ?>
-                        <option value="<?= (int)$cashier['user_id'] ?>" <?= $filters['cashier_id'] === (string)$cashier['user_id'] ? 'selected' : '' ?>><?= shift_report_e($cashier['full_name']) ?></option>
+                        <option value="<?= (int)$cashier['user_id'] ?>" <?= $filters['cashier_id'] === (string)$cashier['user_id'] ? 'selected' : '' ?>><?= shift_report_e($cashier['display_name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>

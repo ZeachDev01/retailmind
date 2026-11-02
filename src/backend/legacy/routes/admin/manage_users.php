@@ -9,7 +9,7 @@ $messageClass = '';
 
 function get_user_snapshot(PDO $pdo, int $userId): ?array {
     $stmt = $pdo->prepare(
-        "SELECT u.user_id, u.username, u.full_name, u.email, u.status, u.role_id, r.role_name AS role
+        "SELECT u.user_id, u.username, u.first_name, u.last_name, u.display_name, u.email, u.status, u.role_id, r.role_name AS role
          FROM users u JOIN roles r ON r.role_id = u.role_id
          WHERE u.user_id = ? AND u.is_recovery_account = 0"
     );
@@ -30,7 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     csrf_verify();
     $passwordError = password_policy_error((string)($_POST['password'] ?? ''));
     $usernameShapeError = \App\Services\UserLifecycleService::usernameShapeError(trim((string)($_POST['username'] ?? '')));
-    if ($passwordError) {
+    $firstName = trim((string)($_POST['first_name'] ?? ''));
+    $lastName = trim((string)($_POST['last_name'] ?? ''));
+    $displayName = trim($firstName . ' ' . $lastName);
+    if ($firstName === '' || mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
+        $message = 'Enter a first name and keep each name part within 50 characters.';
+        $messageClass = 'tag-warning';
+    } elseif ($passwordError) {
         $message = $passwordError;
         $messageClass = 'tag-warning';
     } elseif ($usernameShapeError) {
@@ -38,10 +44,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $messageClass = 'tag-warning';
     } else try {
         $stmt = $pdo->prepare(
-            "INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, 1)"
+            "INSERT INTO users (first_name, last_name, display_name, username, email, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, 1)"
         );
         $stmt->execute([
-            $_POST['full_name'],
+            $firstName,
+            $lastName,
+            $displayName,
             $_POST['username'],
             $_POST['email'],
             password_hash($_POST['password'], PASSWORD_DEFAULT),
@@ -57,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             null,
             [
                 'user_id' => $newUserId,
-                'full_name' => $_POST['full_name'] ?? '',
+                'display_name' => $displayName,
                 'username' => $_POST['username'] ?? '',
                 'email' => $_POST['email'] ?? '',
                 'role_id' => (int)($_POST['role_id'] ?? 0),
@@ -77,13 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update') {
     csrf_verify();
     $userId = (int)($_POST['user_id'] ?? 0);
-    $fullName = trim((string)($_POST['full_name'] ?? ''));
+    $firstName = trim((string)($_POST['first_name'] ?? ''));
+    $lastName = trim((string)($_POST['last_name'] ?? ''));
+    $displayName = trim($firstName . ' ' . $lastName);
     $username = trim((string)($_POST['username'] ?? ''));
     $newPassword = (string)($_POST['new_password'] ?? '');
     $requestedStatus = $_POST['status'] ?? null;
 
-    if ($userId <= 0 || $fullName === '' || $username === '') {
-        $message = 'Full name and username are required.';
+    if ($userId <= 0 || $firstName === '' || $username === '' || mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
+        $message = 'Enter a first name and username; keep each name part within 50 characters.';
         $messageClass = 'tag-warning';
     } elseif ($usernameShapeError = \App\Services\UserLifecycleService::usernameShapeError($username)) {
         $message = $usernameShapeError;
@@ -104,8 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $messageClass = 'tag-warning';
             } else {
                 try {
-                    $updateParts = ['full_name = ?', 'username = ?', 'status = ?'];
-                    $params = [$fullName, $username, $status];
+                    $updateParts = ['first_name = ?', 'last_name = ?', 'display_name = ?', 'username = ?', 'status = ?'];
+                    $params = [$firstName, $lastName, $displayName, $username, $status];
 
                     if ($newPassword !== '') {
                         if ($passwordError = password_policy_error($newPassword)) {
@@ -140,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     );
 
                     if ($userId === (int)$_SESSION['user_id']) {
-                        $_SESSION['full_name'] = $fullName;
+                        $_SESSION['display_name'] = $displayName;
                     }
 
                     $message = 'User account updated successfully.';
@@ -265,7 +275,7 @@ $disabledCount = count($users) - $activeCount;
                     <tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Password</th><th>Action</th></tr>
                     <?php foreach ($users as $u): ?>
                     <tr>
-                        <td><?= htmlspecialchars($u['full_name']) ?></td>
+                        <td><?= htmlspecialchars($u['display_name']) ?></td>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['role_name']) ?></td>
                         <td><?= $u['status'] === 'active' ? '<span class="tag-success">active</span>' : '<span class="tag-warning">disabled</span>' ?></td>
@@ -275,7 +285,9 @@ $disabledCount = count($users) - $activeCount;
                                 type="button"
                                 class="btn btn-small open-user-drawer"
                                 data-user-id="<?= (int)$u['user_id'] ?>"
-                                data-full-name="<?= htmlspecialchars($u['full_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-first-name="<?= htmlspecialchars((string)($u['first_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-last-name="<?= htmlspecialchars((string)($u['last_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                data-needs-name-review="<?= empty($u['first_name']) ? '1' : '0' ?>"
                                 data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') ?>"
                                 data-status="<?= htmlspecialchars($u['status'], ENT_QUOTES, 'UTF-8') ?>"
                                 data-is-self="<?= (int)$u['user_id'] === (int)$_SESSION['user_id'] ? '1' : '0' ?>"
@@ -304,9 +316,14 @@ $disabledCount = count($users) - $activeCount;
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="user_id" id="drawerUserId">
                 <div class="form-group">
-                    <label for="drawerFullName">Full Name</label>
-                    <input id="drawerFullName" name="full_name" required>
+                    <label for="drawerFirstName">First name</label>
+                    <input id="drawerFirstName" name="first_name" maxlength="50" required>
                 </div>
+                <div class="form-group">
+                    <label for="drawerLastName">Last name</label>
+                    <input id="drawerLastName" name="last_name" maxlength="50">
+                </div>
+                <p class="field-help" id="drawerNameReview" hidden>Review the legacy display name shown in the user list and enter its first and last name.</p>
                 <div class="form-group">
                     <label for="drawerUsername">Username</label>
                     <input id="drawerUsername" name="username" required>
@@ -355,8 +372,12 @@ $disabledCount = count($users) - $activeCount;
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
             <div class="form-group">
-                <label>Full Name</label>
-                <input name="full_name" required>
+                <label>First name</label>
+                <input name="first_name" maxlength="50" required>
+            </div>
+            <div class="form-group">
+                <label>Last name</label>
+                <input name="last_name" maxlength="50">
             </div>
             <div class="form-group">
                 <label>Username</label>
@@ -399,7 +420,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const drawerCancelButton = document.getElementById('cancelUserDrawer');
     const drawerMeta = document.getElementById('userDrawerMeta');
     const drawerUserId = document.getElementById('drawerUserId');
-    const drawerFullName = document.getElementById('drawerFullName');
+    const drawerFirstName = document.getElementById('drawerFirstName');
+    const drawerLastName = document.getElementById('drawerLastName');
+    const drawerNameReview = document.getElementById('drawerNameReview');
     const drawerUsername = document.getElementById('drawerUsername');
     const drawerPassword = document.getElementById('drawerPassword');
     const drawerStatus = document.getElementById('drawerStatus');
@@ -424,7 +447,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         drawerUserId.value = button.dataset.userId || '';
         deleteUserId.value = button.dataset.userId || '';
-        drawerFullName.value = button.dataset.fullName || '';
+        drawerFirstName.value = button.dataset.firstName || '';
+        drawerLastName.value = button.dataset.lastName || '';
+        drawerNameReview.hidden = button.dataset.needsNameReview !== '1';
         drawerUsername.value = selectedUsername;
         drawerPassword.value = '';
         drawerStatus.value = button.dataset.status === 'disabled' ? 'disabled' : 'active';
@@ -435,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         drawerOverlay.classList.add('open');
         drawerOverlay.setAttribute('aria-hidden', 'false');
-        drawerFullName.focus();
+        drawerFirstName.focus();
     }
 
     function closeDrawer() {

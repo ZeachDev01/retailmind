@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $products = $pdo->query("SELECT product_id,sku,product_name,variant_label FROM products WHERE status='active' ORDER BY product_name")->fetchAll(PDO::FETCH_ASSOC);
 $categories = $pdo->query('SELECT category_id,category_name FROM categories ORDER BY category_name')->fetchAll(PDO::FETCH_ASSOC);
-$promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.full_name created_by_name FROM promotions pr LEFT JOIN products p ON p.product_id=pr.product_id LEFT JOIN categories c ON c.category_id=pr.category_id JOIN users u ON u.user_id=pr.created_by ORDER BY pr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_name created_by_name FROM promotions pr LEFT JOIN products p ON p.product_id=pr.product_id LEFT JOIN categories c ON c.category_id=pr.category_id JOIN users u ON u.user_id=pr.created_by ORDER BY pr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!DOCTYPE html>
 <html lang="en">

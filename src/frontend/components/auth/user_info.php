@@ -111,16 +111,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->rollBack();
         }
     } else {
-        $fullName = trim((string)($_POST['full_name'] ?? ''));
+        $firstName = trim((string)($_POST['first_name'] ?? ''));
+        $lastName = trim((string)($_POST['last_name'] ?? ''));
+        $displayName = trim($firstName . ' ' . $lastName);
         $email = trim((string)($_POST['email'] ?? ''));
         $emailValue = $email === '' ? null : $email;
-        $profileValues = ['full_name' => $fullName, 'email' => $email];
+        $profileValues = ['first_name' => $firstName, 'last_name' => $lastName, 'email' => $email];
 
-        if ($fullName === '') {
-            $fieldErrors['full_name'] = 'Full name is required.';
-        } elseif (mb_strlen($fullName, 'UTF-8') > 100) {
-            $fieldErrors['full_name'] = 'Use 100 characters or fewer for your full name.';
-        }
+        if ($firstName === '') $fieldErrors['first_name'] = 'First name is required.';
+        elseif (mb_strlen($firstName, 'UTF-8') > 50) $fieldErrors['first_name'] = 'Use 50 characters or fewer.';
+        if (mb_strlen($lastName, 'UTF-8') > 50) $fieldErrors['last_name'] = 'Use 50 characters or fewer.';
+        if (mb_strlen($displayName, 'UTF-8') > 100) $fieldErrors['first_name'] = 'Keep the display name under 101 characters.';
         if (mb_strlen($email, 'UTF-8') > 100) {
             $fieldErrors['email'] = 'Use 100 characters or fewer for your email.';
         } elseif ($emailValue !== null && !filter_var($emailValue, FILTER_VALIDATE_EMAIL)) {
@@ -131,9 +132,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-warning';
         } else {
             try {
-                $stmt = $pdo->prepare('UPDATE users SET full_name = ?, email = ? WHERE user_id = ?');
-                $stmt->execute([$fullName, $emailValue, (int)$_SESSION['user_id']]);
-                $_SESSION['full_name'] = $fullName;
+                $stmt = $pdo->prepare('UPDATE users SET first_name = ?, last_name = ?, display_name = ?, email = ? WHERE user_id = ?');
+                $stmt->execute([$firstName, $lastName, $displayName, $emailValue, (int)$_SESSION['user_id']]);
+                $_SESSION['display_name'] = $displayName;
                 log_activity(
                     $pdo,
                     (int)$_SESSION['user_id'],
@@ -141,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'Users',
                     (int)$_SESSION['user_id'],
                     null,
-                    ['full_name' => $fullName, 'email' => $emailValue]
+                    ['first_name' => $firstName, 'last_name' => $lastName, 'email' => $emailValue]
                 );
                 $message = 'Profile information updated.';
                 $messageClass = 'tag-success';
@@ -154,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $stmt = $pdo->prepare(
-    "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.status, u.last_login_at,
+    "SELECT u.user_id, u.first_name, u.last_name, u.display_name, u.username, u.email, u.profile_image, u.status, u.last_login_at,
             u.password_changed_at, u.must_change_password, u.created_at, r.role_name
      FROM users u JOIN roles r ON r.role_id = u.role_id
      WHERE u.user_id = ? LIMIT 1"
@@ -201,7 +202,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                 <section class="dashboard-section profile-card">
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
-                            <?= profile_avatar_html((int)$account['user_id'], (string)$account['full_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
+                            <?= profile_avatar_html((int)$account['user_id'], (string)$account['display_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
                                     <div>
@@ -255,10 +256,16 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                     <form method="POST" class="form-grid profile-details-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
-                        <div class="form-group full<?= isset($fieldErrors['full_name']) ? ' invalid' : '' ?>">
-                            <label for="full_name">Full name</label>
-                            <input type="text" id="full_name" name="full_name" autocomplete="name" maxlength="100" value="<?= htmlspecialchars($profileValues['full_name'] ?? $account['full_name']) ?>" required<?= isset($fieldErrors['full_name']) ? ' aria-invalid="true" aria-describedby="full-name-error"' : '' ?>>
-                            <?php if (isset($fieldErrors['full_name'])): ?><small class="field-error" id="full-name-error"><?= htmlspecialchars($fieldErrors['full_name']) ?></small><?php endif; ?>
+                        <?php if (empty($account['first_name'])): ?><p class="field-help full">Review your saved display name and enter its first and last name. The existing display name stays visible until you save.</p><?php endif; ?>
+                        <div class="form-group<?= isset($fieldErrors['first_name']) ? ' invalid' : '' ?>">
+                            <label for="first_name">First name</label>
+                            <input type="text" id="first_name" name="first_name" autocomplete="given-name" maxlength="50" value="<?= htmlspecialchars($profileValues['first_name'] ?? (string)($account['first_name'] ?? '')) ?>" required<?= isset($fieldErrors['first_name']) ? ' aria-invalid="true" aria-describedby="first-name-error"' : '' ?>>
+                            <?php if (isset($fieldErrors['first_name'])): ?><small class="field-error" id="first-name-error"><?= htmlspecialchars($fieldErrors['first_name']) ?></small><?php endif; ?>
+                        </div>
+                        <div class="form-group<?= isset($fieldErrors['last_name']) ? ' invalid' : '' ?>">
+                            <label for="last_name">Last name</label>
+                            <input type="text" id="last_name" name="last_name" autocomplete="family-name" maxlength="50" value="<?= htmlspecialchars($profileValues['last_name'] ?? (string)($account['last_name'] ?? '')) ?>"<?= isset($fieldErrors['last_name']) ? ' aria-invalid="true" aria-describedby="last-name-error"' : '' ?>>
+                            <?php if (isset($fieldErrors['last_name'])): ?><small class="field-error" id="last-name-error"><?= htmlspecialchars($fieldErrors['last_name']) ?></small><?php endif; ?>
                         </div>
                         <div class="form-group full<?= isset($fieldErrors['email']) ? ' invalid' : '' ?>">
                             <label for="email">Email address</label>

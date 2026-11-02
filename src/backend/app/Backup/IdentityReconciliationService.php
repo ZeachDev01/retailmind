@@ -295,7 +295,7 @@ final class IdentityReconciliationService
 
     private function displayUser(array $user, array $roles): array
     {
-        return array_intersect_key($user, array_flip(['user_id', 'full_name', 'username', 'email', 'status', 'profile_image'])) + ['roles' => $roles];
+        return array_intersect_key($user, array_flip(['user_id', 'first_name', 'last_name', 'display_name', 'username', 'email', 'status', 'profile_image'])) + ['roles' => $roles];
     }
 
     private function destinationRoleNames(int $id): array
@@ -698,7 +698,7 @@ final class IdentityReconciliationService
 
     private function mapActorReferences(array $rows, array $map, array $references): array
     {
-        foreach (['branches' => ['created_by'], 'sales' => ['discount_authorized_by'], 'inventory_adjustment_revisions' => ['actor_id']] as $table => $columns) foreach ($columns as $column) $references[] = ['TABLE_NAME' => $table, 'COLUMN_NAME' => $column];
+        foreach (['sales' => ['discount_authorized_by'], 'inventory_adjustment_revisions' => ['actor_id']] as $table => $columns) foreach ($columns as $column) $references[] = ['TABLE_NAME' => $table, 'COLUMN_NAME' => $column];
         $unique = [];
         foreach ($references as $reference) $unique[$reference['TABLE_NAME'] . '.' . $reference['COLUMN_NAME']] = $reference;
         foreach ($unique as $reference) {

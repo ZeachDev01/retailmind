@@ -142,6 +142,53 @@ $requestUri = str_replace('\\', '/', (string)($_SERVER['REQUEST_URI'] ?? ''));
 $offlineRecovery = PHP_SAPI === 'cli'
     && $scriptFile === realpath($backendPath . '/scripts/restore_database.php');
 
+$remoteRequest = !empty($_SERVER['RETAILMIND_REMOTE'])
+    || !empty($_ENV['RETAILMIND_REMOTE'])
+    || !empty($_SERVER['HTTP_CF_RAY'])
+    || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
+    || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL']);
+
+if (PHP_SAPI !== 'cli' && $remoteRequest) {
+    $projectPath = dirname($rootPath);
+    $remoteReadRoutes = [
+        $projectPath . '/index.php',
+        $frontendPath . '/index.php',
+        $frontendPath . '/components/administrator/dashboard.php',
+        $frontendPath . '/components/administrator/shift_report.php',
+        $frontendPath . '/components/cashier/dashboard.php',
+        $frontendPath . '/components/cashier/shifts.php',
+        $frontendPath . '/components/inventory_management/inventory_overview.php',
+        $frontendPath . '/components/invoice/sales.php',
+        $frontendPath . '/components/notification/notifications.php',
+        $frontendPath . '/components/report/receiving_history.php',
+        $frontendPath . '/components/report/report_generation.php',
+        $frontendPath . '/components/report/inventory_adjustments.php',
+        $frontendPath . '/components/super_administrator/dashboard.php',
+        $frontendPath . '/components/system_administrator/audit_logs.php',
+        $frontendPath . '/components/auth/session_activity.php',
+        $frontendPath . '/components/auth/workspace.php',
+        $frontendPath . '/components/auth/logout.php',
+    ];
+    $allowedRemoteFiles = array_filter(array_map('realpath', $remoteReadRoutes));
+    $remoteSessionRoutes = [
+        realpath($projectPath . '/index.php'),
+        realpath($frontendPath . '/index.php'),
+        realpath($frontendPath . '/components/auth/session_activity.php'),
+        realpath($frontendPath . '/components/auth/workspace.php'),
+    ];
+    $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    $routeAllowed = $scriptFile !== false && in_array($scriptFile, $allowedRemoteFiles, true);
+    $methodAllowed = in_array($method, ['GET', 'HEAD'], true)
+        || ($method === 'POST' && in_array($scriptFile, $remoteSessionRoutes, true));
+
+    if (!$routeAllowed || !$methodAllowed) {
+        http_response_code(403);
+        header('Cache-Control: no-store');
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('This action is not available during remote monitoring.');
+    }
+}
+
 $isRecoveryRoute = PHP_SAPI !== 'cli' && (
     str_ends_with($scriptName, '/components/backup/recovery.php')
     || str_contains($requestUri, '/components/backup/recovery.php')

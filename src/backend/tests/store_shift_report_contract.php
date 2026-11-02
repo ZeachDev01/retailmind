@@ -16,7 +16,7 @@ class ShiftReportCountingPDO extends PDO
 
 $pdo = new ShiftReportCountingPDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
+$pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, display_name TEXT);
  INSERT INTO users VALUES (1,'Alice'),(2,'Bob'),(3,'Administrator');
  CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT);
  INSERT INTO registers VALUES (10,'Front'),(11,'Back');
@@ -90,7 +90,7 @@ foreach (['save_draft', 'mark_reviewed', 'reopen_review', 'export_csv'] as $acti
 }
 $check(str_contains($page, 'require_capability(RoleCapabilityPolicy::STORE_OPERATIONS)')
     && str_contains($page, 'csrf_verify()'), 'the report and export route enforce access and CSRF');
-$pdo->exec("UPDATE users SET full_name='=2+2' WHERE user_id=1");
+$pdo->exec("UPDATE users SET display_name='=2+2' WHERE user_id=1");
 $stream = fopen('php://temp', 'w+');
 StoreShiftReportService::csv($stream, $service->report('admin', array_merge($filters, ['shift_id' => '20'])));
 rewind($stream);

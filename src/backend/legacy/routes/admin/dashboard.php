@@ -36,7 +36,7 @@ $closedPeriodWidth = min(100, round(($adminMetrics['closed_periods'] / $periodTo
     <div class="main-content">
         <div class="topbar">
             <h1>Admin Dashboard</h1>
-            <span class="badge-role">Admin: <?= htmlspecialchars($_SESSION['full_name']) ?></span>
+            <span class="badge-role">Admin: <?= htmlspecialchars($_SESSION['display_name']) ?></span>
         </div>
 
         <div class="quick-actions">

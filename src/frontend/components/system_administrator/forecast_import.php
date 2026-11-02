@@ -5,8 +5,7 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ForecastHistoryImportService;
 
 require_capability(RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY);
-$storeId = store_scope_id($pdo);
-$service = new ForecastHistoryImportService($pdo, $storeId);
+$service = new ForecastHistoryImportService($pdo);
 
 if (isset($_GET['cancel'])) {
     unset($_SESSION['forecast_import_preview']);

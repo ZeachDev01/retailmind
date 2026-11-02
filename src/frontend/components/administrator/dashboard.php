@@ -6,7 +6,7 @@ use App\Attention\SystemClock;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 
-$displayName = trim((string)($_SESSION['full_name'] ?? 'Administrator'));
+$displayName = trim((string)($_SESSION['display_name'] ?? 'Administrator'));
 $selectedRange = 30;
 $requestedPeriod = filter_input(INPUT_GET, 'period', FILTER_DEFAULT);
 $selectedPeriod = in_array($requestedPeriod, ['today', 'week', 'month'], true) ? $requestedPeriod : 'today';

@@ -97,10 +97,6 @@ class ProductService
                 throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
             }
         }
-        $branchId = function_exists('store_scope_id')
-            ? store_scope_id($this->pdo)
-            : (new App\Store\StoreScope($this->pdo))->id();
-
         if ($productName === '') {
             throw new RuntimeException('Product name is required.');
         }
@@ -221,8 +217,8 @@ class ProductService
                     parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    warning_lead_time_days, product_image, status, created_by, branch_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    warning_lead_time_days, product_image, status, created_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $sku,
@@ -254,7 +250,6 @@ class ProductService
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
-                $branchId,
             ]);
             $productId = (int)$this->pdo->lastInsertId();
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")

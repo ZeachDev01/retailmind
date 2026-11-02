@@ -14,18 +14,12 @@ $import_results = null;
 $fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
 $productService = new ProductService($pdo);
 
-function csv_import_store_id(PDO $pdo): int
-{
-    return store_scope_id($pdo);
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     verify_csrf_token($_POST['csrf_token'] ?? '');
 
     $import_type = $_POST['import_type'] ?? '';
     $file = $_FILES['csv_file'];
-    $import_store_id = csv_import_store_id($pdo);
 
     if (!in_array($import_type, ['products', 'inventory'])) {
         $error = 'Choose a valid import type.';
@@ -95,21 +89,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
 
                     // Insert or update product
-                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
-                    $prod_stmt->execute([$sku, $import_store_id]);
+                    $prod_stmt = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
+                    $prod_stmt->execute([$sku]);
                     $prod = $prod_stmt->fetch();
 
                     if ($prod) {
                         $product_id = (int)$prod['product_id'];
-                        $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $beforeStmt->execute([(int)$prod['product_id'], $import_store_id]);
+                        $beforeStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
+                        $beforeStmt->execute([(int)$prod['product_id']]);
                         $beforeProduct = $beforeStmt->fetch();
 
                         // Update existing
                         $upd = $pdo->prepare("UPDATE products SET barcode = ?, product_name = ?, brand = ?, category_id = ?,
                                             unit_price = ?, cost_price = ?, reorder_level = ?, supplier = ?, preferred_supplier = ?,
                                             supplier_lead_time_days = ?, safety_stock = ?, minimum_order_quantity = ?,
-                                            units_per_package = ? WHERE sku = ? AND branch_id = ?");
+                                            units_per_package = ? WHERE sku = ?");
                         App\Store\StoreWriteGate::execute($pdo, $upd, [
                             $barcode,
                             $product_name,
@@ -125,10 +119,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $sku,
-                            $import_store_id,
                         ]);
-                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $afterStmt->execute([(int)$prod['product_id'], $import_store_id]);
+                        $afterStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
+                        $afterStmt->execute([(int)$prod['product_id']]);
                         $afterProduct = $afterStmt->fetch();
                         log_activity(
                             $pdo,
@@ -154,8 +147,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $ins = $pdo->prepare("INSERT INTO products (sku, barcode, product_name, brand, category_id,
                                             unit_price, cost_price, reorder_level, supplier, preferred_supplier,
                                             supplier_lead_time_days, safety_stock, minimum_order_quantity,
-                                            units_per_package, created_by, branch_id)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                                            units_per_package, created_by)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         App\Store\StoreWriteGate::execute($pdo, $ins, [
                             $sku,
                             $barcode,
@@ -172,7 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $minimum_order_quantity,
                             $units_per_package,
                             $_SESSION['user_id'],
-                            $import_store_id,
                         ]);
                         $product_id = $pdo->lastInsertId();
 
@@ -187,8 +179,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         );
 
 
-                        $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ? AND branch_id = ?");
-                        $afterStmt->execute([(int)$product_id, $import_store_id]);
+                        $afterStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
+                        $afterStmt->execute([(int)$product_id]);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
@@ -239,8 +231,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     }
 
                     // Find product by SKU
-                    $prod_stmt = $pdo->prepare("SELECT product_id FROM products WHERE sku = ? AND branch_id = ?");
-                    $prod_stmt->execute([$sku, $import_store_id]);
+                    $prod_stmt = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
+                    $prod_stmt->execute([$sku]);
                     $prod = $prod_stmt->fetch();
 
                     if (!$prod) {
@@ -260,9 +252,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         "SELECT i.product_id, i.quantity_on_hand
                          FROM inventory i
                          JOIN products p ON p.product_id = i.product_id
-                         WHERE i.product_id = ? AND p.branch_id = ?" . $rowLock
+                         WHERE i.product_id = ?" . $rowLock
                     );
-                    $beforeInvStmt->execute([(int)$product_id, $import_store_id]);
+                    $beforeInvStmt->execute([(int)$product_id]);
                     $beforeInventory = $beforeInvStmt->fetch();
                     if (!$beforeInventory) {
                         throw new RuntimeException("Inventory record for SKU '$sku' was not found in this Store.");

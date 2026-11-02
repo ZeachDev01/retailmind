@@ -22,8 +22,9 @@
                 <p class="field-help" id="drawerAdministratorMinimumHelp" hidden><?= htmlspecialchars(\App\Authorization\AdministratorAccessMinimum::MESSAGE) ?></p>
                 <div class="user-drawer-panel is-active" id="drawerPanelUser" role="tabpanel" aria-labelledby="drawerTabUser" tabindex="0" data-user-drawer-panel="user">
                     <div class="form-group"><label for="drawerUsername">Username</label><input id="drawerUsername" name="username" required aria-describedby="drawerUsernameHelp"><small class="field-help" id="drawerUsernameHelp">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small></div>
-                    <div class="form-group"><label for="drawerFirstName">First Name</label><input id="drawerFirstName" name="first_name" required></div>
-                    <div class="form-group"><label for="drawerLastName">Last Name</label><input id="drawerLastName" name="last_name"></div>
+                    <div class="form-group"><label for="drawerFirstName">First Name</label><input id="drawerFirstName" name="first_name" maxlength="50" required></div>
+                    <div class="form-group"><label for="drawerLastName">Last Name</label><input id="drawerLastName" name="last_name" maxlength="50"></div>
+                    <small class="field-help" id="drawerNameReview" hidden>Review this legacy display name and enter its first and last name. The old display name remains unchanged until you save.</small>
                     <div class="form-group"><label for="drawerEmail">Email</label><input type="email" id="drawerEmail" name="email"></div>
                     <div class="form-group">
                         <label for="drawerProfileImage">Profile Picture <span class="optional-label">Optional</span></label>

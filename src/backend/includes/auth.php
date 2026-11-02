@@ -111,6 +111,24 @@ function login_attempt_count(PDO $pdo, string $identityKey, string $ipAddress, i
     return (int)$stmt->fetchColumn();
 }
 
+function login_attempts_locked(PDO $pdo, string $identityKey, string $ipAddress, array $limits): bool
+{
+    if (login_attempt_count($pdo, $identityKey, $ipAddress, $limits['window_minutes']) < $limits['max_attempts']) {
+        return false;
+    }
+
+    $cutoff = date('Y-m-d H:i:s', time() - max(1, $limits['window_minutes']) * 60);
+    $stmt = $pdo->prepare(
+        'SELECT MAX(attempted_at) FROM login_attempts
+         WHERE username = ? AND ip_address = ? AND was_successful = 0 AND attempted_at >= ?'
+    );
+    $stmt->execute([$identityKey, $ipAddress, $cutoff]);
+    $lastAttempt = $stmt->fetchColumn();
+    $lastAttemptTime = is_string($lastAttempt) ? strtotime($lastAttempt) : false;
+
+    return $lastAttemptTime === false || $lastAttemptTime + max(1, $limits['lockout_minutes']) * 60 > time();
+}
+
 function record_login_attempt(PDO $pdo, string $identityKey, string $ipAddress, bool $success): void
 {
     // The identity key is the resolved-identity throttle key from
@@ -157,7 +175,7 @@ function resolve_login_user(PDO $pdo, string $identifier): array
         return ['user' => null, 'identifier_type' => 'unknown'];
     }
 
-    $select = "SELECT u.user_id, u.full_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
+    $select = "SELECT u.user_id, u.display_name, u.username, u.email, u.profile_image, u.password_hash, u.status,
             u.failed_login_attempts, u.locked_until, u.session_version, u.must_change_password,
             u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON u.role_id = r.role_id";
@@ -210,6 +228,22 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     $user = $resolved['user'];
     $identifierType = $resolved['identifier_type'];
 
+    $throttleIdentity = null;
+    $throttleIp = null;
+    if (function_exists('login_throttle_identity') && function_exists('record_login_attempt')
+        && function_exists('login_attempts_locked') && function_exists('login_security_limits')) {
+        $throttleIdentity = login_throttle_identity($user, $identifier);
+        $throttleIp = get_client_ip_address();
+        try {
+            if (login_attempts_locked($pdo, $throttleIdentity, $throttleIp, login_security_limits())) {
+                $_SESSION['_login_error'] = 'Invalid username or password.';
+                return false;
+            }
+        } catch (Throwable $throttleException) {
+            error_log('Login throttle check skipped: ' . $throttleException->getMessage());
+        }
+    }
+
     $passwordMatches = $user && password_verify($password, (string)$user['password_hash']);
     $valid = $user
         && $user['status'] === 'active'
@@ -221,9 +255,9 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     // extracted-function contract harnesses (which eval only the named entry
     // points) keep working; accounting must never break sign-in, so a
     // storage failure is logged and swallowed here.
-    if (function_exists('login_throttle_identity') && function_exists('record_login_attempt')) {
+    if ($throttleIdentity !== null && $throttleIp !== null) {
         try {
-            record_login_attempt($pdo, login_throttle_identity($user, $identifier), get_client_ip_address(), $valid);
+            record_login_attempt($pdo, $throttleIdentity, $throttleIp, $valid);
         } catch (Throwable $throttleException) {
             error_log('Login throttle accounting skipped: ' . $throttleException->getMessage());
         }
@@ -244,7 +278,7 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             ? user_role_names($pdo, (int)$user['user_id'], (string)$user['role_name'])
             : [(string)$user['role_name']];
         $_SESSION['user_id'] = (int)$user['user_id'];
-        $_SESSION['full_name'] = $user['full_name'];
+        $_SESSION['display_name'] = $user['display_name'];
         $_SESSION['role'] = $assignedRoles[0] ?? (string)$user['role_name'];
         $_SESSION['roles'] = $assignedRoles;
         $_SESSION['profile_image'] = $user['profile_image'];
@@ -301,7 +335,7 @@ function validate_current_session(PDO $pdo): void
     }
     $validated = true;
     $stmt = $pdo->prepare(
-        "SELECT u.status, u.session_version, u.full_name, u.profile_image, u.must_change_password,
+        "SELECT u.status, u.session_version, u.display_name, u.profile_image, u.must_change_password,
             u.is_recovery_account, r.role_name
          FROM users u JOIN roles r ON r.role_id = u.role_id
          WHERE u.user_id = ?"
@@ -316,7 +350,7 @@ function validate_current_session(PDO $pdo): void
         }
         exit;
     }
-    $_SESSION['full_name'] = $user['full_name'];
+    $_SESSION['display_name'] = $user['display_name'];
     $selectedWorkspace = current_role();
     $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
     $_SESSION['roles'] = $assignedRoles;
@@ -366,7 +400,7 @@ function is_remote_request(): bool
     if (!empty($_SESSION['is_remote'])) {
         return true;
     }
-    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_SERVER['HTTP_X_RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
+    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
         return true;
     }
     if (!empty($_SERVER['HTTP_CF_RAY']) || !empty($_SERVER['HTTP_CF_CONNECTING_IP']) || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])) {
@@ -457,7 +491,7 @@ function store_product_scope(string $alias = 'p'): array
     if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
         throw new RuntimeException('Invalid product scope alias.');
     }
-    return [" AND {$alias}.branch_id = ?", [store_scope_id($pdo)]];
+    return ['', []];
 }
 
 function logout_user(): void

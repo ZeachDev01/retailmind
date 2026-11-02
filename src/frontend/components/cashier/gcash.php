@@ -355,7 +355,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         $handoverService = new \App\Services\GCashTransactionService($pdo, $gcashRules);
                         foreach ($handoverService->eligibleHandoverRecipients() as $c) {
                             if ((int)$c['user_id'] === (int)$_SESSION['user_id']) continue;
-                            echo '<option value="' . (int)$c['user_id'] . '">' . htmlspecialchars($c['full_name'] . ' (' . $c['username'] . ')') . '</option>';
+                            echo '<option value="' . (int)$c['user_id'] . '">' . htmlspecialchars($c['display_name'] . ' (' . $c['username'] . ')') . '</option>';
                         }
                         ?>
                     </select>

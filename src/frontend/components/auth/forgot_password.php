@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identity = trim((string)($_POST['identity'] ?? ''));
     try {
         if ($identity !== '') {
-            $stmt = $pdo->prepare("SELECT user_id, full_name, email FROM users WHERE (username = ? OR email = ?) AND status = 'active' AND role_id IS NOT NULL AND is_recovery_account = 0 LIMIT 1");
+            $stmt = $pdo->prepare("SELECT user_id, display_name, email FROM users WHERE (username = ? OR email = ?) AND status = 'active' AND role_id IS NOT NULL AND is_recovery_account = 0 LIMIT 1");
             $stmt->execute([$identity, $identity]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($user && filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
@@ -22,18 +22,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 30 MINUTE))')
                     ->execute([(int)$user['user_id'], $tokenHash]);
                 $resetUrl = rtrim((string)env('APP_URL', ''), '/') . '/components/auth/reset_password.php?token=' . urlencode($token);
-                send_email_notification(
+                if (!send_email_notification(
                     (string)$user['email'],
                     'RetailMind password reset',
-                    "Hello {$user['full_name']},\n\nUse this link within 30 minutes to reset your password:\n{$resetUrl}\n\nIgnore this email if you did not request a reset."
-                );
+                    "Hello {$user['display_name']},\n\nUse this link within 30 minutes to reset your password:\n{$resetUrl}\n\nIgnore this email if you did not request a reset."
+                )) {
+                    throw new RuntimeException('Password reset email delivery failed.');
+                }
             }
         }
         $_SESSION['_recovery_message'] = 'If the account exists and has an email address, a password-reset link has been sent.';
         $_SESSION['_recovery_message_class'] = 'tag-success';
     } catch (Throwable $exception) {
-        $_SESSION['_recovery_message'] = \App\Support\OperatorAlert::message($exception, 'The reset link could not be sent. Check your connection and try again. Tell your Administrator if this keeps happening.');
-        $_SESSION['_recovery_message_class'] = 'tag-warning';
+        \App\Support\OperatorAlert::message($exception, 'The reset link could not be sent.');
+        $_SESSION['_recovery_message'] = 'If the account exists and has an email address, a password-reset link has been sent.';
+        $_SESSION['_recovery_message_class'] = 'tag-success';
         $_SESSION['_recovery_identity'] = $identity;
     }
 }

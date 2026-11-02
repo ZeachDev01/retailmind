@@ -80,7 +80,7 @@ class CashierShiftService
     public function getOpenShift(int $cashierId): ?array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT cs.*, u.full_name, r.name AS register_name
+            "SELECT cs.*, u.display_name, r.name AS register_name
              FROM cashier_shifts cs
              JOIN users u ON u.user_id = cs.cashier_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
@@ -588,7 +588,7 @@ class CashierShiftService
         // this array and the page writes it into the closing Protected Audit
         // Record, so the record names the Register the drawer was reconciled on.
         $stmt = $this->pdo->prepare(
-            "SELECT cs.*, u.full_name, r.name AS register_name
+            "SELECT cs.*, u.display_name, r.name AS register_name
              FROM cashier_shifts cs
              JOIN users u ON u.user_id = cs.cashier_id
              LEFT JOIN registers r ON r.register_id = cs.register_id
@@ -770,18 +770,23 @@ class CashierShiftService
             $stmt = $this->pdo->prepare(
                 "UPDATE cashier_shifts
                  SET status='closed', closed_at=NOW(), expected_cash=?, actual_cash=?, cash_variance=?, closing_notes=?,
-                     variance_threshold=?, variance_review_required=?, payment_totals=?,
+                     variance_threshold=?, variance_review_required=?,
                      closed_by=?, intervention_reason=?
                  WHERE shift_id=? AND status='open'"
             );
             $stmt->execute([
                 $expected, $actualCash, $variance, $reason === '' ? null : $reason,
                 $threshold, $reviewRequired ? 1 : 0,
-                json_encode($paymentTotals, JSON_THROW_ON_ERROR),
                 $closingActorId, $interventionReason, (int)$shift['shift_id'],
             ]);
             if ($stmt->rowCount() === 0) {
                 throw new RuntimeException('The shift was already closed.');
+            }
+            $paymentTotalStatement = $this->pdo->prepare(
+                'INSERT INTO cashier_shift_payment_totals (shift_id, payment_type, amount) VALUES (?, ?, ?)'
+            );
+            foreach ($paymentTotals as $paymentType => $amount) {
+                $paymentTotalStatement->execute([(int)$shift['shift_id'], $paymentType, $amount]);
             }
             $this->auditShiftEvent(
                 $closingActorId,
@@ -900,7 +905,7 @@ class CashierShiftService
     public function recentShifts(?int $cashierId = null, int $limit = 30): array
     {
         $limit = max(1, min(100, $limit));
-        $sql = "SELECT cs.*, u.full_name, closer.full_name AS closing_actor_name, r.name AS register_name
+        $sql = "SELECT cs.*, u.display_name, closer.display_name AS closing_actor_name, r.name AS register_name
                 FROM cashier_shifts cs
                 JOIN users u ON u.user_id=cs.cashier_id
                 LEFT JOIN users closer ON closer.user_id=cs.closed_by
@@ -919,7 +924,7 @@ class CashierShiftService
     public function drawerMovements(int $shiftId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT cdm.*, u.full_name FROM cash_drawer_movements cdm
+            "SELECT cdm.*, u.display_name FROM cash_drawer_movements cdm
              JOIN users u ON u.user_id=cdm.recorded_by WHERE cdm.shift_id=? ORDER BY cdm.created_at DESC"
         );
         $stmt->execute([$shiftId]);
@@ -967,7 +972,7 @@ class CashierShiftService
             }
         }
 
-        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt = $this->pdo->prepare('SELECT display_name FROM users WHERE user_id = ?');
         $uStmt->execute([$reviewerId]);
         $reviewerName = (string)($uStmt->fetchColumn() ?: "User #{$reviewerId}");
 
@@ -1023,7 +1028,7 @@ class CashierShiftService
             throw new DomainException('Only reviewed Cashier Shifts can be reopened.');
         }
 
-        $uStmt = $this->pdo->prepare('SELECT full_name FROM users WHERE user_id = ?');
+        $uStmt = $this->pdo->prepare('SELECT display_name FROM users WHERE user_id = ?');
         $uStmt->execute([$actorId]);
         $actorName = (string)($uStmt->fetchColumn() ?: "User #{$actorId}");
 

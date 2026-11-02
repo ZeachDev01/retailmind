@@ -347,7 +347,7 @@ class SupplierPulloutService
                        COALESCE(SUM(sr.accepted_qty), 0) AS total_replaced_qty,
                        {$receivingFormSelect}
                        COUNT(sr.receiving_id) AS replacement_count,
-                       u.full_name AS pulled_by_name
+                       u.display_name AS pulled_by_name
                 FROM supplier_pullouts sp
                 JOIN products p ON sp.product_id = p.product_id
                 JOIN product_batches pb ON sp.batch_id = pb.batch_id
@@ -386,7 +386,7 @@ class SupplierPulloutService
         if ($hasProductPackSize) {
             $groupCols .= ", p.pack_size";
         }
-        $groupCols .= ", pb.batch_number, pb.expiration_date, u.full_name";
+        $groupCols .= ", pb.batch_number, pb.expiration_date, u.display_name";
 
         $sql .= " GROUP BY {$groupCols}";
         $sql .= " ORDER BY sp.pulled_at DESC, sp.pullout_id DESC";

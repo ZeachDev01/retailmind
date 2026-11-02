@@ -466,14 +466,14 @@ class ReceivingService
                 "Receiving #{$receivingId}: excluded from accepted stock; no stock deduction required."]);
         }
 
-        $recordingStmt = $this->pdo->prepare('SELECT sr.received_at, u.full_name FROM stock_receiving sr JOIN users u ON u.user_id = sr.received_by WHERE sr.receiving_id = ?');
+        $recordingStmt = $this->pdo->prepare('SELECT sr.received_at, u.display_name FROM stock_receiving sr JOIN users u ON u.user_id = sr.received_by WHERE sr.receiving_id = ?');
         $recordingStmt->execute([$receivingId]);
         $recording = $recordingStmt->fetch(PDO::FETCH_ASSOC);
         return [
             'group_id' => $groupId,
             'pullout_id' => $pulloutId,
             'product_name' => $product['product_name'],
-            'recorded_by' => $recording['full_name'],
+            'recorded_by' => $recording['display_name'],
             'received_at' => $recording['received_at'],
             'receiving_id' => $receivingId,
             'received_qty' => $receivedQty,
@@ -513,7 +513,7 @@ class ReceivingService
         $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} sr.received_qty, sr.accepted_qty, sr.damaged_qty,
                                sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
                                sr.discrepancy_qty, sr.received_at, sr.supplier, sr.invoice_number,
-                               p.sku, p.product_name, u.full_name
+                               p.sku, p.product_name, u.display_name
                         FROM stock_receiving sr
                         JOIN products p ON sr.product_id = p.product_id
                         JOIN users u ON sr.received_by = u.user_id
@@ -547,7 +547,7 @@ class ReceivingService
                 srg.group_id AS srg_group_id, srg.received_by AS group_received_by,
                 srg.received_at AS group_received_at, srg.supplier AS group_supplier,
                 srg.invoice_number AS group_invoice, srg.notes AS group_notes,
-                u.full_name AS recorded_by
+                u.display_name AS recorded_by
             {$from}
             JOIN (
                 SELECT {$key} AS entry_key
@@ -556,7 +556,7 @@ class ReceivingService
                 GROUP BY entry_key
                 HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
                     COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
-                    u.full_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
+                    u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
                 ORDER BY MAX(COALESCE(srg.received_at, sr.received_at)) DESC,
                     MAX(COALESCE(sr.group_id, sr.receiving_id)) DESC, entry_key DESC
                 LIMIT 21 OFFSET {$offset}

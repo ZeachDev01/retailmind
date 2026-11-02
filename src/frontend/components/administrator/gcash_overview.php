@@ -161,7 +161,7 @@ function gcash_admin_money(mixed $val): string {
                 <div class="form-row">
                     <label for="emergency-counted-cash">Counted service cash (PHP)<input id="emergency-counted-cash" class="pos-input" name="counted_cash" type="number" min="0" step="0.01" required></label>
                     <label for="emergency-checked-wallet">Checked wallet balance (PHP)<input id="emergency-checked-wallet" class="pos-input" name="checked_wallet" type="number" min="0" step="0.01" required></label>
-                    <label for="emergency-incoming-cashier">Incoming staff member (open shift required)<select id="emergency-incoming-cashier" class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                    <label for="emergency-incoming-cashier">Incoming staff member (open shift required)<select id="emergency-incoming-cashier" class="pos-input" name="incoming_cashier_id"><option value="">Stop service — no replacement</option><?php foreach ($eligibleCashiers as $person): if ((int)$person['user_id'] === (int)($overview['controlling_cashier_id'] ?? 0)) continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= gcash_admin_e($person['display_name']) ?></option><?php endforeach; ?></select></label>
                 </div>
                 <label for="emergency-reason">Reason<textarea id="emergency-reason" class="pos-input" name="reason" required minlength="5" maxlength="255" rows="2"></textarea></label>
                 <label class="gcash-confirmation" for="emergency-checked"><input id="emergency-checked" name="checked" type="checkbox" value="yes" required> I checked both balances and confirm this emergency custody change.</label>
@@ -251,7 +251,7 @@ function gcash_admin_money(mixed $val): string {
                         <option value="">All Cashiers</option>
                         <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
                             <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
-                                <?= gcash_admin_e($c['full_name'] ?: $c['username']) ?>
+                                <?= gcash_admin_e($c['display_name'] ?: $c['username']) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

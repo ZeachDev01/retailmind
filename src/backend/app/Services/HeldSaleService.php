@@ -136,23 +136,30 @@ class HeldSaleService
             }
 
             $reference = 'H' . date('ymdHis') . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $this->pdo->prepare(
-                'INSERT INTO held_sales
-                    (cashier_id, shift_id, reference_no, customer_label, cart_json, item_count, total_amount, expires_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            )->execute([
+            $normalizedItems = $this->normalizedItemsAvailable();
+            $insertHeldSale = $normalizedItems
+                ? 'INSERT INTO held_sales (cashier_id, shift_id, reference_no, customer_label, item_count, total_amount, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+                : 'INSERT INTO held_sales (cashier_id, shift_id, reference_no, customer_label, cart_json, item_count, total_amount, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+            $params = [
                 $cashierId,
                 (int)$shift['shift_id'],
                 $reference,
                 $customerLabel !== null && trim($customerLabel) !== '' ? trim($customerLabel) : null,
-                json_encode($requestedCart, JSON_UNESCAPED_UNICODE),
                 $itemCount,
                 $total,
                 $this->expiry(),
-            ]);
+            ];
+            if (!$normalizedItems) {
+                array_splice($params, 4, 0, [json_encode($requestedCart, JSON_UNESCAPED_UNICODE)]);
+            }
+            $this->pdo->prepare($insertHeldSale)->execute($params);
+            $heldSaleId = (int)$this->pdo->lastInsertId();
+            if ($normalizedItems) {
+                $this->storeHeldItems($heldSaleId, $requestedCart);
+            }
 
             return [
-                'held_sale_id' => (int)$this->pdo->lastInsertId(),
+                'held_sale_id' => $heldSaleId,
                 'reference_no' => $reference,
                 'review' => $review,
             ];
@@ -181,11 +188,12 @@ class HeldSaleService
                 )->execute([$heldSaleId]);
             }
 
+            $cart = $this->loadHeldItems((int)$heldSale['held_sale_id']);
             return [
                 'held_sale_id' => (int)$heldSale['held_sale_id'],
                 'shift_id' => (int)$heldSale['shift_id'],
-                'cart' => json_decode((string)$heldSale['cart_json'], true) ?: [],
-                'review' => $this->reviewCart(json_decode((string)$heldSale['cart_json'], true) ?: []),
+                'cart' => $cart,
+                'review' => $this->reviewCart($cart),
             ];
         });
     }
@@ -777,6 +785,91 @@ class HeldSaleService
             'created_at' => $row['created_at'],
             'expires_at' => $row['expires_at'],
         ];
+    }
+
+    private function normalizedItemsAvailable(): bool
+    {
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+            return false;
+        }
+        return \App\Database\Schema::tableExists($this->pdo, 'held_sale_items')
+            && !\App\Database\Schema::columnExists($this->pdo, 'held_sales', 'cart_json');
+    }
+
+    private function storeHeldItems(int $heldSaleId, array $cart): void
+    {
+        $insert = $this->pdo->prepare(
+            'INSERT INTO held_sale_items
+                (held_sale_id, cart_key, line_position, product_id, selling_form, pack_size, product_name, quantity, price, server_price, stock, reorder_level, safety_stock, sku, barcode, product_image)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $allowed = ['product_id', 'selling_form', 'pack_size', 'name', 'qty', 'price', 'server_price', 'stock', 'reorder_level', 'safety_stock', 'sku', 'barcode', 'product_image'];
+        $position = 0;
+        foreach ($cart as $key => $line) {
+            if ((!is_string($key) && !is_int($key)) || !is_array($line) || array_diff(array_keys($line), $allowed) !== []) {
+                throw new DomainException('The held cart contains unsupported item fields. Refresh the cart and try again.');
+            }
+            foreach ($line as $value) {
+                if ($value !== null && !is_scalar($value)) {
+                    throw new DomainException('The held cart contains invalid item values. Refresh the cart and try again.');
+                }
+            }
+            $insert->execute([
+                $heldSaleId,
+                (string)$key,
+                $position++,
+                (int)$line['product_id'],
+                (string)$line['selling_form'],
+                $line['pack_size'] ?? null,
+                (string)$line['name'],
+                (int)$line['qty'],
+                (float)$line['price'],
+                (float)$line['server_price'],
+                isset($line['stock']) && is_numeric($line['stock']) ? (int)$line['stock'] : null,
+                (int)($line['reorder_level'] ?? 0),
+                (int)($line['safety_stock'] ?? 0),
+                $line['sku'] ?? null,
+                $line['barcode'] ?? null,
+                $line['product_image'] ?? null,
+            ]);
+        }
+    }
+
+    private function loadHeldItems(int $heldSaleId): array
+    {
+        if (!$this->normalizedItemsAvailable()) {
+            $stmt = $this->pdo->prepare('SELECT cart_json FROM held_sales WHERE held_sale_id = ?');
+            $stmt->execute([$heldSaleId]);
+            return json_decode((string)$stmt->fetchColumn(), true) ?: [];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT cart_key, product_id, selling_form, pack_size, product_name, quantity, price, server_price, stock, reorder_level, safety_stock, sku, barcode, product_image
+             FROM held_sale_items WHERE held_sale_id = ? ORDER BY line_position, held_sale_item_id'
+        );
+        $stmt->execute([$heldSaleId]);
+        $cart = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $line = [
+                'product_id' => (int)$row['product_id'],
+                'selling_form' => (string)$row['selling_form'],
+                'pack_size' => $row['pack_size'] === null ? null : (int)$row['pack_size'],
+                'name' => (string)$row['product_name'],
+                'qty' => (int)$row['quantity'],
+                'price' => (float)$row['price'],
+                'server_price' => (float)$row['server_price'],
+                'reorder_level' => (int)$row['reorder_level'],
+                'safety_stock' => (int)$row['safety_stock'],
+                'sku' => $row['sku'],
+                'barcode' => $row['barcode'],
+                'product_image' => (string)($row['product_image'] ?? ''),
+            ];
+            if ($row['stock'] !== null) {
+                $line['stock'] = (int)$row['stock'];
+            }
+            $cart[(string)$row['cart_key']] = $line;
+        }
+        return $cart;
     }
 
     /**

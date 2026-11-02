@@ -6,7 +6,7 @@ require_role(['admin', 'inventory_manager']);
 
 // Get transaction history
 $transactions = $pdo->query(
-    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.barcode, p.product_name, u.full_name AS moved_by_name, i.quantity_on_hand
+    "SELECT sm.movement_id, sm.change_qty, sm.reason, sm.moved_at, p.sku, p.barcode, p.product_name, u.display_name AS moved_by_name, i.quantity_on_hand
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      JOIN inventory i ON p.product_id = i.product_id

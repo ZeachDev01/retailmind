@@ -77,16 +77,16 @@ $cashiers = [];
 $approvers = [];
 try {
     $cashiers = $pdo->query(
-        "SELECT u.user_id, u.full_name FROM users u
+        "SELECT u.user_id, u.display_name FROM users u
          JOIN roles r ON r.role_id = u.role_id
          WHERE r.role_name = 'cashier' AND u.status = 'active'
-         ORDER BY u.full_name"
+         ORDER BY u.display_name"
     )->fetchAll(PDO::FETCH_ASSOC);
     $approvers = $pdo->query(
-        "SELECT u.user_id, u.full_name FROM users u
+        "SELECT u.user_id, u.display_name FROM users u
          JOIN roles r ON r.role_id = u.role_id
          WHERE r.role_name = 'inventory_manager' AND u.status = 'active'
-         ORDER BY u.full_name"
+         ORDER BY u.display_name"
     )->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $exception) {
     $error = $error !== '' ? $error : 'Staff filter options are unavailable.';
@@ -424,7 +424,7 @@ foreach ($reports as $r) {
                                     <option value="">All cashiers</option>
                                     <?php foreach ($cashiers as $cashierOption): ?>
                                         <option value="<?= (int)$cashierOption['user_id'] ?>" <?= $filters['cashier_id'] === (int)$cashierOption['user_id'] ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($cashierOption['full_name']) ?>
+                                            <?= htmlspecialchars($cashierOption['display_name']) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -435,7 +435,7 @@ foreach ($reports as $r) {
                                     <option value="">All approvers</option>
                                     <?php foreach ($approvers as $approverOption): ?>
                                         <option value="<?= (int)$approverOption['user_id'] ?>" <?= $filters['approver_id'] === (int)$approverOption['user_id'] ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($approverOption['full_name']) ?>
+                                            <?= htmlspecialchars($approverOption['display_name']) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>

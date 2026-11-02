@@ -55,7 +55,7 @@ $reviews = match ($role) {
     'cashier' => $service->getPendingReviewsForCashier($actorId),
     'inventory_manager' => $service->getPendingReviewsForInventoryManager($actorId),
 };
-$staff = $role === 'admin' ? $pdo->query("SELECT u.user_id, u.full_name, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.status='active' UNION SELECT u.user_id,u.full_name,r.role_name FROM users u JOIN user_roles ur ON ur.user_id=u.user_id JOIN roles r ON r.role_id=ur.role_id WHERE u.status='active'")->fetchAll(PDO::FETCH_ASSOC) : [];
+$staff = $role === 'admin' ? $pdo->query("SELECT u.user_id, u.display_name, r.role_name FROM users u JOIN roles r ON r.role_id=u.role_id WHERE u.status='active' UNION SELECT u.user_id,u.display_name,r.role_name FROM users u JOIN user_roles ur ON ur.user_id=u.user_id JOIN roles r ON r.role_id=ur.role_id WHERE u.status='active'")->fetchAll(PDO::FETCH_ASSOC) : [];
 $products = $role === 'admin' ? $pdo->query('SELECT product_id, product_name FROM products ORDER BY product_name')->fetchAll(PDO::FETCH_ASSOC) : [];
 function correction_e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
 ?>
@@ -81,11 +81,11 @@ function correction_e(mixed $value): string { return htmlspecialchars((string)$v
                 <label>Correction type<select class="pos-input" name="correction_type"><option value="cash_drawer">Cash drawer</option><option value="stock_only">Stock only</option><option value="combined">Cash drawer and stock</option></select></label>
             </div>
             <fieldset><legend>Cash drawer</legend><div class="correction-fields">
-                <label>Cashier<select class="pos-input" name="cashier_id"><option value="">No cash task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'cashier') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                <label>Cashier<select class="pos-input" name="cashier_id"><option value="">No cash task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'cashier') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['display_name']) ?></option><?php endforeach; ?></select></label>
                 <label>Amount (PHP; + add / − remove)<input class="pos-input" name="cash_amount" type="number" step="0.01"></label>
             </div></fieldset>
             <fieldset><legend>Stock</legend><div class="correction-fields correction-stock-fields">
-                <label>Inventory Manager<select class="pos-input" name="inventory_manager_id"><option value="">No stock task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'inventory_manager') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['full_name']) ?></option><?php endforeach; ?></select></label>
+                <label>Inventory Manager<select class="pos-input" name="inventory_manager_id"><option value="">No stock task</option><?php foreach ($staff as $person): if ($person['role_name'] !== 'inventory_manager') continue; ?><option value="<?= (int)$person['user_id'] ?>"><?= correction_e($person['display_name']) ?></option><?php endforeach; ?></select></label>
                 <label>Product<select class="pos-input" name="product_id"><option value="">No stock task</option><?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>"><?= correction_e($product['product_name']) ?></option><?php endforeach; ?></select></label>
                 <label>Units (+ add / − remove)<input class="pos-input" name="quantity" type="number" step="1"></label>
             </div></fieldset>

@@ -6,7 +6,6 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 use App\Authorization\RoleCapabilityPolicy;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
-$storeId = store_scope_id($pdo);
 $saleUnitsSql = sales_units_sql($pdo, 'si');
 
 $metrics = get_ml_model_metrics();
@@ -31,8 +30,7 @@ $predictionStatement = $pdo->prepare("SELECT df.forecast_id, SUM(df.predicted_un
         MIN(sa.sale_date) first_sale_date
       FROM sale_items si JOIN sales sa ON sa.sale_id=si.sale_id GROUP BY si.product_id
     ) s ON s.product_id=df.product_id
-    WHERE p.branch_id = ?
-      AND df.job_id=(
+    WHERE df.job_id=(
           SELECT df2.job_id FROM demand_forecasts df2 
           JOIN ml_jobs j ON j.job_id = df2.job_id
           WHERE df2.product_id=df.product_id
@@ -41,7 +39,7 @@ $predictionStatement = $pdo->prepare("SELECT df.forecast_id, SUM(df.predicted_un
       )
     GROUP BY df.job_id, df.product_id, df.forecast_origin, p.product_name, p.product_id, p.sku, i.quantity_on_hand, s.units_30, s.nonzero_days, s.first_sale_date, df.forecast_id, df.predicted_units, df.readiness_level
     ORDER BY df.forecast_origin DESC,p.product_name");
-$predictionStatement->execute([$storeId]);
+$predictionStatement->execute();
 $predictions = $predictionStatement->fetchAll(PDO::FETCH_ASSOC);
 
 $exceptions = [];
@@ -106,10 +104,10 @@ if ($searchQuery !== '' || $reasonFilter !== '') {
     }));
 }
 
-$decisionStatement = $pdo->prepare("SELECT fd.*,p.sku,p.product_name,u.full_name decided_by_name
+$decisionStatement = $pdo->prepare("SELECT fd.*,p.sku,p.product_name,u.display_name decided_by_name
     FROM forecast_decisions fd JOIN products p ON p.product_id=fd.product_id LEFT JOIN users u ON u.user_id=fd.decided_by
-    WHERE p.branch_id = ? ORDER BY fd.decided_at DESC LIMIT 30");
-$decisionStatement->execute([$storeId]);
+    ORDER BY fd.decided_at DESC LIMIT 30");
+$decisionStatement->execute();
 $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
 
 $canConfigureModels = role_capability_policy()->allows((string)current_role(), RoleCapabilityPolicy::CONFIGURE_MODELS);
