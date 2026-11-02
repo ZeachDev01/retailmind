@@ -54,6 +54,7 @@ foreach (['success', 'error', 'warning', 'info'] as $flashType) {
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
 $currentPath = '/' . trim(str_replace('\\', '/', $currentPath), '/');
 
+if (!function_exists("sidebar_path")) {
 function sidebar_path(string $path): string
 {
     $urlPath = parse_url(app_url($path), PHP_URL_PATH) ?: app_url($path);
@@ -154,6 +155,7 @@ function sidebar_render_section(array $section): void
     </div>
 <?php
 }
+}
 
 $superAdministratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'privacy', 'label' => 'Users & Access'],
@@ -179,12 +181,16 @@ $administratorSystemItems = [
 
 $managerInventoryItems = [];
 
+$administratorForecastingItems = [
+    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
+    ['path' => 'components/administrator/model_review.php', 'icon' => 'combo_chart', 'label' => 'Model Review & Approval'],
+    ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
+    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
+];
+
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'overtime', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
-
-    ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
-    ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Generate Report'],
 ];
 
@@ -208,6 +214,7 @@ $administratorSections = [
             ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
+            ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $administratorForecastingItems],
             ['icon' => 'statistics', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
     ],

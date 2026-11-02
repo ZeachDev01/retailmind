@@ -55,9 +55,10 @@ class MlJobService
         }
 
         if ($this->hasCutoffColumn()) {
+            $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
             $stmt = $this->pdo->prepare("
                 INSERT INTO ml_jobs (trigger_type, status, requester_id, evidence_cutoff, model_version, queued_at)
-                VALUES (:trigger, 'queued', :requester, :cutoff, :model_version, NOW())
+                VALUES (:trigger, 'queued', :requester, :cutoff, :model_version, {$nowExpr})
             ");
             $stmt->execute([
                 'trigger' => $triggerType,
@@ -66,9 +67,10 @@ class MlJobService
                 'model_version' => $modelVersion,
             ]);
         } else {
+            $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
             $stmt = $this->pdo->prepare("
                 INSERT INTO ml_jobs (trigger_type, status, requester_id, queued_at)
-                VALUES (:trigger, 'queued', :requester, NOW())
+                VALUES (:trigger, 'queued', :requester, {$nowExpr})
             ");
             $stmt->execute([
                 'trigger' => $triggerType,
@@ -83,9 +85,10 @@ class MlJobService
         $module = 'Demand Forecasting';
         $category = AuditRecordCategory::classify($module, $action);
         
+        $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
         $logStmt = $this->pdo->prepare("
             INSERT INTO activity_log (user_id, action, category, module, record_id, new_value, ip_address, created_at)
-            VALUES (:user_id, :action, :category, :module, :record_id, :new_value, :ip, NOW())
+            VALUES (:user_id, :action, :category, :module, :record_id, :new_value, :ip, {$nowExpr})
         ");
         $logStmt->execute([
             'user_id' => $requesterId,
@@ -106,9 +109,10 @@ class MlJobService
         ?string $modelVersion = null
     ): int {
         if ($this->hasCutoffColumn()) {
+            $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
             $stmt = $this->pdo->prepare("
                 INSERT INTO ml_jobs (trigger_type, status, requester_id, evidence_cutoff, model_version, queued_at)
-                VALUES (:trigger, 'queued', NULL, :cutoff, :model_version, NOW())
+                VALUES (:trigger, 'queued', NULL, :cutoff, :model_version, {$nowExpr})
             ");
             $stmt->execute([
                 'trigger' => $triggerType,
@@ -116,9 +120,10 @@ class MlJobService
                 'model_version' => $modelVersion,
             ]);
         } else {
+            $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
             $stmt = $this->pdo->prepare("
                 INSERT INTO ml_jobs (trigger_type, status, requester_id, queued_at)
-                VALUES (:trigger, 'queued', NULL, NOW())
+                VALUES (:trigger, 'queued', NULL, {$nowExpr})
             ");
             $stmt->execute([
                 'trigger' => $triggerType,
@@ -132,9 +137,10 @@ class MlJobService
         $module = 'Demand Forecasting';
         $category = AuditRecordCategory::classify($module, $action);
         
+        $nowExpr = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
         $logStmt = $this->pdo->prepare("
             INSERT INTO activity_log (user_id, action, category, module, record_id, new_value, ip_address, created_at)
-            VALUES (NULL, :action, :category, :module, :record_id, :new_value, '127.0.0.1', NOW())
+            VALUES (NULL, :action, :category, :module, :record_id, :new_value, '127.0.0.1', {$nowExpr})
         ");
         $logStmt->execute([
             'action' => $action,
