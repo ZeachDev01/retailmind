@@ -51,13 +51,18 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             }
         }
 
-        $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        if ($currentScript === 'store_settings.php' && current_role() === 'admin' && isset($_GET['guidance'])) {
-            $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
-            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic('admin', 'store_settings');
-            $isReplay = !empty($_GET['replay']);
-            $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_step'] ?? 0);
-            include __DIR__ . '/workspace_walkthrough_dock.php';
+        if (isset($_GET['guidance']) && is_string($_GET['guidance'])) {
+            $requestedTopicId = (string)$_GET['guidance'];
+            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $requestedTopicId);
+            if ($topic && !empty($topic['steps'])) {
+                $scriptPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+                if (str_ends_with($scriptPath, $topic['path'])) {
+                    $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
+                    $isReplay = !empty($_GET['replay']);
+                    $initialStep = $isReplay ? 0 : (($walkthroughProgress['active_topic'] === $topic['id']) ? ($walkthroughProgress['active_step'] ?? 0) : 0);
+                    include __DIR__ . '/workspace_walkthrough_dock.php';
+                }
+            }
         }
     } catch (Throwable $e) {
         // Guidance must not block Store work when its state cannot be read.
