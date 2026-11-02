@@ -47,6 +47,9 @@ foreach ($evaluations as $e) {
     $evalByHorizon[(int)$e['horizon_days']] = $e;
 }
 
+// 2b. Prediction Performance Evidence (honest evidence matched with subsequent Store sales outcomes)
+$perfEvidence = $demandService->getPredictionPerformanceEvidence(null, $displayedModelVersion);
+
 // 3. Demo status indicator
 $isDemoMode = false;
 $demoSource = 'S001';
@@ -333,6 +336,90 @@ function format_wape_metric(?float $val, ?string $reason): string {
                     <?php endif; ?>
                 </div>
             </div>
+        </section>
+        <section class="model-context-card" aria-label="Prediction Performance Evidence" style="margin-bottom: 1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                <div>
+                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Store Prediction Performance Evidence</h2>
+                    <p class="muted" style="margin:0; font-size:0.875rem;">
+                        Matched forecasts recorded before outcomes with genuine subsequent Store observations.
+                    </p>
+                </div>
+                <div>
+                    <?php if ($perfEvidence['status'] === 'genuine_evidence'): ?>
+                        <span class="comparison-tag gate-passed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Genuine Store Evidence</span>
+                    <?php elseif ($perfEvidence['status'] === 'collecting_evidence'): ?>
+                        <span class="comparison-tag" style="background:var(--theme-warning-surface, #fef3c7); color:var(--theme-warning-text, #92400e); font-size:0.875rem; padding:0.35rem 0.75rem;">Still Collecting Evidence</span>
+                    <?php else: ?>
+                        <span class="comparison-tag gate-failed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Unavailable</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <p style="margin-bottom:0.75rem;"><?= htmlspecialchars($perfEvidence['explanation']) ?></p>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem; padding:0.75rem; background:var(--theme-surface-soft, #f8fafc); border-radius:6px;">
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Evaluated Model</span>
+                    <strong><code><?= htmlspecialchars($perfEvidence['model_version']) ?></code></strong>
+                    <span class="muted" style="font-size:0.8rem;">(<?= ucfirst($perfEvidence['model_association']) ?> Model)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Observation Progress</span>
+                    <strong><?= (int)$perfEvidence['completed_target_dates'] ?> / <?= (int)$perfEvidence['required_target_dates'] ?> dates</strong>
+                    <span class="muted" style="font-size:0.8rem;">(<?= (int)$perfEvidence['usable_comparison_count'] ?> comparisons)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Stockouts</span>
+                    <strong><?= htmlspecialchars($perfEvidence['verified_stockouts_display']) ?></strong>
+                    <span class="muted" style="font-size:0.8rem;">(Incomplete demand excluded)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Expiry Losses</span>
+                    <strong><?= htmlspecialchars($perfEvidence['verified_expiry_losses_display']) ?><?= $perfEvidence['verified_expiry_losses'] !== null ? ' units' : '' ?></strong>
+                    <span class="muted" style="font-size:0.8rem;">(Tracked losses)</span>
+                </div>
+            </div>
+
+            <p class="muted" style="font-size:0.85rem; margin-bottom:1rem;">
+                <strong>Inputs:</strong> <?= htmlspecialchars($perfEvidence['model_inputs_description']) ?>
+            </p>
+
+            <div class="table-wrap">
+                <table class="data-table">
+                    <caption>Prediction Error and Weekly Comparison by Stated Horizon Boundary</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Forecast Horizon</th>
+                            <th scope="col">Overestimated Units</th>
+                            <th scope="col">Underestimated Units</th>
+                            <th scope="col">Model Error (MAE)</th>
+                            <th scope="col">Model Error (WAPE)</th>
+                            <th scope="col">Weekly Baseline Error (MAE)</th>
+                            <th scope="col">Weekly Baseline Error (WAPE)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ([7, 14, 28] as $h): 
+                            $m = $perfEvidence['metrics_by_horizon'][$h] ?? [];
+                        ?>
+                            <tr>
+                                <th scope="row"><?= $h ?>-Day Boundary</th>
+                                <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['wape'] !== null ? number_format($m['wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['baseline_mae'] !== null ? number_format($m['baseline_mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['baseline_wape'] !== null ? number_format($m['baseline_wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="muted" style="font-size:0.8rem; margin-top:0.75rem; margin-bottom:0;">
+                <small><?= htmlspecialchars($perfEvidence['causal_claim_note']) ?> Stockout periods leave unmet demand unknown and are kept separate from forecast errors.</small>
+            </p>
         </section>
 
         <?php if (empty($evaluations)): ?>

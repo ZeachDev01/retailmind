@@ -302,7 +302,10 @@ def train_and_evaluate(df):
     if len(splits) != 3:
         raise ValueError("Insufficient history for three chronological holdouts")
 
-    all_products = [int(p) for p in sorted(data.product_id.unique())]
+    all_products = [
+        int(p) if (isinstance(p, (int, np.integer)) or (isinstance(p, str) and p.isdigit())) else str(p)
+        for p in sorted(data.product_id.unique(), key=lambda x: (int(x) if str(x).isdigit() else str(x)))
+    ]
     product_holdout_complete = {pid: True for pid in all_products}
     product_exclusion_reasons = {}
 
@@ -338,7 +341,7 @@ def train_and_evaluate(df):
         fold_baseline_frac = {7: [], 14: [], 28: []}
 
         for pid, pfeatures in features.groupby("product_id"):
-            pid = int(pid)
+            pid = int(pid) if (isinstance(pid, (int, np.integer)) or (isinstance(pid, str) and pid.isdigit())) else str(pid)
             p_history = history[history.product_id == pid]
             has_classification = "classification" in p_history.columns
             weekend_operating = (p_history.date.dt.dayofweek >= 5).any() and not has_classification
@@ -479,7 +482,7 @@ def train_and_evaluate(df):
         })
 
     evaluations = {}
-    eligible_pids = [int(p) for p in all_products if product_holdout_complete.get(p, False)]
+    eligible_pids = [p for p in all_products if product_holdout_complete.get(p, False)]
     for horizon, values in totals.items():
         actual = np.array(values["actual"], dtype=float)
         predicted = np.array(values["predicted"], dtype=float)
@@ -518,8 +521,8 @@ def train_and_evaluate(df):
             "data_window_end": str(history.date.max().date()),
             "products": eligible_pids if eligible_pids else all_products,
             "included_products": eligible_pids,
-            "excluded_products": [int(pid) for pid in all_products if pid not in eligible_pids],
-            "exclusion_reasons": {int(k): v for k, v in product_exclusion_reasons.items()},
+            "excluded_products": [pid for pid in all_products if pid not in eligible_pids],
+            "exclusion_reasons": {k: v for k, v in product_exclusion_reasons.items()},
             "observations": len(data), "folds": folds,
         },
     }
