@@ -1,10 +1,10 @@
 <?php
 require_once __DIR__ . '/../../../includes/auth.php';
-require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 require_once __DIR__ . '/../../../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../../../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../../../app/Forecasting/ModelPromotionService.php';
 
+use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\StoreModelGovernanceService;
 
@@ -25,7 +25,18 @@ try {
 }
 
 $action = $_POST['action'] ?? '';
-$superAdminId = (int)($_SESSION['user_id'] ?? 0);
+$actorId = (int)($_SESSION['user_id'] ?? 0);
+$actorRole = (string)(function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? ''));
+
+// Local Administrators with store management capabilities (STORE_OPERATIONS) are authorized
+// for operational review, store activation, rollback, and recommendation suspension per ADR-0022.
+// Technical review, candidate promotion, and platform-level rollback require PLATFORM_GOVERNANCE.
+if (in_array($action, ['operational_review', 'activate', 'rollback_store', 'suspend_recommendations', 'resume_recommendations'], true)) {
+    require_any_capability([RoleCapabilityPolicy::STORE_OPERATIONS, RoleCapabilityPolicy::PLATFORM_GOVERNANCE]);
+} else {
+    require_capability(RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+}
+
 $pdo = $GLOBALS['pdo'] ?? \App\Core\Database::connection();
 $governanceService = new StoreModelGovernanceService($pdo);
 
@@ -35,10 +46,10 @@ try {
         if ($modelVersion === '') {
             throw new InvalidArgumentException("Model version is required");
         }
-        $governanceService->promote($modelVersion, $superAdminId);
+        $governanceService->promote($modelVersion, $actorId);
         echo json_encode(['success' => true, 'message' => "Model $modelVersion promoted successfully"]);
     } elseif ($action === 'rollback') {
-        $governanceService->rollback($superAdminId);
+        $governanceService->rollback($actorId);
         echo json_encode(['success' => true, 'message' => "Model rolled back successfully"]);
     } elseif ($action === 'technical_review') {
         $modelVersion = $_POST['model_version'] ?? '';
@@ -47,7 +58,7 @@ try {
         if ($modelVersion === '' || !in_array($decision, ['accepted', 'rejected'], true)) {
             throw new InvalidArgumentException("Valid model version and decision (accepted/rejected) required");
         }
-        $governanceService->recordTechnicalReview($modelVersion, $decision, $notes, $superAdminId);
+        $governanceService->recordTechnicalReview($modelVersion, $decision, $notes, $actorId, $actorRole);
         echo json_encode(['success' => true, 'message' => "Technical review recorded for $modelVersion"]);
     } elseif ($action === 'operational_review') {
         $modelVersion = $_POST['model_version'] ?? '';
@@ -56,7 +67,7 @@ try {
         if ($modelVersion === '' || !in_array($decision, ['accepted', 'rejected'], true)) {
             throw new InvalidArgumentException("Valid model version and decision (accepted/rejected) required");
         }
-        $governanceService->recordOperationalReview($modelVersion, $decision, $notes, $superAdminId);
+        $governanceService->recordOperationalReview($modelVersion, $decision, $notes, $actorId, $actorRole);
         echo json_encode(['success' => true, 'message' => "Operational review recorded for $modelVersion"]);
     } elseif ($action === 'activate') {
         $modelVersion = $_POST['model_version'] ?? '';
@@ -65,18 +76,18 @@ try {
         if ($modelVersion === '') {
             throw new InvalidArgumentException("Model version is required");
         }
-        $record = $governanceService->activateStoreModel($modelVersion, $asOfDate, $superAdminId, $justification);
+        $record = $governanceService->activateStoreModel($modelVersion, $asOfDate, $actorId, $justification, $actorRole);
         echo json_encode(['success' => true, 'message' => "Model $modelVersion activated successfully", 'activation' => $record]);
     } elseif ($action === 'rollback_store') {
         $reason = $_POST['reason'] ?? '';
-        $record = $governanceService->rollbackStoreModel($superAdminId, $reason);
+        $record = $governanceService->rollbackStoreModel($actorId, $reason, $actorRole);
         echo json_encode(['success' => true, 'message' => "Store model rolled back successfully", 'rollback' => $record]);
     } elseif ($action === 'suspend_recommendations') {
         $reason = $_POST['reason'] ?? '';
-        $governanceService->suspendRecommendations($superAdminId, $reason);
+        $governanceService->suspendRecommendations($actorId, $reason, $actorRole);
         echo json_encode(['success' => true, 'message' => "Replenishment recommendations suspended"]);
     } elseif ($action === 'resume_recommendations') {
-        $governanceService->resumeRecommendations($superAdminId);
+        $governanceService->resumeRecommendations($actorId, $actorRole);
         echo json_encode(['success' => true, 'message' => "Replenishment recommendations resumed"]);
     } else {
         throw new InvalidArgumentException("Invalid action");

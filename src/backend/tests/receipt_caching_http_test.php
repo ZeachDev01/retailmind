@@ -164,8 +164,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(isset($headers['cache-control']), 'Finalized receipt view emits Cache-Control header');
     $assert(
         str_contains($headers['cache-control'], 'private')
-        && str_contains($headers['cache-control'], 'no-cache')
-        ,
+        && str_contains($headers['cache-control'], 'max-age=86400')
+        && str_contains($headers['cache-control'], 'immutable'),
         "Cache-Control contains 'private, max-age=86400, immutable' (got: {$headers['cache-control']})"
     );
     $assert(!empty($headers['etag']), 'Finalized receipt view emits ETag header');
@@ -183,8 +183,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(
         isset($headers304['cache-control'])
         && str_contains($headers304['cache-control'], 'private')
-        && str_contains($headers304['cache-control'], 'no-cache')
-        ,
+        && str_contains($headers304['cache-control'], 'max-age=86400')
+        && str_contains($headers304['cache-control'], 'immutable'),
         'HTTP 304 preserves immutable caching headers'
     );
     $assert(trim($body304) === '', 'HTTP 304 response transfers zero body bytes');
@@ -211,8 +211,8 @@ if (str_contains($uri, "pos.php")) {
     $assert(
         isset($headersThermal['cache-control'])
         && str_contains($headersThermal['cache-control'], 'private')
-        && str_contains($headersThermal['cache-control'], 'no-cache')
-        ,
+        && str_contains($headersThermal['cache-control'], 'max-age=86400')
+        && str_contains($headersThermal['cache-control'], 'immutable'),
         "Thermal reprint layout emits identical caching headers: 'private, max-age=86400, immutable'"
     );
     $assert(str_contains($bodyThermal, 'sale-receipt receipt-print-area'), 'Thermal reprint contains print markup');

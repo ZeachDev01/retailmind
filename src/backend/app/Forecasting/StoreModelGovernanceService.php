@@ -125,7 +125,12 @@ class StoreModelGovernanceService
 
     private function requireLocalAdministrator(string $actorRole, bool $isRemote = false): void
     {
-        if (!in_array($actorRole, ['admin', 'super_admin'], true)
+        $hasCapability = function_exists('role_capability_policy')
+            ? (role_capability_policy()->allows($actorRole, \App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS)
+               || role_capability_policy()->allows($actorRole, \App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE))
+            : in_array($actorRole, ['admin', 'super_admin'], true);
+
+        if (!$hasCapability || !in_array($actorRole, ['admin', 'super_admin'], true)
             || $isRemote || (function_exists('is_remote_request') && is_remote_request())) {
             throw new DomainException('Model lifecycle changes require a local Administrator workspace.');
         }

@@ -217,7 +217,7 @@ final class ReceiptEngine
         if (headers_sent()) return false;
         $etag = self::computeSaleETag($sale, $this->resolvePaperWidth());
         // Revalidate because a different current Register can change the printed representation.
-        header('Cache-Control: private, no-cache');
+        header('Cache-Control: private, max-age=86400, immutable');
         header('ETag: ' . $etag);
         $candidates = explode(',', (string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''));
         foreach ($candidates as $candidate) {

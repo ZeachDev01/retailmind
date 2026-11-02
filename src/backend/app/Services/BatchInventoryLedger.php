@@ -128,19 +128,7 @@ class BatchInventoryLedger
             }
 
             $this->lockBatches($productId);
-            // Missing batches are a mismatch too; physical counts repair legacy coverage.
-            if ($hasBatchesTable) {
-                $batchSumStmt = $this->pdo->prepare(
-                    'SELECT COALESCE(SUM(remaining_quantity), 0) FROM product_batches WHERE product_id = ?'
-                );
-                $batchSumStmt->execute([$productId]);
-                $existingBatchSum = (int)$batchSumStmt->fetchColumn();
-                if ($available !== $existingBatchSum) {
-                    throw new RuntimeException(
-                        "Cannot mutate inventory for product #{$productId}: inventory quantity on hand ({$available}) does not match batch total ({$existingBatchSum}). Approval refused; inventory unchanged."
-                    );
-                }
-            }
+            $this->assertBalanced($productId, $available);
 
             $finalAllocations = [];
             $hasBatchFormCols = $hasBatchesTable && $this->hasColumn('product_batches', 'sealed_quantity');
@@ -791,7 +779,7 @@ class BatchInventoryLedger
         $this->fiscalPeriodGuard->assertOpenForDate($pulledAt, 'stock_movements', 'supplier pullout');
         $this->fiscalPeriodGuard->assertOpenNow('supplier_pullouts', 'supplier pullout');
         $currentOnHand = $this->lockStock($productId);
-        $stmt = $this->pdo->prepare('SELECT * FROM product_batches WHERE batch_id = ? AND product_id = ?');
+        $stmt = $this->pdo->prepare('SELECT * FROM product_batches WHERE batch_id = ? AND product_id = ?' . $this->forUpdate());
         $stmt->execute([$batchId, $productId]);
         $batch = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$batch) throw new RuntimeException('Selected batch does not belong to the product.');
@@ -863,7 +851,7 @@ class BatchInventoryLedger
         $stmt->execute([$productId]);
         $batchTotal = (int)$stmt->fetchColumn();
         if ($quantity !== $batchTotal) {
-            throw new RuntimeException("Inventory quantity on hand ({$quantity}) does not match batch total ({$batchTotal}). Record a physical count before changing this stock.");
+            throw new RuntimeException("inventory quantity on hand ({$quantity}) does not match batch total ({$batchTotal}). Record a physical count before changing this stock.");
         }
     }
 

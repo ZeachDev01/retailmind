@@ -215,7 +215,7 @@ class NotificationService
             $reminders[] = $batch + [
                 'type' => 'expired_stock',
                 'reference_type' => 'product_batch',
-                'title' => 'Expired stockâ€”waiting for supplier collection: ' . $batch['product_name'],
+                'title' => 'Expired stock—waiting for supplier collection: ' . $batch['product_name'],
                 'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
             ];
         }
@@ -247,7 +247,7 @@ class NotificationService
             $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
                 && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
             $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
-                ? 'Expired stockâ€”waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
+                ? 'Expired stock—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
             $batch['message'] = "Batch {$batch['batch_number']} (#{$batch['batch_id']}) of {$batch['product_name']} ({$batch['sku']}). Expiration: "
                 . ($expiration ?? 'Not recorded') . ". Remaining: {$batch['remaining_quantity']}.";
             $reminders[(int)$batch['batch_id']] = $batch;
