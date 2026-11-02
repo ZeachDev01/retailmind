@@ -116,6 +116,12 @@ $walkthroughProgress = isset($pdo, $_SESSION['user_id'])
     : ['status' => null, 'active_topic' => null, 'active_step' => 0, 'completed_topics' => [], 'invitation_status' => null];
 $isStoreSettingsDone = in_array('store_settings', $walkthroughProgress['completed_topics'], true);
 $isStoreSettingsInProgress = ($walkthroughProgress['active_topic'] === 'store_settings');
+$activeTopic = $walkthroughProgress['active_topic'] ?? null;
+$activeStep = (int)($walkthroughProgress['active_step'] ?? 0);
+$completedTopics = $walkthroughProgress['completed_topics'] ?? [];
+$imTopics = \App\Guidance\WorkspaceWalkthroughService::paths('inventory_manager')['first_useful_tasks']['topics'] ?? [];
+$isImInProgress = !$isAdmin && $activeTopic && isset($imTopics[$activeTopic]);
+$currentImTopic = $isImInProgress ? $imTopics[$activeTopic] : null;
 ?>
 <h2 id="workspace-guidance-title">
     <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
@@ -219,6 +225,57 @@ $primaryActionLabel = $isAdmin
                 </div>
             </div>
         </section>
+    <?php elseif (!$isAdmin): ?>
+        <?php if ($isImInProgress && $currentImTopic): ?>
+            <section class="guidance-continue-card" aria-label="Continue guidance">
+                <div>
+                    <h2>Continue where you left off</h2>
+                    <p>Resume <?= htmlspecialchars($currentImTopic['title']) ?> walkthrough (Step <?= $activeStep + 1 ?> of <?= count($currentImTopic['steps']) ?>)</p>
+                </div>
+                <a href="<?= htmlspecialchars(app_url($currentImTopic['path'] . '?guidance=' . $currentImTopic['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($currentImTopic['title']) ?> (Step <?= $activeStep + 1 ?> of <?= count($currentImTopic['steps']) ?>)</a>
+            </section>
+        <?php endif; ?>
+        <section class="guidance-walkthroughs" aria-labelledby="first-useful-tasks-title">
+            <div class="guidance-walkthroughs-header">
+                <h2 id="first-useful-tasks-title">First useful tasks</h2>
+                <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
+            </div>
+            <div class="walkthrough-topics-list">
+                <?php
+                $imIcons = [
+                    'replenishment_queue' => 'workflow',
+                    'products' => 'package',
+                    'stock_receiving' => 'shipped',
+                ];
+                foreach ($imTopics as $tId => $tDef):
+                    $isDone = in_array($tId, $completedTopics, true);
+                    $isInProgress = ($activeTopic === $tId);
+                    $stepTotal = count($tDef['steps']);
+                    $iconName = $imIcons[$tId] ?? 'workflow';
+                ?>
+                <div class="walkthrough-topic-card">
+                    <div class="walkthrough-topic-main">
+                        <span class="walkthrough-topic-icon" aria-hidden="true"><?= sidebar_icon($iconName) ?></span>
+                        <div>
+                            <h4 class="walkthrough-topic-title"><?= htmlspecialchars($tDef['title']) ?></h4>
+                            <p class="walkthrough-topic-desc"><?= htmlspecialchars($tDef['summary']) ?></p>
+                        </div>
+                    </div>
+                    <div class="walkthrough-topic-actions">
+                        <?php if ($isDone): ?>
+                            <span class="guidance-completion-badge"><span class="guidance-checkmark" aria-hidden="true">✓</span> Guidance finished</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId . '&replay=1')) ?>" class="btn btn-secondary">Replay</a>
+                        <?php elseif ($isInProgress): ?>
+                            <span class="guidance-progress-badge">In progress (Step <?= $activeStep + 1 ?> of <?= $stepTotal ?>)</span>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Continue</a>
+                        <?php else: ?>
+                            <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>" class="btn btn-primary">Start walkthrough</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
     <?php endif; ?>
     <ul class="workspace-guidance-links">
         <?php foreach ($workflows as $wf): ?>
@@ -242,6 +299,8 @@ $primaryActionLabel = $isAdmin
     <p>
         <?php if ($isAdmin): ?>
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+        <?php else: ?>
+            <a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php?guidance=replenishment_queue')) ?>">First useful tasks: Replenishment needs</a> &middot;
         <?php endif; ?>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>
@@ -251,6 +310,8 @@ $primaryActionLabel = $isAdmin
         <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
         <?php if ($isAdmin): ?>
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
+        <?php else: ?>
+            <a href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php?guidance=replenishment_queue')) ?>">First useful tasks: Replenishment needs</a> &middot;
         <?php endif; ?>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>

@@ -52,12 +52,29 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
         }
 
         $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        if ($currentScript === 'store_settings.php' && current_role() === 'admin' && isset($_GET['guidance'])) {
-            $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
-            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic('admin', 'store_settings');
-            $isReplay = !empty($_GET['replay']);
-            $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_step'] ?? 0);
-            include __DIR__ . '/workspace_walkthrough_dock.php';
+        if (isset($_GET['guidance'])) {
+            $guidanceParam = (string)$_GET['guidance'];
+            $role = current_role();
+            $topic = null;
+            if ($guidanceParam !== '' && $guidanceParam !== '1') {
+                $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $guidanceParam);
+            }
+            if (!$topic) {
+                foreach (\App\Guidance\WorkspaceWalkthroughService::paths($role) as $p) {
+                    foreach ($p['topics'] as $t) {
+                        if (basename($t['path']) === $currentScript) {
+                            $topic = \App\Guidance\WorkspaceWalkthroughService::findTopic($role, $t['id']);
+                            break 2;
+                        }
+                    }
+                }
+            }
+            if ($topic && !empty($topic['steps']) && basename($topic['path']) === $currentScript) {
+                $walkthroughProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], $role);
+                $isReplay = !empty($_GET['replay']);
+                $initialStep = $isReplay ? 0 : (($walkthroughProgress['active_topic'] === $topic['id']) ? ($walkthroughProgress['active_step'] ?? 0) : 0);
+                include __DIR__ . '/workspace_walkthrough_dock.php';
+            }
         }
     } catch (Throwable $e) {
         // Guidance must not block Store work when its state cannot be read.
