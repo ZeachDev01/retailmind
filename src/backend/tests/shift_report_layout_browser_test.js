@@ -18,7 +18,7 @@ function render(variant) {
         function csrf_field() { return '<input type="hidden" name="csrf_token" value="fixture">'; }
         $defaultFrom='2026-10-01'; $defaultTo='2026-10-31'; $error=''; $success=''; $reportLoaded=true;
         $filters=['from'=>$defaultFrom,'to'=>$defaultTo,'cashier_id'=>'','register_id'=>'','shift_id'=>''];
-        $cashiers=[['user_id'=>1,'full_name'=>'Alex Rivera']];
+        $cashiers=[['user_id'=>1,'display_name'=>'Alex Rivera']];
         $registers=[['register_id'=>1,'name'=>'Front register']];
         $shifts=[['shift_id'=>42,'opened_at'=>'2026-10-31 08:00:00']];
         $row=array_fill_keys(['Record','Date','Cashier','Register','Status','Opened At','Closed At','Closed By',

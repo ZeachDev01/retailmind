@@ -144,21 +144,16 @@ $clearShiftUrl = '?' . http_build_query([
 ]);
 
 $shiftRowsCount = 0;
-$openShiftsCount = 0;
 $needsReviewCount = 0;
 foreach ($report['rows'] as $r) {
     if (!empty($r['Shift ID'])) {
         $shiftRowsCount++;
-        if (($r['Status'] ?? '') === 'open') {
-            $openShiftsCount++;
-        }
         if (!empty($r['variance_review_required']) && empty($r['reviewed_at'])) {
             $needsReviewCount++;
         }
     }
 }
 $totalSalesAmount = (float)($report['totals']['Total Sales'] ?? 0);
-$totalSaleCount = (int)($report['totals']['Sale Count'] ?? 0);
 $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
 ?>
 <!DOCTYPE html>
@@ -176,7 +171,6 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
     <header class="page-heading shift-page-header">
         <div>
             <h1>Cashier Shift Report</h1>
-            <p class="shift-page-subtitle">Track shift performance. Reconcile every drawer.</p>
         </div>
         <a href="#shift-filters" class="btn btn-secondary shift-period-link"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>Report filters</a>
         <?php if ($targetedShift !== null): ?>
@@ -191,22 +185,18 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Shifts</span>
             <strong class="shift-kpi-value"><?= $reportLoaded ? $shiftRowsCount : '—' ?></strong>
-            <span class="shift-kpi-meta"><?= $reportLoaded ? $openShiftsCount . ' currently open' : 'Unavailable' ?></span>
         </div>
         <div class="shift-kpi-card <?= $needsReviewCount > 0 ? 'shift-kpi-card--warning' : '' ?>">
             <span class="shift-kpi-label">Needs Review</span>
             <strong class="shift-kpi-value"><?= $reportLoaded ? $needsReviewCount : '—' ?></strong>
-            <span class="shift-kpi-meta"><?= !$reportLoaded ? 'Unavailable' : ($needsReviewCount > 0 ? 'Unresolved cash variances' : 'No pending variance reviews') ?></span>
         </div>
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Sales</span>
             <strong class="shift-kpi-value"><?= $reportLoaded ? shift_report_money($totalSalesAmount) : '—' ?></strong>
-            <span class="shift-kpi-meta"><?= $reportLoaded ? number_format($totalSaleCount) . ' transactions' : 'Unavailable' ?></span>
         </div>
         <div class="shift-kpi-card">
             <span class="shift-kpi-label">Total Refunds</span>
             <strong class="shift-kpi-value"><?= $reportLoaded ? shift_report_money($totalRefundsAmount) : '—' ?></strong>
-            <span class="shift-kpi-meta"><?= $reportLoaded ? 'All payment methods' : 'Unavailable' ?></span>
         </div>
     </section>
 
@@ -287,7 +277,6 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         <input type="hidden" name="action" value="mark_reviewed">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                         <h3>Complete Review</h3>
-                        <p class="shift-form-hint">Record findings to resolve variance.</p>
                         <div class="form-group u-mt-10">
                             <label for="explanation">Final explanation <span class="required-mark" aria-hidden="true">*</span></label>
                             <textarea id="explanation" name="explanation" rows="3" required placeholder="Root cause or verification notes..."></textarea>
@@ -307,8 +296,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="save_draft">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
-                        <h3>Draft Notes</h3>
-                        <p class="shift-form-hint">Save work-in-progress notes without resolving variance.</p>
+                        <h3>Draft notes</h3>
                         <div class="form-group u-mt-10">
                             <label for="draft_notes">Draft notes</label>
                             <textarea id="draft_notes" name="draft_notes" rows="5" placeholder="Working notes..."><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
@@ -365,7 +353,6 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         <div class="section-header shift-results-header">
             <div>
                 <h2 id="shift-records-heading">Shift records <span class="shift-count"><?= $reportLoaded ? count($report['rows']) : '—' ?></span></h2>
-                <p class="shift-section-note">Review cash variances or explore each shift’s payment breakdown.</p>
             </div>
             <form method="post" class="report-actions shift-export-form">
                 <?= csrf_field() ?>
@@ -380,11 +367,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         <div id="shift-filters" class="report-filters">
         <form method="get" class="report-filter-grid" aria-label="Filter shifts">
             <div class="form-group">
-                <label for="from">From Date</label>
+                <label for="from">From date</label>
                 <input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" required>
             </div>
             <div class="form-group">
-                <label for="to">To Date</label>
+                <label for="to">To date</label>
                 <input id="to" name="to" type="date" value="<?= shift_report_e($filters['to']) ?>" required>
             </div>
             <div class="form-group">
@@ -430,11 +417,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                 <thead>
                     <tr>
                         <th scope="col">Shift / Date</th>
-                        <th scope="col">Cashier &amp; Register</th>
+                        <th scope="col">Cashier / Register</th>
                         <th scope="col">Status</th>
                         <th scope="col" class="num-col">Total Sales</th>
                         <th scope="col" class="num-col">Refunds</th>
-                        <th scope="col" class="num-col">Expected vs Counted</th>
+                        <th scope="col" class="num-col">Drawer cash</th>
                         <th scope="col" class="num-col">Variance</th>
                         <th scope="col">Actions</th>
                     </tr>
@@ -467,7 +454,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                 <?php endif; ?>
                                 <div class="cell-sub"><?= shift_report_e($row['Date']) ?></div>
                             </td>
-                            <td data-label="Cashier &amp; Register">
+                            <td data-label="Cashier / Register">
                                 <strong><?= shift_report_e($row['Cashier']) ?></strong>
                                 <div class="cell-sub"><?= shift_report_e($row['Register']) ?></div>
                             </td>
@@ -486,7 +473,6 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                             </td>
                             <td class="num-col" data-label="Total sales">
                                 <strong><?= shift_report_money($row['Total Sales']) ?></strong>
-                                <div class="cell-sub"><?= (int)($row['Sale Count'] ?? 0) ?> sales</div>
                             </td>
                             <td class="num-col" data-label="Refunds">
                                 <?= (float)($row['Total Refunds'] ?? 0) > 0 ? shift_report_money($row['Total Refunds']) : '<span class="u-text-muted">₱0.00</span>' ?>
@@ -530,7 +516,8 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                             </div>
                                             <div class="shift-breakdown-grid">
                                                 <div>
-                                                    <h4>Sales by Method</h4>
+                                                    <h4>Sales by method</h4>
+                                                    <p><?= (int)($row['Sale Count'] ?? 0) ?> transactions</p>
                                                     <p>Cash: <?= shift_report_money($row['Cash Sales']) ?></p>
                                                     <p>Card: <?= shift_report_money($row['Card Sales']) ?></p>
                                                     <p>E-Wallet: <?= shift_report_money($row['E-Wallet Sales']) ?></p>
@@ -576,10 +563,9 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     <?php if ($report['rows']): ?>
                     <tfoot>
                         <tr class="shift-totals-row">
-                            <th scope="row" colspan="3">TOTAL (<?= count($report['rows']) ?> records)</th>
+                            <th scope="row" colspan="3">Total</th>
                             <td class="num-col" data-label="Total sales">
                                 <strong><?= shift_report_money($report['totals']['Total Sales'] ?? 0) ?></strong>
-                                <div class="cell-sub"><?= (int)($report['totals']['Sale Count'] ?? 0) ?> sales</div>
                             </td>
                             <td class="num-col" data-label="Refunds"><?= shift_report_money($report['totals']['Total Refunds'] ?? 0) ?></td>
                             <td colspan="3" class="cell-sub">

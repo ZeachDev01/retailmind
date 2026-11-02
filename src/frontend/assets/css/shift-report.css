@@ -16,11 +16,6 @@
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
-.shift-report-page .shift-page-subtitle {
-    margin-top: .5rem;
-    color: var(--muted);
-    font-size: .95rem;
-}
 .shift-report-page .section-header {
     display: flex;
     align-items: center;
@@ -30,11 +25,6 @@
     margin-bottom: 1rem;
 }
 .shift-report-page .section-header h2 { margin-bottom: 0; }
-.shift-section-note {
-    margin-top: .25rem;
-    color: var(--muted);
-    font-size: 1rem;
-}
 
 /* Summary KPI Strip */
 .shift-kpi-grid {
@@ -60,11 +50,11 @@
     background: var(--theme-warning-surface, #fef3c7);
     color: var(--theme-warning-text, #92400e);
 }
-.shift-kpi-card--warning :is(.shift-kpi-label, .shift-kpi-meta, .shift-kpi-value) {
+.shift-kpi-card--warning :is(.shift-kpi-label, .shift-kpi-value) {
     color: var(--theme-warning-text, #92400e);
 }
 .shift-kpi-label {
-    font-size: .8rem;
+    font-size: .875rem;
     font-weight: 600;
     color: var(--muted);
 }
@@ -76,10 +66,6 @@
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
     color: var(--text);
-}
-.shift-kpi-meta {
-    font-size: .8rem;
-    color: var(--muted);
 }
 
 /* Badges */
@@ -162,7 +148,6 @@
 .shift-review-form { min-width: 0; }
 .shift-review-form + .shift-review-form { border-left: 1px solid var(--border); padding-left: 1.5rem; }
 .shift-report-page .shift-review-form h3 { margin-bottom: .25rem; font-size: 1.05rem; }
-.shift-form-hint { color: var(--muted); font-size: 1rem; line-height: 1.5; max-width: 72ch; }
 .shift-report-page .form-group { min-width: 0; }
 .shift-report-page .rm-search-dropdown > .sr-only { inset: 0 auto auto 0; }
 .shift-report-page .form-group :is(input, select, textarea) {
@@ -290,7 +275,7 @@
     font-variant-numeric: tabular-nums;
 }
 .cell-sub {
-    font-size: .8rem;
+    font-size: .875rem;
     color: var(--muted);
     margin-top: .15rem;
 }
@@ -398,7 +383,6 @@
 }
 @media (max-width: 600px) {
     .shift-kpi-card { padding: 1rem; }
-    .shift-kpi-meta { font-size: .75rem; }
     .shift-report-page .report-filters { padding: 1rem; }
     .shift-report-page .section-header,
     .shift-report-page .shift-page-header { flex-direction: column; align-items: stretch; }
