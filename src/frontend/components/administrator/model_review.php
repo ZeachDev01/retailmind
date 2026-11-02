@@ -25,6 +25,7 @@ $message = '';
 $messageClass = '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    require_local_request('Model review and recovery mutations are restricted to the local Store console.');
     csrf_verify();
     $action = trim((string)($_POST['action'] ?? ''));
 
@@ -73,12 +74,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $message = "Successfully rolled back to previous model '{$rollback['restored_model_version']}'. Fresh operational forecast has been queued.";
             $messageClass = 'tag-success';
         } elseif ($action === 'suspend') {
+            require_capability(RoleCapabilityPolicy::APPROVE_MODELS);
             $reason = trim((string)($_POST['reason'] ?? ''));
-            $activationService->suspendRecommendations($actorId, $reason, $actorRole);
+            $activationService->suspendRecommendations($actorId, $reason, $actorRole, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
             $message = "Forecast-backed replenishment suggestions have been paused locally. Routine cashier sales, inventory counts, and purchasing continue unaffected.";
             $messageClass = 'tag-warning';
         } elseif ($action === 'resume') {
-            $activationService->resumeRecommendations($actorId, $actorRole);
+            require_capability(RoleCapabilityPolicy::APPROVE_MODELS);
+            $activationService->resumeRecommendations($actorId, $actorRole, $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
             $message = "Forecast-backed replenishment suggestions have been resumed.";
             $messageClass = 'tag-success';
         }
@@ -405,6 +408,13 @@ $formatUnits = static function ($val): string {
                                     <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Roll Back to <?= htmlspecialchars($summary['previous_version']) ?>
                                 </button>
                             </form>
+                        </div>
+                    <?php elseif (!empty($summary['previous_version'])): ?>
+                        <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 1rem;">
+                            <label style="font-weight: 600; font-size: 0.9rem;">Reversible Rollback</label>
+                            <p style="font-size: 0.85rem; color: var(--color-warning-text, #92400e); margin: 0.25rem 0 0.5rem 0;">
+                                Rollback to previous model <strong><?= htmlspecialchars($summary['previous_version']) ?></strong> unavailable: <?= htmlspecialchars($summary['rollback_validation']['reason'] ?? 'Incompatible artifact') ?>
+                            </p>
                         </div>
                     <?php endif; ?>
                 </div>
