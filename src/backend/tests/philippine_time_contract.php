@@ -2,11 +2,9 @@
 
 require_once __DIR__ . '/../app/Services/PhilippineTime.php';
 require_once __DIR__ . '/../app/Services/CashierOperationalHistoryService.php';
-require_once __DIR__ . '/../app/Services/CashierOperationalHistoryRequest.php';
 
 use App\Services\PhilippineTime;
 use App\Services\CashierOperationalHistoryService;
-use App\Services\CashierOperationalHistoryRequest;
 
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -37,10 +35,10 @@ $history = new CashierOperationalHistoryService($pdo);
 $filtered = $history->page('sales', 1, 1, 25, '2026-10-01', '2026-10-01');
 $assert(array_column($filtered, 'sale_id') === [3,6,2], 'Underlying timestamps and IDs sort within half-open Manila day, retaining fractions and ownership');
 $assert(array_column($history->page('sales', 1, 2, 1, '2026-10-01', '2026-10-01'), 'sale_id') === [6], 'Pagination preserves date constraints');
-$request = CashierOperationalHistoryRequest::resolve($pdo, 1, ['date_from'=>'2026-10-01','date_to'=>'2026-10-01','cashier_id'=>2]);
+$request = (new CashierOperationalHistoryService($pdo))->resolve(1, ['date_from'=>'2026-10-01','date_to'=>'2026-10-01','cashier_id'=>2]);
 $assert(array_column($request['rows'], 'sale_id') === [3,6,2], 'Date request retains authenticated identity');
 foreach ([['date_from'=>'2026-02-30'],['date_from'=>['2026-10-01']],['date_from'=>'2026-10-02','date_to'=>'2026-10-01']] as $query) {
-    $request = CashierOperationalHistoryRequest::resolve($pdo, 1, $query);
+    $request = (new CashierOperationalHistoryService($pdo))->resolve(1, $query);
     $assert($request['dateError'] !== '' && $request['rows'] === [], 'Invalid date filters do not widen the history');
 }
 $assert($pdo->query('SELECT total_changes()')->fetchColumn() === $before, 'Formatting and history filters never alter records');

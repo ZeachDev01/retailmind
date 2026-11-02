@@ -21,7 +21,6 @@ require_once __DIR__ . '/../../../backend/app/Receipts/RefundReceiptPresentation
 require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptPaperService.php';
 
 require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryService.php';
-require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryRequest.php';
 
 use App\Services\CashRefundService;
 use App\Services\CashierShiftService;
@@ -112,7 +111,7 @@ try {
     $error = \App\Support\OperatorAlert::message($e, 'Ask your Administrator to authorize this sale again.');
     $exceptionToken = '';
 }
-$refundHistory = \App\Services\CashierOperationalHistoryRequest::resolve($pdo, $actorId, [
+$refundHistory = (new \App\Services\CashierOperationalHistoryService($pdo))->resolve($actorId, [
     'type' => 'refunds', 'page' => $_GET['page'] ?? 1, 'length' => $_GET['length'] ?? 10,
 ]);
 $refunds = $refundHistory['rows'];

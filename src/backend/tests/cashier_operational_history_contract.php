@@ -1,12 +1,21 @@
 <?php
 
 require_once __DIR__ . '/../app/Services/CashierOperationalHistoryService.php';
-require_once __DIR__ . '/../app/Services/CashierOperationalHistoryRequest.php';
 
 use App\Services\CashierOperationalHistoryService;
-use App\Services\CashierOperationalHistoryRequest;
 
-$pdo = new PDO('sqlite::memory:');
+class HistoryCountingPDO extends PDO
+{
+    public int $queries = 0;
+
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        $this->queries++;
+        return parent::prepare($query, $options);
+    }
+}
+
+$pdo = new HistoryCountingPDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, status TEXT);
     INSERT INTO users VALUES (1, 'Casey', 'active'), (2, 'Morgan', 'active');
@@ -34,6 +43,8 @@ $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, sta
         (40,1,10,'2026-09-30 08:25','cash_in',10,'other','Casey drawer'),
         (41,2,11,'2026-09-30 08:55','safe_drop',5,'other','Morgan drawer');");
 
+$pdo->exec('ALTER TABLE sales ADD COLUMN discount_amount REAL DEFAULT 0;
+    CREATE TABLE sale_reversals (sale_id INTEGER, status TEXT, settlement_method TEXT, refund_amount REAL)');
 $service = new CashierOperationalHistoryService($pdo);
 $assert = static function (bool $ok, string $message): void {
     if (!$ok) throw new RuntimeException($message);
@@ -58,7 +69,7 @@ $changesBeforeRequests = (int)$pdo->query('SELECT total_changes()')->fetchColumn
 foreach (['sales' => [[20, 22], 21], 'refunds' => [[30], 31],
     'movements' => [[40], 41], 'shifts' => [[10, 12], 11]] as $type => [$ownIds, $otherId]) {
     $key = CashierOperationalHistoryService::types()[$type]['id'];
-    $list = CashierOperationalHistoryRequest::resolve($pdo, 1, [
+    $list = (new CashierOperationalHistoryService($pdo))->resolve(1, [
         'type' => $type, 'cashier_id' => 2, 'user_id' => 2, 'page' => 1,
     ]);
     $actual = array_map(static fn(array $row): int => (int)$row[$key], $list['rows']);
@@ -66,16 +77,16 @@ foreach (['sales' => [[20, 22], 21], 'refunds' => [[30], 31],
     $assert($actual === $ownIds, "forged {$type} owner filter cannot change list scope");
     $assert($list['record'] === null && $list['recordId'] === null, "{$type} list remains a list request");
 
-    $denied = CashierOperationalHistoryRequest::resolve($pdo, 1, [
+    $denied = (new CashierOperationalHistoryService($pdo))->resolve(1, [
         'type' => $type, 'id' => $otherId, 'cashier_id' => 2, 'user_id' => 2,
     ]);
     $assert($denied['record'] === null && $denied['rows'] === [], "direct {$type} URL cannot reveal another Cashier");
-    $allowed = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => $type, 'id' => $ownIds[0]]);
+    $allowed = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => $type, 'id' => $ownIds[0]]);
     $assert((int)($allowed['record'][$key] ?? 0) === $ownIds[0], "own {$type} direct URL works");
 }
-$invalid = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'shifts', 'id' => '-1']);
+$invalid = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'shifts', 'id' => '-1']);
 $assert($invalid['recordId'] === null && count($invalid['rows']) === 2, 'invalid record ID returns private list');
-$page = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'page' => 2, 'cashier_id' => 2]);
+$page = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'page' => 2, 'cashier_id' => 2]);
 $assert($page['rows'] === [] && $page['page'] === 2, 'page filter does not switch owners');
 $assert((int)$pdo->query('SELECT total_changes()')->fetchColumn() === $changesBeforeRequests,
     'history requests do not write to the database');
@@ -91,29 +102,69 @@ $root = dirname(__DIR__, 3);
 $route = file_get_contents($root . '/src/frontend/components/cashier/history.php');
 $assert(str_contains($route, "require_role(['cashier'])"), 'route requires Cashier workspace');
 $assert(str_contains($route, "(int)\$_SESSION['user_id']"), 'route derives identity from authenticated session');
-$assert(str_contains($route, 'CashierOperationalHistoryRequest::resolve($pdo, $cashierId, $_GET)'),
+$assert(str_contains($route, '(new CashierOperationalHistoryService($pdo))->resolve($cashierId, $_GET)'),
     'route delegates actual request filtering to exercised request path');
 $assert(!str_contains($route, "\$_POST[") && !str_contains($route, 'csrf_verify'), 'history route has no write action');
 $assert(str_contains(file_get_contents($root . '/src/frontend/components/sidebar.php'), 'components/cashier/history.php'),
     'Cashier can navigate to history');
 $insert = $pdo->prepare("INSERT INTO sales (sale_id, cashier_id, sale_date, total_amount, payment_method) VALUES (?, 1, '2026-10-01 12:00', 10, 'cash')");
 for ($saleId = 100; $saleId < 111; $saleId++) $insert->execute([$saleId]);
-$first = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales']);
-$second = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'page' => 2]);
+$first = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales']);
+$second = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'page' => 2]);
 $assert(count($first['rows']) === 10 && $first['hasNext'], 'default page contains ten rows and has a next page');
 $assert(count($second['rows']) === 3 && !$second['hasNext'], 'last page contains the remaining rows');
 $assert(array_intersect(array_column($first['rows'], 'sale_id'), array_column($second['rows'], 'sale_id')) === [], 'pages do not repeat records');
 $assert($first['totalRows'] === 13 && $first['totalPages'] === 2, 'pagination counts only the authenticated Cashier records');
-$larger = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'length' => 25]);
+$larger = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'length' => 25]);
 $assert(count($larger['rows']) === 13 && $larger['totalPages'] === 1 && !$larger['hasNext'], 'page length selector changes pagination');
-$invalidSize = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'length' => '-1']);
+$invalidSize = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'length' => '-1']);
 $assert($invalidSize['pageSize'] === 10, 'unsupported page size uses ten rows');
-$filtered = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'sales', 'date_from' => '2026-10-01', 'date_to' => '2026-10-01']);
+$filtered = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'date_from' => '2026-10-01', 'date_to' => '2026-10-01']);
 $assert($filtered['totalRows'] === 11 && count($filtered['rows']) === 10 && $filtered['hasNext'], 'count and rows use identical date filters');
 $insertRefund = $pdo->prepare("INSERT INTO cash_refunds (refund_id, cashier_id, sale_id, shift_id, created_at, refund_amount, payment_method, reason, note) VALUES (?, 1, 20, 10, '2026-10-01 12:00', 1, 'cash', 'other', 'pagination fixture')");
 for ($refundId = 100; $refundId < 155; $refundId++) $insertRefund->execute([$refundId]);
-$refundFirst = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'refunds']);
-$refundLast = CashierOperationalHistoryRequest::resolve($pdo, 1, ['type' => 'refunds', 'page' => 6]);
+$refundFirst = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'refunds']);
+$refundLast = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'refunds', 'page' => 6]);
 $assert(count($refundFirst['rows']) === 10 && $refundFirst['totalRows'] === 56, 'refund pagination counts only owned refunds');
 $assert(count($refundLast['rows']) === 6 && !$refundLast['hasNext'], 'refund pagination reaches records beyond the former fifty-row limit');
+// Live balances include issuing-drawer refunds and approved legacy reversals.
+$pdo->exec("INSERT INTO sales VALUES (200,1,12,'2026-10-02 10:00',100.50,'cash',110,9.50,0);
+    INSERT INTO cash_drawer_movements VALUES
+        (200,1,12,'2026-10-02 10:01','cash_in',20,'other',NULL),
+        (201,1,12,'2026-10-02 10:02','safe_drop',10,'other',NULL),
+        (202,1,12,'2026-10-02 10:03','cash_out',5,'other',NULL);
+    INSERT INTO cash_refunds VALUES (200,1,20,12,'2026-10-02 10:04',8.25,'cash','other',NULL);
+    INSERT INTO sale_reversals VALUES (200,'approved','cash',2), (200,'pending','cash',50)");
+$pdo->queries = 0;
+$live = $service->resolve(1, ['type' => 'shifts']);
+$assert($pdo->queries === 6, 'shift list uses two history queries and four batched aggregates');
+$byId = array_column($live['rows'], null, 'shift_id');
+$assert($byId[12]['expected_cash'] === 145.25 && $byId[12]['actual_cash'] === null
+    && $byId[12]['cash_variance'] === null, 'open shift shows live expected cash without a counted balance');
+$assert((float)$byId[10]['expected_cash'] === 170.0, 'closed shift retains frozen expected cash despite later refunds');
+$detail = $service->resolve(1, ['type' => 'shifts', 'id' => 12]);
+$assert($detail['record']['expected_cash'] === 145.25, 'direct open-shift detail matches list balance');
+$pdo->exec("INSERT INTO cashier_shifts VALUES
+    (13,1,1,'2026-10-02 10:00',NULL,'open',80,NULL,NULL,NULL,NULL,NULL,NULL)");
+$pdo->queries = 0;
+$live = $service->resolve(1, ['type' => 'shifts']);
+$assert($pdo->queries === 6 && count($live['rows']) === 3, 'additional open shifts do not add queries');
+$byId = array_column($live['rows'], null, 'shift_id');
+$assert($byId[13]['expected_cash'] === 80.0, 'empty open shift starts with opening cash');
+$pdo->queries = 0;
+$service->resolve(1, ['type' => 'shifts', 'id' => 10]);
+$assert($pdo->queries === 1, 'closed-shift lookup needs no live aggregates');
+
+foreach ([['date_from' => '2026-02-30'], ['date_from' => ['invalid']],
+    ['date_from' => '2026-10-02', 'date_to' => '2026-10-01']] as $filters) {
+    $pdo->queries = 0;
+    $invalid = $service->resolve(1, $filters);
+    $assert($invalid['dateError'] !== '' && $invalid['rows'] === [] && $pdo->queries === 0,
+        'invalid date filters return an error without querying records');
+}
+$invalid = $service->resolve(1, ['type' => ['shifts'], 'page' => [], 'length' => [], 'id' => []]);
+$assert($invalid['type'] === 'sales' && $invalid['page'] === 1 && $invalid['pageSize'] === 10
+    && $invalid['recordId'] === null, 'malformed filters safely use private list defaults');
+$bounds = $service->resolve(1, ['page' => 999999]);
+$assert($bounds['page'] === 100000 && $bounds['rows'] === [], 'page upper bound is preserved');
 echo "Cashier operational history contract: passed\n";
