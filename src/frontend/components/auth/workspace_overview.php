@@ -114,7 +114,6 @@ if (isset($workflows[$currentScript])) {
 $walkthroughProgress = isset($pdo, $_SESSION['user_id'])
     ? \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role())
     : ['status' => null, 'active_topic' => null, 'active_step' => 0, 'completed_topics' => [], 'invitation_status' => null];
-
 $activeTopicId = $walkthroughProgress['active_topic'] ?? null;
 $activeTopicDef = $activeTopicId ? \App\Guidance\WorkspaceWalkthroughService::findTopic(current_role(), $activeTopicId) : null;
 $completedTopics = $walkthroughProgress['completed_topics'] ?? [];
@@ -139,7 +138,7 @@ $primaryActionLabel = $isAdmin
 ?>
 <?php if ($guidanceIsHelp): ?>
     <?php if ($isAdmin): ?>
-        <?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
+<?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
             <section class="guidance-continue-card" aria-label="Continue guidance">
                 <div>
                     <h2>Continue where you left off</h2>
@@ -322,6 +321,8 @@ $primaryActionLabel = $isAdmin
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/registers.php?guidance=registers')) ?>">Get oriented: Registers</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?guidance=user_manager')) ?>">Staff accounts</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php?guidance=store_calendar')) ?>">Store calendar</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/report/report_generation.php?guidance=report_generation')) ?>">Daily oversight: Store Reports</a> &middot;
         <?php else: ?>
@@ -337,6 +338,8 @@ $primaryActionLabel = $isAdmin
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php?guidance=store_settings')) ?>">Get oriented: Store Settings</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/registers.php?guidance=registers')) ?>">Get oriented: Registers</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/fiscal_periods.php?guidance=fiscal_periods')) ?>">Get oriented: Fiscal Periods</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/user_manager/user_manager.php?guidance=user_manager')) ?>">Staff accounts</a> &middot;
+            <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php?guidance=store_calendar')) ?>">Store calendar</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/administrator/dashboard.php?guidance=dashboard')) ?>">Daily oversight: Needs Attention</a> &middot;
             <a href="<?= htmlspecialchars(app_url('components/report/report_generation.php?guidance=report_generation')) ?>">Daily oversight: Store Reports</a> &middot;
         <?php else: ?>

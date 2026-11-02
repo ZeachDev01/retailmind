@@ -223,6 +223,8 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            flex-wrap: wrap;
+            max-width: 100%;
         }
         .calendar-month-select select { min-height: 44px; }
         .calendar-grid {
@@ -313,7 +315,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         }
         .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
         .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
-        .calendar-scroll { overflow-x: auto; }
+        .calendar-scroll { overflow-x: auto; max-width: 100%; }
         .schedule-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

@@ -231,7 +231,7 @@ if ($argv[1] === 'inventory_state') {
 if ($argv[1] === 'governance_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
-    foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods'] as $table) {
+    foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods', 'store_calendar', 'store_weekly_schedule'] as $table) {
         $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
     }
     $state['users'] = $pdo->query('SELECT user_id,username,display_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
