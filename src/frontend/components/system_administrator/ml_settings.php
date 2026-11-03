@@ -9,9 +9,6 @@ $fieldGroups = [
     'history' => [
         'title' => 'Forecast window',
     ],
-    'schedule' => [
-        'title' => 'Automated retraining schedule',
-    ],
     'accuracy' => [
         'title' => 'Accuracy thresholds & prediction intervals',
         'description' => 'Demand percentiles define the lower and upper bounds of the forecast range.',
@@ -67,24 +64,6 @@ $definitions = [
         'required' => true,
         'group' => 'forest',
     ],
-    'retrain_frequency_days' => [
-        'label' => 'Retraining interval (days)',
-        'help' => 'Maximum days between automatic retraining runs.',
-        'min' => 1,
-        'max' => 90,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'schedule',
-    ],
-    'retrain_new_sales_records' => [
-        'label' => 'New sales records threshold',
-        'help' => 'New line-item sales records needed to trigger automated retraining.',
-        'min' => 1,
-        'max' => 100000,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'schedule',
-    ],
     'accuracy_threshold_wape' => [
         'label' => 'Error warning threshold (WAPE %)',
         'help' => 'Weighted Absolute Percentage Error warning threshold (lower is better).',
@@ -126,6 +105,17 @@ $definitions = [
 ];
 
 $settings = get_ml_settings($pdo);
+$scheduler = new \App\Forecasting\ForecastingSchedulerService($pdo);
+$effectiveSchedule = $scheduler->getEffectiveSchedule();
+$weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+$trainingTime = DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['weekly_retrain_time']);
+$scheduleFields = [
+    'schedule_weekly_retrain_day' => $effectiveSchedule['weekly_retrain_day'],
+    'schedule_hour' => $trainingTime->format('g'),
+    'schedule_minute' => $trainingTime->format('i'),
+    'schedule_period' => $trainingTime->format('A'),
+];
+$scheduleErrors = [];
 $demoMetadata = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_import_metadata'")->fetchColumn();
 $demoDatabase = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
 $isLocalDemo = $demoMetadata !== false
@@ -178,7 +168,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', ['train', 'approve_demo'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_schedule') {
+    csrf_verify();
+    foreach ($scheduleFields as $key => $value) {
+        $scheduleFields[$key] = is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
+    }
+    if (!in_array($scheduleFields['schedule_weekly_retrain_day'], $weekdays, true)) {
+        $scheduleErrors['schedule_weekly_retrain_day'] = 'Select a weekday from Sunday through Saturday.';
+    }
+    if (!preg_match('/^(?:[1-9]|1[0-2])$/D', $scheduleFields['schedule_hour'])
+        || !preg_match('/^[0-5][0-9]$/D', $scheduleFields['schedule_minute'])
+        || !in_array($scheduleFields['schedule_period'], ['AM', 'PM'], true)) {
+        $scheduleErrors['schedule_time'] = 'Select a time from 12:00 AM to 11:59 PM.';
+    }
+    if (!$scheduleErrors) {
+        $hour = (int)$scheduleFields['schedule_hour'] % 12 + ($scheduleFields['schedule_period'] === 'PM' ? 12 : 0);
+        $scheduleUpdates = [
+            'schedule_weekly_retrain_day' => $scheduleFields['schedule_weekly_retrain_day'],
+            'schedule_weekly_retrain_time' => sprintf('%02d:%s', $hour, $scheduleFields['schedule_minute']),
+        ];
+        try {
+            $pdo->beginTransaction();
+            $saveSchedule = $pdo->prepare('INSERT INTO platform_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)');
+            foreach ($scheduleUpdates as $key => $value) {
+                $saveSchedule->execute([$key, $value, (int)$_SESSION['user_id']]);
+            }
+            $pdo->exec("DELETE FROM ml_settings WHERE setting_key IN ('schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
+            log_activity($pdo, (int)$_SESSION['user_id'], 'ML schedule update', 'Demand Forecasting', null, null, $scheduleUpdates);
+            $pdo->commit();
+            $effectiveSchedule = $scheduler->getEffectiveSchedule();
+            $message = 'Weekly schedule saved. Training starts when due, subject to eligible history and worker availability. No training was queued or model approved by this save.';
+            $messageClass = 'tag-success';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $message = \App\Support\OperatorAlert::message($e, 'Could not save the weekly schedule. Retry.');
+            $messageClass = 'tag-warning';
+        }
+    } else {
+        $message = 'Schedule was not saved. Review the highlighted fields below.';
+        $messageClass = 'tag-warning';
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', ['train', 'approve_demo', 'save_schedule'], true)) {
     csrf_verify();
     $updates = [];
     $errors = [];
@@ -456,6 +489,51 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             </div>
         </section>
 
+        <section class="dashboard-section" aria-labelledby="schedule-heading">
+            <div class="section-header"><div>
+                <h2 id="schedule-heading">Weekly Model Retraining</h2>
+                <p id="effective-training-schedule" class="section-description">Every <?= htmlspecialchars($effectiveSchedule['weekly_retrain_day']) ?> at <?= htmlspecialchars(DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['weekly_retrain_time'])->format('g:i A')) ?>, Philippine time (Asia/Manila).</p>
+            </div></div>
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_schedule">
+                <div class="form-grid">
+                    <div class="form-group<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' invalid' : '' ?>">
+                        <label for="schedule_weekly_retrain_day">Training weekday</label>
+                        <select id="schedule_weekly_retrain_day" name="schedule_weekly_retrain_day" required<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' aria-invalid="true" aria-describedby="schedule_day_error"' : '' ?>>
+                            <?php foreach ($weekdays as $day): ?>
+                                <option value="<?= $day ?>"<?= $scheduleFields['schedule_weekly_retrain_day'] === $day ? ' selected' : '' ?>><?= $day ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if (isset($scheduleErrors['schedule_weekly_retrain_day'])): ?><small id="schedule_day_error" class="field-error"><?= htmlspecialchars($scheduleErrors['schedule_weekly_retrain_day']) ?></small><?php endif; ?>
+                    </div>
+                    <?php foreach ([
+                        'schedule_hour' => ['Training hour', range(1, 12)],
+                        'schedule_minute' => ['Training minute', range(0, 59)],
+                        'schedule_period' => ['AM or PM', ['AM', 'PM']],
+                    ] as $key => [$label, $options]): ?>
+                        <div class="form-group<?= isset($scheduleErrors['schedule_time']) ? ' invalid' : '' ?>">
+                            <div class="forecast-field-label">
+                                <label for="<?= $key ?>"><?= $label ?></label>
+                                <?php if ($key === 'schedule_hour'): ?>
+                                    <?php forecast_help('schedule_time_help', 'Select a time from 12:00 AM to 11:59 PM, Philippine time (Asia/Manila). Prefer a time after Store close. Missed training runs catch up when the PC starts.', 'About training time'); ?>
+                                <?php endif; ?>
+                            </div>
+                            <select id="<?= $key ?>" name="<?= $key ?>" required aria-describedby="schedule_time_help<?= isset($scheduleErrors['schedule_time']) ? ' schedule_time_error' : '' ?>"<?= isset($scheduleErrors['schedule_time']) ? ' aria-invalid="true"' : '' ?>>
+                                <?php foreach ($options as $option): $value = $key === 'schedule_minute' ? sprintf('%02d', $option) : (string)$option; ?>
+                                    <option value="<?= $value ?>"<?= $scheduleFields[$key] === $value ? ' selected' : '' ?>><?= $value ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php if (isset($scheduleErrors['schedule_time'])): ?><small id="schedule_time_error" class="field-error"><?= htmlspecialchars($scheduleErrors['schedule_time']) ?></small><?php endif; ?>
+                <div class="form-actions">
+                    <button class="btn" type="submit">Save weekly schedule</button>
+                    <p class="section-description">Daily Forecast Generation remains separate at <?= htmlspecialchars(DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['daily_forecast_time'])->format('g:i A')) ?>, Philippine time (Asia/Manila).</p>
+                </div>
+            </form>
+        </section>
         <section class="dashboard-section">
             <?php require __DIR__ . '/../report/training_eligibility_policy.php'; ?>
             <details>
