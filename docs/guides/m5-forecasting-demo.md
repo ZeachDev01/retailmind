@@ -21,7 +21,7 @@ Use the account named for each stage. These links open existing pages; changing 
 | [Demand Forecast](http://127.0.0.1:8093/components/report/predictions.php) | Any forecast viewer | Unavailable operational coverage and explained stock-rule fallback. Training completion and historical preview do not establish approved current forecasts. Follow its product links when current forecasts exist. |
 | [Forecast Analytics](http://127.0.0.1:8093/components/report/forecast_analytics.php) | Super Administrator | Available persisted evidence and unavailable current output. Saved M5 test comparisons are on the historical page below, not invented current performance. |
 | [Forecast Exceptions](http://127.0.0.1:8093/components/report/forecast_exceptions.php) | Any forecast viewer | Evidence/approval blockers and the responsible role. |
-| [Historical M5 comparison](http://127.0.0.1:8093/components/report/forecast_replay.php?product_id=1) | Any forecast viewer | Original 2016-04-25–2016-05-22 dates, real daily actual/predicted quantities and final held-out metrics. Product 1 (`FOODS_1_122`) totals 17 actual and 28 displayed predicted units. Select another product to inspect different errors. |
+| [Historical M5 comparison](http://127.0.0.1:8093/components/report/forecast_replay.php?product_id=1) | Any forecast viewer | Original 2016-04-25â€“2016-05-22 dates, real daily actual/predicted quantities and final held-out metrics. Product 1 (`FOODS_1_122`) totals 17 actual and 28 displayed predicted units. Select another product to inspect different errors. |
 | [Replenishment Recommendations](http://127.0.0.1:8093/components/inventory_management/replenishment_queue.php) | Inventory Manager | Separate columns for on hand, stock-rule suggestion and historical expected sales. For product 1 these are 0, 30 and 28 units. Historical quantities are explicitly unapproved; purchase suggestions remain advisory. |
 | [Product Investigation](http://127.0.0.1:8093/components/inventory_management/product_investigation.php?product_id=1) | Inventory Manager | Product stock, unavailable approved forecasts, and stock-rule explanation. Viewing neither buys goods nor changes stock. |
 
@@ -29,7 +29,7 @@ Current-date readiness and historical candidate evaluation answer different ques
 
 ## Actual results and provenance
 
-The shared asynchronous worker processed job **1** on November 3, 16:48:19–16:52:13 Philippine time. Candidate `demo_20261103165213_ed4a4f` completed training but failed qualification. WAPE is error; lower is better.
+The shared asynchronous worker processed job **1** on November 3, 16:48:19â€“16:52:13 Philippine time. Candidate `demo_20261103165213_ed4a4f` completed training but failed qualification. WAPE is error; lower is better.
 
 | Horizon | Candidate WAPE | Repeat-last-week baseline | Maximum | Result |
 | --- | ---: | ---: | ---: | --- |
@@ -39,7 +39,7 @@ The shared asynchronous worker processed job **1** on November 3, 16:48:19–16:52
 
 No gates were lowered and no approval was forced. Observation remains **0 of 28 usable target dates**. Current operational generation and forecast-backed purchasing are blocked. This is an honest demonstration of a completed job and rejected evidence, not an activated model.
 
-The deterministic seed-42 sample contains 50 anonymous CA_1 FOODS products from [skforecast/m5_daily](https://huggingface.co/datasets/skforecast/m5_daily), pinned to revision `9eee585c46882aa28aaaf43733a5c55c3e32f058`. There are 40,700 daily observations totaling 72,005 units, 2014-03-01–2016-05-22. The first 730 days train; three subsequent 28-day blocks supply chronological comparisons. The saved preview contains 4,200 genuine held-out daily predictions in jobs 2–4. Their rounded fold totals are 2,094, 2,382 and 2,916 units; actual totals are 2,322, 2,310 and 3,195.
+The deterministic seed-42 sample contains 50 anonymous CA_1 FOODS products from [skforecast/m5_daily](https://huggingface.co/datasets/skforecast/m5_daily), pinned to revision `9eee585c46882aa28aaaf43733a5c55c3e32f058`. There are 40,700 daily observations totaling 72,005 units, 2014-03-01â€“2016-05-22. The first 730 days train; three subsequent 28-day blocks supply chronological comparisons. The saved preview contains 4,200 genuine held-out daily predictions in jobs 2â€“4. Their rounded fold totals are 2,094, 2,382 and 2,916 units; actual totals are 2,322, 2,310 and 3,195.
 
 The historical page's final-test fractional WAPE is 43.00% / 32.44% / 29.63% for 7/14/28 days. These are separate from the candidate's rounded pooled validation metrics above. Daily display quantities round independently, so their sums are not inputs for recomputing fractional metrics. Each historical fold fits earlier history; saved fold predictions are not outputs from the final refitted candidate.
 

@@ -485,6 +485,27 @@ try {
     assert_test($governance->getApprovedModelVersion() === $candidateVersion, 'Rejected candidate preserves the approved model');
 }
 
+// Review rows and the overall quality decision must describe the same evidence.
+$qualityCandidate = 'store_rf_review_evidence';
+foreach ([7, 14, 28] as $horizon) {
+    $pdo->prepare('INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape) VALUES (?, ?, 0.1, 0.2)')
+        ->execute([$qualityCandidate, $horizon]);
+}
+foreach ([
+    ['0.1', 'NULL', 'blocked'],
+    ['NULL', '0.2', 'blocked'],
+    ['1e999', '0.2', 'blocked'],
+    ['0.1', '1e999', 'blocked'],
+    ['0.1', '0.1', 'failed'],
+    ['0.1', '0.2', 'passed'],
+] as [$wape, $baseline, $expectedStatus]) {
+    $pdo->exec("UPDATE ml_model_evaluations SET wape={$wape}, baseline_wape={$baseline} WHERE model_version='{$qualityCandidate}' AND horizon_days=7");
+    $quality = $governance->getApprovalSummary($qualityCandidate, '2026-09-28')['candidate_quality'];
+    assert_test($quality['horizons'][7]['gate_status'] === $expectedStatus,
+        "Review row reports {$expectedStatus} for model WAPE {$wape} and baseline {$baseline}");
+    assert_test($quality['passed'] === ($expectedStatus === 'passed'), 'Review quality decision agrees with the horizon gate');
+}
+
 echo "\n========================================================\n";
 echo "PASS: All Unified Store Model Governance Contract Tests Passed (Ticket #395)\n";
 echo "========================================================\n";
