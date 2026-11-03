@@ -59,9 +59,9 @@ $originAgeText = $originAgeDays !== null ? ($originAgeDays === 0 ? 'Today' : ($o
 // Guidance target range
 $targetRangeText = 'Unavailable';
 if ($forecastOrigin) {
-    $t7 = date('M d, Y', strtotime("$forecastOrigin +7 days"));
+    $t1 = date('M d, Y', strtotime("$forecastOrigin +1 day"));
     $t28 = date('M d, Y', strtotime("$forecastOrigin +28 days"));
-    $targetRangeText = "{$t7} to {$t28}";
+    $targetRangeText = "{$t1} to {$t28}";
 }
 
 if ($isGenerating) {

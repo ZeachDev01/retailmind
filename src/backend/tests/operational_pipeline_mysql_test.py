@@ -116,7 +116,8 @@ class OperationalPipelineTest(unittest.TestCase):
                     self.assertEqual(full['stock_rule_count'], 0)
                     query("UPDATE products SET status='active' WHERE product_id=2")
                     browser = subprocess.run(['node', str(BACKEND / 'tests/operational_pipeline_browser_test.js')],
-                        env=dict(os.environ, ACCEPTANCE_MODEL=version, ACCEPTANCE_ORIGIN=str(origin), ACCEPTANCE_TOTALS=json.dumps(totals)),
+                        env=dict(os.environ, ACCEPTANCE_MODEL=version, ACCEPTANCE_ORIGIN=str(origin), ACCEPTANCE_TOTALS=json.dumps(totals),
+                                 ACCEPTANCE_RANGE=today.strftime('%b %d, %Y') + ' to ' + (today+timedelta(days=27)).strftime('%b %d, %Y')),
                         capture_output=True, text=True, timeout=90)
                     self.assertEqual(browser.returncode, 0, browser.stdout + browser.stderr)
                     print(browser.stdout.strip())

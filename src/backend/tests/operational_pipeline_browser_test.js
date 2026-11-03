@@ -35,6 +35,7 @@ assert.equal(process.env.DB_HOST, '127.0.0.1');
         let text = await page.locator('body').innerText();
         assert.ok(text.includes(process.env.ACCEPTANCE_MODEL), 'Page identifies worker model');
         assert.ok(text.includes(process.env.ACCEPTANCE_ORIGIN), 'Page identifies forecast origin');
+        assert.ok(text.includes('Horizon: ' + process.env.ACCEPTANCE_RANGE), 'Displayed period spans the complete persisted 28-day output');
         const row = page.getByRole('row').filter({hasText: 'ISOLATED-001'});
         assert.equal(await row.count(), 1);
         const cells = await row.locator('td').allTextContents();
