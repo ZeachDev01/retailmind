@@ -875,54 +875,23 @@ class DemandForecastService
             ];
         }
 
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT * FROM ml_model_evaluations
-                WHERE model_version = ?
-                ORDER BY horizon_days ASC
-            ");
-            $stmt->execute([$targetModel]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable) {
-            $rows = [];
-        }
-
-        if (empty($rows)) {
-            return [
-                'status' => 'still_collecting_evidence',
-                'model_version' => $targetModel,
-                'reason' => sprintf("Genuine Store outcomes are still accumulating for model '%s' (requires completed target dates with Store observations across 7, 14, and 28-day horizons).", $targetModel),
-                'horizons' => [],
-                'notes' => $standardNotes,
-            ];
-        }
-
+        $evidence = $this->getPredictionPerformanceEvidence(null, $targetModel);
         $horizons = [];
-        foreach ($rows as $row) {
-            $h = (int)$row['horizon_days'];
-            $horizons[$h] = [
-                'horizon_days' => $h,
-                'mae' => isset($row['mae']) ? (float)$row['mae'] : null,
-                'rmse' => isset($row['rmse']) ? (float)$row['rmse'] : null,
-                'wape' => isset($row['wape']) ? (float)$row['wape'] : null,
-                'baseline_mae' => isset($row['baseline_mae']) ? (float)$row['baseline_mae'] : null,
-                'baseline_rmse' => isset($row['baseline_rmse']) ? (float)$row['baseline_rmse'] : null,
-                'baseline_wape' => isset($row['baseline_wape']) ? (float)$row['baseline_wape'] : null,
-                'overestimated_units' => isset($row['overestimated_units']) ? (int)$row['overestimated_units'] : null,
-                'underestimated_units' => isset($row['underestimated_units']) ? (int)$row['underestimated_units'] : null,
-                'gate_outcome' => $row['candidate_gate_outcome'] ?? null,
-                'missing_metric_reason' => $row['missing_metric_reason'] ?? null,
-                'data_window_start' => $row['data_window_start'] ?? null,
-                'data_window_end' => $row['data_window_end'] ?? null,
-            ];
+        if ($evidence['status'] === 'genuine_evidence') {
+            foreach ($evidence['metrics_by_horizon'] as $horizon => $metrics) {
+                $horizons[$horizon] = $metrics + ['horizon_days' => $horizon];
+            }
         }
-
         return [
-            'status' => 'available',
+            'status' => $horizons ? 'available' : 'still_collecting_evidence',
             'model_version' => $targetModel,
-            'reason' => null,
+            'reason' => $horizons ? null : $evidence['explanation'],
             'horizons' => $horizons,
             'notes' => $standardNotes,
+            'model_association' => $evidence['model_association'],
+            'product_count' => $evidence['product_count'],
+            'usable_comparison_count' => $evidence['usable_comparison_count'],
+            'date_range' => $evidence['date_range'],
         ];
     }
 

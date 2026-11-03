@@ -351,6 +351,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <?php else: ?>
                 <div class="card" style="padding: 1.25rem; margin-bottom: 1rem;">
                     <p style="margin-top: 0;"><strong>Evaluated model:</strong> <code><?= htmlspecialchars($performanceSummary['model_version'] ?? 'Approved') ?></code></p>
+                    <p class="muted"><?= htmlspecialchars(ucfirst($performanceSummary['model_association'])) ?> model · <?= (int)$performanceSummary['product_count'] ?> Products · <?= (int)$performanceSummary['usable_comparison_count'] ?> usable Product/date comparisons · <?= htmlspecialchars($performanceSummary['date_range']['start'] ?? 'Unavailable') ?> to <?= htmlspecialchars($performanceSummary['date_range']['end'] ?? 'Unavailable') ?>.</p>
                     <div class="table-wrap" role="region" aria-label="Performance metrics table" tabindex="0">
                         <table class="data-table">
                             <thead>
@@ -364,7 +365,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     <th scope="col">Repeat Last Week (Baseline WAPE)</th>
                                     <th scope="col">Overestimated Units</th>
                                     <th scope="col">Underestimated Units</th>
-                                    <th scope="col">Gate Result</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -373,7 +373,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     $baseWapeText = isset($horizon['baseline_wape']) ? number_format($horizon['baseline_wape'] * 100, 1) . '%' : 'Unavailable';
                                     $overUnits = $horizon['overestimated_units'] !== null ? number_format($horizon['overestimated_units']) : 'Not recorded';
                                     $underUnits = $horizon['underestimated_units'] !== null ? number_format($horizon['underestimated_units']) : 'Not recorded';
-                                    $gateClass = ($horizon['gate_outcome'] ?? '') === 'passed' ? 'tag-success' : 'tag-warning';
                                 ?>
                                     <tr>
                                         <td><strong><?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
@@ -384,7 +383,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                         <td><?= htmlspecialchars($baseWapeText) ?></td>
                                         <td><?= htmlspecialchars($overUnits) ?></td>
                                         <td><?= htmlspecialchars($underUnits) ?></td>
-                                        <td><span class="status-badge <?= $gateClass ?>"><?= htmlspecialchars(ucfirst($horizon['gate_outcome'] ?? 'Incomplete')) ?></span></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>

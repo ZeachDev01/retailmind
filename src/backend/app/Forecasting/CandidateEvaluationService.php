@@ -323,19 +323,20 @@ class CandidateEvaluationService
     public function getPredictionPerformanceEvidence(PDO $pdo, string $modelVersion, string $asOfDate, ?string $association = null): array
     {
         $timezone = new \DateTimeZone('Asia/Manila');
-        $hasOrigin = $this->hasColumn($pdo, 'demand_forecasts', 'forecast_origin');
-        $originCondition = $hasOrigin ? "AND df.forecast_origin IS NOT NULL AND df.forecast_origin < df.target_date" : "";
-
         try {
             $stmt = $pdo->prepare("
-                SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day, df.forecast_origin
+                SELECT df.forecast_id, df.product_id, df.target_date, df.predicted_units, df.horizon_day, df.forecast_origin
                 FROM demand_forecasts df
+                JOIN ml_jobs j ON j.job_id = df.job_id
                 WHERE df.model_version = ?
                   AND df.target_date <= ?
-                  AND df.predicted_units IS NOT NULL
                   AND df.predicted_units >= 0
-                  {$originCondition}
-                ORDER BY df.target_date ASC, df.product_id ASC
+                  AND df.horizon_day BETWEEN 1 AND 28
+                  AND df.forecast_origin < df.target_date
+                  AND df.created_at < df.target_date
+                  AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
+                  AND j.completed_at < df.target_date
+                ORDER BY df.target_date ASC, df.product_id ASC, df.forecast_origin DESC, df.forecast_id DESC
             ");
             $stmt->execute([$modelVersion, $asOfDate]);
             $forecasts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -400,7 +401,7 @@ class CandidateEvaluationService
             'model_inputs_description' => 'Store daily sales history, day of week, and lag patterns. Prices and promotions are not active model inputs.',
             'status' => 'unavailable',
             'status_label' => 'Unavailable',
-            'explanation' => 'No completed forecasts or usable Store sales observations available yet for evaluation.',
+            'explanation' => 'No completed forecasts or usable Store sales observations available yet for evaluation. Genuine Store prediction evidence is unavailable.',
             'completed_target_dates' => 0,
             'required_target_dates' => 28,
             'usable_comparison_count' => 0,
@@ -425,6 +426,8 @@ class CandidateEvaluationService
 
         $historyService = new DemandHistoryService();
         $targetDates = [];
+        $productTargetDates = [];
+        foreach ($forecasts as $forecast) $productTargetDates[(int)$forecast['product_id']] = [];
         $productsEvaluated = [];
         $stockoutsEncountered = 0;
         $closuresEncountered = 0;
@@ -434,11 +437,15 @@ class CandidateEvaluationService
         $baselineByHorizon = [7 => [], 14 => [], 28 => []];
         $baselineCache = [];
 
+        $seenTargets = [];
         foreach ($forecasts as $fc) {
             $pid = (int)$fc['product_id'];
             $date = $fc['target_date'];
             $h = (int)$fc['horizon_day'];
             $pred = (float)$fc['predicted_units'];
+            $targetKey = $pid . ':' . $date;
+            if (isset($seenTargets[$targetKey])) continue;
+            $seenTargets[$targetKey] = true;
 
             $ev = $historyService->getDailyEvidence($pdo, $pid, $date, $date, $asOfDate . ' 23:59:59');
             if (empty($ev)) {
@@ -464,6 +471,7 @@ class CandidateEvaluationService
 
             $actual = (float)$day['valid_sales_units'];
             $targetDates[$date] = true;
+            $productTargetDates[$pid][$date] = true;
             $productsEvaluated[$pid] = true;
 
             foreach ([7, 14, 28] as $horizonLimit) {
@@ -477,11 +485,16 @@ class CandidateEvaluationService
                 }
             }
 
-            // Weekly seasonal baseline (same product, 7 days prior)
-            $prevWeekDate = (new \DateTime($date, $timezone))->modify('-7 days')->format('Y-m-d');
-            $cacheKey = "{$pid}_{$prevWeekDate}";
+            // Repeat the final observed week available at the forecast origin, never future outcomes.
+            $previous = (new \DateTimeImmutable($date, $timezone))->modify('-7 days');
+            while ($previous->format('Y-m-d') > $fc['forecast_origin']) {
+                $previous = $previous->modify('-7 days');
+            }
+            $prevWeekDate = $previous->format('Y-m-d');
+            $originCutoff = $fc['forecast_origin'] . ' 23:59:59';
+            $cacheKey = "{$pid}_{$prevWeekDate}_{$originCutoff}";
             if (!array_key_exists($cacheKey, $baselineCache)) {
-                $baseEv = $historyService->getDailyEvidence($pdo, $pid, $prevWeekDate, $prevWeekDate, $asOfDate . ' 23:59:59');
+                $baseEv = $historyService->getDailyEvidence($pdo, $pid, $prevWeekDate, $prevWeekDate, $originCutoff);
                 if (!empty($baseEv) && in_array($baseEv[0]['classification'] ?? '', ['valid_demand', 'genuine_zero'], true)) {
                     $baselineCache[$cacheKey] = (float)$baseEv[0]['valid_sales_units'];
                 } else {
@@ -504,7 +517,7 @@ class CandidateEvaluationService
             }
         }
 
-        $completedDaysCount = count($targetDates);
+        $completedDaysCount = min(array_map('count', $productTargetDates));
         $totalUsableComparisons = count($comparisonsByHorizon[28]);
 
         // Compute metrics per horizon
@@ -561,7 +574,7 @@ class CandidateEvaluationService
             $baseOverUnits = null;
             $baseUnderUnits = null;
 
-            if ($baseCount > 0) {
+            if ($baseCount > 0 && $baseCount === $count) {
                 $bOverUnits = 0.0;
                 $bUnderUnits = 0.0;
                 $bAbsErrors = [];
@@ -635,18 +648,22 @@ class CandidateEvaluationService
         ];
 
         // State determination
-        if ($completedDaysCount >= 28) {
+        if ($isDemo) {
+            $status = 'collecting_evidence';
+            $statusLabel = 'Demo evidence';
+            $explanation = 'Demo outcomes demonstrate the workflow only; genuine Store prediction evidence is still collecting.';
+        } elseif ($completedDaysCount >= 28) {
             $status = 'genuine_evidence';
             $statusLabel = 'Genuine Store evidence';
-            $explanation = 'Performance measured against genuine Store sales outcomes across 28+ completed target dates.';
-        } elseif ($completedDaysCount > 0) {
+            $explanation = 'Performance measured against genuine Store sales outcomes across 28+ completed target dates for every evaluated Product.';
+        } elseif (!empty($targetDates)) {
             $status = 'collecting_evidence';
             $statusLabel = 'Still collecting evidence';
-            $explanation = "Still collecting evidence: {$completedDaysCount} of 28 completed target dates backed by usable Store observations. Requires at least 28 completed target dates backed by usable Store observations before prediction performance can be established.";
+            $explanation = "Still collecting evidence: {$completedDaysCount} of 28 completed target dates backed by usable Store observations. Requires at least 28 completed target dates backed by usable Store observations for every evaluated Product before prediction performance can be established.";
         } else {
             $status = 'unavailable';
             $statusLabel = 'Unavailable';
-            $explanation = 'No completed forecasts or usable Store sales observations available yet for evaluation.';
+            $explanation = 'No completed forecasts or usable Store sales observations available yet for evaluation. Genuine Store prediction evidence is unavailable.';
         }
 
         return [
