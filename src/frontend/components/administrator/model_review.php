@@ -156,7 +156,7 @@ $formatUnits = static function ($val): string {
                 <span class="stat-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></span>
                 <div class="label">Approved Store Model</div>
                 <div class="value" style="font-size: 1.1rem;"><?= htmlspecialchars($summary['approved_version'] ?: 'None yet (First model)') ?></div>
-                <div class="hint">Active operational guidance</div>
+                <div class="hint">Approved version for Store forecasting</div>
             </article>
 
             <article class="stat-card with-icon">
@@ -168,9 +168,9 @@ $formatUnits = static function ($val): string {
 
             <article class="stat-card with-icon <?= !empty($summary['is_recommendations_suspended']) ? 'status-warning' : (!empty($summary['approved_version']) ? 'status-healthy' : 'status-neutral') ?>">
                 <span class="stat-icon"><i class="bi bi-cart-check" aria-hidden="true"></i></span>
-                <div class="label">Purchasing Suggestions</div>
-                <div class="value"><?= !empty($summary['is_recommendations_suspended']) ? 'Paused' : (!empty($summary['approved_version']) ? 'Active' : 'No approved model') ?></div>
-                <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Available for replenishment' : 'Stock rules in effect until model approved') ?></div>
+                <div class="label">Forecast Guidance Approval</div>
+                <div class="value"><?= !empty($summary['is_recommendations_suspended']) ? 'Paused' : (!empty($summary['approved_version']) ? 'Approved' : 'No approved model') ?></div>
+                <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Check Demand Forecast for current Product coverage' : 'Stock rules in effect until model approved') ?></div>
             </article>
         </div>
 

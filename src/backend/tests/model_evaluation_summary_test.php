@@ -44,6 +44,7 @@ foreach ([7, 14, 28] as $horizon) $insert->execute(['candidate<script>', $horizo
 $before = $pdo->query('SELECT total_changes()')->fetchColumn();
 $passed = render_review($pdo, 'old-forecast');
 check(substr_count($passed, '>Passed<') === 3, 'All three horizons should pass with good evidence');
+check(str_contains($passed, 'Daily errors') && str_contains($passed, 'not errors of summed horizon totals'), 'Summary distinguishes daily outcome errors from summed-horizon technical qualification');
 check(str_contains($passed, '20.00%') && str_contains($passed, '30.00%'), 'Errors must display as percentages');
 check(str_contains($passed, 'Observation only') && str_contains($passed, 'Not the approved model'), 'Passing checks must not imply approval');
 check(str_contains($passed, 'differs from the approved model'), 'Old displayed forecasts must be distinguished');

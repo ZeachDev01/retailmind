@@ -78,6 +78,8 @@ def build_feature_matrix(df, cutoff_date, horizon_days=28):
     raw_history = normalize_history(df)
     cutoff = pd.Timestamp(cutoff_date)
     raw_history = raw_history[raw_history.date <= cutoff]
+    if "available_date" in raw_history:
+        raw_history = raw_history[raw_history.available_date <= cutoff].drop_duplicates(["product_id", "date"], keep="last")
     data = history_at(df, cutoff_date)
     expected = pd.date_range(cutoff - pd.Timedelta(days=27), cutoff)
     rows = []

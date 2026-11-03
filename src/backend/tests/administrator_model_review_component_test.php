@@ -301,6 +301,7 @@ assert_test($stmtApproved->fetchColumn() === $candidateV1, 'Candidate V1 is acti
 // Check rendering of approved model
 $htmlApproved = render_model_review($pdo, 'admin');
 assert_test(str_contains($htmlApproved, 'Selected as approved model'), 'Status shows "Selected as approved model"');
+assert_test(!str_contains($htmlApproved, 'Available for replenishment') && !str_contains($htmlApproved, 'Active operational guidance'), 'Approval without current saved forecasts never claims usable buying guidance');
 assert_test(str_contains($htmlApproved, 'Pause Purchasing Suggestions'), 'Pause button is visible for operational controls');
 
 // =========================================================================
