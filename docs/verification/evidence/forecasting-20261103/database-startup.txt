@@ -1,0 +1,18 @@
+Executing ml_worker.py synchronously...
+
+[03-Nov-2026 08:55:21 Asia/Manila] Database connection failed: PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\app\Core\Database.php:37
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\app\Core\Database.php(37): PDO->__construct('mysql:host=127....', 'root', Object(SensitiveParameterValue), Array)
+#1 C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\app\Core\Database.php(77): App\Core\Database::connection(Array)
+#2 C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\scripts\run_scheduler.php(33): App\Core\Database::connectionWithRetry()
+#3 {main}
+
+[03-Nov-2026 08:55:24 Asia/Manila] PHP Deprecated:  App\Forecasting\ForecastingSchedulerService::recoverExpiredLeases(): Implicitly marking parameter $now as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\app\Forecasting\ForecastingSchedulerService.php on line 42
+
+[03-Nov-2026 08:55:24 Asia/Manila] PHP Deprecated:  App\Forecasting\ForecastingSchedulerService::runScheduler(): Implicitly marking parameter $now as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\.worktrees\ticket-418\src\backend\app\Forecasting\ForecastingSchedulerService.php on line 77
+{"database": "retailmind_acceptance_6fe740ef7cb2", "port": 14832, "scheduler_started_asia_manila": "2026-11-03T08:55:20.686665+08:00", "database_available_asia_manila": "2026-11-03T08:55:24.315067+08:00", "job": {"job_id": 1, "status": "succeeded", "attempts": 1, "evidence_cutoff": null, "started_at": "2026-11-03 08:55:26", "completed_at": "2026-11-03 08:55:30"}, "training_run_id": 1, "model_version": "v20261103085530_c6d332", "completed_asia_manila": "2026-11-03T08:55:30.971552+08:00", "provenance": "260 synthetic import rows; isolated process; not unattended boot"}
+.
+----------------------------------------------------------------------
+Ran 1 test in 17.337s
+
+OK
