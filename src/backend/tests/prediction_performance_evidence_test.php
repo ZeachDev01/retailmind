@@ -104,7 +104,8 @@ function create_test_pdo(): PDO
             predicted_units INT,
             model_version VARCHAR(100),
             readiness_level VARCHAR(50),
-            limitation_marker VARCHAR(255)
+            limitation_marker VARCHAR(255),
+            created_at DATETIME NOT NULL DEFAULT '2026-08-01 01:00:00'
         );
         CREATE TABLE platform_settings (
             setting_key VARCHAR(100) PRIMARY KEY,
@@ -189,6 +190,15 @@ $assert(str_contains($evidence2['explanation'], '5 of 28 completed target dates'
 $assert(str_contains($evidence2['explanation'], 'Requires at least 28 completed target dates'), "Explanation gives explicit reason");
 $assert($evidence2['status'] !== 'genuine_evidence', "Operational job success did NOT falsely become genuine evidence");
 
+$pdo->exec("UPDATE ml_jobs SET completed_at = '2026-10-07 01:00:00' WHERE job_id = 1");
+$retrospective = $forecastService->getPredictionPerformanceEvidence('2026-10-06');
+$assert($retrospective['usable_comparison_count'] === 0, 'Retrospectively generated forecasts are excluded despite historical origin');
+$pdo->exec("UPDATE ml_jobs SET completed_at = '2026-10-01 01:15:00' WHERE job_id = 1");
+$pdo->exec("UPDATE demand_forecasts SET created_at = '2026-10-07 01:00:00'");
+$retrospectiveRows = $forecastService->getPredictionPerformanceEvidence('2026-10-06');
+$assert($retrospectiveRows['usable_comparison_count'] === 0, 'Forecasts persisted after outcomes are excluded');
+$pdo->exec("UPDATE demand_forecasts SET created_at = '2026-10-01 01:15:00'");
+
 // -------------------------------------------------------------
 // Test 3: Model association, Candidate/Current/Previous, and Truthful Inputs
 // -------------------------------------------------------------
@@ -259,6 +269,13 @@ $assert($h7['overestimated_count'] === 1, "Overestimated count is 1");
 $assert($h7['underestimated_count'] === 1, "Underestimated count is 1");
 $assert($h7['usable_comparisons'] === 2, "Usable comparison count is 2");
 
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, target_date, predicted_units, forecast_origin, model_version)
+    VALUES (1, 1, 2, '2026-10-02', 999, '2026-09-30', 'rf_store_v1')");
+$overlap = $forecastService->getPredictionPerformanceEvidence('2026-10-02');
+$assert($overlap['usable_comparison_count'] === 2, 'Overlapping windows do not multiply independent Product/date outcomes');
+$assert($overlap['metrics_by_horizon'][7]['mae'] === 5.0, 'Latest eligible origin supplies each Product/date/horizon comparison');
+$pdo->exec("DELETE FROM demand_forecasts WHERE predicted_units = 999");
+
 // -------------------------------------------------------------
 // Test 5: Weekly Seasonal Naive comparison on matching eligible periods
 // -------------------------------------------------------------
@@ -282,6 +299,23 @@ $h7Base = $evidenceBaseline['metrics_by_horizon'][7];
 $assert($h7Base['baseline_mae'] === 3.0, "Baseline MAE is 3.0 on matching eligible period");
 $assert($h7Base['baseline_overestimated_units'] === 3.0, "Baseline overestimated units is 3.0");
 $assert($h7Base['baseline_underestimated_units'] === 3.0, "Baseline underestimated units is 3.0");
+
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, target_date, predicted_units, forecast_origin, model_version)
+    VALUES (1, 1, 15, '2026-10-16', 20, '2026-10-01', 'rf_store_v1');
+    INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES
+        ('2026-10-09', 'open', '2026-09-20 00:00:00'), ('2026-10-16', 'open', '2026-09-20 00:00:00');
+    INSERT INTO sales (sale_id, sale_date) VALUES (109, '2026-10-09 12:00:00'), (116, '2026-10-16 12:00:00');
+    INSERT INTO sale_items (sale_id, product_id, quantity) VALUES (109, 1, 99), (116, 1, 15);
+    INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 500, 'delivery', '2026-10-09 08:00:00')");
+$frozenBaseline = $forecastService->getPredictionPerformanceEvidence('2026-10-16');
+$assert($frozenBaseline['metrics_by_horizon'][28]['baseline_mae'] === 3.0, 'Weekly baseline repeats the last week known at forecast origin for long horizons');
+$pdo->exec('DELETE FROM sale_items WHERE sale_id = 92');
+$pdo->exec("DELETE FROM stock_movements WHERE product_id = 2 AND moved_at < '2026-10-01'");
+$incomparable = $forecastService->getPredictionPerformanceEvidence('2026-10-02');
+$assert($incomparable['metrics_by_horizon'][7]['baseline_mae'] === null, 'Baseline stays unavailable when it does not match the model comparison population');
+// Restore baseline evidence for the stockout/closure checks below.
+$pdo->exec("INSERT INTO sale_items (sale_id, product_id, quantity) VALUES (92, 2, 18);
+    INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (2, 25, 'delivery', '2026-09-25 08:00:00')");
 
 // -------------------------------------------------------------
 // Test 6: Incomplete demand / Stockouts, Closures, Unknown history
@@ -357,6 +391,21 @@ $assert($evidence28['status_label'] === 'Genuine Store evidence', "Status label 
 $assert($evidence28['completed_target_dates'] >= 28, "Completed target dates is >= 28");
 $assert($evidence28['metrics_by_horizon'][28]['overestimated_units'] > 0, "28-day overestimated units calculated");
 $assert($evidence28['metrics_by_horizon'][28]['mae'] === 2.0, "28-day MAE is exactly 2.0 (|10-8|)");
+
+$summary28 = $forecastService->getPerformanceSummary('rf_store_v1');
+$assert($summary28['status'] === 'available', 'Landing summary uses genuine subsequent prediction outcomes');
+$assert($summary28['horizons'][28]['mae'] === 2.0, 'Landing summary reports the same observed MAE as detailed evidence');
+
+$pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('demo_import_metadata', '{\"source_label\":\"S001\"}')");
+$demo28 = $forecastService->getPredictionPerformanceEvidence('2026-09-30');
+$assert($demo28['status'] !== 'genuine_evidence', '28 demo target dates never become genuine Store evidence');
+$pdo->exec("DELETE FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
+$pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (2, 'SKU-002', 'Unobserved Product');
+    INSERT INTO demand_forecasts (job_id, product_id, horizon_day, target_date, predicted_units, forecast_origin, model_version)
+        VALUES (1, 2, 1, '2026-09-02', 10, '2026-09-01', 'rf_store_v1')");
+$partialProducts = $forecastService->getPredictionPerformanceEvidence('2026-09-30');
+$assert($partialProducts['status'] !== 'genuine_evidence', '28 dates for one Product cannot qualify an unobserved Product');
+$pdo->exec('DELETE FROM demand_forecasts WHERE product_id = 2');
 
 // -------------------------------------------------------------
 // Test 9: Public evaluation boundary on CandidateEvaluationService

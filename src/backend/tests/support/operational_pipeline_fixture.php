@@ -1,0 +1,64 @@
+<?php
+declare(strict_types=1);
+// Disposable acceptance database only; all production behavior uses public services.
+if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
+error_reporting(E_ALL & ~E_DEPRECATED);
+require_once __DIR__ . '/../../bootstrap/app.php';
+require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../app/Services/NotificationService.php';
+set_exception_handler(static function (Throwable $e): void { fwrite(STDERR, (string)$e); exit(1); });
+$config = require __DIR__ . '/../../config/database.php';
+$database = (string)$config['database'];
+if (!preg_match('/^retailmind_acceptance_[a-f0-9]{12}$/D', $database)
+    || $config['host'] !== '127.0.0.1' || getenv('RUN_DB_TESTS') !== '1') {
+    throw new RuntimeException('Explicit disposable local acceptance database required.');
+}
+$pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
+    $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$action = $argv[1] ?? '';
+if ($action === 'setup') {
+    $pdo->exec("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; USE `{$database}`; SET FOREIGN_KEY_CHECKS=0");
+    preg_match_all('/CREATE TABLE `[^`]+` \(.*?\) ENGINE=[^;]+;/s', file_get_contents(__DIR__ . '/../../database/sql/schema.sql'), $tables);
+    foreach ($tables[0] as $ddl) $pdo->exec($ddl);
+    $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
+    foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $index => $role) {
+        $id = $index + 1;
+        $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
+        $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,?,?,0)')
+            ->execute([$id,'Acceptance',$role,'Acceptance ' . $role,'acceptance_' . $role,password_hash('AcceptanceTest@2026',PASSWORD_DEFAULT),$id]);
+    }
+    (new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
+    $pdo->exec('ALTER TABLE demand_forecasts MODIFY model_version VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL');
+    $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,reorder_level,safety_stock) VALUES
+        (1,'ISOLATED-001','ISOLATED-001','Isolated synthetic history',25,10,10,3),
+        (2,'ISOLATED-002','ISOLATED-002','Isolated excluded product',25,10,10,3);
+        INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,0),(2,0);
+        INSERT INTO platform_settings (setting_key,setting_value) VALUES
+        ('ml_max_wape_7d','0.35'),('ml_max_wape_14d','0.35'),('ml_max_wape_28d','0.35')
+        ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+    echo '{}'; exit;
+}
+$pdo->exec("USE `{$database}`");
+$today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+$yesterday = (new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
+switch ($action) {
+    case 'queue':
+        $id = (new App\Services\MlJobService($pdo))->enqueue($argv[2], 1, 'super_admin');
+        echo json_encode(['job_id' => $id]); break;
+    case 'tick':
+        $result = (new App\Forecasting\ForecastingSchedulerService($pdo))->runScheduler();
+        (new NotificationService($pdo))->checkAndNotifyForecasts();
+        echo json_encode($result); break;
+    case 'summary':
+        $activation = new App\Forecasting\StoreActivationService($pdo, null, null, $argv[3]);
+        echo json_encode($activation->getApprovalSummary($argv[2], $yesterday)); break;
+    case 'approve':
+        $activation = new App\Forecasting\StoreActivationService($pdo, null, null, $argv[3]);
+        echo json_encode($activation->activateStoreModel($argv[2], $yesterday, 2, 'Isolated synthetic workflow evidence only', 'admin')); break;
+    case 'guidance':
+        $forecasts = new App\Forecasting\DemandForecastService($pdo);
+        $job = $forecasts->getLatestUsableJobId($today);
+        echo json_encode(['job_id' => $job, 'coverage' => $forecasts->getCoverage($job, $today),
+            'recommendations' => (new App\Forecasting\ReplenishmentQueueService($pdo))->getRecommendations($job, $today)]); break;
+    default: throw new RuntimeException('Unknown acceptance fixture action.');
+}

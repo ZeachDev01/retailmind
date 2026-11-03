@@ -129,6 +129,7 @@ def claim_job(conn):
             WHERE job_id = %s
         """, (job_id,))
         conn.commit()
+        job['attempts'] += 1
         return job
 
 def process_job(conn, job):
