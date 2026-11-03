@@ -788,29 +788,10 @@ assert_same($candidateVersion1, $latestObsJob['model_version'], 'Candidate 1 sur
 // =============================================================================
 echo "\n--- Section 7: Automated Qualification & Local Administrator Approval ---\n";
 
-$testModelsDir = sys_get_temp_dir() . '/retailmind_workflow_models_' . uniqid();
-mkdir($testModelsDir, 0777, true);
-file_put_contents($testModelsDir . '/random_forest_candidate_' . $candidateVersion1 . '.json', json_encode([
-    'model_version' => $candidateVersion1,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
-file_put_contents($testModelsDir . '/random_forest_candidate_' . $candidateVersion2 . '.json', json_encode([
-    'model_version' => $candidateVersion2,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
-register_shutdown_function(function() use ($testModelsDir) {
-    if (is_dir($testModelsDir)) {
-        foreach (glob($testModelsDir . '/*') as $f) {
-            @unlink($f);
-        }
-        @rmdir($testModelsDir);
-    }
-});
-
 $evalService = new CandidateEvaluationService($pdo);
-$activationService = new StoreActivationService($pdo, $evalService, null, $testModelsDir);
+$activationService = new StoreActivationService($pdo, $evalService);
+require_once __DIR__ . '/support/governance_fixture.php';
+governance_fixture($pdo, $activationService, [$candidateVersion1, $candidateVersion2]);
 
 // 7.1 Record candidate quality evaluations (7d, 14d, 28d) beating baseline and max WAPE limits
 $pdo->exec("

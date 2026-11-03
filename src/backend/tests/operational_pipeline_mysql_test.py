@@ -68,8 +68,17 @@ class OperationalPipelineTest(unittest.TestCase):
                     run = query('SELECT * FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')[0]
                     version = run['model_version']
                     self.assertFalse(version.startswith('demo_'))
-                    self.assertEqual(json.loads(run['metrics_json'])['metadata']['observations'], 260)
-                    self.assertIn('not', php('approve', version, models, success=False).lower())
+                    actual_evaluation = json.loads(run['metrics_json'])
+                    self.assertEqual(actual_evaluation['metadata']['observations'], 260)
+                    ml_worker.observe_model(version)
+                    generated_observation = query("SELECT job_id,status FROM ml_jobs WHERE trigger_type='forecast_observation'")[0]
+                    self.assertEqual(generated_observation['status'], 'succeeded')
+                    observed_rows = query('SELECT limitation_marker FROM demand_forecasts WHERE job_id=%s', (generated_observation['job_id'],))
+                    self.assertEqual(len(observed_rows), 28)
+                    self.assertTrue(all('Observation only' in r['limitation_marker'] for r in observed_rows))
+                    self.assertEqual(php('guidance')['coverage']['forecast_backed_count'], 0)
+                    self.assertFalse(php('summary', version, models)['can_approve'])
+                    php('approve', version, models, success=False)
                     # Synthetic historical qualification is explicitly isolated workflow evidence.
                     query("UPDATE ml_model_evaluations SET mae=1,rmse=1,wape=0.1,baseline_mae=2,baseline_rmse=2,baseline_wape=0.2,candidate_gate_outcome='passed' WHERE model_version=%s", (version,))
                     query("INSERT INTO ml_jobs (trigger_type,status,queued_at,completed_at,attempts,model_version) VALUES ('forecast_observation','succeeded',NOW(),NOW(),1,%s)", (version,))
@@ -100,6 +109,12 @@ class OperationalPipelineTest(unittest.TestCase):
                     self.assertEqual(recommendations[1]['expected_sales_28_day'], totals[2])
                     self.assertEqual(recommendations[2]['basis'], 'Stock-rule suggestion')
                     self.assertIsNone(recommendations[2]['expected_sales_28_day'])
+                    query("UPDATE products SET status='inactive' WHERE product_id=2")
+                    full = php('guidance')['coverage']
+                    self.assertEqual(full['scope_count'], 1)
+                    self.assertEqual(full['forecast_backed_count'], 1)
+                    self.assertEqual(full['stock_rule_count'], 0)
+                    query("UPDATE products SET status='active' WHERE product_id=2")
                     browser = subprocess.run(['node', str(BACKEND / 'tests/operational_pipeline_browser_test.js')],
                         env=dict(os.environ, ACCEPTANCE_MODEL=version, ACCEPTANCE_ORIGIN=str(origin), ACCEPTANCE_TOTALS=json.dumps(totals)),
                         capture_output=True, text=True, timeout=90)
@@ -147,6 +162,8 @@ class OperationalPipelineTest(unittest.TestCase):
                     active = query("SELECT is_active FROM attention_states WHERE attention_key='store.forecasting.failure'")
                     self.assertTrue(all(not r['is_active'] for r in active))
                     print(json.dumps({'database': database, 'model': version, 'training_run_id': run['training_run_id'],
+                                      'actual_training_gate': actual_evaluation['metadata'].get('outcome'),
+                                      'actual_observation_job': generated_observation['job_id'],
                                       'forecast_job': operational['job_id'], 'totals_7_14_28': totals,
                                       'failed_job': failed_id, 'recovered_job': recovery_id, 'notice_ids': [n['notification_id'] for n in notice],
                                       'timestamp_asia_manila': datetime.now(ZoneInfo('Asia/Manila')).isoformat()}))
