@@ -17,7 +17,7 @@ const output = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-superadmin-performance-
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(output, 'recovery')};
 const screens = [
     'super_administrator/dashboard', 'user_manager/user_manager',
-    'system_administrator/audit_logs', 'system_administrator/recovery_account',
+    'system_administrator/audit_logs',
     'system_administrator/system_health', 'system_administrator/ml_settings',
     'administrator/reset_data', 'system_administrator/backup_restore',
     'system_administrator/system_settings', 'system_administrator/database_updates',

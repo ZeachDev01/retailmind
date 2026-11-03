@@ -88,8 +88,9 @@ try {
     $assert(($view['headline']['ml_health']['status'] ?? '') === 'warning', 'ML health must be independently visible');
     $assert(($view['headline']['privileged_accounts']['value'] ?? 0) >= 1, 'Privileged-account anomalies must be visible');
     $assert(!isset($view['access']['emergency']), 'Retired Emergency Access card must be absent');
-    $assert(($view['access']['recovery']['status'] ?? '') === 'unsealed', 'Recovery Account seal status must be visible');
-    $assert(!array_key_exists('activation_secret_hash', $view['access']['recovery']), 'Recovery Account credentials must never be returned');
+    $assert(!isset($view['access']['recovery']), 'Retired Recovery Account status must be absent');
+    $recoveryWarnings = array_values(array_filter($view['attention'], static fn(array $item): bool => $item['key'] === 'platform.recovery-account.active'));
+    $assert(($recoveryWarnings[0]['destination'] ?? '') === 'components/system_administrator/audit_logs.php', 'Unsealed Recovery Account warning must lead to Protected Audit Records');
     $assert($view['continuity']['sales_flowing']['ok'] === true, 'Store continuity must show whether sales are flowing');
     $assert($view['continuity']['active_shifts']['value'] === 1, 'Store continuity must show active shifts');
     $assert($view['continuity']['severe_inventory_disruption']['ok'] === false, 'Store continuity must expose severe inventory disruption');
