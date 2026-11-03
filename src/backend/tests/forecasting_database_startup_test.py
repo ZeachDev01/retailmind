@@ -17,6 +17,39 @@ import pymysql
 BACKEND = Path(__file__).resolve().parents[1]
 
 
+def stop_owned_process_tree(process):
+    """Terminate this test's exact Popen tree and bound inherited-pipe cleanup."""
+    if process.poll() is None:
+        if os.name == 'nt':
+            stopped = subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+            if process.poll() is None:
+                stopped.check_returncode()
+        else:
+            process.kill()
+    process.communicate(timeout=10)
+
+
+@unittest.skipUnless(os.name == 'nt', 'Windows owned-process tree cleanup contract')
+class ProcessCleanupTest(unittest.TestCase):
+    def test_child_inherited_pipes_do_not_keep_cleanup_waiting(self):
+        with tempfile.TemporaryDirectory(prefix='retailmind_process_cleanup_') as directory:
+            marker = Path(directory) / 'child-started'
+            script = ("import subprocess,sys,time; from pathlib import Path; "
+                "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+                "Path(sys.argv[1]).touch(); time.sleep(60)")
+            process = subprocess.Popen([sys.executable, '-c', script, str(marker)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
+            try:
+                deadline = time.monotonic() + 5
+                while not marker.exists() and time.monotonic() < deadline:
+                    time.sleep(.05)
+                self.assertTrue(marker.exists(), 'Owned child must start before testing tree cleanup')
+            finally:
+                stop_owned_process_tree(process)
+            self.assertIsNotNone(process.poll())
+
+
 @unittest.skipUnless(os.getenv('RUN_DB_TESTS') == '1', 'Set RUN_DB_TESTS=1 for disposable MariaDB acceptance')
 class DatabaseStartupTest(unittest.TestCase):
     def test_scheduler_waits_for_database_then_completes_actual_worker(self):
@@ -125,24 +158,25 @@ class DatabaseStartupTest(unittest.TestCase):
                     'completed_asia_manila': datetime.now(ZoneInfo('Asia/Manila')).isoformat(),
                     'provenance': '260 synthetic import rows; isolated process; not unattended boot'}, default=str))
             finally:
-                if scheduler is not None and scheduler.poll() is None:
-                    scheduler.kill()
-                    scheduler.communicate()
-                if server is not None and server.poll() is None:
+                try:
                     try:
-                        connection = connect()
-                        connection.cursor().execute('SHUTDOWN')
-                        connection.close()
-                        server.wait(timeout=20)
+                        if scheduler is not None:
+                            stop_owned_process_tree(scheduler)
                     finally:
-                        if server.poll() is None:
-                            server.kill()
-                            server.wait(timeout=20)
-                if config_created:
-                    config.unlink()
-                # TemporaryDirectory removes only this resolved, owned system-temp root.
-                self.assertEqual(root.parent, Path(tempfile.gettempdir()).resolve())
-                self.assertTrue(root.name.startswith('retailmind_db_startup_'))
+                        if server is not None and server.poll() is None:
+                            try:
+                                connection = connect()
+                                connection.cursor().execute('SHUTDOWN')
+                                connection.close()
+                                server.wait(timeout=20)
+                            finally:
+                                stop_owned_process_tree(server)
+                finally:
+                    if config_created:
+                        config.unlink()
+                    # TemporaryDirectory removes only this resolved, owned system-temp root.
+                    self.assertEqual(root.parent, Path(tempfile.gettempdir()).resolve())
+                    self.assertTrue(root.name.startswith('retailmind_db_startup_'))
 
 
 if __name__ == '__main__':
