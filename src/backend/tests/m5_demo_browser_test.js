@@ -53,6 +53,17 @@ c.close();print(json.dumps(r,default=str))
         await expect(page.locator('main')).toContainText('Original dates are unchanged');
         await expect(page.locator('main')).toContainText('No Store model or purchasing guidance was approved');
         await expect(page.locator('#replay-comparison tbody tr')).toHaveCount(28);
+        const dailyTotals = await page.locator('#replay-comparison tbody tr').evaluateAll(rows => rows.reduce((totals, row) => ({
+            predicted: totals.predicted + Number(row.cells[2].textContent),
+            actual: totals.actual + Number(row.cells[3].textContent),
+        }), { predicted: 0, actual: 0 }));
+        assert.deepEqual(dailyTotals, { predicted: 28, actual: 17 }, 'FOODS_1_122 final held-out block matches the saved experiment');
+        assert.equal(dailyTotals.predicted, Number(before.product_1_expected));
+        const metrics = page.locator('section[aria-labelledby="replay-metrics"] tbody tr');
+        await expect(metrics).toHaveCount(3);
+        for (const [index, values] of [['7 days', '43.00%', '37.88%'], ['14 days', '32.44%', '37.71%'], ['28 days', '29.63%', '36.53%']].entries()) {
+            for (const value of values) await expect(metrics.nth(index)).toContainText(value);
+        }
         await expect(page.locator('#replay-stock-table tbody tr')).toHaveCount(50);
         assert.equal(await page.locator('#replay-stock-table th').count(), 4);
         const product = page.locator('#replay-stock-table tr[data-product-id="1"]');
@@ -79,6 +90,21 @@ c.close();print(json.dumps(r,default=str))
         await expect(expectedRow.locator('td').nth(3)).toContainText('Historical demo');
         await expect(expectedRow.locator('td').nth(3)).toContainText('unapproved');
         await page.screenshot({ path: path.join(output, 'stock-rules.png'), fullPage: true });
+        const reviewer = await browser.newPage();
+        await reviewer.goto(baseURL + '/?login=1');
+        await reviewer.fill('#landing-login-username', 'demo_super_admin');
+        await reviewer.fill('#landing-login-password', process.env.DEMO_PASSWORD);
+        await Promise.all([reviewer.waitForNavigation({ waitUntil: 'domcontentloaded' }), reviewer.locator('#landing-login-password').press('Enter')]);
+        await reviewer.goto(baseURL + '/components/system_administrator/ml_settings.php');
+        await expect(reviewer.locator('.ml-job-status')).toContainText('#1 (Succeeded)');
+        await expect(reviewer.getByRole('button', { name: 'Approve demo model', exact: true })).toBeDisabled();
+        const candidateMetrics = reviewer.getByRole('table', { name: 'Candidate evaluation metrics' }).locator('tbody tr');
+        await expect(candidateMetrics).toHaveCount(3);
+        for (const [index, values] of [['7 days', '44.33%', '39.81%', 'failed'], ['14 days', '40.86%', '41.11%', 'failed'], ['28 days', '40.64%', '41.97%', 'failed']].entries()) {
+            for (const value of values) await expect(candidateMetrics.nth(index)).toContainText(value);
+        }
+        await expect(reviewer.locator('.ml-eval-meta').filter({ hasText: 'Observation progress:' })).toContainText('0 of 28 usable target dates completed');
+        await reviewer.close();
         assert.deepEqual(state(), before, 'Reviewing the Demo must not change stock, jobs, evidence or approval');
         fs.writeFileSync(path.join(output, 'verification.json'), JSON.stringify(before, null, 2));
         console.log('M5 Demo browser checks passed: 50 products, original dates, actual-versus-predicted, four columns, mobile, no stock/job/approval changes.');
