@@ -11,10 +11,13 @@
         trigger.addEventListener('keydown', event => {
             if (event.key === 'Escape') trigger.parentElement.setAttribute('data-dismissed', '');
         });
+        window.addEventListener('scroll', () => {
+            if (document.activeElement === trigger) show();
+            else trigger.parentElement.setAttribute('data-dismissed', '');
+        }, true);
         trigger.addEventListener('focus', show);
         trigger.addEventListener('click', show);
         trigger.parentElement.addEventListener('mouseenter', show);
         trigger.parentElement?.addEventListener('mouseleave', () => trigger.parentElement.removeAttribute('data-dismissed'));
     });
-    window.addEventListener('scroll', () => document.querySelectorAll('.info-tooltip').forEach(wrapper => wrapper.setAttribute('data-dismissed', '')), true);
 })();
