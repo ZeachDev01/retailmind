@@ -81,7 +81,7 @@ const fixture = action => {
         assert.equal(forbidden.status(), 403, 'Missing CSRF must be denied');
         const upload = async csv => {
             await page.locator('#forecast-csv').setInputFiles({ name: 'history.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-            await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Preview CSV' }).click()]);
+            await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Preview and validate' }).click()]);
         };
         await upload('sale_date,sku,quantity\n2026-01-01,UNKNOWN,5\n');
         assert.match(await page.locator('p[role="alert"]').innerText(), /not an active product/);
