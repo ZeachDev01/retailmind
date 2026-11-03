@@ -620,7 +620,7 @@ class ForecastingSchedulerService {
                     $platformSettings[$row['setting_key']] = $row;
                 }
             }
-            
+
             // 2. Check ml_settings fallback
             $mlSettings = [];
             try {
@@ -637,7 +637,7 @@ class ForecastingSchedulerService {
             if ($dailyRow !== null && !empty($dailyRow['setting_value'])) {
                 $val = trim((string)$dailyRow['setting_value']);
                 $hasOperatorUpdate = !empty($dailyRow['updated_by']);
-                
+
                 // If value is 23:00 without explicit operator update, it is the legacy conflicting default
                 if ($val === '23:00' && !$hasOperatorUpdate) {
                     $dailyTime = '01:00';
@@ -682,7 +682,7 @@ class ForecastingSchedulerService {
         $effective = $schedule ?? $this->getEffectiveSchedule();
         $nowStr = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
         $record = array_merge($effective, ['recorded_at' => $nowStr]);
-        
+
         try {
             $json = json_encode($record, JSON_UNESCAPED_SLASHES);
             $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = 'ml_effective_schedule'");

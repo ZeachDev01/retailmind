@@ -239,7 +239,7 @@ $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, model_version, co
             VALUES (1, 'forecast_generation', 'succeeded', 'rf_store_v1', '2026-10-01 01:15:00')");
 $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value)
             VALUES ('ml_approved_model_version', 'rf_store_v1'), ('ml_observation_mode', '0'), ('ml_recommendations_suspended', '0')");
-$pdo->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES 
+$pdo->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES
             (1, 'SKU-001', 'Product A', 'active'),
             (2, 'SKU-002', 'Product B', 'active')");
 
@@ -250,13 +250,13 @@ $pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, horizon_day, targe
             (1, 1, 1, '2026-10-02', 20, '2026-10-01', 'High', 'rf_store_v1'),
             (1, 2, 1, '2026-10-02', 10, '2026-10-01', 'High', 'rf_store_v1')");
 $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-10-02', 'open', '2026-09-30 00:00:00')");
-$pdo->exec("INSERT INTO sales (sale_id, total_amount, sale_date) VALUES 
+$pdo->exec("INSERT INTO sales (sale_id, total_amount, sale_date) VALUES
             (101, 150.0, '2026-10-02 12:00:00'),
             (102, 150.0, '2026-10-02 13:00:00')");
-$pdo->exec("INSERT INTO sale_items (sale_id, product_id, quantity) VALUES 
+$pdo->exec("INSERT INTO sale_items (sale_id, product_id, quantity) VALUES
             (101, 1, 15),
             (102, 2, 15)");
-$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES 
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES
             (1, 20, 'delivery', '2026-10-02 08:00:00'),
             (2, 20, 'delivery', '2026-10-02 08:00:00')");
 
@@ -282,13 +282,13 @@ $pdo->exec("DELETE FROM demand_forecasts WHERE predicted_units = 999");
 echo "\n--- Test 5: Weekly Seasonal Naive comparison on matching eligible periods ---\n";
 // Add prior week sales for 2026-10-02 (matching baseline is 2026-09-25)
 $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-09-25', 'open', '2026-09-20 00:00:00')");
-$pdo->exec("INSERT INTO sales (sale_id, total_amount, sale_date) VALUES 
+$pdo->exec("INSERT INTO sales (sale_id, total_amount, sale_date) VALUES
             (91, 120.0, '2026-09-25 12:00:00'),
             (92, 180.0, '2026-09-25 13:00:00')");
-$pdo->exec("INSERT INTO sale_items (sale_id, product_id, quantity) VALUES 
+$pdo->exec("INSERT INTO sale_items (sale_id, product_id, quantity) VALUES
             (91, 1, 12),
             (92, 2, 18)");
-$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES 
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES
             (1, 25, 'delivery', '2026-09-25 08:00:00'),
             (2, 25, 'delivery', '2026-09-25 08:00:00')");
 
@@ -351,7 +351,7 @@ $assert($evidenceClosure['closures_paused'] >= 1, "Closure paused accumulation a
 // -------------------------------------------------------------
 echo "\n--- Test 7: Verified stockouts and Expiry losses separate with no causal claim ---\n";
 // Record verified stockout and expiry loss
-$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES 
+$pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES
             (1, -4, 'expired', '2026-10-02 17:00:00')");
 $evidenceLoss = $forecastService->getPredictionPerformanceEvidence('2026-10-04');
 $assert($evidenceLoss['verified_expiry_losses'] === 4, "Verified expiry losses is 4 units from stock movements");

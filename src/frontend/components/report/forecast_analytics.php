@@ -400,7 +400,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ([7, 14, 28] as $h): 
+                        <?php foreach ([7, 14, 28] as $h):
                             $m = $perfEvidence['metrics_by_horizon'][$h] ?? [];
                         ?>
                             <tr>
