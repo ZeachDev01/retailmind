@@ -1,0 +1,175 @@
+================================================================================
+Ticket #417 / #374: End-to-End Operational Workflow Verification
+Spec #410 / #359: Hands-off Demand Forecasting & Operational Evidence
+================================================================================
+
+
+--- Section 1: Service Configuration & Database Delay Recovery ---
+  [PASS] Retained PHP binary configuration
+  [PASS] Service account is non-interactive SYSTEM
+  [PASS] Project root retained on local fixed drive
+  [PASS] Mapped network drive rejected for local forecasting services
+  [PASS] Database connection succeeds after transient startup delay
+  [PASS] Database connector retried until successful on attempt 3
+  [PASS] Backoff delays applied between connection retries
+  [PASS] Persistent database failure throws after exhausting bounded retries
+  [PASS] Connector stops after exactly 5 attempts
+
+--- Section 2: Schedules, Downtime Catch-Up & Deduplication ---
+  [PASS] Morning startup cutoff uses latest completed Philippine day (yesterday)
+  [PASS] Catch-up enqueues exactly ONE current forecast job
+  [PASS] Catch-up enqueues exactly ONE missed candidate training job
+  [PASS] Queue contains exactly 2 jobs: one forecast and one retrain
+  [PASS] Forecast cutoff is yesterday (completed Philippine day)
+  [PASS] Training cutoff is yesterday (completed Philippine day)
+  [PASS] Repeated ticks cannot duplicate daily forecast job
+  [PASS] Repeated ticks cannot duplicate candidate training job
+
+--- Section 3: Injected Failures, Bounded Retries, Notice, Fallback & Recovery ---
+  [PASS] Transient failure is re-queued on later scheduler tick
+  [PASS] Second transient failure is re-queued on later scheduler tick
+  [PASS] Exhausted retry (attempts >= 3) fails permanently
+  [PASS] Expired lease under 3 attempts is recovered and re-queued
+  [PASS] Expired lease reaching 3 attempts fails permanently
+  [PASS] Diagnostic indicates lease timeout exhausted
+  [PASS] Exhausted failure delivers notification through notification pipeline without manual insert
+  [PASS] Failure notification delivered to Administrator (user_id 2)
+  [PASS] Failure notification carries critical severity
+  [PASS] Notification points to forecast predictions/exceptions destination
+  [PASS] Notification explanation protects operator by hiding raw diagnostic trace
+  [PASS] Notification communicates failure in plain language
+  [PASS] Repeated failure notification checks do not duplicate notifications
+  [PASS] When no usable output remains, recommendations fall back cleanly to Stock-rule suggestion
+  [PASS] Latest attempt status is failed
+  [PASS] Earlier guidance remains usable today despite failed latest attempt
+  [PASS] One product still backed by earlier valid forecast
+  [PASS] Failure attention state marked inactive on successful recovery
+  [PASS] Resolved timestamp recorded on recovery
+  [PASS] Demand forecast guidance restored upon successful recovery
+  [PASS] Expected sales reflects recovered forecast quantity
+  [PASS] Uncommitted forecast results prevent success claim
+  [PASS] Results complete flag is false when output rows missing
+  [PASS] persistForecasts throws on incomplete daily horizon records (< 28)
+  [PASS] Transaction rolled back; zero partial rows persisted
+
+--- Section 4: Weekly Store Calendar, Exceptions & Sales Evidence ---
+  [PASS] Monday is open under weekly schedule
+  [PASS] Evidence source is weekly_schedule
+  [PASS] Sunday is closed under weekly schedule
+  [PASS] Evidence source is weekly_schedule
+  [PASS] Wednesday holiday exception overrides weekly schedule
+  [PASS] Wednesday holiday is recognized as exception
+  [PASS] Saturday with completed sale recognized as open store evidence
+  [PASS] Evidence source reflects completed_sale opening
+  [PASS] Before completed sale, cutoff evidence reflects closed schedule
+
+--- Section 5: First Installation & Truthful Data Readiness ---
+  [PASS] Product 2 with 0 days is not eligible for training
+  [PASS] Status is Insufficient Data
+  [PASS] Accumulated usable days is 0
+  [PASS] Specific reason explains missing 140 days
+  [PASS] Product 2 present in replenishment recommendations
+  [PASS] Product 2 falls back cleanly to Stock-rule suggestion
+  [PASS] Stock-rule suggestion correctly calculates order quantity
+  [PASS] Product 1 accumulated 140+ usable days
+  [PASS] Product 1 is eligible for candidate training
+  [PASS] Status wording is truthful: Ready for training
+
+--- Section 6: Candidate Training, Observation Mode & Preservation ---
+  [PASS] Operational generation blocked without approved model
+  [PASS] Candidate observation forecast queued automatically
+  [PASS] Observation trigger type is forecast_observation
+  [PASS] Observation job is tied to candidate 1
+  [PASS] Candidate 1 survives closures and later weekly training; candidate 2 does NOT displace it
+
+--- Section 7: Automated Qualification & Local Administrator Approval ---
+  [PASS] Status under incomplete observation is under_evaluation
+  [PASS] Approval blocked while observation period is incomplete (< 28 days)
+  [PASS] Status with complete qualification is awaiting_approval
+  [PASS] Readable status label is Awaiting approval
+  [PASS] Local Administrator can approve fully qualified model
+  [PASS] Demo artifact strictly rejected at activation gate
+  [PASS] Candidate 1 activated successfully by local Administrator
+  [PASS] Approved version matches candidate
+  [PASS] Active approved model version updated in platform_settings
+  [PASS] Activation attributed to local Administrator (user_id 2)
+
+--- Section 8: Fresh Operational Forecast & Purchasing Guidance ---
+  [PASS] Fresh operational forecast job queued on activation
+  [PASS] Forecast job uses newly approved model
+  [PASS] Aggregates contain exactly 1 product
+  [PASS] 7-day aggregate is 7 * 8 = 56
+  [PASS] 14-day aggregate is 14 * 8 = 112
+  [PASS] 28-day aggregate is 28 * 8 = 224
+  [PASS] Product 1 aggregates are present
+  [PASS] Product 1 daily rows contain exactly 28 days
+  [PASS] Day 1 target date is 2026-11-02
+  [PASS] Day 28 target date is 2026-11-29
+  [PASS] Total replenishment scope count is 2 products
+  [PASS] Forecast backed count is 1
+  [PASS] Stock rule count is 1
+  [PASS] Guidance is usable today
+  [PASS] Coverage reports approved candidate 1 version
+  [PASS] Coverage usable date matches accepted origin
+  [PASS] Product 1 guidance present in replenishment queue
+  [PASS] Replenishment basis is Demand Forecast
+  [PASS] Forecast Quantity (expected demand) is displayed
+  [PASS] Expected sales period matches 28-day window
+  [PASS] Recommended Purchase Quantity is displayed
+  [PASS] Product 1 marked as forecast backed
+  [PASS] Product 2 present in replenishment queue
+  [PASS] Product 2 basis is Stock-rule suggestion
+  [PASS] Product 2 expected sales is null (not fabricated zero)
+  [PASS] Product 2 marked as not forecast backed
+  [PASS] Product 2 provides clear exclusion reason
+
+--- Section 9: Administrator Pause, Resume & Compatible Rollback ---
+  [PASS] Recommendations suspended flag set to 1
+  [PASS] Suspended recommendations fall back cleanly to Stock-rule suggestion
+  [PASS] Recommendations suspended flag cleared
+  [PASS] Resumed recommendations restore Demand Forecast guidance
+  [PASS] Candidate 2 is now active
+  [PASS] Candidate 1 preserved in ml_previous_approved_model_version
+  [PASS] Rollback succeeds
+  [PASS] Restored model is Candidate 1
+  [PASS] Active approved model restored to Candidate 1
+  [PASS] Previous approved model cleared to prevent rollback loops
+  [PASS] Double rollback blocked when no previous model is preserved
+
+--- Section 10: Non-Disruption of Cashier & Inventory Operations ---
+  [PASS] Cashier checkout records sale successfully
+  [PASS] Inventory deducted correctly on cashier sale
+  [PASS] Cash refund recorded successfully
+  [PASS] Inventory restored correctly on refund
+  [PASS] Stock receiving adjustment updates inventory independently
+
+--- Section 11: Price & Promotion Evidence Preservation ---
+  [PASS] Dated selling price driver recorded
+  [PASS] Both promotion scheduling and cancellation drivers recorded
+  [PASS] Sales history exported successfully
+  [PASS] out_of_stock key present in export
+  [PASS] price key present in export
+  [PASS] is_on_promotion key present in export
+  [PASS] Nullable unknowns preserved in export rather than fabricated zero values
+
+--- Section 12: Coverage Contracts, Stale/Incomplete Output & Mismatches ---
+  [PASS] Partial coverage: 1 forecast-backed product
+  [PASS] Partial coverage: 1 stock-rule product
+  [PASS] Partial coverage denominator is 2 products
+  [PASS] Scope total is search-independent (2 products total)
+  [PASS] Filtered matched count is 1 product
+  [PASS] Mismatched model version falls back to Stock-rule suggestion
+  [PASS] Mismatched product not marked as forecast backed
+  [PASS] Stale forecast falls back to Stock-rule suggestion
+  [PASS] Stale forecast labeled with origin date
+  [PASS] Observation mode restricts guidance to Stock-rule suggestion
+  [PASS] Observation mode products are not forecast backed
+
+--- Section 13: Evidence Matrix & Separation of Workflow Evidence ---
+Fixture-only: synthetic history/qualification/observation/output; no Python worker or reboot executed.
+Actual worker acceptance: operational_pipeline_mysql_test.py (explicit disposable MySQL opt-in).
+Genuine Store prediction usefulness: not measured by these fixtures.
+
+================================================================================
+PASS: All 137 isolated SQLite service contracts passed (no worker/boot acceptance).
+================================================================================

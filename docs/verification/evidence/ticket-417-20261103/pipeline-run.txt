@@ -1,0 +1,11 @@
+Observation job 2 completed; excluded from routine purchasing
+.
+{"authenticated_pages":["predictions","replenishment_queue"],"totals":[133,266,535]}
+Error processing job 5: [Errno 2] No such file or directory: 'C:\\Users\\Mike\\AppData\\Local\\Temp\\retailmind_acceptance_c5inntez\\models\\store\\855cfa1a8b9eb11e\\random_forest_candidate_v20261103083249_536dad.joblib' (Ref: ERR-57059bf7)
+Error processing job 5: [Errno 2] No such file or directory: 'C:\\Users\\Mike\\AppData\\Local\\Temp\\retailmind_acceptance_c5inntez\\models\\store\\855cfa1a8b9eb11e\\random_forest_candidate_v20261103083249_536dad.joblib' (Ref: ERR-54af4754)
+Error processing job 5: [Errno 2] No such file or directory: 'C:\\Users\\Mike\\AppData\\Local\\Temp\\retailmind_acceptance_c5inntez\\models\\store\\855cfa1a8b9eb11e\\random_forest_candidate_v20261103083249_536dad.joblib' (Ref: ERR-96a2b8d7)
+----------------------------------------------------------------------
+Ran 1 test in 20.594s
+
+OK
+{"database": "retailmind_acceptance_8c879de34f31", "model": "v20261103083249_536dad", "training_run_id": 1, "actual_training_gate": "failed", "actual_observation_job": 2, "forecast_job": 4, "totals_7_14_28": [133, 266, 535], "failed_job": 5, "recovered_job": 6, "notice_ids": [1], "timestamp_asia_manila": "2026-11-03T08:33:01.251925+08:00"}
