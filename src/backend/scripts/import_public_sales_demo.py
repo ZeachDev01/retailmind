@@ -13,7 +13,7 @@ from feature_pipeline import normalize_history
 from ml_worker import get_connection
 from ml_evaluation import calculate_metrics
 from public_sales_experiment import SOURCE_URL
-from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL
+from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL, SOURCE_REVISION
 
 
 def read_experiment(directory):
@@ -26,6 +26,24 @@ def read_experiment(directory):
     if is_m5 and (report.get('store_id') != 'CA_1' or report.get('category') != 'FOODS'
                   or len(report.get('products', [])) not in (20, 50)):
         raise ValueError('M5 Demo requires the selected 20 or 50 CA_1 food products')
+    if is_m5:
+        if (report.get('source_revision') != SOURCE_REVISION or report.get('seed') != 42
+                or not re.fullmatch(r'[a-f0-9]{64}', report.get('source_sha256', ''))):
+            raise ValueError('Changed or missing pinned M5 provenance')
+        end = pd.Timestamp(report['data_end'])
+        training_end = end - pd.Timedelta(days=84)
+        start = training_end - pd.DateOffset(years=2) + pd.Timedelta(days=1)
+        folds = report.get('folds', [])
+        if (report.get('training_start') != str(start.date())
+                or report.get('initial_training_end') != str(training_end.date())
+                or report.get('initial_training_days') != (training_end - start).days + 1
+                or [fold.get('fold') for fold in folds] != [1, 2, 3]
+                or any(fold.get('origin') != str((training_end + pd.Timedelta(days=28 * i)).date())
+                       or fold.get('split') != ('test' if i == 2 else 'validation')
+                       or not fold.get('training_label_end') or pd.isna(pd.Timestamp(fold['training_label_end']))
+                       or pd.Timestamp(fold['training_label_end']) > pd.Timestamp(fold['origin'])
+                       for i, fold in enumerate(folds))):
+            raise ValueError('Changed M5 chronological training/evaluation boundaries')
     history = normalize_history(pd.read_csv(directory / 'daily_history.csv', dtype={'product_id': str}))
     products = (pd.DataFrame({'product_id': report['products'], 'description': ['M5 ' + code for code in report['products']]})
                 if is_m5 else pd.read_csv(directory / 'products.csv', dtype=str, keep_default_na=False))

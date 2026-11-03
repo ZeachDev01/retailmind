@@ -240,15 +240,6 @@ const fixture = action => {
                 await page.reload();
                 assert.equal(await page.locator('#effective-training-schedule').innerText(), 'Every Wednesday at 11:59 PM, Philippine time (Asia/Manila).', 'Invalid saves preserve the effective schedule');
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'Schedule controls fit mobile');
-                await page.locator('#settings-heading').click();
-                const help = page.getByRole('button', {name: 'About Minimum history (days)', exact: true});
-                await help.focus();
-                const tooltip = page.locator('#minimum_history_days_help');
-                assert.equal(await tooltip.isVisible(), true);
-                const rect = await tooltip.boundingBox();
-                assert.ok(rect.x >= 0 && rect.x + rect.width <= 320, 'Settings help stays inside a narrow viewport');
-                await help.press('Escape');
-                assert.equal(await tooltip.isVisible(), false);
             }
         }
         for (const role of ['admin', 'inventory_manager', 'cashier']) {

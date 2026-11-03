@@ -7,7 +7,7 @@ $messageClass = '';
 $fieldErrors = [];
 $fieldGroups = [
     'history' => [
-        'title' => 'Sales history & forecast window',
+        'title' => 'Forecast window',
     ],
     'accuracy' => [
         'title' => 'Accuracy thresholds & prediction intervals',
@@ -19,42 +19,6 @@ $fieldGroups = [
     ],
 ];
 $definitions = [
-    'minimum_history_days' => [
-        'label' => 'Minimum history (days)',
-        'help' => 'Required days of sales history before a product is eligible for training.',
-        'min' => 14,
-        'max' => 365,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'history',
-    ],
-    'preferred_history_days' => [
-        'label' => 'Preferred history (days)',
-        'help' => 'Target history span (must be between minimum and maximum history).',
-        'min' => 30,
-        'max' => 730,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'history',
-    ],
-    'minimum_nonzero_sales_days' => [
-        'label' => 'Minimum days with sales',
-        'help' => 'Minimum days with at least one sale required to train a product.',
-        'min' => 1,
-        'max' => 365,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'history',
-    ],
-    'history_window_days' => [
-        'label' => 'Maximum training history (days)',
-        'help' => 'Maximum historical sales span ingested for model training.',
-        'min' => 60,
-        'max' => 1095,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'history',
-    ],
     'forecast_period_days' => [
         'label' => 'Forecast horizon (days)',
         'help' => 'Future days predicted per forecast run.',
@@ -292,30 +256,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', [
         $updates[$key] = $value;
     }
 
-    if (isset($updates['minimum_history_days'], $updates['preferred_history_days'])
-        && (int)$updates['minimum_history_days'] > (int)$updates['preferred_history_days']
-    ) {
-        $crossError = 'Minimum history cannot exceed Preferred history.';
-        $fieldErrors['minimum_history_days'] = $crossError;
-        $errors[] = $crossError;
-    }
-
-    if (isset($updates['preferred_history_days'], $updates['history_window_days'])
-        && (int)$updates['preferred_history_days'] > (int)$updates['history_window_days']
-    ) {
-        $crossError = 'Preferred history cannot exceed Maximum training history.';
-        $fieldErrors['preferred_history_days'] = $crossError;
-        $errors[] = $crossError;
-    }
-
-    if (isset($updates['minimum_nonzero_sales_days'], $updates['minimum_history_days'])
-        && (int)$updates['minimum_nonzero_sales_days'] > (int)$updates['minimum_history_days']
-    ) {
-        $crossError = 'Minimum days with sales cannot exceed Minimum history.';
-        $fieldErrors['minimum_nonzero_sales_days'] = $crossError;
-        $errors[] = $crossError;
-    }
-
     if (isset($updates['min_samples_leaf'], $updates['min_samples_split'])
         && (int)$updates['min_samples_leaf'] > (int)$updates['min_samples_split']
     ) {
@@ -336,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', [
         save_key_value_settings($pdo, 'ml_settings', $updates, (int)$_SESSION['user_id']);
         log_activity($pdo, (int)$_SESSION['user_id'], 'ML settings update', 'Demand Forecasting', null, null, $updates);
         $settings = get_ml_settings($pdo);
-        $message = 'Forecast settings saved. Retrain the model to apply changes.';
+        $message = 'Forecast settings saved. Training Eligibility remains fixed; saving does not train or approve a model.';
         $messageClass = 'tag-success';
     } else {
         $message = 'Settings were not saved. Review the highlighted fields below.';
@@ -594,12 +534,38 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             </form>
         </section>
+        <section class="dashboard-section">
+            <?php require __DIR__ . '/../report/training_eligibility_policy.php'; ?>
+            <details>
+                <summary>Training Eligibility by Product</summary>
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Product Training Eligibility">
+                    <table class="data-table">
+                        <thead><tr><th scope="col">Product</th><th scope="col">Usable days collected</th><th scope="col">Evidence and next steps</th></tr></thead>
+                        <tbody>
+                        <?php foreach (get_forecasting_readiness($pdo) as $readiness): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($readiness['product_name']) ?></td>
+                                <td><?= (int)$readiness['accumulated_usable_days'] ?> / <?= (int)$readiness['required_usable_days'] ?> usable days<br>
+                                    <?= (int)$readiness['calendar_history_days'] ?> calendar days; <?= (int)$readiness['days_with_sales'] ?> days with sales; <?= (int)$readiness['genuine_zero_days'] ?> genuine zero days</td>
+                                <td><strong><?= $readiness['training_eligible'] ? 'Ready for training' : 'Insufficient Data' ?></strong>
+                                    <?php foreach (array_merge($readiness['eligibility_blockers'], $readiness['eligibility_actions']) as $detail): ?>
+                                        <p><?= htmlspecialchars($detail) ?></p>
+                                    <?php endforeach; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
         <?php if (!$isLocalDemo): ?>
         <section class="dashboard-section" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
             <div class="section-header">
                 <div>
 
-                    <p class="section-description">Adjust history requirements, automated retrain intervals, and algorithm settings.</p>
+                    <p class="section-description">Review forecasting settings. Training Eligibility uses the fixed policy above.</p>
                 </div>
             </div>
             <form method="post" novalidate>
