@@ -255,6 +255,20 @@ class ProductService
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
 
+            $driverService = new \App\Store\ScheduledDemandDriverService();
+            $driverService->recordDriver(
+                $this->pdo,
+                $productId,
+                'price',
+                date('Y-m-d'),
+                date('Y-m-d H:i:s'),
+                json_encode([
+                    'unit_price' => $sellingPrice,
+                    'price' => $sellingPrice,
+                    'base_unit' => $baseUnit !== '' ? $baseUnit : 'piece',
+                ], JSON_THROW_ON_ERROR)
+            );
+
             if ($initialStock > 0) {
                 $purchaseDate = date('Y-m-d H:i:s');
                 $totalCost = $costPrice * $initialStock;
@@ -419,6 +433,22 @@ class ProductService
                 $params[] = $existingProduct['product_id'];
                 $this->pdo->prepare('UPDATE products SET ' . implode(', ', $updateParts) . ' WHERE product_id = ?')
                     ->execute($params);
+
+                if ($sellingPrice > 0) {
+                    $driverService = new \App\Store\ScheduledDemandDriverService();
+                    $driverService->recordDriver(
+                        $this->pdo,
+                        $existingProduct['product_id'],
+                        'price',
+                        date('Y-m-d'),
+                        date('Y-m-d H:i:s'),
+                        json_encode([
+                            'unit_price' => $sellingPrice,
+                            'price' => $sellingPrice,
+                            'base_unit' => $existingProduct['base_unit'] ?? 'piece',
+                        ], JSON_THROW_ON_ERROR)
+                    );
+                }
 
                 $this->pdo->prepare(
                     "UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?"
@@ -1168,6 +1198,22 @@ class ProductService
                 $newPackPrice,
                 $productId,
             ]);
+
+            if ($hasSellingPrice) {
+                $driverService = new \App\Store\ScheduledDemandDriverService();
+                $driverService->recordDriver(
+                    $this->pdo,
+                    $productId,
+                    'price',
+                    date('Y-m-d'),
+                    date('Y-m-d H:i:s'),
+                    json_encode([
+                        'unit_price' => $sellingPrice,
+                        'price' => $sellingPrice,
+                        'base_unit' => $existing['base_unit'] ?? 'piece',
+                    ], JSON_THROW_ON_ERROR)
+                );
+            }
 
             $fetchStmt = $this->pdo->prepare(
                 "SELECT p.*, c.category_name, i.quantity_on_hand

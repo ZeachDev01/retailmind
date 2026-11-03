@@ -56,7 +56,7 @@
                 const expectedSales = row.dataset.expectedSales;
                 const forecastPeriod = row.querySelector?.('.queue-forecast-period')?.textContent?.trim() || row.dataset.forecastPeriod;
                 const values = [`${row.dataset.name}\n${row.dataset.sku}\n${row.dataset.stock}`, row.dataset.onHand, row.dataset.quantity,
-                    expectedSales == null || expectedSales === '' ? 'Unavailable' : `${expectedSales}\n${forecastPeriod}`];
+                    expectedSales == null || expectedSales === '' ? 'Not available yet' : `${expectedSales}\n${forecastPeriod}`];
                 const cells = values.map((text, i) => wrap(text, widths[i]));
                 const lineCount = Math.max(...cells.map(lines => lines.length));
                 for (let line = 0; line < lineCount; line++) {

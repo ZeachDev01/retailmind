@@ -4,57 +4,6 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
 
 $message = '';
 $messageClass = '';
-$fields = [
-    'store_name' => 'Store name',
-    'business_identifier' => 'TIN / Business identifier',
-    'store_email' => 'Store email',
-    'store_phone' => 'Contact number',
-    'store_address' => 'Store address',
-    'currency_symbol' => 'Currency symbol',
-    'timezone' => 'Timezone (IANA)',
-    'expiry_alert_days' => 'Expiry alert lead time (days)',
-    'receipt_footer' => 'Receipt footer',
-];
-$fieldMeta = [
-    'store_name' => [
-        'type' => 'text',
-        'autocomplete' => 'organization',
-        'required' => true,
-    ],
-    'business_identifier' => [
-        'type' => 'text',
-        'autocomplete' => 'off',
-    ],
-    'store_email' => [
-        'type' => 'email',
-        'autocomplete' => 'email',
-    ],
-    'store_phone' => [
-        'type' => 'tel',
-        'autocomplete' => 'tel',
-    ],
-    'store_address' => [
-        'type' => 'text',
-        'autocomplete' => 'street-address',
-        'full' => true,
-    ],
-    'currency_symbol' => [
-        'type' => 'text',
-        'autocomplete' => 'off',
-        'maxlength' => '8',
-    ],
-    'timezone' => [
-        'type' => 'text',
-        'autocomplete' => 'off',
-    ],
-    'expiry_alert_days' => [
-        'type' => 'text',
-        'autocomplete' => 'off',
-    ],
-    'receipt_footer' => [
-        'full' => true,
-    ],
-];
 $dormancyPolicyService = new \App\Authorization\DormancyPolicyService($pdo);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -86,25 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageClass = 'tag-danger';
         }
     } else {
-        $updates = [];
-        foreach ($fields as $key => $label) {
-            $updates[$key] = trim((string)($_POST[$key] ?? ''));
-        }
-        if ($updates['store_name'] === '') {
-            $message = 'Store name is required.';
-            $messageClass = 'tag-danger';
-        } elseif ($updates['store_email'] !== '' && filter_var($updates['store_email'], FILTER_VALIDATE_EMAIL) === false) {
-            $message = 'Enter a valid store email address.';
-            $messageClass = 'tag-danger';
-        } elseif ($updates['timezone'] !== '' && !in_array($updates['timezone'], timezone_identifiers_list(), true)) {
-            $message = 'Enter a valid IANA timezone such as Asia/Manila or UTC.';
-            $messageClass = 'tag-danger';
-        } else {
-            save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
-            $message = 'Store and receipt settings saved.';
-            $messageClass = 'tag-success';
-        }
+        $message = 'Choose a platform setting to save. Store and receipt settings are managed in the Administrator Workspace.';
+        $messageClass = 'tag-danger';
     }
 }
 $settings = get_store_settings($pdo);
@@ -128,7 +60,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
         <header class="topbar">
             <div>
                 <h1>Platform Settings</h1>
-                <p class="page-subtitle">Configure store identity, receipt formatting, account dormancy, and notification dispatch.</p>
+                <p class="page-subtitle">Configure account dormancy and notification dispatch.</p>
             </div>
         </header>
 
@@ -138,55 +70,6 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                 <span><?= htmlspecialchars($message) ?></span>
             </div>
         <?php endif; ?>
-
-        <section class="dashboard-section" aria-labelledby="heading-store">
-            <div class="section-header">
-                <h2 id="heading-store"><i class="bi bi-shop" aria-hidden="true"></i> Store &amp; receipts</h2>
-                <p class="section-description">Store identity, regional defaults, and customer receipt text.</p>
-            </div>
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="save">
-                <div class="form-grid">
-                    <?php foreach ($fields as $key => $label):
-                        $meta = $fieldMeta[$key] ?? [];
-                        $isRequired = !empty($meta['required']);
-                        $isFull = !empty($meta['full']);
-                        $helpId = !empty($meta['help']) ? $key . '_help' : '';
-                    ?>
-                        <div class="form-group<?= $isFull ? ' full' : '' ?>">
-                            <label for="<?= htmlspecialchars($key) ?>">
-                                <?= htmlspecialchars($label) ?>
-                                <?php if ($isRequired): ?><span class="required-mark" aria-hidden="true">*</span><?php endif; ?>
-                            </label>
-                            <?php if ($key === 'receipt_footer'): ?>
-                                <textarea id="<?= htmlspecialchars($key) ?>"
-                                          name="<?= htmlspecialchars($key) ?>"
-                                          rows="3"
-                                          <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
-                                          <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>><?= htmlspecialchars((string)($settings[$key] ?? '')) ?></textarea>
-                            <?php else: ?>
-                                <input type="<?= htmlspecialchars((string)($meta['type'] ?? 'text')) ?>"
-                                       id="<?= htmlspecialchars($key) ?>"
-                                       name="<?= htmlspecialchars($key) ?>"
-                                       value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"
-                                       autocomplete="<?= htmlspecialchars((string)($meta['autocomplete'] ?? 'off')) ?>"
-                                       <?= !empty($meta['maxlength']) ? ' maxlength="' . htmlspecialchars((string)$meta['maxlength']) . '"' : '' ?>
-                                       <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>
-                                       <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
-                                       <?= $isRequired ? ' required aria-required="true"' : '' ?>>
-                            <?php endif; ?>
-                            <?php if ($helpId !== ''): ?>
-                                <small class="field-help" id="<?= htmlspecialchars($helpId) ?>"><?= htmlspecialchars((string)$meta['help']) ?></small>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <div class="form-actions u-mt-1">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> Save store settings</button>
-                </div>
-            </form>
-        </section>
 
         <section class="dashboard-section" aria-labelledby="heading-dormancy">
             <div class="section-header">

@@ -17,9 +17,21 @@ try {
     $reviewApproved = (string)($reviewSettings['ml_approved_model_version'] ?? '');
     $reviewCandidate = $pdo->query("SELECT model_version FROM model_training_runs
         WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    $reviewObsProgress = null;
     if ($reviewCandidate) {
-        $reviewQuality = (new \App\Forecasting\CandidateEvaluationService($pdo))
-            ->evaluateCandidateQuality($reviewCandidate['model_version']);
+        $evalService = new \App\Forecasting\CandidateEvaluationService($pdo);
+        $reviewQuality = $evalService->evaluateCandidateQuality($reviewCandidate['model_version']);
+        try {
+            $reviewObsProgress = $evalService->getCandidateObservationProgress($reviewCandidate['model_version']);
+        } catch (Throwable) {
+            $reviewObsProgress = null;
+        }
+        try {
+            $demandService = new \App\Forecasting\DemandForecastService($pdo);
+            $reviewPerfEvidence = $demandService->getPredictionPerformanceEvidence(null, $reviewCandidate['model_version']);
+        } catch (Throwable) {
+            $reviewPerfEvidence = null;
+        }
     }
 } catch (Throwable $e) {
     error_log('Forecast evaluation summary unavailable: ' . $e->getMessage());
@@ -36,13 +48,13 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
     <div>
         <h2 id="model-review-title">Can we use these forecasts?</h2>
         <?php if ($reviewError): ?>
-            <p>Model checks could not be loaded. Ask the Super Administrator to review the model before relying on its suggestions.</p>
+            <p>Model checks could not be loaded. Ask the Administrator to review the model in Model Review & Approval before relying on its suggestions.</p>
         <?php else: ?>
             <p><strong>Approved model:</strong> <?= $reviewApproved !== '' ? htmlspecialchars($reviewApproved) : 'None yet' ?>.</p>
             <?php if (!empty($displayedForecastModel)): ?>
                 <p><strong>Model behind the forecasts below:</strong> <?= htmlspecialchars($displayedForecastModel) ?>.
                 <?php if ($displayedForecastModel !== $reviewApproved): ?>
-                    This differs from the approved model. Ask the Super Administrator to review it before using these suggestions.
+                    This differs from the approved model. Ask the Administrator to review it in Model Review & Approval before using these suggestions.
                 <?php endif; ?></p>
             <?php endif; ?>
             <?php if (in_array($reviewSettings['ml_recommendations_suspended'] ?? '', ['1', 'true'], true)): ?>
@@ -82,12 +94,59 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                         </tbody>
                     </table>
                 </div>
+                <?php if (!empty($reviewObsProgress)): ?>
+                    <p><strong>Observation progress:</strong> <?= htmlspecialchars($reviewObsProgress['status_label'] ?? 'Under evaluation') ?>
+                       (<?= (int)($reviewObsProgress['usable_observed_days'] ?? 0) ?> of <?= (int)($reviewObsProgress['required_observed_days'] ?? 28) ?> completed target dates backed by usable Store observations).</p>
+                    <?php if (!empty($reviewObsProgress['explanation']) && empty($reviewObsProgress['observation_complete'])): ?>
+                        <p class="muted"><?= htmlspecialchars($reviewObsProgress['explanation']) ?></p>
+                    <?php endif; ?>
+                <?php endif; ?>
                 <p>These results combine products. Some products may perform worse. Recorded sales cannot show all demand lost during stockouts, and these tests do not guarantee future results.</p>
+                <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
+                <?php if (!empty($reviewPerfEvidence) && $reviewPerfEvidence['status'] !== 'unavailable'): ?>
+                    <div style="margin-top: 1rem; padding: 0.75rem; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px;">
+                        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">Store Prediction Performance Evidence</h4>
+                        <p style="margin-bottom: 0.5rem;"><strong>Status:</strong> <?= htmlspecialchars($reviewPerfEvidence['status_label']) ?>
+                            (<?= (int)$reviewPerfEvidence['completed_target_dates'] ?> of <?= (int)$reviewPerfEvidence['required_target_dates'] ?> completed target dates backed by usable Store observations).</p>
+                        <p class="muted" style="margin-bottom: 0.5rem;"><small><?= htmlspecialchars($reviewPerfEvidence['explanation']) ?></small></p>
+
+                        <?php if ($reviewPerfEvidence['status'] === 'genuine_evidence'): ?>
+                            <div class="table-wrap" style="margin-bottom: 0.5rem;">
+                                <table>
+                                    <caption>Daily Errors: Candidate Predictions vs Subsequent Store Sales</caption>
+                                    <thead><tr><th scope="col">Forecast Lead Time</th><th scope="col">Overestimated</th><th scope="col">Underestimated</th><th scope="col">Model MAE</th><th scope="col">Weekly Baseline MAE</th></tr></thead>
+                                    <tbody>
+                                    <?php foreach ([7, 14, 28] as $h):
+                                        $m = $reviewPerfEvidence['metrics_by_horizon'][$h] ?? [];
+                                    ?>
+                                        <tr>
+                                            <th scope="row">1–<?= $h ?> days</th>
+                                            <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : 'Unavailable' ?></td>
+                                            <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : 'Unavailable' ?></td>
+                                            <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : 'Unavailable' ?></td>
+                                            <td><?= $m['baseline_mae'] !== null ? number_format($m['baseline_mae'], 2) . ' units' : 'Unavailable' ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+
+                        <p class="muted" style="margin-bottom: 0;"><small>
+                            Verified stockouts: <?= htmlspecialchars($reviewPerfEvidence['verified_stockouts_display']) ?>;
+                            Verified expiry losses: <?= htmlspecialchars($reviewPerfEvidence['verified_expiry_losses_display']) ?><?= $reviewPerfEvidence['verified_expiry_losses'] !== null ? ' units' : '' ?>.
+                            <?= htmlspecialchars($reviewPerfEvidence['causal_claim_note']) ?>
+                        </small></p>
+                    </div>
+                <?php endif; ?>
             <?php else: ?>
-                <p>No completed model training is available yet. The Super Administrator can train and review a model in ML Operation.</p>
+                <p>No completed model training is available yet. Once a candidate is trained and evaluated, the Administrator can review and approve it in Model Review & Approval.</p>
             <?php endif; ?>
         <?php endif; ?>
         <p>Forecasts guide staff decisions. They do not place orders or change stock.</p>
+        <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS)): ?>
+            <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a></p>
+        <?php endif; ?>
         <?php if (has_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
             <p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Train and review models</a>
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">View detailed model results</a></p>

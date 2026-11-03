@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/NotificationService.php';
 
 $user_id = (int)$_SESSION['user_id'];
+reconcile_notification_stock($pdo, $user_id);
 $category_labels = [
     'low_stock' => 'Low stock',
     'adjustment' => 'Inventory adjustments',
@@ -14,11 +15,12 @@ $category_labels = [
     'expiring_stock' => 'Expiring stock',
     'expired_stock' => 'Expired stock',
     'attention' => 'Attention',
+    'forecasting' => 'Forecasting',
 ];
 $notification_source = "notifications LEFT JOIN products p ON notifications.reference_type = 'product' AND p.product_id = notifications.reference_id";
 $workspace_scope = notification_workspace_scope($pdo);
-$visible_notifications = "(notifications.type <> 'low_stock' OR p.product_id IS NOT NULL)";
-$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $workspace_scope . ' AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
+$visible_notifications = notification_visibility_scope();
+$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE AND notifications.resolved_at IS NULL THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $workspace_scope . ' AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
 $stmt->execute([$user_id]);
 $categories = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $category = $_GET['category'] ?? '';
@@ -62,8 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     exit;
 }
 
-$list_where = $where . ' AND ' . $visible_notifications . ($view === 'unread' ? ' AND notifications.is_read = FALSE' : '');
-$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.created_at, notifications.attention_destination, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
+$list_where = $where . ' AND ' . $visible_notifications . ($view === 'unread' ? ' AND notifications.is_read = FALSE AND notifications.resolved_at IS NULL' : '');
+$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.resolved_at, notifications.created_at, notifications.attention_destination, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
 $stmt->execute($params);
 $notifications = $stmt->fetchAll();
 $required_work = (new NotificationService($pdo))->requiredWork($user_id, current_role());
@@ -103,7 +105,7 @@ $active_batch_reminders = $inventory_workspace
                     <?php foreach ($required_work as $work): ?>
                         <article class="notification-required-item">
                             <span class="notification-category rounded-md px-3 py-1" hidden>Low stock</span>
-                            <h3><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></a></h3>
+                            <h3><?php if (current_role() === 'admin' && ($work['type'] ?? null) === 'low_stock'): ?><?= htmlspecialchars($work['title']) ?><?php else: ?><a href="<?= htmlspecialchars(app_url($work['destination'])) ?>"><?= htmlspecialchars($work['title']) ?><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></a><?php endif; ?></h3>
                             <dl class="notification-quantities" hidden>
                                 <div><dt>Current</dt><dd class="notification-current"></dd></div>
                                 <div><dt>Threshold</dt><dd class="notification-threshold"></dd></div>
@@ -201,18 +203,19 @@ $active_batch_reminders = $inventory_workspace
                             : 'Historical alert. The referenced batch is no longer available.';
                     }
                     ?>
-                    <article class="notification-item <?= $notif['is_read'] ? '' : 'unread' ?>" data-notification-type="<?= htmlspecialchars($notif['type']) ?>">
+                    <?php $unread = !$notif['is_read'] && $notif['resolved_at'] === null; ?>
+                    <article class="notification-item <?= $unread ? 'unread' : '' ?>" data-notification-type="<?= htmlspecialchars($notif['type']) ?>">
                         <div class="notification-content">
                             <div class="notification-row grid items-center gap-4 p-5 sm:p-6">
 
-                                <span class="notification-category rounded-md px-3 py-1"><span class="notification-status"><span class="sr-only"><?= $notif['is_read'] ? 'Read' : 'Unread' ?></span><?php if (!$notif['is_read']): ?><span class="block h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" aria-hidden="true"></span><?php endif; ?></span><?= htmlspecialchars($category_labels[$notif['type']] ?? ucfirst(str_replace('_', ' ', $notif['type']))) ?></span>
+                                <span class="notification-category rounded-md px-3 py-1"><span class="notification-status"><span class="sr-only"><?= $notif['resolved_at'] !== null ? 'Resolved' : ($unread ? 'Unread' : 'Read') ?></span><?php if ($unread): ?><span class="block h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" aria-hidden="true"></span><?php endif; ?></span><?= htmlspecialchars($category_labels[$notif['type']] ?? ucfirst(str_replace('_', ' ', $notif['type']))) ?><?= $notif['resolved_at'] !== null ? ' · Resolved' : '' ?></span>
                                 <h2 class="min-w-0"><?php if ($inventory_workspace && $product_search !== null): ?><a class="notification-product-link" href="<?= htmlspecialchars(app_url('components/inventory_management/products.php?' . http_build_query(['q' => $product_search]))) ?>"><?= htmlspecialchars($notif['product_name'] ?? $notif['title']) ?></a><?php else: ?><?= htmlspecialchars($notif['product_name'] ?? $notif['title']) ?><?php endif; ?></h2>
                                 <dl class="notification-quantities" hidden>
                                     <div><dt>Current</dt><dd class="notification-current"></dd></div>
                                     <div><dt>Threshold</dt><dd class="notification-threshold"></dd></div>
                                 </dl>
                                 <span class="notification-time"><?= htmlspecialchars(format_display_datetime($notif['created_at'])) ?></span>
-                        <?php if (!$notif['is_read']): ?>
+                        <?php if ($unread): ?>
                                 <form class="notification-read-action" method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="mark_read">
@@ -225,7 +228,7 @@ $active_batch_reminders = $inventory_workspace
                             <div class="notification-details">
                                 <div class="min-h-0 overflow-hidden">
                                     <div class="notification-description p-5 sm:p-6"><p><?= htmlspecialchars($notif['message']) ?></p><?php
-                                        $destination = $notif['attention_destination'];
+                                        $destination = current_role() === 'admin' && $notif['type'] === 'low_stock' ? null : $notif['attention_destination'];
                                         if ($destination === null && $notif['reference_type'] === 'stock_issue') {
                                             $destination = match (current_role()) {
                                                 'admin' => 'components/administrator/stock_issues.php?detail=' . (int)$notif['reference_id'],
@@ -233,7 +236,7 @@ $active_batch_reminders = $inventory_workspace
                                                 default => 'components/inventory_management/stock_issues.php',
                                             };
                                         }
-                                        ?><?php if (!empty($destination)): ?><a href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
+                                        ?><?php if (!empty($destination)): ?><a class="btn btn-quiet btn-small mt-2" href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
                                 </div>
                             </div>
                         </div>
@@ -256,10 +259,10 @@ $active_batch_reminders = $inventory_workspace
         const quantities = description.textContent.match(/Current: (-?\d+(?:\.\d+)?), Threshold: (-?\d+(?:\.\d+)?)\s*$/);
         if (quantities) {
             if (item.classList.contains('notification-required-item')) {
-                const link = item.querySelector('h3 a');
-                const title = link.textContent.match(/^(?:Out of stock|Low Stock Alert): (.+)$/);
+                const heading = item.querySelector('h3 a') || item.querySelector('h3');
+                const title = heading.textContent.match(/^(?:Out of stock|Low Stock Alert): (.+)$/);
                 if (!title) return;
-                link.firstChild.textContent = title[1];
+                heading.firstChild.textContent = title[1];
                 item.querySelector('.notification-category').hidden = false;
             }
             item.querySelector('.notification-current').textContent = quantities[1];

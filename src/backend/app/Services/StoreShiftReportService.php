@@ -22,9 +22,15 @@ final class StoreShiftReportService
         'Counted Cash', 'Variance', 'Variance Explanation', 'Material Variance', 'Closing Notes',
     ];
 
-    public function __construct(private PDO $pdo, private ?RoleCapabilityPolicy $policy = null)
-    {
+    private ShiftReconciliationCalculator $calculator;
+
+    public function __construct(
+        private PDO $pdo,
+        private ?RoleCapabilityPolicy $policy = null,
+        ?ShiftReconciliationCalculator $calculator = null
+    ) {
         $this->policy ??= new RoleCapabilityPolicy();
+        $this->calculator = $calculator ?? new ShiftReconciliationCalculator($pdo);
     }
 
     public function report(string $role, array $filters): array
@@ -66,10 +72,7 @@ final class StoreShiftReportService
             $where[] = '1 = 0';
         }
         $statement = $this->pdo->prepare(
-            'SELECT cs.shift_id, cs.cashier_id, cs.register_id, cs.opened_at, cs.closed_at,
-                    cs.status, cs.opening_cash, cs.expected_cash, cs.actual_cash,
-                    cs.cash_variance, cs.variance_review_required, cs.closing_notes,
-                    cs.closed_by, cs.intervention_reason, u.display_name AS cashier,
+            'SELECT cs.*, u.display_name AS cashier,
                     r.name AS register_name, closer.display_name AS closer_name
              FROM cashier_shifts cs
              LEFT JOIN users u ON u.user_id = cs.cashier_id
@@ -78,12 +81,21 @@ final class StoreShiftReportService
              WHERE ' . implode(' AND ', $where) . ' ORDER BY cs.opened_at DESC, cs.shift_id DESC'
         );
         $statement->execute($params);
-        $shiftService = new CashierShiftService($this->pdo);
+        $records = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $summaries = [];
+        $selectedShifts = 'SELECT cs.shift_id FROM cashier_shifts cs WHERE ' . implode(' AND ', $where);
+        if ($records) {
+            $openingCashes = [];
+            foreach ($records as $record) {
+                $openingCashes[(int)$record['shift_id']] = (float)$record['opening_cash'];
+            }
+            $summaries = $this->calculator->calculateForSubquery($selectedShifts, $params, $openingCashes);
+        }
         $rows = [];
-        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $record) {
+        foreach ($records as $record) {
             $id = (int)$record['shift_id'];
-            $summary = $shiftService->calculateShift($id);
-            $refunds = $this->refundTotals($id);
+            $summary = array_merge($record, $summaries[$id] ?? ShiftReconciliationCalculator::defaultSummary((float)$record['opening_cash']));
+            $refunds = ['cash' => $summary['cash_refunds'], 'card' => $summary['card_refunds'], 'ewallet' => $summary['ewallet_refunds']];
             $closed = $record['status'] === 'closed';
             $rows[] = [
                 'Record' => 'Cashier Shift', 'Date' => substr((string)$record['opened_at'], 0, 10),
@@ -169,17 +181,6 @@ final class StoreShiftReportService
         }
         // Opening/expected/count/variance are intentionally not totaled: open
         // and legacy rows have no comparable counted cash.
-        return $totals;
-    }
-
-    private function refundTotals(int $shiftId): array
-    {
-        $stmt = $this->pdo->prepare('SELECT payment_method, SUM(refund_amount) AS amount FROM cash_refunds WHERE shift_id = ? GROUP BY payment_method');
-        $stmt->execute([$shiftId]);
-        $totals = ['cash' => 0.0, 'card' => 0.0, 'ewallet' => 0.0];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (isset($totals[$row['payment_method']])) $totals[$row['payment_method']] = (float)$row['amount'];
-        }
         return $totals;
     }
 

@@ -42,6 +42,9 @@ async function main() {
         await page.fill('#landing-login-password', data.staff.manager.password);
         await Promise.all([page.waitForURL('**/inventory_management/**'), page.getByRole('button', {name:'Log in', exact:true}).click()]);
         await page.goto(history);
+        assert.equal(await page.locator('main > header').getByRole('link', {
+            name: /^(Record bought stock|Check stock|Review recommendations)$/
+        }).count(), 0, 'receiving history header has no stock workflow shortcuts');
         assert.equal(await page.locator('.receiving-entry-card').count(), 1, 'fixture contains one legacy receipt');
         for (let i = 0; i < 22; i++) {
             await page.goto('/components/report/stock_receiving.php');

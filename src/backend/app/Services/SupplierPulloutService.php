@@ -3,6 +3,7 @@ require_once __DIR__ . "/InventorySubmission.php";
 // app/Services/SupplierPulloutService.php
 
 require_once __DIR__ . '/NotificationService.php';
+require_once __DIR__ . '/BatchInventoryLedger.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/PhilippineTime.php';
@@ -175,28 +176,6 @@ class SupplierPulloutService
 
             $productPackSize = isset($productRow['pack_size']) && (int)$productRow['pack_size'] > 1 ? (int)$productRow['pack_size'] : 1;
 
-            $batchStmt = $this->pdo->prepare(
-                "SELECT * FROM product_batches WHERE batch_id = ?" . $this->rowLock()
-            );
-            $batchStmt->execute([$batchId]);
-            $batch = $batchStmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$batch) {
-                throw new RuntimeException("Batch #{$batchId} not found.");
-            }
-
-            if ((int)$batch['product_id'] !== $productId) {
-                throw new RuntimeException("Batch #{$batchId} does not belong to the selected product (#{$productId}).");
-            }
-
-            $normalizedBatch = $this->normalizeBatchFormRow($batch);
-            $remainingQty = (int)$normalizedBatch['remaining_quantity'];
-            $batchSealed = (int)$normalizedBatch['sealed_quantity'];
-            $batchLoose = (int)$normalizedBatch['loose_quantity'];
-
-            $pbTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'product_batches');
-            $hasBatchFormCols = isset($pbTableCols['sealed_quantity']) && isset($pbTableCols['loose_quantity']);
-
             if ($pulledPacks > 0 && $productPackSize <= 1) {
                 throw new RuntimeException('Cannot pull out sealed packs: product has no Sales Pack configured.');
             }
@@ -209,57 +188,15 @@ class SupplierPulloutService
                 }
             }
 
-            if ($quantity > $remainingQty) {
-                throw new RuntimeException("Requested pullout quantity ({$quantity}) exceeds batch remaining balance ({$remainingQty}).");
+            $batchStmt = $this->pdo->prepare('SELECT product_id, supplier FROM product_batches WHERE batch_id = ?');
+            $batchStmt->execute([$batchId]);
+            $batch = $batchStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$batch || (int)$batch['product_id'] !== $productId) {
+                throw new RuntimeException('Selected batch does not belong to the product.');
             }
-
-            if ($pulledPacks > $batchSealed) {
-                throw new RuntimeException("Requested sealed packs ({$pulledPacks}) exceeds batch sealed pack balance ({$batchSealed}).");
-            }
-
-            if ($pulledLoose > $batchLoose) {
-                throw new RuntimeException("Requested loose pieces ({$pulledLoose}) exceeds batch loose piece balance ({$batchLoose}).");
-            }
-
-            $invStmt = $this->pdo->prepare(
-                "SELECT quantity_on_hand FROM inventory WHERE product_id = ?" . $this->rowLock()
-            );
-            $invStmt->execute([$productId]);
-            $inventory = $invStmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$inventory) {
-                throw new RuntimeException("Inventory record for product #{$productId} not found.");
-            }
-
-            $currentOnHand = (int)$inventory['quantity_on_hand'];
-            if ($quantity > $currentOnHand) {
-                throw new RuntimeException("Requested pullout quantity ({$quantity}) exceeds total inventory on hand ({$currentOnHand}).");
-            }
-
             if ($supplier === null && !empty($batch['supplier'])) {
                 $supplier = (string)$batch['supplier'];
             }
-
-            $newRemainingQty = $remainingQty - $quantity;
-            $newBatchSealed = $batchSealed - $pulledPacks;
-            $newBatchLoose = $batchLoose - $pulledLoose;
-
-            if ($hasBatchFormCols) {
-                $updateBatch = $this->pdo->prepare(
-                    "UPDATE product_batches SET remaining_quantity = ?, sealed_quantity = ?, loose_quantity = ? WHERE batch_id = ?"
-                );
-                $updateBatch->execute([$newRemainingQty, $newBatchSealed, $newBatchLoose, $batchId]);
-            } else {
-                $updateBatch = $this->pdo->prepare(
-                    "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ?"
-                );
-                $updateBatch->execute([$quantity, $batchId]);
-            }
-
-            $updateInv = $this->pdo->prepare(
-                "UPDATE inventory SET quantity_on_hand = quantity_on_hand - ? WHERE product_id = ?"
-            );
-            $updateInv->execute([$quantity, $productId]);
 
             $spTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'supplier_pullouts');
             if (isset($spTableCols['pulled_packs'])) {
@@ -277,12 +214,12 @@ class SupplierPulloutService
             }
             $pulloutId = (int)$this->pdo->lastInsertId();
 
-            $movementStmt = $this->pdo->prepare(
-                "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by, pullout_id, moved_at)
-                 VALUES (?, ?, 'supplier_pullout', ?, ?, ?)"
+            $mutation = (new \App\Services\BatchInventoryLedger($this->pdo, $this->fiscalPeriodGuard))->deductPullout(
+                compact('productId', 'batchId', 'quantity', 'pulledPacks', 'pulledLoose', 'packSizeUsed', 'pulloutId', 'pulledAt'), $userId
             );
-            $movementStmt->execute([$productId, -$quantity, $userId, $pulloutId, $pulledAt]);
-            $movementId = (int)$this->pdo->lastInsertId();
+            ['movement_id' => $movementId, 'remaining_batch_qty' => $newRemainingQty,
+                'remaining_batch_packs' => $newBatchSealed, 'remaining_batch_loose' => $newBatchLoose,
+                'new_on_hand' => $newOnHand] = $mutation;
 
             $result = [
                 'pullout_id' => $pulloutId,
@@ -296,7 +233,7 @@ class SupplierPulloutService
                 'remaining_batch_qty' => $newRemainingQty,
                 'remaining_batch_packs' => $newBatchSealed,
                 'remaining_batch_loose' => $newBatchLoose,
-                'new_on_hand' => $currentOnHand - $quantity,
+                'new_on_hand' => $newOnHand,
                 'reason' => $reason,
                 'supplier' => $supplier,
                 'pulled_by' => $userId,

@@ -7,7 +7,7 @@ const {chromium} = require('playwright');
 (async () => {
     const root = path.resolve(__dirname, '../../..');
     const source = fs.readFileSync(path.join(root, 'src/frontend/components/report/report_generation.php'), 'utf8');
-    const template = source.slice(source.indexOf('<!DOCTYPE html>')).replace(/<\?php include __DIR__ .*?\?>/, '');
+    const template = source.slice(source.indexOf('<!DOCTYPE html>')).replace(/<\?php include __DIR__ .*?\?>/, '<aside class="sidebar" aria-hidden="true"></aside>');
     const phpBinary = process.env.PHP_BINARY || 'php';
 
     const renderHtml = (state) => {
@@ -155,6 +155,66 @@ const {chromium} = require('playwright');
 
     try {
         console.log('Starting Ticket #232 Gross Profit Report Browser Tests...');
+
+        // Report workspace: production styles, searchable controls, both themes and narrow screens.
+        {
+            const page = await browser.newPage({reducedMotion: 'reduce'});
+            const output = path.join(root, '.impeccable/review/report-generation');
+            fs.mkdirSync(output, {recursive: true});
+            const salesState = {
+                selected_report: 'sales_period',
+                report_data: {
+                    headers: ['Period', 'Receipts', 'Units Sold', 'Total Sales', 'Refunds', 'Net Sales'],
+                    rows: [{'Period': '2026-10-17', Receipts: 12, 'Units Sold': 24, 'Total Sales': '2,450.00', Refunds: '200.00', 'Net Sales': '2,250.00'}],
+                    metrics: {Receipts: 12, 'Units Sold': 24, 'Total Sales': '2,450.00', Refunds: '200.00', 'Net Sales': '2,250.00'},
+                },
+            };
+            for (const [variant, state] of Object.entries({sales: salesState, profit: recordedState, empty: {selected_report: 'sales_period'}, error: {validation_error: 'Start date must not be after end date.'}})) {
+                await page.setContent(renderHtml(state));
+                for (const asset of ['style.css', 'reports.css', 'report-generation.css', 'theme.css']) {
+                    await page.addStyleTag({path: path.join(root, 'src/frontend/assets/css', asset)});
+                }
+                await page.addScriptTag({path: path.join(root, 'src/frontend/assets/js/ui.js')});
+                await page.evaluate(() => window.RetailMindUI.initPageContent());
+                if (variant === 'error') {
+                    await page.locator('.rm-toast').waitFor({state: 'attached'});
+                    await page.locator('.rm-toast').waitFor({state: 'detached'});
+                }
+                for (const theme of ['light', 'dark']) {
+                    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))));
+                    for (const width of [1440, 1280, 1024, 768, 375, 320, 667]) {
+                        await page.setViewportSize({width, height: width === 667 ? 375 : 960});
+                        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${variant}/${theme}/${width}: document fits`);
+                        assert(await page.locator('.report-filter-grid').evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${variant}/${theme}/${width}: controls fit`);
+                        if (width <= 600) {
+                            const fields = await page.locator('#report-filter-form > .form-group:visible').evaluateAll(els => els.map(el => el.getBoundingClientRect().toJSON()));
+                            for (let i = 1; i < fields.length; i++) assert(fields[i].y >= fields[i - 1].bottom, 'Phone fields stack without overlapping');
+                            assert(await page.locator('#report').evaluate(el => el.clientWidth >= 240), 'Phone report selector retains its readable label');
+                        }
+                        assert.equal(await page.locator('#from').evaluate(el => getComputedStyle(el).colorScheme), theme, 'Date control follows theme');
+                        if (variant === 'empty') {
+                            assert.equal(await page.locator('.table-wrap .report-empty-state').count(), 0, 'Empty recovery stays outside table scrolling');
+                            assert(await page.locator('.report-empty-state').evaluate(el => el.scrollWidth <= el.clientWidth), 'Empty recovery is readable without scrolling');
+                        }
+                        if (variant === 'profit') {
+                            assert.equal(await page.locator('.period-btn.is-active').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'Selected period keeps white text');
+                        }
+                        if (variant !== 'error') {
+                            assert.equal(await page.locator('.section-header .report-actions').count(), 1, 'Exports are grouped with results');
+                            assert.equal(await page.locator('form[method="POST"] input[name="action"]').inputValue(), 'export_csv');
+                            assert.equal(await page.locator('form[method="POST"] input[name="csrf_token"]').count(), 1, 'CSV keeps CSRF protection');
+                        }
+                        if ([1440, 375].includes(width)) {
+                            const filename = variant === 'sales' && theme === 'light' ? (width === 1440 ? 'desktop' : 'mobile') : `${variant}-${theme}-${width}`;
+                            await page.screenshot({path: path.join(output, `${filename}.png`), fullPage: true});
+                        }
+                    }
+                }
+            }
+            await page.close();
+            console.log('  ok - Report workspace (sales/profit/empty/error, light/dark, seven widths, production searchable controls, exports) verified');
+        }
 
         // -------------------------------------------------------------
         // Test 1: Desktop Layout C (Table Left, Summary Right) at 1280px

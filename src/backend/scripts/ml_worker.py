@@ -25,12 +25,25 @@ from feature_pipeline import (FEATURE_COLUMNS, FEATURE_VERSION, build_feature_ma
 ROOT_DIR = Path(__file__).resolve().parents[3]
 STORAGE_MODELS_DIR = ROOT_DIR / "src" / "backend" / "storage" / "ml_models"
 
+RUNNER_CONFIG_PATH = ROOT_DIR / "src" / "backend" / "config" / "forecasting_runner.json"
+if RUNNER_CONFIG_PATH.exists():
+    try:
+        with open(RUNNER_CONFIG_PATH, "r", encoding="utf-8") as _rcf:
+            _runner_cfg = json.load(_rcf)
+            if _runner_cfg.get("model_storage"):
+                STORAGE_MODELS_DIR = Path(_runner_cfg["model_storage"])
+    except Exception:
+        pass
+
 def get_connection():
+    db_host = os.getenv("DB_HOST", "127.0.0.1")
+    if db_host.lower() not in ("127.0.0.1", "localhost", "::1"):
+        raise PermissionError(f"Forecasting database interface must be local; remote host '{db_host}' is not permitted.")
     try:
         import pymysql
         import pymysql.cursors
         connection = pymysql.connect(
-            host=os.getenv("DB_HOST", "127.0.0.1"),
+            host=db_host,
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASSWORD", os.getenv("DB_PASS", "")),
@@ -42,7 +55,7 @@ def get_connection():
     except ImportError:
         import mysql.connector
         connection = mysql.connector.connect(
-            host=os.getenv("DB_HOST", "127.0.0.1"),
+            host=db_host,
             port=int(os.getenv("DB_PORT", "3306")),
             user=os.getenv("DB_USER", "root"),
             password=os.getenv("DB_PASSWORD", os.getenv("DB_PASS", "")),
@@ -75,15 +88,26 @@ def claim_job(conn):
     """Atomically claim a queued job or eligible expired lease."""
     recover_expired_leases(conn)
     with conn.cursor() as cursor:
-        cursor.execute("""
-            SELECT job_id, trigger_type, attempts 
-            FROM ml_jobs 
-            WHERE status = 'queued' 
-               OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
-            ORDER BY queued_at ASC 
-            LIMIT 1 
-            FOR UPDATE
-        """)
+        try:
+            cursor.execute("""
+                SELECT job_id, trigger_type, attempts, model_version, evidence_cutoff 
+                FROM ml_jobs 
+                WHERE status = 'queued' 
+                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                ORDER BY queued_at ASC 
+                LIMIT 1 
+                FOR UPDATE
+            """)
+        except Exception:
+            cursor.execute("""
+                SELECT job_id, trigger_type, attempts 
+                FROM ml_jobs 
+                WHERE status = 'queued' 
+                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                ORDER BY queued_at ASC 
+                LIMIT 1 
+                FOR UPDATE
+            """)
         job = cursor.fetchone()
         if not job:
             conn.commit()
@@ -91,7 +115,9 @@ def claim_job(conn):
 
         # Handle tuple vs dict return
         if isinstance(job, (tuple, list)):
-            job = {'job_id': job[0], 'trigger_type': job[1], 'attempts': job[2]}
+            job = {'job_id': job[0], 'trigger_type': job[1], 'attempts': job[2],
+                   'model_version': job[3] if len(job) > 3 else None,
+                   'evidence_cutoff': job[4] if len(job) > 4 else None}
 
         job_id = job['job_id']
         cursor.execute("""
@@ -103,6 +129,7 @@ def claim_job(conn):
             WHERE job_id = %s
         """, (job_id,))
         conn.commit()
+        job['attempts'] += 1
         return job
 
 def process_job(conn, job):
@@ -112,11 +139,24 @@ def process_job(conn, job):
     with conn.cursor() as cursor:
         try:
             if trigger == 'forecast_generation':
-                run_forecast_generation(conn, cursor, job_id)
+                run_forecast_generation(conn, cursor, job_id, evidence_cutoff=job.get('evidence_cutoff'))
             elif trigger == 'forecast_observation':
-                if not job.get('observation_version'):
+                obs_ver = job.get('observation_version') or job.get('model_version')
+                if not obs_ver:
+                    cursor.execute("SELECT model_version FROM ml_jobs WHERE job_id = %s", (job_id,))
+                    row = cursor.fetchone()
+                    obs_ver = (row['model_version'] if isinstance(row, dict) else row[0]) if row else None
+                if not obs_ver:
                     raise ValueError("Observation generation requires an explicit candidate version")
-                run_forecast_generation(conn, cursor, job_id, job.get('observation_version'))
+                evidence_cutoff = job.get('evidence_cutoff')
+                if not evidence_cutoff:
+                    try:
+                        cursor.execute("SELECT evidence_cutoff FROM ml_jobs WHERE job_id = %s", (job_id,))
+                        row_c = cursor.fetchone()
+                        evidence_cutoff = (row_c['evidence_cutoff'] if isinstance(row_c, dict) else row_c[0]) if row_c else None
+                    except Exception:
+                        pass
+                run_forecast_generation(conn, cursor, job_id, observation_version=obs_ver, evidence_cutoff=evidence_cutoff)
             elif trigger == 'model_retraining':
                 artifact_file = run_model_retraining(conn, cursor, job_id)
             else:
@@ -136,15 +176,51 @@ def process_job(conn, job):
                 artifact_file.unlink(missing_ok=True)
             diag_ref = f"ERR-{uuid.uuid4().hex[:8]}"
             err_msg = str(e)
+            blocked_markers = [
+                'No approved forecasting model version configured',
+                'Demo/Store model artifacts cannot cross dataset boundaries',
+                'Model artifact belongs to another dataset',
+                'Model feature contract is obsolete',
+                'Model artifact version does not match',
+                'No active products have 140 accumulated usable days for training',
+                'No active products have 140 consecutive usable days for training',
+                'No active products have 140',
+                'No trained products have 28 consecutive observed days for generation',
+                'No trained products have supported feature windows',
+                'requires 28 consecutive observed days',
+                'Invalid observation model version',
+                'Imported Demo history does not match',
+            ]
+            is_blocked = any(m.lower() in err_msg.lower() for m in blocked_markers)
+            attempts = job.get('attempts', 1)
             try:
-                cursor.execute("""
-                    UPDATE ml_jobs 
-                    SET status = 'failed', 
-                        completed_at = NOW(), 
-                        operator_message = 'Job encountered an error and could not complete.',
-                        diagnostic_reference = %s
-                    WHERE job_id = %s
-                """, (f"{err_msg} [{diag_ref}]", job_id))
+                if is_blocked:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = %s,
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"Prerequisite blocked: {err_msg}", f"BLOCKED:{err_msg} [{diag_ref}]", job_id))
+                elif attempts >= 3:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = 'Job failed: maximum retry attempts (3) exceeded.',
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"EXHAUSTED:{err_msg} [{diag_ref}]", job_id))
+                else:
+                    cursor.execute("""
+                        UPDATE ml_jobs 
+                        SET status = 'failed', 
+                            completed_at = NOW(), 
+                            operator_message = 'Job encountered a temporary error and will be retried on a later schedule tick.',
+                            diagnostic_reference = %s
+                        WHERE job_id = %s
+                    """, (f"TRANSIENT:{err_msg} [{diag_ref}]", job_id))
                 conn.commit()
             except Exception:
                 pass
@@ -234,14 +310,15 @@ def load_history(cursor, context, training=False):
             context['training_eligibility'] = exported['eligibility']
             exported = exported['history']
             if not exported:
-                raise ValueError('No active products have 140 consecutive usable days for training')
-        data = normalize_history(pd.DataFrame(exported,
-                                             columns=['date', 'product_id', 'units_sold', 'available_date']))
+                raise ValueError('No active products have 140 accumulated usable days for training')
+        data = normalize_history(pd.DataFrame(exported))
     return data
 
 
-def run_forecast_generation(conn, cursor, job_id, observation_version=None):
+def run_forecast_generation(conn, cursor, job_id, observation_version=None, evidence_cutoff=None):
     context = dataset_context(cursor)
+    if evidence_cutoff:
+        context['history_cutoff'] = str(evidence_cutoff)
     cursor.execute("""
         SELECT setting_value FROM platform_settings
         WHERE setting_key = 'ml_approved_model_version'
@@ -269,13 +346,9 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
     data = load_history(cursor, context)
     origin = data.date.max() if is_demo else pd.Timestamp(context['history_cutoff'])
     if not is_demo:
-        known = history_at(data, origin)
-        window = pd.date_range(origin - pd.Timedelta(days=27), origin)
-        counts = known[known.date.isin(window)].groupby('product_id').date.nunique()
-        products = counts.index[(counts == 28) & counts.index.isin(meta['products'])]
-        data = data[data.product_id.isin(products)]
+        data = data[data.product_id.isin(meta.get('products', []))]
         if data.empty:
-            raise ValueError('No trained products have 28 consecutive observed days for generation')
+            raise ValueError('No trained products have supported feature windows')
     features = build_feature_matrix(data, origin)
     predictions = artifact['model'].predict(features[FEATURE_COLUMNS])
     if not np.isfinite(predictions).all():
@@ -302,6 +375,18 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None):
               row.horizon_day, max(0, int(round(float(predicted)))), version, readiness, limitation))
 
 
+def _json_default(obj):
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, (pd.Timestamp, datetime)):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def run_model_retraining(conn, cursor, job_id):
     context = dataset_context(cursor)
     data = load_history(cursor, context, training=True)
@@ -323,10 +408,19 @@ def run_model_retraining(conn, cursor, job_id):
     for horizon, metrics in artifact['evaluations'].items():
         threshold = thresholds.get(f'ml_max_wape_{horizon}d')
         wape, baseline = metrics['wape'], metrics['baseline_wape']
-        if threshold is None or wape is None or baseline is None:
+        coverage = metrics.get('coverage', len(meta.get('products', [])))
+
+        # Snapshot effective configured threshold and baseline comparison (#366)
+        metrics['effective_max_wape'] = threshold
+
+        if threshold is None or wape is None or baseline is None or coverage <= 0:
             outcome = 'incomplete'
+            if threshold is None and not metrics.get('missing_metric_reason'):
+                metrics['missing_metric_reason'] = f"Missing configured threshold ml_max_wape_{horizon}d"
+            elif coverage <= 0 and not metrics.get('missing_metric_reason'):
+                metrics['missing_metric_reason'] = "Insufficient holdout coverage"
         else:
-            outcome = 'passed' if wape <= threshold and wape < baseline else 'failed'
+            outcome = 'passed' if (wape <= threshold and wape < baseline) else 'failed'
         outcomes.append(outcome)
         metrics['candidate_gate_outcome'] = outcome
         cursor.execute("""
@@ -355,7 +449,8 @@ def run_model_retraining(conn, cursor, job_id):
          sales_records_used, eligible_products, started_at, completed_at)
         VALUES (%s, %s, 'cli', 'completed', %s, %s, %s, NOW(), NOW())
     """, (model_name, version, json.dumps({'metadata': meta, 'evaluations': artifact['evaluations'],
-                                          'model_version': version, 'outcome': meta['outcome']}),
+                                          'model_version': version, 'outcome': meta['outcome']},
+                                         default=_json_default),
           meta['observations'], len(meta['products'])))
     directory = artifact_directory(context)
     directory.mkdir(parents=True, exist_ok=True)

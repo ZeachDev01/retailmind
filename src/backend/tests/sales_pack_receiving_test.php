@@ -314,6 +314,8 @@ $pdo->exec("
 require_once __DIR__ . '/support/notification_schema.php';
 notification_test_schema($pdo);
 
+$pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; UPDATE users SET display_name = full_name");
+
 $productService = new ProductService($pdo);
 $inventoryService = new InventoryService($pdo);
 $receivingService = new ReceivingService($pdo);

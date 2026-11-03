@@ -17,11 +17,9 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashierShiftService.php';
 require_once __DIR__ . '/../../../backend/app/Services/CashRefundService.php';
-require_once __DIR__ . '/../../../backend/app/Receipts/RefundReceiptPresentation.php';
-require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptPaperService.php';
+require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptEngine.php';
 
 require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryService.php';
-require_once __DIR__ . '/../../../backend/app/Services/CashierOperationalHistoryRequest.php';
 
 use App\Services\CashRefundService;
 use App\Services\CashierShiftService;
@@ -112,7 +110,7 @@ try {
     $error = \App\Support\OperatorAlert::message($e, 'Ask your Administrator to authorize this sale again.');
     $exceptionToken = '';
 }
-$refundHistory = \App\Services\CashierOperationalHistoryRequest::resolve($pdo, $actorId, [
+$refundHistory = (new \App\Services\CashierOperationalHistoryService($pdo))->resolve($actorId, [
     'type' => 'refunds', 'page' => $_GET['page'] ?? 1, 'length' => $_GET['length'] ?? 10,
 ]);
 $refunds = $refundHistory['rows'];
@@ -126,7 +124,7 @@ $receipt = $receiptId > 0 ? (new \App\Receipts\RefundReceiptService($pdo))->forC
 $autoPrintRefund = $receipt !== null && (int)($_SESSION['auto_print_refund'] ?? 0) === $receiptId;
 if ($autoPrintRefund) unset($_SESSION['auto_print_refund']);
 $autoPrintRefund = $autoPrintRefund && ($_GET['print_receipt'] ?? '') === '1';
-$paperWidthMm = (new \App\Receipts\ReceiptPaperService($pdo))->currentWidth($actorId, $actorRole);
+$paperWidthMm = (new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth($actorId, $actorRole);
 if ($receiptId > 0 && $receipt === null) {
     // Missing and unauthorized receipts share one response, without exposing ownership.
     http_response_code(404);
@@ -182,7 +180,7 @@ if ($receiptId > 0 && $receipt === null) {
                         <div class="receipt-actions no-print">
                             <button class="btn btn-secondary" type="button" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Refund Receipt</button>
                         </div>
-                        <?php \App\Receipts\RefundReceiptPresentation::render($receipt, $paperWidthMm); ?>
+                        <?php \App\Receipts\ReceiptEngine::renderRefund($receipt, $paperWidthMm); ?>
                     </section>
                 </div>
             </dialog>

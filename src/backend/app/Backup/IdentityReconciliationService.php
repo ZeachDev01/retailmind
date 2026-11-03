@@ -12,7 +12,7 @@ final class IdentityReconciliationService
 {
     private const PRESERVED_TABLES = [
         'recovery_accounts', 'platform_settings', 'attention_settings', 'ml_settings',
-        'password_reset_tokens', 'notification_preferences', 'notifications',
+        'password_reset_tokens', 'notification_preferences', 'workspace_guidance', 'notifications',
         'attention_states', 'login_attempts', 'backup_history', 'email_delivery_log',
         'activity_log', 'store_record_origins'
     ];
@@ -403,6 +403,10 @@ final class IdentityReconciliationService
         }
         $result['rows']['notification_preferences'] = array_merge($destProtectedPrefs, $pkgPrefs);
 
+        $destProtectedGuidance = array_values(array_filter($destRows['workspace_guidance'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+        $importedGuidance = array_values(array_filter($result['rows']['workspace_guidance'] ?? [], static fn(array $r): bool => !in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
+        $result['rows']['workspace_guidance'] = array_merge($destProtectedGuidance, $importedGuidance);
+
         $destProtectedNotifs = array_values(array_filter($destRows['notifications'] ?? [], static fn(array $r): bool => in_array((int)$r['user_id'], $result['protected_user_ids'], true)));
         $destNotifIds = array_fill_keys(array_map('intval', array_column($destProtectedNotifs, 'notification_id')), true);
         $maxNotifId = max(array_merge([0], array_keys($destNotifIds)));
@@ -483,6 +487,7 @@ final class IdentityReconciliationService
         foreach ($destRows['ml_settings'] ?? [] as $r) $scan($r['updated_by'] ?? null);
         foreach ($result['rows']['password_reset_tokens'] as $r) $scan($r['user_id'] ?? null);
         foreach ($destProtectedPrefs as $r) $scan($r['user_id'] ?? null);
+        foreach ($destProtectedGuidance as $r) $scan($r['user_id'] ?? null);
         foreach ($destProtectedNotifs as $r) $scan($r['user_id'] ?? null);
         foreach ($result['rows']['attention_states'] as $r) $scan($r['user_id'] ?? null);
         foreach ($destBackup as $r) $scan($r['performed_by'] ?? null);
@@ -620,6 +625,7 @@ final class IdentityReconciliationService
                 'login_attempts' => count($result['rows']['login_attempts']),
                 'password_reset_tokens' => count($result['rows']['password_reset_tokens']),
                 'notification_preferences' => count($destProtectedPrefs),
+                'workspace_guidance' => count($destProtectedGuidance),
                 'notifications' => count($destProtectedNotifs),
                 'attention_states' => count($result['rows']['attention_states']),
                 'backup_history' => count($destBackup),

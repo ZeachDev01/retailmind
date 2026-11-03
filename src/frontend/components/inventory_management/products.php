@@ -1204,7 +1204,7 @@ foreach ($products as $product) {
                             <button type="button" class="btn product-add-trigger" id="product-add-trigger" aria-expanded="false" aria-controls="product-add-options" aria-haspopup="menu"><i class="bi bi-plus-lg" aria-hidden="true"></i><span>Add</span></button>
                             <div class="product-add-menu-list" id="product-add-options" role="menu" hidden>
                                 <?php if ($canManageInventory): ?><button type="button" class="product-add-menu-item" id="add-product-btn" role="menuitem"><i class="bi bi-box-seam" aria-hidden="true"></i><strong>Add Product</strong></button><button type="button" class="product-add-menu-item" id="add-category-btn" role="menuitem"><i class="bi bi-folder-plus" aria-hidden="true"></i><strong>Add Category</strong></button><?php endif; ?>
-                                <a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
+                                <a class="product-add-menu-item" role="menuitem" data-no-navigation href="<?= htmlspecialchars(app_url('components/inventory_management/print_barcodes.php')) ?>"><i class="bi bi-upc-scan" aria-hidden="true"></i><strong>Barcode Labels</strong></a>
                                 <?php if ($canManageInventory): ?><a class="product-add-menu-item" role="menuitem" href="<?= htmlspecialchars(app_url('components/inventory_management/csv_import.php')) ?>"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i><strong>CSV Import</strong></a><?php endif; ?>
                             </div>
                         </div>
@@ -2810,8 +2810,10 @@ foreach ($products as $product) {
             });
         });
 
-        function setWizardStep(step) {
-            queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
+        addProductForm.addEventListener('retailmind:guidance-step', event => setWizardStep(event.detail.step, false));
+
+        function setWizardStep(step, saveDraft = true) {
+            if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
             wizardStep = Math.max(1, Math.min(5, step));
             document.querySelectorAll('.wizard-panel').forEach(panel => panel.classList.toggle('active', Number(panel.dataset.panel) === wizardStep));
             document.querySelectorAll('.wizard-step-indicator').forEach((indicator, index) => {

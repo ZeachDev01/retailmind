@@ -122,3 +122,67 @@ Testing Store Model Activation, Recovery and Runtime Gating (Ticket #163)...
 PASS: All Store Activation and Recovery Contract Tests Passed (Ticket #163)
 ========================================================
 ```
+
+
+---
+
+## 5. Disposable XAMPP End-to-End Workflow Verification (Ticket #374, Spec #359)
+
+**Date**: November 2, 2026  
+**Test Suite**: `src/backend/tests/store_forecasting_operational_workflow_test.php`  
+**Result**: 94 / 94 assertions passed (0 failures)
+
+### 5.1 Verified Operational Lifecycle
+
+1. **Unattended Boot & Database Delay Recovery**:
+   - Background Windows service runs as non-interactive `NT AUTHORITY\SYSTEM`.
+   - Local fixed drive path enforcement rejects mapped network drives (e.g. `Z:\retailmind`).
+   - Handles delayed MySQL startup via bounded exponential backoff connector (up to 5 attempts before raising outage diagnostic).
+
+2. **Downtime Catch-up & Philippine Cutoff Deduplication**:
+   - Evaluates cutoff at latest completed Philippine day (yesterday relative to Asia/Manila 00:00).
+   - Enqueues exactly one operational forecast and one candidate retrain catch-up job across multi-day downtime.
+   - Logical deduplication by `(trigger_type, evidence_cutoff)` prevents duplicate execution across frequent scheduler ticks.
+
+3. **Injected Failure Resilience & Bounded Retry Ceiling**:
+   - Transient execution failures and expired worker leases re-queue with attempt counter increment.
+   - Strict 3-attempt ceiling marks persistent failures as `failed` with durable notification.
+   - Transactional persistence prevents partial writes; missing horizon records trigger complete rollback.
+
+4. **Store Calendar Hierarchy & Operational Provenance**:
+   - Day-of-week schedule (`store_weekly_schedule`) provides baseline status.
+   - Dated exception overrides (`store_calendar`) supersede weekly schedule.
+   - Completed sales on closed days automatically record open status with `completed_sale` evidence source without retroactive corruption.
+
+5. **Data Readiness & Non-Binding Stock-Rule Fallback**:
+   - Requires 140 accumulated usable days across calendar-aware rolling windows.
+   - Products with insufficient history cleanly fall back to Stock-rule order suggestions (`basis: Stock-rule suggestion`).
+   - Qualified products show truthful status (`Ready for training`).
+
+6. **Candidate Observation Mode & Preservation**:
+   - Unapproved candidates generate prospective forecasts via `forecast_observation` trigger.
+   - Active candidate is preserved across weekly retraining and closures until 28 completed observation days accumulate.
+
+7. **Local Administrator Approval (ADR-0022)**:
+   - Super Admin and Administrator review qualification metrics and observation holdouts.
+   - Rejects demo/Kaggle artifacts at activation gate.
+   - Atomic model activation logs Protected Audit Record and queues fresh operational forecast.
+
+8. **Guidance Display & Replenishment Integration**:
+   - Approved model displays 28-day expected demand and recommended order quantity in purchasing replenishment queue.
+
+9. **Pause, Resume & Compatible Rollback**:
+   - Immediate suspension falls back to stock rules.
+   - Resume validates model artifact on disk before reinstating ML guidance.
+   - Rollback restores previous approved model and clears previous slot to prevent loops.
+
+10. **Routine Store Non-Disruption**:
+    - Cashier checkout, cash refunds, stock receipts, and inventory counting operate without latency or locks during ML jobs.
+
+11. **Demand Driver & Export Evidence Preservation**:
+    - Scheduled selling prices and promotions (including edits and cancellations) preserve dated origin-known evidence.
+    - Historical exports preserve nullable unknowns (`price`, `is_on_promotion`, `out_of_stock`) without fabricated zero defaults.
+
+12. **Separation of Workflow Verification from Store Accuracy**:
+    - Workflow tests verify recovery, state transitions, and integration boundaries.
+    - Real-world prospective accuracy requires live Store observation.

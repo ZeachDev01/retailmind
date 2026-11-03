@@ -2,10 +2,8 @@
 
 namespace App\Dashboard;
 
-use App\Attention\AttentionRuleService;
-use App\Attention\AttentionSettingsService;
+use App\Attention\AttentionCenter;
 use App\Attention\Clock;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
 use DateTimeImmutable;
 use DomainException;
@@ -44,10 +42,7 @@ final class DashboardWorkspace
             $healthChecks = $this->health->checks();
             $platform = $this->platformState($now, $healthChecks);
             $attention = array_values(array_filter(
-                (new AttentionRuleService(
-                    new AttentionSettingsService($this->pdo, $this->clock),
-                    $this->clock
-                ))->evaluate($actorRole, $platform['signals']),
+                (new AttentionCenter($this->pdo, $this->clock))->getAttention(0, $actorRole, $healthChecks),
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
 
@@ -105,7 +100,6 @@ final class DashboardWorkspace
     private function platformState(DateTimeImmutable $now, array $healthChecks): array
     {
         $nowValue = $now->format('Y-m-d H:i:s');
-        $signals = (new DatabaseAttentionSignalSource($this->pdo, $this->clock))->platform($healthChecks);
         $backup = $this->row("SELECT created_at FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore' ORDER BY created_at DESC LIMIT 1");
         $recovery = $this->row(
             "SELECT ra.sealed_at, ra.last_used_at, u.status
@@ -114,7 +108,8 @@ final class DashboardWorkspace
         );
         $unsealedRecovery = $recovery !== [] && $recovery['status'] === 'active' && $recovery['sealed_at'] === null ? 1 : 0;
         $backupAge = $backup === [] ? 9999 : $this->ageDays((string)$backup['created_at'], $now);
-        $modelAge = (int)($signals['ml_model_age_days']['value'] ?? 9999);
+        $latestModel = $this->row("SELECT completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1");
+        $modelAge = $latestModel === [] ? 9999 : $this->ageDays((string)($latestModel['completed_at'] ?? ''), $now);
         $privilegedAnomalies = $this->count(
             "SELECT COUNT(*) FROM users u JOIN roles r ON r.role_id = u.role_id
              WHERE r.role_name IN ('super_admin', 'admin') AND u.status = 'active' AND u.locked_until > ?",
@@ -122,7 +117,6 @@ final class DashboardWorkspace
         ) + $unsealedRecovery;
 
         return [
-            'signals' => $signals,
             'backup' => [
                 'label' => 'Latest successful backup',
                 'value' => $backup === [] ? 'Not available' : (string)$backup['created_at'],

@@ -56,17 +56,22 @@ const ui = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8');
             await page.locator('#save-status-btn').focus();
             await page.keyboard.press('Tab');
             assert.equal(await editor.evaluate(el => el.contains(document.activeElement)), true);
-            const box = await page.locator('.rm-modal').boundingBox();
+            const box = await page.locator('#calendar-editor .rm-modal').boundingBox();
             assert.ok(box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= 901);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-            await page.locator('[data-close-modal]').click();
+            await page.locator('#calendar-editor [data-close-modal]').first().click();
             await page.locator('#record-date-btn').click();
             await page.locator('#status').selectOption('closed');
             assert.deepEqual(await page.locator('#calendar-form').evaluate(form => {
                 const data = new FormData(form);
                 return [form.method, data.get('calendar_date'), data.get('status'), data.get('csrf_token')];
             }), ['post', '2026-10-08', 'closed', 'fixture-token']);
-            await page.locator('.rm-close').click();
+            await page.locator('#calendar-editor .rm-close').click();
+            await page.locator('#weekly-schedule-btn').click();
+            await page.waitForFunction(() => document.querySelector('#weekly-schedule-modal').classList.contains('open'));
+            assert.equal(await page.locator('#weekly-schedule-modal').isVisible(), true);
+            assert.equal(await page.locator('#weekly-schedule-form input[name="action"]').inputValue(), 'save_weekly_schedule');
+            await page.locator('#weekly-schedule-modal [data-close-modal]').first().click();
             for (const theme of ['light', 'dark']) {
                 await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
                 const colors = await page.locator('.calendar-legend .calendar-status-badge').evaluateAll(nodes => nodes.map(el => getComputedStyle(el).backgroundColor));

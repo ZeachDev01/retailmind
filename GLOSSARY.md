@@ -203,3 +203,8 @@ _Avoid_: Remote administration, staff remote access
 **Stock Status Indicator**:
 A standardized color-coded visual indicator (🔴 Out of stock, 🟡 Low stock, 🟢 In stock/Available, 🔵 Needs replenishment) displayed across inventory dropdowns and status badges to convey stock health without altering underlying filter values.
 _Avoid_: Custom icon component, unstandardized badge color
+
+
+**Attention Item**:
+An actionable store-wide or platform-level condition (such as overdue high-value Stock Issues, unreviewed cash variances, or approaching Fiscal Period closures) highlighted on an Administrator or Super Administrator dashboard for review.
+_Avoid_: Notification (when referring to dashboard alerts), Task, To-do

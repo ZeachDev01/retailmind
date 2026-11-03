@@ -277,6 +277,8 @@ $pdo->exec("ALTER TABLE stock_receiving ADD COLUMN rejected_loose INTEGER NOT NU
 $pdo->exec("ALTER TABLE stock_receiving ADD COLUMN pack_size_used INTEGER NULL");
 
 $managerId = 1;
+$pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; UPDATE users SET display_name = full_name");
+
 $receivingService = new ReceivingService($pdo);
 $pulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
 $inventoryService = new InventoryService($pdo);

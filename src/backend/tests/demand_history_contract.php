@@ -256,6 +256,123 @@ try {
     $importSummary = $service->getReadinessSummary($pdo, 2, '2026-09-01', '2026-09-03', $cutoff);
     $assert($importSummary['usable_history_days'] === 2 && $importSummary['excluded_days']['missing_evidence'] === 1, 'Readiness counts imports without treating absent dates as zero');
 
+    // -------------------------------------------------------------
+    // Test 8: Intraday Sellout and Restock (Ticket #364)
+    // Positive closing stock cannot hide intraday sellout/restock
+    // -------------------------------------------------------------
+    echo "\n--- Test 8: Intraday Sellout & Restock (#364) ---\n";
+    $pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (3, 'SKU-003', 'Restock Product')");
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-10-15', 'open', '2026-10-01 12:00:00')");
+    // Starting balance of 10 at 08:00
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (3, 10, 'purchase', '2026-10-15 08:00:00')");
+    // Sale of 10 units at 10:30 (stock dips to 0)
+    $pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, sale_date) VALUES (201, 1, 100.00, '2026-10-15 10:30:00')");
+    $pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (201, 201, 3, 10, 10.00, 100.00)");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (3, -10, 'sale', '2026-10-15 10:30:00')");
+    // Restock of 20 units at 14:00 (closing stock becomes 20)
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (3, 20, 'purchase', '2026-10-15 14:00:00')");
+
+    $t8Cutoff = '2026-10-15 23:59:59';
+    $t8Ev = $service->getDailyEvidence($pdo, 3, '2026-10-15', '2026-10-15', $t8Cutoff)[0];
+    $assert($t8Ev['valid_sales_units'] === 10, 'Recorded sales units preserved as 10');
+    $assert($t8Ev['end_of_day_stock'] === 20, 'End of day closing stock is 20');
+    $assert($t8Ev['out_of_stock'] === true, 'Intraday sellout sets out_of_stock = true despite positive closing stock');
+    $assert($t8Ev['classification'] === 'stockout_censored', 'Day classifies as stockout_censored');
+    $assert($t8Ev['source'] === 'pos', 'Source is pos');
+
+    // -------------------------------------------------------------
+    // Test 9: Positive sales on stockout day excluded from training targets (#364)
+    // -------------------------------------------------------------
+    echo "\n--- Test 9: Positive Sales on Stockout Day in Training History (#364) ---\n";
+    $t8History = $service->getObservedHistory($pdo, '2026-10-15');
+    $p3Rows = array_values(array_filter($t8History, fn ($r) => $r['product_id'] === 3 && $r['date'] === '2026-10-15'));
+    $assert(count($p3Rows) === 1, 'Observed history contains record for product 3');
+    $assert($p3Rows[0]['units_sold'] === null, 'units_sold is null for stockout day (excluded from complete demand training targets)');
+    $assert($p3Rows[0]['recorded_sales_units'] === 10, 'recorded_sales_units preserves valid sales 10');
+    $assert($p3Rows[0]['out_of_stock'] === true, 'out_of_stock is carried through history boundary');
+    $assert($p3Rows[0]['classification'] === 'stockout_censored', 'classification is stockout_censored');
+
+    $t8Summary = $service->getReadinessSummary($pdo, 3, '2026-10-15', '2026-10-15', $t8Cutoff);
+    $assert($t8Summary['usable_history_days'] === 0, 'Stockout day with positive sales is not a usable history day');
+    $assert($t8Summary['excluded_days']['stockout_censored'] === 1, 'Counted in excluded_days[stockout_censored]');
+
+    // -------------------------------------------------------------
+    // Test 10: Closed Overnight Zero Balance vs Late Arrival (#364)
+    // -------------------------------------------------------------
+    echo "\n--- Test 10: Closed Overnight Zero Balance (#364) ---\n";
+    $pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (4, 'SKU-004', 'Overnight Product')");
+    $pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (5, 'SKU-005', 'Late Delivery Product')");
+    // Day 1: Store open, both products stock movements reduce balance to 0 at end of day
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-10-16', 'open', '2026-10-01 12:00:00')");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (4, 10, 'purchase', '2026-10-16 08:00:00')");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (4, -10, 'sale', '2026-10-16 18:00:00')");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (5, 10, 'purchase', '2026-10-16 08:00:00')");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (5, -10, 'sale', '2026-10-16 18:00:00')");
+
+    // Day 2 (2026-10-17): Store open
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-10-17', 'open', '2026-10-01 12:00:00')");
+    // Product 4: delivery arrives at 07:30 (before trading begins)
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (4, 15, 'purchase', '2026-10-17 07:30:00')");
+    // Product 5: delivery arrives at 14:00 (late receipt during trading)
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (5, 15, 'purchase', '2026-10-17 14:00:00')");
+
+    $t10Cutoff = '2026-10-17 23:59:59';
+    // Product 4 was replenished before trading: genuine_zero, out_of_stock = false
+    $t10Ev4 = $service->getDailyEvidence($pdo, 4, '2026-10-17', '2026-10-17', $t10Cutoff)[0];
+    $assert($t10Ev4['classification'] === 'genuine_zero', 'Replenished before trading does not infer stockout from overnight 0 balance');
+    $assert($t10Ev4['out_of_stock'] === false, 'Product 4 out_of_stock is false');
+
+    // Product 5 opened trading at 0 stock; late delivery cannot hide morning stockout
+    $t10Ev5 = $service->getDailyEvidence($pdo, 5, '2026-10-17', '2026-10-17', $t10Cutoff)[0];
+    $assert($t10Ev5['classification'] === 'stockout_censored', 'Late delivery does not hide morning stockout');
+    $assert($t10Ev5['out_of_stock'] === true, 'Product 5 out_of_stock is true');
+
+    // -------------------------------------------------------------
+    // Test 11: Missing Calendar Evidence with Store Sales (#364)
+    // -------------------------------------------------------------
+    echo "\n--- Test 11: Missing Calendar Evidence with Store Sales (#364) ---\n";
+    // 2026-10-18: store_calendar has no record for 2026-10-18
+    // Product 3 has a sale at 10:00 (store has completed sales)
+    $pdo->exec("INSERT INTO sales (sale_id, cashier_id, total_amount, sale_date) VALUES (301, 1, 20.00, '2026-10-18 10:00:00')");
+    $pdo->exec("INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (301, 301, 3, 2, 10.00, 20.00)");
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (3, -2, 'sale', '2026-10-18 10:00:00')");
+
+    $t11Cutoff = '2026-10-18 23:59:59';
+    // Product 3 had sales: valid_demand
+    $t11Ev3 = $service->getDailyEvidence($pdo, 3, '2026-10-18', '2026-10-18', $t11Cutoff)[0];
+    $assert($t11Ev3['classification'] === 'valid_demand', 'Product with observed sales classifies as valid_demand');
+    $assert($t11Ev3['valid_sales_units'] === 2, 'Valid sales units is 2');
+    $assert($t11Ev3['out_of_stock'] === false, 'Product 3 out_of_stock is false');
+
+    // Product 4 had 0 sales: calendar interval unknown, classifies as missing_evidence
+    $t11Ev4 = $service->getDailyEvidence($pdo, 4, '2026-10-18', '2026-10-18', $t11Cutoff)[0];
+    $assert($t11Ev4['classification'] === 'missing_evidence', 'Unsold product with missing calendar classifies as missing_evidence independently');
+    $assert($t11Ev4['out_of_stock'] === null, 'Product 4 out_of_stock is null');
+
+    // -------------------------------------------------------------
+    // Test 12: First Late-Day Receipt with No Prior Balance (#364)
+    // -------------------------------------------------------------
+    echo "\n--- Test 12: First Late-Day Receipt (#364) ---\n";
+    $pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (6, 'SKU-006', 'New Product')");
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-10-19', 'open', '2026-10-01 12:00:00')");
+    // First receipt at 14:00 with no prior movements
+    $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (6, 10, 'purchase', '2026-10-19 14:00:00')");
+
+    $t12Cutoff = '2026-10-19 23:59:59';
+    $t12Ev = $service->getDailyEvidence($pdo, 6, '2026-10-19', '2026-10-19', $t12Cutoff)[0];
+    $assert($t12Ev['classification'] === 'missing_evidence', 'First late-day receipt cannot infer all-day availability');
+    $assert($t12Ev['out_of_stock'] === null, 'out_of_stock is null for unproven availability');
+
+    // -------------------------------------------------------------
+    // Test 13: Imported Zero without Stock Evidence (#364)
+    // -------------------------------------------------------------
+    echo "\n--- Test 13: Imported Zero without Stock Evidence (#364) ---\n";
+    $t13Ev = $service->getDailyEvidence($pdo, 2, '2026-09-03', '2026-09-03', $cutoff)[0];
+    $assert($t13Ev['classification'] === 'genuine_zero', 'Imported zero classifies as genuine_zero');
+    $assert($t13Ev['valid_sales_units'] === 0, 'Valid sales units is 0');
+    $assert($t13Ev['out_of_stock'] === null, 'Imported zero without stock evidence has out_of_stock = null');
+    $assert($t13Ev['source'] === 'import', 'Source is import');
+
     echo "\n========================================================\n";
     if (empty($failures)) {
         echo "PASS: All Demand History Contract Tests Passed (Ticket #161)\n";

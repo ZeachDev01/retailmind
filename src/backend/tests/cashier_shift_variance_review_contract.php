@@ -16,7 +16,7 @@ $pdo->sqliteCreateFunction('NOW', static fn(): string => date('Y-m-d H:i:s'), 0)
 $pdo->exec("
     CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT);
     INSERT INTO roles VALUES (1, 'admin'), (2, 'cashier'), (3, 'super_admin');
-    CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, role_id INTEGER, status TEXT);
+    CREATE TABLE users (user_id INTEGER PRIMARY KEY, display_name TEXT, role_id INTEGER, status TEXT);
     INSERT INTO users VALUES (1, 'Alice Cashier', 2, 'active'), (2, 'Bob Admin', 1, 'active'), (3, 'Super Admin', 3, 'active');
     CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INTEGER, product_id INTEGER, quantity INTEGER, unit_price REAL, total_price REAL, cost_price REAL, discount_amount REAL, cost_recovery_status TEXT);
 

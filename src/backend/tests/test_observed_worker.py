@@ -39,7 +39,10 @@ class Cursor:
         self.cursor.close()
 
     def execute(self, sql, params=()):
-        self.cursor.execute(sql.replace("%s", "?").replace("NOW()", "CURRENT_TIMESTAMP"), params)
+        import re
+        s = re.sub(r"DATE_ADD\(NOW\(\),\s*INTERVAL\s*(\d+)\s*MINUTE\)", r"datetime('now', '+\1 minutes')", sql, flags=re.I)
+        s = s.replace("%s", "?").replace("NOW()", "CURRENT_TIMESTAMP").replace("FOR UPDATE", "")
+        self.cursor.execute(s, params)
         return self
 
     def fetchone(self):
@@ -61,8 +64,10 @@ class Connection:
             CREATE TABLE sales (sale_id INTEGER, cashier_id INTEGER, sale_date TEXT);
             CREATE TABLE sale_items (sale_id INTEGER, product_id INTEGER, quantity REAL);
             CREATE TABLE ml_jobs (job_id INTEGER, trigger_type TEXT, status TEXT,
+                model_version TEXT, evidence_cutoff TEXT, attempts INTEGER DEFAULT 1,
+                lease_expires_at TEXT, queued_at TEXT, started_at TEXT,
                 completed_at TEXT, operator_message TEXT, diagnostic_reference TEXT);
-            INSERT INTO ml_jobs VALUES (1, 'model_retraining', 'running', NULL, NULL, NULL);
+            INSERT INTO ml_jobs VALUES (1, 'model_retraining', 'running', NULL, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL);
             CREATE TABLE ml_model_evaluations (model_version TEXT, horizon_days INTEGER,
                 mae REAL, rmse REAL, wape REAL, baseline_mae REAL, baseline_rmse REAL,
                 baseline_wape REAL, candidate_gate_outcome TEXT, missing_metric_reason TEXT,
@@ -345,7 +350,7 @@ class WorkerEvidenceTests(unittest.TestCase):
                 artifact['model'] = ForecastEstimator(error if failure == 'estimator' else None)
                 artifact['metadata']['features'] = [] if failure == 'schema' else ml_worker.FEATURE_COLUMNS
                 joblib.dump(artifact, path)
-                conn.db.execute("INSERT INTO ml_jobs VALUES (?, 'forecast_generation', 'running', NULL, NULL, NULL)",
+                conn.db.execute("INSERT INTO ml_jobs (job_id, trigger_type, status, completed_at, operator_message, diagnostic_reference) VALUES (?, 'forecast_generation', 'running', NULL, NULL, NULL)",
                                 (job_id,))
                 conn.commit()
                 if failure == 'persistence':
@@ -357,7 +362,7 @@ class WorkerEvidenceTests(unittest.TestCase):
                 job = conn.db.execute('SELECT * FROM ml_jobs WHERE job_id = ?', (job_id,)).fetchone()
                 self.assertEqual(job['status'], 'failed')
                 self.assertIsNotNone(job['completed_at'])
-                self.assertEqual(job['operator_message'], 'Job encountered an error and could not complete.')
+                self.assertTrue(job['operator_message'].startswith('Job encountered') or job['operator_message'].startswith('Prerequisite blocked:'))
                 self.assertIn(error, job['diagnostic_reference'])
                 self.assertRegex(job['diagnostic_reference'], r'\[ERR-[0-9a-f]{8}\]$')
                 self.assertEqual(conn.db.execute('SELECT * FROM demand_forecasts ORDER BY product_id, horizon_day').fetchall(),
@@ -374,6 +379,158 @@ class WorkerEvidenceTests(unittest.TestCase):
             clock.now.return_value = datetime(2026, 10, 10, 12)
             context = ml_worker.dataset_context(conn.cursor())
         self.assertEqual(context['history_cutoff'], '2026-10-09')
+
+    def test_store_generation_succeeds_with_supported_weekend_and_holiday_closures(self):
+        conn = Connection('retailmind')
+        self.addCleanup(conn.db.close)
+        conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'v_test_closure')")
+        conn.db.execute("UPDATE ml_jobs SET trigger_type='forecast_generation'")
+        conn.commit()
+        context = ml_worker.dataset_context(conn.cursor())
+        cutoff = '2024-07-07'
+        context['history_cutoff'] = cutoff
+        dates = pd.date_range('2024-01-01', cutoff, freq='D')
+        records = []
+        for d in dates:
+            d_str = d.strftime('%Y-%m-%d')
+            is_weekend = d.dayofweek >= 5
+            if is_weekend or d_str == '2024-06-19':
+                records.append({'date': d_str, 'product_id': 1, 'units_sold': None, 'classification': 'closed'})
+            else:
+                records.append({'date': d_str, 'product_id': 1, 'units_sold': 10.0, 'classification': 'valid_demand'})
+
+            if is_weekend:
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': None, 'classification': 'closed'})
+            elif d_str == '2024-07-04':
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': None, 'classification': 'stockout_censored'})
+            else:
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': 12.0, 'classification': 'valid_demand'})
+
+        data = pd.DataFrame(records)
+        artifact = {'model': ForecastEstimator(), 'metadata': dict(context,
+            model_version='v_test_closure', products=[1, 2], feature_version=ml_worker.FEATURE_VERSION,
+            features=ml_worker.FEATURE_COLUMNS)}
+        with patch.object(ml_worker, 'load_history', return_value=data), patch.object(ml_worker.joblib, 'load', return_value=artifact):
+            ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'forecast_generation', 'evidence_cutoff': cutoff})
+
+        self.assertEqual(conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0], 'succeeded')
+        forecasts = conn.db.execute('SELECT * FROM demand_forecasts').fetchall()
+        self.assertEqual(len(forecasts), 28)
+        self.assertEqual({row['product_id'] for row in forecasts}, {1})
+        self.assertEqual(forecasts[0]['forecast_origin'], cutoff)
+
+    def test_real_worker_training_evaluation_and_generation_end_to_end_with_supported_closures(self):
+        """
+        Ticket #415 Acceptance Criteria:
+        Run identified isolated history with supported closures through actual queue/worker
+        training and evaluation to a saved compatible candidate, observation persistence,
+        and operational generation. Verify complete 7/14/28-day output, provenance, completed-day cutoff.
+        """
+        conn = Connection('retailmind')
+        self.addCleanup(conn.db.close)
+
+        for h in (7, 14, 28):
+            conn.db.execute("INSERT INTO platform_settings VALUES (?, ?)", (f'ml_max_wape_{h}d', '0.50'))
+        conn.commit()
+
+        context = ml_worker.dataset_context(conn.cursor())
+        cutoff = '2024-07-07'
+        context['history_cutoff'] = cutoff
+
+        dates = pd.date_range('2023-12-25', cutoff, freq='D')
+        records = []
+        for d in dates:
+            d_str = d.strftime('%Y-%m-%d')
+            is_weekend = d.dayofweek >= 5
+            week_num = d.isocalendar()[1]
+            is_payweek = (week_num % 2 == 1)
+            val1 = 20.0 + (d.dayofweek * 3.0) + (15.0 if is_payweek and d.dayofweek == 4 else 0.0)
+
+            if is_weekend or d_str == '2024-06-19':
+                records.append({'date': d_str, 'product_id': 1, 'units_sold': None, 'classification': 'closed'})
+            else:
+                records.append({'date': d_str, 'product_id': 1, 'units_sold': float(val1), 'classification': 'valid_demand'})
+
+            if is_weekend:
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': None, 'classification': 'closed'})
+            elif d_str == '2024-07-04':
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': None, 'classification': 'stockout_censored'})
+            else:
+                records.append({'date': d_str, 'product_id': 2, 'units_sold': 12.0, 'classification': 'valid_demand'})
+
+        data = pd.DataFrame(records)
+
+        # 1. Enqueue and process model_retraining job
+        conn.db.execute("INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff) VALUES (10, 'model_retraining', 'queued', ?)", (cutoff,))
+        conn.commit()
+
+        with patch.object(ml_worker, 'load_history', return_value=data):
+            job1 = ml_worker.claim_job(conn)
+            self.assertEqual(job1['job_id'], 10)
+            self.assertEqual(job1['trigger_type'], 'model_retraining')
+            ml_worker.process_job(conn, job1)
+
+        job1_row = dict(conn.db.execute("SELECT * FROM ml_jobs WHERE job_id = 10").fetchone())
+        self.assertEqual(job1_row['status'], 'succeeded', job1_row.get('diagnostic_reference'))
+
+        evaluations = conn.db.execute("SELECT * FROM ml_model_evaluations ORDER BY horizon_days").fetchall()
+        self.assertEqual(len(evaluations), 3, "Evaluations persisted for 7, 14, 28 days")
+        candidate_version = evaluations[0]['model_version']
+        self.assertTrue(candidate_version.startswith('v'))
+        self.assertEqual({r['horizon_days'] for r in evaluations}, {7, 14, 28})
+        self.assertTrue(all(r['candidate_gate_outcome'] == 'passed' for r in evaluations))
+
+        artifact_file = self.path / 'store' / ml_worker.artifact_directory(context).name / f"random_forest_candidate_{candidate_version}.joblib"
+        self.assertTrue(artifact_file.exists(), f"Candidate artifact must be persisted at {artifact_file}")
+        artifact = joblib.load(artifact_file)
+        self.assertEqual(artifact['metadata']['products'], [1], "Product 1 included in model")
+        self.assertIn(2, artifact['metadata']['excluded_products'], "Product 2 excluded due to stockout during holdout")
+        self.assertEqual(artifact['metadata']['data_window_end'], cutoff)
+        self.assertEqual(artifact['metadata']['outcome'], 'passed')
+
+        # 2. Enqueue and process forecast_observation job for candidate
+        conn.db.execute("INSERT INTO ml_jobs (job_id, trigger_type, status, model_version, evidence_cutoff) VALUES (11, 'forecast_observation', 'queued', ?, ?)", (candidate_version, cutoff))
+        conn.commit()
+
+        with patch.object(ml_worker, 'load_history', return_value=data):
+            job2 = ml_worker.claim_job(conn)
+            self.assertEqual(job2['job_id'], 11)
+            self.assertEqual(job2['trigger_type'], 'forecast_observation')
+            ml_worker.process_job(conn, job2)
+
+        job2_row = dict(conn.db.execute("SELECT * FROM ml_jobs WHERE job_id = 11").fetchone())
+        self.assertEqual(job2_row['status'], 'succeeded', job2_row.get('diagnostic_reference'))
+
+        obs_forecasts = conn.db.execute("SELECT * FROM demand_forecasts WHERE job_id = 11 ORDER BY horizon_day").fetchall()
+        self.assertEqual(len(obs_forecasts), 28, "28 observation forecast days persisted")
+        self.assertTrue(all(r['limitation_marker'].startswith('Observation only;') for r in obs_forecasts))
+        self.assertTrue(all(r['forecast_origin'] == cutoff for r in obs_forecasts))
+        self.assertEqual({r['product_id'] for r in obs_forecasts}, {1})
+
+        # 3. Administrator approves candidate and operational generation runs for Sunday cutoff
+        conn.db.execute("INSERT INTO platform_settings VALUES ('ml_approved_model_version', ?)", (candidate_version,))
+        conn.db.execute("INSERT INTO ml_jobs (job_id, trigger_type, status, model_version, evidence_cutoff) VALUES (12, 'forecast_generation', 'queued', ?, ?)", (candidate_version, cutoff))
+        conn.commit()
+
+        with patch.object(ml_worker, 'load_history', return_value=data):
+            job3 = ml_worker.claim_job(conn)
+            self.assertEqual(job3['job_id'], 12)
+            self.assertEqual(job3['trigger_type'], 'forecast_generation')
+            ml_worker.process_job(conn, job3)
+
+        job3_row = dict(conn.db.execute("SELECT * FROM ml_jobs WHERE job_id = 12").fetchone())
+        self.assertEqual(job3_row['status'], 'succeeded', job3_row.get('diagnostic_reference'))
+
+        op_forecasts = conn.db.execute("SELECT * FROM demand_forecasts WHERE job_id = 12 ORDER BY horizon_day").fetchall()
+        self.assertEqual(len(op_forecasts), 28, "Complete 28-day operational forecast persisted")
+        self.assertEqual(list(range(1, 29)), [r['horizon_day'] for r in op_forecasts])
+        self.assertTrue(all(not r['limitation_marker'].startswith('Observation only;') for r in op_forecasts))
+        self.assertTrue(all(r['forecast_origin'] == cutoff for r in op_forecasts))
+        self.assertTrue(all(r['predicted_units'] >= 0 for r in op_forecasts))
+        self.assertEqual({r['product_id'] for r in op_forecasts}, {1})
+
+        expected_target_dates = [str((pd.Timestamp(cutoff) + pd.Timedelta(days=h)).date()) for h in range(1, 29)]
+        self.assertEqual([r['target_date'] for r in op_forecasts], expected_target_dates)
 
     def test_store_generation_skips_untrained_and_gapped_products(self):
         conn = Connection('retailmind')

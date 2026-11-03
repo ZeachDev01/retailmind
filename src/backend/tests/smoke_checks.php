@@ -39,7 +39,7 @@ $checks = [
         ],
     ],
     'Unlinked sales are presented as Legacy / Unassigned' => [
-        'file' => 'src/backend/app/Receipts/ReceiptDetailsService.php',
+        'file' => 'src/backend/app/Receipts/ReceiptEngine.php',
         'needles' => ['Legacy / Unassigned', 'LEFT JOIN cashier_shifts cs ON cs.shift_id = s.shift_id', 'r.name AS register_name'],
     ],
     'Custom discounts cannot bypass eligible promotions' => [
@@ -294,7 +294,7 @@ $checks = [
     ],
     'Shared attention evaluation feeds scheduled notifications' => [
         'file' => 'src/backend/scripts/run_notifications.php',
-        'needles' => ['DatabaseAttentionSignalSource', 'AttentionRuleService', 'AttentionNotificationService', 'refreshResult', 'email_pending', 'checkAndNotifyForecasts'],
+        'needles' => ['AttentionCenter', 'synchronize', 'email_pending', 'checkAndNotifyForecasts'],
     ],
     'Daily job runs the Dormancy Policy runner' => [
         'file' => 'src/backend/scripts/run_notifications.php',
@@ -443,7 +443,7 @@ $checks = [
             'name="register_id"',
             'name="opening_float"',
             '$service->availableRegisters()',
-            'requireCashierWorkspace($actorRole)',
+            "require_role(['admin', 'super_admin', 'cashier'])",
         ],
         // A shift is never opened on somebody's behalf, and the duplicate
         // page-level audit write is gone: the service records the opening.

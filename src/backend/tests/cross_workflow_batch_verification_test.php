@@ -526,12 +526,21 @@ $pdo->exec("ALTER TABLE sale_items ADD COLUMN selling_form TEXT NOT NULL DEFAULT
 $pdo->exec("ALTER TABLE sale_items ADD COLUMN sold_form_qty INTEGER NOT NULL DEFAULT 0");
 $pdo->exec("ALTER TABLE sale_items ADD COLUMN pack_size_used INTEGER NOT NULL DEFAULT 1");
 $pdo->exec("ALTER TABLE notification_preferences ADD COLUMN notify_inapp INTEGER DEFAULT 1");
+$pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN workspace TEXT NULL");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN attention_key TEXT NULL");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN attention_severity TEXT NULL");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN attention_count INTEGER NULL");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN attention_destination TEXT NULL");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN inapp_enabled INTEGER DEFAULT 1");
+$pdo->exec("ALTER TABLE notifications ADD COLUMN email_pending INTEGER DEFAULT 0");
+$pdo->exec("CREATE TABLE IF NOT EXISTS attention_states (user_id INTEGER NOT NULL, attention_key TEXT NOT NULL, fingerprint TEXT NOT NULL, notification_level INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1, first_detected_at TEXT NOT NULL, last_detected_at TEXT NOT NULL, resolved_at TEXT NULL, PRIMARY KEY (user_id, attention_key))");
 
 // Insert users
 $insertUser = static function (string $name, string $username, string $role) use ($pdo): int {
     $roleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name = '{$role}'")->fetchColumn();
-    $stmt = $pdo->prepare('INSERT INTO users (full_name, username, role_id, branch_id, status) VALUES (?, ?, ?, 1, ?)');
-    $stmt->execute([$name, $username, $roleId, 'active']);
+    $stmt = $pdo->prepare('INSERT INTO users (full_name, display_name, username, role_id, branch_id, status) VALUES (?, ?, ?, ?, 1, ?)');
+    $stmt->execute([$name, $name, $username, $roleId, 'active']);
     $userId = (int)$pdo->lastInsertId();
     $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1)')->execute([$userId, $roleId]);
     return $userId;

@@ -4,8 +4,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Attention\AttentionCenter;
 use App\Attention\AttentionItem;
-use App\Attention\AttentionNotificationService;
-use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
 
@@ -50,6 +48,7 @@ try {
         workspace TEXT NOT NULL DEFAULT "",
         inapp_enabled INTEGER NOT NULL DEFAULT 1,
         email_pending INTEGER NOT NULL DEFAULT 0,
+        resolved_at DATETIME NULL,
         type VARCHAR(50) NOT NULL,
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
@@ -85,19 +84,29 @@ try {
     $assert($storeThresholds['cash_variance_amount'] === 500.0, 'Store cash threshold should be capped by the Platform safety limit');
     $assert($storeThresholds['inventory_overdue_hours'] === 24.0, 'Store overdue hours threshold should be Administrator-owned');
 
-    $rules = new AttentionRuleService($settings, $clock);
-    $notifications = new AttentionNotificationService($pdo, $clock);
-    $center = new AttentionCenter($rules, $notifications);
+    $notifications = new AttentionCenter($pdo, $clock, $settings);
+    $center = new AttentionCenter($pdo, $clock, $settings);
 
-    $platformSignals = [
-        'failed_login_count' => ['value' => 6, 'count' => 6, 'detected_at' => '2026-09-18 09:10:00'],
-        'backup_age_days' => ['value' => 9, 'detected_at' => '2026-09-18 08:00:00'],
-        'service_unhealthy_count' => ['value' => 1, 'count' => 1],
-        'ml_model_age_days' => ['value' => 10],
-        'platform_setting_change_count' => ['value' => 1, 'count' => 1],
-        'recovery_account_active_count' => ['value' => 1, 'count' => 1],
-    ];
-    $platformItems = $center->refresh(1, 'super_admin', $platformSignals);
+    $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, status TEXT, locked_until TEXT);
+        CREATE TABLE login_attempts (attempt_id INTEGER PRIMARY KEY, was_successful INTEGER, attempted_at TEXT);
+        CREATE TABLE activity_log (record_id INTEGER, category TEXT, action TEXT, created_at TEXT);
+        CREATE TABLE backup_history (status TEXT, backup_type TEXT, created_at TEXT);
+        CREATE TABLE model_training_runs (training_run_id INTEGER, status TEXT, completed_at TEXT, model_version TEXT);
+        CREATE TABLE recovery_accounts (user_id INTEGER, sealed_at TEXT);
+        CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, status TEXT, reviewed_at TEXT, cash_variance REAL);
+        CREATE TABLE products (product_id INTEGER PRIMARY KEY, cost_price REAL);
+        CREATE TABLE inventory_adjustments (adjustment_id INTEGER PRIMARY KEY, product_id INTEGER, adjustment_qty REAL, reported_at TEXT, status TEXT);
+        CREATE TABLE fiscal_periods (status TEXT, end_date TEXT);
+        INSERT INTO users VALUES (1,'active',NULL);
+        INSERT INTO recovery_accounts VALUES (1,NULL);
+        INSERT INTO backup_history VALUES ('completed','manual','2026-09-09 08:00:00');
+        INSERT INTO model_training_runs VALUES (1,'completed','2026-09-08 08:00:00',NULL);
+        INSERT INTO activity_log VALUES (1,'platform_setting','Updated settings','2026-09-18 09:00:00')");
+    for ($attempt = 1; $attempt <= 6; $attempt++) {
+        $pdo->exec("INSERT INTO login_attempts VALUES ($attempt,0,'2026-09-18 09:10:00')");
+    }
+    $healthChecks = [['status' => 'critical', 'category' => 'Database']];
+    $platformItems = $center->synchronize(1, 'super_admin', $healthChecks)->dashboardItems();
     $platformKeys = array_column($platformItems, 'key');
     $assert($platformItems[0]['severity'] === 'critical', 'Critical platform attention should sort before warnings');
     $severityOrder = ['critical' => 0, 'warning' => 1, 'info' => 2];
@@ -114,24 +123,14 @@ try {
         $assert(str_starts_with($item['destination'], 'components/'), 'Attention destinations must be application-relative permitted routes');
     }
     $firstNotificationCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn();
-    $laterPlatformSignals = $platformSignals;
-    foreach ($laterPlatformSignals as &$signal) {
-        $signal['detected_at'] = '2026-09-18 10:00:00';
-    }
-    unset($signal);
-    $refreshedPlatformItems = $center->refresh(1, 'super_admin', $laterPlatformSignals);
+    $refreshedPlatformItems = $center->synchronize(1, 'super_admin', $healthChecks)->dashboardItems();
     $refreshedByKey = array_column($refreshedPlatformItems, null, 'key');
-    $assert($refreshedByKey['platform.security.failed-logins']['detected_at'] === '2026-09-18 09:10:00', 'An unchanged condition should retain its first detected time');
+    $assert($refreshedByKey['platform.security.failed-logins']['detected_at'] === $platformItems[array_search('platform.security.failed-logins', $platformKeys)]['detected_at'], 'An unchanged condition should retain its first detected time');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $firstNotificationCount, 'Unchanged active conditions must not create duplicate notifications');
 
-    $storeSignals = [
-        'cash_variance_amount' => ['value' => 600, 'count' => 1],
-        'oldest_approval_hours' => ['value' => 30, 'count' => 4],
-        'inventory_escalated_count' => ['value' => 2, 'count' => 2],
-        'inventory_routine_count' => ['value' => 99, 'count' => 99],
-        'fiscal_period_overdue_count' => ['value' => 1, 'count' => 1],
-    ];
-    $storeItems = $center->refresh(7, 'admin', $storeSignals);
+    $pdo->exec("INSERT INTO cashier_shifts VALUES (1,'closed',NULL,600);
+        INSERT INTO fiscal_periods VALUES ('open','2026-09-17')");
+    $storeItems = $center->synchronize(7, 'admin')->dashboardItems();
     $storeKeys = array_column($storeItems, 'key');
     $assert(!in_array('store.sales.reversals', $storeKeys, true), 'Retired reversals must not produce attention');
     $assert(!in_array('store.sales.unusual-discounts', $storeKeys, true), 'Retired unusual discounts must not produce attention');
@@ -148,14 +147,8 @@ try {
     $assert(count(array_filter($storeKeys, static fn(string $key): bool => str_contains($key, 'routine'))) === 0, 'Routine low-level inventory work must remain excluded');
     $assert(!array_intersect($platformKeys, $storeKeys), 'Role visibility should keep platform conditions out of Administrator results');
 
-    $ordinary = $rules->evaluate('admin', ['inventory_escalated_count' => 1,
-        'oldest_inventory_risk_hours' => 23.999, 'inventory_risk_value' => 4999.99]);
-    $assert($ordinary === [], 'A routine pending report must not escalate');
-    $assert(count($rules->evaluate('admin', ['oldest_inventory_risk_hours' => 24])) === 1, 'Stock Issue escalates at 24 hours');
-    $assert(count($rules->evaluate('admin', ['inventory_risk_value' => 5000])) === 1, 'Stock Issue escalates at PHP 5000');
-    $changedCount = $platformSignals;
-    $changedCount['failed_login_count'] = ['value' => 7, 'count' => 7];
-    $assert($center->refreshResult(1, 'super_admin', $changedCount)->newItems() === [], 'Changing counts alone must not notify an unchanged condition');
+    $pdo->exec("INSERT INTO login_attempts VALUES (7,0,'2026-09-18 09:20:00')");
+    $assert($center->synchronize(1, 'super_admin', $healthChecks)->newItems() === [], 'Changing counts alone must not notify an unchanged condition');
 
     $notificationRows = $pdo->query("SELECT attention_key, attention_severity, attention_count, attention_destination FROM notifications WHERE user_id = 7 ORDER BY notification_id")->fetchAll(PDO::FETCH_ASSOC);
     $assert(array_column($notificationRows, 'attention_key') === $storeKeys, 'Notifications and dashboard-ready results should use the same ordered stable keys');
@@ -165,20 +158,23 @@ try {
         $assert($notification['attention_destination'] === $storeItems[$index]['destination'], 'Notification destination should come from the shared evaluated item');
     }
 
-    $emailOnly = $center->refreshResult(11, 'admin', $storeSignals, false);
+    $emailOnly = $center->synchronize(11, 'admin', [], false);
     $assert(count($emailOnly->newItems()) === count($storeItems), 'Email-only recipients should receive each newly active attention item');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 11 AND inapp_enabled = 1')->fetchColumn() === count($storeItems), 'Required actions override optional in-app delivery');
-    $emailOnlyRepeat = $center->refreshResult(11, 'admin', $storeSignals, false);
+    $emailOnlyRepeat = $center->synchronize(11, 'admin', [], false);
     $assert($emailOnlyRepeat->newItems() === [], 'Email-only attention should use the same deduplication state');
 
-    $resolved = $center->refresh(7, 'admin', []);
+    $pdo->exec("UPDATE cashier_shifts SET reviewed_at='2026-09-18 09:30:00'; UPDATE fiscal_periods SET status='closed'");
+    $resolved = $center->synchronize(7, 'admin')->dashboardItems();
+    $assert($center->getAttention(7, 'admin', ['cash_variance_amount' => ['value' => 9999]]) === [], 'Public health input cannot override internal Store signals');
     $assert($resolved === [], 'Resolved live conditions should disappear without a manual lifecycle');
     $activeStates = (int)$pdo->query('SELECT COUNT(*) FROM attention_states WHERE user_id = 7 AND is_active = 1')->fetchColumn();
     $assert($activeStates === 0, 'Resolved conditions should be marked inactive for future reactivation');
 
     $pdo->exec("CREATE TRIGGER fail_attention_state BEFORE INSERT ON attention_states BEGIN SELECT RAISE(ABORT, 'state failure'); END");
     try {
-        $center->refresh(99, 'admin', ['cash_variance_amount' => ['value' => 600, 'count' => 1]]);
+        $pdo->exec('UPDATE cashier_shifts SET reviewed_at=NULL');
+        $center->synchronize(99, 'admin');
         $assert(false, 'Attention synchronization should surface persistence failures');
     } catch (PDOException $exception) {
         $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE user_id = 99')->fetchColumn() === 0, 'Notification and deduplication state must commit atomically');
@@ -202,42 +198,19 @@ try {
     $assert($settings->thresholdsFor('admin') === $settingsBefore, 'Upgrade preserves unrelated operational thresholds');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key = 'store.cash.variance'")->fetchColumn() > 0, 'Upgrade preserves Administrator cash reviews');
 
-    // Issue #264: per-report Stock Issue escalation boundaries via the stock_issues signal array.
-    $belowBothStockIssue = $rules->evaluate('admin', ['stock_issues' => [
-        ['adjustment_id' => 501, 'risk_value' => 4999.99, 'age_hours' => 23.999, 'reported_at' => '2026-09-17 09:30:01'],
-    ]]);
-    $assert($belowBothStockIssue === [], 'A Stock Issue immediately below both thresholds must not escalate');
-
-    $atAgeStockIssue = $rules->evaluate('admin', ['stock_issues' => [
-        ['adjustment_id' => 502, 'risk_value' => 100.0, 'age_hours' => 24, 'reported_at' => '2026-09-17 09:30:00'],
-    ]]);
-    $assert(
-        count($atAgeStockIssue) === 1
-            && $atAgeStockIssue[0]->key === 'store.inventory.issue.502'
-            && $atAgeStockIssue[0]->severity === 'warning',
-        'A Stock Issue exactly 24 hours old must escalate to exactly one store.inventory.issue.<id> warning'
-    );
-
-    $atValueStockIssue = $rules->evaluate('admin', ['stock_issues' => [
-        ['adjustment_id' => 503, 'risk_value' => 5000.0, 'age_hours' => 1.0, 'reported_at' => '2026-09-18 08:30:00'],
-    ]]);
-    $assert(
-        count($atValueStockIssue) === 1
-            && $atValueStockIssue[0]->key === 'store.inventory.issue.503'
-            && $atValueStockIssue[0]->severity === 'critical',
-        'A Stock Issue valued at exactly PHP 5000 must escalate to exactly one critical item'
-    );
-
-    $unrelatedStockIssues = $rules->evaluate('admin', ['stock_issues' => [
-        ['adjustment_id' => 504, 'risk_value' => 4999.99, 'age_hours' => 23.9, 'reported_at' => '2026-09-17 09:36:00'],
-        ['adjustment_id' => 505, 'risk_value' => 4999.99, 'age_hours' => 23.9, 'reported_at' => '2026-09-17 09:36:00'],
-    ]]);
-    $assert($unrelatedStockIssues === [], 'Unrelated Stock Issue values below both thresholds must never be summed into an escalation');
-
-    $ordinaryPendingStockIssue = $rules->evaluate('admin', ['stock_issues' => [
-        ['adjustment_id' => 506, 'risk_value' => 12.5, 'age_hours' => 0, 'reported_at' => '2026-09-18 09:30:00'],
-    ]]);
-    $assert($ordinaryPendingStockIssue === [], 'An ordinary new pending Stock Issue must not escalate');
+    // Per-report thresholds are exercised through persisted Stock Issues.
+    $pdo->exec("UPDATE cashier_shifts SET reviewed_at='2026-09-18 09:30:00';
+        INSERT INTO products VALUES (1,1);
+        INSERT INTO inventory_adjustments VALUES
+            (501,1,-4999.99,'2026-09-17 09:30:01','pending'),
+            (502,1,-100,'2026-09-17 09:30:00','pending'),
+            (503,1,-5000,'2026-09-18 08:30:00','pending'),
+            (506,1,-12.5,'2026-09-18 09:30:00','pending')");
+    $issueItems = array_column($center->getAttention(7, 'admin'), null, 'key');
+    $assert(!isset($issueItems['store.inventory.issue.501']) && !isset($issueItems['store.inventory.issue.506']), 'Routine reports below both thresholds remain excluded');
+    $assert(isset($issueItems['store.inventory.issue.502']) && $issueItems['store.inventory.issue.502']->severity === 'warning', 'Stock Issue escalates exactly at 24 hours');
+    $assert(isset($issueItems['store.inventory.issue.503']) && $issueItems['store.inventory.issue.503']->severity === 'critical', 'Stock Issue escalates exactly at PHP 5000');
+    $pdo->exec("UPDATE inventory_adjustments SET status='approved'");
 
     // Issue #263: condition lifecycle on the shared synchronizer.
     $lifecycleUser = 300;
@@ -256,39 +229,39 @@ try {
     $lifecycleActiveState = static fn (): int =>
         (int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE user_id = 300 AND attention_key = 'store.cash.variance' AND is_active = 1")->fetchColumn();
 
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
     $assert($lifecycleNotifications() === 1, 'First detection of a condition should create exactly one notification');
 
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
     $assert($lifecycleNotifications() === 1, 'An unchanged rerun must not create a second notification');
     $assert($lifecycleActiveState() === 1, 'An unchanged rerun must not create a second active state');
 
     $pdo->exec('UPDATE notifications SET is_read = 1 WHERE user_id = 300');
     $assert($lifecycleActiveState() === 1, 'Reading an alert must not resolve its unresolved condition');
 
-    $notifications->synchronize($lifecycleUser, [], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [], true, 'store.');
     $assert(
         (int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE user_id = 300 AND attention_key = 'store.cash.variance' AND is_active = 0")->fetchColumn() === 1,
         'Removing a condition from the item list should resolve it'
     );
 
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
     $assert($lifecycleNotifications() === 2, 'Recurrence after resolution should create a fresh notification');
 
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('critical')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('critical')], true, 'store.');
     $assert($lifecycleNotifications() === 3, 'Severity escalation while active should create a fresh notification');
     $assert(
         (int)$pdo->query("SELECT notification_level FROM attention_states WHERE user_id = 300 AND attention_key = 'store.cash.variance'")->fetchColumn() === 3000,
         'Severity escalation should raise the remembered notification level to the critical peak'
     );
 
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
-    $notifications->synchronize($lifecycleUser, [$lifecycleItem('critical')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('warning')], true, 'store.');
+    $notifications->synchronizeItems($lifecycleUser, [$lifecycleItem('critical')], true, 'store.');
     $assert($lifecycleNotifications() === 3, 'De-escalation then re-escalation to the same prior peak must not create a duplicate');
 
     // Issue #263: Workspace-scoped lifecycle independence.
     $crossWorkspaceUser = 400;
-    $notifications->synchronize($crossWorkspaceUser, [new AttentionItem(
+    $notifications->synchronizeItems($crossWorkspaceUser, [new AttentionItem(
         'platform.backup.stale',
         'critical',
         'backup_recovery',
@@ -297,7 +270,7 @@ try {
         new DateTimeImmutable('2026-09-18 08:00:00'),
         'components/system_administrator/backup_restore.php'
     )], true, 'platform.');
-    $notifications->synchronize($crossWorkspaceUser, [new AttentionItem(
+    $notifications->synchronizeItems($crossWorkspaceUser, [new AttentionItem(
         'store.cash.variance',
         'warning',
         'cash',
@@ -316,7 +289,7 @@ try {
     );
 
     // Issue #263: required conditions override optional in-app preferences per condition.
-    $notifications->synchronize(500, [new AttentionItem(
+    $notifications->synchronizeItems(500, [new AttentionItem(
         'store.cash.variance',
         'warning',
         'cash',
@@ -331,7 +304,7 @@ try {
     $assert((int)$optionalRow['inapp_enabled'] === 0, 'A createInApp=false optional condition must insert an in-app-disabled row');
     $assert((int)$optionalRow['email_pending'] === 1, 'A createInApp=false optional condition must remain queued for optional daily email');
 
-    $notifications->synchronize(501, [new AttentionItem(
+    $notifications->synchronizeItems(501, [new AttentionItem(
         'store.cash.variance',
         'warning',
         'cash',
@@ -346,6 +319,61 @@ try {
         (int)$pdo->query('SELECT inapp_enabled FROM notifications WHERE user_id = 501')->fetchColumn() === 1,
         'A createInApp=false required condition must override the optional in-app preference'
     );
+    // --- Deepened AttentionCenter interface tests ---
+    $deepCenter = new AttentionCenter($pdo, $clock, $settings);
+    $assert($deepCenter->getAttention(1, 'cashier') === [], 'Deep AttentionCenter must short-circuit cashier to empty array');
+    $assert($deepCenter->getAttention(1, 'inventory_manager') === [], 'Deep AttentionCenter must short-circuit inventory manager to empty array');
+
+    $superAttention = $deepCenter->getAttention(1, 'super_admin', $healthChecks);
+    $assert(count($superAttention) > 0, 'Deep AttentionCenter must evaluate super_admin rules with external signals');
+    $superKeys = array_map(static fn($item): string => $item->key, $superAttention);
+    $assert(in_array('platform.service.unhealthy', $superKeys, true), 'Deep AttentionCenter must surface platform service unhealthy item');
+
+    $syncResult = $deepCenter->synchronize(600, 'super_admin', $healthChecks);
+    $assert($syncResult instanceof \App\Attention\AttentionRefreshResult, 'Deep AttentionCenter::synchronize must return AttentionRefreshResult');
+    $notifRow = $pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 600 AND workspace = 'super_admin'")->fetchColumn();
+    $assert((int)$notifRow > 0, 'Deep AttentionCenter::synchronize must persist notifications');
+    // Comprehensive public-interface verification for AttentionCenter
+    // 1. Unauthorized roles return empty array and do not mutate database
+    foreach (['cashier', 'inventory_manager', 'viewer', ''] as $unauthRole) {
+        $assert($deepCenter->getAttention(99, $unauthRole) === [], "getAttention must return empty array for unauthorized role: {$unauthRole}");
+        $unauthSync = $deepCenter->synchronize(99, $unauthRole);
+        $assert($unauthSync->items() === [] && $unauthSync->newItems() === [], "synchronize must return empty result for unauthorized role: {$unauthRole}");
+    }
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 99")->fetchColumn() === 0, 'Unauthorized role must not create notifications');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM attention_states WHERE user_id = 99")->fetchColumn() === 0, 'Unauthorized role must not create attention states');
+
+    // 2. Both administrator workspaces scoped correctly
+    $pdo->exec('UPDATE cashier_shifts SET reviewed_at=NULL');
+    $adminSync = $deepCenter->synchronize(701, 'admin');
+    $adminNotif = $pdo->query("SELECT workspace, attention_key FROM notifications WHERE user_id = 701")->fetch(PDO::FETCH_ASSOC);
+    $assert($adminNotif !== false && $adminNotif['workspace'] === 'admin', 'Admin attention notifications must carry admin workspace');
+    $assert(str_starts_with($adminNotif['attention_key'], 'store.'), 'Admin attention keys must use store. prefix');
+
+    $superSync = $deepCenter->synchronize(702, 'super_admin', $healthChecks);
+    $superNotif = $pdo->query("SELECT workspace, attention_key FROM notifications WHERE user_id = 702")->fetch(PDO::FETCH_ASSOC);
+    $assert($superNotif !== false && $superNotif['workspace'] === 'super_admin', 'Super admin attention notifications must carry super_admin workspace');
+    $assert(str_starts_with($superNotif['attention_key'], 'platform.'), 'Super admin attention keys must use platform. prefix');
+
+    // 3. Repeated synchronization idempotency (deduplication)
+    $repeatSync = $deepCenter->synchronize(701, 'admin');
+    $assert($repeatSync->newItems() === [], 'Repeated synchronize with unchanged condition must return empty newItems');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 701")->fetchColumn() === 1, 'Repeated synchronize must not duplicate notifications');
+
+    // 4. Changing conditions: resolution and reactivation
+    $pdo->exec("UPDATE cashier_shifts SET reviewed_at='2026-09-18 09:30:00'");
+    $resolveSync = $deepCenter->synchronize(701, 'admin');
+    $assert((int)$pdo->query("SELECT is_active FROM attention_states WHERE user_id = 701 AND attention_key = 'store.cash.variance'")->fetchColumn() === 0, 'Condition resolution must mark attention state inactive');
+    $pdo->exec('UPDATE cashier_shifts SET reviewed_at=NULL');
+    $reactivateSync = $deepCenter->synchronize(701, 'admin');
+    $assert(count($reactivateSync->newItems()) === 1, 'Reactivated condition must produce new notification');
+    $assert((int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 701")->fetchColumn() === 2, 'Reactivation must add second notification');
+
+    // 5. Severity ordering invariant across getAttention
+    $orderedItems = $deepCenter->getAttention(1, 'super_admin', $healthChecks);
+    for ($i = 1; $i < count($orderedItems); $i++) {
+        $assert($severityOrder[$orderedItems[$i - 1]->severity] <= $severityOrder[$orderedItems[$i]->severity], 'getAttention items must be strictly severity-ordered');
+    }
 } catch (Throwable $exception) {
     $failures[] = 'Attention rules contract threw: ' . $exception->getMessage();
 }

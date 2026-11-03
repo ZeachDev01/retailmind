@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 
 use App\Forecasting\CandidateEvaluationService;

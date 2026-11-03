@@ -1737,6 +1737,27 @@ PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE IF NOT EXISTS `workspace_guidance` (
+  `user_id` INT NOT NULL,
+  `workspace` VARCHAR(30) NOT NULL,
+  `status` ENUM('skipped','deferred','completed') NOT NULL,
+  PRIMARY KEY (`user_id`, `workspace`),
+  CONSTRAINT `fk_workspace_guidance_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_workspace_guidance','Remember optional guidance per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+
+CREATE TABLE IF NOT EXISTS `store_setup_confirmations` (
+  `task_key` VARCHAR(50) NOT NULL,
+  `confirmed_by_user_id` INT NOT NULL,
+  `confirmed_workspace` VARCHAR(30) NOT NULL,
+  `confirmed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_key`),
+  CONSTRAINT `fk_store_setup_confirmations_user` FOREIGN KEY (`confirmed_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
 -- 202611010001_retire_branches and 202611010002_remove_branch_id.
 SET @rm_guard = IF(
     EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='branch_id')
@@ -1859,3 +1880,40 @@ PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 SET @rm_sql = IF(EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='cashier_shifts' AND column_name='payment_totals'), 'ALTER TABLE cashier_shifts DROP COLUMN payment_totals', 'DO 0');
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010006_normalize_shift_payment_totals','Store Cashier Shift payment totals as atomic payment-type rows') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE IF NOT EXISTS `store_weekly_schedule` (
+  `schedule_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `effective_date` DATE NOT NULL,
+  `monday_open` TINYINT(1) NOT NULL DEFAULT 1,
+  `tuesday_open` TINYINT(1) NOT NULL DEFAULT 1,
+  `wednesday_open` TINYINT(1) NOT NULL DEFAULT 1,
+  `thursday_open` TINYINT(1) NOT NULL DEFAULT 1,
+  `friday_open` TINYINT(1) NOT NULL DEFAULT 1,
+  `saturday_open` TINYINT(1) NOT NULL DEFAULT 0,
+  `sunday_open` TINYINT(1) NOT NULL DEFAULT 0,
+  `recorded_by` INT DEFAULT NULL,
+  `source` VARCHAR(50) NOT NULL DEFAULT 'manual',
+  `recorded_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT `fk_store_weekly_schedule_user` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  INDEX `idx_store_weekly_schedule_history` (`effective_date`, `recorded_at` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `store_calendar` ADD COLUMN `source` VARCHAR(50) NOT NULL DEFAULT 'manual' AFTER `recorded_by`;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_store_weekly_schedule','Configurable weekly store schedule revisions with effective dates') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+ALTER TABLE `workspace_guidance` MODIFY COLUMN `status` ENUM('skipped','deferred','completed') NULL DEFAULT NULL;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='active_topic'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `active_topic` VARCHAR(60) NULL DEFAULT NULL AFTER `status`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='active_step'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `active_step` INT NOT NULL DEFAULT 0 AFTER `active_topic`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='completed_topics'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `completed_topics` TEXT NULL DEFAULT NULL AFTER `active_step`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='workspace_guidance' AND column_name='invitation_status'), 'ALTER TABLE `workspace_guidance` ADD COLUMN `invitation_status` VARCHAR(30) NULL DEFAULT NULL AFTER `completed_topics`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020002_workspace_walkthrough_progress','Persist interactive walkthrough progress per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='notifications' AND column_name='resolved_at'), 'ALTER TABLE `notifications` ADD COLUMN `resolved_at` DATETIME NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_notification_resolution','Retain resolution for each notification occurrence (#420)') ON DUPLICATE KEY UPDATE description=VALUES(description);

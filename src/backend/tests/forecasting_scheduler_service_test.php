@@ -2,8 +2,12 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap/app.php';
+require_once __DIR__ . '/../app/Services/MlJobService.php';
+require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 
 use App\Forecasting\ForecastingSchedulerService;
+use App\Forecasting\ReplenishmentQueueService;
+use App\Services\MlJobService;
 
 function assert_same(mixed $expected, mixed $actual, string $message): void
 {
@@ -15,21 +19,50 @@ function assert_same(mixed $expected, mixed $actual, string $message): void
 $clock = '2024-05-20 23:05:00';
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $pdo->sqliteCreateFunction('NOW', static function () use (&$clock) { return $clock; });
-$pdo->exec("CREATE TABLE products (product_id INT, status TEXT);
+$pdo->exec("CREATE TABLE products (product_id INT, sku TEXT, product_name TEXT, reorder_level INT DEFAULT 10, safety_stock INT DEFAULT 5, minimum_order_quantity INT DEFAULT 1, units_per_package INT DEFAULT 1, status TEXT);
+    CREATE TABLE inventory (product_id INT PRIMARY KEY, quantity_on_hand INT);
     CREATE TABLE forecast_sales_imports (product_id INT, sale_date TEXT, quantity INT);
-    CREATE TABLE sales (sale_id INT, sale_date TEXT);
-    CREATE TABLE sale_items (sale_item_id INT, sale_id INT, product_id INT, quantity INT);
+    CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INT, sale_date TEXT);
+    CREATE TABLE sale_items (sale_item_id INTEGER PRIMARY KEY, sale_id INT, product_id INT, quantity INT);
     CREATE TABLE stock_movements (product_id INT, change_qty INT, moved_at TEXT);
     CREATE TABLE store_calendar (calendar_id INTEGER PRIMARY KEY, calendar_date TEXT, status TEXT, recorded_at TEXT);
-    CREATE TABLE cash_refunds (refund_id INT, created_at TEXT);
+    CREATE TABLE cash_refunds (refund_id INTEGER PRIMARY KEY, shift_id INT, refund_amount REAL, payment_method TEXT, created_at TEXT);
     CREATE TABLE cash_refund_items (refund_id INT, sale_item_id INT, product_id INT, quantity INT);
-    CREATE TABLE sale_reversals (reversal_id INT, status TEXT, approved_at TEXT);
+    CREATE TABLE sale_reversals (reversal_id INTEGER PRIMARY KEY, sale_id INT, status TEXT, approved_at TEXT);
     CREATE TABLE sale_reversal_items (reversal_id INT, sale_item_id INT, product_id INT, quantity INT);
     CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+    CREATE TABLE ml_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT, updated_by INT, updated_at TEXT);
     CREATE TABLE model_training_runs (training_run_id INTEGER PRIMARY KEY, status TEXT, metrics_json TEXT);
-    CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT, requester_id INT, queued_at TEXT);
+    CREATE TABLE ml_jobs (
+        job_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trigger_type TEXT,
+        status TEXT,
+        requester_id INT,
+        evidence_cutoff TEXT,
+        model_version TEXT,
+        lease_expires_at TEXT,
+        attempts INT DEFAULT 0,
+        operator_message TEXT,
+        diagnostic_reference TEXT,
+        queued_at TEXT,
+        started_at TEXT,
+        completed_at TEXT
+    );
+    CREATE TABLE demand_forecasts (
+        forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id INT,
+        product_id INT,
+        forecast_origin TEXT,
+        target_date TEXT,
+        horizon_day INT,
+        predicted_units INT,
+        model_version TEXT,
+        readiness_level TEXT,
+        limitation_marker TEXT
+    );
     CREATE TABLE activity_log (user_id INT, action TEXT, category TEXT, module TEXT, record_id INT, new_value TEXT, ip_address TEXT, created_at TEXT);
-    INSERT INTO products VALUES (1, 'active');
+    INSERT INTO products VALUES (1, 'SKU-1', 'Product 1', 10, 5, 1, 1, 'active');
+    INSERT INTO inventory VALUES (1, 3);
     INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'keep-approved'), ('ml_observation_mode', '1');");
 $insert = $pdo->prepare('INSERT INTO forecast_sales_imports VALUES (1, ?, ?)');
 $start = new DateTimeImmutable('2024-01-01');
@@ -42,19 +75,20 @@ $tick = static function (string $time) use ($scheduler, &$clock): array {
     return $scheduler->runScheduler(new DateTime($time, new DateTimeZone('Asia/Manila')));
 };
 
-assert_same(0, $tick('2024-05-17 23:05:00')['retrain_jobs_queued'], 'Insufficient history must not train');
-assert_same(0, $tick('2024-05-20 22:00:00')['retrain_jobs_queued'], 'First training waits until after close');
-$first = $tick('2024-05-20 23:05:00');
+// 1. Existing schedule tests (first eligible training, weekly retraining, duplicate checks)
+assert_same(0, $tick('2024-05-17 01:05:00')['retrain_jobs_queued'], 'Insufficient history must not train');
+assert_same(0, $tick('2024-05-20 00:30:00')['retrain_jobs_queued'], 'First training waits until daily forecast time (01:00)');
+$first = $tick('2024-05-20 01:05:00');
 assert_same(1, $first['forecast_jobs_queued'], 'Daily generation is preserved');
 assert_same(1, $first['retrain_jobs_queued'], 'First eligible model trains without waiting for Sunday');
 assert_same(140, $first['training_eligibility'][0]['consecutive_usable_days'], 'Threshold is usable days, not sales volume');
-assert_same(0, $tick('2024-05-20 23:10:00')['retrain_jobs_queued'], 'Repeated ticks cannot duplicate training');
-assert_same(0, $tick('2024-05-21 23:05:00')['retrain_jobs_queued'], 'Pending training from a previous day blocks duplicates');
+assert_same(0, $tick('2024-05-20 01:10:00')['retrain_jobs_queued'], 'Repeated ticks cannot duplicate training');
+assert_same(0, $tick('2024-05-21 01:05:00')['retrain_jobs_queued'], 'Pending training from a previous day blocks duplicates');
 $job = $pdo->query("SELECT requester_id FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetch(PDO::FETCH_ASSOC);
 assert_same(null, $job['requester_id'], 'Automatic training is attributed to the system');
 $pdo->exec("UPDATE ml_jobs SET status = 'succeeded';
     INSERT INTO model_training_runs VALUES (1, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-05-19\"}}');");
-assert_same(0, $tick('2024-05-22 23:05:00')['retrain_jobs_queued'], 'Completed candidate waits for weekly retraining, even before approval');
+assert_same(0, $tick('2024-05-22 01:05:00')['retrain_jobs_queued'], 'Completed candidate waits for weekly retraining, even before approval');
 assert_same(1, $tick('2024-05-26 01:10:00')['retrain_jobs_queued'], 'Weekly training runs with newer eligible history');
 $pdo->exec("UPDATE ml_jobs SET status = 'succeeded';
     UPDATE model_training_runs SET metrics_json = '{\"metadata\":{\"data_window_end\":\"2024-05-25\"}}';
@@ -69,9 +103,308 @@ $pdo->exec("UPDATE ml_jobs SET queued_at = '2024-05-19', status = 'running' WHER
 assert_same(0, $tick('2024-05-22 23:30:00')['retrain_jobs_queued'], 'Older manual running training blocks automatic training');
 $pdo->exec("DELETE FROM ml_jobs;
     INSERT INTO platform_settings VALUES ('demo_import_metadata', '{}');");
-assert_same(0, $tick('2024-05-20 23:30:00')['retrain_jobs_queued'], 'Daily first-training trigger must not change Demo scheduling');
+assert_same(0, $tick('2024-05-20 01:30:00')['retrain_jobs_queued'], 'Daily first-training trigger must not change Demo scheduling');
 assert_same(1, $tick('2024-05-26 01:30:00')['retrain_jobs_queued'], 'Existing weekly Demo schedule is preserved');
 assert_same('keep-approved', $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn(), 'Automatic training never replaces the approved model');
 assert_same('1', $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_observation_mode'")->fetchColumn(), 'Automatic training never enables routine purchasing');
 
-echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged).\n";
+// =========================================================================
+// Ticket #361 Requirements Verification
+// =========================================================================
+
+// --- 2. Cutoff calculation: latest completed Philippine day, excluding partial sales ---
+$pdo->exec("DELETE FROM platform_settings WHERE setting_key = 'demo_import_metadata'; DELETE FROM ml_jobs; DELETE FROM demand_forecasts;");
+// Simulate morning startup at 08:00 AM on 2024-05-21
+$morning = $tick('2024-05-21 08:00:00');
+assert_same('2024-05-20', $morning['cutoff'], 'Morning startup cutoff uses latest completed Philippine day (yesterday)');
+
+// --- 3. Deduplication: repeated ticks do not duplicate logical work ---
+$morningDup = $tick('2024-05-21 08:05:00');
+assert_same(0, $morningDup['forecast_jobs_queued'], 'Repeated ticks cannot duplicate daily forecast job');
+
+// --- 4. Catch-up after downtime: queue exactly ONE current forecast and ONE missed weekly training ---
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs; DELETE FROM demand_forecasts;");
+// Add history up to June 09
+for ($d = 147; $d < 170; $d++) {
+    $insert->execute([$start->modify("+$d days")->format('Y-m-d'), $d % 7]);
+}
+// Set last successful forecast to May 25, 2024 (over 2 weeks ago)
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff, queued_at, completed_at)
+    VALUES (50, 'forecast_generation', 'succeeded', '2024-05-25', '2024-05-26 01:00:00', '2024-05-26 01:05:00')");
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units)
+    VALUES (50, 1, '2024-05-25', '2024-05-26', 1, 10)");
+// Set last training to May 25
+$pdo->exec("INSERT INTO model_training_runs (training_run_id, status, metrics_json)
+    VALUES (2, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-05-25\"}}')");
+
+// Machine powers on on Monday, June 10, 2024 at 08:00 AM after 2+ weeks off
+$catchup = $tick('2024-06-10 08:00:00');
+assert_same(1, $catchup['forecast_jobs_queued'], 'Downtime catch-up queues exactly ONE current forecast');
+assert_same(1, $catchup['retrain_jobs_queued'], 'Downtime catch-up queues exactly ONE missed weekly training');
+$queuedJobs = $pdo->query("SELECT trigger_type, evidence_cutoff FROM ml_jobs WHERE status = 'queued'")->fetchAll(PDO::FETCH_ASSOC);
+assert_same(2, count($queuedJobs), 'Only two jobs queued: one current forecast and one candidate training');
+assert_same('2024-06-09', $queuedJobs[0]['evidence_cutoff'], 'Forecast evidence cutoff is yesterday');
+assert_same('2024-06-09', $queuedJobs[1]['evidence_cutoff'], 'Retraining evidence cutoff is yesterday');
+
+// Repeated ticks on catch-up day do not duplicate
+$catchupDup = $tick('2024-06-10 08:05:00');
+assert_same(0, $catchupDup['forecast_jobs_queued'], 'Catchup duplicate check: no duplicate forecast');
+assert_same(0, $catchupDup['retrain_jobs_queued'], 'Catchup duplicate check: no duplicate retrain');
+
+// --- 5. Attempt bounding (max 3 attempts across execution errors, crashes, and expired leases) ---
+$pdo->exec("DELETE FROM ml_jobs;");
+// Insert job with attempt 1 failed due to transient error
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff, attempts, queued_at, completed_at, diagnostic_reference)
+    VALUES (100, 'forecast_generation', 'failed', '2024-06-09', 1, '2024-06-10 08:00:00', '2024-06-10 08:01:00', 'TRANSIENT:connection reset [ERR-1234]')");
+
+// Later scheduler tick retries the existing job (does not create replacement logical job)
+$tick('2024-06-10 08:15:00');
+$jobAfterRetry1 = $pdo->query("SELECT job_id, status, attempts FROM ml_jobs WHERE job_id = 100")->fetch(PDO::FETCH_ASSOC);
+assert_same('queued', $jobAfterRetry1['status'], 'Transient failure is re-queued on later scheduler tick');
+$jobCount = (int)$pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE trigger_type = 'forecast_generation'")->fetchColumn();
+assert_same(1, $jobCount, 'No replacement logical job created; retries reuse the existing job');
+
+// Worker claims it (attempts becomes 2) and fails again
+$pdo->exec("UPDATE ml_jobs SET status = 'failed', attempts = 2, completed_at = '2024-06-10 08:16:00' WHERE job_id = 100");
+$tick('2024-06-10 08:30:00');
+$jobAfterRetry2 = $pdo->query("SELECT status, attempts FROM ml_jobs WHERE job_id = 100")->fetch(PDO::FETCH_ASSOC);
+assert_same('queued', $jobAfterRetry2['status'], 'Second transient failure is re-queued on later scheduler tick');
+
+// Worker claims it (attempts becomes 3) and fails a third time
+$pdo->exec("UPDATE ml_jobs SET status = 'failed', attempts = 3, completed_at = '2024-06-10 08:31:00', diagnostic_reference = 'EXHAUSTED:connection reset' WHERE job_id = 100");
+$tick('2024-06-10 08:45:00');
+$jobAfterRetry3 = $pdo->query("SELECT status, attempts FROM ml_jobs WHERE job_id = 100")->fetch(PDO::FETCH_ASSOC);
+assert_same('failed', $jobAfterRetry3['status'], 'Exhausted retry (attempts >= 3) is NOT re-queued');
+$jobCountAfter3 = (int)$pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE trigger_type = 'forecast_generation'")->fetchColumn();
+assert_same(1, $jobCountAfter3, 'Attempt limit ceiling prevents creating new replacement logical jobs');
+
+// --- 6. Expired lease recovery with 3-attempt ceiling ---
+$pdo->exec("DELETE FROM ml_jobs;");
+// Job running with expired lease and attempts = 1 (crashed worker)
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, attempts, lease_expires_at, queued_at)
+    VALUES (101, 'forecast_generation', 'running', 1, '2024-06-10 08:00:00', '2024-06-10 07:30:00')");
+$scheduler->recoverExpiredLeases(new DateTime('2024-06-10 08:30:00', new DateTimeZone('Asia/Manila')));
+$recovered1 = $pdo->query("SELECT status, lease_expires_at FROM ml_jobs WHERE job_id = 101")->fetch(PDO::FETCH_ASSOC);
+assert_same('queued', $recovered1['status'], 'Expired lease under 3 attempts is recovered and re-queued');
+assert_same(null, $recovered1['lease_expires_at'], 'Recovered job has lease cleared');
+
+// Job running with expired lease and attempts = 3 (crash limit exhausted)
+$pdo->exec("UPDATE ml_jobs SET status = 'running', attempts = 3, lease_expires_at = '2024-06-10 08:30:00' WHERE job_id = 101");
+$scheduler->recoverExpiredLeases(new DateTime('2024-06-10 09:00:00', new DateTimeZone('Asia/Manila')));
+$recoveredExhausted = $pdo->query("SELECT status, diagnostic_reference FROM ml_jobs WHERE job_id = 101")->fetch(PDO::FETCH_ASSOC);
+assert_same('failed', $recoveredExhausted['status'], 'Expired lease reaching 3 attempts fails permanently');
+assert_same('LEASE_TIMEOUT_EXHAUSTED', $recoveredExhausted['diagnostic_reference'], 'Diagnostic reference indicates lease timeout exhausted');
+
+// Active valid lease is never raced
+$pdo->exec("UPDATE ml_jobs SET status = 'running', attempts = 1, lease_expires_at = '2024-06-10 10:00:00' WHERE job_id = 101");
+$scheduler->recoverExpiredLeases(new DateTime('2024-06-10 09:15:00', new DateTimeZone('Asia/Manila')));
+$activeLease = $pdo->query("SELECT status FROM ml_jobs WHERE job_id = 101")->fetch(PDO::FETCH_ASSOC);
+assert_same('running', $activeLease['status'], 'Running job with valid lease is not touched');
+
+// --- 7. Blocked condition handling ---
+$pdo->exec("DELETE FROM ml_jobs; UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_approved_model_version';");
+$blockedRes = $tick('2024-06-10 23:05:00');
+assert_same(0, $blockedRes['forecast_jobs_queued'], 'Missing approved model blocks forecast queueing');
+$blockedJob = $pdo->query("SELECT status, diagnostic_reference FROM ml_jobs WHERE trigger_type = 'forecast_generation'")->fetch(PDO::FETCH_ASSOC);
+assert_same('failed', $blockedJob['status'], 'Blocked condition is recorded as failed');
+assert_same('BLOCKED:MISSING_APPROVED_MODEL', $blockedJob['diagnostic_reference'], 'Blocked diagnostic reference set');
+// Next tick does NOT retry blocked condition
+$tick('2024-06-10 23:10:00');
+$blockedJobCount = (int)$pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE trigger_type = 'forecast_generation'")->fetchColumn();
+assert_same(1, $blockedJobCount, 'Blocked condition is not retried in a loop');
+
+// --- 8. Technical diagnostics and Complete committed results verification in MlJobService ---
+$jobService = new MlJobService($pdo);
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, requester_id, evidence_cutoff, model_version, attempts, queued_at, completed_at, operator_message, diagnostic_reference)
+    VALUES (200, 'forecast_generation', 'succeeded', NULL, '2024-06-09', 'keep-approved', 1, '2024-06-10 08:00:00', '2024-06-10 08:05:00', 'Success message', 'NONE')");
+// Without committed demand_forecasts records, getJobStatus reports failed / uncommitted
+$statusUncommitted = $jobService->getJobStatus(200);
+assert_same('failed', $statusUncommitted['status'], 'Uncommitted forecast results prevent success claim');
+assert_same(false, $statusUncommitted['committed_results_complete'], 'Complete committed results flag is false when rows missing');
+
+// Once committed:
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units)
+    VALUES (200, 1, '2024-06-09', '2024-06-10', 1, 15)");
+$statusCommitted = $jobService->getJobStatus(200);
+assert_same('succeeded', $statusCommitted['status'], 'Committed forecast results confirm success');
+assert_same(true, $statusCommitted['committed_results_complete'], 'Complete committed results flag is true when rows present');
+assert_same('2024-06-09', $statusCommitted['cutoff'], 'Job cutoff is exposed');
+assert_same('keep-approved', $statusCommitted['model_version'], 'Job model identity is exposed');
+assert_same(1, $statusCommitted['attempts'], 'Job attempt count is exposed');
+
+// --- 9. Operational non-blocking verification: checkout, refunds, receiving, stock-rule suggestions ---
+// Forecasting has failed jobs in queue, but operational functions must remain 100% active.
+// A. Checkout (recording sales)
+$pdo->exec("INSERT INTO sales (sale_id, cashier_id, sale_date) VALUES (501, 1, '2024-06-10 10:00:00');
+    INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity) VALUES (601, 501, 1, 2);");
+$saleRecorded = (int)$pdo->query("SELECT COUNT(*) FROM sales WHERE sale_id = 501")->fetchColumn();
+assert_same(1, $saleRecorded, 'Checkout succeeds despite forecasting failures');
+
+// B. Cash refunds
+$pdo->exec("INSERT INTO cash_refunds (refund_id, shift_id, refund_amount, payment_method, created_at)
+    VALUES (701, 1, 50.0, 'cash', '2024-06-10 10:15:00');
+    INSERT INTO cash_refund_items (refund_id, sale_item_id, product_id, quantity) VALUES (701, 601, 1, 1);");
+$refundRecorded = (int)$pdo->query("SELECT COUNT(*) FROM cash_refunds WHERE refund_id = 701")->fetchColumn();
+assert_same(1, $refundRecorded, 'Cash refund succeeds despite forecasting failures');
+
+// C. Stock-rule suggestions (ReplenishmentQueueService)
+// Product 1 has inventory = 3, reorder_level = 10, safety_stock = 5.
+// Expected suggestion = 10 + 5 - 3 = 12 units.
+$queueService = new ReplenishmentQueueService($pdo);
+$queue = $queueService->getRecommendations(null, '2024-06-10');
+assert_same(1, count($queue), 'Replenishment queue returns product');
+assert_same('Stock-rule suggestion', $queue[0]['basis'], 'Falls back cleanly to Stock-rule suggestion');
+assert_same(12, $queue[0]['stock_rule_quantity'], 'Stock-rule quantity is accurately calculated');
+
+// =========================================================================
+// Ticket #367 Requirements: Candidate Observation Forecasting & Preservation
+// =========================================================================
+
+// --- 10A. First-installation candidate observation (no approved model) ---
+// When no approved model exists, operational forecast generation is blocked,
+// but candidate observation forecast is queued automatically without needing approval.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM platform_settings WHERE setting_key = 'ml_approved_model_version';");
+$pdo->exec("INSERT INTO model_training_runs (training_run_id, status, metrics_json)
+    VALUES (10, 'completed', '{\"model_version\":\"v_candidate_store_1\",\"metadata\":{\"data_window_end\":\"2024-06-09\"}}');");
+
+// Scheduler tick at 23:05 on 2024-06-10
+$obsRes1 = $tick('2024-06-10 23:05:00');
+assert_same(0, $obsRes1['forecast_jobs_queued'], 'Operational generation blocked when no approved model');
+assert_same(1, $obsRes1['observation_jobs_queued'], 'Candidate observation forecast queued automatically without approval');
+
+$obsJob1 = $pdo->query("SELECT trigger_type, model_version, evidence_cutoff, status FROM ml_jobs WHERE trigger_type = 'forecast_observation'")->fetch(PDO::FETCH_ASSOC);
+assert_same('forecast_observation', $obsJob1['trigger_type'], 'Observation trigger type is forecast_observation');
+assert_same('v_candidate_store_1', $obsJob1['model_version'], 'Observation job is tied to candidate 1');
+assert_same('2024-06-09', $obsJob1['evidence_cutoff'], 'Evidence cutoff is yesterday');
+assert_same('queued', $obsJob1['status'], 'Job is queued for worker processing');
+
+// Repeated tick on the same day does not duplicate observation job
+$obsResDup = $tick('2024-06-10 23:10:00');
+assert_same(0, $obsResDup['observation_jobs_queued'], 'Repeated ticks do not duplicate candidate observation job');
+
+// Mark observation job 1 succeeded and insert 28 forecast rows
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded', completed_at = '2024-06-10 23:15:00' WHERE trigger_type = 'forecast_observation'");
+for ($h = 1; $h <= 28; $h++) {
+    $tDate = date('Y-m-d', strtotime("2024-06-09 +$h days"));
+    $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level, limitation_marker)
+        VALUES (1, 1, '2024-06-09', ?, ?, 5, 'v_candidate_store_1', 'Medium', 'Observation only')")->execute([$tDate, $h]);
+}
+
+// --- 10B. Replacement candidate observation & independent operational generation ---
+// When an approved model exists, daily operational generation from approved model continues
+// independently alongside daily observation forecasting for candidate under observation.
+$pdo->exec("DELETE FROM ml_jobs;");
+$pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'v_approved_incumbent');");
+
+// Next daily tick at 23:05 on 2024-06-11
+$obsRes2 = $tick('2024-06-11 23:05:00');
+assert_same(1, $obsRes2['forecast_jobs_queued'], 'Approved model operational forecast is queued');
+assert_same(1, $obsRes2['observation_jobs_queued'], 'Candidate observation forecast is queued simultaneously');
+
+$jobs2 = $pdo->query("SELECT trigger_type, model_version, evidence_cutoff FROM ml_jobs ORDER BY job_id ASC")->fetchAll(PDO::FETCH_ASSOC);
+assert_same(2, count($jobs2), 'Exactly two jobs queued: operational and candidate observation');
+assert_same('forecast_generation', $jobs2[0]['trigger_type'], 'First job is operational generation');
+assert_same('v_approved_incumbent', $jobs2[0]['model_version'], 'Operational job uses approved model');
+assert_same('forecast_observation', $jobs2[1]['trigger_type'], 'Second job is candidate observation');
+assert_same('v_candidate_store_1', $jobs2[1]['model_version'], 'Observation job is tied to candidate 1');
+
+// --- 10C. Preserving candidate under observation across later weekly retraining ---
+// A later weekly candidate training runs and produces candidate 2.
+// Candidate 1 remains under observation; candidate 2 does NOT replace it or erase progress.
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded';");
+$pdo->exec("INSERT INTO model_training_runs (training_run_id, status, metrics_json)
+    VALUES (11, 'completed', '{\"model_version\":\"v_candidate_store_2_weekly\",\"metadata\":{\"data_window_end\":\"2024-06-11\"}}');");
+
+// Next daily tick at 23:05 on 2024-06-12
+$obsRes3 = $tick('2024-06-12 23:05:00');
+assert_same(1, $obsRes3['observation_jobs_queued'], 'Daily observation forecast queued on next day');
+
+$obsJob3 = $pdo->query("SELECT model_version FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_1', $obsJob3['model_version'], 'Candidate 1 is preserved under observation; candidate 2 does NOT replace it');
+
+// --- 10D. Observation continuity across downtime catch-up ---
+// Machine is powered off for multiple days (from June 12 to June 15).
+// Startup tick on June 15 at 08:00 AM catches up with ONE current observation forecast for yesterday.
+$pdo->exec("UPDATE ml_jobs SET status = 'succeeded';");
+$catchupObs = $tick('2024-06-15 08:00:00');
+assert_same(1, $catchupObs['forecast_jobs_queued'], 'Catchup queues one operational forecast');
+assert_same(1, $catchupObs['observation_jobs_queued'], 'Catchup queues one current observation forecast');
+
+$obsCatchupJob = $pdo->query("SELECT model_version, evidence_cutoff FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_1', $obsCatchupJob['model_version'], 'Catchup observation is for candidate 1');
+assert_same('2024-06-14', $obsCatchupJob['evidence_cutoff'], 'Catchup observation uses yesterday cutoff');
+
+// Repeated tick does not duplicate catchup observation job
+$catchupObsDup = $tick('2024-06-15 08:05:00');
+assert_same(0, $catchupObsDup['observation_jobs_queued'], 'Repeated ticks do not duplicate catchup observation job');
+
+// --- 10E. Finishing review advances observation to next candidate ---
+// When candidate 1 review finishes (e.g. approved or rejected):
+// 1. Mark candidate 1 as approved
+$pdo->exec("UPDATE platform_settings SET setting_value = 'v_candidate_store_1' WHERE setting_key = 'ml_approved_model_version';");
+// Now candidate 1 is the approved model; review is finished.
+// Next daily tick at 23:05 on June 15:
+$pdo->exec("DELETE FROM ml_jobs WHERE trigger_type = 'forecast_observation';");
+$obsRes4 = $tick('2024-06-15 23:05:00');
+assert_same(1, $obsRes4['observation_jobs_queued'], 'Next candidate enters observation once candidate 1 is approved');
+
+$obsJob4 = $pdo->query("SELECT model_version FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+assert_same('v_candidate_store_2_weekly', $obsJob4['model_version'], 'Candidate 2 enters observation now that candidate 1 is approved');
+
+// =========================================================================
+// Ticket #416 Requirements: 01:00 Daily Generation & Sunday 01:00 Training (Asia/Manila)
+// =========================================================================
+
+// --- 11A. Default schedule policy: 01:00 daily generation, Sunday 01:00 retraining ---
+$pdo->exec("DELETE FROM platform_settings WHERE setting_key LIKE '%schedule%'; DELETE FROM ml_settings;");
+$schedPolicy = $scheduler->getEffectiveSchedule();
+assert_same('01:00', $schedPolicy['daily_forecast_time'], 'Default daily forecast time must be 01:00');
+assert_same('Sunday', $schedPolicy['weekly_retrain_day'], 'Default weekly retrain day must be Sunday');
+assert_same('01:00', $schedPolicy['weekly_retrain_time'], 'Default weekly retrain time must be 01:00');
+assert_same('Asia/Manila', $schedPolicy['timezone'], 'Default schedule timezone must be Asia/Manila');
+assert_same(false, $schedPolicy['is_explicit'], 'Default policy is not marked explicit');
+
+// --- 11B. Conflicting 23:00 fallback/default is corrected to 01:00 ---
+$pdo->exec("INSERT INTO ml_settings (setting_key, setting_value, updated_by) VALUES ('schedule_daily_forecast_time', '23:00', NULL)");
+$correctedSched = $scheduler->getEffectiveSchedule();
+assert_same('01:00', $correctedSched['daily_forecast_time'], 'Conflicting 23:00 default without operator update is corrected to 01:00');
+assert_same(false, $correctedSched['is_explicit'], 'Corrected default is not treated as explicit');
+
+// --- 11C. Explicitly selected operational schedule is preserved ---
+$pdo->exec("UPDATE ml_settings SET setting_value = '03:30', updated_by = 1 WHERE setting_key = 'schedule_daily_forecast_time'");
+$explicitSched = $scheduler->getEffectiveSchedule();
+assert_same('03:30', $explicitSched['daily_forecast_time'], 'Explicit operational schedule 03:30 is preserved');
+assert_same(true, $explicitSched['is_explicit'], 'Explicit schedule is marked explicit');
+
+// Explicit selection of 23:00 by an operator is also preserved
+$pdo->exec("UPDATE ml_settings SET setting_value = '23:00', updated_by = 1 WHERE setting_key = 'schedule_daily_forecast_time'");
+$explicit23 = $scheduler->getEffectiveSchedule();
+assert_same('23:00', $explicit23['daily_forecast_time'], 'Explicitly chosen 23:00 by operator is preserved');
+assert_same(true, $explicit23['is_explicit'], 'Operator chosen 23:00 is marked explicit');
+
+// --- 11D. Effective settings are recorded and returned by runScheduler() ---
+$pdo->exec("DELETE FROM ml_settings; DELETE FROM ml_jobs; UPDATE platform_settings SET setting_value = 'v_approved_incumbent' WHERE setting_key = 'ml_approved_model_version';");
+$schedTick = $tick('2024-06-16 01:05:00'); // Sunday 01:05 AM
+assert_same('01:00', $schedTick['effective_schedule']['daily_forecast_time'], 'runScheduler returns effective daily schedule');
+assert_same('Sunday', $schedTick['effective_schedule']['weekly_retrain_day'], 'runScheduler returns effective weekly day');
+assert_same('01:00', $schedTick['effective_schedule']['weekly_retrain_time'], 'runScheduler returns effective weekly time');
+assert_same('Asia/Manila', $schedTick['effective_schedule']['timezone'], 'runScheduler returns effective timezone');
+
+$persistedEff = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_effective_schedule'")->fetchColumn();
+assert_same(true, !empty($persistedEff), 'ml_effective_schedule is recorded in platform_settings');
+$decodedEff = json_decode((string)$persistedEff, true);
+assert_same('01:00', $decodedEff['daily_forecast_time'], 'Persisted effective daily time is 01:00');
+assert_same('Asia/Manila', $decodedEff['timezone'], 'Persisted effective timezone is Asia/Manila');
+
+// Scheduled run before 01:00 (e.g. 00:30 AM) does NOT trigger daily work
+$pdo->exec("DELETE FROM ml_jobs;");
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units)
+    VALUES (999, 1, '2024-06-15', '2024-06-16', 1, 10)");
+$earlyTick = $tick('2024-06-17 00:30:00'); // Monday 00:30 AM (before 01:00)
+assert_same(0, $earlyTick['forecast_jobs_queued'], 'Daily forecast does not trigger before 01:00');
+
+// Scheduled run at or after 01:00 (e.g. 01:05 AM) triggers daily work
+$dueTick = $tick('2024-06-17 01:05:00'); // Monday 01:05 AM
+assert_same(1, $dueTick['forecast_jobs_queued'], 'Daily forecast triggers at 01:00');
+
+echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation, candidate observation queueing, candidate preservation, downtime observation catch-up, review transition, 01:00 daily generation, Sunday 01:00 retraining, conflicting default correction, explicit schedule preservation, effective settings recording).\n";

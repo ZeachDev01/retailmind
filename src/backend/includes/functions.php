@@ -196,6 +196,19 @@ function ensure_key_value_table(PDO $pdo, string $table): void
     if (!in_array($table, $allowed, true)) {
         throw new InvalidArgumentException('Unsupported settings table.');
     }
+    // MySQL DDL commits transactions; transactional callers prepare settings tables before writing.
+    if ($pdo->inTransaction()) {
+        return;
+    }
+    if ((string)$pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_by INT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )");
+        return;
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS {$table} (
         setting_key VARCHAR(100) PRIMARY KEY,
         setting_value TEXT NOT NULL,
@@ -263,7 +276,7 @@ function get_store_settings(PDO $pdo): array
     ]);
 }
 
-function get_forecasting_readiness(PDO $pdo): array
+function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
 {
     $dailySalesSql = forecast_daily_sales_sql($pdo);
     $settings = get_ml_settings($pdo);
@@ -342,6 +355,17 @@ function get_forecasting_readiness(PDO $pdo): array
         return [];
     }
 
+    $throughDate = $throughDate ?? date('Y-m-d', strtotime('-1 day'));
+    $eligibilityMap = [];
+    try {
+        $eligService = new App\Forecasting\StoreTrainingEligibilityService();
+        $eligList = $eligService->evaluateAllProducts($pdo, $throughDate);
+        foreach ($eligList as $item) {
+            $eligibilityMap[(int)$item['product_id']] = $item;
+        }
+    } catch (Throwable) {
+    }
+
     foreach ($rows as &$row) {
         $calendarDays = (int)$row['calendar_history_days'];
         $nonzeroDays = (int)$row['nonzero_sales_days'];
@@ -361,12 +385,25 @@ function get_forecasting_readiness(PDO $pdo): array
             $minimumNonzeroDays
         );
 
-        if ($calendarDays < $minimumHistoryDays || $nonzeroDays < $minimumNonzeroDays) {
-            continue;
-        }
+        $pid = (int)$row['product_id'];
+        $elig = $eligibilityMap[$pid] ?? null;
+        $accumulatedUsable = $elig ? (int)$elig['accumulated_usable_days'] : (int)$row['nonzero_sales_days'];
+        $row['accumulated_usable_days'] = $accumulatedUsable;
+        $row['required_usable_days'] = App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS;
+        $row['has_feature_window'] = $elig ? (bool)$elig['has_feature_window'] : false;
+        $row['has_holdout_coverage'] = $elig ? (bool)$elig['has_holdout_coverage'] : false;
+        $isEligible = $elig ? (bool)$elig['eligible'] : false;
+
         if (!$hasPrediction) {
-            $row['forecast_status'] = 'Ready for Forecasting';
-            $row['forecast_reason'] = 'The product has enough data. Run the Random Forest retraining job to generate a forecast.';
+            if ($isEligible) {
+                $row['forecast_status'] = 'Ready for training';
+                $row['forecast_reason'] = 'Ready for training. Product meets all prerequisites (' . $accumulatedUsable . ' usable days, supported feature window, and holdout coverage).';
+            } else {
+                $row['forecast_status'] = 'Insufficient Data';
+                $row['forecast_reason'] = ($elig && !empty($elig['reason']))
+                    ? $elig['reason']
+                    : sprintf('%d accumulated usable days available. At least %d accumulated usable days are required.', $accumulatedUsable, App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS);
+            }
             continue;
         }
         if ($modelVersion !== $currentModelVersion) {
@@ -388,7 +425,7 @@ function get_forecasting_readiness(PDO $pdo): array
     }
     unset($row);
 
-    $priority = ['Model Requires Retraining' => 0, 'Ready for Forecasting' => 1, 'Forecast Generated' => 2, 'Insufficient Data' => 3];
+    $priority = ['Model Requires Retraining' => 0, 'Ready for training' => 1, 'Ready for Forecasting' => 1, 'Forecast Generated' => 2, 'Insufficient Data' => 3];
     usort($rows, static function (array $a, array $b) use ($priority): int {
         return ($priority[$a['forecast_status']] ?? 4) <=> ($priority[$b['forecast_status']] ?? 4)
             ?: strcasecmp((string)$a['product_name'], (string)$b['product_name']);
@@ -489,8 +526,9 @@ function notification_workspace_scope(PDO $pdo, string $alias = 'notifications')
  */
 function get_unread_notifications(PDO $pdo, int $user_id): array
 {
+    reconcile_notification_stock($pdo, $user_id);
     $stmt = $pdo->prepare("SELECT notification_id, type, title, message, reference_id, reference_type, created_at
-                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE
+                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE
                            ORDER BY created_at DESC");
     $stmt->execute([$user_id]);
     return $stmt->fetchAll();
@@ -501,9 +539,22 @@ function get_unread_notifications(PDO $pdo, int $user_id): array
  */
 function get_notification_count(PDO $pdo, int $user_id): int
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE");
+    reconcile_notification_stock($pdo, $user_id);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE");
     $stmt->execute([$user_id]);
     return (int)$stmt->fetchColumn();
+}
+
+function notification_visibility_scope(): string
+{
+    return "notifications.resolved_at IS NULL AND (notifications.type <> 'low_stock' OR EXISTS (SELECT 1 FROM products np WHERE notifications.reference_type = 'product' AND np.product_id = notifications.reference_id))";
+}
+
+function reconcile_notification_stock(PDO $pdo, int $userId): void
+{
+    require_once __DIR__ . '/../app/Services/NotificationService.php';
+    $workspace = function_exists('current_role') ? current_role() : (string)($_SESSION['role'] ?? '');
+    (new NotificationService($pdo))->reconcileStockAlerts($userId, $workspace);
 }
 
 /**

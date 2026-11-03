@@ -4,10 +4,9 @@ namespace App\Dashboard;
 
 require_once __DIR__ . '/../Services/GrossProfitService.php';
 
-use App\Attention\AttentionRuleService;
+use App\Attention\AttentionCenter;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\GrossProfitService;
 use DateTimeImmutable;
@@ -27,7 +26,7 @@ final class StoreOperationsDashboardWorkspace
         ['label' => 'Stock Issue Oversight', 'description' => 'Inspect Stock Issue history read-only', 'icon' => 'bi-check2-square', 'destination' => 'components/administrator/stock_issues.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Fiscal Periods', 'description' => 'Govern Store accounting windows', 'icon' => 'bi-calendar-check', 'destination' => 'components/system_administrator/fiscal_periods.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Forecast Review', 'description' => 'Review operational forecast performance', 'icon' => 'bi-graph-up-arrow', 'destination' => 'components/report/predictions.php', 'capability' => RoleCapabilityPolicy::VIEW_FORECASTS],
-        ['label' => 'Store Settings', 'description' => 'Set operational attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
+        ['label' => 'Store Settings', 'description' => 'Maintain Store identity, receipts, and attention thresholds', 'icon' => 'bi-sliders', 'destination' => 'components/administrator/store_settings.php', 'capability' => RoleCapabilityPolicy::STORE_OPERATIONS],
         ['label' => 'Database Backup', 'description' => 'Create and download a SQL Store copy', 'icon' => 'bi-database-check', 'destination' => 'components/administrator/database_backup.php', 'capability' => RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP],
     ];
 
@@ -161,9 +160,10 @@ final class StoreOperationsDashboardWorkspace
         try {
             $settings = new AttentionSettingsService($this->pdo, $this->clock);
             $thresholds = $settings->thresholdsFor($actorRole);
-            $signals = (new DatabaseAttentionSignalSource($this->pdo, $this->clock))->store();
+            $attentionCenter = new AttentionCenter($this->pdo, $this->clock);
+            $actorUserId = (int)($_SESSION['user_id'] ?? 0);
             $attention = array_values(array_filter(
-                (new AttentionRuleService($settings, $this->clock))->evaluate($actorRole, $signals),
+                $attentionCenter->getAttention($actorUserId, $actorRole),
                 fn($item): bool => $this->destinationIsPermitted($actorRole, $item->destination)
             ));
             $exceptions = $this->exceptions($now, $days, $thresholds);
@@ -522,12 +522,12 @@ final class StoreOperationsDashboardWorkspace
     {
         $items = [];
         $cashVarianceSql = $this->hasVarianceReviewRequiredColumn()
-            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
+            ? "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, " . $this->userDisplayNameColumn() . "
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL
                  AND (cs.variance_review_required = 1 OR (cs.variance_review_required IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))))
                ORDER BY cs.closed_at ASC LIMIT 20"
-            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, u.display_name
+            : "SELECT cs.shift_id, cs.cash_variance, cs.closed_at, " . $this->userDisplayNameColumn() . "
                FROM cashier_shifts cs JOIN users u ON u.user_id = cs.cashier_id
                WHERE cs.status = 'closed' AND cs.reviewed_at IS NULL AND cs.cash_variance IS NOT NULL AND cs.cash_variance != 0 AND ABS(cs.cash_variance) >= CAST(? AS DECIMAL(12,2))
                ORDER BY cs.closed_at ASC LIMIT 20";
@@ -552,6 +552,29 @@ final class StoreOperationsDashboardWorkspace
         ) as $row) {
             $items[] = $this->exception('warning', 'Follow up with Inventory Manager', (string)$row['product_name'] . ' · ' . (string)$row['adjustment_type'] . ' (' . (int)$row['adjustment_qty'] . ') · Follow up with Inventory Manager', (string)$row['reported_at'], 'components/administrator/stock_issues.php');
         }
+
+        try {
+            $attentionCenter = new AttentionCenter($this->pdo, $this->clock);
+            foreach ($attentionCenter->getAttention(0, 'admin') as $attentionItem) {
+                if ($attentionItem->key === 'store.forecasting.failure') {
+                    $items[] = $this->exception(
+                        'critical',
+                        'Forecasting failure',
+                        $attentionItem->explanation,
+                        $attentionItem->detectedAt->format('Y-m-d H:i:s'),
+                        'components/report/predictions.php'
+                    );
+                } elseif ($attentionItem->key === 'store.forecasting.candidate-review') {
+                    $items[] = $this->exception(
+                        'warning',
+                        'Candidate model awaiting review',
+                        $attentionItem->explanation,
+                        $attentionItem->detectedAt->format('Y-m-d H:i:s'),
+                        'components/administrator/model_review.php'
+                    );
+                }
+            }
+        } catch (\Throwable) {}
 
         $severity = ['critical' => 0, 'warning' => 1, 'info' => 2];
         usort($items, static fn(array $left, array $right): int => ($severity[$left['severity']] <=> $severity[$right['severity']]) ?: strcmp($left['detected_at'], $right['detected_at']));
@@ -814,6 +837,18 @@ final class StoreOperationsDashboardWorkspace
             return $hasColumn = true;
         } catch (\Throwable) {
             return $hasColumn = false;
+        }
+    }
+
+    private function userDisplayNameColumn(): string
+    {
+        static $col = null;
+        if ($col !== null) return $col;
+        try {
+            $this->pdo->query("SELECT display_name FROM users LIMIT 0");
+            return $col = "u.display_name";
+        } catch (\Throwable) {
+            return $col = "u.full_name AS display_name";
         }
     }
     public function gcashAttention(): array

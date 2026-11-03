@@ -18,20 +18,18 @@ $notifications = new NotificationService($pdo, $clock);
 $notifications->checkAndNotifyLowStock();
 $notifications->checkAndNotifyExpiringStock();
 
-$signalSource = new App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
-$attentionCenter = new App\Attention\AttentionCenter(
-    new App\Attention\AttentionRuleService(new App\Attention\AttentionSettingsService($pdo, $clock), $clock),
-    new App\Attention\AttentionNotificationService($pdo, $clock)
-);
 require_once dirname(__DIR__) . '/app/Services/SystemHealthService.php';
 $healthChecks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
-$platformSignals = $signalSource->platform($healthChecks);
-$storeSignals = $signalSource->store();
+$attentionCenter = new App\Attention\AttentionCenter($pdo, $clock);
 foreach (['super_admin', 'admin'] as $role) {
+    $external = $role === 'super_admin' ? $healthChecks : [];
     foreach ($notifications->recipients($role) as $recipient) {
-        $attentionCenter->refreshResult((int)$recipient['user_id'], $role,
-            $role === 'super_admin' ? $platformSignals : $storeSignals,
-            (bool)($recipient['notify_inapp'] ?? true));
+        $attentionCenter->synchronize(
+            (int)$recipient['user_id'],
+            $role,
+            $external,
+            (bool)($recipient['notify_inapp'] ?? true)
+        );
     }
 }
 

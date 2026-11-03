@@ -47,9 +47,9 @@ if (getenv('RUN_DB_TESTS') === '1') {
     assert_same(3, count($changed), "Leap year range 2024-02-28 to 2024-03-01 must include 3 days (Feb 28, Feb 29, Mar 1)");
 
     $range = $calendar->getCalendarDateRangeAtCutoff($pdo, '2024-02-28', '2024-03-01', date('Y-m-d H:i:s', time() + 5));
-    assert_same('closed', $range['2024-02-28']);
-    assert_same('closed', $range['2024-02-29']);
-    assert_same('closed', $range['2024-03-01']);
+    assert_same('closed', $range['2024-02-28'], 'Feb 28 closed');
+    assert_same('closed', $range['2024-02-29'], 'Feb 29 closed');
+    assert_same('closed', $range['2024-03-01'], 'Mar 1 closed');
 
     // Test 5: Deduplication in range - running same range again changes 0 dates
     $changed2 = $calendar->recordCalendarRange($pdo, '2024-02-28', '2024-03-01', 'closed', 1);

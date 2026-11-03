@@ -49,13 +49,13 @@ $roleId = static function (string $name) use ($pdo): int {
 
 $pdo->exec('CREATE TABLE users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name VARCHAR(150) NOT NULL DEFAULT \'Test User\',
+    display_name VARCHAR(150) NOT NULL DEFAULT \'Test User\',
     branch_id INTEGER NULL,
     role_id INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT \'active\'
 )');
 $insertUser = static function (string $name, string $role) use ($pdo, $roleId, $storeId): int {
-    $stmt = $pdo->prepare('INSERT INTO users (full_name, branch_id, role_id, status) VALUES (?, ?, ?, \'active\')');
+    $stmt = $pdo->prepare('INSERT INTO users (display_name, branch_id, role_id, status) VALUES (?, ?, ?, \'active\')');
     $stmt->execute([$name, $storeId, $roleId($role)]);
     return (int)$pdo->lastInsertId();
 };
@@ -139,6 +139,7 @@ $pdo->exec('CREATE TABLE fiscal_period_locks (
     period_id INTEGER NOT NULL,
     table_name VARCHAR(100) NULL
 )');
+$pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status) VALUES ('Test Period','2000-01-01','2099-12-31','open')");
 $pdo->exec('CREATE TABLE activity_log (
     log_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NULL,
@@ -277,6 +278,24 @@ $throws(
     'Cashiers must not open another cashier\'s report detail'
 );
 $assert($service->getReportDetail(999999, $adminId) === null, 'Unknown report details must return null');
+
+// Active Workspaces stay separate from the account's primary role.
+$pdo->exec("INSERT INTO user_roles (user_id,role_id) VALUES ({$cashierId}, {$roleId('admin')}), ({$managerId}, {$roleId('admin')}), ({$managerId}, {$roleId('cashier')}), ({$adminId}, {$roleId('super_admin')})");
+$adminWorkspace = new StockIssueService($pdo, $quietNotifications, 'admin');
+$assert(count($adminWorkspace->getOversightReports([], $cashierId)) === 4, 'Additional Administrator access must see every report in the Administrator Workspace');
+$assert((int)$adminWorkspace->getReportDetail($pendingId, $cashierId)['report']['adjustment_id'] === $pendingId, 'Administrator Workspace must open another cashier\'s report');
+$cashierWorkspace = new StockIssueService($pdo, $quietNotifications, 'cashier');
+$assert($cashierWorkspace->getOversightReports([], $managerId) === [], 'Cashier Workspace cannot inherit Inventory Manager visibility');
+$throws(static fn() => $cashierWorkspace->getReportDetail($pendingId, $managerId), 'Cashier Workspace must refuse another cashier\'s detail');
+$platformWorkspace = new StockIssueService($pdo, $quietNotifications, 'super_admin');
+$throws(static fn() => $platformWorkspace->getOversightReports([], $adminId), 'Platform Workspace cannot inherit Administrator oversight');
+$throws(static fn() => $platformWorkspace->getReportDetail($pendingId, $adminId), 'Platform Workspace cannot inherit Administrator detail access');
+$throws(static fn() => $adminWorkspace->approveReport($pendingId, $managerId), 'Administrator Workspace cannot inherit Inventory Manager approval');
+$throws(static fn() => $adminWorkspace->rejectReport($pendingId, $managerId, 'Denied decision.'), 'Administrator Workspace cannot inherit Inventory Manager rejection');
+$throws(static fn() => $adminWorkspace->returnReport($pendingId, $managerId, 'Denied decision.'), 'Administrator Workspace cannot inherit Inventory Manager return');
+$throws(static fn() => $adminWorkspace->editReport($approvedId, $cashierId, ['quantity' => 1]), 'Administrator Workspace cannot inherit Cashier editing');
+$throws(static fn() => $adminWorkspace->cancelReport($pendingId, $cashierId), 'Administrator Workspace cannot inherit Cashier cancellation');
+$throws(static fn() => $adminWorkspace->resubmitReport($pendingId, $cashierId), 'Administrator Workspace cannot inherit Cashier resubmission');
 
 // --- Administrator mutation denial + read-only capability ---
 $assert(

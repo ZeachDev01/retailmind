@@ -8,6 +8,62 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'create_admin_with_temp_password') {
+    $pdo->exec("USE `{$database}`");
+    $username = $argv[3] ?? 'new_admin';
+    $tempPassword = 'TempPassword123';
+    $stmt = $pdo->prepare("INSERT INTO users (display_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, 1, 1)");
+    $stmt->execute(['New Admin ' . $username, $username, password_hash($tempPassword, PASSWORD_DEFAULT)]);
+    $newId = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, 1, 1)")->execute([$newId]);
+    echo json_encode(['user_id' => $newId, 'username' => $username, 'password' => $tempPassword]);
+    exit;
+}
+if ($argv[1] === 'complete_store_setup') {
+    $pdo->exec("USE `{$database}`");
+    $tasks = ['catalog_ready', 'opening_stock_ready', 'calendar_reviewed'];
+    foreach ($tasks as $task) {
+        $pdo->prepare("INSERT INTO store_setup_confirmations (task_key, confirmed_by_user_id, confirmed_workspace) VALUES (?, 1, 'admin') ON DUPLICATE KEY UPDATE confirmed_at = CURRENT_TIMESTAMP")->execute([$task]);
+    }
+    exit;
+}
+if ($argv[1] === 'get_guidance_row') {
+    $pdo->exec("USE `{$database}`");
+    $userId = (int)($argv[3] ?? 1);
+    $workspace = $argv[4] ?? 'admin';
+    $stmt = $pdo->prepare("SELECT * FROM workspace_guidance WHERE user_id = ? AND workspace = ?");
+    $stmt->execute([$userId, $workspace]);
+    echo json_encode($stmt->fetch(PDO::FETCH_ASSOC) ?: null);
+    exit;
+}
+if (in_array($argv[1], ['stock_issue_loading_failure', 'stock_issue_loading_allow'], true)) {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec($argv[1] === 'stock_issue_loading_failure'
+        ? 'RENAME TABLE inventory_adjustments TO unavailable_stock_issues'
+        : 'RENAME TABLE unavailable_stock_issues TO inventory_adjustments');
+    exit;
+}
+if (in_array($argv[1], ['store_settings_state', 'store_settings_failure', 'store_settings_allow'], true)) {
+    $pdo->exec("USE `{$database}`");
+    if ($argv[1] === 'store_settings_state') {
+        echo json_encode([
+            'store' => $pdo->query('SELECT setting_key, setting_value, updated_by FROM store_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'platform' => $pdo->query('SELECT setting_key, setting_value FROM platform_settings ORDER BY setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'attention' => $pdo->query('SELECT setting_scope, setting_key, setting_value FROM attention_settings ORDER BY setting_scope, setting_key')->fetchAll(PDO::FETCH_ASSOC),
+            'audit' => $pdo->query("SELECT user_id, new_value FROM activity_log WHERE action='Store settings update' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC),
+        ], JSON_THROW_ON_ERROR);
+    } elseif ($argv[1] === 'store_settings_failure') {
+        $pdo->exec("CREATE TRIGGER reject_store_settings BEFORE INSERT ON store_settings FOR EACH ROW BEGIN IF NEW.setting_key='store_phone' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Fixture persistence failure'; END IF; END");
+    } else {
+        $pdo->exec('DROP TRIGGER reject_store_settings');
+    }
+    exit;
+}
+if ($argv[1] === 'open_fiscal_period') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Test Fiscal Period','2026-01-01','2026-12-31','open',1)");
+    exit;
+}
 if ($argv[1] === 'receiving_empty_catalog') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec("UPDATE products SET status='inactive'");
@@ -154,6 +210,16 @@ if ($argv[1] === 'responsive') {
     }
     exit;
 }
+if ($argv[1] === 'setup_state') {
+    $pdo->exec("USE `{$database}`");
+    echo json_encode($pdo->query('SELECT task_key, confirmed_by_user_id, confirmed_workspace FROM store_setup_confirmations ORDER BY task_key')->fetchAll(PDO::FETCH_ASSOC));
+    exit;
+}
+if ($argv[1] === 'guidance_state') {
+    $pdo->exec("USE `{$database}`");
+    echo json_encode($pdo->query('SELECT user_id, workspace, status FROM workspace_guidance ORDER BY user_id, workspace')->fetchAll(PDO::FETCH_ASSOC));
+    exit;
+}
 if ($argv[1] === 'inventory_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
@@ -165,10 +231,10 @@ if ($argv[1] === 'inventory_state') {
 if ($argv[1] === 'governance_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];
-    foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods'] as $table) {
+    foreach (['registers', 'attention_settings', 'platform_settings', 'store_settings', 'ml_settings', 'user_roles', 'fiscal_periods', 'store_calendar', 'store_weekly_schedule'] as $table) {
         $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
     }
-    $state['users'] = $pdo->query('SELECT user_id,username,full_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
+    $state['users'] = $pdo->query('SELECT user_id,username,display_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode($state); exit;
 }
 if ($argv[1] === 'state') {
@@ -231,13 +297,12 @@ $forecastImportMigration = require __DIR__ . '/../../database/migrations/2026101
 $forecastImportMigration['up']($pdo);
 $backupMigration['up']($pdo);
 $fresh = $pdo->query("SHOW COLUMNS FROM users LIKE 'theme_preference'")->fetch(PDO::FETCH_ASSOC);
-$pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Theme Test Store','THEME')");
 $password = 'ThemeTest@2026';
 $roles = ['admin','super_admin','inventory_manager','cashier'];
 foreach ($roles as $index => $role) {
     $id = $index + 1;
     $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
-    $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES (?,?,?,?,?,1,0)')
+    $pdo->prepare('INSERT INTO users (user_id,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,0)')
         ->execute([$id,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
     if ($pdo->query('SELECT theme_preference FROM users WHERE user_id=' . $id)->fetchColumn() !== 'system') {
         throw new RuntimeException('Fresh accounts must default to System.');
@@ -256,9 +321,10 @@ if ((int)$pdo->query("SELECT COUNT(*) FROM users WHERE theme_preference='system'
 (new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
 $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Theme Register')");
 $pdo->exec('INSERT INTO cashier_shifts (shift_id,cashier_id,register_id,opening_cash) VALUES (1,4,1,100)');
-$pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,cart_json,item_count,total_amount) VALUES (4,1,?,?,?,?,?)')
-    ->execute(['THEME-HELD', 'Unfinished theme customer', json_encode([1 => ['qty' => 1, 'name' => 'Theme Test Item', 'price' => 25]]), 1, 25]);
-$pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3,1)");
+$pdo->prepare('INSERT INTO held_sales (cashier_id,shift_id,reference_no,customer_label,item_count,total_amount) VALUES (4,1,?,?,?,?)')
+    ->execute(['THEME-HELD', 'Unfinished theme customer', 1, 25]);
+$pdo->exec("INSERT INTO held_sale_items (held_sale_id,cart_key,line_position,product_id,selling_form,product_name,quantity,price,server_price) VALUES (1,'1',0,1,'piece','Theme Test Item',1,25,25)");
+$pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (1,'THEME-ITEM','THEME-BARCODE','Theme Test Item',25,3)");
 $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
 $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustment_type,reported_by,shift_id,reason) VALUES (1,1,'damaged',4,1,'Disposable theme Stock Issue')");
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();

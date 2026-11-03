@@ -1,8 +1,7 @@
 <?php
 
 require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
-require_once __DIR__ . '/../app/Receipts/SaleReceiptPresentation.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptPaperService.php';
+require_once __DIR__ . '/../app/Receipts/ReceiptEngine.php';
 
 use App\Receipts\ReceiptDetailsService;
 
@@ -164,11 +163,11 @@ foreach ([58, 80] as $width) {
         $assert(!str_contains($receipt, 'Current printing Register'), 'printing Register never replaces recorded attribution');
     }
 }
-$paper = new App\Receipts\ReceiptPaperService($pdo);
-$assert($paper->currentWidth(99, 'cashier') === 80, 'no open shift falls back to 80 mm');
-$assert($paper->currentWidth(7, 'admin') === 80, 'an inactive Cashier workspace falls back to 80 mm');
+$paper = new App\Receipts\ReceiptEngine($pdo);
+$assert($paper->resolvePaperWidth(99, 'cashier') === 80, 'no open shift falls back to 80 mm');
+$assert($paper->resolvePaperWidth(7, 'admin') === 80, 'an inactive Cashier workspace falls back to 80 mm');
 $pdo->exec("UPDATE cashier_shifts SET register_id = 999 WHERE shift_id = 24");
-$assert($paper->currentWidth(7, 'cashier') === 80, 'missing Register falls back to 80 mm');
+$assert($paper->resolvePaperWidth(7, 'cashier') === 80, 'missing Register falls back to 80 mm');
 $assert($pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id = 42')->fetchColumn() === $snapshotBefore,
     'reprinting at either width leaves saved receipt bytes unchanged');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM sales')->fetchColumn() === $financialCount,

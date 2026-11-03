@@ -30,6 +30,7 @@ class NotificationService
     {
         foreach (['inventory_manager', 'admin'] as $role) {
             foreach ($this->recipients($role) as $user) {
+                $this->reconcileStockAlerts((int)$user['user_id'], $role);
                 $items = [];
                 foreach ($this->getLowStockProducts() as $product) {
                     $out = (int)$product['quantity_on_hand'] <= 0;
@@ -50,17 +51,58 @@ class NotificationService
         }
     }
 
+    /** Resolve existing stock updates on normal renders, without delivering new updates. */
+    public function reconcileStockAlerts(int $userId, string $workspace): void
+    {
+        if (!in_array($workspace, ['inventory_manager', 'admin'], true) || !$this->inWorkspace($userId, $workspace)) return;
+        $stmt = $this->pdo->prepare("SELECT n.notification_id, n.attention_key, n.type, n.reference_id, s.is_active
+            FROM notifications n
+            LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
+            WHERE n.user_id = ? AND n.workspace = ? AND n.resolved_at IS NULL
+                AND (n.type = 'low_stock' OR n.type IN ('expiring_stock', 'expired_stock')
+                    OR (n.type = 'system' AND n.reference_type LIKE 'product_batch%'))");
+        $stmt->execute([$userId, $workspace]);
+        $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$alerts) return;
+        $lowStock = array_filter($alerts, static fn(array $alert): bool => $alert['type'] === 'low_stock')
+            ? array_column($this->getLowStockProducts(), null, 'product_id') : [];
+        $eligibleBatches = array_filter($alerts, static fn(array $alert): bool => $alert['type'] !== 'low_stock')
+            ? array_column($this->getEligibleExpiryReminders(), null, 'batch_id') : [];
+        $resolve = $this->pdo->prepare('UPDATE notifications SET resolved_at = ?, email_pending = 0 WHERE notification_id = ? AND user_id = ? AND resolved_at IS NULL');
+        $resolveState = $this->pdo->prepare('UPDATE attention_states SET is_active = 0, resolved_at = ? WHERE user_id = ? AND attention_key = ? AND is_active = 1');
+        $now = $this->clock->now()->format('Y-m-d H:i:s');
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
+        try {
+            foreach ($alerts as $alert) {
+                $active = $alert['type'] === 'low_stock'
+                    ? isset($lowStock[$alert['reference_id']])
+                        && ($workspace !== 'admin' || (int)$lowStock[$alert['reference_id']]['quantity_on_hand'] <= 0)
+                    : isset($eligibleBatches[$alert['reference_id']]);
+                if ($active && $workspace === 'admin' && $alert['type'] !== 'low_stock') {
+                    $active = $this->expiryOverdue($eligibleBatches[$alert['reference_id']]['expiration_date']);
+                }
+                if (!$active || ($alert['is_active'] !== null && !(bool)$alert['is_active'])) {
+                    $resolve->execute([$now, $alert['notification_id'], $userId]);
+                    if (!$active) $resolveState->execute([$now, $userId, $alert['attention_key']]);
+                }
+            }
+            if ($ownsTransaction) $this->pdo->commit();
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+    }
+
     public function checkAndNotifyExpiringStock(int $days = 30): void
     {
         $reminders = $this->getEligibleExpiryReminders($days);
         foreach (['inventory_manager', 'admin'] as $role) {
             foreach ($this->recipients($role) as $user) {
+                $this->reconcileStockAlerts((int)$user['user_id'], $role);
                 $items = [];
                 foreach ($reminders as $reminder) {
-                    // Printed expiration dates remain saleable through the end of that Manila day.
-                    $overdueAt = new DateTimeImmutable($reminder['expiration_date'] . ' 00:00:00', new DateTimeZone('Asia/Manila'));
-                    $overdue = $this->clock->now() >= $overdueAt->modify('+2 days');
-                    if ($role === 'admin' && !$overdue) continue;
+                    if ($role === 'admin' && !$this->expiryOverdue($reminder['expiration_date'])) continue;
                     $items[] = new \App\Attention\AttentionItem(
                         ($role === 'admin' ? 'oversight' : 'inventory') . '.expiry.' . $reminder['batch_id'],
                         $reminder['type'] === 'expired_stock' ? 'critical' : 'warning', 'inventory',
@@ -77,30 +119,41 @@ class NotificationService
 
     private function synchronize(array $user, array $items, bool $inApp, string $scope): void
     {
-        (new \App\Attention\AttentionNotificationService($this->pdo, $this->clock))
-            ->synchronize((int)$user['user_id'], $items, $inApp, $scope);
+        (new \App\Attention\AttentionCenter($this->pdo, $this->clock))
+            ->synchronizeItems((int)$user['user_id'], $items, $inApp, $scope);
+    }
+
+    private function expiryOverdue(string $expirationDate): bool
+    {
+        // Printed expiration dates remain saleable through the end of that Manila day.
+        $expiration = new DateTimeImmutable($expirationDate . ' 00:00:00', new DateTimeZone('Asia/Manila'));
+        return $this->clock->now() >= $expiration->modify('+2 days');
     }
 
     public function checkAndNotifyForecasts(): void
     {
-        $spikes = $this->pdo->query(
-            "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
-                    COALESCE(hist.avg_weekly, 0) AS avg_weekly
-             FROM stock_predictions sp
-             JOIN products p ON p.product_id = sp.product_id
-             LEFT JOIN (
-                 SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
-                 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-                 WHERE s.sale_date >= DATE_SUB(NOW(), INTERVAL 28 DAY)
-                 GROUP BY si.product_id
-             ) hist ON hist.product_id = sp.product_id
-             WHERE sp.prediction_id = (
-                 SELECT sp2.prediction_id FROM stock_predictions sp2
-                 WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
-             )
-               AND hist.avg_weekly > 0
-               AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
-        )->fetchAll(PDO::FETCH_ASSOC);
+        $spikes = [];
+        try {
+            $twentyEightDaysAgo = $this->clock->now()->modify('-28 days')->format('Y-m-d H:i:s');
+            $spikes = $this->pdo->query(
+                "SELECT p.product_id, p.product_name, sp.predicted_demand_next_7_days,
+                        COALESCE(hist.avg_weekly, 0) AS avg_weekly
+                 FROM stock_predictions sp
+                 JOIN products p ON p.product_id = sp.product_id
+                 LEFT JOIN (
+                     SELECT si.product_id, SUM(si.quantity) / 4 AS avg_weekly
+                     FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+                     WHERE s.sale_date >= '{$twentyEightDaysAgo}'
+                     GROUP BY si.product_id
+                 ) hist ON hist.product_id = sp.product_id
+                 WHERE sp.prediction_id = (
+                     SELECT sp2.prediction_id FROM stock_predictions sp2
+                     WHERE sp2.product_id = sp.product_id ORDER BY sp2.generated_at DESC, sp2.prediction_id DESC LIMIT 1
+                 )
+                    AND hist.avg_weekly > 0
+                    AND sp.predicted_demand_next_7_days >= hist.avg_weekly * 1.75"
+            )->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {}
         $demandItems = [];
         foreach ($spikes as $spike) {
             $demandItems[] = new \App\Attention\AttentionItem(
@@ -112,14 +165,18 @@ class NotificationService
                 null, false, 'system', (int)$spike['product_id'], 'product'
             );
         }
-        $conditionNotifications = new \App\Attention\AttentionNotificationService($this->pdo, $this->clock);
+        $conditionNotifications = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
         foreach ($this->recipients('inventory_manager') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $demandItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
         }
-        $failedRun = $this->pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs
-            WHERE status = 'failed' AND started_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
-            ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        $failedRun = null;
+        try {
+            $oneDayAgo = $this->clock->now()->modify('-1 day')->format('Y-m-d H:i:s');
+            $failedRun = $this->pdo->query("SELECT training_run_id, error_message, started_at FROM model_training_runs
+                WHERE status = 'failed' AND started_at >= '{$oneDayAgo}'
+                ORDER BY started_at DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        } catch (\Throwable) {}
         $trainingItems = $failedRun ? [new \App\Attention\AttentionItem(
             'platform-training.failure.' . $failedRun['training_run_id'], 'critical', 'ml_health',
             'Random Forest training failure',
@@ -129,8 +186,17 @@ class NotificationService
             'system', (int)$failedRun['training_run_id'], 'model_training'
         )] : [];
         foreach ($this->recipients('super_admin') as $recipient) {
-            $conditionNotifications->synchronize((int)$recipient['user_id'], $trainingItems,
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
+        }
+        $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
+        $adminForecastingItems = array_values(array_filter(
+            $attentionCenter->getAttention(0, 'admin'),
+            static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
+        ));
+        foreach ($this->recipients('admin') as $recipient) {
+            $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $adminForecastingItems,
+                (bool)($recipient['notify_inapp'] ?? true), 'store.forecasting.');
         }
     }
 
@@ -154,10 +220,11 @@ class NotificationService
                 'destination' => 'components/' . ($workspace === 'cashier' ? 'cashier' : 'inventory_management') . '/stock_issues.php',
             ], $stmt->fetchAll(PDO::FETCH_ASSOC));
         }
-        $stmt = $this->pdo->prepare("SELECT n.title, n.message, n.attention_destination AS destination
+        $stmt = $this->pdo->prepare("SELECT n.type, n.title, n.message, n.attention_destination AS destination
             FROM attention_states s JOIN notifications n ON n.user_id = s.user_id AND n.attention_key = s.attention_key
             WHERE s.user_id = ? AND s.is_active = 1 AND n.workspace = ? AND n.inapp_enabled = 1
                 AND s.attention_key <> 'platform.settings.changed'
+                AND s.attention_key NOT LIKE 'oversight.stock.%' AND s.attention_key NOT LIKE 'oversight.expiry.%'
                 AND n.notification_id = (SELECT MAX(n2.notification_id) FROM notifications n2
                     WHERE n2.user_id = n.user_id AND n2.attention_key = n.attention_key)
             ORDER BY n.created_at DESC");

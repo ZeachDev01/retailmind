@@ -3,6 +3,8 @@ CREATE TABLE ml_jobs (
     trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',
     status VARCHAR(20) NOT NULL DEFAULT 'queued' COMMENT 'queued, running, succeeded, failed',
     requester_id INT NULL COMMENT 'User ID who requested it, NULL if scheduled',
+    evidence_cutoff VARCHAR(20) NULL COMMENT 'Latest completed Philippine calendar day cutoff YYYY-MM-DD',
+    model_version VARCHAR(50) NULL COMMENT 'Model version used or trained',
     queued_at DATETIME NOT NULL,
     started_at DATETIME NULL,
     completed_at DATETIME NULL,

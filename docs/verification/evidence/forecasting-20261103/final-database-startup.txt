@@ -1,0 +1,18 @@
+Executing ml_worker.py synchronously...
+
+[03-Nov-2026 09:00:54 Asia/Manila] Database connection failed: PDOException: SQLSTATE[HY000] [2002] No connection could be made because the target machine actively refused it in C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\app\Core\Database.php:37
+Stack trace:
+#0 C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\app\Core\Database.php(37): PDO->__construct('mysql:host=127....', 'root', Object(SensitiveParameterValue), Array)
+#1 C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\app\Core\Database.php(77): App\Core\Database::connection(Array)
+#2 C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\scripts\run_scheduler.php(33): App\Core\Database::connectionWithRetry()
+#3 {main}
+
+..
+----------------------------------------------------------------------
+Ran 2 tests in 16.861s
+
+OK
+[03-Nov-2026 09:00:56 Asia/Manila] PHP Deprecated:  App\Forecasting\ForecastingSchedulerService::recoverExpiredLeases(): Implicitly marking parameter $now as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\app\Forecasting\ForecastingSchedulerService.php on line 42
+
+[03-Nov-2026 09:00:56 Asia/Manila] PHP Deprecated:  App\Forecasting\ForecastingSchedulerService::runScheduler(): Implicitly marking parameter $now as nullable is deprecated, the explicit nullable type must be used instead in C:\xampp\htdocs\retailmind\.worktrees\integration-410\src\backend\app\Forecasting\ForecastingSchedulerService.php on line 77
+{"database": "retailmind_acceptance_56a17a3aca04", "port": 24327, "scheduler_started_asia_manila": "2026-11-03T09:00:53.076710+08:00", "database_available_asia_manila": "2026-11-03T09:00:56.703051+08:00", "job": {"job_id": 1, "status": "succeeded", "attempts": 1, "evidence_cutoff": null, "started_at": "2026-11-03 09:00:58", "completed_at": "2026-11-03 09:01:02"}, "training_run_id": 1, "model_version": "v20261103090102_6d5c6e", "completed_asia_manila": "2026-11-03T09:01:02.675575+08:00", "provenance": "260 synthetic import rows; isolated process; not unattended boot"}

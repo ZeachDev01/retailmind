@@ -20,6 +20,8 @@ require_once __DIR__ . '/../Store/StoreWriteGate.php';
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 use App\Store\StoreWriteGate;
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/BatchInventoryLedger.php';
+use App\Services\BatchInventoryLedger;
 require_once __DIR__ . '/SalesWorkflowService.php';
 require_once __DIR__ . '/../../includes/functions.php';
 
@@ -49,12 +51,14 @@ class StockIssueService
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
     private ?bool $correctionLinkColumn = null;
+    private BatchInventoryLedger $ledger;
 
-    public function __construct(PDO $pdo, ?NotificationService $notificationService = null, private ?string $activeWorkspace = null)
+    public function __construct(PDO $pdo, ?NotificationService $notificationService = null, private ?string $activeWorkspace = null, ?BatchInventoryLedger $ledger = null)
     {
         $this->pdo = $pdo;
         $this->notificationService = $notificationService ?? new NotificationService($pdo);
         $this->fiscalPeriodGuard = new FiscalPeriodGuardService($pdo);
+        $this->ledger = $ledger ?? new BatchInventoryLedger($pdo, $this->fiscalPeriodGuard);
     }
 
     /**
@@ -562,303 +566,38 @@ class StockIssueService
                 throw new RuntimeException('Only pending reports can be approved.');
             }
 
-            $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
-            $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-
             $productId = (int)$report['product_id'];
             $form = $report['form'] ?? 'piece';
             $rawPackSize = !empty($report['pack_size']) ? (int)$report['pack_size'] : (!empty($report['product_pack_size']) ? (int)$report['product_pack_size'] : null);
             $packSize = $rawPackSize !== null && $rawPackSize > 1 ? $rawPackSize : null;
-            $hasPack = $packSize !== null;
 
             $reportedQty = (int)($report['reported_qty'] ?? 0);
             if ($reportedQty <= 0) {
                 $reportedQty = abs((int)$report['adjustment_qty']);
             }
-            $baseUnitQty = abs((int)$report['adjustment_qty']);
-            if ($baseUnitQty <= 0) {
-                throw new RuntimeException('Report quantity is invalid.');
-            }
             $cashierId = (int)$report['reported_by'];
 
-            $inventoryStmt = $this->pdo->prepare(
-                "SELECT quantity_on_hand FROM inventory WHERE product_id = ?{$this->forUpdate()}"
+            // BatchInventoryLedger atomic deduction: verifies quantity_on_hand >= ?; throws Insufficient available stock
+            $mutation = $this->ledger->recordStockIssueDeduction(
+                $productId,
+                $reportedQty,
+                $form,
+                $packSize,
+                $batchAllocations,
+                $approverId,
+                $adjustmentId,
+                'adjustment'
             );
-            $inventoryStmt->execute([$productId]);
-            $inventory = $inventoryStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$inventory) {
-                throw new RuntimeException('Inventory record not found for this report.');
-            }
-            $available = (int)$inventory['quantity_on_hand'];
-            if ($available < $baseUnitQty) {
-                throw new RuntimeException(
-                    "Insufficient available stock ({$available} on hand, {$baseUnitQty} reported). Approval refused; inventory unchanged."
-                );
-            }
 
-            $finalAllocations = [];
-            if ($batchAllocations !== null) {
-                if (!$this->hasBatchesTable()) {
-                    throw new RuntimeException('Batch allocation requested but batch tracking is not available.');
-                }
-                $allocations = [];
-                foreach ($batchAllocations as $key => $val) {
-                    if (is_array($val)) {
-                        $bIdRaw = $val['batch_id'] ?? $key;
-                        $qRaw = $val['quantity'] ?? $val['qty'] ?? 0;
-                    } else {
-                        $bIdRaw = $key;
-                        $qRaw = $val;
-                    }
-
-                    if (!is_int($bIdRaw) && !(is_string($bIdRaw) && preg_match('/^\d+$/', trim($bIdRaw)))) {
-                        throw new RuntimeException('Invalid batch ID.');
-                    }
-                    $batchId = (int)$bIdRaw;
-                    if ($batchId <= 0) {
-                        throw new RuntimeException('Invalid batch ID.');
-                    }
-
-                    if (is_string($qRaw)) {
-                        $qStr = trim($qRaw);
-                        if ($qStr === '') {
-                            continue;
-                        }
-                        if (!preg_match('/^-?\d+$/', $qStr)) {
-                            throw new RuntimeException('Allocated quantity must be a whole number.');
-                        }
-                        $allocQty = (int)$qStr;
-                    } elseif (is_int($qRaw)) {
-                        $allocQty = $qRaw;
-                    } else {
-                        throw new RuntimeException('Allocated quantity must be a whole number.');
-                    }
-
-                    if ($allocQty < 0) {
-                        throw new RuntimeException('Allocated quantity cannot be negative.');
-                    }
-                    if ($allocQty === 0) {
-                        continue;
-                    }
-
-                    $allocations[$batchId] = ($allocations[$batchId] ?? 0) + $allocQty;
-                }
-
-                $sumAllocated = array_sum($allocations);
-                if ($sumAllocated !== $reportedQty) {
-                    throw new RuntimeException(
-                        "Allocated batch quantity ({$sumAllocated}) does not match reported quantity ({$reportedQty})."
-                    );
-                }
-
-                $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
-                $formSelect = $hasBatchCols ? ', sealed_quantity, loose_quantity' : '';
-                foreach ($allocations as $batchId => $allocReportedUnits) {
-                    $batchStmt = $this->pdo->prepare(
-                        "SELECT batch_id, product_id, remaining_quantity{$formSelect}
-                         FROM product_batches
-                         WHERE batch_id = ?{$this->forUpdate()}"
-                    );
-                    $batchStmt->execute([$batchId]);
-                    $batch = $batchStmt->fetch(PDO::FETCH_ASSOC);
-                    if (!$batch) {
-                        throw new RuntimeException("Selected batch #{$batchId} not found.");
-                    }
-                    if ((int)$batch['product_id'] !== $productId) {
-                        throw new RuntimeException("Batch #{$batchId} does not belong to product #{$productId}.");
-                    }
-
-                    if ($form === 'pack') {
-                        $availPacks = (int)($batch['sealed_quantity'] ?? 0);
-                        if ($availPacks < $allocReportedUnits) {
-                            throw new RuntimeException(
-                                "Insufficient sealed pack stock in batch #{$batchId} ({$availPacks} available, {$allocReportedUnits} allocated)."
-                            );
-                        }
-                        $allocBaseUnits = $allocReportedUnits * ($packSize ?? 1);
-                    } else {
-                        if ($hasPack && $hasBatchCols) {
-                            $availLoose = (int)($batch['loose_quantity'] ?? 0);
-                            if ($availLoose < $allocReportedUnits) {
-                                throw new RuntimeException(
-                                    "Insufficient loose stock in batch #{$batchId} ({$availLoose} available, {$allocReportedUnits} allocated)."
-                                );
-                            }
-                        } else {
-                            if ((int)$batch['remaining_quantity'] < $allocReportedUnits) {
-                                throw new RuntimeException(
-                                    "Insufficient stock in batch #{$batchId} ({$batch['remaining_quantity']} available, {$allocReportedUnits} allocated)."
-                                );
-                            }
-                        }
-                        $allocBaseUnits = $allocReportedUnits;
-                    }
-
-                    $finalAllocations[$batchId] = [
-                        'reported_units' => $allocReportedUnits,
-                        'base_units' => $allocBaseUnits,
-                    ];
-                }
-            } else {
-                if ($this->hasBatchesTable()) {
-                    $countStmt = $this->pdo->prepare('SELECT COUNT(*) FROM product_batches WHERE product_id = ?');
-                    $countStmt->execute([$productId]);
-                    $totalBatches = (int)$countStmt->fetchColumn();
-
-                    if ($totalBatches > 0) {
-                        $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
-                        $formSelect = $hasBatchCols ? ', sealed_quantity, loose_quantity' : '';
-                        $fefoStmt = $this->pdo->prepare(
-                            "SELECT batch_id, remaining_quantity{$formSelect}, expiration_date
-                             FROM product_batches
-                             WHERE product_id = ? AND remaining_quantity > 0
-                             ORDER BY
-                                CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
-                                expiration_date ASC,
-                                date_received ASC,
-                                batch_id ASC{$this->forUpdate()}"
-                        );
-                        $fefoStmt->execute([$productId]);
-                        $availableBatches = $fefoStmt->fetchAll(PDO::FETCH_ASSOC);
-
-                        $needed = $reportedQty;
-                        foreach ($availableBatches as $batch) {
-                            if ($needed <= 0) {
-                                break;
-                            }
-                            if ($form === 'pack') {
-                                $avail = (int)($batch['sealed_quantity'] ?? 0);
-                                $take = min($needed, $avail);
-                                if ($take > 0) {
-                                    $finalAllocations[(int)$batch['batch_id']] = [
-                                        'reported_units' => $take,
-                                        'base_units' => $take * ($packSize ?? 1),
-                                    ];
-                                    $needed -= $take;
-                                }
-                            } else {
-                                if ($hasPack && $hasBatchCols) {
-                                    $avail = (int)($batch['loose_quantity'] ?? 0);
-                                } else {
-                                    $avail = (int)$batch['remaining_quantity'];
-                                }
-                                $take = min($needed, $avail);
-                                if ($take > 0) {
-                                    $finalAllocations[(int)$batch['batch_id']] = [
-                                        'reported_units' => $take,
-                                        'base_units' => $take,
-                                    ];
-                                    $needed -= $take;
-                                }
-                            }
-                        }
-
-                        if ($needed > 0) {
-                            if ($form === 'pack') {
-                                throw new RuntimeException(
-                                    "Insufficient sealed pack stock available for product #{$productId} ({$needed} packs unallocated). Approval refused; inventory unchanged."
-                                );
-                            } elseif ($hasPack) {
-                                throw new RuntimeException(
-                                    "Insufficient loose stock available for product #{$productId} ({$needed} units unallocated). Approval refused; inventory unchanged."
-                                );
-                            } else {
-                                throw new RuntimeException(
-                                    "Insufficient batch stock available for product #{$productId} ({$needed} units unallocated). Approval refused; inventory unchanged."
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!empty($finalAllocations)) {
-                $hasBatchCols = $this->hasColumn('product_batches', 'sealed_quantity');
-                $hasSibCols = $this->hasColumn('stock_issue_batches', 'form');
-
-                if ($form === 'pack') {
-                    $deductBatchStmt = $this->pdo->prepare(
-                        'UPDATE product_batches
-                         SET sealed_quantity = sealed_quantity - ?,
-                             remaining_quantity = remaining_quantity - ?
-                         WHERE batch_id = ? AND sealed_quantity >= ? AND remaining_quantity >= ?'
-                    );
-                } else {
-                    if ($hasBatchCols) {
-                        $deductBatchStmt = $this->pdo->prepare(
-                            'UPDATE product_batches
-                             SET loose_quantity = loose_quantity - ?,
-                                 remaining_quantity = remaining_quantity - ?
-                             WHERE batch_id = ? AND loose_quantity >= ? AND remaining_quantity >= ?'
-                        );
-                    } else {
-                        $deductBatchStmt = $this->pdo->prepare(
-                            'UPDATE product_batches
-                             SET remaining_quantity = remaining_quantity - ?
-                             WHERE batch_id = ? AND remaining_quantity >= ?'
-                        );
-                    }
-                }
-
-                if ($hasSibCols) {
-                    $recordBatchStmt = $this->pdo->prepare(
-                        'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity, form, reported_qty)
-                         VALUES (?, ?, ?, ?, ?)'
-                    );
-                } else {
-                    $recordBatchStmt = $this->pdo->prepare(
-                        'INSERT INTO stock_issue_batches (adjustment_id, batch_id, quantity)
-                         VALUES (?, ?, ?)'
-                    );
-                }
-
-                foreach ($finalAllocations as $batchId => $alloc) {
-                    $repUnits = $alloc['reported_units'];
-                    $bUnits = $alloc['base_units'];
-                    if ($form === 'pack') {
-                        $deductBatchStmt->execute([$repUnits, $bUnits, $batchId, $repUnits, $bUnits]);
-                    } else {
-                        if ($hasBatchCols) {
-                            $deductBatchStmt->execute([$repUnits, $bUnits, $batchId, $repUnits, $bUnits]);
-                        } else {
-                            $deductBatchStmt->execute([$bUnits, $batchId, $bUnits]);
-                        }
-                    }
-                    if ($deductBatchStmt->rowCount() === 0) {
-                        throw new RuntimeException(
-                            "Batch #{$batchId} stock changed while reviewing. Approval refused; inventory unchanged."
-                        );
-                    }
-                    if ($hasSibCols) {
-                        $recordBatchStmt->execute([$adjustmentId, $batchId, $bUnits, $form, $repUnits]);
-                    } else {
-                        $recordBatchStmt->execute([$adjustmentId, $batchId, $bUnits]);
-                    }
-                }
-            }
-
-            // Conditional deduction: concurrent approvals cannot drive stock negative.
-            $deductStmt = $this->pdo->prepare(
-                'UPDATE inventory SET quantity_on_hand = quantity_on_hand - ?
-                  WHERE product_id = ? AND quantity_on_hand >= ?'
-            );
-            $deductStmt->execute([$baseUnitQty, $productId, $baseUnitQty]);
-            if ($deductStmt->rowCount() === 0) {
-                throw new RuntimeException('Stock changed while reviewing. Approval refused; inventory unchanged.');
-            }
+            $available = $mutation['available_before'];
+            $baseUnitQty = $mutation['base_units'];
+            $finalAllocations = $mutation['allocations'];
 
             $notes = trim($reviewNotes);
-            // stock_movements.reason is an enum, so the category/cashier link
-            // lives on the report row (adjustment_id FK); keep the human
-            // context in the audit record instead.
             $auditDetail = 'adjustment: ' . $report['adjustment_type'] . ' report #' . $adjustmentId;
             if ($notes !== '') {
                 $auditDetail .= ' - ' . mb_substr($notes, 0, 200);
             }
-            $this->pdo->prepare(
-                'INSERT INTO stock_movements (product_id, change_qty, reason, moved_by, adjustment_id)
-                 VALUES (?, ?, ?, ?, ?)'
-            )->execute([$productId, -$baseUnitQty, 'adjustment', $approverId, $adjustmentId]);
 
             $reviewStmt = $this->pdo->prepare(
                 "UPDATE inventory_adjustments
@@ -1036,15 +775,15 @@ class StockIssueService
     }
 
     /**
-     * Read-only oversight list (ticket #31). The viewer's role is derived from
-     * the database, never trusted from the caller: Administrators and Inventory
+     * Read-only oversight list (ticket #31). The authenticated active Workspace
+     * takes precedence over the primary account role: Administrators and Inventory
      * Managers see every report for operational review; Cashiers see only their
      * own. Filters: status, category, product_id, product (text), cashier_id,
      * approver_id, date_from, date_to (Y-m-d). Never mutates.
      */
     public function getOversightReports(array $filters, int $viewerId): array
     {
-        $viewerRole = $this->roleOf($viewerId);
+        $viewerRole = $this->activeWorkspace ?? $this->roleOf($viewerId);
         $this->assertOversightRole($viewerRole);
 
         $where = ['1 = 1'];
@@ -1135,12 +874,12 @@ class StockIssueService
     /**
      * Full read-only report detail for oversight: the report row, append-only
      * revisions, linked stock movements, and any correction inventory counts.
-     * Returns null when the report does not exist; the viewer's role is
-     * derived from the database and Cashiers may only open their own reports.
+     * Returns null when the report does not exist; the active Workspace applies
+     * and Cashiers may only open their own reports.
      */
     public function getReportDetail(int $adjustmentId, int $viewerId): ?array
     {
-        $viewerRole = $this->roleOf($viewerId);
+        $viewerRole = $this->activeWorkspace ?? $this->roleOf($viewerId);
         $this->assertOversightRole($viewerRole);
         $report = $this->getReport($adjustmentId);
         if ($report === null) {

@@ -1,0 +1,45 @@
+Observed targeted command (credentials omitted):
+RUN_DB_TESTS=1 PHP_BINARY=C:/xampp/php/php.exe python src/backend/tests/operational_pipeline_mysql_test.py
+Source: d85e815 plus ticket-418 test-only public-operation extension (committed with this evidence).
+Windows/XAMPP; actual MySQL at 127.0.0.1:3306; PHP C:/xampp/php/php.exe; Python C:/Python314/python.exe.
+
+Ran 1 test in 26.079s
+OK
+Observation job 2 completed; excluded from routine purchasing
+{"authenticated_pages":["predictions","replenishment_queue"],"totals":[133,266,535]}
+
+database: retailmind_acceptance_b58ebc1f58ab
+temporary artifact namespace: C:/Users/Mike/AppData/Local/Temp/retailmind_acceptance_dcmlxsna/models/store/4bc556e49aada503/
+model: v20261103084919_3a02b0
+training_run_id: 1
+actual_training_gate: failed
+actual_observation_job: 2
+forecast_job: 4
+totals_7_14_28: [133,266,535]
+failed_job: 5
+recovered_job: 6
+generated forecasting failure notice_ids: [3]
+completion_timestamp_asia_manila: 2026-11-03T08:49:34.474512+08:00
+
+Public workflow services; not HTTP. Operations on Product 2, same database/artifact namespace as the real workers.
+Actual training worker ran in a separate Python process. No synthetic running row, worker delay or Store-write fault injected.
+Before operations: job_id=1 status=running attempts=1 started_at=2026-11-03 08:49:14 completed_at=null
+After operations: job_id=1 status=running attempts=1 started_at=2026-11-03 08:49:14 completed_at=null
+operation_timestamp_asia_manila: 2026-11-03T08:49:15+08:00
+receiving_id=1 sale_id=1 refund_id=1 shift_id=1 count_id=1
+Receiving +20 Base Units; cash sale -2 at PHP25 each; restockable Cash Refund +1 at PHP25; approved physical count -1.
+stock_before=0 stock_after=18 batch_sum=18 sale_total=50 refund_amount=25 expected_cash_before=100 expected_cash_after=125
+
+Real missing isolated artifact failed job 5 three times, diagnostics ERR-9f301e75 / ERR-98109bfa / ERR-b97b8a4a.
+Before operations: job_id=5 status=failed attempts=3 started_at=2026-11-03 08:49:32 completed_at=2026-11-03 08:49:32
+After operations: job_id=5 status=failed attempts=3 started_at=2026-11-03 08:49:32 completed_at=2026-11-03 08:49:32
+operation_timestamp_asia_manila: 2026-11-03T08:49:32+08:00
+receiving_id=2 sale_id=2 refund_id=2 shift_id=1 count_id=2
+Same quantities/prices; stock_before=18 stock_after=36 batch_sum=36 sale_total=50 refund_amount=25 expected_cash_before=125 expected_cash_after=150
+
+Assertions observed receiving stock addition, sale stock depletion/payment total, one-unit refundability and amount remaining, refund stock restoration, expected drawer cash, approved count stock/batch reconciliation, and actual forecasting job state before/after each four-operation interval.
+Actors: Cashier user4 for shift/sales/refunds; Inventory Manager user3 for receiving/count approval. All financial/inventory operations used existing public workflow services. SQL created only setup/history/labelled qualification fixtures; SQL did not insert these operations.
+Finally cleanup removed the randomly named database and temporary artifacts. No real Store services/task/reboot modified.
+
+Red observation: missing operations fixture action failed the new test before implementation. Green observation above followed public service fixture addition and correct CashRefundService constructor wiring.
+Unattended boot and actual delayed database startup: Not tested. Operational verdict: NOT ACCEPTED. Prediction usefulness: Still collecting evidence.

@@ -220,6 +220,8 @@ $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, qua
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date, supplier)
             VALUES (3, 2, 'BATCH-MK-01', 20, 20, '2026-11-15', 'DairyInc')");
 
+$pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; UPDATE users SET display_name = full_name");
+
 $pulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
 
 // ==========================================

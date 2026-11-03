@@ -2,12 +2,10 @@
 // Contract for Store Overview attention alignment (Ticket #330 / Spec #326).
 require_once __DIR__ . '/../bootstrap/app.php';
 
+use App\Attention\AttentionCenter;
 use App\Attention\AttentionItem;
-use App\Attention\AttentionNotificationService;
-use App\Attention\AttentionRuleService;
 use App\Attention\AttentionSettingsService;
 use App\Attention\Clock;
-use App\Attention\DatabaseAttentionSignalSource;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 
@@ -32,7 +30,7 @@ try {
     foreach ([
         'CREATE TABLE attention_settings (setting_scope TEXT, setting_key TEXT, setting_value TEXT, updated_by INTEGER, updated_at TEXT, PRIMARY KEY (setting_scope, setting_key))',
         'CREATE TABLE attention_states (user_id INTEGER NOT NULL, attention_key VARCHAR(120) NOT NULL, fingerprint VARCHAR(64) NOT NULL, notification_level INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL, first_detected_at DATETIME NOT NULL, last_detected_at DATETIME NOT NULL, resolved_at DATETIME NULL, PRIMARY KEY (user_id, attention_key))',
-        'CREATE TABLE notifications (notification_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, workspace TEXT NOT NULL DEFAULT "", inapp_enabled INTEGER NOT NULL DEFAULT 1, email_pending INTEGER NOT NULL DEFAULT 0, type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, message TEXT NOT NULL, reference_id INTEGER NULL, reference_type VARCHAR(100) NULL, attention_key VARCHAR(120) NULL, attention_severity VARCHAR(20) NULL, attention_count INTEGER NULL, attention_destination VARCHAR(255) NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)',
+        'CREATE TABLE notifications (notification_id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, workspace TEXT NOT NULL DEFAULT "", inapp_enabled INTEGER NOT NULL DEFAULT 1, email_pending INTEGER NOT NULL DEFAULT 0, resolved_at DATETIME NULL, type VARCHAR(50) NOT NULL, title VARCHAR(255) NOT NULL, message TEXT NOT NULL, reference_id INTEGER NULL, reference_type VARCHAR(100) NULL, attention_key VARCHAR(120) NULL, attention_severity VARCHAR(20) NULL, attention_count INTEGER NULL, attention_destination VARCHAR(255) NULL, is_read INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL)',
         'CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT)',
         'CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, role_id INTEGER, status TEXT)',
         'CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, cashier_id INTEGER, total_amount REAL, discount_type TEXT, discount_value REAL, discount_amount REAL, sale_date TEXT)',
@@ -171,16 +169,12 @@ try {
     $assert(isset($storeDefaults['inventory_high_value_amount']), 'inventory_high_value_amount must be retained');
     $assert(isset($storeDefaults['fiscal_period_days_to_close']), 'fiscal_period_days_to_close must be retained');
 
-    // DatabaseAttentionSignalSource must not emit reversal_count or max_discount_percent
-    $signals = (new DatabaseAttentionSignalSource($pdo, $clock))->store();
-    $assert(!isset($signals['reversal_count']), 'reversal_count signal must be removed');
-    $assert(!isset($signals['max_discount_percent']), 'max_discount_percent signal must be removed');
-
-    // AttentionRuleService must not generate store.sales.reversals or store.sales.unusual-discounts
-    $ruleItems = (new AttentionRuleService($settings, $clock))->evaluate('admin', $signals);
-    $ruleKeys = array_map(static fn(AttentionItem $item): string => $item->key, $ruleItems);
-    $assert(!in_array('store.sales.reversals', $ruleKeys, true), 'store.sales.reversals rule must be removed');
-    $assert(!in_array('store.sales.unusual-discounts', $ruleKeys, true), 'store.sales.unusual-discounts rule must be removed');
+    // AttentionCenter must not generate store.sales.reversals or store.sales.unusual-discounts
+    $attentionCenter = new AttentionCenter($pdo, $clock, $settings);
+    $attentionItems = $attentionCenter->getAttention(1, 'admin');
+    $attentionKeys = array_map(static fn(AttentionItem $item): string => $item->key, $attentionItems);
+    $assert(!in_array('store.sales.reversals', $attentionKeys, true), 'store.sales.reversals rule must be removed');
+    $assert(!in_array('store.sales.unusual-discounts', $attentionKeys, true), 'store.sales.unusual-discounts rule must be removed');
 
     // 7. Migration retires notifications and deduplication state
     $migration = require __DIR__ . '/../database/migrations/202610280001_retire_unusual_discount_and_reversal_attention.php';

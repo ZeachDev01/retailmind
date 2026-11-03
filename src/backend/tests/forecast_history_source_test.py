@@ -47,7 +47,16 @@ with tempfile.TemporaryDirectory(prefix="retailmind-history-") as recovery:
 
 assert len(history) == 120
 assert list(history.units_sold[:3]) == [10, 0, 4], "Explicit zero preserved; POS wins"
+assert "price" in history.columns, "Export contract carries nullable price"
+assert "is_on_promotion" in history.columns, "Export contract carries nullable is_on_promotion"
+assert "out_of_stock" in history.columns, "Export contract carries nullable out_of_stock"
+assert history.price[:2].isna().all(), "Imported history distinguishes unknown price from zero"
+assert history.is_on_promotion[:2].isna().all(), "Imported history distinguishes unknown promotion from false"
+assert history.out_of_stock[:2].isna().all(), "Imported history distinguishes unknown stockout from zero"
+
 features = build_feature_matrix(history, "2024-01-28")
+assert "price" not in features.columns, "Price is preserved without enabling it as an active predictor"
+assert "is_on_promotion" not in features.columns, "Promotion is preserved without enabling it as an active predictor"
 assert len(features) == 28 and features.lag_28.eq(10).all()
 rows = build_training_rows(history, "2024-04-29")
 assert len(rows) > 0 and rows.units_sold.notna().all(), "Imports yield real training rows"

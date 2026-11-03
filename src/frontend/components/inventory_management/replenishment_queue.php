@@ -33,9 +33,11 @@ $isHistoricalDemo = false;
 $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
 $jobId = null;
+$coverage = null;
 try {
     $forecastService = new DemandForecastService($pdo);
-    $jobId = $forecastService->getLatestSuccessfulJobId();
+    $jobId = $forecastService->getLatestUsableJobId() ?? $forecastService->getLatestSuccessfulJobId();
+    $coverage = $forecastService->getCoverage($jobId);
     
     $queue = [];
     if ($jobId) {
@@ -44,7 +46,6 @@ try {
         $isDemo = $jobMeta['is_demo'] ?? false;
         $demoSource = $jobMeta['source_label'] ?? '';
         $isProduction = ($jobMeta['dataset_kind'] ?? null) === 'store';
-
     }
 } catch (Throwable $e) {
     $jobId = null;
@@ -123,8 +124,18 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 </div>
             <?php endif; ?>
 
+            <?php if ($coverage && $coverage['latest_attempt_status'] === 'failed'): ?>
+                <div class="alert tag-warning" role="alert">
+                    <strong>Notice:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
+                </div>
+            <?php elseif ($coverage && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
+                <p class="muted"><strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?> <a href="../report/forecast_exceptions.php">View excluded products</a>.</p>
+            <?php endif; ?>
+
             <?php if ($isDemo): ?>
-                <p class="muted">Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
+                <p class="muted"><span class="badge tag-info">Demo Mode</span> Demo: <?= htmlspecialchars($demoSource) ?> historical sales. Current stock and planning settings are demonstration inputs, not source observations. No Store accuracy is established.</p>
+            <?php elseif ($isProduction): ?>
+                <p class="muted"><span class="badge tag-light">Production forecast</span> Store demand forecast from approved model <?= htmlspecialchars($activeModelVersion) ?>.</p>
             <?php endif; ?>
             <?php if ($isHistoricalDemo): ?>
                 <p class="tag-warning" role="status">Historical M5 demo: expected sales use the original 2016 dates shown in each row. Stock is illustrative. These predictions are unapproved and are not current Store forecasts. <a href="../report/forecast_replay.php">Compare predictions with actual sales</a>.</p>
@@ -179,16 +190,43 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                     ?>
                                         <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['stock_rule_quantity'] ?>" data-expected-sales="<?= $item['expected_sales_28_day'] === null ? '' : (int)$item['expected_sales_28_day'] ?>" data-forecast-period="<?= htmlspecialchars($item['expected_sales_period'] ?? '') ?>">
                                             <td>
+                                                <div class="queue-product-cell">
+                                                <div class="queue-product-identity">
                                                 <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
+                                                </div>
                                                 <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
+                                                <?php if ($item['basis'] === 'Demand Forecast'): ?>
+                                                <details class="queue-details">
+                                                    <summary>Forecast details</summary>
+                                                    <strong class="queue-basis"><?= htmlspecialchars($item['basis']) ?></strong>
+                                                    <p class="queue-reason"><?= htmlspecialchars($item['explanation']) ?></p>
+                                                        <p class="queue-recommended">Recommended buying quantity: <strong><?= (int)$item['recommended_quantity'] ?> units</strong></p>
+                                                    <p class="queue-forecast-status"><?= htmlspecialchars($item['forecast_status']) ?></p>
+                                                    <?php if (!empty($item['model_version'])): ?>
+                                                        <small class="queue-model muted" style="display:block;">Model: <?= htmlspecialchars((string)$item['model_version']) ?><?= !empty($item['job_id']) ? ' (run #' . (int)$item['job_id'] . ')' : '' ?></small>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($item['limitation_marker'])): ?>
+                                                        <small class="queue-limitations muted" style="display:block;"><?= htmlspecialchars((string)$item['limitation_marker']) ?></small>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($item['forecast_origin']) && strtotime((string)$item['forecast_origin']) < strtotime('-3 days')): ?>
+                                                        <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
+                                                    <?php endif; ?>
+                                                </details>
+                                                <?php endif; ?>
+                                                </div>
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
-                                            <td><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></td>
+                                            <td>
+                                                <span class="info-tooltip queue-stock-tooltip">
+                                                    <button class="info-tooltip-trigger" type="button" aria-describedby="queue-stock-rule-<?= (int)$item['product_id'] ?>"><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></button>
+                                                    <span class="tooltip-box no-print" id="queue-stock-rule-<?= (int)$item['product_id'] ?>" role="tooltip">Reorder level: <?= (int)$item['reorder_level'] ?> units + Safety stock: <?= (int)$item['safety_stock'] ?> units</span>
+                                                </span>
+                                            </td>
                                             <td><?php if ($item['expected_sales_28_day'] !== null): ?>
                                                 <strong class="queue-number"><?= (int)$item['expected_sales_28_day'] ?></strong> <small class="muted">units</small>
                                                 <small class="muted queue-forecast-period"><?= htmlspecialchars($item['expected_sales_period']) ?> · <?= htmlspecialchars($item['expected_sales_context'] ?? ($item['readiness_level'] . ' readiness')) ?></small>
-                                            <?php else: ?><span class="muted">Unavailable</span><?php endif; ?></td>
+                                            <?php else: ?><span class="muted">Not available yet</span><?php endif; ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

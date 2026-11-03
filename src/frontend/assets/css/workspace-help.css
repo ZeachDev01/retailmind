@@ -1,0 +1,85 @@
+.workspace-help-page .help-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.help-heading h1 { margin: 0; font-size: 2rem; letter-spacing: -.025em; }
+.help-heading > a { min-height: 44px; text-decoration: none; }
+
+.workspace-help-page .help-workflows {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.workspace-help-page #workspace-guidance-title { margin: 0 0 1.25rem; font-size: 1.125rem; }
+
+.workspace-help-page .guidance-walkthroughs,
+.workspace-help-page .guidance-walkthroughs-daily {
+    margin: 0 0 1.5rem;
+    padding: 1.5rem;
+    border-radius: 14px;
+}
+
+.workspace-help-page .guidance-walkthroughs-header { margin-bottom: .5rem; }
+.workspace-help-page .guidance-walkthroughs-header h3 { margin: 0 0 .5rem; font-size: 1.25rem; line-height: 1.3; }
+.workspace-help-page .guidance-walkthroughs-header p { margin: 0 0 1rem; color: var(--muted); font-size: .95rem; }
+.workspace-help-page .walkthrough-topics-list { gap: 0; min-width: 0; }
+
+.workspace-help-page .walkthrough-topic-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem 1.5rem;
+    padding: 1.25rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+}
+
+.workspace-help-page .walkthrough-topic-card:last-child { padding-bottom: 0; }
+.workspace-help-page .walkthrough-topic-main { min-width: 0; gap: 1rem; align-items: flex-start; }
+.workspace-help-page .walkthrough-topic-main > div { min-width: 0; }
+.workspace-help-page .walkthrough-topic-icon { width: 44px; height: 44px; }
+.workspace-help-page .walkthrough-topic-title { margin: 0 0 .35rem; line-height: 1.4; }
+.workspace-help-page .walkthrough-topic-desc { margin: 0; color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.workspace-help-page .walkthrough-topic-actions { flex-direction: column; align-items: flex-end; gap: .5rem; }
+.workspace-help-page .walkthrough-topic-actions .btn { justify-content: center; min-width: 156px; min-height: 44px; white-space: normal; text-align: center; text-decoration: none; }
+.workspace-help-page .help-workflows .btn-primary { color: #fff; }
+.workspace-help-page .help-workflows .btn-secondary { color: var(--text); }
+.workspace-help-page .guidance-completion-badge { color: var(--theme-success-text, #166534); }
+.workspace-help-page .guidance-progress-badge { color: var(--theme-info-text, #1d4ed8); font-variant-numeric: tabular-nums; }
+
+.workspace-help-page .guidance-continue-card { margin-bottom: 1.5rem; border-radius: 14px; }
+.workspace-help-page .guidance-continue-card h3 { margin: 0 0 .5rem; font-size: 1.125rem; }
+.workspace-help-page .guidance-continue-card p { margin: 0; color: var(--muted); }
+.workspace-help-page .guidance-continue-card .btn { max-width: 100%; white-space: normal; text-decoration: none; }
+.workspace-help-page .main-content :focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.workspace-help-page .main-content ::selection { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1d4ed8); }
+
+@media (min-width: 1180px) {
+    .workspace-help-page .guidance-walkthroughs,
+    .workspace-help-page .guidance-walkthroughs-daily { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 2rem; }
+    .workspace-help-page .walkthrough-topic-card:first-child { padding-top: 0; border-top: 0; }
+}
+
+@media (max-width: 760px) {
+    .workspace-help-page .walkthrough-topic-card { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-page .walkthrough-topic-actions { align-items: flex-start; padding-left: 60px; }
+}
+
+@media (max-width: 480px) {
+    .help-heading h1 { font-size: 1.8rem; }
+    .workspace-help-page .guidance-walkthroughs,
+    .workspace-help-page .guidance-walkthroughs-daily { padding: 1rem; }
+    .workspace-help-page .walkthrough-topic-main { gap: .75rem; }
+    .workspace-help-page .walkthrough-topic-actions { padding-left: 0; align-items: stretch; }
+    .workspace-help-page .walkthrough-topic-actions .btn { width: 100%; min-width: 0; }
+}

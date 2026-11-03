@@ -36,14 +36,17 @@ try {
 
 
 
+    $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status,active_topic,active_step) VALUES (2,'admin','skipped','store_settings',1),(3,'inventory_manager','deferred',NULL,0)");
     $rows = [];
     foreach (App\Backup\SqlBackupFormat::schema($pdo) as $table => $definition) {
         $columns = implode(',', array_map([App\Backup\DatabaseSnapshotWriter::class, 'identifier'], $definition['columns']));
         $rows[$table] = $pdo->query('SELECT ' . $columns . ' FROM ' . App\Backup\DatabaseSnapshotWriter::identifier($table))->fetchAll(PDO::FETCH_ASSOC);
     }
     $package = ['rows' => $rows, 'files' => [], 'manifest' => ['origin_id' => str_repeat('a', 32), 'package_id' => str_repeat('b', 32), 'schema' => hash('sha256', json_encode(array_keys($rows)))]];
+    $pdo->exec("UPDATE workspace_guidance SET status='completed' WHERE user_id=2");
+    $pdo->exec("INSERT INTO workspace_guidance (user_id,workspace,status) VALUES (2,'inventory_manager','skipped')");
     // Destination dependent actor (evidence-only closure, AC 2, 3)
-    $pdo->exec("INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id) VALUES (50,'Old Log Subject','old_audited_staff','\$2y\$10\$xyz',4,1)");
+    $pdo->exec("INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id) VALUES (50,'Old','Staff','Old Log Subject','old_audited_staff','\$2y\$10\$xyz',4)");
     $pdo->exec("INSERT INTO activity_log (log_id,user_id,action,category,module,record_id) VALUES (300,2,'Audited old staff','security','User Access',50)");
     $service = new App\Backup\IdentityReconciliationService($pdo, new App\Authorization\RoleCapabilityPolicy());
     $review = $service->review(2, 'super_admin', $package);
@@ -72,6 +75,10 @@ try {
     $assert(count($review['rows']['login_attempts']) >= 1, 'Destination login attempts preserved');
     $assert(count($review['rows']['password_reset_tokens']) >= 1, 'Protected reset state preserved');
     $assert(count($review['rows']['notification_preferences']) >= 1, 'Protected notification preferences preserved');
+    $protectedGuidance = array_values(array_filter($review['rows']['workspace_guidance'], static fn(array $row): bool => (int)$row['user_id'] === 2));
+    $guidanceStatusMap = array_map(fn($r) => ['user_id' => (int)$r['user_id'], 'workspace' => $r['workspace'], 'status' => $r['status']], $protectedGuidance);
+    $assert($guidanceStatusMap === [['user_id' => 2, 'workspace' => 'admin', 'status' => 'completed'], ['user_id' => 2, 'workspace' => 'inventory_manager', 'status' => 'skipped']], 'Protected guidance choices survive restore without source choices replacing them');
+    $assert(count(array_filter($review['rows']['workspace_guidance'], static fn(array $row): bool => (int)$row['user_id'] === $review['identity_map'][3] && $row['status'] === 'deferred')) === 1, 'Ordinary staff guidance follows explicit identity mapping');
     $assert(count($review['rows']['notifications']) >= 1, 'Protected notifications preserved');
     $assert(count($review['rows']['attention_states']) >= 1, 'Protected attention states preserved');
     $assert(count($review['rows']['backup_history']) >= 1, 'Backup history preserved');
@@ -145,8 +152,8 @@ try {
     $assert($service->replay($package, $checkpoint, $review)['rows'] === $review['rows'], 'Approved projection reconstructs identically from incoming and original checkpoint');
 
     // User lifecycle guards on historical actors (AC 3)
-    $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,status,branch_id,is_recovery_account) VALUES (?,?,?,?,NULL,\'disabled\',1,0)')
-        ->execute([1000, 'Historical employee', 'historical_employee', '!']);
+    $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,status,is_recovery_account) VALUES (?,?,?,?,?,?,NULL,\'disabled\',0)')
+        ->execute([1000, 'Historical', 'Employee', 'Historical employee', 'historical_employee', '!']);
     $lifecycle = new App\Services\UserLifecycleService($pdo, new App\Authorization\RoleCapabilityPolicy(), new App\Store\StoreScope($pdo));
     $reject(fn() => $lifecycle->setStatus(2, 'super_admin', 1000, 'active'), 'Historical Actor cannot activate');
     $reject(fn() => $lifecycle->update(2, 'super_admin', 1000, ['role' => 'admin']), 'Historical Actor cannot receive a role');
@@ -156,7 +163,7 @@ try {
     $insertOrigin = $pdo->prepare('INSERT INTO store_record_origins (origin_id,table_name,source_key,local_key,original_details) VALUES (?,?,?,?,?)');
     foreach ($review['provenance'] as $entry) $insertOrigin->execute(array_values($entry));
     $identity = (new App\Backup\RecordProvenance($pdo))->actor('sales', ['sale_id' => 1], null, $review['identity_map'][4]);
-    $assert($identity['source_id'] === 4 && $identity['original']['full_name'] === 'Theme Test cashier', 'Read boundary resolves original people in the record installation context');
+    $assert($identity['source_id'] === 4 && ($identity['original']['display_name'] ?? $identity['original']['full_name'] ?? '') === 'Theme Test cashier', 'Read boundary resolves original people in the record installation context');
 
     // Repeated / Chained transfer
     $again = $package; $again['rows'] = $review['rows']; $again['manifest']['origin_id'] = str_repeat('c', 32);

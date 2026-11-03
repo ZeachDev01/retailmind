@@ -881,6 +881,7 @@ CREATE TABLE `notifications` (
   `attention_severity` varchar(20) DEFAULT NULL,
   `attention_count` int(11) DEFAULT NULL,
   `attention_destination` varchar(255) DEFAULT NULL,
+  `resolved_at` datetime DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`notification_id`),
@@ -1711,7 +1712,7 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_thr
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
-INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','23:00');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','01:00');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
 
@@ -1923,6 +1924,7 @@ CREATE TABLE `store_calendar` (
   `calendar_date` date NOT NULL,
   `status` enum('open','closed','holiday','exceptional-closure') NOT NULL,
   `recorded_by` int DEFAULT NULL,
+  `source` varchar(50) NOT NULL DEFAULT "manual",
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`calendar_id`),
   KEY `fk_store_calendar_user` (`recorded_by`),
@@ -2057,5 +2059,56 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280003_
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202610280004_gcash_follow_up_responsibility','Persist accepted GCash follow-up responsibility for unresolved exchanges and closing differences (#333)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+DROP TABLE IF EXISTS `workspace_guidance`;
+CREATE TABLE `workspace_guidance` (
+  `user_id` INT NOT NULL,
+  `workspace` VARCHAR(30) NOT NULL,
+  `status` ENUM('skipped','deferred','completed') DEFAULT NULL,
+  `active_topic` VARCHAR(60) DEFAULT NULL,
+  `active_step` INT NOT NULL DEFAULT 0,
+  `completed_topics` TEXT DEFAULT NULL,
+  `invitation_status` VARCHAR(30) DEFAULT NULL,
+  PRIMARY KEY (`user_id`, `workspace`),
+  CONSTRAINT `fk_workspace_guidance_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_workspace_guidance','Remember optional guidance per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020002_workspace_walkthrough_progress','Persist interactive walkthrough progress per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+
+DROP TABLE IF EXISTS `store_setup_confirmations`;
+CREATE TABLE `store_setup_confirmations` (
+  `task_key` VARCHAR(50) NOT NULL,
+  `confirmed_by_user_id` INT NOT NULL,
+  `confirmed_workspace` VARCHAR(30) NOT NULL,
+  `confirmed_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`task_key`),
+  CONSTRAINT `fk_store_setup_confirmations_user` FOREIGN KEY (`confirmed_by_user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire the branches table for the single-store application') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_remove_branch_id','Remove obsolete branch identifiers from the single-store schema') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+DROP TABLE IF EXISTS `store_weekly_schedule`;
+CREATE TABLE `store_weekly_schedule` (
+  `schedule_id` int NOT NULL AUTO_INCREMENT,
+  `effective_date` date NOT NULL,
+  `monday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `tuesday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `wednesday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `thursday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `friday_open` tinyint(1) NOT NULL DEFAULT 1,
+  `saturday_open` tinyint(1) NOT NULL DEFAULT 0,
+  `sunday_open` tinyint(1) NOT NULL DEFAULT 0,
+  `recorded_by` int DEFAULT NULL,
+  `source` varchar(50) NOT NULL DEFAULT "manual",
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`schedule_id`),
+  KEY `fk_store_weekly_schedule_user` (`recorded_by`),
+  KEY `idx_store_weekly_schedule_history` (`effective_date`,`recorded_at` DESC),
+  CONSTRAINT `fk_store_weekly_schedule_user` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ("202611020001_store_weekly_schedule","Configurable weekly store schedule revisions with effective dates") ON DUPLICATE KEY UPDATE description=VALUES(description);

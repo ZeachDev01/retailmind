@@ -920,14 +920,17 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 <title><?= htmlspecialchars($pageTitle) ?></title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/report-generation.css')) ?>">
 </head>
-<body>
+<body class="report-generation-page <?= $selectedReport === 'gross_profit' ? 'report-gross-profit' : '' ?>">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading topbar">
             <div>
+                <p class="report-eyebrow">Store reports</p>
                 <h1 id="page-heading"><?= htmlspecialchars($pageTitle) ?></h1>
+                <p class="report-page-description"><?= $selectedReport === 'gross_profit' ? 'Understand what you earned after discounts, refunds, and product costs.' : 'Review Store activity and export the records you need.' ?></p>
             </div>
             <?php if ($selectedReport === 'gross_profit'): ?>
                 <div class="topbar-actions">
@@ -939,8 +942,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
         </header>
 
         <div class="dashboard-section report-filters">
+            <h2 id="report-filters-heading">Report settings</h2>
             <form method="GET" class="report-filter-grid" id="report-filter-form">
-                <div class="form-group">
+                <div class="form-group report-type-field">
                     <label for="report">Report</label>
                     <select id="report" name="report">
                         <?php foreach ($reportCatalog as $key => $label): ?>
@@ -978,7 +982,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                     <label for="to">To</label>
                     <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
-                <div class="form-group">
+                <div class="form-group report-product-field">
                     <label for="product_id">Product</label>
                     <select data-search-dropdown id="product_id" name="product_id">
                         <option value="0">All products</option>
@@ -989,7 +993,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group report-category-field">
                     <label for="category_id">Category</label>
                     <select data-search-dropdown id="category_id" name="category_id">
                         <option value="0">All categories</option>
@@ -1000,7 +1004,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <button type="submit" class="btn">Run Report</button>
+                <button type="submit" class="btn report-run-btn">Run Report</button>
             </form>
         </div>
 
@@ -1013,7 +1017,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
         <?php if ($validationError === null && $loadError === null): ?>
             <?php if ($selectedReport === 'gross_profit'): ?>
                 <!-- Gross Profit Layout C -->
-                <div class="dashboard-section u-mt-15">
+                <section class="report-results gross-profit-results" aria-labelledby="gross-profit-heading">
                     <div class="section-header">
                         <div>
                             <h2 id="gross-profit-heading">Gross Profit Report</h2>
@@ -1023,14 +1027,26 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                 <span class="badge"><?= ucfirst($activePeriod) ?></span>
                             </div>
                         </div>
+                        <div class="report-actions no-print">
+                            <form method="POST">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="export_csv">
+                                <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
+                                <input type="hidden" name="period" value="<?= htmlspecialchars($activePeriod) ?>">
+                                <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                                <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                                <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
+                                <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                                <button type="submit" class="btn btn-secondary" id="export-csv-btn">Export CSV</button>
+                            </form>
+                            <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
+                        </div>
                     </div>
 
                     <div class="gross-profit-layout-c">
                         <!-- Left Panel on desktop: Product Table -->
                         <div class="gp-table-panel">
-                            <p class="net-units-note" id="net-units-explanation">
-                                <strong>Net units:</strong> Units sold minus units refunded in this period. Negative values can be refunds for earlier sales.
-                            </p>
+                            <h3 class="report-table-heading">Product breakdown</h3>
 
                             <div class="gp-table-wrap" tabindex="0" role="region" aria-label="Products gross profit table container">
                                 <table class="gp-product-table" aria-label="Gross Profit by Product">
@@ -1088,6 +1104,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                     </tbody>
                                 </table>
                             </div>
+                            <p class="net-units-note" id="net-units-explanation">
+                                <strong>Net units:</strong> Units sold minus units refunded in this period. Negative values can be refunds for earlier sales.
+                            </p>
                         </div>
 
                         <!-- Right Panel on desktop: At a glance summary -->
@@ -1142,7 +1161,6 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 
                                 <?php if ($isSumInc): ?>
                                     <div class="profit-incomplete-explanation" id="profit-incomplete-explanation" role="alert">
-                                        <span class="alert-icon" aria-hidden="true">⚠️</span>
                                         <div>
                                             <strong><?= (int)($summary['affected_lines_count'] ?? 0) ?> affected sold line<?= ($summary['affected_lines_count'] ?? 0) === 1 ? '' : 's' ?></strong> missing cost snapshots.
                                             Full cost, gross profit, and margin are withheld to prevent misleading financial totals.
@@ -1174,25 +1192,10 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                             </div>
                         </div>
                     </div>
-
-                    <div class="report-actions no-print">
-                        <form method="POST">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="export_csv">
-                            <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
-                            <input type="hidden" name="period" value="<?= htmlspecialchars($activePeriod) ?>">
-                            <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
-                            <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
-                            <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
-                            <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
-                            <button type="submit" class="btn" id="export-csv-btn">Export CSV</button>
-                        </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
-                    </div>
-                </div>
+                </section>
             <?php else: ?>
                 <!-- Ordinary Reports (preserved) -->
-                <div class="dashboard-section u-mt-15">
+                <div class="dashboard-section report-results">
                     <div class="section-header">
                         <div>
                             <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
@@ -1207,22 +1210,39 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                 <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
                             </div>
                         </div>
+                        <div class="report-actions no-print">
+                            <form method="POST">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="export_csv">
+                                <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
+                                <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
+                                <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                                <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                                <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
+                                <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                                <button type="submit" class="btn btn-secondary">Export CSV</button>
+                            </form>
+                            <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
+                        </div>
                     </div>
                     <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
 
                     <?php if (!empty($reportData['metrics'])): ?>
-                        <div class="card-grid u-my-1">
+                        <dl class="report-metrics">
                             <?php foreach ($reportData['metrics'] as $label => $value): ?>
-                                <div class="stat-card">
-                                    <div class="value"><?= htmlspecialchars((string)$value) ?></div>
-                                    <div class="label"><?= htmlspecialchars((string)$label) ?></div>
+                                <div class="report-metric">
+                                    <dt><?= htmlspecialchars((string)$label) ?></dt>
+                                    <dd><?= htmlspecialchars((string)$value) ?></dd>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
+                        </dl>
                     <?php endif; ?>
 
-                    <div class="table-wrap">
-                        <table>
+                    <?php if (!$reportData['rows']): ?>
+                        <p class="report-empty-state">No records match these filters. Try a different date range, product, or category.</p>
+                    <?php else: ?>
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Report records">
+                        <table class="report-records-table">
                             <thead>
                                 <tr>
                                     <?php foreach ($reportData['headers'] as $header): ?>
@@ -1238,27 +1258,10 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                         <?php endforeach; ?>
                                     </tr>
                                 <?php endforeach; ?>
-                                <?php if (!$reportData['rows']): ?>
-                                    <tr><td colspan="<?= max(1, count($reportData['headers'])) ?>" style="text-align:center;color:var(--muted);">No records match these filters.</td></tr>
-                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
-
-                    <div class="report-actions no-print">
-                        <form method="POST">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="export_csv">
-                            <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
-                            <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
-                            <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
-                            <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
-                            <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
-                            <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
-                            <button type="submit" class="btn">Export CSV</button>
-                        </form>
-                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
-                    </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         <?php endif; ?>

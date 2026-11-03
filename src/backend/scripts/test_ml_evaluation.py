@@ -37,9 +37,60 @@ def test_seasonal_naive_forecast_short_history():
     # For day 5-7 (indices 4-6), step_back is 3, 2, 1, so it uses 10, 20, 30.
     assert np.array_equal(predicted, [30, 30, 30, 30, 10, 20, 30])
 
+def test_metrics_diagnostics_and_population():
+    actual = np.array([10.0, 20.0, 30.0])
+    predicted = np.array([12.0, 18.0, 30.0])
+    
+    metrics = calculate_metrics(actual, predicted)
+    assert metrics['population'] == 3
+    assert metrics['underprediction_count'] == 1
+    assert metrics['overprediction_count'] == 1
+    assert metrics['exact_count'] == 1
+    assert abs(metrics['underprediction_units'] - 2.0) < 1e-6
+    assert abs(metrics['overprediction_units'] - 2.0) < 1e-6
+
+def test_metrics_zero_error_boundary():
+    actual = np.array([5.0, 10.0, 15.0])
+    predicted = np.array([5.0, 10.0, 15.0])
+    metrics = calculate_metrics(actual, predicted)
+    assert metrics['mae'] == 0.0
+    assert metrics['rmse'] == 0.0
+    assert metrics['wape'] == 0.0
+    assert metrics['underprediction_count'] == 0
+    assert metrics['overprediction_count'] == 0
+    assert metrics['exact_count'] == 3
+    assert metrics['missing_metric_reason'] is None
+
+def test_opposite_signed_errors_do_not_cancel():
+    # Opposing errors: item 1 predicted 15 vs actual 10 (+5 overestimation)
+    #                  item 2 predicted 15 vs actual 20 (-5 underestimation)
+    # Signed sum would be 0, but honest evidence must separate over/underestimation units
+    actual = np.array([10.0, 20.0])
+    predicted = np.array([15.0, 15.0])
+    metrics = calculate_metrics(actual, predicted)
+    assert metrics['overprediction_units'] == 5.0
+    assert metrics['underprediction_units'] == 5.0
+    assert metrics['mae'] == 5.0
+    assert metrics['overprediction_count'] == 1
+    assert metrics['underprediction_count'] == 1
+
+def test_metrics_insufficient_coverage_empty():
+    actual = np.array([])
+    predicted = np.array([])
+    metrics = calculate_metrics(actual, predicted)
+    assert metrics['mae'] is None
+    assert metrics['rmse'] is None
+    assert metrics['wape'] is None
+    assert metrics['population'] == 0
+    assert metrics['missing_metric_reason'] == "Insufficient coverage"
+
 if __name__ == '__main__':
     test_metrics_mae_rmse_wape()
     test_wape_zero_demand()
     test_seasonal_naive_forecast()
     test_seasonal_naive_forecast_short_history()
+    test_metrics_diagnostics_and_population()
+    test_metrics_zero_error_boundary()
+    test_opposite_signed_errors_do_not_cancel()
+    test_metrics_insufficient_coverage_empty()
     print("All metrics tests passed.")
