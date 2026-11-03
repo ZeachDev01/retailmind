@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 from datetime import datetime, timedelta
@@ -60,9 +61,25 @@ class OperationalPipelineTest(unittest.TestCase):
                         query('INSERT INTO forecast_sales_imports (product_id,sale_date,quantity,imported_by) VALUES (1,%s,%s,1)',
                               (date, 5 + date.weekday() * 2 + day // 28))
                     training = php('queue', 'model_retraining')['job_id']
-                    job = ml_worker.claim_job(conn)
-                    self.assertEqual(job['job_id'], training)
-                    ml_worker.process_job(conn, job)
+                    # Separate real worker process, with only its artifact root redirected.
+                    worker = subprocess.Popen([sys.executable, '-c',
+                        'import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); '
+                        'import ml_worker; ml_worker.STORAGE_MODELS_DIR=Path(sys.argv[2]); '
+                        'c=ml_worker.get_connection(); j=ml_worker.claim_job(c); '
+                        'ml_worker.process_job(c,j); c.close()', str(BACKEND / 'scripts'), str(models)],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    try:
+                        deadline = time.monotonic() + 20
+                        while query('SELECT status FROM ml_jobs WHERE job_id=%s', (training,))[0]['status'] == 'queued':
+                            self.assertLess(time.monotonic(), deadline, 'Worker did not claim training job')
+                            time.sleep(0.05)
+                        active_operations = php('operations', training, 'running')
+                        out, err = worker.communicate(timeout=90)
+                        self.assertEqual(worker.returncode, 0, out + err)
+                    finally:
+                        if worker.poll() is None:
+                            worker.kill()
+                            worker.communicate()
                     completed = query('SELECT * FROM ml_jobs WHERE job_id=%s', (training,))[0]
                     self.assertEqual(completed['status'], 'succeeded', completed['diagnostic_reference'])
                     run = query('SELECT * FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')[0]
@@ -144,6 +161,7 @@ class OperationalPipelineTest(unittest.TestCase):
                         notice = query("SELECT * FROM notifications WHERE attention_key='store.forecasting.failure'")
                         self.assertTrue(notice, 'Real exhausted worker failure generates a notice without inserting one')
                         self.assertEqual(query('SELECT attempts FROM ml_jobs WHERE job_id=%s', (failed_id,))[0]['attempts'], 3)
+                        failed_operations = php('operations', failed_id, 'failed')
                         # Invalidate only isolated previous output to verify no usable output fallback.
                         query('UPDATE demand_forecasts SET forecast_origin=DATE_SUB(forecast_origin,INTERVAL 1 DAY) WHERE job_id=%s',
                               (operational['job_id'],))
@@ -167,6 +185,7 @@ class OperationalPipelineTest(unittest.TestCase):
                                       'actual_observation_job': generated_observation['job_id'],
                                       'forecast_job': operational['job_id'], 'totals_7_14_28': totals,
                                       'failed_job': failed_id, 'recovered_job': recovery_id, 'notice_ids': [n['notification_id'] for n in notice],
+                                      'active_operations': active_operations, 'failed_operations': failed_operations,
                                       'timestamp_asia_manila': datetime.now(ZoneInfo('Asia/Manila')).isoformat()}))
                 finally:
                     if conn:
