@@ -59,6 +59,7 @@ const {chromium} = require('playwright');
         }));
         await page.goto('http://retailmind.test/?success=Saved');
         await page.clock.install();
+        await page.clock.pauseAt(new Date());
         await page.addStyleTag({path: path.join(frontend, 'assets/css/style.css')});
         await page.addStyleTag({content: '.bi-x-lg::before { content: "×"; }'});
         await page.addScriptTag({path: path.join(frontend, 'assets/js/ui.js')});
@@ -69,6 +70,7 @@ const {chromium} = require('playwright');
                 <div class="message success">Product updated.</div>
                 <div class="message error">Try saving again.</div>
                 <div class="message warning">Check the delivery.</div>
+                <div class="alert tag-warning" role="alert"><strong>Notice:</strong> Forecast update failed. Buying suggestions are using stock rules.</div>
                 <div class="message warning" role="note">Open a shift first.</div>
                 <div class="alert" data-rm-alert-processed="1">Persistent instruction.</div>
                 <div id="rm-flash-messages" hidden data-info="Settings loaded."></div>`;
@@ -76,22 +78,29 @@ const {chromium} = require('playwright');
             RetailMindUI.initPageContent();
             RetailMindUI.initPageContent();
         });
-        assert.equal(await page.locator('.rm-toast').count(), 5, 'URL, flash, and inline feedback appears once');
+        assert.equal(await page.locator('.rm-toast').count(), 6, 'URL, flash, and inline feedback appears once');
         assert.deepEqual(await page.evaluate(() => dialogs), [], 'Routine feedback never calls SweetAlert');
         assert.equal(await page.locator('#scan').evaluate(node => node === document.activeElement), true, 'Scanner focus stays');
         assert.equal(await page.locator('.message.success').isVisible(), false, 'Success banner becomes a toast');
         assert.equal(await page.locator('.message.error').isVisible(), true, 'Failure instructions stay inline');
         assert.equal(await page.locator('[role="note"]').isVisible(), true, 'Persistent blockers stay inline');
-        assert.equal(await page.locator('.rm-toast.warning').count(), 1, 'Warnings retain their severity');
-        await page.clock.fastForward(3000);
-        assert.equal(await page.locator('.rm-toast').count(), 5, 'Routine toasts remain past three seconds');
-        await page.clock.fastForward(1300);
-        await page.clock.fastForward(300);
-        assert.equal(await page.locator('.rm-toast').count(), 1, 'Routine toasts expire after 4.3 seconds');
-        assert.equal(await page.locator('.rm-toast.warning').count(), 1, 'Warning lasts longer');
-        await page.clock.fastForward(15400);
-        await page.clock.fastForward(300);
-        assert.equal(await page.locator('.rm-toast').count(), 0, 'Warnings expire after twenty seconds');
+        assert.equal(await page.locator('.rm-toast.warning').count(), 2, 'Warnings retain their severity');
+        await page.clock.runFor(2999);
+        assert.equal(await page.locator('.rm-toast.show').count(), 6, 'All feedback stays visible before three seconds');
+        assert.equal(await page.locator('.alert.tag-warning').isVisible(), true, 'Forecast notice stays visible before three seconds');
+        await page.clock.runFor(1);
+        assert.equal(await page.locator('.rm-toast.show').count(), 0, 'All toast types dismiss at three seconds');
+        assert.equal(await page.locator('.alert.tag-warning').isVisible(), false, 'Forecast notice dismisses at three seconds');
+        assert.equal(await page.locator('.message.error').isVisible(), false, 'Inline failure feedback also dismisses');
+        assert.equal(await page.locator('[role="note"]').isVisible(), true, 'Persistent instructions remain available');
+        assert.equal(await page.getByText('Persistent instruction.', {exact: true}).isVisible(), true, 'Explicit persistent alerts remain available');
+        await page.clock.runFor(250);
+        assert.equal(await page.locator('.rm-toast').count(), 0, 'All expired toasts are removed after the exit transition');
+        await page.evaluate(() => RetailMindUI.toast('Check the delivery.', 'warning', undefined, 20000));
+        await page.clock.runFor(2999);
+        assert.equal(await page.locator('.rm-toast.show').count(), 1, 'Legacy duration overrides stay visible before three seconds');
+        await page.clock.runFor(1);
+        assert.equal(await page.locator('.rm-toast.show').count(), 0, 'Legacy duration overrides cannot extend notices past three seconds');
         await page.evaluate(() => {
             window.redirects = [];
             RetailMindUI.navigate = url => redirects.push(url);

@@ -249,7 +249,7 @@ assert_test(str_contains($html1, 'Model Review &amp; Approval'), 'Page title is 
 assert_test(str_contains($html1, $candidateV1), 'Candidate model version is rendered');
 assert_test(str_contains($html1, 'None yet (First model)'), 'First model identifies no previous approved model');
 assert_test(str_contains($html1, 'Under evaluation'), 'Status shows "Under evaluation" while observation days remain incomplete');
-assert_test(str_contains($html1, 'Approval is disabled while technical checks or prospective observation holdouts remain incomplete'), 'Approval is disabled with safe explanation');
+assert_test(str_contains($html1, 'Approval is blocked until technical checks and observation are complete'), 'Approval is disabled with safe explanation');
 assert_test(!str_contains($html1, 'Approve &amp; Activate Model</button>'), 'Approve button is not active when under evaluation');
 assert_test(str_contains($html1, 'Weekly Seasonal Naive'), 'Weekly Seasonal Naive baseline comparison method named');
 assert_test(str_contains($html1, '19.00% error'), 'WAPE is rendered as error percentage');

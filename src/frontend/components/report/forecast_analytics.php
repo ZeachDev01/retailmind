@@ -63,7 +63,7 @@ if (!empty($govSettings['demo_import_metadata'])) {
 $actualVsForecast = [];
 try {
     $stmt = $pdo->prepare("
-        SELECT 
+        SELECT
             p.product_name,
             p.sku,
             df.target_date,
@@ -102,27 +102,14 @@ try {
     }
 } catch (PDOException $e) {}
 
-// Fallback trend if none recorded yet
-if (empty($trainingTrend)) {
-    $trainingTrend = [
-        ['date' => date('Y-m-d', strtotime('-14 days')), 'wape' => 0.22, 'mae' => 3.8],
-        ['date' => date('Y-m-d', strtotime('-7 days')), 'wape' => 0.18, 'mae' => 3.2],
-        ['date' => date('Y-m-d'), 'wape' => 0.15, 'mae' => 2.9],
-    ];
-}
-
-// Feature importance defaults or model extracted
-$featureImportance = [
-    'lag_7' => 0.35,
-    'lag_14' => 0.24,
-    'rolling_mean_7' => 0.18,
-    'day_of_week' => 0.13,
-    'promo_active' => 0.10
-];
+// No recorded model evidence means an empty chart, not sample results.
+$trainingTrend = array_values(array_filter($trainingTrend, static fn(array $run): bool => is_numeric($run['wape'])));
+$featureImportance = [];
 
 // Product performance calculations for best/worst tabs
 $productPerf = [];
 foreach ($actualVsForecast as $row) {
+    if ($row['actual_units'] === null) continue;
     $pName = $row['product_name'];
     if (!isset($productPerf[$pName])) {
         $productPerf[$pName] = [
@@ -157,21 +144,13 @@ $worst = array_slice($worstPerformers, 0, 5);
 
 // Actual chart data series
 $actualChartData = [];
-foreach (array_slice($actualVsForecast, 0, 10) as $row) {
+foreach (array_slice(array_values(array_filter($actualVsForecast, static fn(array $row): bool => $row['actual_units'] !== null)), 0, 10) as $row) {
     $actualChartData[] = [
-        'product_name' => $row['product_name'],
+        'product_name' => $row['product_name'] . ' ' . $row['target_date'],
         'forecast_value' => (float)$row['predicted_units'],
         'actual_demand' => (float)($row['actual_units'] ?? 0)
     ];
 }
-if (empty($actualChartData)) {
-    $actualChartData = [
-        ['product_name' => 'Demo Item 1', 'forecast_value' => 45, 'actual_demand' => 42],
-        ['product_name' => 'Demo Item 2', 'forecast_value' => 30, 'actual_demand' => 35],
-        ['product_name' => 'Demo Item 3', 'forecast_value' => 20, 'actual_demand' => 18],
-    ];
-}
-
 // Format helpers
 function format_unit_metric(?float $val): string {
     return $val !== null ? number_format($val, 2) . ' units' : 'N/A';
@@ -271,15 +250,16 @@ function format_wape_metric(?float $val, ?string $reason): string {
             font-weight: 600;
         }
     </style>
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body>
+<body class="forecast-workspace">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <div class="topbar">
             <div>
                 <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
-                <p class="page-subtitle">Model benchmarks, evaluation metrics, and prediction audit logs.</p>
+                <p class="page-subtitle">Compare forecasts with recorded sales. Review model evidence when needed.</p>
             </div>
             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Forecasts</a>
@@ -337,160 +317,16 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
             </div>
         </section>
-        <section class="model-context-card" aria-label="Prediction Performance Evidence" style="margin-bottom: 1.5rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
-                <div>
-                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Store Prediction Performance Evidence</h2>
-                    <p class="muted" style="margin:0; font-size:0.875rem;">
-                        Matched forecasts recorded before outcomes with genuine subsequent Store observations.
-                    </p>
-                </div>
-                <div>
-                    <?php if ($perfEvidence['status'] === 'genuine_evidence'): ?>
-                        <span class="comparison-tag gate-passed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Genuine Store Evidence</span>
-                    <?php elseif ($perfEvidence['status'] === 'collecting_evidence'): ?>
-                        <span class="comparison-tag" style="background:var(--theme-warning-surface, #fef3c7); color:var(--theme-warning-text, #92400e); font-size:0.875rem; padding:0.35rem 0.75rem;">Still Collecting Evidence</span>
-                    <?php else: ?>
-                        <span class="comparison-tag gate-failed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Unavailable</span>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <p style="margin-bottom:0.75rem;"><?= htmlspecialchars($perfEvidence['explanation']) ?></p>
-            <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
-
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem; padding:0.75rem; background:var(--theme-surface-soft, #f8fafc); border-radius:6px;">
-                <div>
-                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Evaluated Model</span>
-                    <strong><code><?= htmlspecialchars($perfEvidence['model_version']) ?></code></strong>
-                    <span class="muted" style="font-size:0.8rem;">(<?= ucfirst($perfEvidence['model_association']) ?> Model)</span>
-                </div>
-                <div>
-                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Observation Progress</span>
-                    <strong><?= (int)$perfEvidence['completed_target_dates'] ?> / <?= (int)$perfEvidence['required_target_dates'] ?> dates</strong>
-                    <span class="muted" style="font-size:0.8rem;">(<?= (int)$perfEvidence['usable_comparison_count'] ?> comparisons)</span>
-                </div>
-                <div>
-                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Stockouts</span>
-                    <strong><?= htmlspecialchars($perfEvidence['verified_stockouts_display']) ?></strong>
-                    <span class="muted" style="font-size:0.8rem;">(Incomplete demand excluded)</span>
-                </div>
-                <div>
-                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Expiry Losses</span>
-                    <strong><?= htmlspecialchars($perfEvidence['verified_expiry_losses_display']) ?><?= $perfEvidence['verified_expiry_losses'] !== null ? ' units' : '' ?></strong>
-                    <span class="muted" style="font-size:0.8rem;">(Tracked losses)</span>
-                </div>
-            </div>
-
-            <p class="muted" style="font-size:0.85rem; margin-bottom:1rem;">
-                <strong>Inputs:</strong> <?= htmlspecialchars($perfEvidence['model_inputs_description']) ?>
-            </p>
-
-            <div class="table-wrap">
-                <table class="data-table">
-                    <caption>Daily Errors by Forecast Lead Time</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Forecast Lead Time</th>
-                            <th scope="col">Overestimated Units</th>
-                            <th scope="col">Underestimated Units</th>
-                            <th scope="col">Model Error (MAE)</th>
-                            <th scope="col">Model Error (WAPE)</th>
-                            <th scope="col">Weekly Baseline Error (MAE)</th>
-                            <th scope="col">Weekly Baseline Error (WAPE)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ([7, 14, 28] as $h):
-                            $m = $perfEvidence['metrics_by_horizon'][$h] ?? [];
-                        ?>
-                            <tr>
-                                <th scope="row">1–<?= $h ?> Days Ahead</th>
-                                <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
-                                <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
-                                <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
-                                <td><?= $m['wape'] !== null ? number_format($m['wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
-                                <td><?= $m['baseline_mae'] !== null ? number_format($m['baseline_mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
-                                <td><?= $m['baseline_wape'] !== null ? number_format($m['baseline_wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <p class="muted" style="font-size:0.8rem; margin-top:0.75rem; margin-bottom:0;">
-                <small><?= htmlspecialchars($perfEvidence['causal_claim_note']) ?> Stockout periods leave unmet demand unknown and are kept separate from forecast errors.</small>
-            </p>
-        </section>
-
-        <p class="muted">Technical qualification: chronological backtests compare summed 7-, 14-, and 28-day Product totals. These historical tests are separate from subsequent Store outcome evidence above.</p>
-        <?php if (empty($evaluations)): ?>
-            <div class="empty-state">
-                <i class="bi bi-bar-chart empty-icon"></i>
-                <h2>No Evaluation Records Available</h2>
-                <p>Retrain a candidate model to record evaluation benchmarks.</p>
-            </div>
-        <?php else: ?>
-            <div class="horizon-grid">
-                <?php foreach ([7, 14, 28] as $h): 
-                    $data = $evalByHorizon[$h] ?? null;
-                ?>
-                    <div class="horizon-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
-                            <h3 style="margin:0;"><?= $h ?>-Day Horizon</h3>
-                            <?php if ($data): ?>
-                                <span class="comparison-tag gate-<?= htmlspecialchars($data['candidate_gate_outcome']) ?>">
-                                    Gate <?= ucfirst($data['candidate_gate_outcome']) ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
-
-                        <?php if ($data): ?>
-                            <div class="metric-row">
-                                <span class="metric-label">Random Forest MAE</span>
-                                <span class="metric-val"><?= format_unit_metric($data['mae'] !== null ? (float)$data['mae'] : null) ?></span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">Random Forest RMSE</span>
-                                <span class="metric-val"><?= format_unit_metric($data['rmse'] !== null ? (float)$data['rmse'] : null) ?></span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">Random Forest WAPE</span>
-                                <span class="metric-val"><?= format_wape_metric($data['wape'] !== null ? (float)$data['wape'] : null, $data['missing_metric_reason']) ?></span>
-                            </div>
-
-                            <hr style="border:0; border-top:1px dashed var(--border-color, #e2e8f0); margin:0.75rem 0;">
-
-                            <div class="metric-row">
-                                <span class="metric-label">Weekly Baseline MAE</span>
-                                <span class="metric-val"><?= format_unit_metric($data['baseline_mae'] !== null ? (float)$data['baseline_mae'] : null) ?></span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">Weekly Baseline RMSE</span>
-                                <span class="metric-val"><?= format_unit_metric($data['baseline_rmse'] !== null ? (float)$data['baseline_rmse'] : null) ?></span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">Weekly Baseline WAPE</span>
-                                <span class="metric-val"><?= format_wape_metric($data['baseline_wape'] !== null ? (float)$data['baseline_wape'] : null, null) ?></span>
-                            </div>
-                        <?php else: ?>
-                            <p style="color:var(--muted);">No evaluation data recorded for <?= $h ?> days.</p>
-                        <?php endif; ?>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-
-        <section class="forecast-analytics-tabs" aria-labelledby="analytics-view-title">
+        <section class="forecast-analytics-tabs" aria-label="Forecast charts">
             <div class="analytics-tab-list" role="tablist" aria-label="Forecast analytics views">
-                <button class="analytics-tab is-active" id="analytics-tab-features" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-features" data-analytics-tab="features">
+                <button class="analytics-tab is-active" id="analytics-tab-actual" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-actual" data-analytics-tab="actual">
+                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Actual vs Predicted
+                </button>
+                <button class="analytics-tab" id="analytics-tab-features" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="analytics-panel-features" data-analytics-tab="features">
                     <i class="bi bi-sliders" aria-hidden="true"></i> Feature Importance
                 </button>
                 <button class="analytics-tab" id="analytics-tab-trend" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-trend" data-analytics-tab="trend" tabindex="-1">
-                    <i class="bi bi-graph-up" aria-hidden="true"></i> Accuracy Trend
-                </button>
-                <button class="analytics-tab" id="analytics-tab-actual" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-actual" data-analytics-tab="actual" tabindex="-1">
-                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Actual vs Predicted
+                    <i class="bi bi-graph-up" aria-hidden="true"></i> Error trend
                 </button>
                 <button class="analytics-tab" id="analytics-tab-best" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-best" data-analytics-tab="best" tabindex="-1">
                     <i class="bi bi-trophy" aria-hidden="true"></i> Best Performers
@@ -500,23 +336,26 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </button>
             </div>
 
-            <div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features">
+            <div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features" hidden>
                 <h2 id="analytics-view-title">Feature Importance</h2>
-                <canvas id="featureChart"></canvas>
+                <?php if (empty($featureImportance)): ?><p class="muted">Feature weights have not been recorded.</p><?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-trend" role="tabpanel" aria-labelledby="analytics-tab-trend" data-analytics-panel="trend" hidden>
-                <h2>Accuracy Over Retraining Runs</h2>
-                <canvas id="trendChart"></canvas>
+                <h2>Prediction error over training runs</h2>
+                <?php if (empty($trainingTrend)): ?><p class="muted">No recorded training error yet.</p><?php else: ?><canvas id="trendChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
-            <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual" hidden>
-                <h2>Actual vs Predicted Demand</h2>
-                <canvas id="actualChart"></canvas>
+            <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
+                <h2>Actual vs Predicted Demand</h2><p class="muted">Recorded units by product and date Â· forecast in blue, sales in green.</p>
+                <?php if (empty($actualChartData)): ?><p class="muted">No completed sales comparisons yet.</p><?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
+                <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Product &amp; date</th><th>Forecast units</th><th>Recorded sales</th></tr></thead><tbody>
+                <?php foreach ($actualChartData as $point): ?><tr><td><?= htmlspecialchars($point['product_name']) ?></td><td><?= htmlspecialchars((string)$point['forecast_value']) ?></td><td><?= htmlspecialchars((string)$point['actual_demand']) ?></td></tr><?php endforeach; ?>
+                </tbody></table></div></details><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel" id="analytics-panel-best" role="tabpanel" aria-labelledby="analytics-tab-best" data-analytics-panel="best" hidden>
-                <h2>Top Accurate Forecasts</h2>
+                <h2>Lowest recorded errors</h2>
                 <?php if (empty($best)): ?>
                     <p style="color:var(--muted);">No completed sales data available for ranking.</p>
                 <?php else: ?>
@@ -584,7 +423,157 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
         </section>
 
-        <section class="card" style="margin-top: 1.5rem;" aria-labelledby="prediction-logs-title">
+        <section class="model-context-card" aria-label="Prediction Performance Evidence" style="margin-bottom: 1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                <div>
+                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Store Prediction Performance Evidence</h2>
+                    <p class="muted" style="margin:0; font-size:0.875rem;">
+                        Matched forecasts recorded before outcomes with genuine subsequent Store observations.
+                    </p>
+                </div>
+                <div>
+                    <?php if ($perfEvidence['status'] === 'genuine_evidence'): ?>
+                        <span class="comparison-tag gate-passed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Genuine Store Evidence</span>
+                    <?php elseif ($perfEvidence['status'] === 'collecting_evidence'): ?>
+                        <span class="comparison-tag" style="background:var(--theme-warning-surface, #fef3c7); color:var(--theme-warning-text, #92400e); font-size:0.875rem; padding:0.35rem 0.75rem;">Still Collecting Evidence</span>
+                    <?php else: ?>
+                        <span class="comparison-tag gate-failed" style="font-size:0.875rem; padding:0.35rem 0.75rem;">Unavailable</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <details class="forecast-details"><summary>Observation evidence &amp; daily errors</summary>
+            <p style="margin-bottom:0.75rem;"><?= htmlspecialchars($perfEvidence['explanation']) ?></p>
+            <p class="muted">Daily errors compare one Product/day at lead times 1â€“7, 1â€“14, and 1â€“28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem; padding:0.75rem; background:var(--theme-surface-soft, #f8fafc); border-radius:6px;">
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Evaluated Model</span>
+                    <strong><code><?= htmlspecialchars($perfEvidence['model_version']) ?></code></strong>
+                    <span class="muted" style="font-size:0.8rem;">(<?= ucfirst($perfEvidence['model_association']) ?> Model)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Observation Progress</span>
+                    <strong><?= (int)$perfEvidence['completed_target_dates'] ?> / <?= (int)$perfEvidence['required_target_dates'] ?> dates</strong>
+                    <span class="muted" style="font-size:0.8rem;">(<?= (int)$perfEvidence['usable_comparison_count'] ?> comparisons)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Stockouts</span>
+                    <strong><?= htmlspecialchars($perfEvidence['verified_stockouts_display']) ?></strong>
+                    <span class="muted" style="font-size:0.8rem;">(Incomplete demand excluded)</span>
+                </div>
+                <div>
+                    <span class="muted" style="font-size:0.75rem; display:block; text-transform:uppercase;">Verified Expiry Losses</span>
+                    <strong><?= htmlspecialchars($perfEvidence['verified_expiry_losses_display']) ?><?= $perfEvidence['verified_expiry_losses'] !== null ? ' units' : '' ?></strong>
+                    <span class="muted" style="font-size:0.8rem;">(Tracked losses)</span>
+                </div>
+            </div>
+
+            <p class="muted" style="font-size:0.85rem; margin-bottom:1rem;">
+                <strong>Inputs:</strong> <?= htmlspecialchars($perfEvidence['model_inputs_description']) ?>
+            </p>
+
+            <div class="table-wrap">
+                <table class="data-table">
+                    <caption>Daily Errors by Forecast Lead Time</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Forecast Lead Time</th>
+                            <th scope="col">Overestimated Units</th>
+                            <th scope="col">Underestimated Units</th>
+                            <th scope="col">Model Error (MAE)</th>
+                            <th scope="col">Model Error (WAPE)</th>
+                            <th scope="col">Weekly Baseline Error (MAE)</th>
+                            <th scope="col">Weekly Baseline Error (WAPE)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ([7, 14, 28] as $h):
+                            $m = $perfEvidence['metrics_by_horizon'][$h] ?? [];
+                        ?>
+                            <tr>
+                                <th scope="row">1â€“<?= $h ?> Days Ahead</th>
+                                <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['wape'] !== null ? number_format($m['wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['baseline_mae'] !== null ? number_format($m['baseline_mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
+                                <td><?= $m['baseline_wape'] !== null ? number_format($m['baseline_wape'] * 100, 2) . '%' : '<span class="muted">Unavailable</span>' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="muted" style="font-size:0.8rem; margin-top:0.75rem; margin-bottom:0;">
+                <small><?= htmlspecialchars($perfEvidence['causal_claim_note']) ?> Stockout periods leave unmet demand unknown and are kept separate from forecast errors.</small>
+            </p>
+            </details>
+        </section>
+
+        <details class="forecast-details"><summary>Historical model checks Â· 7, 14 &amp; 28 days</summary>
+        <p class="muted">Technical qualification: chronological backtests compare summed 7-, 14-, and 28-day Product totals. These historical tests are separate from subsequent Store outcome evidence above.</p>
+        <?php if (empty($evaluations)): ?>
+            <div class="empty-state">
+                <i class="bi bi-bar-chart empty-icon"></i>
+                <h2>No Evaluation Records Available</h2>
+                <p>Retrain a candidate model to record evaluation benchmarks.</p>
+            </div>
+        <?php else: ?>
+            <div class="horizon-grid">
+                <?php foreach ([7, 14, 28] as $h):
+                    $data = $evalByHorizon[$h] ?? null;
+                ?>
+                    <div class="horizon-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <h3 style="margin:0;"><?= $h ?>-Day Horizon</h3>
+                            <?php if ($data): ?>
+                                <span class="comparison-tag gate-<?= htmlspecialchars($data['candidate_gate_outcome']) ?>">
+                                    Gate <?= ucfirst($data['candidate_gate_outcome']) ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($data): ?>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest MAE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['mae'] !== null ? (float)$data['mae'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest RMSE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['rmse'] !== null ? (float)$data['rmse'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Random Forest WAPE</span>
+                                <span class="metric-val"><?= format_wape_metric($data['wape'] !== null ? (float)$data['wape'] : null, $data['missing_metric_reason']) ?></span>
+                            </div>
+
+                            <hr style="border:0; border-top:1px dashed var(--border-color, #e2e8f0); margin:0.75rem 0;">
+
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline MAE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['baseline_mae'] !== null ? (float)$data['baseline_mae'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline RMSE</span>
+                                <span class="metric-val"><?= format_unit_metric($data['baseline_rmse'] !== null ? (float)$data['baseline_rmse'] : null) ?></span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Weekly Baseline WAPE</span>
+                                <span class="metric-val"><?= format_wape_metric($data['baseline_wape'] !== null ? (float)$data['baseline_wape'] : null, null) ?></span>
+                            </div>
+                        <?php else: ?>
+                            <p style="color:var(--muted);">No evaluation data recorded for <?= $h ?> days.</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        </details>
+
+        <details class="forecast-details"><summary>Recent prediction logs</summary>
+        <section aria-labelledby="prediction-logs-title">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
                 <h2 id="prediction-logs-title" style="margin:0;">Recent Prediction Logs</h2>
                 <span class="metric-label" style="font-size:0.85rem;">Observed sales for past target dates</span>
@@ -606,7 +595,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($actualVsForecast as $row): 
+                            <?php foreach ($actualVsForecast as $row):
                                 $diff = $row['actual_units'] !== null ? (int)$row['actual_units'] - (int)$row['predicted_units'] : null;
                             ?>
                                 <tr>
@@ -626,6 +615,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
             <?php endif; ?>
         </section>
+        </details>
     </main>
 </div>
 
@@ -685,6 +675,8 @@ function drawBars(canvasId, labels, series, legends) {
         ctx.save();
         ctx.translate(pad.l + i * groupW + groupW / 2, height - pad.b + 8);
         ctx.rotate(-0.45);
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
         ctx.fillText(String(label).slice(0, 18), 0, 0);
         ctx.restore();
     });
@@ -777,7 +769,7 @@ analyticsTabs.forEach((tab, index) => {
     });
 });
 
-drawAnalyticsPanel('features');
+drawAnalyticsPanel('actual');
 
 const redrawAnalytics = () => {
     const activeTab = document.querySelector('[data-analytics-tab].is-active');
@@ -791,6 +783,7 @@ const redrawAll = () => {
 };
 
 window.addEventListener('retailmind:themechange', redrawAnalytics);
+window.addEventListener('resize', redrawAnalytics);
 
 if (window.MutationObserver) {
     const themeObserver = new MutationObserver(mutations => {

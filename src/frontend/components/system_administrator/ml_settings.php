@@ -384,15 +384,16 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
     <title>ML Operation</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/ml-settings.css')) ?>">
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body class="ml-settings-page">
+<body class="forecast-workspace ml-settings-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <div class="topbar">
             <div>
                 <h1>ML Operation</h1>
-                <p class="page-subtitle">Configure model parameters, training triggers, and evaluate candidate forecasts.</p>
+                <p class="page-subtitle">Train models, check results, and manage forecast settings.</p>
             </div>
             <div class="ml-page-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a>
@@ -410,7 +411,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             <div class="section-header">
                 <div>
                     <h2 id="training-title">Candidate model & training</h2>
-                    <p class="section-description">Train a candidate model and evaluate accuracy against baseline sales before replacing the approved model.</p>
+                    <p class="section-description">Train a candidate, then compare its error with repeating last week’s sales.</p>
                 </div>
             </div>
 
@@ -516,10 +517,10 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         </section>
 
         <?php if (!$isLocalDemo): ?>
-        <section class="dashboard-section" aria-labelledby="settings-heading">
+        <section class="dashboard-section" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
             <div class="section-header">
                 <div>
-                    <h2 id="settings-heading">Forecast & model parameters</h2>
+
                     <p class="section-description">Adjust history requirements, automated retrain intervals, and algorithm settings.</p>
                 </div>
             </div>
@@ -536,7 +537,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                             <legend><?= htmlspecialchars($groupMeta['title']) ?></legend>
                         <?php endif; ?>
                         <?php if (isset($groupMeta['description'])): ?>
-                            <p class="fieldset-description"><?= htmlspecialchars($groupMeta['description']) ?></p>
+                            <?php forecast_help('group-' . $groupKey, $groupMeta['description'], 'About ' . $groupMeta['title']); ?>
                         <?php endif; ?>
                         <div class="form-grid">
                             <?php foreach ($definitions as $key => $definition):
@@ -552,7 +553,12 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                                 $inputMode = $definition['type'] === 'number' ? (isset($definition['step']) ? 'decimal' : 'numeric') : null;
                             ?>
                                 <div class="<?= $groupClasses ?>">
-                                    <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label>
+                                    <div class="forecast-field-label">
+                                        <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label>
+                                        <?php if (isset($definition['help'])): ?>
+                                            <?php forecast_help($helpId, $definition['help'], 'About ' . $definition['label']); ?>
+                                        <?php endif; ?>
+                                    </div>
                                     <input id="<?= htmlspecialchars($key) ?>"
                                            name="<?= htmlspecialchars($key) ?>"
                                            type="<?= htmlspecialchars($definition['type']) ?>"
@@ -566,9 +572,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                                            <?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?>
                                            <?= $hasError ? ' aria-invalid="true"' : '' ?>
                                            <?= $isRequired ? ' required' : '' ?>>
-                                    <?php if (isset($definition['help'])): ?>
-                                        <small id="<?= htmlspecialchars($helpId) ?>" class="field-help"><?= htmlspecialchars($definition['help']) ?></small>
-                                    <?php endif; ?>
                                     <?php if ($hasError): ?>
                                         <small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small>
                                     <?php endif; ?>
@@ -587,13 +590,14 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     <p class="section-description">Changes take effect on the next model training run.</p>
                 </div>
             </form>
-        </section>
+        </details></section>
         <?php endif; ?>
 
         <section class="dashboard-section" aria-labelledby="runs-heading">
+<details class="forecast-details"><summary id="runs-heading">Recent training runs</summary>
             <div class="section-header">
                 <div>
-                    <h2 id="runs-heading">Recent training runs</h2>
+
                     <p class="section-description">Latest 12 training runs, newest first.</p>
                 </div>
             </div>
@@ -630,7 +634,8 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </tbody>
                 </table>
             </div>
-        </section>
+        </details>
+</section>
     </main>
 </div>
 <?php if ($isTraining): ?>

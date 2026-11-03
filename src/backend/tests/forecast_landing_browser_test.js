@@ -36,7 +36,7 @@ const fixture = action => {
         const origin = 'http://127.0.0.1:' + port;
 
         server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
-            {env: {...env, RM_THEME_TEST_DATABASE: database}, stdio: 'ignore'});
+            {env: {...env, RM_THEME_TEST_DATABASE: database, FORECAST_REPLAY_DATABASE: database}, stdio: 'ignore'});
 
         for (let attempt = 0; attempt < 100; attempt++) {
             try { if ((await fetch(origin)).ok) break; } catch {}
@@ -71,71 +71,31 @@ const fixture = action => {
         await page.goto(origin + '/components/report/predictions.php');
         await page.waitForLoadState('domcontentloaded');
 
-        // Check page title and structure
         assert.match(await page.locator('h1').innerText(), /Demand Forecast/);
-        assert.match(await page.locator('.page-subtitle').innerText(), /Expected demand, operational actions, and model performance/);
-
-        // Check contextual navigation chips
-        const navChips = page.locator('.forecasting-nav-chips');
-        await navChips.waitFor();
-        const navText = await navChips.innerText();
-        assert.match(navText, /Replenishment Queue/);
-        assert.match(navText, /Forecast Exceptions/);
-        assert.match(navText, /Data Readiness/);
-        assert.match(navText, /Model Review & Approval/);
-        assert.match(navText, /Store Calendar/);
-        assert.match(navText, /Promotions/);
-
-        // Check Generate Now button is present for Admin
-        const generateBtn = page.locator('button[name="action"][value="generate"]');
-        assert.equal(await generateBtn.count(), 1, 'Generate Now button is present for Administrator');
-
-        // Check Section 1: "1. Can we use forecasting today?"
+        assert.match(await page.locator('.page-subtitle').innerText(), /Expected sales/);
+        const navText = await page.locator('.forecasting-nav-chips').innerText();
+        for (const label of ['Forecast Exceptions', 'Data Readiness', 'Model Review & Approval', 'Store Calendar', 'Promotions']) assert.ok(navText.includes(label));
+        assert.equal(await page.locator('main a[href$="replenishment_queue.php"]').count(), 1, 'Replenishment navigation is not duplicated');
+        assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 1);
         const s1Heading = page.locator('#heading-usability');
-        await s1Heading.waitFor();
-        assert.match(await s1Heading.innerText(), /1\. Can we use forecasting today\?/);
-        const statCards = page.locator('.stat-card');
-        assert.equal(await statCards.count(), 4, 'Four key usability stat cards are displayed');
-        const s1Text = await page.locator('section[aria-labelledby="heading-usability"]').innerText();
-        assert.match(s1Text, /Forecast Coverage/);
-        assert.match(s1Text, /Guidance Usability/);
-        assert.match(s1Text, /Forecast Origin/);
-        assert.match(s1Text, /Model Governance/);
-
-        // Check Section 2: "2. What needs action?"
         const s2Heading = page.locator('#heading-actions');
-        await s2Heading.waitFor();
-        assert.match(await s2Heading.innerText(), /2\. What needs action\?/);
-        const actionCards = page.locator('.action-issue-card');
-        assert.ok((await actionCards.count()) >= 1, 'At least one operational issue or healthy status card is shown');
-        const firstIssueText = await actionCards.first().innerText();
-        assert.match(firstIssueText, /Practical effect:/);
-        assert.match(firstIssueText, /Responsible:/);
-
-        // Check Section 3: "3. Is it helping?"
-        const s3Heading = page.locator('#heading-performance');
-        await s3Heading.waitFor();
-        assert.match(await s3Heading.innerText(), /3\. Is it helping\?/);
-        const s3Text = await page.locator('section[aria-labelledby="heading-performance"]').innerText();
-        assert.ok(s3Text.includes('Still collecting evidence') || s3Text.includes('Evaluation Evidence'),
-            'Section 3 provides honest performance evidence status');
-
-        const summaryText = await page.locator('section[aria-labelledby="heading-usability"] [role="status"]').innerText();
-        for (const text of [summaryText, 'Still collecting evidence']) {
-            assert.equal(await page.locator('#rm-toast-stack .rm-toast').filter({hasText: text}).count(), 0,
-                'Persistent forecasting summaries stay inline without duplicate toasts');
-        }
-        await page.setViewportSize({width: 390, height: 844});
-        const prose = page.locator('section[aria-labelledby="heading-performance"] [role="status"] p');
-        if (await prose.count()) {
-            const dimensions = await prose.evaluate(node => ({paragraph: node.getBoundingClientRect().width,
-                summary: node.parentElement.getBoundingClientRect().width}));
-            assert.ok(dimensions.paragraph > dimensions.summary * 0.8,
-                'Narrow performance explanation uses the summary width instead of a flex column');
-        }
-        await page.setViewportSize({width: 1440, height: 900});
-
-        assert.match(await page.locator('section[aria-labelledby="heading-performance"]').innerText(), /Daily errors/);
+        assert.match(await s1Heading.innerText(), /Forecast status/);
+        assert.match(await s2Heading.innerText(), /Needs attention/);
+        const performance = page.locator('details').filter({has: page.locator('#heading-performance')});
+        assert.equal(await performance.getAttribute('open'), null, 'Technical performance starts collapsed');
+        const productPosition = await page.locator('#product-forecasts').evaluate(el => el.getBoundingClientRect().top);
+        const detailPosition = await performance.evaluate(el => el.getBoundingClientRect().top);
+        assert.ok(productPosition < detailPosition, 'Products precede technical metrics');
+        await performance.locator('summary').click();
+        assert.match(await performance.innerText(), /Still collecting evidence|Evaluation Evidence/);
+        assert.match(await performance.innerText(), /Daily errors/);
+        await performance.locator('summary').click();
+        assert.equal(await page.locator('.forecast-bars').count(), 0, 'Missing forecasts are not graphed as zero');
+        const coverageHelp = page.getByRole('button', {name: 'About forecast availability'});
+        await coverageHelp.focus();
+        assert.equal(await page.locator('#coverage-help').isVisible(), true);
+        await coverageHelp.press('Escape');
+        assert.equal(await page.locator('#coverage-help').isVisible(), false);
 
         // Check Section 4: Product Forecasts Table & Search
         const searchInput = page.locator('input[type="search"][name="search"]');
@@ -161,7 +121,7 @@ const fixture = action => {
                 assert.equal(await page.locator('h1').isVisible(), true, `Heading visible on width ${width}px theme ${theme}`);
                 assert.equal(await s1Heading.isVisible(), true, `Section 1 visible on width ${width}px theme ${theme}`);
                 assert.equal(await s2Heading.isVisible(), true, `Section 2 visible on width ${width}px theme ${theme}`);
-                assert.equal(await s3Heading.isVisible(), true, `Section 3 visible on width ${width}px theme ${theme}`);
+                assert.equal(await page.locator('main').evaluate(el => document.documentElement.scrollWidth <= window.innerWidth), true, `No page overflow at ${width}px in ${theme}`);
             }
         }
         await page.setViewportSize({width: 1440, height: 900});
@@ -175,9 +135,9 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
 
         // Usability and sections visible
-        assert.match(await page.locator('#heading-usability').innerText(), /1\. Can we use forecasting today\?/);
-        assert.match(await page.locator('#heading-actions').innerText(), /2\. What needs action\?/);
-        assert.match(await page.locator('#heading-performance').innerText(), /3\. Is it helping\?/);
+        assert.match(await page.locator('#heading-usability').innerText(), /Forecast status/);
+        assert.match(await page.locator('#heading-actions').innerText(), /Needs attention/);
+        assert.equal(await page.locator('#heading-performance').isVisible(), false, 'Technical details remain collapsed for Inventory Manager');
 
         // Generate Now button MUST NOT be present for Inventory Manager
         assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0,
@@ -191,14 +151,71 @@ const fixture = action => {
         const imIssues = page.locator('.action-issue-card');
         if (await imIssues.count() > 0) {
             const imText = await imIssues.first().innerText();
-            assert.match(imText, /Responsible:/);
+            assert.match(imText, /Administrator/);
         }
 
+        fixture('forecast_workspace');
+        await page.reload();
+        assert.equal(await page.locator('.forecast-bar-row').count(), 1, 'Usable demand produces a real comparison chart');
+        assert.equal(await page.locator('.page-heading-actions .btn').first().evaluate(el => el.scrollWidth <= el.clientWidth), true, 'Primary action text fits its button');
+        const row = page.locator('#product-forecasts tbody tr').first();
+        assert.match(await row.innerText(), /14[\s\S]*28[\s\S]*56/);
+        await page.locator('.forecast-bar-row a').click();
+        await page.waitForURL('**/product_investigation.php?product_id=1');
+        await page.waitForLoadState('domcontentloaded');
+        assert.equal(await page.locator('.daily-bar').count(), 28, 'Product chart shows the actual 28 daily outputs');
+        await page.getByText('Daily forecast values', {exact: true}).click();
+        assert.equal(await page.locator('details .table-wrap[aria-label="Daily forecast values"] tbody tr').count(), 28);
+        await login('admin');
+        for (const route of ['report/data_readiness.php', 'report/forecast_exceptions.php', 'administrator/model_review.php', 'inventory_management/replenishment_queue.php']) {
+            const response = await page.goto(origin + '/components/' + route);
+            assert.equal(response.status(), 200, route);
+            assert.equal(await page.locator('body.forecast-workspace').count(), 1);
+            for (const width of [1440, 390, 320]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width);
+            }
+        }
+        await login('super_admin');
+        for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php']) {
+            const response = await page.goto(origin + '/components/' + route);
+            assert.equal(response.status(), 200, route);
+            for (const width of [1440, 390, 320]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width);
+            }
+            if (route.includes('forecast_analytics')) {
+                assert.equal(await page.locator('#analytics-tab-actual').getAttribute('aria-selected'), 'true');
+                await page.locator('#analytics-tab-trend').click();
+                assert.equal(await page.locator('#trendChart').count(), 0, 'Missing recorded training errors never produce a sample trend');
+                await page.locator('#analytics-tab-features').click();
+                assert.equal(await page.locator('#featureChart').count(), 0, 'Missing weights never produce invented feature importance');
+            }
+            if (route.includes('ml_settings')) {
+                await page.locator('#settings-heading').click();
+                const help = page.getByRole('button', {name: 'About Minimum history (days)', exact: true});
+                await help.focus();
+                const tooltip = page.locator('#minimum_history_days_help');
+                assert.equal(await tooltip.isVisible(), true);
+                const rect = await tooltip.boundingBox();
+                assert.ok(rect.x >= 0 && rect.x + rect.width <= 320, 'Settings help stays inside a narrow viewport');
+                await help.press('Escape');
+                assert.equal(await tooltip.isVisible(), false);
+            }
+        }
+        fixture('forecast_replay_workspace');
+        const replay = await page.goto(origin + '/components/report/forecast_replay.php');
+        assert.equal(replay.status(), 200);
+        assert.equal(await page.locator('.replay-bar-pair').count(), 28);
+        assert.match(await page.locator('main p[role="status"]').innerText(), /Experimental preview only/);
+        await page.getByText('Daily comparison values', {exact: true}).click();
+        assert.equal(await page.locator('#replay-comparison tbody tr').count(), 28);
         assert.deepEqual(pageErrors, [], 'No unexpected page errors occurred during test');
         console.log('PASS: Forecast landing browser test passed cleanly!');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();
-        try { fixture('destroy'); } catch {}
+        fixture('cleanup');
+        fs.rmSync(directory, {recursive: true, force: true});
     }
 })();

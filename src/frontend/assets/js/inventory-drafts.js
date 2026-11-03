@@ -9,7 +9,7 @@ window.RetailMindInventoryDrafts = (() => {
     const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
     const resubmitting = new WeakSet(), submitted = new WeakMap();
     let noticeTimer;
-    function notice(message, error = false, duration = error ? 0 : 4000) {
+    function notice(message, error = false, duration = error ? 0 : 3000) {
         clearTimeout(noticeTimer);
         let status = document.getElementById('inventory-draft-status');
         if (!status) {

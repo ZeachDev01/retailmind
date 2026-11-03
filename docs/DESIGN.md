@@ -271,3 +271,7 @@ Workspace Help presents role-specific walkthroughs as divided rows within task g
 ## Workspace guidance feedback — 2026-11-02
 
 Overview preferences now save in place and replace their controls with a persistent profile-menu Help reminder. Reuse the semantic success alert and visible keyboard focus. Motion is a 150 ms exit and 220 ms arrival, reduced to 80 ms opacity feedback for reduced motion. Save failures retain the controls; JavaScript-disabled submissions keep the server redirect fallback. See `.impeccable/surfaces/workspace-help.md` for the scope and verification verdict. No global tokens, dependencies or image assets added.
+
+## Forecast workspace — 2026-11-03
+
+Forecast screens prioritize expected sales, on-hand stock and required action. Reuse compact status rows, paired quantity bars, native disclosures and the shared keyboard-accessible info tooltip. Missing measurements remain unavailable; forecast quantities stay distinct from suggested buying quantities. Scope, confirmed direction and checks are recorded in the [Forecast workspace surface brief](../.impeccable/surfaces/forecast-workspace.md).

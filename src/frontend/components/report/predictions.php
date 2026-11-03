@@ -104,257 +104,173 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Demand Forecast</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(function_exists('theme_url') ? theme_url('assets/css/style.css') : app_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
-    <style>
-        .forecast-header-card {
-            margin-bottom: 1.5rem;
-            padding: 1.25rem;
-            background: var(--card-bg, #ffffff);
-            border: 1px solid var(--border-color, #e2e8f0);
-            border-radius: 8px;
-        }
-        .demo-badge {
-            display: inline-block;
-            background: var(--theme-warning-surface, #fef3c7);
-            color: var(--theme-warning-text, #92400e);
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            margin-left: 0.5rem;
-            text-transform: uppercase;
-        }
-        .readiness-tag-High { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #15803d); }
-        .readiness-tag-Medium { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #b45309); }
-        .readiness-tag-Low { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); }
-        .readiness-tag-Insufficient { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted, #64748b); }
-
-        .forecast-summary {
-            display: block;
-            padding: 0.75rem 0.95rem;
-            border: 1px solid transparent;
-            border-radius: 10px;
-            margin-bottom: 1rem;
-            font-size: 0.95rem;
-            font-weight: 600;
-            line-height: 1.45;
-        }
-        .forecast-summary.tag-info { background: var(--theme-info-surface, #eff6ff); color: var(--theme-info-text, #1e40af); }
-        .forecast-summary.tag-success { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); border-color: #86efac; }
-        .forecast-summary.tag-warning { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); border-color: #fcd34d; }
-        .forecast-section {
-            margin-bottom: 2rem;
-        }
-        .forecast-section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
-        }
-        .forecast-section-header h2 {
-            font-size: 1.25rem;
-            margin: 0;
-            color: var(--text-primary, #0f172a);
-        }
-        .action-issue-card {
-            border-radius: 8px;
-            background: var(--card-bg, #ffffff);
-            border: 1px solid var(--border-color, #e2e8f0);
-            box-shadow: var(--shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05));
-            transition: box-shadow 0.15s ease-in-out;
-        }
-        .action-issue-card:hover {
-            box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
-        }
-        .forecasting-nav-chips {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .forecasting-nav-chips .btn {
-            font-size: 0.85rem;
-            padding: 0.35rem 0.75rem;
-        }
-        @media (max-width: 640px) {
-            .page-heading {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
-            }
-            .page-heading-actions {
-                width: 100%;
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            .card-grid {
-                grid-template-columns: 1fr;
-            }
-            .table-toolbar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .search-form {
-                width: 100%;
-            }
-            .search-form input[type="search"] {
-                width: 100%;
-            }
-        }
-    </style>
+    <?php require_once __DIR__ . '/forecast_ui.php'; ?>
 </head>
-<body>
+<body class="forecast-workspace">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <h1>Demand Forecast <?php if ($isDemoMode): ?><span class="demo-badge">Demo Mode (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
-                <p class="page-subtitle">Expected demand, operational actions, and model performance.</p>
+                <h1>Demand Forecast</h1>
+                <p class="page-subtitle">Expected sales. Stock on hand. What needs attention.</p>
             </div>
-            
             <div class="page-heading-actions">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Replenishment Queue</a>
+                <a class="btn btn-primary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review replenishment</a>
                 <?php if (has_capability(RoleCapabilityPolicy::GENERATE_FORECASTS)): ?>
                     <form method="post" action="" style="display:inline-block; margin:0;">
                         <?= csrf_field() ?>
-                        <button type="submit" name="action" value="generate" class="btn btn-primary" <?= $isGenerating ? 'disabled' : '' ?>>
-                            <?= $isGenerating ? 'Generating...' : 'Generate Now' ?>
-                        </button>
+                        <button type="submit" name="action" value="generate" class="btn btn-secondary" <?= $isGenerating ? 'disabled' : '' ?>><?= $isGenerating ? 'Generating...' : 'Generate forecasts' ?></button>
                     </form>
                 <?php endif; ?>
             </div>
         </header>
-
-        <!-- Contextual Navigation to Retained Forecasting & Operational Destinations -->
         <nav class="forecasting-nav-chips" aria-label="Forecasting Destinations">
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Replenishment Queue</a>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast Exceptions</a>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data Readiness</a>
+            <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast Exceptions</a>
+            <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data Readiness</a>
             <?php if (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)): ?>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
+                <a href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
             <?php elseif ($userRole === 'super_admin'): ?>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Forecast Model Governance</a>
+                <a href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Forecast Model Governance</a>
             <?php endif; ?>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php')) ?>">Store Calendar</a>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/promotions.php')) ?>">Promotions</a>
+            <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php')) ?>">Store Calendar</a>
+            <a href="<?= htmlspecialchars(app_url('components/inventory_management/promotions.php')) ?>">Promotions</a>
         </nav>
-
         <?php if ($isDemoMode): ?>
-            <div class="forecast-summary tag-info" role="status" style="margin-bottom: 1.25rem;">
-                <strong>Demo dataset active (<?= htmlspecialchars($demoSource) ?>):</strong> Forecasts reflect historical benchmark data.
-            </div>
+            <div class="forecast-notice" role="status"><strong>Historical demo Â· <?= htmlspecialchars($demoSource) ?></strong> â€” not current Store forecasts.</div>
         <?php endif; ?>
-
-        <?php if ($message): ?>
-            <div class="alert <?= htmlspecialchars($messageClass) ?>" role="alert">
-                <?= htmlspecialchars($message) ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- SECTION 1: Can we use forecasting today? (Coverage & Usability) -->
-        <section class="forecast-section" aria-labelledby="heading-usability">
-            <div class="forecast-section-header">
-                <h2 id="heading-usability">1. Can we use forecasting today?</h2>
+        <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="alert"><?= htmlspecialchars($message) ?></div><?php endif; ?>
+        <section class="forecast-overview" aria-labelledby="heading-usability">
+            <div>
+                <h2 id="heading-usability">Forecast status</h2>
                 <span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span>
+                <?php forecast_help('coverage-help', $coverage['coverage_summary_text'], 'About forecast availability'); ?>
             </div>
-
-            <div class="forecast-summary <?= $coverage['store_status'] === 'full' ? 'tag-success' : ($coverage['forecast_backed_count'] > 0 ? 'tag-info' : 'tag-warning') ?>" role="status" style="margin-bottom: 1.25rem;">
-                <strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
-                <?php if ($coverage['stock_rule_count'] > 0): ?>
-                    <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>" class="alert-link" style="text-decoration:underline; font-weight:600; margin-left:0.5rem;">Inspect exclusions &amp; next actions</a>
-                <?php endif; ?>
+            <div class="forecast-coverage">
+                <strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products forecast-backed</strong>
+                <meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Forecast product coverage"></meter>
+                <small><?= (int)$coverage['stock_rule_count'] ?> use stock rules</small>
             </div>
-
-            <div class="card-grid">
-                <div class="stat-card">
-                    <div class="label">Forecast Coverage</div>
-                    <div class="value"><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?></div>
-                    <div class="hint"><?= (int)$coverage['stock_rule_count'] ?> use stock rules<?= $coverage['filtered']['is_filtered'] ? ' (filtered: ' . (int)$coverage['filtered']['forecast_backed_count'] . ' of ' . (int)$coverage['filtered']['count'] . ')' : '' ?></div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">Guidance Usability</div>
-                    <div class="value"><span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span></div>
-                    <div class="hint">Usable Results: <?= $effectiveJobId ? 'Job #' . (int)$effectiveJobId : 'None' ?><?= $latestJob ? ' (Latest attempt: #' . (int)$latestJob['job_id'] . ' ' . htmlspecialchars($latestJobStatus) . ')' : '' ?></div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">Forecast Origin</div>
-                    <div class="value" style="font-size: 1.25rem;"><?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?></div>
-                    <div class="hint"><?= htmlspecialchars($originAgeText) ?> (Horizon: <?= htmlspecialchars($targetRangeText) ?>)</div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">Model Governance</div>
-                    <div class="value" style="font-size: 1.1rem; font-family: ui-monospace, monospace;"><?= htmlspecialchars($displayedForecastModel ?? 'Unavailable') ?></div>
-                    <div class="hint"><?= $coverage['is_observation_mode'] ? 'Observation mode' : ($coverage['is_recommendations_suspended'] ? 'Recommendations suspended' : 'Approved algorithm') ?></div>
-                </div>
-            </div>
+            <div><small>Forecast origin</small><strong><?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?></strong><small><?= htmlspecialchars($originAgeText) ?></small></div>
         </section>
-
-        <!-- SECTION 2: What needs action? (Actions Needing Attention) -->
-        <section class="forecast-section" aria-labelledby="heading-actions">
-            <div class="forecast-section-header">
-                <h2 id="heading-actions">2. What needs action?</h2>
-            </div>
-
-            <div class="action-issues-list" role="list">
-                <?php foreach ($operationalIssues as $issue):
-                    $sev = $issue['severity'] ?? 'info';
-                    $sevBadgeClass = match($sev) {
-                        'critical' => 'tag-danger',
-                        'warning' => 'tag-warning',
-                        'healthy', 'success' => 'tag-success',
-                        default => 'tag-info'
-                    };
-                    $sevLabel = match($sev) {
-                        'critical' => 'Critical Attention',
-                        'warning' => 'Action Needed',
-                        'healthy', 'success' => 'Operational Health',
-                        default => 'Information'
-                    };
-                    $borderColor = match($sev) {
-                        'critical' => 'var(--theme-danger, #ef4444)',
-                        'warning' => 'var(--theme-warning, #f59e0b)',
-                        'healthy', 'success' => 'var(--theme-success, #10b981)',
-                        default => 'var(--theme-info, #0284c7)'
-                    };
-                ?>
-                    <div class="action-issue-card card" role="listitem" style="margin-bottom: 1rem; border-left: 4px solid <?= $borderColor ?>; padding: 1rem 1.25rem;">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">
-                            <div>
-                                <span class="status-badge <?= $sevBadgeClass ?>"><?= $sevLabel ?></span>
-                                <strong style="margin-left: 0.5rem; font-size: 1.05rem;"><?= htmlspecialchars($issue['condition']) ?></strong>
-                            </div>
-                            <?php if (!empty($issue['action_url'])): ?>
-                                <a href="<?= htmlspecialchars($issue['action_url']) ?>" class="btn btn-sm btn-primary">
-                                    <?= htmlspecialchars($issue['action_label']) ?> &rarr;
-                                </a>
-                            <?php elseif (!empty($issue['action_label'])): ?>
-                                <span class="badge tag-secondary"><?= htmlspecialchars($issue['action_label']) ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <div style="font-size: 0.92rem; color: var(--text-secondary, #475569); margin-top: 0.25rem;">
-                            <p style="margin: 0.25rem 0;"><strong>Practical effect:</strong> <?= htmlspecialchars($issue['effect']) ?></p>
-                            <p style="margin: 0.25rem 0;"><strong>Responsible:</strong> <?= htmlspecialchars($issue['responsible_role']) ?></p>
-                        </div>
+        <?php if ($coverage['is_observation_mode'] || $coverage['is_recommendations_suspended']): ?>
+            <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
+        <?php endif; ?>
+        <section class="forecast-actions" aria-labelledby="heading-actions">
+            <h2 id="heading-actions">Needs attention</h2>
+            <div role="list">
+            <?php foreach ($operationalIssues as $issueIndex => $issue):
+                $sevBadgeClass = match($issue['severity'] ?? 'info') {
+                    'critical' => 'tag-danger', 'warning' => 'tag-warning',
+                    'healthy', 'success' => 'tag-success', default => 'tag-info'
+                };
+            ?>
+                <div class="action-issue-card" role="listitem">
+                    <div>
+                        <span class="status-badge <?= $sevBadgeClass ?>"><?= htmlspecialchars($issue['condition']) ?></span>
+                        <?php if (!in_array($issue['severity'] ?? '', ['healthy', 'success'], true)): ?><small class="muted"><?= htmlspecialchars($issue['responsible_role']) ?></small><?php endif; ?>
+                        <?php forecast_help('issue-' . $issueIndex, $issue['effect'], 'Effect of this forecast status'); ?>
                     </div>
-                <?php endforeach; ?>
+                    <?php if (!empty($issue['action_url'])): ?>
+                        <a href="<?= htmlspecialchars($issue['action_url']) ?>"><?= htmlspecialchars($issue['action_label']) ?> &rarr;</a>
+                    <?php elseif (!empty($issue['action_label']) && !in_array($issue['severity'] ?? '', ['healthy', 'success'], true)): ?>
+                        <small><?= htmlspecialchars($issue['action_label']) ?></small>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
             </div>
         </section>
+        <?php require __DIR__ . '/forecast_stock_chart.php'; ?>
+        <div class="forecast-panel" id="product-forecasts">
+            <div class="forecast-panel-heading">
+                <h2 style="font-size:1.15rem; margin:0;">
+                    Product Forecasts (<?= count($displayProducts) ?><?= $coverage['filtered']['is_filtered'] ? ' matching search of ' . (int)$coverage['scope_count'] : '' ?>)
+                </h2>
+                <form method="get" action="" class="search-form" role="search" style="display:flex; gap:0.5rem; align-items:center; margin:0;">
+                    <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text" style="min-width:240px;">
+                    <button type="submit" class="btn btn-secondary">Search</button>
+                    <?php if ($searchQuery !== ''): ?>
+                        <a href="predictions.php" class="btn btn-quiet">Clear</a>
+                    <?php endif; ?>
+                </form>
+            </div>
 
-        <!-- SECTION 3: Is it helping? (Prediction Performance Summary) -->
-        <section class="forecast-section" aria-labelledby="heading-performance">
+            <p class="muted">Expected sales in Base Units Â· <?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', '7-, 14-, and 28-day totals each start the day after the forecast origin. These are expected sales, not quantities to buy. Review Replenishment Recommendations before purchasing.', 'About forecast quantities'); ?></p>
+            <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
+                <div class="empty-state">
+                    <i class="bi bi-graph-up-arrow empty-icon"></i>
+                    <h2>No Forecasts Available</h2>
+                    <p><?= $searchQuery !== '' ? 'No matching products found in current catalog.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
+                </div>
+            <?php else: ?>
+                <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Product</th>
+                                <th scope="col">On hand</th>
+                                <th scope="col">7 days</th>
+                                <th scope="col">14 days</th>
+                                <th scope="col">28 days</th>
+                                <th scope="col">Forecast basis <?php forecast_help('basis-help', 'Forecast-backed products use estimated sales. Other products use stock rules. Readiness describes available evidence, not an accuracy guarantee.', 'About forecast basis'); ?></th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($displayProducts as $f):
+                                $name = $f['product_name'] ?? "Product #{$f['product_id']}";
+                                $sku = $f['sku'] ?? "PRD-{$f['product_id']}";
+                                $stock = (int)($f['current_stock'] ?? 0);
+                                $isForecastBacked = !empty($f['is_forecast_backed']);
+                                $readiness = $f['readiness_level'] ?? 'Insufficient';
+                            ?>
+                                <tr>
+                                    <td>
+                                        <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars($name) ?></a></strong>
+                                        <small class="forecast-sku"><?= htmlspecialchars($sku) ?></small>
+                                    </td>
+                                    <td><?= htmlspecialchars((string)$stock) ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_7_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_14_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
+                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_28_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
+                                    <td>
+                                        <?php if ($isForecastBacked): ?>
+                                            <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
+                                                <?= htmlspecialchars($readiness) ?>
+                                            </span>
+                                            <?php forecast_help('basis-' . (int)$f['product_id'], (string)$f['basis'], 'Forecast evidence for ' . $name); ?>
+                                        <?php else: ?>
+                                            <span class="badge tag-secondary">Stock-rule</span>
+                                            <?php forecast_help('excluded-' . (int)$f['product_id'], (string)($f['exclusion_reason'] ?? 'Stock rules'), 'Why ' . $name . ' uses stock rules'); ?>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
+                                            View forecast
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+        <details class="forecast-details">
+            <summary>Forecast performance &amp; model details</summary>
+            <p class="muted">Model: <?= htmlspecialchars($displayedForecastModel ?? 'None approved') ?> Â· <?= $coverage['is_observation_mode'] ? 'Observation only' : ($coverage['is_recommendations_suspended'] ? 'Buying suggestions paused' : 'Check product coverage above') ?></p>
+            <p class="muted">Usable results: <?= $effectiveJobId ? 'Job #' . (int)$effectiveJobId : 'None' ?><?= $latestJob ? ' Â· Latest attempt: #' . (int)$latestJob['job_id'] . ' ' . htmlspecialchars($latestJobStatus) : '' ?></p>
+        <section aria-labelledby="heading-performance">
             <div class="forecast-section-header">
-                <h2 id="heading-performance">3. Is it helping?</h2>
+                <h2 id="heading-performance">Forecast performance</h2>
                 <span class="status-badge <?= $performanceSummary['status'] === 'available' ? 'tag-success' : 'tag-info' ?>">
                     <?= $performanceSummary['status'] === 'available' ? 'Evaluation Evidence' : 'Still Collecting Evidence' ?>
                 </span>
             </div>
 
-            <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
+            <p class="muted">Daily errors compare one Product/day at lead times 1â€“7, 1â€“14, and 1â€“28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
             <?php if ($performanceSummary['status'] === 'still_collecting_evidence'): ?>
                 <div class="forecast-summary tag-info" role="status" style="margin-bottom: 1rem;">
                     <strong>Still collecting evidence:</strong> <?= htmlspecialchars($performanceSummary['reason']) ?>
@@ -365,7 +281,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <?php else: ?>
                 <div class="card" style="padding: 1.25rem; margin-bottom: 1rem;">
                     <p style="margin-top: 0;"><strong>Evaluated model:</strong> <code><?= htmlspecialchars($performanceSummary['model_version'] ?? 'Approved') ?></code></p>
-                    <p class="muted"><?= htmlspecialchars(ucfirst($performanceSummary['model_association'])) ?> model · <?= (int)$performanceSummary['product_count'] ?> Products · <?= (int)$performanceSummary['usable_comparison_count'] ?> usable Product/date comparisons · <?= htmlspecialchars($performanceSummary['date_range']['start'] ?? 'Unavailable') ?> to <?= htmlspecialchars($performanceSummary['date_range']['end'] ?? 'Unavailable') ?>.</p>
+                    <p class="muted"><?= htmlspecialchars(ucfirst($performanceSummary['model_association'])) ?> model Â· <?= (int)$performanceSummary['product_count'] ?> Products Â· <?= (int)$performanceSummary['usable_comparison_count'] ?> usable Product/date comparisons Â· <?= htmlspecialchars($performanceSummary['date_range']['start'] ?? 'Unavailable') ?> to <?= htmlspecialchars($performanceSummary['date_range']['end'] ?? 'Unavailable') ?>.</p>
                     <div class="table-wrap" role="region" aria-label="Performance metrics table" tabindex="0">
                         <table class="data-table">
                             <thead>
@@ -389,7 +305,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     $underUnits = $horizon['underestimated_units'] !== null ? number_format($horizon['underestimated_units']) : 'Not recorded';
                                 ?>
                                     <tr>
-                                        <td><strong>1–<?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
+                                        <td><strong>1â€“<?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
                                         <?php foreach (['mae', 'baseline_mae', 'rmse', 'baseline_rmse'] as $metric): ?>
                                             <td><?= isset($horizon[$metric]) ? number_format($horizon[$metric], 2) : 'Unavailable' ?></td>
                                         <?php endforeach; ?>
@@ -409,82 +325,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <?php endif; ?>
         </section>
 
-        <!-- SECTION 4: Detailed Product Forecasts -->
-        <div class="card">
-            <div class="table-toolbar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
-                <h2 style="font-size:1.15rem; margin:0;">
-                    Product Forecasts (<?= count($displayProducts) ?><?= $coverage['filtered']['is_filtered'] ? ' matching search of ' . (int)$coverage['scope_count'] : '' ?>)
-                </h2>
-                <form method="get" action="" class="search-form" role="search" style="display:flex; gap:0.5rem; align-items:center; margin:0;">
-                    <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Search by Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text" style="min-width:240px;">
-                    <button type="submit" class="btn btn-secondary">Search</button>
-                    <?php if ($searchQuery !== ''): ?>
-                        <a href="predictions.php" class="btn btn-quiet">Clear</a>
-                    <?php endif; ?>
-                </form>
-            </div>
-        
-            <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
-                <div class="empty-state">
-                    <i class="bi bi-graph-up-arrow empty-icon"></i>
-                    <h2>No Forecasts Available</h2>
-                    <p><?= $searchQuery !== '' ? 'No matching products found in current catalog.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
-                </div>
-            <?php else: ?>
-                <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Product</th>
-                                <th scope="col">SKU</th>
-                                <th scope="col">Current Stock</th>
-                                <th scope="col">7-Day Demand</th>
-                                <th scope="col">14-Day Demand</th>
-                                <th scope="col">28-Day Demand</th>
-                                <th scope="col">Buying Guidance</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($displayProducts as $f):
-                                $name = $f['product_name'] ?? "Product #{$f['product_id']}";
-                                $sku = $f['sku'] ?? "PRD-{$f['product_id']}";
-                                $stock = (int)($f['current_stock'] ?? 0);
-                                $isForecastBacked = !empty($f['is_forecast_backed']);
-                                $readiness = $f['readiness_level'] ?? 'Insufficient';
-                            ?>
-                                <tr>
-                                    <td>
-                                        <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars($name) ?></a></strong>
-                                    </td>
-                                    <td><code><?= htmlspecialchars($sku) ?></code></td>
-                                    <td><?= htmlspecialchars((string)$stock) ?></td>
-                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_7_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
-                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_14_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
-                                    <td><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_28_day'] ?? 0)) : '<span class="muted">Unavailable</span>' ?></td>
-                                    <td>
-                                        <?php if ($isForecastBacked): ?>
-                                            <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
-                                                <?= htmlspecialchars($readiness) ?>
-                                            </span>
-                                            <small class="muted" style="display:block;"><?= htmlspecialchars($f['basis']) ?></small>
-                                        <?php else: ?>
-                                            <span class="badge tag-secondary">Stock-rule</span>
-                                            <small class="muted" style="display:block;"><?= htmlspecialchars($f['exclusion_reason'] ?? 'Stock rules') ?></small>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
-                                            Investigate
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </div>
+        </details>
     </main>
 </div>
 <?php if ($isGenerating): ?><script>setTimeout(() => window.location.replace(window.location.href), 5000);</script><?php endif; ?>

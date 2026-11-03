@@ -53,10 +53,10 @@ $forecastOrigin = $forecast['aggregates']['forecast_origin'] ?? date('Y-m-d');
 $originCutoff = $forecastOrigin . ' 23:59:59';
 $driverService = new ScheduledDemandDriverService();
 $drivers = $driverService->getDriversForPeriod(
-    $pdo, 
-    $productId, 
-    $forecastOrigin, 
-    date('Y-m-d', strtotime('+28 days', strtotime($forecastOrigin))), 
+    $pdo,
+    $productId,
+    $forecastOrigin,
+    date('Y-m-d', strtotime('+28 days', strtotime($forecastOrigin))),
     $originCutoff
 );
 
@@ -107,8 +107,9 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
             margin-left: 0.5rem;
         }
     </style>
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body>
+<body class="forecast-workspace">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -126,11 +127,45 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
         <?php if (isset($errorState)): ?>
             <div class="empty-state">
                 <i class="bi bi-exclamation-triangle empty-icon"></i>
-                <h2><?= htmlspecialchars(str_replace('_', ' ', ucfirst($errorState))) ?></h2>
+                <h2><?= $errorState === 'missing_product' ? 'Product not found' : 'Forecast unavailable' ?></h2>
                 <p>Unable to provide forecast data for this product at this time.</p>
             </div>
         <?php else: ?>
-            <div class="meta-grid">
+            <p class="forecast-notice">Saved forecast from <?= htmlspecialchars($forecastOrigin) ?>. Review current coverage before buying. <a href="../report/predictions.php">Check forecast status</a></p>
+            <section class="forecast-panel" aria-labelledby="daily-chart-title">
+                <div class="forecast-panel-heading"><h2 id="daily-chart-title">Expected sales by day</h2><?php forecast_help('daily-chart-help', 'Daily estimated sales in Base Units. These are expected sales, not buying quantities. Exact values are available in Daily forecast values below.', 'About this forecast chart'); ?></div>
+                <?php $dailyMax = max(1, ...array_map(static fn(array $day): float => max(0, (float)$day['predicted_units']), $forecast['daily'])); ?>
+                <small class="muted">0–<?= htmlspecialchars((string)$dailyMax) ?> units per day · <?= htmlspecialchars($forecast['daily'][0]['target_date']) ?> to <?= htmlspecialchars($forecast['daily'][count($forecast['daily']) - 1]['target_date']) ?></small>
+                <div class="daily-forecast-chart" aria-hidden="true">
+                    <?php foreach ($forecast['daily'] as $day): ?>
+                        <div><span class="daily-bar" style="height: <?= max(0, (float)$day['predicted_units']) / $dailyMax * 85 ?>%"></span><small><?= (int)$day['horizon_day'] ?></small></div>
+                    <?php endforeach; ?>
+                </div>
+                <small class="muted">Days after forecast origin · <?= htmlspecialchars($forecastOrigin) ?></small>
+            </section>
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <h2>Expected sales · Base Units</h2>
+                <div class="table-wrap"><table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>7-Day Demand</th>
+                            <th>14-Day Demand</th>
+                            <th>28-Day Demand</th>
+                            <th>Readiness Level</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_7_day']) ?></strong></td>
+                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_14_day']) ?></strong></td>
+                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_28_day']) ?></strong></td>
+                            <td><?= htmlspecialchars((string)$forecast['aggregates']['readiness_level']) ?></td>
+                        </tr>
+                    </tbody>
+                </table></div>
+            </div>
+
+            <details class="forecast-details"><summary>Forecast source &amp; limitations</summary>            <div class="meta-grid">
                 <div class="meta-card">
                     <div class="meta-label">Forecast Origin</div>
                     <div class="meta-value"><?= htmlspecialchars((string)$forecast['aggregates']['forecast_origin']) ?></div>
@@ -148,35 +183,13 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
                     <div class="meta-value" style="font-size:0.95rem; font-weight:normal;"><?= htmlspecialchars((string)($forecast['aggregates']['limitation_marker'] ?? 'Full evidence available')) ?></div>
                 </div>
             </div>
-
-            <div class="card" style="margin-bottom: 1.5rem;">
-                <h2>Forecast Horizon Totals</h2>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>7-Day Demand</th>
-                            <th>14-Day Demand</th>
-                            <th>28-Day Demand</th>
-                            <th>Readiness Level</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_7_day']) ?></strong></td>
-                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_14_day']) ?></strong></td>
-                            <td><strong><?= htmlspecialchars((string)$forecast['aggregates']['forecast_28_day']) ?></strong></td>
-                            <td><?= htmlspecialchars((string)$forecast['aggregates']['readiness_level']) ?></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="card" style="margin-bottom: 1.5rem;">
-                <h2>Scheduled Demand Drivers (as of Origin Cutoff)</h2>
+</details>
+            <details class="forecast-details"><summary>Scheduled prices &amp; promotions</summary>
+                <h2>Scheduled changes</h2>
                 <?php if (empty($drivers)): ?>
                     <p style="color:var(--text-muted, #64748b); font-style:italic;">No scheduled price changes or promotions were known prior to the forecast origin.</p>
                 <?php else: ?>
-                    <table class="data-table">
+                    <div class="table-wrap"><table class="data-table">
                         <thead>
                             <tr>
                                 <th>Effective Date</th>
@@ -193,12 +206,12 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
-                    </table>
+                    </table></div>
                 <?php endif; ?>
-            </div>
+            </details>
 
-            <div class="card">
-                <h2>Daily Forecast (28-Day Breakdown)</h2>
+            <details class="forecast-details"><summary>Daily forecast values</summary>
+                <div class="table-wrap" tabindex="0" role="region" aria-label="Daily forecast values">
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -219,7 +232,8 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
                         <?php endforeach; ?>
                     </tbody>
                 </table>
-            </div>
+                </div>
+            </details>
         <?php endif; ?>
     </main>
 </div>

@@ -38,7 +38,7 @@ try {
     $forecastService = new DemandForecastService($pdo);
     $jobId = $forecastService->getLatestUsableJobId() ?? $forecastService->getLatestSuccessfulJobId();
     $coverage = $forecastService->getCoverage($jobId);
-    
+
     $queue = [];
     if ($jobId) {
         $jobMeta = $forecastService->getJobMetadata($jobId);
@@ -109,13 +109,13 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
     <script src="<?= htmlspecialchars(app_url('assets/js/jspdf.umd.min.js')) ?>" defer></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/replenishment-pdf.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/replenishment-pdf.js')) ?>" defer></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/replenishment.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/replenishment.js')) ?>" defer></script>
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body class="replenishment-page">
+<body class="forecast-workspace replenishment-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <div class="topbar">
-        </div>
+        <header class="page-heading"><div><h1>Replenishment Recommendations</h1><p class="page-subtitle">Review stock and suggested buying quantities.</p></div><a class="btn btn-secondary" href="../report/predictions.php">Demand Forecast</a></header>
 
             <?php if ($error): ?>
                 <div class="alert tag-warning" role="status">
@@ -129,7 +129,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                     <strong>Notice:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
                 </div>
             <?php elseif ($coverage && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
-                <p class="muted"><strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?> <a href="../report/forecast_exceptions.php">View excluded products</a>.</p>
+                <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> products use forecasts · <?= (int)$coverage['stock_rule_count'] ?> use stock rules. <a href="../report/forecast_exceptions.php">Review exclusions</a> <?php forecast_help('queue-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
             <?php endif; ?>
 
             <?php if ($isDemo): ?>

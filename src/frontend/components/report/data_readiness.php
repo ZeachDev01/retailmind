@@ -152,8 +152,9 @@ function build_query(array $params): string {
             cursor: not-allowed;
         }
     </style>
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body>
+<body class="forecast-workspace">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -220,9 +221,9 @@ function build_query(array $params): string {
                         <tr>
                             <th scope="col">Product</th>
                             <th scope="col">Status</th>
-                            <th scope="col">Calendar History</th>
-                            <th scope="col">Active Days</th>
-                            <th scope="col">Recorded Volume</th>
+                            <th scope="col">Usable history</th>
+                            <th scope="col">Days with sales</th>
+                            <th scope="col">Sales recorded</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -248,17 +249,16 @@ function build_query(array $params): string {
                                 <td>
                                     <span class="status-badge <?= $badgeClass ?>"><?= htmlspecialchars($status) ?></span>
                                     <?php if (!empty($row['forecast_reason'])): ?>
-                                        <div class="u-text-muted" style="font-size:0.75rem; margin-top:0.25rem;" title="<?= htmlspecialchars($row['forecast_reason']) ?>">
-                                            <?= htmlspecialchars(mb_strimwidth($row['forecast_reason'], 0, 65, '...')) ?>
-                                        </div>
+                                        <?php forecast_help('readiness-' . (int)$row['product_id'], $row['forecast_reason'], 'Readiness details for ' . $row['product_name']); ?>
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <strong><?= (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days']) ?> usable days</strong> (<?= (int)($row['required_usable_days'] ?? 140) ?> req)<br>
-                                    <span class="u-text-muted" style="font-size:0.75rem;"><?= (int)$row['calendar_history_days'] ?> cal days &middot; <?= $historyRange ?></span>
+                                    <strong><?= (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days']) ?> / <?= (int)($row['required_usable_days'] ?? 140) ?> days</strong>
+                                    <meter min="0" max="<?= max(1, (int)($row['required_usable_days'] ?? 140)) ?>" value="<?= min((int)($row['required_usable_days'] ?? 140), (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days'])) ?>" aria-label="Usable sales history for <?= htmlspecialchars($row['product_name']) ?>"></meter>
+                                    <?php forecast_help('history-' . (int)$row['product_id'], (int)$row['calendar_history_days'] . ' calendar days · ' . strip_tags(html_entity_decode($historyRange)), 'Sales history dates'); ?>
                                 </td>
                                 <td>
-                                    <span><?= (int)$row['nonzero_sales_days'] ?> active</span><br>
+                                    <span><?= (int)$row['nonzero_sales_days'] ?> days</span><br>
                                     <span class="u-text-muted" style="font-size:0.75rem;"><?= (int)$row['zero_sales_days'] ?> zero sales</span>
                                 </td>
                                 <td>

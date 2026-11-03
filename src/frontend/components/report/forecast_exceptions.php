@@ -37,15 +37,16 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
     <title>Forecast Exceptions</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body>
+<body class="forecast-workspace">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
         <header class="page-heading">
             <div>
                 <h1>Forecast Exceptions</h1>
-                <p class="page-subtitle">Excluded products using stock rules and required operational next steps.</p>
+                <p class="page-subtitle">Products without usable forecasts. Review the reason and next step.</p>
             </div>
             <div class="page-heading-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Demand Forecast</a>
@@ -62,11 +63,11 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
             <div class="stat-card">
                 <div class="value"><?= (int)$coverage['scope_count'] ?></div>
                 <div class="label">Active catalog products</div>
-                <div class="hint">Replenishment scope denominator</div>
+                <div class="hint">Products in this Store</div>
             </div>
             <div class="stat-card">
                 <div class="value"><?= (int)$coverage['forecast_backed_count'] ?></div>
-                <div class="label">Forecast-backed products</div>
+                <div class="label">With forecasts</div>
                 <div class="hint"><?= $coverage['scope_count'] > 0 ? round(($coverage['forecast_backed_count'] / $coverage['scope_count']) * 100) . '% coverage' : 'No active products' ?></div>
             </div>
             <div class="stat-card">
@@ -76,13 +77,11 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
             </div>
         </div>
 
-        <div class="alert <?= $coverage['forecast_backed_count'] === $coverage['scope_count'] && $coverage['scope_count'] > 0 ? 'tag-success' : 'tag-warning' ?>" role="status" style="margin-bottom:1.5rem;">
-            <strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
-        </div>
+        <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products have usable forecasts. <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
 
         <section class="dashboard-section">
             <div class="section-header">
-                <h2>Exception queue (<?= count($filteredExceptions) ?><?= $coverage['filtered']['is_filtered'] ? ' of ' . count($exceptions) : '' ?>)</h2>
+                <h2>Products to review (<?= count($filteredExceptions) ?><?= $coverage['filtered']['is_filtered'] ? ' of ' . count($exceptions) : '' ?>)</h2>
             </div>
 
             <form method="get" action="" class="search-form no-print" role="search" aria-label="Filter exception queue" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
@@ -115,7 +114,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             <th scope="col">On hand</th>
                             <th scope="col">Stock-rule suggestion</th>
                             <th scope="col">Exclusion reason</th>
-                            <th scope="col">Category</th>
+
                             <th scope="col">Action needed</th>
                             <th scope="col">Actions</th>
                         </tr>
@@ -132,9 +131,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                                 <td>
                                     <span class="reason"><?= htmlspecialchars($row['exclusion_reason'] ?? 'Forecast unavailable') ?></span>
                                 </td>
-                                <td>
-                                    <span class="badge tag-light"><?= htmlspecialchars(ucfirst($row['exclusion_category'] ?? 'evidence')) ?></span>
-                                </td>
+
                                 <td>
                                     <small><?= htmlspecialchars($row['exclusion_action'] ?? 'Replenishment continues on stock rules') ?></small>
                                 </td>
@@ -144,14 +141,14 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$filteredExceptions): ?>
-                            <tr><td colspan="7" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No excluded products. All active products have usable forecasts.' ?></td></tr>
+                            <tr><td colspan="6" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No excluded products. All active products have usable forecasts.' ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <section class="dashboard-section">
+        <details class="forecast-details"><summary>Recent forecast decisions</summary>
             <div class="section-header">
                 <h2>Recent forecast decisions (<?= count($decisions) ?>)</h2>
             </div>
@@ -189,7 +186,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                     </tbody>
                 </table>
             </div>
-        </section>
+        </details>
     </main>
 </div>
 </body>

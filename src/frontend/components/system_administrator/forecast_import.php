@@ -139,8 +139,9 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
             flex-wrap: wrap;
         }
     </style>
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
-<body class="forecast-import-page">
+<body class="forecast-workspace forecast-import-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -195,7 +196,8 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
             </section>
 
             <section class="dashboard-section" aria-labelledby="format-heading">
-                <h2 id="format-heading">CSV format & import rules</h2>
+<details class="forecast-details"><summary id="format-heading">CSV columns &amp; import rules</summary>
+
                 <div class="table-wrap">
                     <table class="format-table">
                         <thead>
@@ -229,7 +231,8 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                     <li><strong>Deduplication:</strong> Automatically skips POS sales days and matching imports; conflicting totals reject import.</li>
                     <li><strong>Model retraining:</strong> Stores historical totals; initiate model retraining separately in ML Operation.</li>
                 </ul>
-            </section>
+            </details>
+</section>
         </div>
 
         <?php if ($preview): ?>
