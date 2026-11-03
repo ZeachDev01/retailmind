@@ -8,7 +8,7 @@ $fieldErrors = [];
 $fieldGroups = [
     'accuracy' => [
         'title' => 'Candidate error limits',
-        'description' => 'WAPE measures prediction error: lower is better. Each horizon must meet its limit and strictly beat repeating last week’s sales. Missing evidence blocks qualification.',
+        'description' => 'WAPE measures prediction error: lower is better. Each horizon must meet its limit and strictly beat repeating last weekâ€™s sales. Missing evidence blocks qualification.',
     ],
 ];
 $definitions = [];
