@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace App\Forecasting;
 
+require_once __DIR__ . '/StoreModelGovernanceService.php';
+require_once __DIR__ . '/CandidateEvaluationService.php';
+
 use PDO;
 use InvalidArgumentException;
 use RuntimeException;
@@ -255,7 +258,7 @@ class DemandForecastService
     {
         try {
             $stmt = $this->pdo->query("
-                SELECT job_id, trigger_type, status, queued_at, completed_at, error_message
+                SELECT *
                 FROM ml_jobs
                 WHERE trigger_type IN ('forecast_generation', 'forecast_observation')
                 ORDER BY job_id DESC
@@ -266,6 +269,9 @@ class DemandForecastService
                 return null;
             }
             $row['job_id'] = (int)$row['job_id'];
+            if (isset($row['attempts'])) {
+                $row['attempts'] = (int)$row['attempts'];
+            }
             return $row;
         } catch (Throwable $e) {
             return null;
@@ -360,7 +366,8 @@ class DemandForecastService
         ?int $jobId = null,
         ?string $asOfDate = null,
         ?string $search = null,
-        ?string $reasonFilter = null
+        ?string $reasonFilter = null,
+        ?string $actorRole = 'admin'
     ): array {
         $today = new \DateTimeImmutable($asOfDate ?? 'today', new \DateTimeZone('Asia/Manila'));
         $acceptedOrigin = $today->modify('-1 day')->format('Y-m-d');
@@ -518,7 +525,7 @@ class DemandForecastService
             ];
         }
 
-        return [
+        $coverageResult = [
             'scope_count' => $scopeCount,
             'forecast_backed_count' => $forecastBackedCount,
             'stock_rule_count' => $stockRuleCount,
@@ -544,6 +551,378 @@ class DemandForecastService
                 'stock_rule_count' => $stockRuleCount,
                 'products' => $products,
             ],
+        ];
+
+        $coverageResult['operational_issues'] = $this->getOperationalIssues($coverageResult, $actorRole);
+        $coverageResult['performance_summary'] = $this->getPerformanceSummary($coverageResult['approved_model_version'], $coverageResult);
+
+        return $coverageResult;
+    }
+
+    public function getOperationalIssues(array $coverage, ?string $actorRole = 'admin'): array
+    {
+        $issues = [];
+        $actorRole = $actorRole ?? 'admin';
+        $latestJob = $coverage['latest_job'] ?? $this->getLatestJob();
+        $isSuspended = !empty($coverage['is_recommendations_suspended']);
+        $isObservation = !empty($coverage['is_observation_mode']);
+        $isUpdating = !empty($coverage['is_updating']);
+        $approvedVersion = (string)($coverage['approved_model_version'] ?? '');
+        $urlHelper = static fn(string $path): string => function_exists('app_url') ? app_url($path) : $path;
+
+        // -------------------------------------------------------------
+        // Priority 1: Conditions Affecting Current Guidance
+        // -------------------------------------------------------------
+
+        // 1a. Guidance paused by Administrator
+        if ($isSuspended) {
+            $actionUrl = null;
+            $actionLabel = 'Administrator action required to resume guidance';
+            if ($actorRole === 'admin') {
+                $actionUrl = $urlHelper('components/administrator/model_review.php');
+                $actionLabel = 'Manage Guidance in Model Review';
+            } elseif ($actorRole === 'super_admin') {
+                $actionUrl = $urlHelper('components/report/forecast_analytics.php');
+                $actionLabel = 'Manage Guidance in Governance';
+            }
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'warning',
+                'category' => 'paused',
+                'condition' => 'Forecasting guidance is paused by Administrator.',
+                'effect' => 'All buying suggestions fall back to standard stock rules until resumed.',
+                'responsible_role' => 'Administrator',
+                'action_label' => $actionLabel,
+                'action_url' => $actionUrl,
+            ];
+        }
+
+        // 1b. Background update failed: Exhausted recovery vs Retry scheduled
+        if ($latestJob && ($latestJob['status'] ?? '') === 'failed') {
+            $attempts = (int)($latestJob['attempts'] ?? 1);
+            $opMsg = (string)($latestJob['operator_message'] ?? '');
+            $diagRef = (string)($latestJob['diagnostic_reference'] ?? '');
+            $isExhausted = $attempts >= 3 || str_contains($opMsg, 'exceeded') || str_contains($diagRef, 'EXHAUSTED');
+
+            if ($isExhausted) {
+                $actionUrl = null;
+                $actionLabel = 'Technical Support Required (Super Administrator)';
+                if ($actorRole === 'super_admin') {
+                    $actionUrl = $urlHelper('components/system_administrator/ml_settings.php');
+                    $actionLabel = 'Inspect Worker Diagnostics';
+                }
+                $issues[] = [
+                    'priority' => 1,
+                    'severity' => 'critical',
+                    'category' => 'exhausted_recovery',
+                    'condition' => sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
+                    'effect' => 'Buying suggestions are using stock rules until the worker failure is resolved. Technical support required to inspect background worker logs.',
+                    'responsible_role' => 'Super Administrator',
+                    'action_label' => $actionLabel,
+                    'action_url' => $actionUrl,
+                ];
+            } else {
+                $issues[] = [
+                    'priority' => 1,
+                    'severity' => 'warning',
+                    'category' => 'retry_scheduled',
+                    'condition' => sprintf('Forecast update failed on attempt %d of 3.', $attempts),
+                    'effect' => 'Buying suggestions are using stock rules' . (!empty($coverage['effective_job_id']) ? ' (earlier valid guidance remains active until retry)' : '') . '. Automatic retry scheduled; no action needed.',
+                    'responsible_role' => 'Automatic System',
+                    'action_label' => 'No action needed (Automatic retry scheduled)',
+                    'action_url' => null,
+                ];
+            }
+        }
+
+        // 1c. Empty Store catalog
+        if ((string)($coverage['store_status'] ?? '') === 'empty' || (int)($coverage['scope_count'] ?? 0) === 0) {
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'info',
+                'category' => 'empty_store',
+                'condition' => 'No active replenishment products found in Store catalog.',
+                'effect' => 'Demand forecasts cannot be generated without active products.',
+                'responsible_role' => 'Administrator',
+                'action_label' => 'Review Data Readiness',
+                'action_url' => $urlHelper('components/report/data_readiness.php'),
+            ];
+        }
+
+        // 1d. Stale forecast guidance (older than accepted origin, no update in progress and not failed)
+        if ((string)($coverage['store_status'] ?? '') === 'stale' && !$isUpdating && (!$latestJob || (string)($latestJob['status'] ?? '') !== 'failed')) {
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'warning',
+                'category' => 'stale_guidance',
+                'condition' => 'Saved forecasts are stale (results are older than the accepted latest completed Philippine day).',
+                'effect' => 'All products are falling back to stock rules for replenishment suggestions.',
+                'responsible_role' => 'Administrator',
+                'action_label' => 'Inspect Forecast Exceptions',
+                'action_url' => $urlHelper('components/report/forecast_exceptions.php'),
+            ];
+        }
+
+        // 1e. No approved model
+        if (($coverage['store_status'] ?? '') === 'no_approved_model' || $approvedVersion === '') {
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'warning',
+                'category' => 'no_approved_model',
+                'condition' => 'No approved forecasting model selected for Store guidance.',
+                'effect' => sprintf('All %d active products use standard stock rules for buying suggestions.', (int)($coverage['scope_count'] ?? 0)),
+                'responsible_role' => 'Administrator',
+                'action_label' => ($actorRole === 'super_admin' ? 'Configure & Train in Governance' : 'Check Data Readiness & Model Status'),
+                'action_url' => ($actorRole === 'super_admin' ? $urlHelper('components/report/forecast_analytics.php') : ($actorRole === 'admin' ? $urlHelper('components/report/data_readiness.php') : null)),
+            ];
+        }
+
+        // 1f. Partial coverage (some products excluded and using stock rules)
+        if ((int)($coverage['forecast_backed_count'] ?? 0) > 0 && (int)($coverage['stock_rule_count'] ?? 0) > 0) {
+            $actionUrl = $urlHelper('components/report/forecast_exceptions.php');
+            $roleLabel = 'Administrator';
+            if ($actorRole === 'inventory_manager') {
+                $roleLabel = 'Inventory Manager';
+            }
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'info',
+                'category' => 'partial_coverage',
+                'condition' => sprintf('%d of %d active products are excluded from demand forecasting.', (int)$coverage['stock_rule_count'], (int)$coverage['scope_count']),
+                'effect' => 'Excluded products use standard stock rules for replenishment suggestions.',
+                'responsible_role' => $roleLabel,
+                'action_label' => 'Inspect Excluded Products & Reasons',
+                'action_url' => $actionUrl,
+            ];
+        }
+
+        // 1g. All products using stock rules (no approved model was handled above; this covers ungenerated/insufficient forecasts)
+        if ((int)($coverage['forecast_backed_count'] ?? 0) === 0 && (int)($coverage['scope_count'] ?? 0) > 0 && ($coverage['store_status'] ?? '') !== 'no_approved_model' && $approvedVersion !== '' && !$isSuspended && (!$latestJob || ($latestJob['status'] ?? '') !== 'failed')) {
+            $issues[] = [
+                'priority' => 1,
+                'severity' => 'info',
+                'category' => 'stock_rules_only',
+                'condition' => sprintf('Demand forecasts unavailable for current guidance. All %d products use stock rules.', (int)($coverage['scope_count'] ?? 0)),
+                'effect' => 'Buying suggestions fall back to standard min/max replenishment rules.',
+                'responsible_role' => ($actorRole === 'inventory_manager' ? 'Inventory Manager' : 'Administrator'),
+                'action_label' => 'Inspect Forecast Exceptions',
+                'action_url' => $urlHelper('components/report/forecast_exceptions.php'),
+            ];
+        }
+
+        // -------------------------------------------------------------
+        // Priority 2: Available Reviews (Model Candidate Ready for Review)
+        // -------------------------------------------------------------
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT model_version FROM model_training_runs
+                WHERE status = 'completed' AND model_version != ?
+                ORDER BY training_run_id DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$approvedVersion]);
+            $candidateVersion = $stmt->fetchColumn();
+
+            if ($candidateVersion) {
+                // Check if candidate passed evaluation gates
+                $isQualified = false;
+                try {
+                    $evalService = new CandidateEvaluationService($this->pdo);
+                    $quality = $evalService->evaluateCandidateQuality((string)$candidateVersion);
+                    $isQualified = !empty($quality['passed']);
+                } catch (Throwable) {}
+
+                if (!$isQualified) {
+                    $checkStmt = $this->pdo->prepare("
+                        SELECT COUNT(*) FROM ml_model_evaluations
+                        WHERE model_version = ? AND candidate_gate_outcome = 'passed'
+                    ");
+                    $checkStmt->execute([$candidateVersion]);
+                    if ((int)$checkStmt->fetchColumn() >= 3) {
+                        $isQualified = true;
+                    }
+                }
+
+                if ($isQualified) {
+                    // Check if already operationally reviewed
+                    $revKey = 'ml_review_operational_' . $candidateVersion;
+                    $isReviewed = (bool)($this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = '" . $revKey . "'")->fetchColumn() ?: false);
+                    if (!$isReviewed) {
+                        $actionUrl = null;
+                        $actionLabel = 'Administrator operational review required';
+                        if ($actorRole === 'admin') {
+                            $actionUrl = $urlHelper('components/administrator/model_review.php');
+                            $actionLabel = 'Open Detailed Model Review';
+                        } elseif ($actorRole === 'super_admin') {
+                            $actionUrl = $urlHelper('components/report/forecast_analytics.php');
+                            $actionLabel = 'View Candidate Governance';
+                        }
+                        $issues[] = [
+                            'priority' => 2,
+                            'severity' => 'warning',
+                            'category' => 'candidate_review',
+                            'condition' => sprintf("Qualified candidate model '%s' is ready for operational review.", $candidateVersion),
+                            'effect' => 'Existing guidance continues unchanged until the new model is approved.',
+                            'responsible_role' => 'Administrator',
+                            'action_label' => $actionLabel,
+                            'action_url' => $actionUrl,
+                        ];
+                    }
+                }
+            }
+        } catch (Throwable) {}
+
+        // -------------------------------------------------------------
+        // Priority 3: Informational Progress
+        // -------------------------------------------------------------
+
+        // 3a. Candidate observation progress
+        if ($isObservation) {
+            $obsDays = 0;
+            $obsReq = 28;
+            $obsModel = $approvedVersion ?: 'Candidate';
+            try {
+                $evalService = new CandidateEvaluationService($this->pdo);
+                $prog = $evalService->getCandidateObservationProgress($obsModel);
+                $obsDays = (int)($prog['usable_observed_days'] ?? 0);
+                $obsReq = (int)($prog['required_observed_days'] ?? 28);
+            } catch (Throwable) {}
+
+            $actionUrl = null;
+            if ($actorRole === 'admin') {
+                $actionUrl = $urlHelper('components/administrator/model_review.php');
+            } elseif ($actorRole === 'super_admin') {
+                $actionUrl = $urlHelper('components/report/forecast_analytics.php');
+            }
+            $issues[] = [
+                'priority' => 3,
+                'severity' => 'info',
+                'category' => 'observation_mode',
+                'condition' => sprintf("Model '%s' is in prospective observation (day %d of %d).", $obsModel, $obsDays, $obsReq),
+                'effect' => 'Forecasts are being observed against live Store sales and are not approved for routine purchasing.',
+                'responsible_role' => 'Automatic Observation',
+                'action_label' => 'View Observation Details',
+                'action_url' => $actionUrl,
+            ];
+        }
+
+        // 3b. Background update in progress
+        if ($isUpdating) {
+            $issues[] = [
+                'priority' => 3,
+                'severity' => 'info',
+                'category' => 'updating',
+                'condition' => sprintf('Background forecast generation is in progress (Job #%s).', (string)($latestJob['job_id'] ?? 'active')),
+                'effect' => (int)($coverage['forecast_backed_count'] ?? 0) > 0
+                    ? 'Existing guidance remains valid until the run finishes.'
+                    : 'Buying suggestions use stock rules until the run completes.',
+                'responsible_role' => 'Background Worker',
+                'action_label' => 'In Progress (No action needed)',
+                'action_url' => null,
+            ];
+        }
+
+        // -------------------------------------------------------------
+        // Priority 4: Healthy No-Action State
+        // -------------------------------------------------------------
+        $hasPriority1Or2 = false;
+        foreach ($issues as $iss) {
+            if ($iss['priority'] <= 2 && !in_array($iss['category'], ['partial_coverage'], true)) {
+                $hasPriority1Or2 = true;
+                break;
+            }
+        }
+
+        if (!$hasPriority1Or2 && !empty($coverage['is_guidance_usable']) && (int)($coverage['forecast_backed_count'] ?? 0) === (int)($coverage['scope_count'] ?? 0)) {
+            return [[
+                'priority' => 4,
+                'severity' => 'healthy',
+                'category' => 'healthy',
+                'condition' => 'All operational checks passing.',
+                'effect' => 'Demand forecasts are actively guiding buying suggestions for eligible products.',
+                'responsible_role' => 'None (No action needed)',
+                'action_label' => 'Healthy (No action needed)',
+                'action_url' => null,
+            ]];
+        }
+
+        usort($issues, static fn(array $a, array $b): int => $a['priority'] <=> $b['priority']);
+
+        return $issues;
+    }
+
+    public function getPerformanceSummary(?string $modelVersion = null, ?array $coverage = null): array
+    {
+        $targetModel = $modelVersion;
+        if (empty($targetModel)) {
+            $targetModel = (string)($coverage['approved_model_version'] ?? '');
+        }
+        if (empty($targetModel)) {
+            try {
+                $targetModel = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
+            } catch (Throwable) {}
+        }
+
+        $standardNotes = 'Lower error is better (WAPE is weighted absolute percentage error, not an accuracy percentage). Overestimation and underestimation are reported separately. Stockouts leave unmet demand unknown and are excluded from proven overestimation.';
+
+        if (empty($targetModel)) {
+            return [
+                'status' => 'still_collecting_evidence',
+                'model_version' => null,
+                'reason' => 'No approved Store model selected yet. Train and approve a model to begin collecting prediction evidence.',
+                'horizons' => [],
+                'notes' => $standardNotes,
+            ];
+        }
+
+        try {
+            $stmt = $this->pdo->prepare("
+                SELECT * FROM ml_model_evaluations
+                WHERE model_version = ?
+                ORDER BY horizon_days ASC
+            ");
+            $stmt->execute([$targetModel]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            $rows = [];
+        }
+
+        if (empty($rows)) {
+            return [
+                'status' => 'still_collecting_evidence',
+                'model_version' => $targetModel,
+                'reason' => sprintf("Genuine Store outcomes are still accumulating for model '%s' (requires completed target dates with Store observations across 7, 14, and 28-day horizons).", $targetModel),
+                'horizons' => [],
+                'notes' => $standardNotes,
+            ];
+        }
+
+        $horizons = [];
+        foreach ($rows as $row) {
+            $h = (int)$row['horizon_days'];
+            $horizons[$h] = [
+                'horizon_days' => $h,
+                'mae' => isset($row['mae']) ? (float)$row['mae'] : null,
+                'rmse' => isset($row['rmse']) ? (float)$row['rmse'] : null,
+                'wape' => isset($row['wape']) ? (float)$row['wape'] : null,
+                'baseline_mae' => isset($row['baseline_mae']) ? (float)$row['baseline_mae'] : null,
+                'baseline_rmse' => isset($row['baseline_rmse']) ? (float)$row['baseline_rmse'] : null,
+                'baseline_wape' => isset($row['baseline_wape']) ? (float)$row['baseline_wape'] : null,
+                'overestimated_units' => isset($row['overestimated_units']) ? (int)$row['overestimated_units'] : null,
+                'underestimated_units' => isset($row['underestimated_units']) ? (int)$row['underestimated_units'] : null,
+                'gate_outcome' => $row['candidate_gate_outcome'] ?? null,
+                'missing_metric_reason' => $row['missing_metric_reason'] ?? null,
+                'data_window_start' => $row['data_window_start'] ?? null,
+                'data_window_end' => $row['data_window_end'] ?? null,
+            ];
+        }
+
+        return [
+            'status' => 'available',
+            'model_version' => $targetModel,
+            'reason' => null,
+            'horizons' => $horizons,
+            'notes' => $standardNotes,
         ];
     }
 
@@ -666,5 +1045,73 @@ class DemandForecastService
         } catch (Throwable $e) {
             return false;
         }
+    }
+
+    public function getPredictionPerformanceEvidence(?string $asOfDate = null, ?string $modelVersion = null): array
+    {
+        $timezone = new \DateTimeZone('Asia/Manila');
+        if ($asOfDate === null) {
+            $asOfDate = (new \DateTime('now', $timezone))->modify('-1 day')->format('Y-m-d');
+        }
+
+        // Determine settings
+        $settings = [];
+        try {
+            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('ml_approved_model_version', 'ml_observation_mode', 'demo_import_metadata')");
+            $settings = $stmt ? $stmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+        } catch (\Throwable) {}
+
+        $approvedModel = $settings['ml_approved_model_version'] ?? null;
+        $isObservation = in_array($settings['ml_observation_mode'] ?? '0', ['1', 'true'], true);
+
+        // Resolve model version to evaluate
+        $modelAssociation = 'candidate';
+        if ($modelVersion === null) {
+            // Check usable job first
+            $usableJobId = $this->getLatestUsableJobId($asOfDate);
+            if ($usableJobId) {
+                try {
+                    $mStmt = $this->pdo->prepare("SELECT model_version FROM demand_forecasts WHERE job_id = ? LIMIT 1");
+                    $mStmt->execute([$usableJobId]);
+                    $modelVersion = $mStmt->fetchColumn() ?: null;
+                } catch (\Throwable) {}
+            }
+            if (!$modelVersion) {
+                $modelVersion = $approvedModel;
+            }
+            if (!$modelVersion) {
+                // Check latest completed training run
+                try {
+                    $rStmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                    $modelVersion = $rStmt ? ($rStmt->fetchColumn() ?: null) : null;
+                } catch (\Throwable) {}
+            }
+        }
+
+        if (!$modelVersion) {
+            $evalService = new CandidateEvaluationService($this->pdo);
+            return $evalService->getPredictionPerformanceEvidence($this->pdo, 'none', $asOfDate, 'unavailable');
+        }
+
+        // Determine model association
+        if ($approvedModel !== null && $modelVersion === $approvedModel) {
+            $modelAssociation = $isObservation ? 'candidate' : 'current';
+        } else {
+            // Check if it is the latest candidate from training runs
+            $latestCandidate = null;
+            try {
+                $rStmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                $latestCandidate = $rStmt ? ($rStmt->fetchColumn() ?: null) : null;
+            } catch (\Throwable) {}
+
+            if ($latestCandidate !== null && $modelVersion === $latestCandidate) {
+                $modelAssociation = 'candidate';
+            } else {
+                $modelAssociation = 'previous';
+            }
+        }
+
+        $evalService = new CandidateEvaluationService($this->pdo);
+        return $evalService->getPredictionPerformanceEvidence($this->pdo, $modelVersion, $asOfDate, $modelAssociation);
     }
 }

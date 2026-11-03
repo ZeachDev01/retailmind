@@ -319,4 +319,361 @@ class CandidateEvaluationService
     {
         $this->governance()->setRecommendationsSuspended($suspended, $updatedBy);
     }
+
+    public function getPredictionPerformanceEvidence(PDO $pdo, string $modelVersion, string $asOfDate, ?string $association = null): array
+    {
+        $timezone = new \DateTimeZone('Asia/Manila');
+        $hasOrigin = $this->hasColumn($pdo, 'demand_forecasts', 'forecast_origin');
+        $originCondition = $hasOrigin ? "AND df.forecast_origin IS NOT NULL AND df.forecast_origin < df.target_date" : "";
+
+        try {
+            $stmt = $pdo->prepare("
+                SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day, df.forecast_origin
+                FROM demand_forecasts df
+                WHERE df.model_version = ?
+                  AND df.target_date <= ?
+                  AND df.predicted_units IS NOT NULL
+                  AND df.predicted_units >= 0
+                  {$originCondition}
+                ORDER BY df.target_date ASC, df.product_id ASC
+            ");
+            $stmt->execute([$modelVersion, $asOfDate]);
+            $forecasts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (\Throwable $e) {
+            $forecasts = [];
+        }
+
+        // Demo check
+        $isDemo = false;
+        $demoLabel = null;
+        try {
+            $demoStmt = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'demo_import_metadata'");
+            if ($demoStmt && ($demoVal = $demoStmt->fetchColumn())) {
+                $isDemo = true;
+                $decoded = json_decode((string)$demoVal, true);
+                $demoLabel = 'Demo Evidence (' . ($decoded['source_label'] ?? 'S001') . ')';
+            }
+        } catch (\Throwable) {}
+
+        // Default empty structure
+        $emptyHorizons = [];
+        foreach ([7, 14, 28] as $h) {
+            $emptyHorizons[$h] = [
+                'mae' => null,
+                'rmse' => null,
+                'wape' => null,
+                'overestimated_units' => null,
+                'underestimated_units' => null,
+                'overestimated_count' => 0,
+                'underestimated_count' => 0,
+                'exact_count' => 0,
+                'usable_comparisons' => 0,
+                'baseline_mae' => null,
+                'baseline_rmse' => null,
+                'baseline_wape' => null,
+                'baseline_overestimated_units' => null,
+                'baseline_underestimated_units' => null,
+            ];
+        }
+
+        // Check verified expiry losses
+        $verifiedExpiry = null;
+        if ($this->hasColumn($pdo, 'stock_movements', 'change_qty')) {
+            try {
+                $checkExp = $pdo->prepare("SELECT COUNT(*) FROM stock_movements WHERE reason IN ('expired', 'expiry', 'spoilage', 'damaged_expired') AND moved_at <= ?");
+                $checkExp->execute([$asOfDate . ' 23:59:59']);
+                if ((int)$checkExp->fetchColumn() > 0) {
+                    $expStmt = $pdo->prepare("SELECT COALESCE(SUM(ABS(change_qty)), 0) FROM stock_movements WHERE reason IN ('expired', 'expiry', 'spoilage', 'damaged_expired') AND moved_at <= ?");
+                    $expStmt->execute([$asOfDate . ' 23:59:59']);
+                    $verifiedExpiry = (int)$expStmt->fetchColumn();
+                }
+            } catch (\Throwable) {
+                $verifiedExpiry = null;
+            }
+        }
+
+        $baseResult = [
+            'model_version' => $modelVersion,
+            'model_association' => $association ?? 'candidate',
+            'is_demo' => $isDemo,
+            'demo_label' => $demoLabel,
+            'model_inputs_description' => 'Store daily sales history, day of week, and lag patterns. Prices and promotions are not active model inputs.',
+            'status' => 'unavailable',
+            'status_label' => 'Unavailable',
+            'explanation' => 'No completed forecasts or usable Store sales observations available yet for evaluation.',
+            'completed_target_dates' => 0,
+            'required_target_dates' => 28,
+            'usable_comparison_count' => 0,
+            'products_evaluated' => [],
+            'product_count' => 0,
+            'date_range' => ['start' => null, 'end' => null],
+            'incomplete_demand_count' => 0,
+            'closures_paused' => 0,
+            'missing_count' => 0,
+            'verified_stockouts' => null,
+            'verified_stockouts_display' => 'Unavailable',
+            'verified_expiry_losses' => $verifiedExpiry,
+            'verified_expiry_losses_display' => $verifiedExpiry !== null ? (string)$verifiedExpiry : 'Unavailable',
+            'causal_claim' => null,
+            'causal_claim_note' => 'Advisory guidance only. Predictions do not claim causal reduction of stockouts or waste.',
+            'metrics_by_horizon' => $emptyHorizons,
+        ];
+
+        if (empty($forecasts)) {
+            return $baseResult;
+        }
+
+        $historyService = new DemandHistoryService();
+        $targetDates = [];
+        $productsEvaluated = [];
+        $stockoutsEncountered = 0;
+        $closuresEncountered = 0;
+        $missingEncountered = 0;
+
+        $comparisonsByHorizon = [7 => [], 14 => [], 28 => []];
+        $baselineByHorizon = [7 => [], 14 => [], 28 => []];
+        $baselineCache = [];
+
+        foreach ($forecasts as $fc) {
+            $pid = (int)$fc['product_id'];
+            $date = $fc['target_date'];
+            $h = (int)$fc['horizon_day'];
+            $pred = (float)$fc['predicted_units'];
+
+            $ev = $historyService->getDailyEvidence($pdo, $pid, $date, $date, $asOfDate . ' 23:59:59');
+            if (empty($ev)) {
+                $missingEncountered++;
+                continue;
+            }
+
+            $day = $ev[0];
+            $class = $day['classification'] ?? '';
+
+            if ($class === 'closed') {
+                $closuresEncountered++;
+                continue;
+            }
+            if ($class === 'stockout_censored') {
+                $stockoutsEncountered++;
+                continue;
+            }
+            if (!in_array($class, ['valid_demand', 'genuine_zero'], true)) {
+                $missingEncountered++;
+                continue;
+            }
+
+            $actual = (float)$day['valid_sales_units'];
+            $targetDates[$date] = true;
+            $productsEvaluated[$pid] = true;
+
+            foreach ([7, 14, 28] as $horizonLimit) {
+                if ($h <= $horizonLimit) {
+                    $comparisonsByHorizon[$horizonLimit][] = [
+                        'pid' => $pid,
+                        'date' => $date,
+                        'predicted' => $pred,
+                        'actual' => $actual,
+                    ];
+                }
+            }
+
+            // Weekly seasonal baseline (same product, 7 days prior)
+            $prevWeekDate = (new \DateTime($date, $timezone))->modify('-7 days')->format('Y-m-d');
+            $cacheKey = "{$pid}_{$prevWeekDate}";
+            if (!array_key_exists($cacheKey, $baselineCache)) {
+                $baseEv = $historyService->getDailyEvidence($pdo, $pid, $prevWeekDate, $prevWeekDate, $asOfDate . ' 23:59:59');
+                if (!empty($baseEv) && in_array($baseEv[0]['classification'] ?? '', ['valid_demand', 'genuine_zero'], true)) {
+                    $baselineCache[$cacheKey] = (float)$baseEv[0]['valid_sales_units'];
+                } else {
+                    $baselineCache[$cacheKey] = null;
+                }
+            }
+
+            $baseUnits = $baselineCache[$cacheKey];
+            if ($baseUnits !== null) {
+                foreach ([7, 14, 28] as $horizonLimit) {
+                    if ($h <= $horizonLimit) {
+                        $baselineByHorizon[$horizonLimit][] = [
+                            'pid' => $pid,
+                            'date' => $date,
+                            'predicted' => $baseUnits,
+                            'actual' => $actual,
+                        ];
+                    }
+                }
+            }
+        }
+
+        $completedDaysCount = count($targetDates);
+        $totalUsableComparisons = count($comparisonsByHorizon[28]);
+
+        // Compute metrics per horizon
+        $metricsByHorizon = [];
+        foreach ([7, 14, 28] as $h) {
+            $comps = $comparisonsByHorizon[$h];
+            $count = count($comps);
+
+            if ($count === 0) {
+                $metricsByHorizon[$h] = $emptyHorizons[$h];
+                continue;
+            }
+
+            $overUnits = 0.0;
+            $underUnits = 0.0;
+            $overCount = 0;
+            $underCount = 0;
+            $exactCount = 0;
+            $absErrors = [];
+            $sqErrors = [];
+            $sumActual = 0.0;
+
+            foreach ($comps as $c) {
+                $p = $c['predicted'];
+                $a = $c['actual'];
+                $diff = $p - $a;
+
+                if ($p > $a) {
+                    $overUnits += ($p - $a);
+                    $overCount++;
+                } elseif ($a > $p) {
+                    $underUnits += ($a - $p);
+                    $underCount++;
+                } else {
+                    $exactCount++;
+                }
+
+                $abs = abs($diff);
+                $absErrors[] = $abs;
+                $sqErrors[] = $diff * $diff;
+                $sumActual += $a;
+            }
+
+            $mae = array_sum($absErrors) / $count;
+            $rmse = sqrt(array_sum($sqErrors) / $count);
+            $wape = $sumActual > 0 ? (array_sum($absErrors) / $sumActual) : null;
+
+            // Baseline metrics on matching eligible periods
+            $baseComps = $baselineByHorizon[$h];
+            $baseCount = count($baseComps);
+            $baseMae = null;
+            $baseRmse = null;
+            $baseWape = null;
+            $baseOverUnits = null;
+            $baseUnderUnits = null;
+
+            if ($baseCount > 0) {
+                $bOverUnits = 0.0;
+                $bUnderUnits = 0.0;
+                $bAbsErrors = [];
+                $bSqErrors = [];
+                $bSumActual = 0.0;
+
+                foreach ($baseComps as $bc) {
+                    $bp = $bc['predicted'];
+                    $ba = $bc['actual'];
+                    $bdiff = $bp - $ba;
+
+                    if ($bp > $ba) {
+                        $bOverUnits += ($bp - $ba);
+                    } elseif ($ba > $bp) {
+                        $bUnderUnits += ($ba - $bp);
+                    }
+
+                    $bAbs = abs($bdiff);
+                    $bAbsErrors[] = $bAbs;
+                    $bSqErrors[] = $bdiff * $bdiff;
+                    $bSumActual += $ba;
+                }
+
+                $baseMae = round(array_sum($bAbsErrors) / $baseCount, 4);
+                $baseRmse = round(sqrt(array_sum($bSqErrors) / $baseCount), 4);
+                $baseWape = $bSumActual > 0 ? round(array_sum($bAbsErrors) / $bSumActual, 4) : null;
+                $baseOverUnits = round($bOverUnits, 2);
+                $baseUnderUnits = round($bUnderUnits, 2);
+            }
+
+            $metricsByHorizon[$h] = [
+                'mae' => round($mae, 4),
+                'rmse' => round($rmse, 4),
+                'wape' => $wape !== null ? round($wape, 4) : null,
+                'overestimated_units' => round($overUnits, 2),
+                'underestimated_units' => round($underUnits, 2),
+                'overestimated_count' => $overCount,
+                'underestimated_count' => $underCount,
+                'exact_count' => $exactCount,
+                'usable_comparisons' => $count,
+                'baseline_mae' => $baseMae,
+                'baseline_rmse' => $baseRmse,
+                'baseline_wape' => $baseWape,
+                'baseline_overestimated_units' => $baseOverUnits,
+                'baseline_underestimated_units' => $baseUnderUnits,
+            ];
+        }
+
+        // Verified stockouts
+        $verifiedStockouts = null;
+        if ($stockoutsEncountered > 0) {
+            $verifiedStockouts = $stockoutsEncountered;
+        }
+        if ($this->hasColumn($pdo, 'stock_movements', 'reason')) {
+            try {
+                $stkStmt = $pdo->prepare("SELECT COUNT(*) FROM stock_movements WHERE reason IN ('stockout', 'out_of_stock') AND moved_at <= ?");
+                $stkStmt->execute([$asOfDate . ' 23:59:59']);
+                $smStockouts = (int)$stkStmt->fetchColumn();
+                if ($smStockouts > 0) {
+                    $verifiedStockouts = ($verifiedStockouts ?? 0) + $smStockouts;
+                }
+            } catch (\Throwable) {}
+        }
+
+        // Date range
+        $dateKeys = array_keys($targetDates);
+        sort($dateKeys);
+        $dateRange = [
+            'start' => !empty($dateKeys) ? $dateKeys[0] : null,
+            'end' => !empty($dateKeys) ? $dateKeys[count($dateKeys) - 1] : null,
+        ];
+
+        // State determination
+        if ($completedDaysCount >= 28) {
+            $status = 'genuine_evidence';
+            $statusLabel = 'Genuine Store evidence';
+            $explanation = 'Performance measured against genuine Store sales outcomes across 28+ completed target dates.';
+        } elseif ($completedDaysCount > 0) {
+            $status = 'collecting_evidence';
+            $statusLabel = 'Still collecting evidence';
+            $explanation = "Still collecting evidence: {$completedDaysCount} of 28 completed target dates backed by usable Store observations. Requires at least 28 completed target dates backed by usable Store observations before prediction performance can be established.";
+        } else {
+            $status = 'unavailable';
+            $statusLabel = 'Unavailable';
+            $explanation = 'No completed forecasts or usable Store sales observations available yet for evaluation.';
+        }
+
+        return [
+            'model_version' => $modelVersion,
+            'model_association' => $association ?? 'candidate',
+            'is_demo' => $isDemo,
+            'demo_label' => $demoLabel,
+            'model_inputs_description' => 'Store daily sales history, day of week, and lag patterns. Prices and promotions are not active model inputs.',
+            'status' => $status,
+            'status_label' => $statusLabel,
+            'explanation' => $explanation,
+            'completed_target_dates' => $completedDaysCount,
+            'required_target_dates' => 28,
+            'usable_comparison_count' => $totalUsableComparisons,
+            'products_evaluated' => array_keys($productsEvaluated),
+            'product_count' => count($productsEvaluated),
+            'date_range' => $dateRange,
+            'incomplete_demand_count' => $stockoutsEncountered,
+            'closures_paused' => $closuresEncountered,
+            'missing_count' => $missingEncountered,
+            'verified_stockouts' => $verifiedStockouts,
+            'verified_stockouts_display' => $verifiedStockouts !== null ? (string)$verifiedStockouts : 'Unavailable',
+            'verified_expiry_losses' => $verifiedExpiry,
+            'verified_expiry_losses_display' => $verifiedExpiry !== null ? (string)$verifiedExpiry : 'Unavailable',
+            'causal_claim' => null,
+            'causal_claim_note' => 'Advisory guidance only. Predictions do not claim causal reduction of stockouts or waste.',
+            'metrics_by_horizon' => $metricsByHorizon,
+        ];
+    }
 }

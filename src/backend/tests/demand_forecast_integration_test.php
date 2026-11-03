@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../includes/functions.php';
 
