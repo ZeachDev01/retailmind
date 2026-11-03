@@ -318,6 +318,12 @@ class StoreModelGovernanceService
 
     public function setThresholds(array $thresholds, int $updatedBy): void
     {
+        foreach ($thresholds as $key => $value) {
+            if (!in_array($key, ['ml_max_wape_7d', 'ml_max_wape_14d', 'ml_max_wape_28d'], true)
+                || !is_numeric($value) || !is_finite((float)$value) || (float)$value < 0 || (float)$value > 2) {
+                throw new InvalidArgumentException('WAPE limits must be finite fractions between 0 and 2.');
+            }
+        }
         foreach (['7', '14', '28'] as $horizon) {
             $key = "ml_max_wape_{$horizon}d";
             if (isset($thresholds[$key])) {

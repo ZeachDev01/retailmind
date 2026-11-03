@@ -6,126 +6,30 @@ $message = '';
 $messageClass = '';
 $fieldErrors = [];
 $fieldGroups = [
-    'history' => [
-        'title' => 'Forecast window',
-    ],
-    'schedule' => [
-        'title' => 'Automated retraining schedule',
-    ],
     'accuracy' => [
-        'title' => 'Accuracy thresholds & prediction intervals',
-        'description' => 'Demand percentiles define the lower and upper bounds of the forecast range.',
-    ],
-    'forest' => [
-        'title' => 'Advanced: Random Forest parameters',
-        'description' => 'Fine-tune tree count and node split complexity for training.',
+        'title' => 'Candidate error limits',
+        'description' => 'WAPE measures prediction error: lower is better. Each horizon must meet its limit and strictly beat repeating last week’s sales. Missing evidence blocks qualification.',
     ],
 ];
-$definitions = [
-    'forecast_period_days' => [
-        'label' => 'Forecast horizon (days)',
-        'help' => 'Future days predicted per forecast run.',
-        'min' => 7,
-        'max' => 90,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'history',
-    ],
-    'n_estimators' => [
-        'label' => 'Random Forest trees',
-        'help' => 'Number of decision trees in the ensemble.',
-        'min' => 50,
-        'max' => 1000,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'forest',
-    ],
-    'max_depth' => [
-        'label' => 'Maximum tree depth',
-        'help' => 'Maximum tree depth limit to prevent overfitting.',
-        'min' => 2,
-        'max' => 60,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'forest',
-    ],
-    'min_samples_split' => [
-        'label' => 'Minimum samples to split',
-        'help' => 'Training samples required to split an internal node.',
-        'min' => 2,
-        'max' => 50,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'forest',
-    ],
-    'min_samples_leaf' => [
-        'label' => 'Minimum samples per leaf',
-        'help' => 'Minimum training samples required at a leaf node.',
-        'min' => 1,
-        'max' => 30,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'forest',
-    ],
-    'retrain_frequency_days' => [
-        'label' => 'Retraining interval (days)',
-        'help' => 'Maximum days between automatic retraining runs.',
-        'min' => 1,
-        'max' => 90,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'schedule',
-    ],
-    'retrain_new_sales_records' => [
-        'label' => 'New sales records threshold',
-        'help' => 'New line-item sales records needed to trigger automated retraining.',
-        'min' => 1,
-        'max' => 100000,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'schedule',
-    ],
-    'accuracy_threshold_wape' => [
-        'label' => 'Error warning threshold (WAPE %)',
-        'help' => 'Weighted Absolute Percentage Error warning threshold (lower is better).',
-        'full' => true,
-        'min' => 1,
-        'max' => 200,
-        'step' => '0.1',
-        'type' => 'number',
-        'required' => true,
-        'group' => 'accuracy',
-    ],
-    'prediction_interval_lower' => [
-        'label' => 'Lower demand percentile',
-        'help' => 'Lower bound percentile for uncertainty interval (e.g. 10th percentile).',
-        'min' => 1,
-        'max' => 49,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'accuracy',
-    ],
-    'prediction_interval_upper' => [
-        'label' => 'Upper demand percentile',
-        'help' => 'Upper bound percentile for uncertainty interval (e.g. 90th percentile).',
-        'min' => 51,
-        'max' => 99,
-        'type' => 'number',
-        'required' => true,
-        'group' => 'accuracy',
-    ],
-    'holiday_dates' => [
-        'label' => 'Special events & holiday dates (optional)',
-        'help' => 'Comma-separated YYYY-MM-DD dates to account for demand anomalies. Leave blank if none.',
-        'type' => 'text',
-        'required' => false,
-        'group' => 'accuracy',
-        'full' => true,
-        'placeholder' => '2026-11-27, 2026-12-24',
-    ],
-];
+$definitions = [];
+foreach ([7, 14, 28] as $horizon) {
+    $definitions["ml_max_wape_{$horizon}d"] = [
+        'label' => "{$horizon}-day maximum WAPE (%)",
+        'help' => 'Allowed error from 0% to 200%. This is not an accuracy guarantee.',
+        'min' => 0, 'max' => 200, 'step' => '0.1', 'type' => 'number',
+        'required' => true, 'group' => 'accuracy',
+    ];
+}
+$governance = new \App\Forecasting\StoreModelGovernanceService($pdo);
+$loadLimits = static function () use ($governance): array {
+    $values = [];
+    foreach ($governance->getThresholds() as $horizon => $fraction) {
+        $values["ml_max_wape_{$horizon}d"] = $fraction === null ? '' : (string)($fraction * 100);
+    }
+    return $values;
+};
 
-$settings = get_ml_settings($pdo);
+$settings = $loadLimits();
 $demoMetadata = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_import_metadata'")->fetchColumn();
 $demoDatabase = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
 $isLocalDemo = $demoMetadata !== false
@@ -178,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', ['train', 'approve_demo'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_model_quality') {
     csrf_verify();
     $updates = [];
     $errors = [];
@@ -189,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', [
             $step = (string)($definition['step'] ?? '1');
             $isFloatStep = strpos($step, '.') !== false;
             $numericValid = is_numeric($value) && ($isFloatStep || preg_match('/^-?\d+$/', $value) === 1);
-            if (!$numericValid || (float)$value < $definition['min'] || (float)$value > $definition['max']) {
+            if (!$numericValid || !is_finite((float)$value) || (float)$value < $definition['min'] || (float)$value > $definition['max']) {
                 $rangeMessage = sprintf(
                     '%s must be between %s and %s.',
                     $definition['label'],
@@ -223,26 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', [
         $updates[$key] = $value;
     }
 
-    if (isset($updates['min_samples_leaf'], $updates['min_samples_split'])
-        && (int)$updates['min_samples_leaf'] > (int)$updates['min_samples_split']
-    ) {
-        $crossError = 'Minimum samples per leaf cannot exceed Minimum samples to split.';
-        $fieldErrors['min_samples_leaf'] = $crossError;
-        $errors[] = $crossError;
-    }
-
-    if (isset($updates['prediction_interval_lower'], $updates['prediction_interval_upper'])
-        && (int)$updates['prediction_interval_lower'] >= (int)$updates['prediction_interval_upper']
-    ) {
-        $crossError = 'Lower demand percentile must be strictly less than Upper demand percentile.';
-        $fieldErrors['prediction_interval_lower'] = $crossError;
-        $errors[] = $crossError;
-    }
-
     if (!$errors) {
-        save_key_value_settings($pdo, 'ml_settings', $updates, (int)$_SESSION['user_id']);
+        $governance->setThresholds(array_map(static fn($value): float => (float)$value / 100, $updates), (int)$_SESSION['user_id']);
         log_activity($pdo, (int)$_SESSION['user_id'], 'ML settings update', 'Demand Forecasting', null, null, $updates);
-        $settings = get_ml_settings($pdo);
+        $settings = $loadLimits();
         $message = 'Forecast settings saved. Training Eligibility remains fixed; saving does not train or approve a model.';
         $messageClass = 'tag-success';
     } else {
@@ -482,6 +370,15 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             </details>
         </section>
 
+        <section class="dashboard-section" aria-label="Effective model recipe">
+            <h2>Fixed model recipe</h2>
+            <p>Shared Random Forest: 15 trees, maximum depth 8, random seed 42.</p>
+            <p>Forecast Horizons: 7, 14 and 28 days. Forecasts are point quantities; prediction intervals are unavailable.</p>
+            <p>Training completion does not qualify a candidate. Chronological quality checks, required observation evidence,
+                compatible Store artifacts and explicit local Administrator approval remain required.
+                Failed or rejected candidates leave the approved model unchanged. Demo review never activates a Store model.</p>
+        </section>
+
         <?php if (!$isLocalDemo): ?>
         <section class="dashboard-section" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
             <div class="section-header">
@@ -490,18 +387,12 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     <p class="section-description">Review forecasting settings. Training Eligibility uses the fixed policy above.</p>
                 </div>
             </div>
-            <form method="post" novalidate>
+            <form id="model-quality-settings" method="post" novalidate>
+                <input type="hidden" name="action" value="save_model_quality">
                 <?= csrf_field() ?>
                 <?php foreach ($fieldGroups as $groupKey => $groupMeta): ?>
-                    <?php if ($groupKey === 'forest'): ?>
-                        <details class="ml-tuning"<?= $fieldErrors ? ' open' : '' ?>>
-                            <summary id="ml-tuning-title"><?= htmlspecialchars($groupMeta['title']) ?></summary>
-                    <?php endif; ?>
-
-                    <fieldset class="settings-fieldset"<?= $groupKey === 'forest' ? ' aria-labelledby="ml-tuning-title"' : '' ?>>
-                        <?php if ($groupKey !== 'forest'): ?>
-                            <legend><?= htmlspecialchars($groupMeta['title']) ?></legend>
-                        <?php endif; ?>
+                    <fieldset class="settings-fieldset">
+                        <legend><?= htmlspecialchars($groupMeta['title']) ?></legend>
                         <?php if (isset($groupMeta['description'])): ?>
                             <?php forecast_help('group-' . $groupKey, $groupMeta['description'], 'About ' . $groupMeta['title']); ?>
                         <?php endif; ?>
@@ -546,14 +437,11 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                         </div>
                     </fieldset>
 
-                    <?php if ($groupKey === 'forest'): ?>
-                        </details>
-                    <?php endif; ?>
                 <?php endforeach; ?>
 
                 <div class="form-actions">
                     <button type="submit" class="btn">Save settings</button>
-                    <p class="section-description">Changes take effect on the next model training run.</p>
+                    <p class="section-description">Saved limits are used when candidate quality is evaluated. Saving does not train or approve a model.</p>
                 </div>
             </form>
         </details></section>

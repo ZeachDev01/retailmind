@@ -97,7 +97,12 @@ class CandidateEvaluationService
             $wape = (float)($eval['wape'] ?? 999.0);
             $baselineWape = isset($eval['baseline_wape']) ? (float)$eval['baseline_wape'] : null;
 
-            if ($wape > $maxWape) {
+            if (!isset($eval['wape']) || $baselineWape === null || !is_finite($wape) || !is_finite($baselineWape)) {
+                $eval['gate_status'] = 'blocked';
+                $eval['gate_reason'] = 'Missing model or weekly baseline evidence';
+                $passedAll = false;
+                $reasons[] = "Horizon {$h}d is missing model or weekly baseline evidence";
+            } elseif ($wape > $maxWape) {
                 $eval['gate_status'] = 'failed';
                 $eval['gate_reason'] = "WAPE {$wape} exceeds maximum allowed {$maxWape}";
                 $passedAll = false;
