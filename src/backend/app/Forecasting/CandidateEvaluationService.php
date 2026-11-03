@@ -143,6 +143,12 @@ class CandidateEvaluationService
         try {
             $hasOrigin = $this->hasColumn($pdo, 'demand_forecasts', 'forecast_origin');
             $originCondition = $hasOrigin ? "AND df.forecast_origin IS NOT NULL AND df.forecast_origin < df.target_date" : "";
+            // A historical origin alone cannot make an imported backtest prospective evidence.
+            $prospectiveCondition = $this->hasColumn($pdo, 'demand_forecasts', 'created_at')
+                ? 'AND df.created_at < df.target_date' : '';
+            if ($this->hasColumn($pdo, 'demand_forecasts', 'limitation_marker')) {
+                $prospectiveCondition .= " AND COALESCE(df.limitation_marker, '') NOT LIKE 'Historical M5 experiment;%'";
+            }
 
             $stmt = $pdo->prepare("
                 SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day
@@ -152,6 +158,7 @@ class CandidateEvaluationService
                   AND df.predicted_units IS NOT NULL
                   AND df.predicted_units >= 0
                   {$originCondition}
+                  {$prospectiveCondition}
                 ORDER BY df.target_date ASC
             ");
             $stmt->execute([$modelVersion, $asOfDate]);
