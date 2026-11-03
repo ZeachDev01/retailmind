@@ -33,6 +33,13 @@ class StoreModelGovernanceService
         ?string $modelsDir = null
     ) {
         $this->pdo = $pdo;
+        $runnerConfigPath = dirname(__DIR__, 2) . '/config/forecasting_runner.json';
+        if ($modelsDir === null && is_readable($runnerConfigPath)) {
+            $config = json_decode((string)file_get_contents($runnerConfigPath), true);
+            if (is_string($config['model_storage'] ?? null) && trim($config['model_storage']) !== '') {
+                $modelsDir = $config['model_storage'];
+            }
+        }
         $this->modelsDir = $modelsDir ?? dirname(__DIR__, 2) . '/storage/ml_models';
         $this->evaluationService = $evaluationService ?? new CandidateEvaluationService($pdo, $this);
     }

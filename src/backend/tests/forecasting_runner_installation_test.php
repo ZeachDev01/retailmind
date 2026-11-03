@@ -66,6 +66,14 @@ try {
     assert_same('Sunday', $loaded['effective_schedule']['weekly_retrain_day'], 'Effective weekly retrain day must be Sunday');
     assert_same('01:00', $loaded['effective_schedule']['weekly_retrain_time'], 'Effective weekly retrain time must be 01:00');
     assert_same('Asia/Manila', $loaded['effective_schedule']['timezone'], 'Effective timezone must be Asia/Manila');
+    require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+    require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
+    $governanceDb = new PDO('sqlite::memory:');
+    $installedGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb);
+    assert_same($testConfig['model_storage'], $installedGovernance->getModelsDir(), 'Approval and recovery use the installed worker model storage');
+    $explicitGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb, null, '/isolated/model-fixture');
+    assert_same('/isolated/model-fixture', $explicitGovernance->getModelsDir(), 'Explicit model storage injection remains authoritative');
+
 
     // Verify no credentials retained in config
     $rawConfig = (string)file_get_contents($configPath);
@@ -74,6 +82,42 @@ try {
     }
 
     echo "  ok - Configuration retention contract verified (with 01:00 Asia/Manila schedule and no credentials)\n";
+
+    if (PHP_OS_FAMILY === 'Windows') {
+        $installerRoot = sys_get_temp_dir() . '/rm-installer-' . bin2hex(random_bytes(6));
+        mkdir($installerRoot);
+        $pythonBinary = trim((string)shell_exec('where.exe python.exe'));
+        $pythonBinary = explode("\n", $pythonBinary)[0];
+        $fixtureProcess = proc_open([
+            'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', __DIR__ . '/support/forecasting_installer_fixture.ps1',
+            '-Installer', dirname(__DIR__) . '/scripts/install_forecasting_scheduler.ps1',
+            '-ProjectRoot', $installerRoot, '-PhpBinary', PHP_BINARY, '-PythonBinary', trim($pythonBinary),
+        ], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $installerPipes);
+        $installerOutput = stream_get_contents($installerPipes[1]) . stream_get_contents($installerPipes[2]);
+        fclose($installerPipes[1]);
+        fclose($installerPipes[2]);
+        assert_same(0, proc_close($fixtureProcess), 'Isolated Windows PowerShell installer succeeds: ' . $installerOutput);
+        $installedConfig = $installerRoot . '/src/backend/config/forecasting_runner.json';
+        try {
+            $installedBytes = file_get_contents($installedConfig);
+            assert_true(!str_starts_with($installedBytes, "\xEF\xBB\xBF"), 'Windows PowerShell installer writes BOM-free UTF-8 JSON');
+            $installed = json_decode($installedBytes, true, 512, JSON_THROW_ON_ERROR);
+            assert_same(PHP_BINARY, $installed['php_binary'], 'PHP decodes retained installer paths');
+            $pythonProcess = proc_open([trim($pythonBinary), '-c', 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))', $installedConfig], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pythonPipes);
+            $pythonOutput = stream_get_contents($pythonPipes[1]) . stream_get_contents($pythonPipes[2]);
+            fclose($pythonPipes[1]);
+            fclose($pythonPipes[2]);
+            assert_same(0, proc_close($pythonProcess), 'Python decodes retained installer paths: ' . $pythonOutput);
+        } finally {
+            unlink($installedConfig);
+            foreach (['config', 'storage/logs', 'storage/ml_models', 'storage', ''] as $subdirectory) {
+                rmdir($installerRoot . '/src/backend/' . $subdirectory);
+            }
+            rmdir($installerRoot . '/src');
+            rmdir($installerRoot);
+        }
+    }
 
     // =========================================================================
     // 2. Database Readiness Check and Retry Loop Contract

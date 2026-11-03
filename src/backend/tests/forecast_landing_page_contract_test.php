@@ -213,6 +213,16 @@ try {
     $assert(str_contains(strtolower($exhaustedIssue['effect']), 'technical support') || str_contains(strtolower($exhaustedIssue['condition']), 'technical support'), 'Mentions technical support required');
     $assert($exhaustedIssue['responsible_role'] === 'Super Administrator', 'Responsible role is Super Administrator (technical support)');
 
+    $assert(!str_contains($covExhausted['coverage_summary_text'], 'Automatic retry scheduled'), 'Coverage summary never promises retry after the final attempt');
+    $queueExhausted = (new App\Forecasting\ReplenishmentQueueService($pdo2))->getRecommendations(1, $asOf);
+    $assert(!str_contains($queueExhausted[0]['exclusion_action'], 'Automatic retry'), 'Product fallback does not promise exhausted retries');
+    $pdo2->exec("UPDATE ml_jobs SET attempts = 1, diagnostic_reference = 'BLOCKED:MISSING_APPROVED_MODEL' WHERE job_id = 1");
+    $blockedCoverage = $service2->getCoverage(null, $asOf);
+    $blockedIssues = $service2->getOperationalIssues($blockedCoverage, 'admin');
+    $assert(!str_contains($blockedCoverage['coverage_summary_text'], 'Automatic retry scheduled'), 'Blocked prerequisites never promise an automatic retry in coverage');
+    $assert(count(array_filter($blockedIssues, static fn($issue) => $issue['category'] === 'retry_scheduled')) === 0, 'Blocked prerequisites do not create a no-action retry issue');
+    $pdo2->exec("UPDATE ml_jobs SET attempts = 3, diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED' WHERE job_id = 1");
+
     // For Super Admin, link points to ml_settings.php
     $saIssues = $service2->getOperationalIssues($covExhausted, 'super_admin');
     $saExhausted = null;
@@ -279,6 +289,7 @@ try {
     $pdo4->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");
     $pdo4->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)");
 
+    $pdo4->exec("INSERT INTO model_training_runs (model_version, status) VALUES ('rf_observation_v2', 'completed')");
     $covObs = $service4->getCoverage(null, $asOf);
     $issuesObs = $service4->getOperationalIssues($covObs, 'admin');
 
@@ -289,6 +300,7 @@ try {
         }
     }
     $assert($obsIssue !== null, 'Found observation progress issue');
+    $assert(str_contains($obsIssue['condition'], 'rf_observation_v2'), 'Observation action identifies the actual candidate rather than the approved incumbent');
     $assert(str_contains(strtolower($obsIssue['condition']), 'observation'), 'Condition mentions observation mode');
     $assert(str_contains(strtolower($obsIssue['effect']), 'stock rules') || str_contains(strtolower($obsIssue['effect']), 'routine purchasing'), 'Effect explains not approved for routine purchasing / stock rules used');
 

@@ -43,7 +43,7 @@ class ReplenishmentQueueService
         $jobInfo = null;
         if ($jobId) {
             try {
-                $stmt = $this->pdo->prepare("SELECT trigger_type, status FROM ml_jobs WHERE job_id = ?");
+                $stmt = $this->pdo->prepare("SELECT * FROM ml_jobs WHERE job_id = ?");
                 $stmt->execute([$jobId]);
                 $jobInfo = $stmt->fetch(PDO::FETCH_ASSOC);
             } catch (Throwable $e) {}
@@ -54,9 +54,9 @@ class ReplenishmentQueueService
 
         $latestJobId = null;
         try {
-            $latestJobId = (new DemandForecastService($this->pdo))->getLatestSuccessfulJobId();
+            $latestJobId = (new DemandForecastService($this->pdo))->getLatestUsableJobId($asOfDate);
         } catch (Throwable $e) {}
-        $isSuperseded = ($jobId !== null && $latestJobId !== null && $jobId < $latestJobId);
+        $isSuperseded = ($jobId !== null && $latestJobId !== null && $jobId !== $latestJobId);
 
         $jobMeta = null;
         if ($jobId) {
@@ -176,7 +176,9 @@ class ReplenishmentQueueService
                 } elseif ($isJobFailed) {
                     $exclusionReason = 'Failed forecast: run #' . $jobId;
                     $exclusionCategory = 'recovery';
-                    $exclusionAction = 'Automatic retry scheduled; no action needed';
+                    $exclusionAction = ForecastingSchedulerService::canAutomaticallyRetry($jobInfo)
+                        ? 'Automatic retry scheduled; no action needed'
+                        : 'Super Administrator: Inspect blocked or exhausted recovery before retrying';
                 } elseif ($approvedVersion === '') {
                     $exclusionReason = 'Unapproved model: no approved Store model';
                     $exclusionCategory = 'approval';

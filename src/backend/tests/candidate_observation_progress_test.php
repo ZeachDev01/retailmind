@@ -239,6 +239,15 @@ try {
     $assert($prog['status'] === 'awaiting_approval', 'Progress helper returns status');
     $assert($prog['observation_complete'] === true, 'Progress helper returns observation_complete');
     $assert(!empty($prog['explanation']), 'Progress helper returns explanation');
+    require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
+    $pdo->prepare("INSERT INTO model_training_runs (model_version, status) VALUES (?, 'completed')")->execute([$candidateVersion]);
+    $issues = (new App\Forecasting\DemandForecastService($pdo))->getOperationalIssues([
+        'scope_count' => 1, 'is_observation_mode' => true, 'approved_model_version' => 'previous_approved_model',
+    ]);
+    $observationIssues = array_values(array_filter($issues, static fn($issue) => $issue['category'] === 'observation_mode'));
+    $assert(count($observationIssues) === 1 && str_contains($observationIssues[0]['condition'], $candidateVersion)
+        && str_contains($observationIssues[0]['condition'], 'day 28 of 28'), 'Operational progress reports the candidate actual 28 observed days, not the incumbent progress');
+
 
 } catch (Throwable $e) {
     $failures[] = 'CandidateObservationProgress tests threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();

@@ -5,6 +5,7 @@ namespace App\Forecasting;
 
 require_once __DIR__ . '/StoreModelGovernanceService.php';
 require_once __DIR__ . '/CandidateEvaluationService.php';
+require_once __DIR__ . '/ForecastingSchedulerService.php';
 
 use PDO;
 use InvalidArgumentException;
@@ -347,15 +348,13 @@ class DemandForecastService
                 }
             }
 
-            $stmt = $this->pdo->prepare("
-                SELECT 1 FROM demand_forecasts
-                WHERE job_id = ? AND forecast_origin = ?
-                  AND readiness_level IN ('Low', 'Medium', 'High')
-                LIMIT 1
-            ");
-            $stmt->execute([$jid, $acceptedOrigin]);
-            if ($stmt->fetchColumn()) {
-                return $jid;
+            foreach ((new ReplenishmentQueueService($this->pdo))->getQueue($jid, $asOfDate) as $product) {
+                if (!empty($product['complete_forecast'])
+                    && $product['forecast_origin'] === $acceptedOrigin
+                    && $product['model_version'] === $approvedVersion
+                    && in_array($product['readiness_level'], ['Low', 'Medium', 'High'], true)) {
+                    return $jid;
+                }
             }
         }
 
@@ -446,15 +445,18 @@ class DemandForecastService
         if ($scopeCount === 0) {
             $summaryText = 'No active products available in catalog.';
         } elseif ($latestAttemptStatus === 'failed') {
+            $recoveryText = ForecastingSchedulerService::canAutomaticallyRetry($latestJob)
+                ? 'Automatic retry scheduled; no action needed.'
+                : 'Automatic recovery is blocked or exhausted. Super Administrator: inspect the failure before retrying.';
             if ($forecastBackedCount > 0) {
                 $summaryText = sprintf(
-                    'Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. Automatic retry scheduled; no action needed.',
-                    $forecastBackedCount, $scopeCount, $stockRuleCount
+                    'Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. %s',
+                    $forecastBackedCount, $scopeCount, $stockRuleCount, $recoveryText
                 );
             } else {
                 $summaryText = sprintf(
-                    'Forecast update failed. Buying suggestions are using stock rules for all %d products. Automatic retry scheduled; no action needed.',
-                    $scopeCount
+                    'Forecast update failed. Buying suggestions are using stock rules for all %d products. %s',
+                    $scopeCount, $recoveryText
                 );
             }
         } elseif ($isUpdating) {
@@ -602,7 +604,8 @@ class DemandForecastService
             $attempts = (int)($latestJob['attempts'] ?? 1);
             $opMsg = (string)($latestJob['operator_message'] ?? '');
             $diagRef = (string)($latestJob['diagnostic_reference'] ?? '');
-            $isExhausted = $attempts >= 3 || str_contains($opMsg, 'exceeded') || str_contains($diagRef, 'EXHAUSTED');
+            $isExhausted = !ForecastingSchedulerService::canAutomaticallyRetry($latestJob);
+            $isBlocked = str_starts_with($diagRef, 'BLOCKED:');
 
             if ($isExhausted) {
                 $actionUrl = null;
@@ -614,8 +617,8 @@ class DemandForecastService
                 $issues[] = [
                     'priority' => 1,
                     'severity' => 'critical',
-                    'category' => 'exhausted_recovery',
-                    'condition' => sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
+                    'category' => $isBlocked ? 'blocked_recovery' : 'exhausted_recovery',
+                    'condition' => $isBlocked ? 'Forecast update is blocked by missing prerequisites; automatic retry is unavailable.' : sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
                     'effect' => 'Buying suggestions are using stock rules until the worker failure is resolved. Technical support required to inspect background worker logs.',
                     'responsible_role' => 'Super Administrator',
                     'action_label' => $actionLabel,
@@ -713,6 +716,7 @@ class DemandForecastService
         // -------------------------------------------------------------
         // Priority 2: Available Reviews (Model Candidate Ready for Review)
         // -------------------------------------------------------------
+        $candidateVersion = null;
         try {
             $stmt = $this->pdo->prepare("
                 SELECT model_version FROM model_training_runs
@@ -777,10 +781,10 @@ class DemandForecastService
         // -------------------------------------------------------------
 
         // 3a. Candidate observation progress
-        if ($isObservation) {
+        if ($isObservation && $candidateVersion) {
             $obsDays = 0;
             $obsReq = 28;
-            $obsModel = $approvedVersion ?: 'Candidate';
+            $obsModel = (string)$candidateVersion;
             try {
                 $evalService = new CandidateEvaluationService($this->pdo);
                 $prog = $evalService->getCandidateObservationProgress($obsModel);

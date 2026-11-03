@@ -161,7 +161,7 @@ $runnerConfig = [ordered]@{
         timezone            = 'Asia/Manila'
     }
 }
-$runnerConfig | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configPath -Encoding UTF8
+[System.IO.File]::WriteAllText($configPath, ($runnerConfig | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
 Write-Output "Retained forecasting runner configuration in $configPath"
 
 # Ensure MySQL local service is set to Automatic startup if installed
