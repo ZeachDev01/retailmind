@@ -275,3 +275,7 @@ Overview preferences now save in place and replace their controls with a persist
 ## Forecast workspace — 2026-11-03
 
 Forecast screens prioritize expected sales, on-hand stock and required action. Reuse compact status rows, paired quantity bars, native disclosures and the shared keyboard-accessible info tooltip. Missing measurements remain unavailable; forecast quantities stay distinct from suggested buying quantities. Scope, confirmed direction and checks are recorded in the [Forecast workspace surface brief](../.impeccable/surfaces/forecast-workspace.md).
+
+Backup & Restore copy was simplified on 2026-11-03: retain essential replacement and key-security warnings, use concise upload limits, and avoid repeating labels in helper paragraphs. The [Backup & Restore surface brief](../.impeccable/surfaces/s-system-administrator-backup-restore-php-24753d25.md) records scope and verification. Existing layout and tokens remain unchanged.
+
+Identity review now leads with each backup person and shows only the fields for their selected account path. Server-account references and preservation details use native disclosures; final access and restore consent remain visible. Scope and verification are recorded in the [Identity reconciliation surface brief](../.impeccable/surfaces/administrator-identity-reconciliation-php-60878ea8.md).

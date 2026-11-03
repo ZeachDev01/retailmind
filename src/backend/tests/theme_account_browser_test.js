@@ -268,7 +268,6 @@ const fixture = action => {
                 ] : [
                     'super_administrator/dashboard', 'system_administrator/system_settings', 'user_manager/user_manager',
                     'system_administrator/audit_logs', 'system_administrator/backup_restore', 'system_administrator/database_updates',
-                    'system_administrator/recovery_account',
                     'system_administrator/system_health', 'system_administrator/ml_settings',
                 ];
                 for (const route of routes) {

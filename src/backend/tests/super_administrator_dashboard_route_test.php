@@ -27,7 +27,7 @@ $assert(str_contains($route, 'Critical attention') || str_contains($route, 'Crit
 $assert(str_contains($route, 'Latest successful backup') || str_contains($route, 'Latest backup'), 'Dashboard route is missing Latest backup');
 $assert(str_contains($route, 'Platform/service health') || str_contains($route, 'Platform health'), 'Dashboard route is missing Platform health');
 $assert(str_contains($route, 'ML health') || str_contains($route, 'Demand Forecast'), 'Dashboard route is missing ML health');
-$assert(str_contains($route, 'Recovery access'), 'Dashboard route is missing Recovery access readiness');
+$assert(!str_contains($route, 'Recovery access'), 'Dashboard must not show retired Recovery access readiness');
 $assert(str_contains($route, 'Store continuity') || (str_contains($route, 'continuity') && str_contains($route, 'store')), 'Dashboard route is missing Store continuity');
 foreach (['Recent Sales', 'Total Revenue', 'Inventory Value', 'Adjust Stock', 'Receive Stock'] as $forbidden) {
     $assert(!str_contains($route, $forbidden), "Dashboard route must not expose {$forbidden}");
