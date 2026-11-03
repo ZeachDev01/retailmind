@@ -194,8 +194,11 @@ try {
     // =========================================================================
     // 5. Effective Forecasting Schedule Resolution Contract
     // =========================================================================
-    $realDb = Database::connectionWithRetry();
-    $schedulerService = new ForecastingSchedulerService($realDb);
+    // Contract checks must never connect to the configured Store database.
+    $scheduleDb = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $scheduleDb->exec("CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+        CREATE TABLE ml_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT, updated_by INT)");
+    $schedulerService = new ForecastingSchedulerService($scheduleDb);
     $effectiveSched = $schedulerService->getEffectiveSchedule();
 
     assert_same('01:00', $effectiveSched['daily_forecast_time'], 'Effective schedule daily forecast time must be 01:00');
@@ -205,70 +208,14 @@ try {
 
     // Verify recording into platform_settings
     $schedulerService->recordEffectiveSchedule($effectiveSched);
-    $persistedJson = $realDb->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_effective_schedule'")->fetchColumn();
+    $persistedJson = $scheduleDb->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_effective_schedule'")->fetchColumn();
     assert_true(!empty($persistedJson), 'ml_effective_schedule must be persisted in platform_settings');
     $decodedPersisted = json_decode((string)$persistedJson, true);
     assert_same('01:00', $decodedPersisted['daily_forecast_time'], 'Persisted daily forecast time must be 01:00');
 
     echo "  ok - Effective schedule resolution contract verified (01:00 daily, Sunday 01:00 Asia/Manila)\n";
 
-    // =========================================================================
-    // 6. Real Scheduled Non-Interactive Execution & Actual Worker Completion
-    // =========================================================================
-    $installerScript = dirname(__DIR__) . '/scripts/install_forecasting_scheduler.ps1';
-    $projectRoot = dirname(__DIR__, 3);
-    $phpCmd = PHP_BINARY;
-    $pyCmd = 'python';
-
-    // A. Run installer with -Run switch non-interactively
-    $runCmd = "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File " .
-        escapeshellarg($installerScript) . " -Run 2>&1";
-    exec($runCmd, $runOut, $runExit);
-    assert_same(0, $runExit, "Noninteractive installer -Run execution must succeed. Output: " . implode("\n", $runOut));
-
-    echo "  ok - Non-interactive scheduled runner execution verified\n";
-
-    // B. Demonstrate real worker execution and actual completion in ml_jobs
-    // Test 1: Worker recovers expired lease reaching 3 attempts to permanent terminal failure
-    $realDb->exec("INSERT INTO ml_jobs (trigger_type, status, queued_at, lease_expires_at, attempts)
-        VALUES ('forecast_observation', 'running', DATE_SUB(NOW(), INTERVAL 2 HOUR), DATE_SUB(NOW(), INTERVAL 1 HOUR), 3)");
-    $exhaustedJobId = (int)$realDb->lastInsertId();
-
-    $wOut1 = [];
-    $wExit1 = 0;
-    exec("python " . escapeshellarg($workerScript) . " --run-once 2>&1", $wOut1, $wExit1);
-    assert_same(0, $wExit1, "ml_worker.py --run-once must exit with code 0");
-
-    $stExhausted = $realDb->prepare("SELECT status, diagnostic_reference, completed_at FROM ml_jobs WHERE job_id = ?");
-    $stExhausted->execute([$exhaustedJobId]);
-    $jobExhausted = $stExhausted->fetch(PDO::FETCH_ASSOC);
-    assert_same('failed', $jobExhausted['status'], 'Exhausted lease job must transition to failed status');
-    assert_same('LEASE_TIMEOUT_EXHAUSTED', $jobExhausted['diagnostic_reference'], 'Diagnostic reference must be LEASE_TIMEOUT_EXHAUSTED');
-    assert_true(!empty($jobExhausted['completed_at']), 'completed_at must be populated by worker upon completion');
-
-    // Test 2: Worker claims queued job and completes execution
-    $realDb->exec("INSERT INTO ml_jobs (trigger_type, status, queued_at, attempts)
-        VALUES ('forecast_observation', 'queued', NOW(), 0)");
-    $queuedJobId = (int)$realDb->lastInsertId();
-
-    $wOut2 = [];
-    $wExit2 = 0;
-    exec("python " . escapeshellarg($workerScript) . " --run-once 2>&1", $wOut2, $wExit2);
-    assert_same(0, $wExit2, "ml_worker.py --run-once must exit with code 0");
-
-    $stQueued = $realDb->prepare("SELECT status, attempts, completed_at, operator_message FROM ml_jobs WHERE job_id = ?");
-    $stQueued->execute([$queuedJobId]);
-    $jobProcessed = $stQueued->fetch(PDO::FETCH_ASSOC);
-
-    // Job was claimed and processed by the actual worker (attempts >= 1, completed_at set)
-    assert_true((int)$jobProcessed['attempts'] >= 1, 'Worker must increment attempts count upon claiming job');
-    assert_true(!empty($jobProcessed['completed_at']), 'Worker must set completed_at upon processing job');
-    assert_true($jobProcessed['status'] !== 'queued', 'Job status must transition out of queued upon worker execution');
-
-    // Cleanup isolated test records
-    $realDb->prepare("DELETE FROM ml_jobs WHERE job_id IN (?, ?)")->execute([$exhaustedJobId, $queuedJobId]);
-
-    echo "  ok - Real worker execution, atomic claiming, and actual completion demonstrated\n";
+    echo "  Not tested - Unattended restart and full worker completion require independent target-installation evidence; see the operational acceptance report.\n";
 
 } finally {
     // Restore or cleanup config
