@@ -40,6 +40,27 @@ class DemandHistoryService
         $current = new DateTime($startDate, $this->timezone);
         $end = new DateTime($endDate, $this->timezone);
         
+        // Imported-only history has no Store evidence to reconstruct per day.
+        // Keep the same classification below, and fall back as soon as Store evidence exists.
+        $importOnly = false;
+        $importedQuantities = [];
+        try {
+            $importOnly = (bool)$pdo->query('SELECT
+                NOT EXISTS (SELECT 1 FROM sales)
+                AND NOT EXISTS (SELECT 1 FROM stock_movements)
+                AND NOT EXISTS (SELECT 1 FROM store_calendar)
+                AND NOT EXISTS (SELECT 1 FROM store_weekly_schedule)
+                AND NOT EXISTS (SELECT 1 FROM scheduled_demand_drivers)')->fetchColumn();
+            if ($importOnly) {
+                $imports = $pdo->prepare('SELECT sale_date, quantity FROM forecast_sales_imports
+                    WHERE product_id = ? AND sale_date >= ? AND sale_date <= ?');
+                $imports->execute([$productId, $startDate, $endDate]);
+                $importedQuantities = $imports->fetchAll(PDO::FETCH_KEY_PAIR);
+            }
+        } catch (Throwable) {
+            $importOnly = false;
+        }
+
         $results = [];
         
         while ($current <= $end) {
@@ -97,13 +118,13 @@ class DemandHistoryService
 
             // 1. Calendar Status at cutoff
             $calEvidence = null;
-            if (method_exists($this->calendar, 'getCalendarDateEvidenceAtCutoff')) {
+            if (!$importOnly && method_exists($this->calendar, 'getCalendarDateEvidenceAtCutoff')) {
                 try {
                     $calEvidence = $this->calendar->getCalendarDateEvidenceAtCutoff($pdo, $dateStr, $cutoff);
                 } catch (Throwable) {
                 }
             }
-            $calStatus = $calEvidence ? $calEvidence['status'] : $this->calendar->getCalendarDateStatusAtCutoff($pdo, $dateStr, $cutoff);
+            $calStatus = $importOnly ? null : ($calEvidence ? $calEvidence['status'] : $this->calendar->getCalendarDateStatusAtCutoff($pdo, $dateStr, $cutoff));
             $hasSaleOpening = $calEvidence
                 ? (!empty($calEvidence['has_sale_override']) || ($calEvidence['source'] ?? null) === 'sale')
                 : false;
@@ -111,33 +132,39 @@ class DemandHistoryService
             // 2. Store-level sales evidence at cutoff
             $storeSalesCount = 0;
             $firstStoreSale = null;
-            try {
-                $storeSalesStmt = $pdo->prepare("
-                    SELECT COUNT(*) AS cnt, MIN(sale_date) AS first_sale
-                    FROM sales
-                    WHERE sale_date >= ? AND sale_date <= ?
-                ");
-                $storeSalesStmt->execute([$startOfDay, $effectiveEnd]);
-                $storeSalesRow = $storeSalesStmt->fetch(PDO::FETCH_ASSOC);
-                $storeSalesCount = (int)($storeSalesRow['cnt'] ?? 0);
-                $firstStoreSale = $storeSalesRow['first_sale'] ?? null;
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $storeSalesStmt = $pdo->prepare("
+                        SELECT COUNT(*) AS cnt, MIN(sale_date) AS first_sale
+                        FROM sales
+                        WHERE sale_date >= ? AND sale_date <= ?
+                    ");
+                    $storeSalesStmt->execute([$startOfDay, $effectiveEnd]);
+                    $storeSalesRow = $storeSalesStmt->fetch(PDO::FETCH_ASSOC);
+                    $storeSalesCount = (int)($storeSalesRow['cnt'] ?? 0);
+                    $firstStoreSale = $storeSalesRow['first_sale'] ?? null;
+                } catch (Throwable) {
+                }
+
             }
 
             // 3. Stock context reconstruction from audited movements at cutoff
             $allMovements = [];
-            try {
-                $hasMovementId = isset($this->columns($pdo, 'stock_movements')['movement_id']);
-                $orderClause = $hasMovementId ? "ORDER BY moved_at ASC, movement_id ASC" : "ORDER BY moved_at ASC";
-                $movementsStmt = $pdo->prepare("
-                    SELECT change_qty, moved_at
-                    FROM stock_movements
-                    WHERE product_id = ? AND moved_at <= ?
-                    {$orderClause}
-                ");
-                $movementsStmt->execute([$productId, $effectiveEnd]);
-                $allMovements = $movementsStmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $hasMovementId = isset($this->columns($pdo, 'stock_movements')['movement_id']);
+                    $orderClause = $hasMovementId ? "ORDER BY moved_at ASC, movement_id ASC" : "ORDER BY moved_at ASC";
+                    $movementsStmt = $pdo->prepare("
+                        SELECT change_qty, moved_at
+                        FROM stock_movements
+                        WHERE product_id = ? AND moved_at <= ?
+                        {$orderClause}
+                    ");
+                    $movementsStmt->execute([$productId, $effectiveEnd]);
+                    $allMovements = $movementsStmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Throwable) {
+                }
+
             }
 
             $hasStockEvidence = count($allMovements) > 0;
@@ -162,24 +189,33 @@ class DemandHistoryService
             // 4. Observed Sales & Historical Attribution
             $sold = 0;
             $salesRecords = 0;
-            try {
-                $soldStmt = $pdo->prepare("
-                    SELECT COUNT(*) AS records, COALESCE(SUM(" . $this->saleUnitsExpression($pdo, 'si') . "), 0) AS units
-                    FROM sale_items si
-                    JOIN sales s ON si.sale_id = s.sale_id
-                    WHERE si.product_id = ?
-                      AND s.sale_date >= ? AND s.sale_date <= ?
-                ");
-                $soldStmt->execute([$productId, $startOfDay, $effectiveEnd]);
-                $sales = $soldStmt->fetch(PDO::FETCH_ASSOC);
-                $sold = (int)($sales['units'] ?? 0);
-                $salesRecords = (int)($sales['records'] ?? 0);
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $soldStmt = $pdo->prepare("
+                        SELECT COUNT(*) AS records, COALESCE(SUM(" . $this->saleUnitsExpression($pdo, 'si') . "), 0) AS units
+                        FROM sale_items si
+                        JOIN sales s ON si.sale_id = s.sale_id
+                        WHERE si.product_id = ?
+                          AND s.sale_date >= ? AND s.sale_date <= ?
+                    ");
+                    $soldStmt->execute([$productId, $startOfDay, $effectiveEnd]);
+                    $sales = $soldStmt->fetch(PDO::FETCH_ASSOC);
+                    $sold = (int)($sales['units'] ?? 0);
+                    $salesRecords = (int)($sales['records'] ?? 0);
+                } catch (Throwable) {
+                }
+
             }
 
             $source = 'pos';
             $imported = false;
-            if ($salesRecords === 0 && $endOfDay <= $cutoff) {
+            if ($importOnly && $endOfDay <= $cutoff) {
+                $imported = $importedQuantities[$dateStr] ?? false;
+                if ($imported !== false) {
+                    $sold = (int)$imported;
+                    $source = 'import';
+                }
+            } elseif ($salesRecords === 0 && $endOfDay <= $cutoff) {
                 try {
                     $importStmt = $pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?
                         AND NOT EXISTS (SELECT 1 FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
@@ -196,48 +232,57 @@ class DemandHistoryService
 
             // Approved sale reversals known by the cutoff, in Base Units
             $reversed = 0;
-            try {
-                $reversedStmt = $pdo->prepare("
-                    SELECT COALESCE(SUM(" . $this->reversalUnitsExpression($pdo, 'sri', 'si') . "), 0)
-                    FROM sale_reversal_items sri
-                    JOIN sale_reversals sr ON sri.reversal_id = sr.reversal_id
-                    JOIN sale_items si ON sri.sale_item_id = si.sale_item_id
-                    JOIN sales s ON si.sale_id = s.sale_id
-                    WHERE sri.product_id = ?
-                      AND s.sale_date >= ? AND s.sale_date <= ?
-                      AND sr.status = 'approved'
-                      AND sr.approved_at <= ?
-                ");
-                $reversedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
-                $reversed = (int)$reversedStmt->fetchColumn();
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $reversedStmt = $pdo->prepare("
+                        SELECT COALESCE(SUM(" . $this->reversalUnitsExpression($pdo, 'sri', 'si') . "), 0)
+                        FROM sale_reversal_items sri
+                        JOIN sale_reversals sr ON sri.reversal_id = sr.reversal_id
+                        JOIN sale_items si ON sri.sale_item_id = si.sale_item_id
+                        JOIN sales s ON si.sale_id = s.sale_id
+                        WHERE sri.product_id = ?
+                          AND s.sale_date >= ? AND s.sale_date <= ?
+                          AND sr.status = 'approved'
+                          AND sr.approved_at <= ?
+                    ");
+                    $reversedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
+                    $reversed = (int)$reversedStmt->fetchColumn();
+                } catch (Throwable) {
+                }
+
             }
 
             // Cash refunds created before the cutoff, in Base Units
             $refunded = 0;
-            try {
-                $refundedStmt = $pdo->prepare("
-                    SELECT COALESCE(SUM(" . $this->refundUnitsExpression($pdo, 'cri', 'si') . "), 0)
-                    FROM cash_refund_items cri
-                    JOIN cash_refunds cr ON cri.refund_id = cr.refund_id
-                    JOIN sale_items si ON cri.sale_item_id = si.sale_item_id
-                    JOIN sales s ON si.sale_id = s.sale_id
-                    WHERE cri.product_id = ?
-                      AND s.sale_date >= ? AND s.sale_date <= ?
-                      AND cr.created_at <= ?
-                ");
-                $refundedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
-                $refunded = (int)$refundedStmt->fetchColumn();
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $refundedStmt = $pdo->prepare("
+                        SELECT COALESCE(SUM(" . $this->refundUnitsExpression($pdo, 'cri', 'si') . "), 0)
+                        FROM cash_refund_items cri
+                        JOIN cash_refunds cr ON cri.refund_id = cr.refund_id
+                        JOIN sale_items si ON cri.sale_item_id = si.sale_item_id
+                        JOIN sales s ON si.sale_id = s.sale_id
+                        WHERE cri.product_id = ?
+                          AND s.sale_date >= ? AND s.sale_date <= ?
+                          AND cr.created_at <= ?
+                    ");
+                    $refundedStmt->execute([$productId, $startOfDay, $effectiveEnd, $cutoff]);
+                    $refunded = (int)$refundedStmt->fetchColumn();
+                } catch (Throwable) {
+                }
+
             }
 
             $validSalesUnits = max(0, $sold - $reversed - $refunded);
 
             // 5. Scheduled Demand Drivers known by cutoff
             $effectiveDrivers = [];
-            try {
-                $effectiveDrivers = $this->driverService->getEffectiveDrivers($pdo, $productId, $dateStr, $cutoff);
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $effectiveDrivers = $this->driverService->getEffectiveDrivers($pdo, $productId, $dateStr, $cutoff);
+                } catch (Throwable) {
+                }
+
             }
 
             // 6. Semantic Classification: distinguish Open, Closed, Stockout, Missing
@@ -387,9 +432,12 @@ class DemandHistoryService
             }
             // Dated Price and Promotion Evidence
             $price = null;
-            try {
-                $price = $this->driverService->getEffectivePrice($pdo, $productId, $dateStr, $effectiveEnd);
-            } catch (Throwable) {
+            if (!$importOnly) {
+                try {
+                    $price = $this->driverService->getEffectivePrice($pdo, $productId, $dateStr, $effectiveEnd);
+                } catch (Throwable) {
+                }
+
             }
 
             $isOnPromotion = null;

@@ -70,7 +70,7 @@ class CandidateEvaluationService
     public function evaluateCandidateQuality(string $modelVersion): array
     {
         $evaluations = $this->getEvaluationsByModelVersion($modelVersion);
-        if (count($evaluations) < 3) {
+        if (array_diff([7, 14, 28], array_column($evaluations, 'horizon_days'))) {
             return [
                 'passed' => false,
                 'reason' => "Incomplete evaluations: expected 7, 14, and 28-day horizons, found " . count($evaluations),
@@ -97,7 +97,12 @@ class CandidateEvaluationService
             $wape = (float)($eval['wape'] ?? 999.0);
             $baselineWape = isset($eval['baseline_wape']) ? (float)$eval['baseline_wape'] : null;
 
-            if ($wape > $maxWape) {
+            if (!isset($eval['wape']) || $baselineWape === null || !is_finite($wape) || !is_finite($baselineWape)) {
+                $eval['gate_status'] = 'blocked';
+                $eval['gate_reason'] = 'Missing model or weekly baseline evidence';
+                $passedAll = false;
+                $reasons[] = "Horizon {$h}d is missing model or weekly baseline evidence";
+            } elseif ($wape > $maxWape) {
                 $eval['gate_status'] = 'failed';
                 $eval['gate_reason'] = "WAPE {$wape} exceeds maximum allowed {$maxWape}";
                 $passedAll = false;
@@ -138,6 +143,12 @@ class CandidateEvaluationService
         try {
             $hasOrigin = $this->hasColumn($pdo, 'demand_forecasts', 'forecast_origin');
             $originCondition = $hasOrigin ? "AND df.forecast_origin IS NOT NULL AND df.forecast_origin < df.target_date" : "";
+            // A historical origin alone cannot make an imported backtest prospective evidence.
+            $prospectiveCondition = $this->hasColumn($pdo, 'demand_forecasts', 'created_at')
+                ? 'AND df.created_at < df.target_date' : '';
+            if ($this->hasColumn($pdo, 'demand_forecasts', 'limitation_marker')) {
+                $prospectiveCondition .= " AND COALESCE(df.limitation_marker, '') NOT LIKE 'Historical M5 experiment;%'";
+            }
 
             $stmt = $pdo->prepare("
                 SELECT df.product_id, df.target_date, df.predicted_units, df.horizon_day
@@ -147,6 +158,7 @@ class CandidateEvaluationService
                   AND df.predicted_units IS NOT NULL
                   AND df.predicted_units >= 0
                   {$originCondition}
+                  {$prospectiveCondition}
                 ORDER BY df.target_date ASC
             ");
             $stmt->execute([$modelVersion, $asOfDate]);

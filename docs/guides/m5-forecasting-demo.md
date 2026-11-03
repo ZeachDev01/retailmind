@@ -1,65 +1,81 @@
 # M5 forecasting demonstration
 
-Prepared 2026-10-29 (Asia/Manila). This is a separate local Demo, not the operational Store.
+Verified locally for #421 on 2026-11-04 (Asia/Manila). This is the fresh isolated Demo; October databases, passwords and Laragon paths in earlier guide revisions are obsolete.
 
-## Open it
+## Open the prepared Demo
 
-- [Demo login](http://127.0.0.1:8093/?login=1).
-- Username: `demo_inventory_manager`; password: `M5DemoLocal@2026`.
-- [Four-column historical M5 comparison](http://127.0.0.1:8093/components/report/forecast_replay.php#replay-stock).
-- [Normal replenishment screen](http://127.0.0.1:8093/components/inventory_management/replenishment_queue.php).
-- To inspect the real training candidate, sign in as `demo_super_admin` with the same Demo password, then open [ML Operation](http://127.0.0.1:8093/components/system_administrator/ml_settings.php).
+Open [Demo login](http://127.0.0.1:8093/?login=1). Accounts are `demo_super_admin`, `demo_admin`, `demo_inventory_manager`, and `demo_cashier`. Their Demo-only password and exact environment are recorded outside Git in `C:/Users/Mike/AppData/Local/Temp/retailmind-421-demo-handoff.md` and the persistent Demo home. No operational credentials are needed.
 
-The historical page shows Product, On hand, Stock-rule suggestion, and Expected sales for 2016-04-25 through 2016-05-22. It also shows actual-versus-predicted daily sales and the measured experiment's errors. Product selection uses the normal searchable dropdown.
+The database is `retailmind_demo_m5_421_20261103` on the separate loopback MariaDB instance at `127.0.0.1:3307`. PHP serves only `127.0.0.1:8093` from `C:/xampp/htdocs/retailmind/.worktrees/integration-421`. Keep that checkout: its model artifacts and server paths are in use. Sessions and recovery storage are separate from the Store.
 
-Stock starts at zero as an explicitly illustrative scenario. Reorder level is 20, safety stock 10, package/minimum quantity 1, and lead time 7 days. Therefore an untouched product's stock-rule suggestion is 30 units; its expected sales are a separate model quantity. Prices/costs are placeholders. The Inventory Manager decides what to buy; no purchases or receiving entries were created.
+## Browser walkthrough
 
-## What is real, and what is illustrative?
+Use the account named for each stage. These links open existing pages; changing accounts uses the normal logout/login workflow.
 
-- M5 CA_1 food sales retain their original dates and anonymous product codes. There are 50 products and 40,700 daily observations (2014-03-01 through 2016-05-22).
-- The adapter imports daily sales evidence, not fake customer receipts, cashier sales, deliveries, batches, or stock movements.
-- A real isolated worker trained a candidate through the existing Random Forest pipeline. Training finished; its validation failed the existing quality gates. It was not approved.
-- The historical preview imports the experiment's 4,200 saved held-out daily predictions across three folds. Each fold used earlier data; this is expanding-window backtest evidence, not a single frozen model and not a new current forecast. Final test metrics cover the last 28 days and all 50 products.
-- The display rounds daily predictions to whole units; metric tables retain the experiment's unrounded results. Small differences between summed display values and metric calculations are expected.
-- The M5 Demo replenishment page shows these saved expected quantities beside independent stock rules, explicitly labelled with their 2016 dates and `Historical demo · unapproved`. Its historical-preview link opens the detailed actual-versus-predicted comparison. This display exception requires a prepared M5 preview in an explicitly allowed Demo database; operational Store forecasts still require current, complete, approved output.
-- Receiving goods manually in the Demo would change its illustrative stock; it does not retrain the model or change the saved historical predictions.
+| Stage | Account | Inspect |
+| --- | --- | --- |
+| [Forecast Data Import](http://127.0.0.1:8093/components/system_administrator/forecast_import.php) | Super Administrator | Optional Store CSV upload/preview. The prepared M5 history was imported through the existing Demo adapter; do not upload it again. Viewing imports does not create customer receipts. |
+| [Data Readiness](http://127.0.0.1:8093/components/report/data_readiness.php) | Any forecast viewer | Fixed 140 accumulated usable days, supported recent 28-day inputs, and three supported chronological 28-day evaluation periods. Compare the identical policy in ML Operation. Original 2016 observations do not provide current 2026 inputs; missing recent evidence remains a blocker. |
+| [ML Operation](http://127.0.0.1:8093/components/system_administrator/ml_settings.php) | Super Administrator | Actual succeeded job #1, failed candidate metrics, 0/28 prospective observation dates, disabled Demo approval, separate daily Forecast Generation and weekly Model Retraining, AM/PM time and Asia/Manila help, fixed 15-tree/depth-8/seed-42 recipe. Saving settings never trains or approves. |
+| [Model Review & Approval](http://127.0.0.1:8093/components/administrator/model_review.php) | Administrator | Local lifecycle gates. The Demo artifact cannot activate a Store model; historical comparisons do not count as prospective observation. Failed quality evidence remains blocked. |
+| [Demand Forecast](http://127.0.0.1:8093/components/report/predictions.php) | Any forecast viewer | Unavailable operational coverage and explained stock-rule fallback. Training completion and historical preview do not establish approved current forecasts. Follow its product links when current forecasts exist. |
+| [Forecast Analytics](http://127.0.0.1:8093/components/report/forecast_analytics.php) | Super Administrator | Available persisted evidence and unavailable current output. Saved M5 test comparisons are on the historical page below, not invented current performance. |
+| [Forecast Exceptions](http://127.0.0.1:8093/components/report/forecast_exceptions.php) | Any forecast viewer | Evidence/approval blockers and the responsible role. |
+| [Historical M5 comparison](http://127.0.0.1:8093/components/report/forecast_replay.php?product_id=1) | Any forecast viewer | Original 2016-04-25–2016-05-22 dates, real daily actual/predicted quantities and final held-out metrics. Product 1 (`FOODS_1_122`) totals 17 actual and 28 displayed predicted units. Select another product to inspect different errors. |
+| [Replenishment Recommendations](http://127.0.0.1:8093/components/inventory_management/replenishment_queue.php) | Inventory Manager | Separate columns for on hand, stock-rule suggestion and historical expected sales. For product 1 these are 0, 30 and 28 units. Historical quantities are explicitly unapproved; purchase suggestions remain advisory. |
+| [Product Investigation](http://127.0.0.1:8093/components/inventory_management/product_investigation.php?product_id=1) | Inventory Manager | Product stock, unavailable approved forecasts, and stock-rule explanation. Viewing neither buys goods nor changes stock. |
 
-Candidate validation pools all three chronological blocks: WAPE 41.65%, 37.97%, and 35.30% for 7/14/28 days. These differ from final-test-only metrics shown in the historical preview. The 7-day candidate also loses to the weekly baseline. The existing 35% limits were not lowered.
+Current-date readiness and historical candidate evaluation answer different questions. The real worker trained against the original frozen history; the walkthrough does not shift that history forward to make current inputs appear available. Never interpret external Walmart results as local Store accuracy or unconstrained demand.
 
-## Google Colab
+## Actual results and provenance
 
-Open [Google Colab](https://colab.research.google.com/) and select **File → Upload notebook**. Upload [m5_random_forest_colab.ipynb](../research/m5_random_forest_colab.ipynb), choose CPU (no accelerator), then **Runtime → Run all**. If package installation requests a restart, restart and run all again. The notebook defaults to 50 products. Download its result ZIP from the final cell before closing the runtime.
+The shared asynchronous worker processed job **1** on November 3, 16:48:19–16:52:13 Philippine time. Candidate `demo_20261103165213_ed4a4f` completed training but failed qualification. WAPE is error; lower is better.
 
-Colab executes the research notebook; it does not need the local Demo database and does not become the RetailMind server. This session verified local runs, not execution inside Google Colab. [Google's notebook upload/runtime guidance](https://research.google.com/colaboratory/faq.html).
+| Horizon | Candidate WAPE | Repeat-last-week baseline | Maximum | Result |
+| --- | ---: | ---: | ---: | --- |
+| 7 days | 44.33% | 39.81% | 35% | Failed |
+| 14 days | 40.86% | 41.11% | 35% | Failed |
+| 28 days | 40.64% | 41.97% | 35% | Failed |
 
-## Local isolation and restart
+No gates were lowered and no approval was forced. Observation remains **0 of 28 usable target dates**. Current operational generation and forecast-backed purchasing are blocked. This is an honest demonstration of a completed job and rejected evidence, not an activated model.
 
-The Demo database is `retailmind_demo_m5_20261029` on a separate loopback MySQL instance, port 3307. Its new data directory is `.scratch/m5-demo-mysql-20261029`. PHP listens only on `127.0.0.1:8093`. Root `.env`, the ordinary database configuration, and the Store database were not changed. Demo sessions/recovery storage use separate directories outside the served frontend.
+The deterministic seed-42 sample contains 50 anonymous CA_1 FOODS products from [skforecast/m5_daily](https://huggingface.co/datasets/skforecast/m5_daily), pinned to revision `9eee585c46882aa28aaaf43733a5c55c3e32f058`. There are 40,700 daily observations totaling 72,005 units, 2014-03-01–2016-05-22. The first 730 days train; three subsequent 28-day blocks supply chronological comparisons. The saved preview contains 4,200 genuine held-out daily predictions in jobs 2–4. Their rounded fold totals are 2,094, 2,382 and 2,916 units; actual totals are 2,322, 2,310 and 3,195.
 
-The database server and application are currently running. After a machine restart, start this prepared MySQL instance if port 3307 is free:
+The historical page's final-test fractional WAPE is 43.00% / 32.44% / 29.63% for 7/14/28 days. These are separate from the candidate's rounded pooled validation metrics above. Daily display quantities round independently, so their sums are not inputs for recomputing fractional metrics. Each historical fold fits earlier history; saved fold predictions are not outputs from the final refitted candidate.
+
+Opening stock 0, reorder level 20, safety stock 10, lead time 7, package/minimum quantity 1 are illustrative. Prices/costs are placeholders. Imported observations did not create receipts, deliveries or stock movements. Details: [preparation and preservation](../verification/m5-421-preparation-20261103.md), [actual training and fold results](../verification/m5-421-training-20261103.md), and [browser verification](../verification/m5-421-walkthrough-20261104.md).
+
+## Manual restart on this machine
+
+Use a fresh PowerShell process. Do not rerun setup, preparation, training or imports to reopen the existing Demo. Load only its external process environment:
 
 ```powershell
-$demoMysql = 'C:/laragon/bin/mysql/mysql-8.4.3-winx64'
-$demoData = 'C:/laragon/www/retailmind/.scratch/m5-demo-mysql-20261029'
+$m5Home = 'C:/Users/Mike/AppData/Local/retailmind-demos/m5-421-20261103'
+Set-Location 'C:/xampp/htdocs/retailmind/.worktrees/integration-421'
+$m5Environment = Get-Content -LiteralPath "$m5Home/environment.json" -Raw | ConvertFrom-Json
+$m5Environment.PSObject.Properties | ForEach-Object {
+    [Environment]::SetEnvironmentVariable($_.Name, [string]$_.Value, 'Process')
+}
 if (-not (Get-NetTCPConnection -State Listen -LocalPort 3307 -ErrorAction SilentlyContinue)) {
-    Start-Process -FilePath "$demoMysql/bin/mysqld.exe" -ArgumentList @(
-        "--basedir=$demoMysql", "--datadir=$demoData", '--port=3307',
-        '--bind-address=127.0.0.1', '--mysqlx=OFF', "--log-error=$demoData/server.log"
-    ) -WindowStyle Hidden
+    $m5Data = "$m5Home/mysql-data"
+    Start-Process 'C:/xampp/mysql/bin/mysqld.exe' -WindowStyle Hidden -ArgumentList @(
+        '--no-defaults', '--basedir=C:/xampp/mysql', "--datadir=$m5Data",
+        '--port=3307', '--bind-address=127.0.0.1', "--log-error=$m5Data/server.log", '--skip-log-bin'
+    )
+}
+& 'C:/xampp/mysql/bin/mysqladmin.exe' --protocol=tcp --host=127.0.0.1 --port=3307 --user=root ping
+```
+
+When the response is `mysqld is alive`, open the existing URL if port 8093 is already listening. Otherwise start the existing application and worker:
+
+```powershell
+if (-not (Get-NetTCPConnection -State Listen -LocalPort 8093 -ErrorAction SilentlyContinue)) {
+    ./src/backend/scripts/start_public_sales_demo.ps1 -Database retailmind_demo_m5_421_20261103 -Port 8093
 }
 ```
 
-Once MySQL is ready, start the app from the repository root if port 8093 is free:
+The starter refuses a busy port and records process IDs/logs under `.scratch/public-sales-demo/retailmind_demo_m5_421_20261103/` in the integration checkout. The current browser-only session uses an application server with no continuous worker; the starter intentionally starts both after restart. MariaDB logs are under the persistent home's `mysql-data/server.log`; prepared data, credentials and verification evidence remain outside Git.
 
-```powershell
-$env:DB_PORT = '3307'
-./src/backend/scripts/start_public_sales_demo.ps1 -Database retailmind_demo_m5_20261029 -Port 8093
-```
+No Windows startup task was installed or executed as part of this work. Manual server recovery was exercised; a complete Windows reboot was not. Operational environment files and Store data were preserved. See the verification report for exact checks and blocked stages.
 
-Do not reinitialize the data directory or rerun setup against an existing database. The setup/import/preview commands refuse replacement; choose fresh names for another experiment. Runtime details and logs are under `.scratch/public-sales-demo/retailmind_demo_m5_20261029/` and `.scratch/m5-demo-mysql-20261029/`.
-
-## Verification
-
-Four importer checks and fifteen worker boundary checks pass. The real MySQL setup, 40,700-row import, actual candidate training, and 4,200-prediction preview completed locally. The M5 browser check signs in as Inventory Manager, verifies original dates and 50 products, compares saved forecast totals, uses the searchable product selector, checks desktop/mobile and the labelled historical quantities on the replenishment screen, and confirms no stock, jobs, source history, or approval changes from review. `php src/backend/tests/replenishment_demo_preview_contract.php` checks that this display exception cannot apply to a Store database and that incomplete or disabled previews remain unavailable.
-
-Screenshots and verification state are under `.scratch/m5-demo-browser/`. This does not verify Store activation, all receiving forms, or execution inside Colab.
+The existing [Colab notebook](../research/m5_random_forest_colab.ipynb) remains a research reproduction option. It was not executed in Google Colab during this walkthrough; its pre-existing bundled-source mismatch remains documented in the preparation report.

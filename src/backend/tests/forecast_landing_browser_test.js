@@ -45,19 +45,21 @@ const fixture = action => {
         }
 
         browser = await chromium.launch({headless: true});
-        const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+        const page = await browser.newPage({viewport: {width: 1440, height: 900}, reducedMotion: 'reduce'});
         page.setDefaultTimeout(15000);
         await page.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
         const pageErrors = [];
+        let eligibilityPolicy;
         page.on('pageerror', error => pageErrors.push(error.message));
 
         const login = async role => {
             await page.goto(origin + '/components/auth/logout.php');
             await page.goto(origin + '/?login=1');
+            await page.waitForFunction(() => document.activeElement === document.getElementById('landing-login-username'));
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([
-                page.waitForURL(u => !u.search.includes('login=1')),
+                page.waitForURL(u => !u.search.includes('login=1'), {waitUntil: 'domcontentloaded'}),
                 page.getByRole('button', {name: 'Log in', exact: true}).click(),
             ]);
             await page.waitForLoadState('domcontentloaded');
@@ -171,6 +173,7 @@ const fixture = action => {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
             assert.equal(await page.locator('body.forecast-workspace').count(), 1);
+            if (route.includes('data_readiness')) eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width);
@@ -192,17 +195,71 @@ const fixture = action => {
                 assert.equal(await page.locator('#featureChart').count(), 0, 'Missing weights never produce invented feature importance');
             }
             if (route.includes('ml_settings')) {
-                await page.locator('#settings-heading').click();
-                const help = page.getByRole('button', {name: 'About Minimum history (days)', exact: true});
-                await help.focus();
-                const tooltip = page.locator('#minimum_history_days_help');
-                assert.equal(await tooltip.isVisible(), true);
-                const rect = await tooltip.boundingBox();
-                assert.ok(rect.x >= 0 && rect.x + rect.width <= 320, 'Settings help stays inside a narrow viewport');
-                await help.press('Escape');
-                assert.equal(await tooltip.isVisible(), false);
+                assert.equal(await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText(), eligibilityPolicy, 'Readiness and settings explain one effective policy');
+                assert.match(await page.getByRole('region', {name: 'Effective model recipe', exact: true}).innerText(), /15 trees, maximum depth 8, random seed 42/);
+                assert.equal(await page.locator('[name="min_training_days"], [name="preferred_training_days"], [name="min_nonzero_days"], [name="max_training_days"], [name="forecast_horizon_days"], [name="lower_percentile"], [name="upper_percentile"], [name="n_estimators"], [name="max_depth"]').count(), 0, 'Disconnected inputs remain removed');
+                assert.equal(await page.locator('#schedule_weekly_retrain_day').inputValue(), 'Sunday');
+                assert.match(await page.locator('#effective-training-schedule').innerText(), /Sunday at 1:00 AM, Philippine time \(Asia\/Manila\)/);
+                assert.equal(await page.locator('[name="retrain_frequency_days"], [name="retrain_new_sales_records"], [name="schedule_daily_forecast_time"]').count(), 0, 'Only weekly training is editable');
+                const scheduleForm = page.locator('form').filter({has: page.locator('[name="action"][value="save_schedule"]')});
+                const scheduleUrl = page.url();
+                const trainingStatus = await page.locator('.ml-job-status').innerText();
+                const timeHelp = page.getByRole('button', {name: 'About training time', exact: true});
+                await timeHelp.scrollIntoViewIfNeeded();
+                await timeHelp.focus();
+                await timeHelp.press('Enter');
+                const scheduleTooltip = page.locator('#schedule_time_help');
+                assert.equal(await scheduleTooltip.isVisible(), true);
+                assert.equal(await scheduleTooltip.innerText(), 'Select a time from 12:00 AM to 11:59 PM, Philippine time (Asia/Manila). Prefer a time after Store close. Missed training runs catch up when the PC starts.');
+                const timeRect = await scheduleTooltip.boundingBox();
+                assert.ok(timeRect.x >= 0 && timeRect.x + timeRect.width <= 320);
+                await timeHelp.press('Escape');
+                assert.equal(await scheduleTooltip.isVisible(), false);
+                await page.locator('#schedule_hour').focus();
+                await page.keyboard.press('Tab');
+                assert.equal(await page.locator('#schedule_minute').evaluate(el => el === document.activeElement), true, 'Minute selection works by keyboard');
+                for (const [hour, minute, period, display] of [
+                    ['12', '00', 'AM', '12:00 AM'], ['12', '00', 'PM', '12:00 PM'], ['11', '59', 'PM', '11:59 PM'],
+                ]) {
+                    await page.locator('#schedule_weekly_retrain_day').selectOption('Wednesday');
+                    await page.locator('#schedule_hour').selectOption(hour);
+                    await page.locator('#schedule_minute').selectOption(minute);
+                    await page.locator('#schedule_period').selectOption(period);
+                    await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Save weekly schedule', exact: true}).click()]);
+                    assert.match(await page.locator('main [role="status"]').first().innerText(), /Weekly schedule saved/);
+                    await page.reload();
+                    assert.equal(await page.locator('#effective-training-schedule').innerText(), `Every Wednesday at ${display}, Philippine time (Asia/Manila).`);
+                    assert.equal(await page.locator('#schedule_hour').inputValue(), hour);
+                    assert.equal(await page.locator('#schedule_period').inputValue(), period);
+                    assert.equal(await page.locator('.ml-job-status').innerText(), trainingStatus, 'Saving does not queue training');
+                }
+                const scheduleValues = await scheduleForm.evaluate(form => Object.fromEntries(new FormData(form)));
+                assert.equal((await page.context().request.post(scheduleUrl, {form: {...scheduleValues, csrf_token: ''}})).status(), 403, 'Schedule saves require CSRF');
+                for (const invalid of [
+                    {schedule_weekly_retrain_day: 'Funday'}, {schedule_hour: '0'}, {schedule_hour: '13'},
+                    {schedule_minute: '60'}, {schedule_period: '24'},
+                ]) {
+                    const response = await page.context().request.post(scheduleUrl, {form: {...scheduleValues, ...invalid}});
+                    assert.equal(response.status(), 200);
+                    assert.match(await response.text(), /Schedule was not saved/);
+                }
+                await page.reload();
+                assert.equal(await page.locator('#effective-training-schedule').innerText(), 'Every Wednesday at 11:59 PM, Philippine time (Asia/Manila).', 'Invalid saves preserve the effective schedule');
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'Schedule controls fit mobile');
             }
         }
+        for (const role of ['admin', 'inventory_manager', 'cashier']) {
+            await login(role);
+            const response = await page.context().request.post(origin + '/components/system_administrator/ml_settings.php', {form: {
+                action: 'save_schedule', schedule_weekly_retrain_day: 'Friday', schedule_hour: '3', schedule_minute: '00', schedule_period: 'AM',
+            }});
+            assert.equal(response.status(), 403, role + ' cannot save a training schedule');
+        }
+        await login('super_admin');
+        await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        assert.match(await page.locator('#effective-training-schedule').innerText(), /Wednesday at 11:59 PM/, 'Unauthorized saves preserve the schedule');
+        await page.goto(origin + '/components/report/data_readiness.php');
+        assert.equal(await page.locator('main').getByRole('link', {name: 'ML Operation', exact: true}).count(), 1, 'Readiness links authorized users to training settings');
         fixture('forecast_replay_workspace');
         const replay = await page.goto(origin + '/components/report/forecast_replay.php');
         assert.equal(replay.status(), 200);
