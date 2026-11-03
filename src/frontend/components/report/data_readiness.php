@@ -173,7 +173,10 @@ function build_query(array $params): string {
             </div>
         </header>
 
-        <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
+        <details class="forecast-details">
+            <summary>How training eligibility works</summary>
+            <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
+        </details>
 
         <section class="card-grid" aria-label="Readiness overview stats">
             <div class="stat-card">
@@ -253,10 +256,13 @@ function build_query(array $params): string {
                                 </td>
                                 <td>
                                     <span class="status-badge <?= $badgeClass ?>"><?= htmlspecialchars($status) ?></span>
-                                    <p>Training Eligibility: <?= $row['training_eligible'] ? 'Ready for training' : 'Insufficient Data' ?></p>
-                                    <?php foreach (array_merge($row['eligibility_blockers'], $row['eligibility_actions']) as $detail): ?>
-                                        <p><?= htmlspecialchars($detail) ?></p>
-                                    <?php endforeach; ?>
+                                    <details>
+                                        <summary>Training details</summary>
+                                        <p>Training Eligibility: <?= $row['training_eligible'] ? 'Ready for training' : 'Insufficient Data' ?></p>
+                                        <?php foreach (array_merge($row['eligibility_blockers'], $row['eligibility_actions']) as $detail): ?>
+                                            <p><?= htmlspecialchars($detail) ?></p>
+                                        <?php endforeach; ?>
+                                    </details>
                                     <?php if (!empty($row['forecast_reason'])): ?>
                                         <?php forecast_help('readiness-' . (int)$row['product_id'], $row['forecast_reason'], 'Readiness details for ' . $row['product_name']); ?>
                                     <?php endif; ?>
@@ -264,7 +270,6 @@ function build_query(array $params): string {
                                 <td>
                                     <strong><?= (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days']) ?> / <?= (int)($row['required_usable_days'] ?? 140) ?> usable days</strong>
                                     <meter min="0" max="<?= max(1, (int)($row['required_usable_days'] ?? 140)) ?>" value="<?= min((int)($row['required_usable_days'] ?? 140), (int)($row['accumulated_usable_days'] ?? $row['calendar_history_days'])) ?>" aria-label="Usable sales history for <?= htmlspecialchars($row['product_name']) ?>"></meter>
-                                    <span><?= (int)$row['calendar_history_days'] ?> calendar days</span>
                                     <?php forecast_help('history-' . (int)$row['product_id'], (int)$row['calendar_history_days'] . ' calendar days · ' . strip_tags(html_entity_decode($historyRange)), 'Sales history dates'); ?>
                                 </td>
                                 <td>
