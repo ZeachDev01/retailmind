@@ -249,163 +249,44 @@ class StoreModelGovernanceService
 
     public function validateModelArtifactCompatibility(string $version, string $contextLabel = 'Rollback'): array
     {
-        $prefix = $contextLabel === 'Resume' ? 'Cannot resume recommendations' : 'Rollback rejected';
-        $trimmed = trim($version);
-        if ($trimmed === '') {
-            return [
-                'valid' => false,
-                'reason' => $contextLabel === 'Resume'
-                    ? "Cannot resume recommendations: no approved Store model version configured."
-                    : "Rollback rejected: no compatible previous approved Store model artifact found.",
-                'artifact_path' => null,
-                'details' => ['check' => 'version_presence'],
-            ];
+        $prefix = match ($contextLabel) {
+            'Resume' => 'Cannot resume recommendations',
+            'Activation' => 'Activation blocked',
+            default => 'Rollback rejected',
+        };
+        $invalid = static fn(string $reason): array => ['valid' => false, 'reason' => $prefix . ': ' . $reason, 'artifact_path' => null];
+        if (!preg_match('/^[A-Za-z0-9_-]{1,50}$/D', $version)
+            || preg_match('/demo|kaggle/i', $version)) {
+            return $invalid('No compatible non-demo Store model version configured.');
         }
-
-        $lower = strtolower($trimmed);
-        if (str_contains($lower, 'demo') || str_contains($lower, 'kaggle')) {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model version '{$trimmed}' is a demo/kaggle artifact. Demo artifacts cannot be activated in Store operations.",
-                'artifact_path' => null,
-                'details' => ['check' => 'not_demo_artifact'],
-            ];
+        $statement = $this->pdo->prepare("SELECT metrics_json FROM model_training_runs WHERE model_version = ? AND status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+        $statement->execute([$version]);
+        $metrics = json_decode((string)$statement->fetchColumn(), true);
+        $metadata = $metrics['metadata'] ?? [];
+        $features = ['product_id', 'horizon_day', 'lag_1', 'lag_7', 'lag_14', 'lag_28',
+            'rolling_mean_7', 'rolling_std_7', 'rolling_mean_28', 'rolling_std_28',
+            'day_of_week', 'day_of_month', 'month', 'is_weekend'];
+        if (($metadata['dataset_kind'] ?? '') !== 'store' || ($metadata['model_version'] ?? '') !== $version
+            || ($metadata['feature_version'] ?? '') !== '2.0.0' || ($metadata['features'] ?? []) !== $features) {
+            return $invalid('Completed Store training metadata does not match the model feature contract.');
         }
-
-        // Look for model artifact file in modelsDir
-        $candidates = [
-            $this->modelsDir . '/random_forest_candidate_' . $trimmed . '.joblib',
-            $this->modelsDir . '/random_forest_candidate_' . $trimmed . '.json',
-            $this->modelsDir . '/' . $trimmed . '.joblib',
-            $this->modelsDir . '/' . $trimmed . '.json',
-        ];
-        if (is_dir($this->modelsDir . '/store')) {
-            foreach (glob($this->modelsDir . '/store/*/random_forest_candidate_' . $trimmed . '.joblib') ?: [] as $cand) {
-                $candidates[] = $cand;
+        foreach (['dataset_host' => 'DB_HOST', 'dataset_port' => 'DB_PORT', 'dataset_database' => 'DB_NAME'] as $key => $envKey) {
+            $expected = (string)\env($envKey, $envKey === 'DB_PORT' ? '3306' : '');
+            if ((string)($metadata[$key] ?? '') !== $expected || $expected === '') {
+                return $invalid('Model artifact belongs to another Store dataset.');
             }
         }
-        $foundPath = null;
-        foreach ($candidates as $cand) {
-            if (file_exists($cand)) {
-                $foundPath = $cand;
-                break;
-            }
+        $identity = $metadata['dataset_host'] . ':' . $metadata['dataset_port'] . ':' . $metadata['dataset_database'];
+        $path = $this->modelsDir . '/store/' . substr(hash('sha256', $identity), 0, 16)
+            . '/random_forest_candidate_' . $version . '.joblib';
+        if (!is_file($path) || !is_readable($path) || filesize($path) === 0) {
+            return $invalid('Qualified Store model artifact is missing or unreadable.');
         }
-
-        if ($foundPath === null) {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' was not found on disk in {$this->modelsDir}.",
-                'artifact_path' => null,
-                'details' => ['check' => 'artifact_exists'],
-            ];
+        $quality = $this->evaluationService->evaluateCandidateQuality($version);
+        if (!$quality['passed']) {
+            return $invalid('Store model failed qualification quality gates: ' . $quality['reason']);
         }
-
-        $size = filesize($foundPath);
-        if ($size === 0 || $size === false) {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' is empty or corrupted (0 bytes).",
-                'artifact_path' => $foundPath,
-                'details' => ['check' => 'artifact_integrity'],
-            ];
-        }
-
-        $content = (string)file_get_contents($foundPath);
-        if (str_starts_with($content, 'CORRUPT') || str_contains($content, 'CORRUPTED_ARTIFACT')) {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model artifact file for version '{$trimmed}' is corrupted or unreadable.",
-                'artifact_path' => $foundPath,
-                'details' => ['check' => 'artifact_integrity'],
-            ];
-        }
-
-        $fileMeta = null;
-        if (str_ends_with($foundPath, '.json')) {
-            $fileMeta = json_decode($content, true);
-            if ($fileMeta === null && json_last_error() !== JSON_ERROR_NONE) {
-                return [
-                    'valid' => false,
-                    'reason' => "{$prefix}: model artifact file for version '{$trimmed}' contains corrupted JSON metadata.",
-                    'artifact_path' => $foundPath,
-                    'details' => ['check' => 'artifact_integrity'],
-                ];
-            }
-        }
-
-        // Check schema and dataset kind from database or file metadata
-        $trainingRun = null;
-        try {
-            $stmt = $this->pdo->prepare("SELECT metrics_json, dataset_kind, status FROM model_training_runs WHERE model_version = ? ORDER BY training_run_id DESC LIMIT 1");
-            $stmt->execute([$trimmed]);
-            $trainingRun = $stmt->fetch(\PDO::FETCH_ASSOC);
-        } catch (\Throwable) {}
-
-        $metrics = null;
-        if (!empty($trainingRun['metrics_json'])) {
-            $metrics = json_decode((string)$trainingRun['metrics_json'], true);
-        } elseif (is_array($fileMeta)) {
-            $metrics = $fileMeta;
-        }
-
-        $datasetKind = $trainingRun['dataset_kind'] ?? $metrics['metadata']['dataset_kind'] ?? $metrics['dataset_kind'] ?? null;
-        if ($datasetKind === 'demo') {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model version '{$trimmed}' belongs to demo dataset. Demo artifacts cannot be activated in Store operations.",
-                'artifact_path' => $foundPath,
-                'details' => ['check' => 'dataset_kind'],
-            ];
-        }
-
-        $featureVersion = $metrics['metadata']['feature_version'] ?? $metrics['feature_version'] ?? null;
-        if ($featureVersion !== null && $featureVersion !== '2.0.0') {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model version '{$trimmed}' has incompatible feature version '{$featureVersion}' (Store requires version 2.0.0).",
-                'artifact_path' => $foundPath,
-                'details' => ['check' => 'feature_version'],
-            ];
-        }
-
-        // Qualification metadata check: evaluations or completed training run
-        $evals = $this->evaluationService->getEvaluationsByModelVersion($trimmed);
-        $hasEvals = !empty($evals);
-        $hasCompletedRun = !empty($trainingRun) && ($trainingRun['status'] ?? '') === 'completed';
-
-        if (!$hasEvals && !$hasCompletedRun) {
-            return [
-                'valid' => false,
-                'reason' => "{$prefix}: model version '{$trimmed}' lacks valid qualification metadata or completed training records.",
-                'artifact_path' => $foundPath,
-                'details' => ['check' => 'qualification_metadata'],
-            ];
-        }
-
-        if ($hasEvals) {
-            $quality = $this->evaluationService->evaluateCandidateQuality($trimmed);
-            if (!$quality['passed']) {
-                return [
-                    'valid' => false,
-                    'reason' => "{$prefix}: model version '{$trimmed}' failed qualification quality gates: " . ($quality['reason'] ?? ''),
-                    'artifact_path' => $foundPath,
-                    'details' => ['check' => 'quality_gates'],
-                ];
-            }
-        }
-
-        return [
-            'valid' => true,
-            'reason' => '',
-            'artifact_path' => $foundPath,
-            'details' => [
-                'model_version' => $trimmed,
-                'feature_version' => $featureVersion ?? '2.0.0',
-                'dataset_kind' => $datasetKind ?? 'store',
-                'artifact_file' => basename($foundPath),
-            ],
-        ];
+        return ['valid' => true, 'reason' => '', 'artifact_path' => $path];
     }
 
     public function validateRollbackArtifact(string $version): array
@@ -595,6 +476,10 @@ class StoreModelGovernanceService
         }
 
         $automatedTechPassed = $checks['quality_gates_passed'] && $checks['observation_period_completed'] && $checks['not_demo_artifact'] && $checks['valid_version_format'];
+        if (empty($reasons)) {
+            $artifact = $this->validateModelArtifactCompatibility($modelVersion, 'Activation');
+            if (!$artifact['valid']) $reasons[] = $artifact['reason'];
+        }
         $ready = empty($reasons);
         $status = $automatedTechPassed ? ($ready ? 'awaiting_approval' : ($opDecision === 'rejected' ? 'rejected' : 'awaiting_approval')) : 'under_evaluation';
         $statusLabel = $automatedTechPassed ? 'Awaiting approval' : 'Under evaluation';

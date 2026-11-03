@@ -254,6 +254,66 @@ assert_test($readiness['checks']['operational_review_accepted'] === true, 'Opera
 assert_test($readiness['checks']['technical_review_accepted'] === false, 'Technical review not yet recorded');
 assert_test($readiness['ready'] === true, 'ADR-0022: Local Administrator approval qualifies candidate without mandatory Super Admin sign-off');
 
+// Completed training metadata is authoritative; an opaque file alone cannot prove compatibility.
+$metadataStatement = $pdo->prepare('SELECT metrics_json FROM model_training_runs WHERE model_version = ?');
+$metadataStatement->execute([$candidateVersion]);
+$qualifiedMetrics = $metadataStatement->fetchColumn();
+$pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE model_version = ?')->execute(['{}', $candidateVersion]);
+try {
+    assert_test(!$governance->validateRollbackArtifact($candidateVersion)['valid'], 'Rollback rejects missing Store feature and dataset metadata');
+    assert_test(!$governance->validateActiveModelForGuidance($candidateVersion)['valid'], 'Resume rejects missing Store feature and dataset metadata');
+} finally {
+    $pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE model_version = ?')->execute([$qualifiedMetrics, $candidateVersion]);
+}
+
+foreach ([
+    'dataset_database' => 'another_store',
+    'dataset_kind' => 'demo',
+    'model_version' => 'different_version',
+    'feature_version' => '1.0.0',
+    'features' => ['product_id'],
+] as $field => $invalidValue) {
+    $invalidMetrics = json_decode($qualifiedMetrics, true);
+    $invalidMetrics['metadata'][$field] = $invalidValue;
+    $pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE model_version = ?')
+        ->execute([json_encode($invalidMetrics, JSON_THROW_ON_ERROR), $candidateVersion]);
+    try {
+        assert_test(!$governance->validateRollbackArtifact($candidateVersion)['valid'], 'Rollback rejects incompatible ' . $field);
+    } finally {
+        $pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE model_version = ?')->execute([$qualifiedMetrics, $candidateVersion]);
+    }
+}
+
+// A qualified review cannot approve an artifact that is no longer available.
+$artifactPath = $governance->validateRollbackArtifact($candidateVersion)['artifact_path'];
+rename($artifactPath, $artifactPath . '.missing');
+try {
+    $decoy = $governance->getModelsDir() . '/random_forest_candidate_' . $candidateVersion . '.json';
+    file_put_contents($decoy, $qualifiedMetrics);
+    assert_test(!$governance->validateRollbackArtifact($candidateVersion)['valid'], 'Root JSON metadata cannot replace a scoped Store model artifact');
+    unlink($decoy);
+    $otherDirectory = $governance->getModelsDir() . '/store/another_store';
+    mkdir($otherDirectory);
+    $otherArtifact = $otherDirectory . '/random_forest_candidate_' . $candidateVersion . '.joblib';
+    copy($artifactPath . '.missing', $otherArtifact);
+    try {
+        assert_test(!$governance->validateRollbackArtifact($candidateVersion)['valid'], 'Another Store namespace cannot supply a missing model artifact');
+    } finally {
+        unlink($otherArtifact);
+        rmdir($otherDirectory);
+    }
+    $missingArtifactReadiness = $governance->validateActivationReadiness($candidateVersion, '2026-09-28');
+    assert_test(!$missingArtifactReadiness['ready'], 'Activation readiness blocks a missing qualified Store artifact');
+    try {
+        $governance->activateStoreModel($candidateVersion, '2026-09-28', $adminId);
+        throw new RuntimeException('Missing candidate artifact was activated');
+    } catch (InvalidArgumentException $e) {
+        assert_test($governance->getApprovedModelVersion() === '', 'Blocked activation leaves approved model unchanged');
+    }
+} finally {
+    rename($artifactPath . '.missing', $artifactPath);
+}
+
 // Super Admin explicitly rejects candidate -> activation MUST be blocked
 $superAdminId = 1;
 $governance->recordTechnicalReview($candidateVersion, 'rejected', 'Critical architectural flaw identified.', $superAdminId);

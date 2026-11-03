@@ -356,6 +356,10 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                             <thead>
                                 <tr>
                                     <th scope="col">Forecast Horizon</th>
+                                    <th scope="col">Average Error (MAE, Base Units)</th>
+                                    <th scope="col">Repeat Last Week (Baseline MAE)</th>
+                                    <th scope="col">RMSE (Base Units)</th>
+                                    <th scope="col">Repeat Last Week (Baseline RMSE)</th>
                                     <th scope="col">Model Error (WAPE)</th>
                                     <th scope="col">Repeat Last Week (Baseline WAPE)</th>
                                     <th scope="col">Overestimated Units</th>
@@ -373,6 +377,9 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 ?>
                                     <tr>
                                         <td><strong><?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
+                                        <?php foreach (['mae', 'baseline_mae', 'rmse', 'baseline_rmse'] as $metric): ?>
+                                            <td><?= isset($horizon[$metric]) ? number_format($horizon[$metric], 2) : 'Unavailable' ?></td>
+                                        <?php endforeach; ?>
                                         <td><?= htmlspecialchars($wapeText) ?></td>
                                         <td><?= htmlspecialchars($baseWapeText) ?></td>
                                         <td><?= htmlspecialchars($overUnits) ?></td>
