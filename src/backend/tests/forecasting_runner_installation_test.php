@@ -66,6 +66,14 @@ try {
     assert_same('Sunday', $loaded['effective_schedule']['weekly_retrain_day'], 'Effective weekly retrain day must be Sunday');
     assert_same('01:00', $loaded['effective_schedule']['weekly_retrain_time'], 'Effective weekly retrain time must be 01:00');
     assert_same('Asia/Manila', $loaded['effective_schedule']['timezone'], 'Effective timezone must be Asia/Manila');
+    require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+    require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
+    $governanceDb = new PDO('sqlite::memory:');
+    $installedGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb);
+    assert_same($testConfig['model_storage'], $installedGovernance->getModelsDir(), 'Approval and recovery use the installed worker model storage');
+    $explicitGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb, null, '/isolated/model-fixture');
+    assert_same('/isolated/model-fixture', $explicitGovernance->getModelsDir(), 'Explicit model storage injection remains authoritative');
+
 
     // Verify no credentials retained in config
     $rawConfig = (string)file_get_contents($configPath);

@@ -289,6 +289,7 @@ try {
     $pdo4->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");
     $pdo4->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)");
 
+    $pdo4->exec("INSERT INTO model_training_runs (model_version, status) VALUES ('rf_observation_v2', 'completed')");
     $covObs = $service4->getCoverage(null, $asOf);
     $issuesObs = $service4->getOperationalIssues($covObs, 'admin');
 
@@ -299,6 +300,7 @@ try {
         }
     }
     $assert($obsIssue !== null, 'Found observation progress issue');
+    $assert(str_contains($obsIssue['condition'], 'rf_observation_v2'), 'Observation action identifies the actual candidate rather than the approved incumbent');
     $assert(str_contains(strtolower($obsIssue['condition']), 'observation'), 'Condition mentions observation mode');
     $assert(str_contains(strtolower($obsIssue['effect']), 'stock rules') || str_contains(strtolower($obsIssue['effect']), 'routine purchasing'), 'Effect explains not approved for routine purchasing / stock rules used');
 

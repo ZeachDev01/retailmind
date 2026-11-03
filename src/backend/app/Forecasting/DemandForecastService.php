@@ -716,6 +716,7 @@ class DemandForecastService
         // -------------------------------------------------------------
         // Priority 2: Available Reviews (Model Candidate Ready for Review)
         // -------------------------------------------------------------
+        $candidateVersion = null;
         try {
             $stmt = $this->pdo->prepare("
                 SELECT model_version FROM model_training_runs
@@ -780,10 +781,10 @@ class DemandForecastService
         // -------------------------------------------------------------
 
         // 3a. Candidate observation progress
-        if ($isObservation) {
+        if ($isObservation && $candidateVersion) {
             $obsDays = 0;
             $obsReq = 28;
-            $obsModel = $approvedVersion ?: 'Candidate';
+            $obsModel = (string)$candidateVersion;
             try {
                 $evalService = new CandidateEvaluationService($this->pdo);
                 $prog = $evalService->getCandidateObservationProgress($obsModel);
