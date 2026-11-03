@@ -156,7 +156,7 @@ $formatUnits = static function ($val): string {
                 <span class="stat-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></span>
                 <div class="label">Approved Store Model</div>
                 <div class="value" style="font-size: 1.1rem;"><?= htmlspecialchars($summary['approved_version'] ?: 'None yet (First model)') ?></div>
-                <div class="hint">Active operational guidance</div>
+                <div class="hint">Approved version for Store forecasting</div>
             </article>
 
             <article class="stat-card with-icon">
@@ -166,11 +166,11 @@ $formatUnits = static function ($val): string {
                 <div class="hint">Completed usable target dates</div>
             </article>
 
-            <article class="stat-card with-icon <?= !empty($summary['is_recommendations_suspended']) ? 'status-warning' : 'status-healthy' ?>">
+            <article class="stat-card with-icon <?= !empty($summary['is_recommendations_suspended']) ? 'status-warning' : (!empty($summary['approved_version']) ? 'status-healthy' : 'status-neutral') ?>">
                 <span class="stat-icon"><i class="bi bi-cart-check" aria-hidden="true"></i></span>
-                <div class="label">Purchasing Suggestions</div>
-                <div class="value"><?= !empty($summary['is_recommendations_suspended']) ? 'Paused' : 'Active' ?></div>
-                <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : 'Available for replenishment' ?></div>
+                <div class="label">Forecast Guidance Approval</div>
+                <div class="value"><?= !empty($summary['is_recommendations_suspended']) ? 'Paused' : (!empty($summary['approved_version']) ? 'Approved' : 'No approved model') ?></div>
+                <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Check Demand Forecast for current Product coverage' : 'Stock rules in effect until model approved') ?></div>
             </article>
         </div>
 
@@ -191,12 +191,97 @@ $formatUnits = static function ($val): string {
             </div>
         </section>
 
-        <!-- Chronological Evaluation Results vs Baseline -->
+        <!-- Activation Consequences & Operational Role -->
+        <section class="dashboard-section" aria-labelledby="consequences-heading">
+            <h2 id="consequences-heading"><i class="bi bi-info-circle" aria-hidden="true"></i> Activation Consequences &amp; Advisory Boundary</h2>
+            <div class="incumbent-box" style="line-height: 1.6;">
+                <p><strong>Guidance remains strictly advisory:</strong> Demand forecasts estimate expected recorded customer sales in Base Units. Replenishment recommendations calculate suggested buy quantities after accounting for on-hand stock and replenishment rules. <em>Forecasting guidance never automatically orders goods, generates purchase orders, or modifies Store inventory records.</em> Operational workflows such as Stock Receiving remain human-driven.</p>
+                <p style="margin-bottom: 0;"><strong>Operational coverage &amp; fallback:</strong> Approving a model activates forecast-backed buying suggestions for all covered products meeting data prerequisites. Immature or excluded products automatically fall back to stock rules without interrupting Store operations.</p>
+            </div>
+        </section>
+
+        <!-- Product Coverage and Input Blockers -->
+        <section class="dashboard-section" aria-labelledby="products-heading">
+            <h2 id="products-heading"><i class="bi bi-box-seam" aria-hidden="true"></i> Product Coverage &amp; Input Blockers</h2>
+            <p class="section-description">An approved model does not conceal individual Product input blockers. Products lacking sufficient history or feature windows are listed with their required next action and automatically fall back to stock rules.</p>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                <div class="approval-form-card">
+                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-check-circle text-success" aria-hidden="true"></i> Covered Products (<?= (int)($summary['products']['covered_count'] ?? 0) ?>)</h3>
+                    <?php if (empty($summary['products']['covered'])): ?>
+                        <p class="text-muted" style="font-size: 0.9rem;">No products currently covered in candidate model.</p>
+                    <?php else: ?>
+                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
+                            <?php foreach ($summary['products']['covered'] as $cp): ?>
+                                <li><strong><?= htmlspecialchars($cp['product_name']) ?></strong> (<?= htmlspecialchars($cp['sku']) ?>) — Eligible for model forecasts</li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+
+                <div class="approval-form-card">
+                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i> Excluded Products &amp; Blockers (<?= (int)($summary['products']['excluded_count'] ?? 0) ?>)</h3>
+                    <?php if (empty($summary['products']['excluded'])): ?>
+                        <p class="text-muted" style="font-size: 0.9rem;">All active products meet data prerequisites.</p>
+                    <?php else: ?>
+                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
+                            <?php foreach ($summary['products']['excluded'] as $ep): ?>
+                                <li>
+                                    <strong><?= htmlspecialchars($ep['product_name']) ?></strong> (<?= htmlspecialchars($ep['sku']) ?>):
+                                    <br><span style="color: var(--color-warning-text, #92400e);"><?= htmlspecialchars($ep['exclusion_reason']) ?></span>
+                                    <br><span style="font-size: 0.85rem; color: var(--color-text-muted, #6b7280);"><?= htmlspecialchars($ep['blocked_next_action']) ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </section>
+
+        <!-- Prospective Observation Holdout -->
+        <section class="dashboard-section" aria-labelledby="obs-heading">
+            <h2 id="obs-heading"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Prospective Store Observation Progress</h2>
+            <p class="section-description">Requires at least 28 completed target dates evaluated against actual Store sales. Missing or Stockout Day targets cannot advance observation; recorded closures pause accumulation without resetting progress.</p>
+
+            <div style="margin: 0.75rem 0;">
+                <div style="display: flex; justify-content: space-between; max-width: 400px; font-weight: 600; font-size: 0.9rem;">
+                    <span>Completed Target Dates:</span>
+                    <span><?= (int)($summary['observation_progress']['usable_days'] ?? 0) ?> / 28 days</span>
+                </div>
+                <div class="progress-bar-container">
+                    <?php
+                    $pct = min(100, max(0, round(((int)($summary['observation_progress']['usable_days'] ?? 0) / 28) * 100)));
+                    ?>
+                    <div class="progress-bar-fill" style="width: <?= $pct ?>%;"></div>
+                </div>
+                <p style="font-size: 0.9rem; color: var(--color-text-muted, #6b7280);">
+                    <?= htmlspecialchars($summary['observation_progress']['explanation'] ?? '') ?>
+                </p>
+            </div>
+        </section>
+
+        <!-- Incumbent Model Comparison Box -->
+        <section class="dashboard-section" aria-labelledby="incumbent-heading">
+            <h2 id="incumbent-heading"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Incumbent Model Comparison</h2>
+            <div class="incumbent-box">
+                <p style="margin: 0; font-size: 0.95rem;"><?= htmlspecialchars($summary['incumbent_comparison']['status_message'] ?? '') ?></p>
+                <?php if (!empty($summary['incumbent_comparison']['available'])): ?>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">
+                        <strong>Approved Model (<?= htmlspecialchars($summary['incumbent_comparison']['version']) ?>) 28-day WAPE:</strong>
+                        <?= $formatError($summary['incumbent_comparison']['horizons'][28]['wape'] ?? null) ?>
+                        vs <strong>Candidate 28-day WAPE:</strong>
+                        <?= $formatError($summary['candidate_quality']['horizons'][28]['wape'] ?? null) ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <!-- Supporting Technical Details & Holdout Metrics -->
         <section class="dashboard-section" aria-labelledby="eval-heading">
-            <h2 id="eval-heading"><i class="bi bi-table" aria-hidden="true"></i> Chronological Evaluation Checks (7, 14, 28 Days)</h2>
+            <h2 id="eval-heading"><i class="bi bi-table" aria-hidden="true"></i> Supporting Technical Details &amp; Holdout Metrics</h2>
             <p class="section-description">
-                Evaluation compares candidate predictions against recorded Store sales and against the <strong><?= htmlspecialchars($summary['comparison_method'] ?? 'Weekly Seasonal Naive') ?></strong> baseline across 3 chronological 28-day holdout folds (<?= htmlspecialchars($summary['evaluation_periods']['start'] ?? '') ?> to <?= htmlspecialchars($summary['evaluation_periods']['end'] ?? '') ?>).
-                <br><em>Note: WAPE measures relative prediction error (lower is better); it is an error metric, not an accuracy percentage.</em>
+                Evaluation compares candidate predictions against recorded Store sales in units and against the <strong><?= htmlspecialchars($summary['comparison_method'] ?? 'Weekly Seasonal Naive') ?></strong> baseline across 3 chronological 28-day holdout folds (<?= htmlspecialchars($summary['evaluation_periods']['start'] ?? '') ?> to <?= htmlspecialchars($summary['evaluation_periods']['end'] ?? '') ?>).
+                <br><em>Note: WAPE measures relative prediction error (lower is better); it is an error metric, not an accuracy percentage. Raw MAE and RMSE reflect deviation in units sold.</em>
             </p>
 
             <div class="data-table-shell">
@@ -240,80 +325,6 @@ $formatUnits = static function ($val): string {
                         <?php endif; ?>
                         </tbody>
                     </table>
-                </div>
-            </div>
-
-            <!-- Incumbent Model Comparison Box -->
-            <div class="incumbent-box">
-                <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Incumbent Model Comparison</h3>
-                <p style="margin: 0; font-size: 0.95rem;"><?= htmlspecialchars($summary['incumbent_comparison']['status_message'] ?? '') ?></p>
-                <?php if (!empty($summary['incumbent_comparison']['available'])): ?>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                        <strong>Approved Model (<?= htmlspecialchars($summary['incumbent_comparison']['version']) ?>) 28-day WAPE:</strong>
-                        <?= $formatError($summary['incumbent_comparison']['horizons'][28]['wape'] ?? null) ?>
-                        vs <strong>Candidate 28-day WAPE:</strong>
-                        <?= $formatError($summary['candidate_quality']['horizons'][28]['wape'] ?? null) ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </section>
-
-        <!-- Prospective Observation Holdout -->
-        <section class="dashboard-section" aria-labelledby="obs-heading">
-            <h2 id="obs-heading"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Prospective Store Observation Progress</h2>
-            <p class="section-description">Requires at least 28 completed target dates evaluated against actual Store sales. Missing or Stockout Day targets cannot advance observation; recorded closures pause accumulation without resetting progress.</p>
-            
-            <div style="margin: 0.75rem 0;">
-                <div style="display: flex; justify-content: space-between; max-width: 400px; font-weight: 600; font-size: 0.9rem;">
-                    <span>Completed Target Dates:</span>
-                    <span><?= (int)($summary['observation_progress']['usable_days'] ?? 0) ?> / 28 days</span>
-                </div>
-                <div class="progress-bar-container">
-                    <?php
-                    $pct = min(100, max(0, round(((int)($summary['observation_progress']['usable_days'] ?? 0) / 28) * 100)));
-                    ?>
-                    <div class="progress-bar-fill" style="width: <?= $pct ?>%;"></div>
-                </div>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted, #6b7280);">
-                    <?= htmlspecialchars($summary['observation_progress']['explanation'] ?? '') ?>
-                </p>
-            </div>
-        </section>
-
-        <!-- Product Coverage and Input Blockers -->
-        <section class="dashboard-section" aria-labelledby="products-heading">
-            <h2 id="products-heading"><i class="bi bi-box-seam" aria-hidden="true"></i> Product Coverage &amp; Input Blockers</h2>
-            <p class="section-description">An approved model does not conceal individual Product input blockers. Products lacking sufficient history or feature windows are listed with their required next action and automatically fall back to stock rules.</p>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top: 1rem;">
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-check-circle text-success" aria-hidden="true"></i> Covered Products (<?= (int)($summary['products']['covered_count'] ?? 0) ?>)</h3>
-                    <?php if (empty($summary['products']['covered'])): ?>
-                        <p class="text-muted" style="font-size: 0.9rem;">No products currently covered in candidate model.</p>
-                    <?php else: ?>
-                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
-                            <?php foreach ($summary['products']['covered'] as $cp): ?>
-                                <li><strong><?= htmlspecialchars($cp['product_name']) ?></strong> (<?= htmlspecialchars($cp['sku']) ?>) — Eligible for model forecasts</li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
-                </div>
-
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i> Excluded Products &amp; Blockers (<?= (int)($summary['products']['excluded_count'] ?? 0) ?>)</h3>
-                    <?php if (empty($summary['products']['excluded'])): ?>
-                        <p class="text-muted" style="font-size: 0.9rem;">All active products meet data prerequisites.</p>
-                    <?php else: ?>
-                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
-                            <?php foreach ($summary['products']['excluded'] as $ep): ?>
-                                <li>
-                                    <strong><?= htmlspecialchars($ep['product_name']) ?></strong> (<?= htmlspecialchars($ep['sku']) ?>):
-                                    <br><span style="color: var(--color-warning-text, #92400e);"><?= htmlspecialchars($ep['exclusion_reason']) ?></span>
-                                    <br><span style="font-size: 0.85rem; color: var(--color-text-muted, #6b7280);"><?= htmlspecialchars($ep['blocked_next_action']) ?></span>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
                 </div>
             </div>
         </section>

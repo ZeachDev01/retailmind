@@ -234,7 +234,7 @@ try {
 
     // Seed 28 completed target dates with sales and calendar
     $historyService = new DemandHistoryService();
-    $origin = '2026-09-01';
+    $origin = '2026-08-31';
     for ($d = 1; $d <= 28; $d++) {
         $targetDate = sprintf("2026-09-%02d", $d);
         // Persist forecast

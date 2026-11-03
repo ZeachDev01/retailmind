@@ -1,0 +1,83 @@
+Starting Ticket #411 Forecast Coverage and Buying Guidance Contract Test...
+
+--- Test 1: Empty Store handling ---
+  [PASS] Empty store has scope_count 0
+  [PASS] Empty store has forecast_backed_count 0
+  [PASS] Empty store has stock_rule_count 0
+  [PASS] Empty store guidance is not usable
+  [PASS] Empty store status is empty
+  [PASS] Empty store products list is empty
+
+--- Test 2: Active vs Inactive products in scope denominator ---
+  [PASS] Scope denominator counts ONLY active replenishment products (2 active)
+  [PASS] Product 1 is forecast backed
+  [PASS] Product 2 uses stock rules
+  [PASS] Store status is partial coverage
+  [PASS] Products list contains exactly 2 active products
+  [PASS] Product 1 is_forecast_backed is true
+  [PASS] Product 1 basis is Demand Forecast
+  [PASS] Product 1 expected sales is 84 (28 * 3)
+  [PASS] Product 1 has null exclusion reason
+  [PASS] Product 2 is_forecast_backed is false
+  [PASS] Product 2 basis is Stock-rule suggestion
+  [PASS] Product 2 expected sales is null (unknown, not zero)
+  [PASS] Product 2 exclusion reason explains missing forecast
+  [PASS] Product 2 exclusion category is evidence
+
+--- Test 3: Coverage summary text & search independence ---
+  [PASS] Coverage summary text mentions 1 of 2 products
+  [PASS] Search filter does NOT change Store-wide scope count (remains 2)
+  [PASS] Search filter does NOT change Store-wide forecast count (remains 1)
+  [PASS] Search filter does NOT change Store-wide stock rule count (remains 1)
+  [PASS] Filtered metadata indicates search was active
+  [PASS] Filtered count is 1
+  [PASS] Filtered forecast backed count is 0
+  [PASS] Filtered stock rule count is 1
+  [PASS] Filtered products list contains 1 product
+
+--- Test 4: Stale forecasts vs accepted latest-completed Philippine-day origin ---
+  [PASS] Stale forecast must not be counted as forecast-backed
+  [PASS] Stale forecast product falls back to stock rules
+  [PASS] Store status identifies stale forecast
+  [PASS] Stale product expected sales is null, not 112
+  [PASS] Exclusion reason identifies stale forecast
+  [PASS] Exclusion category is freshness
+
+--- Test 5: Unapproved model & Replaced model ---
+  [PASS] Replaced/unapproved model forecast is not forecast-backed
+  [PASS] Product uses stock rules
+  [PASS] Exclusion reason identifies unapproved model
+  [PASS] Exclusion category is approval
+
+--- Test 6: Incomplete forecast & Insufficient readiness ---
+  [PASS] Neither incomplete nor insufficient readiness is forecast-backed
+  [PASS] P1 exclusion explains incomplete forecast
+  [PASS] P1 category is evidence
+  [PASS] P2 exclusion explains insufficient history
+  [PASS] P2 category is evidence
+
+--- Test 7: Preserving still-eligible guidance when latest update attempt failed ---
+  [PASS] Effective job ID resolves to still-eligible job 10
+  [PASS] Guidance is usable from earlier job 10
+  [PASS] Product 1 is forecast backed
+  [PASS] Latest attempt status is failed
+  [PASS] Latest job is recognized as job 11
+  [PASS] Coverage text notes failed latest attempt while preserving guidance
+
+--- Test 8: Pending job is not success ---
+  [PASS] is_updating is true when job is running
+  [PASS] Pending job does NOT count as usable guidance
+  [PASS] No products forecast backed while pending
+  [PASS] Product uses stock rules
+
+--- Test 9: Agreement between DemandForecastService and ReplenishmentQueueService ---
+  [PASS] Scope count matches recommendations count exactly
+  [PASS] P1 basis agrees between services
+  [PASS] P1 expected sales agrees between services
+  [PASS] P2 basis agrees between services
+  [PASS] P2 null expected sales agrees between services
+  [PASS] P2 recommended quantity is 0 because stock is above reorder level
+  [PASS] P2 explanation explains stock is sufficient and no purchase is needed
+
+================================================================================
+PASS: Ticket #411 Forecast Coverage Contract passed cleanly!

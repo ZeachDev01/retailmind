@@ -63,8 +63,8 @@ $pdo->exec("
         training_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
         model_version VARCHAR(100),
         status VARCHAR(50),
-        dataset_kind VARCHAR(50) DEFAULT 'store',
-        created_at DATETIME
+        metrics_json TEXT,
+        completed_at DATETIME
     );
 
     CREATE TABLE demand_forecasts (
@@ -88,6 +88,7 @@ $pdo->exec("
     CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name VARCHAR(255),
+        display_name VARCHAR(255),
         username VARCHAR(100),
         email VARCHAR(255),
         profile_image VARCHAR(255),
@@ -222,21 +223,13 @@ function render_model_review(PDO $pdo, string $role = 'admin', array $post = [])
 echo "--- Test 1: Empty / Initial Candidate Rendering (Under evaluation) ---\n";
 // =========================================================================
 $candidateV1 = 'store_rf_v20261102';
-$modelsDir = dirname(__DIR__) . '/storage/ml_models';
-if (!is_dir($modelsDir)) {
-    mkdir($modelsDir, 0777, true);
-}
-$v1Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json';
-file_put_contents($v1Artifact, json_encode([
-    'model_version' => $candidateV1,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
-
-register_shutdown_function(function() use ($modelsDir, $candidateV1) {
-    @unlink($modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json');
-    @unlink($modelsDir . '/random_forest_candidate_store_rf_v20261115.json');
-    @unlink($modelsDir . '/random_forest_candidate_store_rf_v_corrupt.json');
+$fixtureGovernance = new App\Forecasting\StoreModelGovernanceService($pdo);
+require_once __DIR__ . '/support/governance_fixture.php';
+$runnerConfigPath = dirname(__DIR__) . '/config/forecasting_runner.json';
+$originalConfig = is_file($runnerConfigPath) ? file_get_contents($runnerConfigPath) : null;
+register_shutdown_function(static function () use ($runnerConfigPath, $originalConfig): void {
+    if ($originalConfig === null) unlink($runnerConfigPath);
+    else file_put_contents($runnerConfigPath, $originalConfig);
 });
 foreach ([7 => [0.19, 0.28, 4.8, 7.1], 14 => [0.22, 0.32, 6.2, 9.4], 28 => [0.26, 0.36, 7.9, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
@@ -244,7 +237,10 @@ foreach ([7 => [0.19, 0.28, 4.8, 7.1], 14 => [0.22, 0.32, 6.2, 9.4], 28 => [0.26
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-07-01', '2026-09-22', '2026-10-31 23:00:00')
     ")->execute([$candidateV1, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-10-31 23:00:00')")->execute([$candidateV1]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-10-31 23:00:00')")->execute([$candidateV1]);
+governance_fixture($pdo, $fixtureGovernance, [$candidateV1]);
+$modelsDir = $fixtureGovernance->getModelsDir();
+file_put_contents($runnerConfigPath, json_encode(['model_storage' => $modelsDir], JSON_THROW_ON_ERROR));
 
 // At this point, 0 observation days exist -> Under evaluation
 $html1 = render_model_review($pdo, 'admin');
@@ -266,7 +262,8 @@ assert_test(str_contains($html1, 'error metric, not an accuracy percentage'), 'L
 // =========================================================================
 echo "\n--- Test 2: Qualified Model Rendering (Awaiting approval) ---\n";
 // =========================================================================
-// Complete 28 observation days for candidate V1
+// Complete 28 observation days for candidate V1 (synthetic workflow evidence)
+echo "  [INFO] Synthetic observation evidence is isolated workflow evidence only.\n";
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 1000, 'receive', '2026-09-01 07:00:00')");
 for ($i = 1; $i <= 28; $i++) {
     $tDate = sprintf('2026-10-%02d', $i);
@@ -304,6 +301,7 @@ assert_test($stmtApproved->fetchColumn() === $candidateV1, 'Candidate V1 is acti
 // Check rendering of approved model
 $htmlApproved = render_model_review($pdo, 'admin');
 assert_test(str_contains($htmlApproved, 'Selected as approved model'), 'Status shows "Selected as approved model"');
+assert_test(!str_contains($htmlApproved, 'Available for replenishment') && !str_contains($htmlApproved, 'Active operational guidance'), 'Approval without current saved forecasts never claims usable buying guidance');
 assert_test(str_contains($htmlApproved, 'Pause Purchasing Suggestions'), 'Pause button is visible for operational controls');
 
 // =========================================================================
@@ -331,19 +329,16 @@ assert_test($stmtResumed->fetchColumn() === '0', 'Recommendations marked active 
 echo "\n--- Test 5: Replacement & Incumbent Comparison Rendering ---\n";
 // =========================================================================
 $candidateV2 = 'store_rf_v20261115';
-$v2Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV2 . '.json';
-file_put_contents($v2Artifact, json_encode([
-    'model_version' => $candidateV2,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
 foreach ([7 => [0.15, 0.28, 4.0, 7.1], 14 => [0.18, 0.32, 5.5, 9.4], 28 => [0.21, 0.36, 7.0, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, candidate_gate_outcome, data_window_start, data_window_end, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-08-01', '2026-10-22', '2026-11-14 23:00:00')
     ")->execute([$candidateV2, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-11-14 23:00:00')")->execute([$candidateV2]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-11-14 23:00:00')")->execute([$candidateV2]);
+governance_fixture($pdo, $fixtureGovernance, [$candidateV1, $candidateV2]);
+$modelsDir = $fixtureGovernance->getModelsDir();
+file_put_contents($runnerConfigPath, json_encode(['model_storage' => $modelsDir], JSON_THROW_ON_ERROR));
 
 // Seed 28 observation days for candidate V2
 for ($i = 1; $i <= 28; $i++) {
@@ -423,6 +418,20 @@ $_SESSION['csrf_token'] = 'valid-test-csrf-token';
 assert_test(!csrf_token_is_valid('invalid-tampered-token'), 'CSRF verification rejects invalid token');
 assert_test(!csrf_token_is_valid(''), 'CSRF verification rejects empty token');
 assert_test(csrf_token_is_valid('valid-test-csrf-token'), 'CSRF verification accepts authentic token');
+
+// 6.4 Role Capability & Active-Workspace Boundary Denials
+assert_test(!$policy->allows('cashier', RoleCapabilityPolicy::APPROVE_MODELS), 'Cashier lacks APPROVE_MODELS capability');
+assert_test(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_MODELS), 'Inventory Manager lacks APPROVE_MODELS capability');
+assert_test(!$policy->allows('cashier', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Cashier lacks ROLL_BACK_MODELS capability');
+assert_test(!$policy->allows('inventory_manager', RoleCapabilityPolicy::ROLL_BACK_MODELS), 'Inventory Manager lacks ROLL_BACK_MODELS capability');
+
+// Wrong active workspace boundary: active workspace role takes precedence over assigned roles
+$_SESSION['role'] = 'cashier';
+assert_test(!has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Wrong active workspace (cashier) is denied APPROVE_MODELS even for multi-role user');
+$_SESSION['role'] = 'inventory_manager';
+assert_test(!has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Wrong active workspace (inventory_manager) is denied APPROVE_MODELS even for multi-role user');
+$_SESSION['role'] = 'admin';
+assert_test(has_capability(RoleCapabilityPolicy::APPROVE_MODELS), 'Active admin workspace retains APPROVE_MODELS capability');
 
 echo "\n=========================================================================\n";
 echo "PASS: All Administrator Model Review Component Tests Passed!\n";

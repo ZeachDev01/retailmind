@@ -33,6 +33,13 @@ class StoreModelGovernanceService
         ?string $modelsDir = null
     ) {
         $this->pdo = $pdo;
+        $runnerConfigPath = dirname(__DIR__, 2) . '/config/forecasting_runner.json';
+        if ($modelsDir === null && is_readable($runnerConfigPath)) {
+            $config = json_decode((string)file_get_contents($runnerConfigPath), true);
+            if (is_string($config['model_storage'] ?? null) && trim($config['model_storage']) !== '') {
+                $modelsDir = $config['model_storage'];
+            }
+        }
         $this->modelsDir = $modelsDir ?? dirname(__DIR__, 2) . '/storage/ml_models';
         $this->evaluationService = $evaluationService ?? new CandidateEvaluationService($pdo, $this);
     }
@@ -125,33 +132,61 @@ class StoreModelGovernanceService
         }
     }
 
-    private function requireLocalAdministrator(string $actorRole, bool $isRemote = false): void
+    private function requireLocalAdministrator(string $actorRole, bool $isRemote = false, string $actionLabel = 'Model lifecycle changes'): void
     {
+        if ($isRemote || (function_exists('is_remote_request') && is_remote_request())) {
+            throw new \DomainException("Unauthorized: Remote mutation rejected. {$actionLabel} require a local Administrator workspace.");
+        }
+
         $hasCapability = function_exists('role_capability_policy')
             ? (role_capability_policy()->allows($actorRole, \App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS)
                || role_capability_policy()->allows($actorRole, \App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE))
             : in_array($actorRole, ['admin', 'super_admin'], true);
 
-        if (!$hasCapability || !in_array($actorRole, ['admin', 'super_admin'], true)
-            || $isRemote || (function_exists('is_remote_request') && is_remote_request())) {
-            throw new DomainException('Model lifecycle changes require a local Administrator workspace.');
+        if (!$hasCapability || !in_array($actorRole, ['admin', 'super_admin'], true)) {
+            throw new \DomainException("Unauthorized: Role '{$actorRole}' lacks authority. {$actionLabel} require a local Administrator workspace.");
         }
     }
 
     public function suspendRecommendations(int $actorId, string $reason = '', string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
     {
-        $this->requireLocalAdministrator($actorRole, $isRemote);
+        $this->requireLocalAdministrator($actorRole, $isRemote, 'Recommendation suspension');
         $this->pdo->beginTransaction();
         try {
-            $record = ['suspended_by' => $actorId, 'actor_role' => $actorRole,
-                'suspended_at' => date('Y-m-d H:i:s'), 'reason' => trim($reason) ?: 'Suspended by local Administrator',
-                'active_model' => $this->getApprovedModelVersion()];
+            $trimmedReason = trim($reason) ?: 'Suspended by local Administrator';
+            $currentModel = $this->getApprovedModelVersion();
+            $record = [
+                'suspended_by' => $actorId,
+                'actor_role' => $actorRole,
+                'suspended_at' => date('Y-m-d H:i:s'),
+                'reason' => $trimmedReason,
+                'active_model' => $currentModel,
+            ];
             $this->setSetting('ml_recommendations_suspended', '1', $actorId);
             $this->setSetting('ml_recommendations_suspended_reason', json_encode($record, JSON_THROW_ON_ERROR), $actorId);
-            $this->audit($actorId, 'Suspend Replenishment Recommendations', $record, $ipAddress);
+            if (function_exists('log_activity')) {
+                \log_activity(
+                    $this->pdo,
+                    $actorId,
+                    'Suspend Replenishment Recommendations',
+                    'Demand Forecasting',
+                    null,
+                    '0',
+                    '1',
+                    $ipAddress ?? '127.0.0.1',
+                    'store_operation',
+                    [
+                        'decision' => 'suspend',
+                        'reason' => $trimmedReason,
+                        'actor_role' => $actorRole,
+                        'active_model' => $currentModel,
+                        'timestamp' => $record['suspended_at'],
+                    ]
+                );
+            }
             $this->pdo->commit();
             return $record;
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
@@ -159,22 +194,44 @@ class StoreModelGovernanceService
 
     public function resumeRecommendations(int $actorId, string $actorRole = 'admin', ?string $ipAddress = null, bool $isRemote = false): array
     {
-        $this->requireLocalAdministrator($actorRole, $isRemote);
+        $this->requireLocalAdministrator($actorRole, $isRemote, 'Resuming recommendations');
+        $version = $this->getApprovedModelVersion();
+        $validation = $this->validateActiveModelForGuidance($version);
+        if ($this->isObservationMode() || !$validation['valid']) {
+            throw new \RuntimeException($validation['reason'] ?: 'Cannot resume recommendations: approved, compatible Store guidance is required.');
+        }
         $this->pdo->beginTransaction();
         try {
-            $version = $this->getApprovedModelVersion();
-            $validation = $this->validateModelArtifactCompatibility($version);
-            if ($this->isObservationMode() || !$validation['valid']) {
-                throw new RuntimeException('Cannot resume recommendations: approved, compatible Store guidance is required. ' . $validation['reason']);
-            }
-            $record = ['resumed_by' => $actorId, 'actor_role' => $actorRole,
-                'resumed_at' => date('Y-m-d H:i:s'), 'active_model' => $version];
+            $record = [
+                'resumed_by' => $actorId,
+                'actor_role' => $actorRole,
+                'resumed_at' => date('Y-m-d H:i:s'),
+                'active_model' => $version,
+            ];
             $this->setSetting('ml_recommendations_suspended', '0', $actorId);
             $this->setSetting('ml_recommendations_resumed_record', json_encode($record, JSON_THROW_ON_ERROR), $actorId);
-            $this->audit($actorId, 'Resume Replenishment Recommendations', $record, $ipAddress);
+            if (function_exists('log_activity')) {
+                \log_activity(
+                    $this->pdo,
+                    $actorId,
+                    'Resume Replenishment Recommendations',
+                    'Demand Forecasting',
+                    null,
+                    '1',
+                    '0',
+                    $ipAddress ?? '127.0.0.1',
+                    'store_operation',
+                    [
+                        'decision' => 'resume',
+                        'actor_role' => $actorRole,
+                        'active_model' => $version,
+                        'timestamp' => $record['resumed_at'],
+                    ]
+                );
+            }
             $this->pdo->commit();
             return $record;
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
@@ -197,9 +254,14 @@ class StoreModelGovernanceService
         return $this->modelsDir;
     }
 
-    public function validateModelArtifactCompatibility(string $version): array
+    public function validateModelArtifactCompatibility(string $version, string $contextLabel = 'Rollback'): array
     {
-        $invalid = static fn(string $reason): array => ['valid' => false, 'reason' => $reason, 'artifact_path' => null];
+        $prefix = match ($contextLabel) {
+            'Resume' => 'Cannot resume recommendations',
+            'Activation' => 'Activation blocked',
+            default => 'Rollback rejected',
+        };
+        $invalid = static fn(string $reason): array => ['valid' => false, 'reason' => $prefix . ': ' . $reason, 'artifact_path' => null];
         if (!preg_match('/^[A-Za-z0-9_-]{1,50}$/D', $version)
             || preg_match('/demo|kaggle/i', $version)) {
             return $invalid('No compatible non-demo Store model version configured.');
@@ -236,12 +298,12 @@ class StoreModelGovernanceService
 
     public function validateRollbackArtifact(string $version): array
     {
-        return $this->validateModelArtifactCompatibility($version);
+        return $this->validateModelArtifactCompatibility($version, 'Rollback');
     }
 
     public function validateActiveModelForGuidance(string $version): array
     {
-        return $this->validateModelArtifactCompatibility($version);
+        return $this->validateModelArtifactCompatibility($version, 'Resume');
     }
 
     public function getThresholds(): array
@@ -382,7 +444,15 @@ class StoreModelGovernanceService
             $checks['quality_gates_passed'] = true;
         }
 
-        // 3. Technical and Operational reviews
+        // 3. Observation period holdout evaluation (minimum 28 target days)
+        $obsResult = $this->evaluationService->evaluateCompletedTargetDates($this->pdo, $modelVersion, $asOfDate);
+        if (!$obsResult['observation_complete']) {
+            $reasons[] = "Observation period incomplete: requires at least {$obsResult['min_required_days']} completed target days evaluated against Store sales, but only {$obsResult['completed_days']} completed days were recorded.";
+        } else {
+            $checks['observation_period_completed'] = true;
+        }
+
+        // 4. Technical and Operational reviews (ADR-0022)
         $reviewStatus = $this->getReviewStatus($modelVersion);
         $techDecision = $reviewStatus['technical_review']['decision'] ?? null;
         $opDecision = $reviewStatus['operational_review']['decision'] ?? null;
@@ -393,39 +463,38 @@ class StoreModelGovernanceService
         if ($techDecision === 'accepted') {
             $checks['technical_review_accepted'] = true;
         } elseif ($techDecision === 'rejected') {
+            $checks['technical_review_accepted'] = false;
             $reasons[] = 'Super Administrator technical review rejected this candidate.';
+        } else {
+            $checks['technical_review_accepted'] = false;
         }
 
-        // Operational review by Administrator (or Super Admin acting operationally)
+        // Operational review decision:
         if ($opDecision === 'accepted') {
             $checks['operational_review_accepted'] = true;
-        } elseif ($opDecision === 'rejected') {
-            $checks['not_rejected'] = false;
-            $reasons[] = 'Administrator operational review rejected this candidate.';
         } else {
-            $reasons[] = 'Administrator operational review is missing or not accepted.';
-        }
-
-        // 4. Observation period holdout evaluation (minimum 28 target days)
-        $obsResult = $this->evaluationService->evaluateCompletedTargetDates($this->pdo, $modelVersion, $asOfDate);
-        if (!$obsResult['observation_complete']) {
-            $reasons[] = "Observation period incomplete: requires at least {$obsResult['min_required_days']} completed target days evaluated against Store sales, but only {$obsResult['completed_days']} completed days were recorded.";
-        } else {
-            $checks['observation_period_completed'] = true;
+            $checks['operational_review_accepted'] = false;
+            if ($opDecision === 'rejected') {
+                $checks['not_rejected'] = false;
+                $reasons[] = "Candidate model '{$modelVersion}' was rejected during operational review.";
+            } else {
+                $reasons[] = 'Administrator operational review is missing or not accepted.';
+            }
         }
 
         $automatedTechPassed = $checks['quality_gates_passed'] && $checks['observation_period_completed'] && $checks['not_demo_artifact'] && $checks['valid_version_format'];
-
         if (empty($reasons)) {
-            $artifact = $this->validateModelArtifactCompatibility($modelVersion);
+            $artifact = $this->validateModelArtifactCompatibility($modelVersion, 'Activation');
             if (!$artifact['valid']) $reasons[] = $artifact['reason'];
         }
         $ready = empty($reasons);
+        $status = $automatedTechPassed ? ($ready ? 'awaiting_approval' : ($opDecision === 'rejected' ? 'rejected' : 'awaiting_approval')) : 'under_evaluation';
+        $statusLabel = $automatedTechPassed ? 'Awaiting approval' : 'Under evaluation';
 
         return [
             'ready' => $ready,
-            'status' => $automatedTechPassed ? ($checks['not_rejected'] ? 'awaiting_approval' : 'rejected') : 'under_evaluation',
-            'status_label' => $automatedTechPassed ? 'Awaiting approval' : 'Under evaluation',
+            'status' => $status,
+            'status_label' => $statusLabel,
             'model_version' => $modelVersion,
             'as_of_date' => $asOfDate,
             'reasons' => $reasons,
@@ -491,7 +560,20 @@ class StoreModelGovernanceService
 
             $this->setSetting('ml_store_activation_record', json_encode($activationRecord, JSON_THROW_ON_ERROR), $actorId);
 
-            $this->audit($actorId, 'Activate Store Forecasting Model', $activationRecord, $ipAddress);
+            if (function_exists('log_activity')) {
+                \log_activity(
+                    $this->pdo,
+                    $actorId,
+                    'Activate Store Forecasting Model',
+                    'Demand Forecasting',
+                    null,
+                    $currentApproved ?: null,
+                    $modelVersion,
+                    $ipAddress ?? '127.0.0.1',
+                    'store_operation',
+                    $activationRecord
+                );
+            }
             $activationRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress, $asOfDate, $modelVersion);
 
             $this->pdo->commit();
@@ -542,7 +624,28 @@ class StoreModelGovernanceService
 
             $this->setSetting('ml_observation_mode', '0', $actorId);
             $this->setSetting('ml_recommendations_suspended', '0', $actorId);
-            $this->audit($actorId, 'Rollback Store Forecasting Model', $rollbackRecord, $ipAddress);
+            if (function_exists('log_activity')) {
+                \log_activity(
+                    $this->pdo,
+                    $actorId,
+                    'Rollback Store Forecasting Model',
+                    'Demand Forecasting',
+                    null,
+                    $current ?: null,
+                    $previous,
+                    $ipAddress ?? '127.0.0.1',
+                    'store_operation',
+                    [
+                        'decision' => 'rollback',
+                        'restored_model' => $previous,
+                        'previous_active' => $current,
+                        'reason' => $reason,
+                        'actor_role' => $actorRole,
+                        'rollback_id' => $rollbackRecord['rollback_id'],
+                        'timestamp' => $rollbackRecord['rolled_back_at'],
+                    ]
+                );
+            }
             $rollbackRecord['operational_forecast_job_id'] = (new \App\Services\MlJobService($this->pdo))->enqueue('forecast_generation', $actorId, $actorRole, $ipAddress, $asOfDate, $previous);
 
             $this->pdo->commit();
@@ -649,6 +752,9 @@ class StoreModelGovernanceService
             $rollbackRecord = json_decode($settings['ml_store_rollback_record'], true);
         }
 
+        $schedulerService = new ForecastingSchedulerService($this->pdo);
+        $effectiveSchedule = $schedulerService->getEffectiveSchedule();
+
         return [
             'rollback_history' => json_decode($this->getSetting('ml_store_rollback_history', '[]'), true) ?: [],
             'approved_model_version' => $approvedModel,
@@ -659,9 +765,12 @@ class StoreModelGovernanceService
             'activation_record' => $activationRecord,
             'rollback_record' => $rollbackRecord,
             'schedule' => [
-                'daily_forecast_time' => $settings['schedule_daily_forecast_time'] ?? '23:00',
-                'weekly_retrain_day' => $settings['schedule_weekly_retrain_day'] ?? 'Sunday',
-                'weekly_retrain_time' => $settings['schedule_weekly_retrain_time'] ?? '01:00',
+                'daily_forecast_time' => $effectiveSchedule['daily_forecast_time'],
+                'weekly_retrain_day' => $effectiveSchedule['weekly_retrain_day'],
+                'weekly_retrain_time' => $effectiveSchedule['weekly_retrain_time'],
+                'timezone' => $effectiveSchedule['timezone'] ?? 'Asia/Manila',
+                'source' => $effectiveSchedule['source'] ?? 'default_policy',
+                'is_explicit' => $effectiveSchedule['is_explicit'] ?? false,
             ],
         ];
     }
