@@ -120,6 +120,21 @@ const fixture = action => {
         assert.ok(s3Text.includes('Still collecting evidence') || s3Text.includes('Evaluation Evidence'),
             'Section 3 provides honest performance evidence status');
 
+        const summaryText = await page.locator('section[aria-labelledby="heading-usability"] [role="status"]').innerText();
+        for (const text of [summaryText, 'Still collecting evidence']) {
+            assert.equal(await page.locator('#rm-toast-stack .rm-toast').filter({hasText: text}).count(), 0,
+                'Persistent forecasting summaries stay inline without duplicate toasts');
+        }
+        await page.setViewportSize({width: 390, height: 844});
+        const prose = page.locator('section[aria-labelledby="heading-performance"] [role="status"] p');
+        if (await prose.count()) {
+            const dimensions = await prose.evaluate(node => ({paragraph: node.getBoundingClientRect().width,
+                summary: node.parentElement.getBoundingClientRect().width}));
+            assert.ok(dimensions.paragraph > dimensions.summary * 0.8,
+                'Narrow performance explanation uses the summary width instead of a flex column');
+        }
+        await page.setViewportSize({width: 1440, height: 900});
+
         // Check Section 4: Product Forecasts Table & Search
         const searchInput = page.locator('input[type="search"][name="search"]');
         await searchInput.waitFor();

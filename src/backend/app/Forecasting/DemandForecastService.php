@@ -1040,18 +1040,7 @@ class DemandForecastService
         // Resolve model version to evaluate
         $modelAssociation = 'candidate';
         if ($modelVersion === null) {
-            // Check usable job first
-            $usableJobId = $this->getLatestUsableJobId($asOfDate);
-            if ($usableJobId) {
-                try {
-                    $mStmt = $this->pdo->prepare("SELECT model_version FROM demand_forecasts WHERE job_id = ? LIMIT 1");
-                    $mStmt->execute([$usableJobId]);
-                    $modelVersion = $mStmt->fetchColumn() ?: null;
-                } catch (\Throwable) {}
-            }
-            if (!$modelVersion) {
-                $modelVersion = $approvedModel;
-            }
+            $modelVersion = $approvedModel;
             if (!$modelVersion) {
                 // Check latest completed training run
                 try {

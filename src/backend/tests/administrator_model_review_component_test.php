@@ -63,8 +63,8 @@ $pdo->exec("
         training_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
         model_version VARCHAR(100),
         status VARCHAR(50),
-        dataset_kind VARCHAR(50) DEFAULT 'store',
-        created_at DATETIME
+        metrics_json TEXT,
+        completed_at DATETIME
     );
 
     CREATE TABLE demand_forecasts (
@@ -223,21 +223,13 @@ function render_model_review(PDO $pdo, string $role = 'admin', array $post = [])
 echo "--- Test 1: Empty / Initial Candidate Rendering (Under evaluation) ---\n";
 // =========================================================================
 $candidateV1 = 'store_rf_v20261102';
-$modelsDir = dirname(__DIR__) . '/storage/ml_models';
-if (!is_dir($modelsDir)) {
-    mkdir($modelsDir, 0777, true);
-}
-$v1Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json';
-file_put_contents($v1Artifact, json_encode([
-    'model_version' => $candidateV1,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
-
-register_shutdown_function(function() use ($modelsDir, $candidateV1) {
-    @unlink($modelsDir . '/random_forest_candidate_' . $candidateV1 . '.json');
-    @unlink($modelsDir . '/random_forest_candidate_store_rf_v20261115.json');
-    @unlink($modelsDir . '/random_forest_candidate_store_rf_v_corrupt.json');
+$fixtureGovernance = new App\Forecasting\StoreModelGovernanceService($pdo);
+require_once __DIR__ . '/support/governance_fixture.php';
+$runnerConfigPath = dirname(__DIR__) . '/config/forecasting_runner.json';
+$originalConfig = is_file($runnerConfigPath) ? file_get_contents($runnerConfigPath) : null;
+register_shutdown_function(static function () use ($runnerConfigPath, $originalConfig): void {
+    if ($originalConfig === null) unlink($runnerConfigPath);
+    else file_put_contents($runnerConfigPath, $originalConfig);
 });
 foreach ([7 => [0.19, 0.28, 4.8, 7.1], 14 => [0.22, 0.32, 6.2, 9.4], 28 => [0.26, 0.36, 7.9, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
@@ -245,7 +237,10 @@ foreach ([7 => [0.19, 0.28, 4.8, 7.1], 14 => [0.22, 0.32, 6.2, 9.4], 28 => [0.26
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-07-01', '2026-09-22', '2026-10-31 23:00:00')
     ")->execute([$candidateV1, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-10-31 23:00:00')")->execute([$candidateV1]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-10-31 23:00:00')")->execute([$candidateV1]);
+governance_fixture($pdo, $fixtureGovernance, [$candidateV1]);
+$modelsDir = $fixtureGovernance->getModelsDir();
+file_put_contents($runnerConfigPath, json_encode(['model_storage' => $modelsDir], JSON_THROW_ON_ERROR));
 
 // At this point, 0 observation days exist -> Under evaluation
 $html1 = render_model_review($pdo, 'admin');
@@ -333,19 +328,16 @@ assert_test($stmtResumed->fetchColumn() === '0', 'Recommendations marked active 
 echo "\n--- Test 5: Replacement & Incumbent Comparison Rendering ---\n";
 // =========================================================================
 $candidateV2 = 'store_rf_v20261115';
-$v2Artifact = $modelsDir . '/random_forest_candidate_' . $candidateV2 . '.json';
-file_put_contents($v2Artifact, json_encode([
-    'model_version' => $candidateV2,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
 foreach ([7 => [0.15, 0.28, 4.0, 7.1], 14 => [0.18, 0.32, 5.5, 9.4], 28 => [0.21, 0.36, 7.0, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, mae, rmse, wape, baseline_mae, baseline_rmse, baseline_wape, candidate_gate_outcome, data_window_start, data_window_end, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-08-01', '2026-10-22', '2026-11-14 23:00:00')
     ")->execute([$candidateV2, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-11-14 23:00:00')")->execute([$candidateV2]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-11-14 23:00:00')")->execute([$candidateV2]);
+governance_fixture($pdo, $fixtureGovernance, [$candidateV1, $candidateV2]);
+$modelsDir = $fixtureGovernance->getModelsDir();
+file_put_contents($runnerConfigPath, json_encode(['model_storage' => $modelsDir], JSON_THROW_ON_ERROR));
 
 // Seed 28 observation days for candidate V2
 for ($i = 1; $i <= 28; $i++) {
