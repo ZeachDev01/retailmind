@@ -163,6 +163,9 @@ function build_query(array $params): string {
                 <h1>Forecast Data Readiness</h1>
             </div>
             <div class="page-heading-actions">
+                <?php if (has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">ML Operation</a>
+                <?php endif; ?>
                 <?php if (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)): ?>
                     <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
                 <?php endif; ?>
