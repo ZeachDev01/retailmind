@@ -606,6 +606,9 @@ class DemandForecastService
             $diagRef = (string)($latestJob['diagnostic_reference'] ?? '');
             $isExhausted = !ForecastingSchedulerService::canAutomaticallyRetry($latestJob);
             $isBlocked = str_starts_with($diagRef, 'BLOCKED:');
+            $guidanceEffect = sprintf('Forecast guidance remains available for %d of %d Products; %d use stock rules.',
+                (int)($coverage['forecast_backed_count'] ?? 0), (int)($coverage['scope_count'] ?? 0),
+                (int)($coverage['stock_rule_count'] ?? 0));
 
             if ($isExhausted) {
                 $actionUrl = null;
@@ -619,7 +622,7 @@ class DemandForecastService
                     'severity' => 'critical',
                     'category' => $isBlocked ? 'blocked_recovery' : 'exhausted_recovery',
                     'condition' => $isBlocked ? 'Forecast update is blocked by missing prerequisites; automatic retry is unavailable.' : sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
-                    'effect' => 'Buying suggestions are using stock rules until the worker failure is resolved. Technical support required to inspect background worker logs.',
+                    'effect' => $guidanceEffect . ' Technical support required to inspect background worker logs.',
                     'responsible_role' => 'Super Administrator',
                     'action_label' => $actionLabel,
                     'action_url' => $actionUrl,
@@ -630,7 +633,7 @@ class DemandForecastService
                     'severity' => 'warning',
                     'category' => 'retry_scheduled',
                     'condition' => sprintf('Forecast update failed on attempt %d of 3.', $attempts),
-                    'effect' => 'Buying suggestions are using stock rules' . (!empty($coverage['effective_job_id']) ? ' (earlier valid guidance remains active until retry)' : '') . '. Automatic retry scheduled; no action needed.',
+                    'effect' => $guidanceEffect . ' Automatic retry scheduled; no action needed.',
                     'responsible_role' => 'Automatic System',
                     'action_label' => 'No action needed (Automatic retry scheduled)',
                     'action_url' => null,

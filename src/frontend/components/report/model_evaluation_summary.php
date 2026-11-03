@@ -102,6 +102,7 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                     <?php endif; ?>
                 <?php endif; ?>
                 <p>These results combine products. Some products may perform worse. Recorded sales cannot show all demand lost during stockouts, and these tests do not guarantee future results.</p>
+                <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
                 <?php if (!empty($reviewPerfEvidence) && $reviewPerfEvidence['status'] !== 'unavailable'): ?>
                     <div style="margin-top: 1rem; padding: 0.75rem; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 6px;">
                         <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">Store Prediction Performance Evidence</h4>
@@ -112,14 +113,14 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                         <?php if ($reviewPerfEvidence['status'] === 'genuine_evidence'): ?>
                             <div class="table-wrap" style="margin-bottom: 0.5rem;">
                                 <table>
-                                    <caption>Candidate predictions vs subsequent Store sales</caption>
-                                    <thead><tr><th scope="col">Horizon</th><th scope="col">Overestimated</th><th scope="col">Underestimated</th><th scope="col">Model MAE</th><th scope="col">Weekly Baseline MAE</th></tr></thead>
+                                    <caption>Daily Errors: Candidate Predictions vs Subsequent Store Sales</caption>
+                                    <thead><tr><th scope="col">Forecast Lead Time</th><th scope="col">Overestimated</th><th scope="col">Underestimated</th><th scope="col">Model MAE</th><th scope="col">Weekly Baseline MAE</th></tr></thead>
                                     <tbody>
                                     <?php foreach ([7, 14, 28] as $h):
                                         $m = $reviewPerfEvidence['metrics_by_horizon'][$h] ?? [];
                                     ?>
                                         <tr>
-                                            <th scope="row"><?= $h ?> days</th>
+                                            <th scope="row">1–<?= $h ?> days</th>
                                             <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : 'Unavailable' ?></td>
                                             <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : 'Unavailable' ?></td>
                                             <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : 'Unavailable' ?></td>

@@ -354,6 +354,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </span>
             </div>
 
+            <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
             <?php if ($performanceSummary['status'] === 'still_collecting_evidence'): ?>
                 <div class="forecast-summary tag-info" role="status" style="margin-bottom: 1rem;">
                     <strong>Still collecting evidence:</strong> <?= htmlspecialchars($performanceSummary['reason']) ?>
@@ -369,7 +370,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th scope="col">Forecast Horizon</th>
+                                    <th scope="col">Forecast Lead Time</th>
                                     <th scope="col">Average Error (MAE, Base Units)</th>
                                     <th scope="col">Repeat Last Week (Baseline MAE)</th>
                                     <th scope="col">RMSE (Base Units)</th>
@@ -388,7 +389,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     $underUnits = $horizon['underestimated_units'] !== null ? number_format($horizon['underestimated_units']) : 'Not recorded';
                                 ?>
                                     <tr>
-                                        <td><strong><?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
+                                        <td><strong>1–<?= (int)$horizon['horizon_days'] ?> Days Ahead</strong></td>
                                         <?php foreach (['mae', 'baseline_mae', 'rmse', 'baseline_rmse'] as $metric): ?>
                                             <td><?= isset($horizon[$metric]) ? number_format($horizon[$metric], 2) : 'Unavailable' ?></td>
                                         <?php endforeach; ?>

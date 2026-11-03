@@ -65,6 +65,20 @@ class ObservedDemandTests(unittest.TestCase):
             data[column] = "untrusted future value"
         pd.testing.assert_frame_equal(expected, build_feature_matrix(data, "2023-02-01"))
 
+    def test_calendar_closure_revisions_enter_features_only_when_known(self):
+        data = history(60)
+        data["available_date"] = data.date
+        data["classification"] = "valid_demand"
+        missing_date = pd.Timestamp("2023-01-31")
+        data.loc[data.date == missing_date, ["units_sold", "classification"]] = [float("nan"), "missing_evidence"]
+        future_closure = pd.DataFrame({"date": [missing_date], "product_id": [1],
+            "units_sold": [float("nan")], "classification": ["closed"],
+            "available_date": [pd.Timestamp("2023-02-15")]})
+        revisions = pd.concat([data, future_closure], ignore_index=True)
+        with self.assertRaisesRegex(ValueError, "missing_evidence"):
+            build_feature_matrix(revisions, "2023-02-09")
+        self.assertEqual(len(build_feature_matrix(revisions, "2023-02-15")), 28)
+
     def test_corrections_enter_features_and_labels_only_when_known(self):
         from feature_pipeline import build_training_rows
         data = history(140)

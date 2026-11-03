@@ -223,6 +223,18 @@ try {
     $assert(count(array_filter($blockedIssues, static fn($issue) => $issue['category'] === 'retry_scheduled')) === 0, 'Blocked prerequisites do not create a no-action retry issue');
     $pdo2->exec("UPDATE ml_jobs SET attempts = 3, diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED' WHERE job_id = 1");
 
+    foreach ([1, 3] as $attempt) {
+        $preserved = $covRetry;
+        $preserved['forecast_backed_count'] = 1;
+        $preserved['stock_rule_count'] = 2;
+        $preserved['scope_count'] = 3;
+        $preserved['latest_job']['attempts'] = $attempt;
+        $preserved['latest_job']['diagnostic_reference'] = $attempt === 3 ? 'EXHAUSTED:FAILURE' : 'TRANSIENT:FAILURE';
+        $preservedIssues = $service2->getOperationalIssues($preserved, 'admin');
+        $recovery = array_values(array_filter($preservedIssues, static fn($issue) => in_array($issue['category'], ['retry_scheduled', 'exhausted_recovery'], true)))[0];
+        $assert(str_contains($recovery['effect'], '1 of 3 Products') && str_contains($recovery['effect'], '2 use stock rules'), 'Failure effect preserves actual forecast and stock-rule coverage on attempt ' . $attempt);
+    }
+
     // For Super Admin, link points to ml_settings.php
     $saIssues = $service2->getOperationalIssues($covExhausted, 'super_admin');
     $saExhausted = null;

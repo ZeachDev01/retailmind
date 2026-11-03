@@ -135,6 +135,8 @@ const fixture = action => {
         }
         await page.setViewportSize({width: 1440, height: 900});
 
+        assert.match(await page.locator('section[aria-labelledby="heading-performance"]').innerText(), /Daily errors/);
+
         // Check Section 4: Product Forecasts Table & Search
         const searchInput = page.locator('input[type="search"][name="search"]');
         await searchInput.waitFor();

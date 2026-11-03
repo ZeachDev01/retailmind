@@ -357,6 +357,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
 
             <p style="margin-bottom:0.75rem;"><?= htmlspecialchars($perfEvidence['explanation']) ?></p>
+            <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
 
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem; padding:0.75rem; background:var(--theme-surface-soft, #f8fafc); border-radius:6px;">
                 <div>
@@ -387,10 +388,10 @@ function format_wape_metric(?float $val, ?string $reason): string {
 
             <div class="table-wrap">
                 <table class="data-table">
-                    <caption>Prediction Error and Weekly Comparison by Stated Horizon Boundary</caption>
+                    <caption>Daily Errors by Forecast Lead Time</caption>
                     <thead>
                         <tr>
-                            <th scope="col">Forecast Horizon</th>
+                            <th scope="col">Forecast Lead Time</th>
                             <th scope="col">Overestimated Units</th>
                             <th scope="col">Underestimated Units</th>
                             <th scope="col">Model Error (MAE)</th>
@@ -404,7 +405,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                             $m = $perfEvidence['metrics_by_horizon'][$h] ?? [];
                         ?>
                             <tr>
-                                <th scope="row"><?= $h ?>-Day Boundary</th>
+                                <th scope="row">1–<?= $h ?> Days Ahead</th>
                                 <td><?= $m['overestimated_units'] !== null ? number_format($m['overestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
                                 <td><?= $m['underestimated_units'] !== null ? number_format($m['underestimated_units'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
                                 <td><?= $m['mae'] !== null ? number_format($m['mae'], 2) . ' units' : '<span class="muted">Unavailable</span>' ?></td>
@@ -422,6 +423,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </p>
         </section>
 
+        <p class="muted">Technical qualification: chronological backtests compare summed 7-, 14-, and 28-day Product totals. These historical tests are separate from subsequent Store outcome evidence above.</p>
         <?php if (empty($evaluations)): ?>
             <div class="empty-state">
                 <i class="bi bi-bar-chart empty-icon"></i>
