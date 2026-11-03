@@ -142,7 +142,6 @@ class ForecastingSchedulerService {
             $currentDate,
             $currentTime,
             $currentDayName,
-            $dailyTime,
             $weeklyDay,
             $weeklyTime,
             $result
@@ -436,16 +435,15 @@ class ForecastingSchedulerService {
         string $currentDate,
         string $currentTime,
         string $currentDayName,
-        string $dailyTime,
         string $weeklyDay,
         string $weeklyTime,
         array &$result
     ): void {
-        $latestTraining = $this->pdo->query("SELECT metrics_json FROM model_training_runs
-            WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetchColumn();
+        $latestTraining = $this->pdo->query("SELECT * FROM model_training_runs
+            WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
         
         $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
-        $lastEvidence = json_decode((string)$latestTraining, true)['metadata']['data_window_end'] ?? null;
+        $lastEvidence = json_decode((string)($latestTraining['metrics_json'] ?? ''), true)['metadata']['data_window_end'] ?? null;
         $hasNewHistory = $lastEvidence === null || $lastEvidence < $targetCutoff;
         $history = [];
         if (!$isDemo && $hasNewHistory) {
@@ -477,17 +475,25 @@ class ForecastingSchedulerService {
         
         // Compare the most recent selected opportunity with completed training evidence.
         $downtimeRetrainDue = false;
-        if ($lastEvidence !== null) {
+        if ($latestTraining !== false) {
             $opportunity = (clone $now)->modify('last ' . $weeklyDay)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
             if (strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime) {
                 $opportunity = (clone $now)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
             }
-            // A run with yesterday's cutoff already covers its training day's opportunity.
-            $coveredThrough = (new DateTime($lastEvidence, new DateTimeZone('Asia/Manila')))->modify('+1 day')->setTime(23, 59, 59);
-            $downtimeRetrainDue = $opportunity > $coveredThrough;
+            $completedAt = $latestTraining['completed_at'] ?? null;
+            // Legacy runs lack timestamps; their cutoff still establishes the training day.
+            $coveredThrough = $completedAt
+                ? new DateTime($completedAt, new DateTimeZone('Asia/Manila'))
+                : ($lastEvidence !== null ? (new DateTime($lastEvidence, new DateTimeZone('Asia/Manila')))->modify('+1 day')->setTime(23, 59, 59) : null);
+            $downtimeRetrainDue = $coveredThrough !== null && $opportunity > $coveredThrough;
+            $weeklyTrainingDue = $weeklyTrainingDue && ($coveredThrough === null || $opportunity > $coveredThrough);
         }
 
         if (!$firstTrainingDue && !$weeklyTrainingDue && !$downtimeRetrainDue) {
+            return;
+        }
+
+        if (!$isDemo && (!$hasNewHistory || empty($history['history']))) {
             return;
         }
 
@@ -517,11 +523,9 @@ class ForecastingSchedulerService {
             }
         }
 
-        // Demo history is frozen; only its existing weekly schedule or downtime catch-up applies.
-        if (($isDemo && ($weeklyTrainingDue || $downtimeRetrainDue)) || (!$isDemo && $hasNewHistory && !empty($history['history']))) {
-            $jobService->enqueueSystem('model_retraining', $targetCutoff);
-            $result['retrain_jobs_queued']++;
-        }
+        // Demo history is frozen; Store runs have already passed the new-history gate.
+        $jobService->enqueueSystem('model_retraining', $targetCutoff);
+        $result['retrain_jobs_queued']++;
     }
 
     private function findJob(string $triggerType, string $cutoff, string $currentDate): ?array {
