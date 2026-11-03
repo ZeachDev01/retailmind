@@ -337,7 +337,7 @@ try {
         "Policy exposes three chronological 28-day evaluation periods");
     $assert(!isset($policy['configurable']), "Policy is not configurable");
 
-    $assert($res1['days_with_sales'] === 149, "P1 counts days with sales separately from usable days");
+    $assert($res1['days_with_sales'] === 150, "P1 counts recorded sales on its closed date separately from usable days");
     $assert($res1['accumulated_usable_days'] === 149, "P1 counts 149 usable days including the closed day exclusion");
     $assert($res1['genuine_zero_days'] === 0, "P1 has no genuine zero days");
     $assert($res1['calendar_span_days'] === 210, "P1 elapsed calendar span is 210 days, not 149");
@@ -345,7 +345,7 @@ try {
     $assert($res1['usable_days_remaining'] === 0, "P1 has no usable days remaining");
 
     $assert($res2['usable_days_remaining'] === 1, "P2 is exactly one usable day short of 140");
-    $assert($res2['days_with_sales'] === 139, "P2 days with sales equals its usable count");
+    $assert($res2['days_with_sales'] === 140, "P2 days with sales includes its closed date with imported sales");
     $assert(!empty($res2['actions']), "P2 exposes an actionable usable-day blocker");
     $assert(str_contains($res2['actions'][0], '1 more usable day'), "P2 action states how many usable days remain");
 
@@ -353,12 +353,19 @@ try {
     $assert($res7['eligible'] === true, "P7 with genuine observed zeros is eligible");
     $assert($res7['accumulated_usable_days'] === 149, "P7 genuine zeros count as usable days");
     $assert($res7['genuine_zero_days'] === 12, "P7 records 12 genuine observed zero days");
-    $assert($res7['days_with_sales'] === 137, "P7 days with sales excludes genuine zeros");
+    $assert($res7['days_with_sales'] === 138, "P7 days with sales excludes genuine zeros");
 
     $assert($res5['accumulated_usable_days'] === 149, "P5 supported closure does not add a usable day");
     $assert($res5['closed_days'] >= 2, "P5 records the holiday closure alongside weekend closures");
     $assert($res5['eligible'] === true, "P5 supported closure does not invalidate otherwise supported windows");
     $assert($res3['stockout_days'] >= 1, "P3 records stockout days separately");
+    $partialSales = $service->evaluateProductEligibility($pdo, 3, '2024-07-25', [
+        '2024-07-24' => ['classification' => 'valid_demand', 'valid_sales_units' => 5],
+        '2024-07-25' => ['classification' => 'stockout_censored', 'valid_sales_units' => 3],
+    ]);
+    $assert($partialSales['days_with_sales'] === 2, "Sales before a stockout still count as a day with sales");
+    $assert($partialSales['accumulated_usable_days'] === 1 && $partialSales['stockout_days'] === 1,
+        "A stockout day with recorded sales remains unusable for training");
     $assert($res3['accumulated_usable_days'] === 147, "P3 stockout days do not add usable days (stockouts: {$res3['stockout_days']})");
     $assert(!empty($res3['actions']) && str_contains($res3['actions'][0], '2024-07-25'),
         "P3 recent-input blocker names the unsupported date and the required action");
@@ -398,6 +405,7 @@ try {
         $eligibilityMap[$item['product_id']] = $item;
     }
     $assert($eligibilityMap[1]['eligible'] === true, "DemandHistoryService reports P1 eligible");
+    $assert($eligibilityMap[1]['days_with_sales'] === 150, "Training history retains sales-day counts through recorded-sales evidence");
     $assert($eligibilityMap[2]['eligible'] === false, "DemandHistoryService reports P2 ineligible");
     $assert($eligibilityMap[3]['eligible'] === false, "DemandHistoryService reports P3 ineligible");
     $assert($eligibilityMap[4]['eligible'] === false, "DemandHistoryService reports P4 ineligible");
@@ -426,11 +434,11 @@ try {
     // Ticket #422: readiness exposes the same policy and separates usable days from span/sales days.
     $assert($readinessByPid[1]['training_eligible'] === true, "Data readiness exposes training eligibility separately");
     $assert($readinessByPid[1]['required_usable_days'] === 140, "Data readiness shows the fixed 140-day requirement");
-    $assert($readinessByPid[1]['days_with_sales'] === 149, "Data readiness shows days with sales separately");
+    $assert($readinessByPid[1]['days_with_sales'] === 150, "Data readiness shows days with sales separately");
     $assert($readinessByPid[1]['calendar_history_days'] === 210, "Data readiness keeps the elapsed calendar span separate");
     $assert($readinessByPid[2]['usable_days_remaining'] === 1, "Data readiness shows one usable day remaining for P2");
     $assert(!empty($readinessByPid[2]['eligibility_actions']), "Data readiness exposes actionable eligibility blockers");
-    $assert($readinessByPid[7]['days_with_sales'] === 137, "Data readiness reports genuine zeros separately from days with sales");
+    $assert($readinessByPid[7]['days_with_sales'] === 138, "Data readiness reports genuine zeros separately from days with sales");
     $assert($readinessByPid[7]['accumulated_usable_days'] === 149, "Data readiness counts genuine zeros as usable days");
     $assert(!str_contains(strtolower((string)$readinessByPid[1]['forecast_reason']), 'minimum history'),
         "Data readiness no longer describes a configurable minimum history");

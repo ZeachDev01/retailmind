@@ -107,11 +107,13 @@ class StoreTrainingEligibilityService
                 continue;
             }
             $observedDates[] = $date;
+            if (($row['valid_sales_units'] ?? $row['recorded_sales_units'] ?? 0) > 0) {
+                $daysWithSales++;
+            }
             $classification = (string)($row['classification'] ?? 'missing_evidence');
             switch ($classification) {
                 case 'valid_demand':
                     $usableDays++;
-                    $daysWithSales++;
                     break;
                 case 'genuine_zero':
                     $usableDays++;

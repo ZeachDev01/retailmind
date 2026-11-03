@@ -907,7 +907,7 @@ class StoreModelGovernanceService
 
         // 1. Candidate Quality Evaluation
         $qualityResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
-        $candidateEvals = $this->evaluationService->getEvaluationsByModelVersion($modelVersion);
+        $candidateEvals = $qualityResult['horizons'];
         $thresholds = $this->evaluationService->getThresholds();
 
         $horizonsData = [];
@@ -930,7 +930,7 @@ class StoreModelGovernanceService
                 'baseline_wape' => $row['baseline_wape'] !== null ? round((float)$row['baseline_wape'], 4) : null,
                 'max_wape_limit' => $maxWape,
                 'gate_outcome' => $row['candidate_gate_outcome'] ?? 'pending',
-                'gate_status' => $this->determineHorizonGateStatus($row, $maxWape),
+                'gate_status' => $row['gate_status'] ?? 'blocked',
             ];
         }
 
@@ -1073,22 +1073,6 @@ class StoreModelGovernanceService
             'limitations' => $this->getStandardLimitations(),
             'latest_job' => $latestJob,
         ];
-    }
-
-    private function determineHorizonGateStatus(array $row, ?float $maxWape): string
-    {
-        if ($maxWape === null) {
-            return 'blocked';
-        }
-        $w = isset($row['wape']) ? (float)$row['wape'] : null;
-        $bw = isset($row['baseline_wape']) ? (float)$row['baseline_wape'] : null;
-        if ($w === null) {
-            return 'blocked';
-        }
-        if ($w > $maxWape || ($bw !== null && $w >= $bw)) {
-            return 'failed';
-        }
-        return 'passed';
     }
 
     private function getProductCoverageSummary(string $asOfDate, string $candidateVersion): array
