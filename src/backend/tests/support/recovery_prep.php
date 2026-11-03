@@ -18,13 +18,14 @@ $superRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name='supe
 $adminRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name='admin'")->fetchColumn();
 $hash = password_hash($password, PASSWORD_DEFAULT);
 
-$pdo->prepare("INSERT INTO users (user_id, username, full_name, email, password_hash, role_id, status, is_recovery_account) VALUES (8, 'other_admin', 'Other Admin', 'other@example.com', ?, ?, 'active', 0)")->execute([$hash, $adminRoleId]);
-$pdo->prepare("INSERT INTO users (user_id, username, full_name, email, password_hash, role_id, status, is_recovery_account) VALUES (9, 'recovery_primary', 'Recovery Account', NULL, ?, ?, 'disabled', 1)")->execute([$hash, $superRoleId]);
+$pdo->prepare("INSERT INTO users (user_id, username, display_name, email, password_hash, role_id, status, is_recovery_account) VALUES (8, 'other_admin', 'Other Admin', 'other@example.com', ?, ?, 'disabled', 0)")->execute([$hash, $adminRoleId]);
+$pdo->prepare("INSERT INTO users (user_id, username, display_name, email, password_hash, role_id, status, is_recovery_account) VALUES (9, 'recovery_primary', 'Recovery Account', NULL, ?, ?, 'disabled', 1)")->execute([$hash, $superRoleId]);
 $pdo->prepare("INSERT INTO recovery_accounts (account_key, user_id, activation_secret_hash, sealed_at) VALUES ('primary', 9, ?, CURRENT_TIMESTAMP)")->execute([password_hash('Secret1234', PASSWORD_DEFAULT)]);
 
 $opId = bin2hex(random_bytes(16));
 $safetyOpId = bin2hex(random_bytes(16));
 $approval = [
+    'stage' => 'reconciliation_approved',
     'package_id' => 'pkg-test-12345',
     'approval_hash' => hash('sha256', 'test_approval'),
     'destination_watermark' => hash('sha256', 'test_watermark'),
