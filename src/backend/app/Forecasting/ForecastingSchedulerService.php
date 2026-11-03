@@ -444,20 +444,47 @@ class ForecastingSchedulerService {
         $latestTraining = $this->pdo->query("SELECT metrics_json FROM model_training_runs
             WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetchColumn();
         
-        $firstTrainingDue = $latestTraining === false && $currentTime >= $dailyTime;
-        $weeklyTrainingDue = strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime;
-        
-        // Missed weekly training catch-up after downtime (e.g. computer was off over weekend/weeks)
-        $downtimeRetrainDue = false;
-        if ($latestTraining !== false && !$weeklyTrainingDue) {
-            $meta = json_decode((string)$latestTraining, true)['metadata'] ?? [];
-            $lastEvidence = $meta['data_window_end'] ?? null;
-            if ($lastEvidence !== null) {
-                $daysSinceLastTraining = (int)round((strtotime($targetCutoff) - strtotime($lastEvidence)) / 86400);
-                if ($daysSinceLastTraining >= 7) {
-                    $downtimeRetrainDue = true;
+        $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
+        $lastEvidence = json_decode((string)$latestTraining, true)['metadata']['data_window_end'] ?? null;
+        $hasNewHistory = $lastEvidence === null || $lastEvidence < $targetCutoff;
+        $history = [];
+        if (!$isDemo && $hasNewHistory) {
+            $history = (new DemandHistoryService())->getTrainingHistory($this->pdo, $targetCutoff);
+            $result['training_eligibility'] = $history['eligibility'];
+        }
+
+        $firstTrainingDue = false;
+        if (!$isDemo && $latestTraining === false && !empty($history['history'])) {
+            $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_initial_training_due'");
+            $saved = $stmt->fetchColumn();
+            $initial = json_decode((string)$saved, true);
+            $schedule = $weeklyDay . ' ' . $weeklyTime;
+            if (($initial['schedule'] ?? null) !== $schedule) {
+                $due = (clone $now)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+                // Initial eligibility must precede its first opportunity, including exact-time detection.
+                if ($due <= $now) $due->modify('+1 day');
+                $initial = ['schedule' => $schedule, 'due_at' => $due->format('Y-m-d H:i:s')];
+                if ($saved === false) {
+                    $stmt = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_initial_training_due', ?)");
+                } else {
+                    $stmt = $this->pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_initial_training_due'");
                 }
+                $stmt->execute([json_encode($initial)]);
             }
+            $firstTrainingDue = $initial['due_at'] <= $now->format('Y-m-d H:i:s');
+        }
+        $weeklyTrainingDue = ($isDemo || $latestTraining !== false) && strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime;
+        
+        // Compare the most recent selected opportunity with completed training evidence.
+        $downtimeRetrainDue = false;
+        if ($lastEvidence !== null) {
+            $opportunity = (clone $now)->modify('last ' . $weeklyDay)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+            if (strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime) {
+                $opportunity = (clone $now)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+            }
+            // A run with yesterday's cutoff already covers its training day's opportunity.
+            $coveredThrough = (new DateTime($lastEvidence, new DateTimeZone('Asia/Manila')))->modify('+1 day')->setTime(23, 59, 59);
+            $downtimeRetrainDue = $opportunity > $coveredThrough;
         }
 
         if (!$firstTrainingDue && !$weeklyTrainingDue && !$downtimeRetrainDue) {
@@ -488,15 +515,6 @@ class ForecastingSchedulerService {
                 $jobService->retryJob((int)$existingRetrain['job_id']);
                 return;
             }
-        }
-
-        $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
-        $lastEvidence = json_decode((string)$latestTraining, true)['metadata']['data_window_end'] ?? null;
-        $hasNewHistory = $lastEvidence === null || $lastEvidence < $targetCutoff;
-
-        if (!$isDemo && $hasNewHistory) {
-            $history = (new DemandHistoryService())->getTrainingHistory($this->pdo, $targetCutoff);
-            $result['training_eligibility'] = $history['eligibility'];
         }
 
         // Demo history is frozen; only its existing weekly schedule or downtime catch-up applies.

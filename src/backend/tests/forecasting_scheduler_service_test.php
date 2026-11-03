@@ -437,4 +437,20 @@ foreach (['00:00' => '2024-06-17 00:00:00', '12:00' => '2024-06-17 12:00:00'] as
     assert_same('2024-06-16', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Midnight/noon use the Philippine cutoff');
 }
 
+// Initial eligibility after the hour must wait for tomorrow, even on a nonweekly day.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+    DELETE FROM platform_settings WHERE setting_key = 'ml_initial_training_due';
+    UPDATE platform_settings SET setting_value = 'Sunday' WHERE setting_key = 'schedule_weekly_retrain_day';
+    UPDATE platform_settings SET setting_value = '01:00' WHERE setting_key = 'schedule_weekly_retrain_time';");
+assert_same(0, $tick('2024-06-10 10:00:00')['retrain_jobs_queued'], 'After-hour detection cannot train during Store hours');
+assert_same(0, $tick('2024-06-11 00:59:59')['retrain_jobs_queued'], 'Restart before first due time still waits');
+assert_same(1, $tick('2024-06-11 01:00:00')['retrain_jobs_queued'], 'Initial run uses next selected time on a nonweekly day');
+assert_same('2024-06-10', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Initial run uses completed Philippine day');
+
+// A Sunday missed since Friday training is due Monday before the selected hour (< seven days).
+$pdo->exec("DELETE FROM ml_jobs;
+    INSERT INTO model_training_runs VALUES (30, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-06-13\"}}');");
+assert_same(1, $tick('2024-06-17 00:30:00')['retrain_jobs_queued'], 'Missed weekly opportunity catches up before selected hour within seven days');
+assert_same('2024-06-16', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Missed weekly run uses current evidence, not fabricated old cutoff');
+
 echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation, candidate observation queueing, candidate preservation, downtime observation catch-up, review transition, 01:00 daily generation, Sunday 01:00 retraining, conflicting default correction, explicit schedule preservation, effective settings recording).\n";
