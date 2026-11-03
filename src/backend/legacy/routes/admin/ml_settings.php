@@ -5,10 +5,6 @@ require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE)
 $message = '';
 $messageClass = '';
 $definitions = [
-    'minimum_history_days' => ['label' => 'Minimum calendar history (days)', 'min' => 14, 'max' => 365, 'type' => 'number'],
-    'preferred_history_days' => ['label' => 'Preferred calendar history (days)', 'min' => 30, 'max' => 730, 'type' => 'number'],
-    'minimum_nonzero_sales_days' => ['label' => 'Minimum days with sales', 'min' => 1, 'max' => 365, 'type' => 'number'],
-    'history_window_days' => ['label' => 'Maximum training history (days)', 'min' => 60, 'max' => 1095, 'type' => 'number'],
     'forecast_period_days' => ['label' => 'Forecast period (days)', 'min' => 7, 'max' => 90, 'type' => 'number'],
     'n_estimators' => ['label' => 'Random Forest trees', 'min' => 50, 'max' => 1000, 'type' => 'number'],
     'max_depth' => ['label' => 'Maximum tree depth', 'min' => 2, 'max' => 60, 'type' => 'number'],

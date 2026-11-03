@@ -42,6 +42,15 @@ const fixture = action => {
         };
         await login('super_admin');
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        const eligibilityPolicy = await page.locator('[aria-label="Training Eligibility policy"]').innerText();
+        assert.match(eligibilityPolicy, /140 accumulated usable days/);
+        for (const key of ['minimum_history_days', 'preferred_history_days', 'minimum_nonzero_sales_days', 'history_window_days']) {
+            assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' is read-only policy');
+        }
+        await page.goto(origin + '/components/report/data_readiness.php');
+        assert.equal(await page.locator('[aria-label="Training Eligibility policy"]').innerText(), eligibilityPolicy,
+            'ML Operation and Data Readiness explain the same effective policy');
+        await page.goto(origin + '/components/system_administrator/ml_settings.php');
         const tuning = page.locator('details.ml-tuning');
         assert.equal(await tuning.getAttribute('open'), null, 'Advanced tuning starts collapsed');
         const values = await page.locator('main form').evaluate(form => Object.fromEntries(new FormData(form)));
