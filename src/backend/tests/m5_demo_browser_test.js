@@ -48,7 +48,7 @@ c.close();print(json.dumps(r,default=str))
         await page.fill('#landing-login-username', 'demo_inventory_manager');
         await page.fill('#landing-login-password', process.env.DEMO_PASSWORD);
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.locator('#landing-login-password').press('Enter')]);
-        await page.goto(baseURL + '/components/report/forecast_replay.php');
+        await page.goto(baseURL + '/components/report/forecast_replay.php?product_id=1');
         await expect(page.getByRole('heading', { name: 'M5 historical demonstration', exact: true })).toBeVisible();
         await expect(page.locator('main')).toContainText('Original dates are unchanged');
         await expect(page.locator('main')).toContainText('No Store model or purchasing guidance was approved');
@@ -72,9 +72,10 @@ c.close();print(json.dumps(r,default=str))
         assert.equal((await product.locator('td').nth(2).innerText()).trim(), '30 units');
         assert.equal((await product.locator('td').nth(3).innerText()).trim(), before.product_1_expected + ' units');
         await page.screenshot({ path: path.join(output, 'm5-desktop.png'), fullPage: true });
-        const secondProduct = await page.locator('#replay-product option[value="2"]').textContent();
-        await page.getByRole('combobox', { name: 'Product', exact: true }).fill(secondProduct);
-        await page.getByRole('option', { name: secondProduct, exact: true }).click();
+        const productSearch = page.getByRole('combobox', { name: 'Product', exact: true });
+        await productSearch.fill('FOODS_1_125');
+        await productSearch.press('ArrowDown');
+        await productSearch.press('Enter');
         await page.getByRole('button', { name: 'Compare product', exact: true }).click();
         await expect(page.locator('#replay-product')).toHaveValue('2');
         await expect(page.locator('#replay-comparison tbody tr')).toHaveCount(28);
