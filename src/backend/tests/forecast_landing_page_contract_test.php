@@ -311,12 +311,8 @@ try {
         ('rf_prod_v1', 28, 2.50, 3.20, 0.22, 3.40, 4.20, 0.35, 'passed', 58, 41, '2026-10-01', '2026-10-28')");
 
     $perfReady = $service->getPerformanceSummary('rf_prod_v1');
-    $assert($perfReady['status'] === 'available', 'Performance summary available when evaluations exist');
-    $assert(count($perfReady['horizons']) === 3, 'Covers 7, 14, and 28 day horizons');
-    $assert($perfReady['horizons'][7]['overestimated_units'] === 15, 'Overestimated units shown separately');
-    $assert($perfReady['horizons'][7]['underestimated_units'] === 8, 'Underestimated units shown separately');
-    $assert($perfReady['horizons'][7]['baseline_wape'] === 0.22, 'Simple weekly baseline comparison present');
-    $assert(!empty($perfReady['notes']), 'Includes note that WAPE is error (lower is better) and stockouts leave unmet demand unknown');
+    $assert($perfReady['status'] === 'still_collecting_evidence', 'Historical evaluations do not become genuine subsequent Store outcome evidence');
+    $assert($perfReady['horizons'] === [], 'Backtest metrics are not presented as live Store prediction usefulness');
 
 } catch (Throwable $e) {
     $failures[] = "Exception: " . $e->getMessage() . "\n" . $e->getTraceAsString();
