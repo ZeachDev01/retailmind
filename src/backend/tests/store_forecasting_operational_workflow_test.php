@@ -4,12 +4,12 @@ declare(strict_types=1);
 /**
  * store_forecasting_operational_workflow_test.php
  *
- * End-to-End Operational Workflow Verification on Disposable XAMPP (Ticket #374 & #417 under Spec #359 & #410).
+ * Isolated SQLite Operational Service Contracts (Ticket #374 & #417 under Spec #359 & #410).
  *
  * Exercises the entire local forecasting sequence end-to-end against an isolated test database:
- * 1. Reboot & service configuration without interactive sign-in & database delay recovery
+ * 1. Simulated service configuration and injected database-connector delay
  * 2. Daily/weekly schedules, downtime catch-up, and deduplication
- * 3. Injected failures, bounded retries (max 3), generated notice, fallback & recovery
+ * 3. Inserted failure states, bounded retry service checks, generated notice, fallback & recovery
  * 4. Weekly store calendar with weekend closures, weekday exceptions, sales-based opening
  * 5. First installation: stock rules -> accumulated usable history -> candidate training -> qualification -> observation -> local approval -> fresh forecast
  * 6. Automatic candidate training, observation mode & candidate preservation across weekly training
@@ -1175,74 +1175,15 @@ $evalService->setObservationMode(false, 1);
 // =============================================================================
 echo "\n--- Section 13: Evidence Matrix & Separation of Workflow Evidence ---\n";
 
-$acceptanceEvidence = [
-    'history_to_candidate' => [
-        'scenario' => 'History to Candidate Training & Evaluation',
-        'environment' => 'Windows / XAMPP / PHP ' . PHP_VERSION,
-        'data_provenance' => 'Isolated synthetic history with supported closures (154 usable days)',
-        'timestamp_asia_manila' => (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s T'),
-        'run_reference' => 'training_run_id=10, model_version=' . $candidateVersion1,
-        'expected' => 'Passed 7/14/28-day WAPE/MAE/RMSE thresholds without replacing approved model',
-        'observed' => 'Quality gate passed, stored as isolated candidate artifact',
-        'status' => 'Passed',
-    ],
-    'qualification_to_approval' => [
-        'scenario' => 'Qualification to Local Administrator Approval',
-        'environment' => 'Windows / XAMPP / PHP ' . PHP_VERSION,
-        'data_provenance' => 'Isolated 28-day prospective observation telemetry',
-        'timestamp_asia_manila' => (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s T'),
-        'run_reference' => 'candidate_version=' . $candidateVersion1 . ', approved_by=user_id:2',
-        'expected' => 'Blocked under 28 days holdout; approved with audit attribution when qualified',
-        'observed' => 'Status transitioned from under_evaluation to awaiting_approval; local approval audit-logged',
-        'status' => 'Passed',
-    ],
-    'approval_to_forecasts' => [
-        'scenario' => 'Approval to Complete Operational Forecast Output',
-        'environment' => 'Windows / XAMPP / PHP ' . PHP_VERSION,
-        'data_provenance' => 'Isolated store sales imports (140+ accumulated usable days)',
-        'timestamp_asia_manila' => (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s T'),
-        'run_reference' => 'job_id=' . $opJobId . ', model_version=' . $candidateVersion1,
-        'expected' => 'Complete 28-day horizon persisted transactionally',
-        'observed' => 'All 28 daily records persisted with target dates starting tomorrow',
-        'status' => 'Passed',
-    ],
-    'forecasts_to_guidance' => [
-        'scenario' => 'Forecasts to Replenishment Recommendations & Truthful Exclusions',
-        'environment' => 'Windows / XAMPP / PHP ' . PHP_VERSION,
-        'data_provenance' => 'Persisted demand_forecasts records and stock rules',
-        'timestamp_asia_manila' => (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s T'),
-        'run_reference' => 'job_id=' . $opJobId . ', product_ids=[1,2]',
-        'expected' => 'Product 1 guided by forecast; Product 2 truthful stock-rule fallback',
-        'observed' => 'Product 1 basis=Demand Forecast (224 units); Product 2 basis=Stock-rule suggestion (14 units, insufficient history)',
-        'status' => 'Passed',
-    ],
-    'failure_to_recovery' => [
-        'scenario' => 'Injected Worker Failure, Notice, Fallback & Recovery',
-        'environment' => 'Windows / XAMPP / PHP ' . PHP_VERSION,
-        'data_provenance' => 'Injected worker failure in isolated acceptance copy',
-        'timestamp_asia_manila' => (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s T'),
-        'run_reference' => 'failed_job_id=101, recovered_job_id=160',
-        'expected' => 'Bounded retries (max 3), notification generated without manual insertion, fallback, and recovery',
-        'observed' => 'Notification generated in notifications table, fallback to stock rules, earlier guidance used when eligible, signal cleared on recovery',
-        'status' => 'Passed',
-    ],
-];
-
-assert_true(count($acceptanceEvidence) === 5, 'Acceptance evidence matrix recorded 5 core operational scenarios');
-foreach ($acceptanceEvidence as $key => $ev) {
-    assert_same('Passed', $ev['status'], "Scenario {$key} marked Passed");
-    assert_true(!empty($ev['timestamp_asia_manila']), "Scenario {$key} has Philippine timestamp");
-    assert_true(!empty($ev['data_provenance']), "Scenario {$key} has data provenance");
-}
-
-assert_true(true, 'Test verifies deterministic workflow logic, recovery, and boundaries');
-assert_true(true, 'Synthetic and fixture holdouts do NOT represent real Store prospective accuracy');
-assert_true(true, 'Genuine prospective observation of at least 28 days required in live Store operations');
-assert_true(true, 'Genuine Store qualification is tracked separately and never replaced by isolated workflow tests');
+// This suite inserts jobs, quality metrics, observation and forecast rows itself.
+// It proves service contracts, not worker execution or unattended installation.
+echo "Fixture-only: synthetic history/qualification/observation/output; no Python worker or reboot executed.\n";
+echo "Actual worker acceptance: operational_pipeline_mysql_test.py (explicit disposable MySQL opt-in).\n";
+echo "Genuine Store prediction usefulness: not measured by these fixtures.\n";
 
 echo "\n================================================================================\n";
 if (empty($failures)) {
-    echo "PASS: All {$totalTests} End-to-End Operational Workflow Tests Passed! (Ticket #417)\n";
+    echo "PASS: All {$totalTests} isolated SQLite service contracts passed (no worker/boot acceptance).\n";
     echo "================================================================================\n";
     exit(0);
 } else {
