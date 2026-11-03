@@ -129,7 +129,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         .readiness-tag-Medium { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #b45309); }
         .readiness-tag-Low { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); }
         .readiness-tag-Insufficient { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted, #64748b); }
-        
+
         .forecast-summary {
             display: block;
             padding: 0.75rem 0.95rem;
@@ -301,7 +301,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             </div>
 
             <div class="action-issues-list" role="list">
-                <?php foreach ($operationalIssues as $issue): 
+                <?php foreach ($operationalIssues as $issue):
                     $sev = $issue['severity'] ?? 'info';
                     $sevBadgeClass = match($sev) {
                         'critical' => 'tag-danger',
@@ -381,7 +381,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($performanceSummary['horizons'] as $horizon): 
+                                <?php foreach ($performanceSummary['horizons'] as $horizon):
                                     $wapeText = isset($horizon['wape']) ? number_format($horizon['wape'] * 100, 1) . '%' : ($horizon['missing_metric_reason'] ?? 'Unavailable');
                                     $baseWapeText = isset($horizon['baseline_wape']) ? number_format($horizon['baseline_wape'] * 100, 1) . '%' : 'Unavailable';
                                     $overUnits = $horizon['overestimated_units'] !== null ? number_format($horizon['overestimated_units']) : 'Not recorded';
@@ -445,7 +445,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($displayProducts as $f): 
+                            <?php foreach ($displayProducts as $f):
                                 $name = $f['product_name'] ?? "Product #{$f['product_id']}";
                                 $sku = $f['sku'] ?? "PRD-{$f['product_id']}";
                                 $stock = (int)($f['current_stock'] ?? 0);

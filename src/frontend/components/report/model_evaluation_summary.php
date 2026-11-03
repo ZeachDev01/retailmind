@@ -115,7 +115,7 @@ $reviewPercent = static fn($value): string => is_numeric($value) && is_finite((f
                                     <caption>Candidate predictions vs subsequent Store sales</caption>
                                     <thead><tr><th scope="col">Horizon</th><th scope="col">Overestimated</th><th scope="col">Underestimated</th><th scope="col">Model MAE</th><th scope="col">Weekly Baseline MAE</th></tr></thead>
                                     <tbody>
-                                    <?php foreach ([7, 14, 28] as $h): 
+                                    <?php foreach ([7, 14, 28] as $h):
                                         $m = $reviewPerfEvidence['metrics_by_horizon'][$h] ?? [];
                                     ?>
                                         <tr>

@@ -242,7 +242,7 @@ $formatUnits = static function ($val): string {
         <section class="dashboard-section" aria-labelledby="obs-heading">
             <h2 id="obs-heading"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Prospective Store Observation Progress</h2>
             <p class="section-description">Requires at least 28 completed target dates evaluated against actual Store sales. Missing or Stockout Day targets cannot advance observation; recorded closures pause accumulation without resetting progress.</p>
-            
+
             <div style="margin: 0.75rem 0;">
                 <div style="display: flex; justify-content: space-between; max-width: 400px; font-weight: 600; font-size: 0.9rem;">
                     <span>Completed Target Dates:</span>
