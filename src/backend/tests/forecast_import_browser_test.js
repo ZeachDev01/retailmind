@@ -97,7 +97,7 @@ const fixture = action => {
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
         await page.goto(origin + '/components/report/data_readiness.php');
-        assert.match(await page.locator('.main-content').innerText(), /Missing history is unknown, not zero sales/);
+        assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
         assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in ML Operation');
         const after = JSON.parse(fixture('state'));
         assert.equal(after.sales, before.sales, 'History imports must not create receipts');
