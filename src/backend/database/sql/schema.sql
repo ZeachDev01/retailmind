@@ -881,6 +881,7 @@ CREATE TABLE `notifications` (
   `attention_severity` varchar(20) DEFAULT NULL,
   `attention_count` int(11) DEFAULT NULL,
   `attention_destination` varchar(255) DEFAULT NULL,
+  `resolved_at` datetime DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`notification_id`),

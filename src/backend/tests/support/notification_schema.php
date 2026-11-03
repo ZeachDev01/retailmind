@@ -4,7 +4,7 @@ function notification_test_schema(PDO $pdo): void
 {
     $columns = array_column($pdo->query('PRAGMA table_info(notifications)')->fetchAll(PDO::FETCH_ASSOC), 'name');
     foreach (['workspace' => "TEXT NOT NULL DEFAULT ''", 'inapp_enabled' => 'INTEGER NOT NULL DEFAULT 1',
-        'email_pending' => 'INTEGER NOT NULL DEFAULT 0', 'attention_key' => 'TEXT', 'attention_severity' => 'TEXT',
+        'email_pending' => 'INTEGER NOT NULL DEFAULT 0', 'resolved_at' => 'TEXT', 'attention_key' => 'TEXT', 'attention_severity' => 'TEXT',
         'attention_count' => 'INTEGER', 'attention_destination' => 'TEXT', 'is_read' => 'INTEGER DEFAULT 0'] as $name => $type) {
         if (!in_array($name, $columns, true)) $pdo->exec("ALTER TABLE notifications ADD COLUMN $name $type");
     }

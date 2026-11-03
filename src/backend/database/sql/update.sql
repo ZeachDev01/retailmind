@@ -1913,3 +1913,7 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE tabl
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020002_workspace_walkthrough_progress','Persist interactive walkthrough progress per staff account and Workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='notifications' AND column_name='resolved_at'), 'ALTER TABLE `notifications` ADD COLUMN `resolved_at` DATETIME NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_notification_resolution','Retain resolution for each notification occurrence (#420)') ON DUPLICATE KEY UPDATE description=VALUES(description);
