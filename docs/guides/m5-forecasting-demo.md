@@ -1,5 +1,7 @@
 # M5 forecasting demonstration
 
+For the fresh #421 dataset prepared on 2026-11-03, use the [current preparation record](../verification/m5-421-preparation-20261103.md). The paths, login details and running-state claims below describe the older 2026-10-29 demonstration; they are not evidence of current services.
+
 Prepared 2026-10-29 (Asia/Manila). This is a separate local Demo, not the operational Store.
 
 ## Open it
