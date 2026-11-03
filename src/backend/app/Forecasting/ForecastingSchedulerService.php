@@ -634,7 +634,7 @@ class ForecastingSchedulerService {
 
             // Resolve daily forecast time
             $dailyRow = $platformSettings['schedule_daily_forecast_time'] ?? $mlSettings['schedule_daily_forecast_time'] ?? null;
-            if ($dailyRow !== null && !empty($dailyRow['setting_value'])) {
+            if ($dailyRow !== null && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', trim((string)$dailyRow['setting_value']))) {
                 $val = trim((string)$dailyRow['setting_value']);
                 $hasOperatorUpdate = !empty($dailyRow['updated_by']);
 
@@ -650,7 +650,7 @@ class ForecastingSchedulerService {
 
             // Resolve weekly retrain day
             $dayRow = $platformSettings['schedule_weekly_retrain_day'] ?? $mlSettings['schedule_weekly_retrain_day'] ?? null;
-            if ($dayRow !== null && !empty($dayRow['setting_value'])) {
+            if ($dayRow !== null && in_array(ucfirst(strtolower(trim((string)$dayRow['setting_value']))), ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], true)) {
                 $weeklyDay = ucfirst(strtolower(trim((string)$dayRow['setting_value'])));
                 if (!empty($dayRow['updated_by']) || $weeklyDay !== 'Sunday') {
                     $isExplicit = true;
@@ -659,7 +659,7 @@ class ForecastingSchedulerService {
 
             // Resolve weekly retrain time
             $timeRow = $platformSettings['schedule_weekly_retrain_time'] ?? $mlSettings['schedule_weekly_retrain_time'] ?? null;
-            if ($timeRow !== null && !empty($timeRow['setting_value'])) {
+            if ($timeRow !== null && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', trim((string)$timeRow['setting_value']))) {
                 $val = trim((string)$timeRow['setting_value']);
                 if (!empty($timeRow['updated_by']) || $val !== '01:00') {
                     $weeklyTime = $val;
