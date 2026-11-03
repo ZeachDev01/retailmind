@@ -25,6 +25,10 @@ for table in ('products','sales','stock_movements','demand_forecasts','ml_jobs')
 s.execute("SELECT COUNT(*) n FROM platform_settings WHERE setting_key='ml_approved_model_version' AND setting_value<>''");r['approvals']=s.fetchone()['n']
 s.execute('SELECT SUM(quantity_on_hand) quantity FROM inventory');r['stock']=s.fetchone()['quantity']
 s.execute("SELECT SUM(predicted_units) expected FROM demand_forecasts WHERE job_id=%s AND product_id=1",(r['preview']['preview_job'],));r['product_1_expected']=s.fetchone()['expected']
+r['checksums']={}
+for table in ('sales','sale_items','stock_receiving','stock_movements','inventory','forecast_sales_imports','ml_jobs','model_training_runs','demand_forecasts'):
+ s.execute('CHECKSUM TABLE '+table+' EXTENDED');r['checksums'][table]=s.fetchone()['Checksum']
+s.execute("SELECT setting_key,setting_value FROM platform_settings WHERE setting_key LIKE '%approved%' OR setting_key LIKE '%review%' ORDER BY setting_key");r['approval_settings']=s.fetchall()
 c.close();print(json.dumps(r,default=str))
 `], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stderr);
@@ -76,7 +80,8 @@ c.close();print(json.dumps(r,default=str))
         await productSearch.fill('FOODS_1_125');
         await productSearch.press('ArrowDown');
         await productSearch.press('Enter');
-        await page.getByRole('button', { name: 'Compare product', exact: true }).click();
+        await expect(page.locator('#replay-product')).toHaveValue('2');
+        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Compare product', exact: true }).click()]);
         await expect(page.locator('#replay-product')).toHaveValue('2');
         await expect(page.locator('#replay-comparison tbody tr')).toHaveCount(28);
         await page.setViewportSize({ width: 390, height: 844 });
@@ -91,6 +96,29 @@ c.close();print(json.dumps(r,default=str))
         await expect(expectedRow.locator('td').nth(3)).toContainText('Historical demo');
         await expect(expectedRow.locator('td').nth(3)).toContainText('unapproved');
         await page.screenshot({ path: path.join(output, 'stock-rules.png'), fullPage: true });
+        let eligibilityPolicy;
+        const routeChecks = [];
+        const inspect = async (target, route) => {
+            const response = await target.goto(baseURL + '/components/' + route, { waitUntil: 'domcontentloaded' });
+            assert.equal(response.status(), 200, route);
+            await expect(target.locator('main')).toBeVisible();
+            await target.setViewportSize({ width: 390, height: 844 });
+            assert.ok(await target.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), route + ' fits mobile');
+            await target.setViewportSize({ width: 1440, height: 1000 });
+            routeChecks.push(route);
+        };
+        for (const route of ['report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php', 'inventory_management/product_investigation.php?product_id=1']) {
+            await inspect(page, route);
+            if (route.includes('data_readiness')) {
+                eligibilityPolicy = await page.getByRole('region', { name: 'Training Eligibility policy', exact: true }).innerText();
+                await expect(page.locator('main')).toContainText('Unsupported recent inputs');
+            }
+            if (route.includes('predictions')) {
+                await expect(page.locator('#heading-usability')).toBeVisible();
+                assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0, 'Inventory Manager cannot generate forecasts');
+            }
+        }
+
         const reviewer = await browser.newPage();
         await reviewer.goto(baseURL + '/?login=1');
         await reviewer.fill('#landing-login-username', 'demo_super_admin');
@@ -105,10 +133,22 @@ c.close();print(json.dumps(r,default=str))
             for (const value of values) await expect(candidateMetrics.nth(index)).toContainText(value);
         }
         await expect(reviewer.locator('.ml-eval-meta').filter({ hasText: 'Observation progress:' })).toContainText('0 of 28 usable target dates completed');
+        assert.equal(await reviewer.getByRole('region', { name: 'Training Eligibility policy', exact: true }).innerText(), eligibilityPolicy);
+        await expect(reviewer.getByRole('region', { name: 'Effective model recipe', exact: true })).toContainText('15 trees, maximum depth 8, random seed 42');
+        await expect(reviewer.locator('#effective-training-schedule')).toContainText('Asia/Manila');
+        for (const route of ['system_administrator/forecast_import.php', 'report/forecast_analytics.php']) await inspect(reviewer, route);
+        await reviewer.goto(baseURL + '/components/auth/logout.php');
+        await reviewer.goto(baseURL + '/?login=1');
+        await reviewer.fill('#landing-login-username', 'demo_admin');
+        await reviewer.fill('#landing-login-password', process.env.DEMO_PASSWORD);
+        await Promise.all([reviewer.waitForNavigation({ waitUntil: 'domcontentloaded' }), reviewer.locator('#landing-login-password').press('Enter')]);
+        await inspect(reviewer, 'administrator/model_review.php');
+        assert.equal(await reviewer.locator('button[name="action"][value="approve"]:enabled').count(), 0, 'No Demo candidate can activate a Store model');
+        fs.writeFileSync(path.join(output, 'walkthrough-routes.json'), JSON.stringify(routeChecks, null, 2));
         await reviewer.close();
         assert.deepEqual(state(), before, 'Reviewing the Demo must not change stock, jobs, evidence or approval');
         fs.writeFileSync(path.join(output, 'verification.json'), JSON.stringify(before, null, 2));
-        console.log('M5 Demo browser checks passed: 50 products, original dates, actual-versus-predicted, four columns, mobile, no stock/job/approval changes.');
+        console.log('M5 Demo browser checks passed: 50 products, original dates, actual-versus-predicted, four columns, mobile, full workflow, unchanged data checksums and approvals.');
     } finally {
         await browser.close();
     }
