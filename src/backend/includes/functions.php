@@ -547,7 +547,7 @@ function get_notification_count(PDO $pdo, int $user_id): int
 
 function notification_visibility_scope(): string
 {
-    return "(notifications.type <> 'low_stock' OR EXISTS (SELECT 1 FROM products np WHERE notifications.reference_type = 'product' AND np.product_id = notifications.reference_id))";
+    return "notifications.resolved_at IS NULL AND (notifications.type <> 'low_stock' OR EXISTS (SELECT 1 FROM products np WHERE notifications.reference_type = 'product' AND np.product_id = notifications.reference_id))";
 }
 
 function reconcile_notification_stock(PDO $pdo, int $userId): void

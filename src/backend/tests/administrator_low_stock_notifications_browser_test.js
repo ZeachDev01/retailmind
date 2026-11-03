@@ -94,7 +94,7 @@ const query = sql => {
         query('UPDATE inventory SET quantity_on_hand = 1 WHERE product_id = 1');
         query("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity) VALUES (1,'PARTIAL-420',1,1)");
         await page.goto(url);
-        assert.match(await adminStock.innerText(), /Resolved/, 'Partial replenishment resolves Administrator stockout on render');
+        assert.equal(await adminStock.count(), 0, 'Resolved Administrator stockout disappears from All on render');
         await page.goto(origin + '/components/auth/logout.php');
         await page.goto(origin + '/?login=1');
         await page.locator('#landing-login-username').fill('theme_inventory_manager');
@@ -111,13 +111,13 @@ const query = sql => {
         assert.equal(await page.locator('.notification-required-item, .active-batch-reminders article').filter({hasText: 'Theme Test Item'}).count(), 0,
             'Recovered product has no active reminder after receiving');
         await page.goto(url + '?category=low_stock&batch=10');
-        assert.match(await inventoryStock.innerText(), /Resolved/, 'Recovered unread alert remains in All as Resolved');
+        assert.equal(await inventoryStock.count(), 0, 'Recovered alert disappears from All');
         query('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
         fixture('workspace_check_stock');
         fixture('workspace_check_stock');
         await page.goto(url + '?category=low_stock&batch=10');
-        assert.equal(await inventoryStock.count(), 2, 'Recurrence creates one fresh stock update');
-        assert.equal(await inventoryStock.filter({hasText: 'Resolved'}).count(), 1, 'Recurrence never reactivates old history');
+        assert.equal(await inventoryStock.count(), 1, 'Recurrence shows only one fresh stock update');
+        assert.equal(await inventoryStock.filter({hasText: 'Resolved'}).count(), 0, 'Recurrence keeps resolved history hidden');
         assert.equal(await inventoryStock.and(page.locator('.unread')).count(), 1);
         console.log('Administrator low-stock notifications: passed');
     } finally {

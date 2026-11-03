@@ -239,7 +239,7 @@ Applying the currently approved forecasting model to Store data after close or t
 _Avoid_: Model training, automatic ordering, retraining
 
 **Model Retraining**:
-Replacing the currently approved forecasting model with a newly fitted Random Forest after chronological validation. It runs weekly after close or through a manual Super Administrator request and is recorded as a Protected Audit Record.
+Preparing and evaluating a candidate forecasting model using Store sales history. Retraining does not replace the approved model; a qualified candidate requires explicit local Administrator approval before operational use.
 _Avoid_: Forecast generation, live request training, Administrator retraining
 
 **Forecast Data Import**:

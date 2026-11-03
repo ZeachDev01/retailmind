@@ -132,3 +132,10 @@ $migration['up']($pdo);
 // Deleted-product alerts must not affect counts, category options, or pagination.
 $insert->execute([9100, 3, 'low_stock', 'Low Stock Alert: Deleted test product', 'Current: 6, Threshold: 10', 'product', 999999]);
 $insert->execute([9101, 2, 'low_stock', 'Low Stock Alert: Deleted private product', 'Current: 6, Threshold: 10', 'product', 999999]);
+
+// Resolved updates, whether read or unread, must not affect any inbox surface.
+foreach (['low_stock', 'system', 'adjustment', 'fiscal_period'] as $index => $type) {
+    $id = 9200 + $index;
+    $insert->execute([$id, 3, $type, 'Resolved notice ' . $type, 'Already resolved.', $type === 'low_stock' ? 'product' : null, $type === 'low_stock' ? 1001 : null]);
+    $pdo->exec("UPDATE notifications SET resolved_at = '2026-10-02 12:00:00', is_read = " . ($index % 2) . " WHERE notification_id = {$id}");
+}

@@ -109,6 +109,7 @@ const query = sql => {
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(url);
+        assert.equal(await page.locator('.notification-item').filter({hasText: 'Resolved notice'}).count(), 0, 'All hides resolved updates across notification types');
         assert.equal(await page.locator('.notification-item').count(), 10);
         await assertBells(27);
         assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), Array.from({length: 10}, (_, i) => 'Notice ' + (27 - i)));
@@ -280,7 +281,8 @@ const query = sql => {
         await page.reload();
         assert.equal(await active.count(), 0, 'Final removal immediately clears active work');
         await page.goto(url + '?category=expired_stock');
-        assert.match(await page.locator('section.notification-list').innerText(), /Expiry alert history:.*Current remaining: 0\./s, 'Depleted notification remains clearly historical');
+        assert.equal(await page.locator('.notification-item[data-notification-type="expired_stock"]').count(), 0, 'Resolved expiry alert disappears after final removal');
+        assert.equal(await page.locator('#notification-category option[value="expired_stock"]').count(), 0, 'Resolved-only categories disappear from the filter');
 
         // ---- #262: workspace-scoped lists, counts, read state, role and account eligibility ----
         await page.goto(origin + '/components/auth/logout.php');
