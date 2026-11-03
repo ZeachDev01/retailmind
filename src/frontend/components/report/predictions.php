@@ -130,6 +130,19 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         .readiness-tag-Low { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); }
         .readiness-tag-Insufficient { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted, #64748b); }
         
+        .forecast-summary {
+            display: block;
+            padding: 0.75rem 0.95rem;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.45;
+        }
+        .forecast-summary.tag-info { background: var(--theme-info-surface, #eff6ff); color: var(--theme-info-text, #1e40af); }
+        .forecast-summary.tag-success { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); border-color: #86efac; }
+        .forecast-summary.tag-warning { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); border-color: #fcd34d; }
         .forecast-section {
             margin-bottom: 2rem;
         }
@@ -232,7 +245,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         </nav>
 
         <?php if ($isDemoMode): ?>
-            <div class="alert tag-info" role="status" style="margin-bottom: 1.25rem;">
+            <div class="forecast-summary tag-info" role="status" style="margin-bottom: 1.25rem;">
                 <strong>Demo dataset active (<?= htmlspecialchars($demoSource) ?>):</strong> Forecasts reflect historical benchmark data.
             </div>
         <?php endif; ?>
@@ -250,7 +263,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span>
             </div>
 
-            <div class="alert <?= $coverage['store_status'] === 'full' ? 'tag-success' : ($coverage['forecast_backed_count'] > 0 ? 'tag-info' : 'tag-warning') ?>" role="status" style="margin-bottom: 1.25rem;">
+            <div class="forecast-summary <?= $coverage['store_status'] === 'full' ? 'tag-success' : ($coverage['forecast_backed_count'] > 0 ? 'tag-info' : 'tag-warning') ?>" role="status" style="margin-bottom: 1.25rem;">
                 <strong>Coverage:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
                 <?php if ($coverage['stock_rule_count'] > 0): ?>
                     <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>" class="alert-link" style="text-decoration:underline; font-weight:600; margin-left:0.5rem;">Inspect exclusions &amp; next actions</a>
@@ -342,7 +355,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             </div>
 
             <?php if ($performanceSummary['status'] === 'still_collecting_evidence'): ?>
-                <div class="alert tag-info" role="status" style="margin-bottom: 1rem;">
+                <div class="forecast-summary tag-info" role="status" style="margin-bottom: 1rem;">
                     <strong>Still collecting evidence:</strong> <?= htmlspecialchars($performanceSummary['reason']) ?>
                     <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;" class="muted">
                         Predictions are evaluated against genuine subsequent Store sales. Stockout periods leave unmet demand unknown and are excluded from error calculations. Demo and historical backtests are never presented as live Store accuracy.
