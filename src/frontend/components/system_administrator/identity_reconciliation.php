@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $review = $reconciler->review((int)$_SESSION['user_id'], (string)current_role(), $package, $decisions);
             $message = $action === 'edit' ? 'Review your account choices below. No records or files were replaced.'
-                : ($review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : implode(' ', $review['errors']));
+                : ($review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : ($decisions === [] ? '' : implode(' ', $review['errors'])));
         }
         $encryptedPackage = file_get_contents($file['tmp_name']);
         if ($encryptedPackage === false) throw new RuntimeException('The reviewed package could not be retained.');
@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $editing = $action === 'edit';
-$recordedApproval = $approval ?? $reconciler->latestApproval();
+$recordedApproval = $approval;
 $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review['ready']));
 ?>
 <!doctype html>
@@ -116,7 +116,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 </div>
             <?php endif; ?>
 
-            <?php if ($recordedApproval && !$approval): ?>
+            <?php if ($recordedApproval): ?>
                 <section class="dashboard-section reconcile-evidence" aria-labelledby="active-evidence-title">
                     <div class="recovery-panel-heading">
                         <h2 id="active-evidence-title"><i class="bi bi-patch-check" aria-hidden="true"></i> Approved review</h2>
@@ -152,14 +152,13 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             <dl class="reconcile-facts">
                                 <div><dt>Selected backup</dt><dd data-selected-package-name><?= $escape($draft['filename'] ?? '') ?></dd></div>
                             </dl>
-                            <p><?= !empty($review['ready']) && !$editing ? 'Account review complete. Confirm restoration below.' : 'Package loaded. Continue with the account choices below.' ?></p>
                             <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php?new=1')) ?>">Change backup</a>
                         </div>
                     <?php endif; ?>
                     <div data-package-inputs>
                     <div class="form-group reconcile-field"<?= $review && $draft ? ' hidden' : '' ?>>
                         <label for="identity-package">Encrypted Store package (.rmpkg)</label>
-                        <p class="restore-file-hint" id="identity-upload-help"><?= $escape($restorer->supportedSizeLine()) ?> Reviews are retained for 30 minutes in this signed-in session.</p>
+                        <p class="restore-file-hint" id="identity-upload-help">Maximum <?= (int)floor($restorer->supportedUploadBytes() / 1048576) ?> MB.</p>
                         <div class="restore-file-field">
                             <input id="identity-package" type="file" name="backup_file" accept=".rmpkg"<?= $review && $draft ? '' : ' required' ?> aria-describedby="identity-upload-help">
                         </div>
@@ -167,31 +166,107 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
 
                     <div class="credentials-grid">
                         <div class="form-group">
-                            <label for="identity-password">Current login password on this server</label>
+                            <label for="identity-password">Current login password</label>
                             <input id="identity-password" type="password" name="restore_password" autocomplete="current-password" required>
                         </div>
                     </div>
                     </div>
                     </div>
                     <aside class="reconcile-guidance" aria-labelledby="identity-guidance-heading">
-                        <h3 id="identity-guidance-heading">Review does not change records</h3>
-                        <ul>
-                            <li>Names and IDs alone do not prove identity.</li>
-                            <li>Linked accounts keep their password and access on this server.</li>
-                            <li>Privileged-only and Recovery accounts from the backup retain history, without login access.</li>
-                        </ul>
+                        <h3 id="identity-guidance-heading">Nothing changes during review</h3>
+                        <p><?= $review ? 'Your review is saved for 30 minutes in this session.' : 'Choose a backup, then review who each account belongs to before restoring.' ?></p>
                     </aside>
                 </section>
 
                 <?php if ($review): ?>
                     <div data-identity-choices<?= !empty($review['ready']) && !$editing ? ' hidden' : '' ?>>
+                    <section class="dashboard-section" aria-labelledby="source-resolutions-heading">
+                        <div class="recovery-panel-heading">
+                            <h2 id="source-resolutions-heading"><i class="bi bi-person-gear" aria-hidden="true"></i> Accounts in the backup</h2>
+                            <span class="history-total"><?= count($review['source_users']) ?> <?= count($review['source_users']) === 1 ? 'identity' : 'identities' ?></span>
+                        </div>
+                        <p class="backup-hint">For each person, keep their existing server account or create a separate account. Matching names or IDs alone do not prove identity.</p>
+                        <div class="resolution-list">
+                            <?php foreach ($review['source_users'] as $person):
+                                $id = (int)$person['user_id'];
+                                $choice = $decisions[$id] ?? [];
+                            ?>
+                                <fieldset class="resolution-card">
+                                    <legend class="sr-only">Backup account #<?= $id ?>: <?= $escape($person['display_name']) ?></legend>
+                                    <div class="resolution-head">
+                                        <div>
+                                            <h3><span class="reconcile-id">#<?= $id ?></span> <?= $escape($person['display_name']) ?></h3>
+                                            <p class="identity-meta"><code><?= $escape($person['username']) ?></code> <span><?= $escape($person['email'] ?? 'No email') ?></span></p>
+                                        </div>
+                                        <div class="resolution-badges">
+                                            <span class="<?= $person['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= $escape(ucfirst((string)$person['status'])) ?></span>
+                                            <span class="tag-neutral"><?= $escape(implode(', ', $person['roles']) ?: 'No roles') ?></span>
+                                        </div>
+                                    </div>
+                                    <?php if ($person['historical']): ?>
+                                        <input type="hidden" name="people[<?= $id ?>][action]" value="historical">
+                                        <div class="resolution-historical">
+                                            <i class="bi bi-archive" aria-hidden="true"></i>
+                                            <p><strong>Historical Actor only.</strong> History is kept; login access is not imported.</p>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="resolution-grid">
+                                            <div class="form-group">
+                                                <label for="resolution-<?= $id ?>">How should this person sign in?</label>
+                                                <select id="resolution-<?= $id ?>" name="people[<?= $id ?>][action]" data-account-action required>
+                                                    <option value="">Choose an account option</option>
+                                                    <option value="link" <?= ($choice['action'] ?? '') === 'link' ? 'selected' : '' ?>>Use their existing account on this server</option>
+                                                    <option value="distinct" <?= ($choice['action'] ?? '') === 'distinct' ? 'selected' : '' ?>>Create a separate account</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group" data-account-fields="link">
+                                                <label for="destination-<?= $id ?>">Their account on this server</label>
+                                                <select id="destination-<?= $id ?>" name="people[<?= $id ?>][destination_id]">
+                                                    <option value="">Choose their existing account</option>
+                                                    <?php foreach ($review['destination_users'] as $target): ?>
+                                                        <option value="<?= (int)$target['user_id'] ?>" <?= (int)($choice['destination_id'] ?? 0) === (int)$target['user_id'] ? 'selected' : '' ?>>
+                                                            #<?= (int)$target['user_id'] ?>: <?= $escape($target['display_name']) ?> (<?= $escape($target['username']) ?>)
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <p class="backup-hint" data-account-fields="link">Keeps this server account's password and access.</p>
+                                        <div data-account-fields="distinct">
+                                        <p class="backup-hint">Use an unused username and email. Super Administrator and Recovery access are not imported.</p>
+                                        <div class="resolution-grid">
+                                            <div class="form-group">
+                                                <label for="username-<?= $id ?>">New username</label>
+                                                <input id="username-<?= $id ?>" name="people[<?= $id ?>][username]" maxlength="80" value="<?= $escape($choice['username'] ?? '') ?>" autocomplete="off" placeholder="New username">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="email-<?= $id ?>">Email (optional)</label>
+                                                <input id="email-<?= $id ?>" type="email" name="people[<?= $id ?>][email]" maxlength="120" value="<?= $escape($choice['email'] ?? '') ?>" autocomplete="off" placeholder="user@example.com">
+                                            </div>
+                                        </div>
+                                        <label class="resolution-option">
+                                            <input type="checkbox" name="people[<?= $id ?>][administrator]" value="1" <?= !empty($choice['administrator']) ? 'checked' : '' ?>>
+                                            <span>
+                                                Make this new account an Administrator
+                                                <small>Imported roles: <strong><?= $escape(implode(', ', $person['ordinary_roles'])) ?></strong>.</small>
+                                            </span>
+                                        </label>
+                                        </div>
+                                    <?php endif; ?>
+                                </fieldset>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+
+                    <details class="reconcile-details">
+                        <summary>View server accounts and matching details</summary>
                     <div class="reconcile-reference">
                     <section class="dashboard-section" aria-labelledby="dest-people-heading">
                         <div class="recovery-panel-heading">
-                            <h2 id="dest-people-heading"><i class="bi bi-people" aria-hidden="true"></i> Destination people</h2>
+                            <h2 id="dest-people-heading"><i class="bi bi-people" aria-hidden="true"></i> Accounts on this server</h2>
                             <span class="history-total"><?= count($review['destination_users']) ?> <?= count($review['destination_users']) === 1 ? 'account' : 'accounts' ?></span>
                         </div>
-                        <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Destination people">
+                        <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Accounts on this server">
                             <table>
                                 <thead>
                                     <tr>
@@ -218,13 +293,13 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
 
                     <section class="dashboard-section" aria-labelledby="conflicts-heading">
                         <div class="recovery-panel-heading">
-                            <h2 id="conflicts-heading"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Conflicts</h2>
+                            <h2 id="conflicts-heading"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Matching details</h2>
                             <span class="history-total"><?= count($review['conflicts']) ?> <?= count($review['conflicts']) === 1 ? 'conflict' : 'conflicts' ?></span>
                         </div>
                         <?php if (!empty($review['conflicts'])): ?>
                             <ul class="reconcile-conflicts">
                                 <?php foreach ($review['conflicts'] as $conflict): ?>
-                                    <li>Source <strong>#<?= $escape($conflict['source_id']) ?></strong> and destination <strong>#<?= $escape($conflict['destination_id']) ?></strong> share <span class="tag-warning"><?= $escape($conflict['kind']) ?></span></li>
+                                    <li>Backup <strong>#<?= $escape($conflict['source_id']) ?></strong> and server account <strong>#<?= $escape($conflict['destination_id']) ?></strong> share <span class="tag-warning"><?= $escape($conflict['kind']) ?></span></li>
                                 <?php endforeach; ?>
                             </ul>
                         <?php else: ?>
@@ -233,77 +308,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                     </section>
 
                     </div>
-                    <section class="dashboard-section" aria-labelledby="source-resolutions-heading">
-                        <div class="recovery-panel-heading">
-                            <h2 id="source-resolutions-heading"><i class="bi bi-person-gear" aria-hidden="true"></i> Accounts in the backup</h2>
-                            <span class="history-total"><?= count($review['source_users']) ?> <?= count($review['source_users']) === 1 ? 'identity' : 'identities' ?></span>
-                        </div>
-                        <div class="resolution-list">
-                            <?php foreach ($review['source_users'] as $person):
-                                $id = (int)$person['user_id'];
-                                $choice = $decisions[$id] ?? [];
-                            ?>
-                                <fieldset class="resolution-card">
-                                    <legend class="sr-only">Source #<?= $id ?>: <?= $escape($person['display_name']) ?></legend>
-                                    <div class="resolution-head">
-                                        <div>
-                                            <h3><span class="reconcile-id">#<?= $id ?></span> <?= $escape($person['display_name']) ?></h3>
-                                            <p class="identity-meta"><code><?= $escape($person['username']) ?></code> <span><?= $escape($person['email'] ?? 'No email') ?></span></p>
-                                        </div>
-                                        <div class="resolution-badges">
-                                            <span class="<?= $person['status'] === 'active' ? 'tag-success' : 'tag-warning' ?>"><?= $escape(ucfirst((string)$person['status'])) ?></span>
-                                            <span class="tag-neutral"><?= $escape(implode(', ', $person['roles']) ?: 'No roles') ?></span>
-                                        </div>
-                                    </div>
-                                    <?php if ($person['historical']): ?>
-                                        <input type="hidden" name="people[<?= $id ?>][action]" value="historical">
-                                        <div class="resolution-historical">
-                                            <i class="bi bi-archive" aria-hidden="true"></i>
-                                            <p><strong>Historical Actor only.</strong> No login, role, password reset or Recovery authority will be imported.</p>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="resolution-grid">
-                                            <div class="form-group">
-                                                <label for="resolution-<?= $id ?>">Account decision</label>
-                                                <select id="resolution-<?= $id ?>" name="people[<?= $id ?>][action]" required>
-                                                    <option value="">Choose an action</option>
-                                                    <option value="link" <?= ($choice['action'] ?? '') === 'link' ? 'selected' : '' ?>>Same person: retain destination account</option>
-                                                    <option value="distinct" <?= ($choice['action'] ?? '') === 'distinct' ? 'selected' : '' ?>>Distinct person: import ordinary access</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="destination-<?= $id ?>">Destination account (linking only)</label>
-                                                <select id="destination-<?= $id ?>" name="people[<?= $id ?>][destination_id]">
-                                                    <option value="">Choose only when linking</option>
-                                                    <?php foreach ($review['destination_users'] as $target): ?>
-                                                        <option value="<?= (int)$target['user_id'] ?>" <?= (int)($choice['destination_id'] ?? 0) === (int)$target['user_id'] ? 'selected' : '' ?>>
-                                                            #<?= (int)$target['user_id'] ?>: <?= $escape($target['display_name']) ?> (<?= $escape($target['username']) ?>)
-                                                        </option>
-                                                    <?php endforeach; ?>
-                                                </select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="username-<?= $id ?>">New account username (must be unused)</label>
-                                                <input id="username-<?= $id ?>" name="people[<?= $id ?>][username]" maxlength="80" value="<?= $escape($choice['username'] ?? '') ?>" autocomplete="off" placeholder="New username">
-                                            </div>
-                                            <div class="form-group">
-                                                <label for="email-<?= $id ?>">New account email (blank to clear)</label>
-                                                <input id="email-<?= $id ?>" type="email" name="people[<?= $id ?>][email]" maxlength="120" value="<?= $escape($choice['email'] ?? '') ?>" autocomplete="off" placeholder="user@example.com">
-                                            </div>
-                                        </div>
-                                        <label class="resolution-option">
-                                            <input type="checkbox" name="people[<?= $id ?>][administrator]" value="1" <?= !empty($choice['administrator']) ? 'checked' : '' ?>>
-                                            <span>
-                                                Make this new account an Administrator
-                                                <small>Resulting ordinary roles: <strong><?= $escape(implode(', ', $person['ordinary_roles'])) ?></strong>. Privileged source memberships are removed.</small>
-                                            </span>
-                                        </label>
-                                    <?php endif; ?>
-                                </fieldset>
-                            <?php endforeach; ?>
-                        </div>
-                    </section>
-
+                    </details>
                     </div>
                     <?php if ($review['ready'] && !$editing): ?>
                         <?php $counts = $review['preservation_closure']['counts'];
@@ -319,11 +324,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             ['Backup operations history', 'backup_history', 'Destination backup history preserved with collision-free IDs'],
                             ['Email delivery evidence', 'email_delivery_log', 'Destination email delivery records preserved'],
                         ]; ?>
-                        <section class="dashboard-section" aria-labelledby="preservation-heading">
-                            <div class="recovery-panel-heading">
-                                <h2 id="preservation-heading"><i class="bi bi-shield-check" aria-hidden="true"></i> Preserved on this server</h2>
-                                <span class="tag-success">10 Rules Enforced</span>
-                            </div>
+                        <details class="dashboard-section reconcile-details" aria-labelledby="preservation-heading">
+                            <summary id="preservation-heading">Security and settings preserved on this server</summary>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Preservation categories">
                                 <table>
                                     <thead>
@@ -340,12 +342,12 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                     </tbody>
                                 </table>
                             </div>
-                        </section>
+                        </details>
 
                         <section class="dashboard-section" aria-labelledby="projection-heading">
                             <div class="recovery-panel-heading">
                                 <h2 id="projection-heading"><i class="bi bi-person-check" aria-hidden="true"></i> Access after restore</h2>
-                                <span class="tag-success"><?= (int)$review['active_administrators'] ?> Active Admin(s)</span>
+                                <span class="tag-success"><?= (int)$review['active_administrators'] ?> active <?= (int)$review['active_administrators'] === 1 ? 'Administrator' : 'Administrators' ?></span>
                             </div>
                             <p class="backup-hint">Privileged-only source identities and unlinked destination accounts gain no imported login access.</p>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Resulting access">
@@ -362,12 +364,19 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                         <?php foreach ($review['resulting_access'] as $acc): ?>
                                             <tr>
                                                 <td><span class="reconcile-id">#<?= (int)$acc['user_id'] ?></span> <?= $escape($acc['username']) ?></td>
-                                                <td><span class="tag-neutral"><?= $escape($acc['classification']) ?></span></td>
+                                                <td><span class="tag-neutral"><?= $escape(match ($acc['classification']) {
+                                                    'destination_linked' => 'Existing server account',
+                                                    'imported_distinct' => 'Separate account',
+                                                    'evidence_only' => 'History only',
+                                                    'historical' => 'Historical Actor',
+                                                    'protected' => 'Protected server account',
+                                                    default => $acc['classification'],
+                                                }) ?></span></td>
                                                 <td>
                                                     <?php if ($acc['usable_access']): ?>
                                                         <span class="tag-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Active login</span>
                                                     <?php else: ?>
-                                                        <span class="tag-warning"><i class="bi bi-slash-circle" aria-hidden="true"></i> None (Evidence only)</span>
+                                                        <span class="tag-warning"><i class="bi bi-slash-circle" aria-hidden="true"></i> No login · history only</span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td><?= $escape(implode(', ', $acc['roles']) ?: 'None') ?></td>
@@ -415,7 +424,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 <?php if (!$review || empty($review['ready']) || $editing): ?>
                     <div class="reconcile-actions">
                         <button class="btn btn-primary" type="submit" name="action" value="review">
-                            <i class="bi bi-search" aria-hidden="true"></i> <?= $review ? 'Review resolutions' : 'Review accounts' ?>
+                            <i class="bi bi-search" aria-hidden="true"></i> <?= $review ? 'Continue to confirmation' : 'Review identities' ?>
                         </button>
                     </div>
                 <?php endif; ?>

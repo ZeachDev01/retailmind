@@ -41,9 +41,6 @@ $headlineOrder = [
     'platform_health' => ['Platform health', 'bi-heart-pulse'],
     'ml_health' => ['Demand Forecast health', 'bi-cpu'],
 ];
-$accessOrder = [
-    'recovery' => 'Recovery Account',
-];
 $attentionCategoryLabels = [
     'security' => 'Security',
     'access' => 'Access',
@@ -60,12 +57,8 @@ $attentionActionLabels = [
     'system_health' => 'Review System Health',
     'ml_health' => 'Review Demand Forecast',
     'platform_setting' => 'Review Platform Settings',
-    'recovery_account' => 'Review Recovery Account',
+    'recovery_account' => 'Review audit records',
 ];
-$privilegedActionCount = count(array_filter(
-    $dashboard['access'] ?? [],
-    static fn(array $item): bool => !in_array($item['status'] ?? '', ['inactive', 'sealed'], true)
-));
 $attentionItems = $dashboard['attention'] ?? [];
 $criticalAttentionCount = count(array_filter(
     $attentionItems,
@@ -139,9 +132,6 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                     <article class="horizon-signal <?= $escape($statusTone((string) $backup['status'])) ?>">
                         <span class="horizon-label"><i class="bi bi-database-check" aria-hidden="true"></i><span>Latest successful backup</span></span><strong class="horizon-date"><?= $escape($backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string) $backup['value'])) ?></strong><small><?= $escape($backupSubtext) ?></small>
                     </article>
-                    <article class="horizon-signal <?= $privilegedActionCount > 0 ? 'needs-attention' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-person-lock" aria-hidden="true"></i><span>Recovery access</span></span><strong><?= $escape((string) $privilegedActionCount) ?></strong><small><?= $privilegedActionCount === 0 ? 'Secured' : ($privilegedActionCount === 1 ? 'Action needed' : 'Actions needed') ?></small>
-                    </article>
                 </div>
             </section>
             <?php endif; ?>
@@ -205,20 +195,6 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                             <article class="ledger-item <?= $escape($statusTone((string) $item['status'])) ?>">
                                 <i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i><div><span><?= $escape($label) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($detail) ?></small></div>
                             </article>
-                        <?php endforeach; ?>
-                        <?php foreach ($accessOrder as $accessKey => $accessLabel): ?>
-                            <?php
-                            $item = $dashboard['access'][$accessKey];
-                            $accessDetail = match ($item['status'] ?? '') {
-                                'sealed' => !empty($item['last_used_at']) ? 'Last used ' . $formatDate($item['last_used_at']) : 'Tamper seal intact',
-                                'unsealed' => 'Active — review audit log',
-                                'not_configured' => 'Configuration needed',
-                                default => $item['detail'] ?? '',
-                            };
-                            ?>
-                            <a class="ledger-item ledger-link <?= $escape($statusTone((string) $item['status'])) ?>" href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>
-                                <i class="bi bi-person-lock" aria-hidden="true"></i><div><span><?= $escape($accessLabel) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($accessDetail) ?></small></div><i class="bi bi-arrow-up-right" aria-hidden="true"></i>
-                            </a>
                         <?php endforeach; ?>
                     </div>
                 </section>

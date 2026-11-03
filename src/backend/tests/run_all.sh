@@ -28,6 +28,7 @@ php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
+node src/backend/tests/identity_review_ui_browser_test.js
 node src/backend/tests/backup_package_browser_test.js
 node src/backend/tests/backup_recovery_tabs_browser_test.js
 node src/backend/tests/recovery_tools_browser_test.js
@@ -46,6 +47,7 @@ node src/backend/tests/session_activity_http_test.js
 php src/backend/tests/recovery_store_restricted_host_contract.php
 php src/backend/tests/backup_unavailable_status_test.php
 php src/backend/tests/recovery_account_lifecycle_test.php
+node src/backend/tests/recovery_account_removed_browser_test.js
 php src/backend/tests/attention_rules_contract.php
 php src/backend/tests/role_notification_routing_contract.php
 php src/backend/tests/forecasting_notices_contract.php

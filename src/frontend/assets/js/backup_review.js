@@ -1,6 +1,22 @@
 // Keep credentials in this page only; the session draft resumes review after reload.
 (function () {
     'use strict';
+    function initializeAccountChoices(root) {
+        root.querySelectorAll('[data-account-action]').forEach(select => {
+            function update() {
+                select.closest('fieldset').querySelectorAll('[data-account-fields]').forEach(group => {
+                    const active = group.dataset.accountFields === select.value;
+                    group.hidden = !active;
+                    group.querySelectorAll('input, select').forEach(input => {
+                        input.disabled = !active;
+                        if (input.name.endsWith('[destination_id]') || input.name.endsWith('[username]')) input.required = active;
+                    });
+                });
+            }
+            select.addEventListener('change', update);
+            update();
+        });
+    }
     function initializeAuthorization(root) {
         root.querySelectorAll('[data-password-authorization]').forEach(form => {
             const password = form.querySelector('input[type="password"]');
@@ -10,7 +26,7 @@
             const title = document.createElement('h2');
             title.id = password.id + '-authorization-title';
             let warning = form.closest('#restore-package')?.querySelector('.restore-introduction');
-            if (!warning && password.name === 'restore_password') {
+            if (!warning && password.name === 'restore_password' && !form.matches('[data-identity-form]')) {
                 warning = document.createElement('div');
                 warning.className = 'restore-introduction';
                 const text = document.createElement('p');
@@ -70,6 +86,7 @@
     }
     function initialize() {
         initializeAuthorization(document);
+        initializeAccountChoices(document);
         const controller = new AbortController();
         window.addEventListener('pagehide', () => controller.abort());
         let pending = false;
@@ -124,6 +141,7 @@
                     }
                 });
                 initializeAuthorization(main);
+                initializeAccountChoices(main);
                 const target = main.querySelector('#restore-package') || main;
                 target.scrollIntoView({ block: 'start' });
             } catch (error) {

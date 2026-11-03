@@ -138,7 +138,19 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .reconcile-steps [aria-current] strong { color: var(--recovery-ink); }
 .identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { background: var(--primary, #2563eb); border-color: var(--primary, #2563eb); color: #fff; }
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { color: #0f172a; }
+html[data-theme="dark"] .identity-reconciliation-page .btn-secondary { background: var(--theme-surface); color: var(--recovery-ink); border-color: var(--recovery-line); }
+html[data-theme="dark"] .identity-reconciliation-page .btn-secondary:hover { background: var(--theme-surface-soft); }
 .identity-reconciliation-page .reconcile-package { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, 1fr); gap: 2rem; }
+.identity-reconciliation-page [data-identity-choices] > .dashboard-section { margin: 0; }
+.identity-reconciliation-page .reconcile-details { margin-top: 1rem; }
+.identity-reconciliation-page .reconcile-details summary { cursor: pointer; padding: .5rem 0; font-weight: 600; color: var(--recovery-ink); }
+.identity-reconciliation-page .reconcile-details > summary { display: list-item; list-style: disclosure-closed inside; }
+.identity-reconciliation-page .reconcile-details[open] > summary { list-style-type: disclosure-open; }
+.identity-reconciliation-page .reconcile-details summary:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 4px; }
+.identity-reconciliation-page .reconcile-details[open] > .reconcile-reference { margin-top: 1rem; }
+.identity-reconciliation-page [data-account-fields][hidden] { display: none; }
+.identity-reconciliation-page p[data-account-fields],
+.identity-reconciliation-page [data-account-fields] > .backup-hint { margin: 0 0 1rem; }
 .identity-reconciliation-page .reconcile-guidance { padding-left: 1.5rem; border-left: 1px solid var(--recovery-line); color: var(--recovery-muted); font-size: .875rem; line-height: 1.6; }
 .identity-reconciliation-page .reconcile-guidance h3 { margin: 0; color: var(--recovery-ink); font-size: 1rem; font-weight: 700; }
 .identity-reconciliation-page .reconcile-guidance p { margin: .5rem 0 1rem; }
