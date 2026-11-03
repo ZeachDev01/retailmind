@@ -73,6 +73,10 @@ try {
     $pdo->exec("UPDATE ml_model_evaluations SET baseline_wape=0.15 WHERE model_version='quality' AND horizon_days=7");
     $assert(!$service->evaluateCandidateQuality('quality')['passed'], 'Tying the weekly baseline fails');
 
+    $pdo->exec("INSERT INTO ml_model_evaluations (model_version,horizon_days,wape,baseline_wape) VALUES
+        ('missing28',7,0.1,0.2),('missing28',7,0.1,0.2),('missing28',14,0.1,0.2)");
+    $assert(!$service->evaluateCandidateQuality('missing28')['passed'], 'Duplicate horizon evidence cannot replace the missing 28-day evaluation');
+
     // Test evaluations
     $pdo->exec("
         INSERT INTO ml_model_evaluations 

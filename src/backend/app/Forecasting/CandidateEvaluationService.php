@@ -70,7 +70,7 @@ class CandidateEvaluationService
     public function evaluateCandidateQuality(string $modelVersion): array
     {
         $evaluations = $this->getEvaluationsByModelVersion($modelVersion);
-        if (count($evaluations) < 3) {
+        if (array_diff([7, 14, 28], array_column($evaluations, 'horizon_days'))) {
             return [
                 'passed' => false,
                 'reason' => "Incomplete evaluations: expected 7, 14, and 28-day horizons, found " . count($evaluations),
