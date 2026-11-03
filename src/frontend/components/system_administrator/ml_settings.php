@@ -104,25 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                 $errors[] = $rangeMessage;
                 continue;
             }
-        } elseif ($key === 'holiday_dates') {
-            if ($value !== '') {
-                $normalizedDates = [];
-                foreach (array_filter(array_map('trim', explode(',', $value)), static fn(string $item): bool => $item !== '') as $date) {
-                    $parsed = DateTime::createFromFormat('Y-m-d', $date);
-                    if (!$parsed || $parsed->format('Y-m-d') !== $date) {
-                        $dateError = "Invalid special date \"{$date}\". Use YYYY-MM-DD format separated by commas.";
-                        $fieldErrors[$key] = $dateError;
-                        $errors[] = $dateError;
-                        break;
-                    }
-                    $normalizedDates[$date] = $date;
-                }
-                if (!isset($fieldErrors[$key])) {
-                    ksort($normalizedDates);
-                    $value = implode(', ', array_values($normalizedDates));
-                    $settings[$key] = $value;
-                }
-            }
         }
         $updates[$key] = $value;
     }
