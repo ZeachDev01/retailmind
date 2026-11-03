@@ -84,7 +84,7 @@ const fixture = action => {
             await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Preview and validate' }).click()]);
         };
         await upload('sale_date,sku,quantity\n2026-01-01,UNKNOWN,5\n');
-        assert.match(await page.locator('p[role="alert"]').innerText(), /not an active product/);
+        assert.match(await page.locator('[role="alert"]').innerText(), /not an active product/);
         const csv = 'sale_date,sku,quantity\n' + Array.from({ length: 35 }, (_, day) => {
             const date = new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10);
             return `${date},THEME-ITEM,5`;
@@ -92,10 +92,10 @@ const fixture = action => {
         await upload(csv);
         assert.equal(await page.locator('tbody tr').count(), 20, 'Preview must be limited to 20 rows');
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
-        assert.match(await page.locator('p[role="status"]').innerText(), /Imported 35 daily totals/);
+        assert.match(await page.locator('[role="status"]').innerText(), /Imported 35 daily totals/);
         await upload(csv);
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
-        assert.match(await page.locator('p[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
+        assert.match(await page.locator('[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
         await page.goto(origin + '/components/report/data_readiness.php');
         assert.match(await page.locator('.main-content').innerText(), /Missing history is unknown, not zero sales/);
         assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in ML Operation');
