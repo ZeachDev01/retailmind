@@ -301,6 +301,15 @@ $assert($cov['latest_job']['job_id'] === 11, 'Latest job is recognized as job 11
 $assert(str_contains($cov['coverage_summary_text'], 'retry scheduled') || str_contains($cov['coverage_summary_text'], 'update failed'),
     'Coverage text notes failed latest attempt while preserving guidance');
 
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at)
+    VALUES (12, 'forecast_generation', 'succeeded', '2026-11-02 04:00:00', '2026-11-02 04:05:00')");
+insert28DailyForecasts($pdo, 12, 1, '2026-11-01', 9, 'unapproved_candidate', 'High');
+$unapprovedReplacement = $service->getCoverage(null, '2026-11-02');
+$assert($unapprovedReplacement['forecast_backed_count'] === 1, 'A later unapproved run cannot supersede still-eligible approved guidance');
+$pdo->exec("UPDATE demand_forecasts SET model_version = 'v1.0.0' WHERE job_id = 12; DELETE FROM demand_forecasts WHERE job_id = 12 AND horizon_day = 28");
+$incompleteReplacement = $service->getCoverage(null, '2026-11-02');
+$assert($incompleteReplacement['effective_job_id'] === 10 && $incompleteReplacement['forecast_backed_count'] === 1, 'A later incomplete run cannot supersede complete approved guidance');
+
 // -----------------------------------------------------------------------------
 // Test 8: Pending job is not success; guidance uses stock rules if no prior usable job
 // -----------------------------------------------------------------------------

@@ -15,6 +15,14 @@ class ForecastingSchedulerService {
         $this->pdo = $pdo;
     }
 
+    public static function canAutomaticallyRetry(array $job): bool {
+        $diagnostic = (string)($job['diagnostic_reference'] ?? '');
+        return ($job['status'] ?? '') === 'failed'
+            && (int)($job['attempts'] ?? 0) < 3
+            && !str_starts_with($diagnostic, 'BLOCKED:')
+            && !str_contains($diagnostic, 'EXHAUSTED');
+    }
+
     private function hasCutoffColumn(): bool {
         if ($this->hasCutoffColumn !== null) {
             return $this->hasCutoffColumn;
@@ -191,16 +199,7 @@ class ForecastingSchedulerService {
                 }
             }
             if ($status === 'failed') {
-                $diag = (string)($existingJob['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingJob['attempts'] ?? 0);
-                // Treat blocked conditions as non-retryable automatically
-                if (str_starts_with($diag, 'BLOCKED:')) {
-                    return;
-                }
-                // Max 3 total attempts
-                if ($attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingJob)) return;
                 // Retry the SAME logical job on a later tick rather than a busy loop
                 $jobService->retryJob((int)$existingJob['job_id']);
                 return;
@@ -267,11 +266,7 @@ class ForecastingSchedulerService {
                 }
             }
             if ($status === 'failed') {
-                $diag = (string)($existingJob['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingJob['attempts'] ?? 0);
-                if (str_starts_with($diag, 'BLOCKED:') || $attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingJob)) return;
                 $jobService->retryJob((int)$existingJob['job_id']);
                 return;
             }
@@ -488,11 +483,7 @@ class ForecastingSchedulerService {
                 return;
             }
             if ($status === 'failed') {
-                $diag = (string)($existingRetrain['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingRetrain['attempts'] ?? 0);
-                if (str_starts_with($diag, 'BLOCKED:') || $attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingRetrain)) return;
                 // Retry eligible temporary failure on later tick
                 $jobService->retryJob((int)$existingRetrain['job_id']);
                 return;

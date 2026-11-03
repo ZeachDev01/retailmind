@@ -213,6 +213,16 @@ try {
     $assert(str_contains(strtolower($exhaustedIssue['effect']), 'technical support') || str_contains(strtolower($exhaustedIssue['condition']), 'technical support'), 'Mentions technical support required');
     $assert($exhaustedIssue['responsible_role'] === 'Super Administrator', 'Responsible role is Super Administrator (technical support)');
 
+    $assert(!str_contains($covExhausted['coverage_summary_text'], 'Automatic retry scheduled'), 'Coverage summary never promises retry after the final attempt');
+    $queueExhausted = (new App\Forecasting\ReplenishmentQueueService($pdo2))->getRecommendations(1, $asOf);
+    $assert(!str_contains($queueExhausted[0]['exclusion_action'], 'Automatic retry'), 'Product fallback does not promise exhausted retries');
+    $pdo2->exec("UPDATE ml_jobs SET attempts = 1, diagnostic_reference = 'BLOCKED:MISSING_APPROVED_MODEL' WHERE job_id = 1");
+    $blockedCoverage = $service2->getCoverage(null, $asOf);
+    $blockedIssues = $service2->getOperationalIssues($blockedCoverage, 'admin');
+    $assert(!str_contains($blockedCoverage['coverage_summary_text'], 'Automatic retry scheduled'), 'Blocked prerequisites never promise an automatic retry in coverage');
+    $assert(count(array_filter($blockedIssues, static fn($issue) => $issue['category'] === 'retry_scheduled')) === 0, 'Blocked prerequisites do not create a no-action retry issue');
+    $pdo2->exec("UPDATE ml_jobs SET attempts = 3, diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED' WHERE job_id = 1");
+
     // For Super Admin, link points to ml_settings.php
     $saIssues = $service2->getOperationalIssues($covExhausted, 'super_admin');
     $saExhausted = null;
