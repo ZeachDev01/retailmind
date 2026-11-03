@@ -64,17 +64,57 @@ const query = sql => {
         await submit(page.locator('.global-topbar .global-notification-button').first());
         assert.equal(new URL(page.url()).pathname, '/components/notification/notifications.php', 'Bell opens notifications');
         const stockWork = page.locator('.notification-required-item').filter({hasText: 'Theme Test Item'});
-        assert.equal(await stockWork.count(), 1, 'Administrator sees active out-of-stock oversight');
-        assert.equal(await stockWork.locator('a, [role="link"]').count(), 0, 'Administrator stock oversight is not clickable');
-        assert.equal(await stockWork.locator('.notification-current').innerText(), '0', 'Plain stock alert retains quantity');
+        assert.equal(await stockWork.count(), 0, 'Administrator stock oversight is absent from Action needed');
         const adminStock = page.locator('.notification-item[data-notification-type="low_stock"]');
         assert.equal(await adminStock.count(), 1);
         assert.equal(await adminStock.locator('a, [role="link"]').count(), 0, 'Administrator stock history has no inventory link');
-        for (const item of [stockWork, adminStock]) {
+        for (const item of [adminStock]) {
             await item.locator('.notification-category').click();
             await page.waitForTimeout(150);
             assert.equal(new URL(page.url()).pathname, '/components/notification/notifications.php', 'Clicking administrator stock alerts stays on notifications');
         }
+        const assertBells = async count => {
+            for (const bell of await page.locator('.global-notification-button').all()) {
+                assert.equal(await bell.getAttribute('aria-label'), 'Notifications' + (count ? ': ' + count + ' unread' : ''));
+                assert.equal(await bell.locator('strong').count(), count ? 1 : 0);
+            }
+        };
+        await submit(adminStock.getByRole('button', {name: 'Mark as read', exact: true}));
+        await assertBells(0);
+        fixture('workspace_check_stock');
+        await page.goto(url);
+        await assertBells(0);
+        assert.equal(query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')[0].quantity_on_hand, 0, 'Reading leaves inventory unchanged');
+        fixture('workspace_admin_review');
+        fixture('bread_create');
+        await page.goto(url);
+        assert.equal(await page.locator('.notification-required-item').count(), 1, 'Only executable Administrator review remains actionable');
+        assert.match(await page.locator('.notification-required-item').innerText(), /Cash variance review/);
+        assert.equal(await page.locator('.notification-item').filter({hasText: 'Reminder Bread'}).count(), 1, 'Overdue stock oversight remains in history');
+        query('UPDATE inventory SET quantity_on_hand = 1 WHERE product_id = 1');
+        query("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity) VALUES (1,'PARTIAL-420',1,1)");
+        await page.goto(url);
+        assert.match(await adminStock.innerText(), /Resolved/, 'Partial replenishment resolves Administrator stockout on render');
+        await page.goto(origin + '/components/auth/logout.php');
+        await page.goto(origin + '/?login=1');
+        await page.locator('#landing-login-username').fill('theme_inventory_manager');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        await page.goto(url + '?category=low_stock&view=unread&batch=10');
+        const inventoryStock = page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'});
+        assert.equal(await inventoryStock.count(), 1, 'Partial replenishment keeps the Inventory Manager warning');
+        fixture('workspace_receive_stock');
+        await page.goto(url + '?category=low_stock&view=unread&batch=10');
+        assert.equal(await inventoryStock.count(), 0, 'Successful Stock Receiving clears unread stock before any scheduled run');
+        await page.goto(url + '?category=low_stock&batch=10');
+        assert.match(await inventoryStock.innerText(), /Resolved/, 'Recovered unread alert remains in All as Resolved');
+        query('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
+        fixture('workspace_check_stock');
+        fixture('workspace_check_stock');
+        await page.goto(url + '?category=low_stock&batch=10');
+        assert.equal(await inventoryStock.count(), 2, 'Recurrence creates one fresh stock update');
+        assert.equal(await inventoryStock.filter({hasText: 'Resolved'}).count(), 1, 'Recurrence never reactivates old history');
+        assert.equal(await inventoryStock.and(page.locator('.unread')).count(), 1);
         console.log('Administrator low-stock notifications: passed');
     } finally {
         if (browser) await browser.close();

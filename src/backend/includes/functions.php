@@ -526,8 +526,9 @@ function notification_workspace_scope(PDO $pdo, string $alias = 'notifications')
  */
 function get_unread_notifications(PDO $pdo, int $user_id): array
 {
+    reconcile_notification_stock($pdo, $user_id);
     $stmt = $pdo->prepare("SELECT notification_id, type, title, message, reference_id, reference_type, created_at
-                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE
+                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE
                            ORDER BY created_at DESC");
     $stmt->execute([$user_id]);
     return $stmt->fetchAll();
@@ -538,9 +539,22 @@ function get_unread_notifications(PDO $pdo, int $user_id): array
  */
 function get_notification_count(PDO $pdo, int $user_id): int
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE");
+    reconcile_notification_stock($pdo, $user_id);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE");
     $stmt->execute([$user_id]);
     return (int)$stmt->fetchColumn();
+}
+
+function notification_visibility_scope(): string
+{
+    return "(notifications.type <> 'low_stock' OR EXISTS (SELECT 1 FROM products np WHERE notifications.reference_type = 'product' AND np.product_id = notifications.reference_id))";
+}
+
+function reconcile_notification_stock(PDO $pdo, int $userId): void
+{
+    require_once __DIR__ . '/../app/Services/NotificationService.php';
+    $workspace = function_exists('current_role') ? current_role() : (string)($_SESSION['role'] ?? '');
+    (new NotificationService($pdo))->reconcileStockAlerts($userId, $workspace);
 }
 
 /**

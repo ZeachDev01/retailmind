@@ -30,6 +30,7 @@ class NotificationService
     {
         foreach (['inventory_manager', 'admin'] as $role) {
             foreach ($this->recipients($role) as $user) {
+                $this->reconcileStockAlerts((int)$user['user_id'], $role);
                 $items = [];
                 foreach ($this->getLowStockProducts() as $product) {
                     $out = (int)$product['quantity_on_hand'] <= 0;
@@ -50,11 +51,58 @@ class NotificationService
         }
     }
 
+    /** Resolve existing stock updates on normal renders, without delivering new updates. */
+    public function reconcileStockAlerts(int $userId, string $workspace): void
+    {
+        if (!in_array($workspace, ['inventory_manager', 'admin'], true) || !$this->inWorkspace($userId, $workspace)) return;
+        $stmt = $this->pdo->prepare("SELECT n.notification_id, n.attention_key, n.type, n.reference_id,
+                p.product_id, i.quantity_on_hand, p.reorder_level, pb.expiration_date, s.is_active
+            FROM notifications n
+            LEFT JOIN products p ON n.reference_type = 'product' AND p.product_id = n.reference_id
+            LEFT JOIN inventory i ON i.product_id = p.product_id
+            LEFT JOIN product_batches pb ON pb.batch_id = n.reference_id AND
+                (n.reference_type = 'product_batch' OR n.reference_type LIKE 'product_batch_expiry_%')
+            LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
+            WHERE n.user_id = ? AND n.workspace = ? AND n.resolved_at IS NULL
+                AND (n.type = 'low_stock' OR n.type IN ('expiring_stock', 'expired_stock')
+                    OR (n.type = 'system' AND n.reference_type LIKE 'product_batch%'))");
+        $stmt->execute([$userId, $workspace]);
+        $alerts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$alerts) return;
+        $eligibleBatches = array_filter($alerts, static fn(array $alert): bool => $alert['type'] !== 'low_stock')
+            ? array_column($this->getEligibleExpiryReminders(), null, 'batch_id') : [];
+        $resolve = $this->pdo->prepare('UPDATE notifications SET resolved_at = ?, email_pending = 0 WHERE notification_id = ? AND user_id = ? AND resolved_at IS NULL');
+        $resolveState = $this->pdo->prepare('UPDATE attention_states SET is_active = 0, resolved_at = ? WHERE user_id = ? AND attention_key = ? AND is_active = 1');
+        $now = $this->clock->now()->format('Y-m-d H:i:s');
+        $ownsTransaction = !$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
+        try {
+            foreach ($alerts as $alert) {
+                $active = $alert['type'] === 'low_stock'
+                    ? $alert['product_id'] !== null && $alert['quantity_on_hand'] !== null
+                        && (int)$alert['quantity_on_hand'] <= ($workspace === 'admin' ? 0 : (int)$alert['reorder_level'])
+                    : isset($eligibleBatches[$alert['reference_id']]);
+                if ($active && $workspace === 'admin' && $alert['type'] !== 'low_stock') {
+                    $active = $this->clock->now() >= (new DateTimeImmutable($alert['expiration_date'] . ' 00:00:00', new DateTimeZone('Asia/Manila')))->modify('+2 days');
+                }
+                if (!$active || ($alert['is_active'] !== null && !(bool)$alert['is_active'])) {
+                    $resolve->execute([$now, $alert['notification_id'], $userId]);
+                    if (!$active) $resolveState->execute([$now, $userId, $alert['attention_key']]);
+                }
+            }
+            if ($ownsTransaction) $this->pdo->commit();
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+    }
+
     public function checkAndNotifyExpiringStock(int $days = 30): void
     {
         $reminders = $this->getEligibleExpiryReminders($days);
         foreach (['inventory_manager', 'admin'] as $role) {
             foreach ($this->recipients($role) as $user) {
+                $this->reconcileStockAlerts((int)$user['user_id'], $role);
                 $items = [];
                 foreach ($reminders as $reminder) {
                     // Printed expiration dates remain saleable through the end of that Manila day.
@@ -175,6 +223,7 @@ class NotificationService
             FROM attention_states s JOIN notifications n ON n.user_id = s.user_id AND n.attention_key = s.attention_key
             WHERE s.user_id = ? AND s.is_active = 1 AND n.workspace = ? AND n.inapp_enabled = 1
                 AND s.attention_key <> 'platform.settings.changed'
+                AND s.attention_key NOT LIKE 'oversight.stock.%' AND s.attention_key NOT LIKE 'oversight.expiry.%'
                 AND n.notification_id = (SELECT MAX(n2.notification_id) FROM notifications n2
                     WHERE n2.user_id = n.user_id AND n2.attention_key = n.attention_key)
             ORDER BY n.created_at DESC");

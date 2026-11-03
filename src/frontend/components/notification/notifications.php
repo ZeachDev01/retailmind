@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/NotificationService.php';
 
 $user_id = (int)$_SESSION['user_id'];
+reconcile_notification_stock($pdo, $user_id);
 $category_labels = [
     'low_stock' => 'Low stock',
     'adjustment' => 'Inventory adjustments',
@@ -18,8 +19,8 @@ $category_labels = [
 ];
 $notification_source = "notifications LEFT JOIN products p ON notifications.reference_type = 'product' AND p.product_id = notifications.reference_id";
 $workspace_scope = notification_workspace_scope($pdo);
-$visible_notifications = "(notifications.type <> 'low_stock' OR p.product_id IS NOT NULL)";
-$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $workspace_scope . ' AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
+$visible_notifications = notification_visibility_scope();
+$stmt = $pdo->prepare('SELECT notifications.type, COUNT(*) AS total, SUM(CASE WHEN notifications.is_read = FALSE AND notifications.resolved_at IS NULL THEN 1 ELSE 0 END) AS unread FROM ' . $notification_source . ' WHERE notifications.user_id = ? AND ' . $workspace_scope . ' AND ' . $visible_notifications . ' GROUP BY notifications.type ORDER BY notifications.type');
 $stmt->execute([$user_id]);
 $categories = $stmt->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
 $category = $_GET['category'] ?? '';
@@ -63,8 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     exit;
 }
 
-$list_where = $where . ' AND ' . $visible_notifications . ($view === 'unread' ? ' AND notifications.is_read = FALSE' : '');
-$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.created_at, notifications.attention_destination, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
+$list_where = $where . ' AND ' . $visible_notifications . ($view === 'unread' ? ' AND notifications.is_read = FALSE AND notifications.resolved_at IS NULL' : '');
+$stmt = $pdo->prepare('SELECT notifications.notification_id, notifications.type, notifications.title, notifications.message, notifications.reference_type, notifications.reference_id, notifications.is_read, notifications.resolved_at, notifications.created_at, notifications.attention_destination, p.product_name, p.sku FROM ' . $notification_source . ' WHERE ' . $list_where . ' ORDER BY notifications.created_at DESC, notifications.notification_id DESC LIMIT ' . (int)$limit);
 $stmt->execute($params);
 $notifications = $stmt->fetchAll();
 $required_work = (new NotificationService($pdo))->requiredWork($user_id, current_role());
@@ -202,18 +203,19 @@ $active_batch_reminders = $inventory_workspace
                             : 'Historical alert. The referenced batch is no longer available.';
                     }
                     ?>
-                    <article class="notification-item <?= $notif['is_read'] ? '' : 'unread' ?>" data-notification-type="<?= htmlspecialchars($notif['type']) ?>">
+                    <?php $unread = !$notif['is_read'] && $notif['resolved_at'] === null; ?>
+                    <article class="notification-item <?= $unread ? 'unread' : '' ?>" data-notification-type="<?= htmlspecialchars($notif['type']) ?>">
                         <div class="notification-content">
                             <div class="notification-row grid items-center gap-4 p-5 sm:p-6">
 
-                                <span class="notification-category rounded-md px-3 py-1"><span class="notification-status"><span class="sr-only"><?= $notif['is_read'] ? 'Read' : 'Unread' ?></span><?php if (!$notif['is_read']): ?><span class="block h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" aria-hidden="true"></span><?php endif; ?></span><?= htmlspecialchars($category_labels[$notif['type']] ?? ucfirst(str_replace('_', ' ', $notif['type']))) ?></span>
+                                <span class="notification-category rounded-md px-3 py-1"><span class="notification-status"><span class="sr-only"><?= $notif['resolved_at'] !== null ? 'Resolved' : ($unread ? 'Unread' : 'Read') ?></span><?php if ($unread): ?><span class="block h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" aria-hidden="true"></span><?php endif; ?></span><?= htmlspecialchars($category_labels[$notif['type']] ?? ucfirst(str_replace('_', ' ', $notif['type']))) ?><?= $notif['resolved_at'] !== null ? ' · Resolved' : '' ?></span>
                                 <h2 class="min-w-0"><?php if ($inventory_workspace && $product_search !== null): ?><a class="notification-product-link" href="<?= htmlspecialchars(app_url('components/inventory_management/products.php?' . http_build_query(['q' => $product_search]))) ?>"><?= htmlspecialchars($notif['product_name'] ?? $notif['title']) ?></a><?php else: ?><?= htmlspecialchars($notif['product_name'] ?? $notif['title']) ?><?php endif; ?></h2>
                                 <dl class="notification-quantities" hidden>
                                     <div><dt>Current</dt><dd class="notification-current"></dd></div>
                                     <div><dt>Threshold</dt><dd class="notification-threshold"></dd></div>
                                 </dl>
                                 <span class="notification-time"><?= htmlspecialchars(format_display_datetime($notif['created_at'])) ?></span>
-                        <?php if (!$notif['is_read']): ?>
+                        <?php if ($unread): ?>
                                 <form class="notification-read-action" method="POST">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                     <input type="hidden" name="action" value="mark_read">

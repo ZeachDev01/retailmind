@@ -346,8 +346,8 @@
             if (avatar && payload.shell?.avatar) avatar.outerHTML = payload.shell.avatar;
             const mobileAvatar = document.querySelector('.admin-mobile-avatar');
             if (mobileAvatar && payload.shell?.mobileAvatar) mobileAvatar.innerHTML = payload.shell.mobileAvatar;
-            const notification = document.querySelector('.global-notification-button');
-            if (notification && Number.isFinite(payload.shell?.notifications)) {
+            for (const notification of document.querySelectorAll('.global-notification-button')) {
+                if (!Number.isFinite(payload.shell?.notifications)) continue;
                 notification.querySelector('strong')?.remove();
                 const count = payload.shell.notifications;
                 notification.setAttribute('aria-label', 'Notifications' + (count ? ': ' + count + ' unread' : ''));

@@ -242,6 +242,58 @@ $optedOutRoutine = $rowsFor($managerOptedOutId, 'inventory.stock.1');
 $assert(count($optedOutRoutine) === 1, 'A routine opt-out keeps the condition active for the Inventory Manager');
 $assert((int)$optedOutRoutine[0]['inapp_enabled'] === 0, 'A disabled routine preference suppresses the optional in-app reminder');
 
+// Acknowledgement and recovery are independent, including existing alerts before a scheduled run.
+$pdo->exec("UPDATE notifications SET is_read = 1 WHERE user_id = {$managerId} AND attention_key = 'inventory.stock.1'");
+$notifications->checkAndNotifyLowStock();
+$assert(count($rowsFor($managerId, 'inventory.stock.1')) === 1 && (int)$rowsFor($managerId, 'inventory.stock.1')[0]['is_read'] === 1,
+    'An unchanged low-stock condition stays read without changing stock');
+$assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 1')->fetchColumn() === 3, 'Reading leaves inventory unchanged');
+$assert($notifications->requiredWork($adminId, 'admin') === [], 'Stock oversight is not Administrator action needed');
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 5 WHERE product_id IN (1, 2)');
+$notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+$notifications->reconcileStockAlerts($adminId, 'admin');
+$assert($stateActive($managerId, 'inventory.stock.1') === 1, 'Equality at Reorder Level remains low stock');
+$assert($stateActive($managerId, 'inventory.stock.2') === 1, 'Partial replenishment from zero retains the Inventory warning');
+$assert($stateActive($adminId, 'oversight.stock.2') === 0, 'Positive stock resolves Administrator stockout oversight immediately');
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 6 WHERE product_id IN (1, 2)');
+$pdo->exec("CREATE TRIGGER reject_recovery BEFORE UPDATE ON attention_states
+    WHEN OLD.user_id = {$managerId} BEGIN SELECT RAISE(ABORT, 'Recovery write failed'); END");
+try {
+    $notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+    $assert(false, 'Recovery storage failure must be reported');
+} catch (PDOException $exception) {
+    $assert($rowsFor($managerId, 'inventory.stock.1')[0]['resolved_at'] === null
+        && $stateActive($managerId, 'inventory.stock.1') === 1, 'Recovery storage failure rolls back notification and condition changes together');
+}
+$pdo->exec('DROP TRIGGER reject_recovery');
+$notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+$notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+$assert($stateActive($managerId, 'inventory.stock.1') === 0, 'Stock strictly above Reorder Level resolves a read alert');
+$assert($rowsFor($managerId, 'inventory.stock.2')[0]['resolved_at'] !== null, 'Unread recovered stock history is retained as resolved');
+$assert((int)$rowsFor($managerId, 'inventory.stock.2')[0]['email_pending'] === 0, 'Recovery cancels obsolete queued email');
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
+$notifications->checkAndNotifyLowStock();
+$notifications->checkAndNotifyLowStock();
+$recurrence = $rowsFor($managerId, 'inventory.stock.1');
+$assert(count($recurrence) === 2 && $recurrence[0]['resolved_at'] !== null && $recurrence[1]['resolved_at'] === null
+    && (int)$recurrence[1]['is_read'] === 0, 'Recurrence delivers one unread update while old history stays resolved');
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 0 WHERE product_id = 1');
+$notifications->checkAndNotifyLowStock();
+$notifications->checkAndNotifyLowStock();
+$assert(count($rowsFor($managerId, 'inventory.stock.1')) === 3, 'Low stock escalating to zero delivers exactly one new update');
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 10 WHERE product_id = 1');
+$notifications->checkAndNotifyLowStock();
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
+$notifications->checkAndNotifyLowStock();
+$pdo->exec('UPDATE inventory SET quantity_on_hand = 0 WHERE product_id = 1');
+$notifications->checkAndNotifyLowStock();
+$assert(count($rowsFor($managerId, 'inventory.stock.1')) === 5, 'A new occurrence can escalate even when an older occurrence reached zero');
+$notifications->createNotification($managerId, 'low_stock', 'Legacy stale stock alert', 'Previously delivered before reconciliation.', 2, 'product');
+$notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+$legacy = array_values(array_filter($rowsFor($managerId), static fn(array $row): bool => $row['title'] === 'Legacy stale stock alert'));
+$assert($legacy[0]['resolved_at'] !== null && (int)$legacy[0]['email_pending'] === 0,
+    'An existing stale stock alert without a condition key is safely reconciled');
+
 $crossoverBefore = count($rowsFor($crossoverId));
 $pdo->exec("DELETE FROM user_roles WHERE user_id = {$crossoverId}");
 $notifications->checkAndNotifyLowStock();
