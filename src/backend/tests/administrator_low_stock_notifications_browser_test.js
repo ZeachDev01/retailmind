@@ -106,6 +106,10 @@ const query = sql => {
         fixture('workspace_receive_stock');
         await page.goto(url + '?category=low_stock&view=unread&batch=10');
         assert.equal(await inventoryStock.count(), 0, 'Successful Stock Receiving clears unread stock before any scheduled run');
+        await page.goto(url + '?view=unread&batch=10');
+        await assertBells(Number(await page.locator('.notification-view-count').textContent()));
+        assert.equal(await page.locator('.notification-required-item, .active-batch-reminders article').filter({hasText: 'Theme Test Item'}).count(), 0,
+            'Recovered product has no active reminder after receiving');
         await page.goto(url + '?category=low_stock&batch=10');
         assert.match(await inventoryStock.innerText(), /Resolved/, 'Recovered unread alert remains in All as Resolved');
         query('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
