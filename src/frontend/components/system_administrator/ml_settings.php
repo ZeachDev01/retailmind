@@ -258,10 +258,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 <h1>Model Training</h1>
                 <p class="page-subtitle">Prepare a new model for Administrator review.</p>
             </div>
-            <div class="ml-page-actions">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Open forecasts</a>
-            </div>
         </div>
 
         <?php if ($message): ?>
@@ -310,6 +306,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             <?php endif; ?>
 
+            <div class="ml-training-panel">
             <div class="ml-action-bar">
                 <form class="ml-action-form" method="post">
                     <?= csrf_field() ?>
@@ -318,7 +315,8 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </button>
                 </form>
                 <div class="ml-job-status" role="status" aria-live="polite">
-                    Latest training job: <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' (' . ucfirst($trainingJob['status']) . ')' : 'Not started') ?></strong>
+                    <span>Latest training job</span>
+                    <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' · ' . ucfirst($trainingJob['status']) : 'Not started') ?></strong>
                 </div>
             </div>
 
@@ -392,12 +390,19 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     <?php endif; ?>
                 </div>
             <?php else: ?>
-                <p class="u-empty-cell-padded">No candidate model yet. Import product-level history, verify worker status, and train a candidate.</p>
-            <?php endif; ?>
+                    <div class="ml-empty-state">
+                        <i class="bi bi-cpu" aria-hidden="true"></i>
+                        <div>
+                            <strong>No candidate model yet</strong>
+                            <p>Import product-level history, verify worker status, then train a candidate for review.</p>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
-            <div class="ml-section-links">
-                <a class="btn btn-secondary" href="../report/forecast_analytics.php">Forecast analytics</a>
-            </div>
+                <div class="ml-section-links">
+                    <a class="btn btn-secondary" href="../report/forecast_analytics.php">Forecast analytics</a>
+                </div>
+                </div>
         </section>
 
         <section class="dashboard-section" aria-labelledby="schedule-heading">

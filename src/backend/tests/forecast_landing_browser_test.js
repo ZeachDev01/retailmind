@@ -108,15 +108,24 @@ const fixture = action => {
 
         assert.match(await page.locator('h1').innerText(), /Demand Forecast/);
         assert.match(await page.locator('.page-subtitle').innerText(), /Expected sales/);
-        await checkWorkflow('admin', 'Administrator');
+        const adminStudioNav = page.locator('.forecast-studio-nav');
+        assert.equal(await adminStudioNav.count(), 1, 'Administrator uses the shared forecasting studio navigation');
+        assert.equal(await adminStudioNav.locator('a').count(), 4, 'Administrator sees four permitted forecasting destinations');
+        for (const label of ['Data readiness', 'Model review', 'Demand forecast', 'Exceptions']) {
+            assert.ok((await adminStudioNav.innerText()).includes(label), 'Administrator navigation includes ' + label);
+        }
+        assert.equal(await adminStudioNav.locator('a[aria-current="page"]').count(), 1, 'Administrator navigation marks the active forecasting page');
+        assert.equal(await adminStudioNav.locator('a[aria-current="page"]').innerText(), 'Demand forecast', 'Demand Forecast is the active Admin destination');
+        assert.equal(await adminStudioNav.locator('a[href*="ml_settings.php"]').count(), 0, 'Administrator navigation excludes Model Training');
+        assert.equal(await adminStudioNav.locator('a[href*="forecast_import.php"]').count(), 0, 'Administrator navigation excludes history import');
         const related = page.locator('.forecast-related');
         assert.equal(await related.getAttribute('open'), null, 'Extra destinations start collapsed');
         await related.locator('summary').click();
         const navText = await page.locator('.forecasting-nav-chips').innerText();
         for (const label of ['Forecast Exceptions', 'Data Readiness', 'Model Review & Approval', 'Store Calendar', 'Promotions']) assert.ok(navText.includes(label));
         await related.locator('summary').click();
-        assert.equal(await page.locator('main a[href$="replenishment_queue.php"]').count(), 1, 'Replenishment navigation is not duplicated');
-        assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 1);
+        assert.equal(await page.locator('.forecast-studio-nav a[href$="replenishment_queue.php"]').count(), 0, 'Administrator studio navigation excludes Inventory Manager buying actions');
+        assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0, 'Demand Forecast has no redundant top generate action');
         const s1Heading = page.locator('#heading-usability');
         const s2Heading = page.locator('#heading-actions');
         assert.match(await s1Heading.innerText(), /Forecast status/);
@@ -201,7 +210,7 @@ const fixture = action => {
         assert.match(await page.locator('.forecast-status-content > p').innerText(), /Review expected sales and buying suggestions/);
         assert.equal(await page.locator('.forecast-actions').getAttribute('open'), null, 'Supporting forecast checks start collapsed');
         assert.equal(await page.locator('.forecast-bar-row').count(), 1, 'Usable demand produces a real comparison chart');
-        assert.equal(await page.locator('.page-heading-actions .btn').first().evaluate(el => el.scrollWidth <= el.clientWidth), true, 'Primary action text fits its button');
+        assert.equal(await page.locator('.page-heading-actions').count(), 0, 'Demand Forecast has no redundant top action group');
         const row = page.locator('#product-forecasts tbody tr').first();
         assert.match(await row.innerText(), /14[\s\S]*28[\s\S]*56/);
         await page.locator('.forecast-bar-row a').click();
@@ -238,11 +247,11 @@ const fixture = action => {
             assert.equal(await studio.locator('a').count(), 6, 'All forecasting destinations remain reachable');
             assert.equal(await studio.locator('[aria-current="page"]').count(), 1, 'Only the current page is highlighted');
             assert.ok((await studio.locator('[aria-current="page"]').getAttribute('href')).endsWith(route));
-            const help = page.getByRole('button', {name: 'About the forecasting workflow'});
-            await help.focus();
-            assert.equal(await page.locator('#forecast-process-help').isVisible(), true, 'Workflow help opens on keyboard focus');
-            await page.keyboard.press('Escape');
-            assert.equal(await page.locator('#forecast-process-help').isVisible(), false, 'Escape dismisses workflow help');
+            assert.equal(await page.locator('.forecast-studio-caption').count(), 0, 'Forecast studio has no redundant process caption');
+            if (await page.locator('.forecast-notice').count() > 0) {
+                await page.waitForTimeout(3300);
+                assert.equal(await page.locator('.forecast-notice').count(), 0, 'Forecast notices dismiss after three seconds');
+            }
             if (route.includes('data_readiness')) {
                 assert.equal(await page.locator('.forecast-readiness-visual meter').count(), 3);
                 const row = page.locator('.readiness-catalog tbody tr').first();
@@ -351,7 +360,7 @@ const fixture = action => {
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
         assert.match(await page.locator('#effective-training-schedule').innerText(), /Wednesday at 11:59 PM/, 'Unauthorized saves preserve the schedule');
         await page.goto(origin + '/components/report/data_readiness.php');
-        assert.equal(await page.locator('main').getByRole('link', {name: 'Model Training', exact: true}).count(), 1, 'Readiness links authorized users to training settings');
+        assert.equal(await page.locator('.forecast-studio-nav a[href*="ml_settings.php"]').count(), 1, 'Forecast studio links authorized users to training settings');
         fixture('forecast_replay_workspace');
         const replay = await page.goto(origin + '/components/report/forecast_replay.php');
         assert.equal(replay.status(), 200);

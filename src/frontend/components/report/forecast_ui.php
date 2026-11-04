@@ -47,9 +47,25 @@ function forecast_workflow(string $current): void
                 </a>
             <?php endforeach; ?>
         </nav>
-        <div class="forecast-studio-caption"><span>Sales data <i class="bi bi-arrow-right" aria-hidden="true"></i> Model <i class="bi bi-arrow-right" aria-hidden="true"></i> Forecast</span>
-            <?php forecast_help('forecast-process-help', 'Import history, check data readiness, then train a candidate. The Administrator reviews approval. Analytics checks results; Exceptions identifies products needing attention.', 'About the forecasting workflow'); ?>
-        </div>
+        <?php
+        return;
+    }
+    if (current_role() === 'admin') {
+        $pages = [
+            ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
+            ['model_review.php', 'Model review', 'clipboard-check', 'administrator'],
+            ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
+            ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],
+        ];
+        $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        ?>
+        <nav class="forecast-studio-nav forecast-studio-nav-admin" aria-label="Forecasting workspace">
+            <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>
+                <a href="<?= htmlspecialchars(app_url('components/' . $folder . '/' . $file)) ?>" <?= $page === $file ? 'aria-current="page"' : '' ?>>
+                    <i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span>
+                </a>
+            <?php endforeach; ?>
+        </nav>
         <?php
         return;
     }
@@ -116,3 +132,4 @@ function forecast_help(string $id, string $text, string $label = 'About this val
 ?>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/forecast-workspace.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/forecast-workspace.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>" defer></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/forecast-notices.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/forecast-notices.js')) ?>" defer></script>

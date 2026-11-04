@@ -156,6 +156,66 @@ function build_query(array $params): string {
             pointer-events: none;
             cursor: not-allowed;
         }
+        .forecast-help-card {
+            margin: 1.25rem 0 1.5rem;
+            padding: 1rem 1.15rem;
+            background: var(--theme-surface-soft, #f8fafc);
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: 12px;
+        }
+        .forecast-help-card > h2 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 0 0.25rem;
+            font-size: 1rem;
+            color: var(--text, #1e293b);
+        }
+        .forecast-help-card > p {
+            margin: 0 0 0.65rem;
+            color: var(--muted, #64748b);
+            font-size: 0.875rem;
+        }
+        .forecast-help-item {
+            margin: 0;
+            border-top: 1px solid var(--border-color, #e2e8f0);
+        }
+        .forecast-help-item > summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            min-height: 44px;
+            padding: 0.7rem 0;
+            color: var(--text, #1e293b);
+            font-weight: 600;
+            cursor: pointer;
+            list-style: none;
+        }
+        .forecast-help-item > summary::-webkit-details-marker {
+            display: none;
+        }
+        .forecast-help-item > summary::after {
+            content: '';
+            width: 0.45rem;
+            height: 0.45rem;
+            flex: 0 0 auto;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            transform: rotate(45deg) translateY(-2px);
+            transition: transform 160ms ease;
+        }
+        .forecast-help-item[open] > summary::after {
+            transform: rotate(225deg) translate(-2px, -1px);
+        }
+        .forecast-help-item > summary:focus-visible {
+            outline: 2px solid var(--primary, #2563eb);
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+        .forecast-help-item > :not(summary) {
+            margin-bottom: 0.9rem;
+        }
     </style>
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
@@ -167,15 +227,6 @@ function build_query(array $params): string {
             <div>
                 <h1>Forecast Data Readiness</h1>
                 <p class="page-subtitle">Check which products have enough sales data for training.</p>
-            </div>
-            <div class="page-heading-actions">
-                <?php if (has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
-                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Model Training</a>
-                <?php endif; ?>
-                <?php if (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)): ?>
-                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
-                <?php endif; ?>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Demand Forecast</a>
             </div>
         </header>
 
@@ -213,20 +264,25 @@ function build_query(array $params): string {
                 </div>
             <?php endforeach; ?>
         </section>
-        <details class="forecast-details">
-            <summary>How training eligibility works</summary>
-            <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
-        </details>
+        <section class="forecast-help-card" aria-labelledby="forecast-help-heading">
+            <h2 id="forecast-help-heading"><i class="bi bi-info-circle" aria-hidden="true"></i> Help &amp; definitions</h2>
+            <p>Quick explanations for training readiness and forecast statuses.</p>
+            <details class="forecast-help-item">
+                <summary>How training eligibility works</summary>
+                <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
+            </details>
 
-        <details class="forecast-details"><summary>Other forecast statuses</summary>
-        <section class="forecast-overview" aria-label="Readiness overview stats">
-            <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
-            <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
-            <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
-            <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
-            <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
+            <details class="forecast-help-item">
+                <summary>Other forecast statuses</summary>
+                <section class="forecast-overview" aria-label="Readiness overview stats">
+                    <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
+                    <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
+                    <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
+                    <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
+                    <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
+                </section>
+            </details>
         </section>
-        </details>
 
         <section class="dashboard-section" aria-label="Product readiness management">
             <div class="section-header">

@@ -139,11 +139,6 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                 <h1>Import Sales History</h1>
                 <p class="page-subtitle">Add past daily sales from this Store.</p>
             </div>
-            <div class="topbar-actions">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">
-                    Model Training
-                </a>
-            </div>
         </div>
 
         <?php forecast_workflow('data'); ?>

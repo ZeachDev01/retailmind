@@ -50,7 +50,7 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
     <div class="topbar"><div><h1><?= $isM5 ? 'M5 historical demonstration' : 'Historical replay' ?></h1><p class="page-subtitle"><?= $isM5 ? 'Original Walmart sales dates and measured backtest predictions. Stock is an illustrative scenario.' : 'Simulated recent sales. Real public quantities, shifted dates, illustrative stock.' ?></p></div>
-        <a class="btn btn-secondary" href="../system_administrator/ml_settings.php">Model Training</a></div>
+    </div>
     <p class="tag-warning" role="status">Experimental preview only. Training validation: <?= htmlspecialchars($result['validation_outcome']) ?>. No Store model or purchasing guidance was approved.</p>
     <?php forecast_workflow(''); ?>
     <p class="forecast-notice">This is a test against past sales, separate from today’s forecasts. <a href="data_readiness.php">Check readiness for today</a>.</p>

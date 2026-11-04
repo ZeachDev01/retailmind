@@ -48,10 +48,6 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                 <h1>Forecast Exceptions</h1>
                 <p class="page-subtitle">Products without usable forecasts. Review the reason and next step.</p>
             </div>
-            <div class="page-heading-actions">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">Demand Forecast</a>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review recommendations</a>
-            </div>
         </header>
         <?php forecast_workflow('forecast'); ?>
 

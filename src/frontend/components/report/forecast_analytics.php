@@ -261,10 +261,6 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
                 <p class="page-subtitle">Compare forecasts with recorded sales. Review model evidence when needed.</p>
             </div>
-            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Forecasts</a>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Model Training</a>
-            </div>
         </div>
 
         <?php forecast_workflow(''); ?>

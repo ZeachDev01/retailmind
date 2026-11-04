@@ -22,6 +22,20 @@
     margin-bottom: 1.75rem;
 }
 
+.ml-settings-page #training-title {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+}
+
+.ml-settings-page #training-title .info-tooltip {
+    margin-left: .1rem;
+}
+
 .ml-settings-page .settings-fieldset {
     padding-bottom: 1.5rem;
     margin-bottom: 1.75rem;
@@ -93,11 +107,11 @@
 }
 
 .ml-settings-page .ml-action-bar {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    flex-wrap: wrap;
     gap: 1rem;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
 }
 
 .ml-settings-page .ml-action-form {
@@ -105,18 +119,71 @@
     display: inline-flex;
 }
 
+.ml-settings-page .ml-action-form .btn {
+    min-height: 48px;
+    padding-inline: 1.1rem;
+    font-size: .95rem;
+    font-weight: 650;
+}
+
+.ml-settings-page .ml-training-panel {
+    padding: 1.25rem;
+    background: var(--surface-soft, #f8fafc);
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px;
+    color: var(--text, #1f2937);
+}
+
 .ml-settings-page .ml-job-status {
-    font-size: .875rem;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 190px;
+    padding-left: 1rem;
+    border-left: 1px solid var(--border, #e5e7eb);
+    font-size: .8rem;
     color: var(--muted, #626b7a);
 }
 
 .ml-settings-page .ml-job-status strong {
+    font-size: .95rem;
+    font-weight: 650;
     color: var(--text, #1f2937);
 }
 
+.ml-settings-page .ml-empty-state {
+    display: flex;
+    align-items: flex-start;
+    gap: .85rem;
+    padding: 1rem;
+    background: var(--card-bg, #fff);
+    border: 1px dashed var(--border, #cbd5e1);
+    border-radius: 10px;
+}
+
+.ml-settings-page .ml-empty-state > i {
+    flex: 0 0 auto;
+    color: var(--primary, #2563eb);
+    font-size: 1.25rem;
+}
+
+.ml-settings-page .ml-empty-state strong {
+    display: block;
+    margin-bottom: .2rem;
+    font-size: .95rem;
+    font-weight: 650;
+    color: var(--text, #1f2937);
+}
+
+.ml-settings-page .ml-empty-state p {
+    margin: 0;
+    color: var(--muted, #626b7a);
+    font-size: .9rem;
+    line-height: 1.5;
+}
+
 .ml-settings-page .candidate-card {
-    border-top: 1px solid var(--border, #e5e7eb);
-    padding-top: 1.25rem;
+    margin-top: 1rem;
     margin-bottom: 1.25rem;
 }
 
@@ -125,6 +192,15 @@
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: .875rem;
     margin-bottom: 1.25rem;
+}
+
+.ml-settings-page .candidate-card .forecast-details {
+    margin-block: .75rem;
+    padding-inline: .9rem;
+}
+
+.ml-settings-page .candidate-card .forecast-details > summary {
+    font-size: .95rem;
 }
 
 .ml-settings-page .candidate-meta-item {
@@ -136,6 +212,7 @@
 .ml-settings-page .candidate-meta-label {
     font-size: .75rem;
     font-weight: 600;
+    line-height: 1.25;
     text-transform: uppercase;
     letter-spacing: .04em;
     color: var(--muted, #626b7a);
@@ -144,6 +221,7 @@
 .ml-settings-page .candidate-meta-val {
     font-size: .95rem;
     font-weight: 600;
+    line-height: 1.35;
     color: var(--text, #1f2937);
 }
 
@@ -153,12 +231,14 @@
 
 .ml-settings-page .ml-eval-reason {
     font-size: .875rem;
+    line-height: 1.5;
     color: var(--muted, #626b7a);
     margin: .5rem 0 0 0;
 }
 
 .ml-settings-page .ml-eval-meta {
     font-size: .85rem;
+    line-height: 1.5;
     color: var(--muted, #626b7a);
     margin: .5rem 0 .875rem;
 }
@@ -180,7 +260,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: .75rem;
-    margin-top: 1.25rem;
+    margin-top: 1rem;
 }
 
 .ml-settings-page .table-wrap :is(th, td):nth-child(-n + 3) {
@@ -198,6 +278,22 @@
 }
 
 @media (max-width: 480px) {
+    .ml-settings-page .ml-action-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ml-settings-page .ml-action-form,
+    .ml-settings-page .ml-action-form .btn {
+        width: 100%;
+    }
+
+    .ml-settings-page .ml-job-status {
+        min-width: 0;
+        padding: .75rem 0 0;
+        border-top: 1px solid var(--border, #e5e7eb);
+        border-left: 0;
+    }
+
     .ml-settings-page .form-actions {
         align-items: stretch;
         flex-direction: column;

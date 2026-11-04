@@ -280,9 +280,10 @@ $assert(str_contains($dashboardFile, "'Candidate model awaiting review'") &&
     str_contains($dashboardFile, "'components/administrator/model_review.php'"),
     'Dashboard candidate review exception alert links to model_review.php');
 
-// Model Training page exposes Forecast Data Import
+// Forecasting workflow exposes Forecast Data Import from Model Training.
 $operation = file_get_contents(__DIR__ . '/../../frontend/components/system_administrator/ml_settings.php');
-$assert(str_contains($operation, 'components/system_administrator/forecast_import.php'), 'Model Training exposes Forecast Data Import');
+$forecastUi = file_get_contents(__DIR__ . '/../../frontend/components/report/forecast_ui.php');
+$assert(str_contains($operation, "forecast_workflow('train')") && str_contains($forecastUi, "['forecast_import.php', 'Import history'"), 'Model Training exposes Forecast Data Import');
 
 // Store Calendar contains contextual link to Demand Forecast
 $calendarFile = file_get_contents(__DIR__ . '/../../frontend/components/administrator/store_calendar.php');
@@ -292,14 +293,43 @@ $assert(str_contains($calendarFile, 'components/report/predictions.php'), 'Store
 $promotionsFile = file_get_contents(__DIR__ . '/../../frontend/components/inventory_management/promotions.php');
 $assert(str_contains($promotionsFile, 'components/report/predictions.php'), 'Promotions contains contextual link to predictions.php');
 
-// Data Readiness contains contextual link to Demand Forecast and Model Review & Approval
+// Data Readiness contains a contextual link to Demand Forecast.
 $readinessFile = file_get_contents(__DIR__ . '/../../frontend/components/report/data_readiness.php');
 $assert(str_contains($readinessFile, 'components/report/predictions.php'), 'Data Readiness links to predictions.php');
-$assert(str_contains($readinessFile, 'components/administrator/model_review.php'), 'Data Readiness links to model_review.php');
 
 // Model Evaluation Summary exposes contextual link to model_review.php for APPROVE_MODELS
 $evalSummaryFile = file_get_contents(__DIR__ . '/../../frontend/components/report/model_evaluation_summary.php');
 $assert(str_contains($evalSummaryFile, 'components/administrator/model_review.php'), 'Model Evaluation Summary links to model_review.php');
+
+// Forecasting pages keep workflow actions in the page body; redundant text-only
+// navigation buttons do not belong in their top bars.
+echo "\n--- 8. Forecasting Topbar Navigation ---\n";
+$forecastTopbarFiles = [
+    __DIR__ . '/../../frontend/components/system_administrator/forecast_import.php',
+    __DIR__ . '/../../frontend/components/report/data_readiness.php',
+    __DIR__ . '/../../frontend/components/report/forecast_analytics.php',
+    __DIR__ . '/../../frontend/components/report/forecast_replay.php',
+];
+$forecastTopbarLabels = [
+    'forecast_import.php' => ['Model Training'],
+    'data_readiness.php' => ['Model Training', 'Model Review &amp; Approval', 'Demand Forecast'],
+    'forecast_analytics.php' => ['Model Training', 'View Forecasts'],
+    'forecast_replay.php' => ['Model Training'],
+];
+foreach ($forecastTopbarFiles as $forecastPage) {
+    $forecastMarkup = file_get_contents($forecastPage);
+    $pageName = basename($forecastPage);
+    preg_match(
+        '/<(?:div|header)\b[^>]*(?:class="topbar"|class="page-heading")[^>]*>.*?(?=<\?php forecast_workflow|<p class="tag-warning"|<\/main>)/is',
+        $forecastMarkup,
+        $topbarMatch
+    );
+    $topbarMarkup = $topbarMatch[0] ?? '';
+    foreach ($forecastTopbarLabels[$pageName] as $label) {
+        $hasTopbarLabel = str_contains($topbarMarkup, $label);
+        $assert(!$hasTopbarLabel, "{$pageName} has no redundant '{$label}' topbar button");
+    }
+}
 
 // =========================================================================
 // Completion

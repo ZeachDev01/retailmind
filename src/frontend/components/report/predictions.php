@@ -117,16 +117,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <h1>Demand Forecast</h1>
                 <p class="page-subtitle">Expected sales. Stock on hand. What needs attention.</p>
             </div>
-            <div class="page-heading-actions">
-                <?php if (has_capability(RoleCapabilityPolicy::GENERATE_FORECASTS)): ?>
-                    <form method="post" action="" style="display:inline-block; margin:0;">
-                        <?= csrf_field() ?>
-                        <button type="submit" name="action" value="generate" class="btn btn-secondary" <?= $isGenerating ? 'disabled' : '' ?>><?= $isGenerating ? 'Generating...' : 'Generate forecasts' ?></button>
-                    </form>
-                <?php elseif (has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY)): ?>
-                    <a class="btn btn-primary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review buying suggestions</a>
-                <?php endif; ?>
-            </div>
         </header>
         <?php forecast_workflow('forecast'); ?>
         <?php
