@@ -268,7 +268,10 @@ function format_wape_metric(?float $val, ?string $reason): string {
         </div>
 
         <?php forecast_workflow(''); ?>
-        <p class="forecast-notice">This page explains performance. <a href="../system_administrator/ml_settings.php">Model Training shows the latest training result and blockers</a>.</p>
+        <?php if ($recommendationsSuspended || $observationMode): ?>
+            <p class="forecast-notice" role="status"><?= $recommendationsSuspended ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></p>
+        <?php endif; ?>
+        <details class="forecast-details"><summary>Model &amp; data details</summary>
         <section class="model-context-card" aria-label="Model Governance">
             <?= csrf_field() ?>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
@@ -319,6 +322,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
             </div>
         </section>
+        </details>
         <section class="forecast-analytics-tabs" aria-label="Forecast charts">
             <div class="analytics-tab-list" role="tablist" aria-label="Forecast analytics views">
                 <button class="analytics-tab is-active" id="analytics-tab-actual" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-actual" data-analytics-tab="actual">
@@ -349,7 +353,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
-                <h2>Forecasts vs recorded sales</h2><p class="muted">Recorded units by product and date · forecast in blue, sales in green.</p>
+                <h2>Forecasts vs recorded sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
                 <?php if (empty($actualChartData)): ?><p class="muted">No sales comparisons yet. Comparisons appear when forecast dates have recorded sales.</p><?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
                 <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Product &amp; date</th><th>Forecast units</th><th>Recorded sales</th></tr></thead><tbody>
                 <?php foreach ($actualChartData as $point): ?><tr><td><?= htmlspecialchars($point['product_name']) ?></td><td><?= htmlspecialchars((string)$point['forecast_value']) ?></td><td><?= htmlspecialchars((string)$point['actual_demand']) ?></td></tr><?php endforeach; ?>

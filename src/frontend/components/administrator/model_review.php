@@ -146,7 +146,11 @@ $formatUnits = static function ($val): string {
         forecast_status_summary(
             !empty($summary['is_current_approved']) ? 'This model is already approved' : (!empty($summary['can_approve']) ? 'Model is ready for your approval' : 'Model approval is blocked'),
             $firstFailedCheck['label'] ?? (empty($summary['has_candidate']) ? 'No completed model is available to review.' : (!empty($summary['can_approve']) ? 'None of the required checks.' : 'Review the checks below for the remaining requirements.')),
-            !empty($summary['can_approve']) ? 'Review the evidence below before approving or rejecting.' : 'Check the failed requirements below. Training completion alone does not allow approval.'
+            !empty($summary['is_current_approved'])
+                ? 'Check product coverage and current forecasts before buying.'
+                : (!empty($summary['can_approve']) ? 'Review the evidence below before approving or rejecting.' : 'Check the failed requirements below. Training completion alone does not allow approval.'),
+            !empty($summary['is_current_approved']) ? app_url('components/report/predictions.php') : null,
+            'View forecasts'
         );
         ?>
 
@@ -154,7 +158,7 @@ $formatUnits = static function ($val): string {
             <div id="review-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
 
-        <!-- Key Metrics & Identities Grid -->
+        <details class="forecast-details"><summary>Model versions &amp; observation</summary>
         <div class="card-grid" style="margin-bottom: 1.5rem;">
             <article class="stat-card with-icon">
                 <span class="stat-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
@@ -184,10 +188,10 @@ $formatUnits = static function ($val): string {
                 <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Check Demand Forecast for current Product coverage' : 'Stock rules in effect until model approved') ?></div>
             </article>
         </div>
+        </details>
 
         <!-- Candidate Qualification & Status Banner -->
-        <section class="dashboard-section" aria-labelledby="status-heading">
-            <h2 id="status-heading"><i class="bi bi-shield-check" aria-hidden="true"></i> Candidate status</h2>
+            <details class="forecast-details"><summary id="status-heading">Approval status details</summary>
             <div style="margin: 0.75rem 0;">
                 <?php if ($summary['overall_status'] === 'awaiting_approval'): ?>
                     <span class="badge-status badge-awaiting-approval">Awaiting approval</span>
@@ -200,7 +204,7 @@ $formatUnits = static function ($val): string {
                     <p style="margin-top: 0.5rem;">Candidate is currently under evaluation. Required performance holdout checks or prospective observation days remain incomplete.</p>
                 <?php endif; ?>
             </div>
-        </section>
+            </details>
 
         <!-- Governance Actions & Operational Controls -->
         <section class="dashboard-section" aria-labelledby="actions-heading">
@@ -306,7 +310,6 @@ $formatUnits = static function ($val): string {
         </section>
 
         <!-- Activation Consequences & Operational Role -->
-        <section class="dashboard-section" aria-labelledby="consequences-heading">
 <details class="forecast-details"><summary id="consequences-heading">What approval changes</summary>
 
             <div class="incumbent-box" style="line-height: 1.6;">
@@ -314,7 +317,6 @@ $formatUnits = static function ($val): string {
                 <p style="margin-bottom: 0;"><strong>Operational coverage &amp; fallback:</strong> Approval enables forecast-backed suggestions for eligible products. Other products keep using stock rules.</p>
             </div>
         </details>
-</section>
 
         <!-- Product Coverage and Input Blockers -->
         <section class="dashboard-section" aria-labelledby="products-heading">
@@ -393,7 +395,6 @@ $formatUnits = static function ($val): string {
         </section>
 
         <!-- Supporting Technical Details & Holdout Metrics -->
-        <section class="dashboard-section" aria-labelledby="eval-heading">
 <details class="forecast-details"><summary id="eval-heading">Technical checks &amp; error metrics</summary>
 
             <p class="section-description">
@@ -445,10 +446,8 @@ $formatUnits = static function ($val): string {
                 </div>
             </div>
         </details>
-</section>
 
         <!-- Governance Rules and Limitations Box -->
-        <section class="dashboard-section" aria-labelledby="limitations-heading">
 <details class="forecast-details"><summary id="limitations-heading">Model limitations &amp; safeguards</summary>
 
             <ul class="limitations-list">
@@ -457,7 +456,6 @@ $formatUnits = static function ($val): string {
                 <?php endforeach; ?>
             </ul>
         </details>
-</section>
     </main>
 </div>
 </body>

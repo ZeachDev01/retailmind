@@ -63,6 +63,39 @@ const fixture = action => {
                 page.getByRole('button', {name: 'Log in', exact: true}).click(),
             ]);
             await page.waitForLoadState('domcontentloaded');
+            const skipGuidance = page.getByRole('button', {name: 'Skip guidance', exact: true});
+            if (await skipGuidance.isVisible()) {
+                await skipGuidance.click();
+                await skipGuidance.waitFor({state: 'hidden'});
+            }
+        };
+
+        const checkWorkflow = async (role, expectedRole) => {
+            const workflow = page.locator('.forecast-workflow');
+            assert.equal(await workflow.getAttribute('open'), null, 'Full workflow starts collapsed');
+            assert.ok((await page.locator('.forecast-role-context > p').innerText()).includes(expectedRole));
+            await workflow.locator('summary').click();
+            assert.equal(await page.getByRole('navigation', {name: 'Forecasting steps'}).isVisible(), true);
+            assert.equal(await workflow.locator('ol li small').count(), 5, 'Every step identifies its owner');
+            assert.equal(await workflow.locator('a[aria-current="step"]').count(), 0, 'Navigation does not claim task progress');
+            for (const width of [1440, 390, 320]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Open workflow fits ' + width);
+            }
+            await workflow.locator('summary').focus();
+            await page.keyboard.press('Enter');
+            assert.equal(await workflow.getAttribute('open'), null, 'Keyboard closes workflow');
+            await page.setViewportSize({width: 1440, height: 900});
+            if (process.env.FORECAST_SCREENSHOTS) {
+                await page.locator('h1').click();
+                await page.evaluate(() => window.scrollTo(0, 0));
+                fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
+                for (const width of [1440, 390]) {
+                    await page.setViewportSize({width, height: 900});
+                    await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, role + '-forecast-' + width + '.png'), fullPage: true, animations: 'disabled'});
+                }
+                await page.setViewportSize({width: 1440, height: 900});
+            }
         };
 
         // -------------------------------------------------------------
@@ -75,14 +108,19 @@ const fixture = action => {
 
         assert.match(await page.locator('h1').innerText(), /Demand Forecast/);
         assert.match(await page.locator('.page-subtitle').innerText(), /Expected sales/);
+        await checkWorkflow('admin', 'Administrator');
+        const related = page.locator('.forecast-related');
+        assert.equal(await related.getAttribute('open'), null, 'Extra destinations start collapsed');
+        await related.locator('summary').click();
         const navText = await page.locator('.forecasting-nav-chips').innerText();
         for (const label of ['Forecast Exceptions', 'Data Readiness', 'Model Review & Approval', 'Store Calendar', 'Promotions']) assert.ok(navText.includes(label));
+        await related.locator('summary').click();
         assert.equal(await page.locator('main a[href$="replenishment_queue.php"]').count(), 1, 'Replenishment navigation is not duplicated');
         assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 1);
         const s1Heading = page.locator('#heading-usability');
         const s2Heading = page.locator('#heading-actions');
         assert.match(await s1Heading.innerText(), /Forecast status/);
-        assert.match(await s2Heading.innerText(), /Needs attention/);
+        assert.match(await s2Heading.innerText(), /Forecast checks/);
         const performance = page.locator('details').filter({has: page.locator('#heading-performance')});
         assert.equal(await performance.getAttribute('open'), null, 'Technical performance starts collapsed');
         const productPosition = await page.locator('#product-forecasts').evaluate(el => el.getBoundingClientRect().top);
@@ -137,8 +175,9 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
 
         // Usability and sections visible
+        await checkWorkflow('inventory_manager', 'Inventory Manager');
         assert.match(await page.locator('#heading-usability').innerText(), /Forecast status/);
-        assert.match(await page.locator('#heading-actions').innerText(), /Needs attention/);
+        assert.match(await page.locator('#heading-actions').innerText(), /Forecast checks/);
         assert.equal(await page.locator('#heading-performance').isVisible(), false, 'Technical details remain collapsed for Inventory Manager');
 
         // Generate Now button MUST NOT be present for Inventory Manager
@@ -151,6 +190,7 @@ const fixture = action => {
 
         // Any action items show read-only explanations with Administrator responsible
         const imIssues = page.locator('.action-issue-card');
+        await page.locator('.forecast-actions > summary').click();
         if (await imIssues.count() > 0) {
             const imText = await imIssues.first().innerText();
             assert.match(imText, /Administrator/);
@@ -158,6 +198,8 @@ const fixture = action => {
 
         fixture('forecast_workspace');
         await page.reload();
+        assert.match(await page.locator('.forecast-status-content > p').innerText(), /Review expected sales and buying suggestions/);
+        assert.equal(await page.locator('.forecast-actions').getAttribute('open'), null, 'Supporting forecast checks start collapsed');
         assert.equal(await page.locator('.forecast-bar-row').count(), 1, 'Usable demand produces a real comparison chart');
         assert.equal(await page.locator('.page-heading-actions .btn').first().evaluate(el => el.scrollWidth <= el.clientWidth), true, 'Primary action text fits its button');
         const row = page.locator('#product-forecasts tbody tr').first();
@@ -173,6 +215,12 @@ const fixture = action => {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
             assert.equal(await page.locator('body.forecast-workspace').count(), 1);
+            if (process.env.FORECAST_SCREENSHOTS) {
+                for (const width of [1440, 390]) {
+                    await page.setViewportSize({width, height: 900});
+                    await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'admin-' + path.basename(route, '.php') + '-' + width + '.png'), fullPage: true, animations: 'disabled'});
+                }
+            }
             if (route.includes('data_readiness')) {
                 await page.getByText('How training eligibility works', {exact: true}).click();
                 eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
@@ -186,8 +234,37 @@ const fixture = action => {
         for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php', 'report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php']) {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
+            const studio = page.getByRole('navigation', {name: 'Forecasting workspace'});
+            assert.equal(await studio.locator('a').count(), 6, 'All forecasting destinations remain reachable');
+            assert.equal(await studio.locator('[aria-current="page"]').count(), 1, 'Only the current page is highlighted');
+            assert.ok((await studio.locator('[aria-current="page"]').getAttribute('href')).endsWith(route));
+            const help = page.getByRole('button', {name: 'About the forecasting workflow'});
+            await help.focus();
+            assert.equal(await page.locator('#forecast-process-help').isVisible(), true, 'Workflow help opens on keyboard focus');
+            await page.keyboard.press('Escape');
+            assert.equal(await page.locator('#forecast-process-help').isVisible(), false, 'Escape dismisses workflow help');
+            if (route.includes('data_readiness')) {
+                assert.equal(await page.locator('.forecast-readiness-visual meter').count(), 3);
+                const row = page.locator('.readiness-catalog tbody tr').first();
+                await page.setViewportSize({width: 1440, height: 900});
+                assert.ok(await row.evaluate(el => el.getBoundingClientRect().height) <= 80, 'Closed readiness rows stay compact');
+                const details = row.locator('details');
+                assert.equal(await details.getAttribute('open'), null);
+                await details.locator('summary').focus();
+                await page.keyboard.press('Enter');
+                assert.match(await details.innerText(), /Recent 28 days:|Three test periods:/);
+                await page.keyboard.press('Enter');
+                const rowHelp = row.locator('.info-tooltip-trigger');
+                await rowHelp.focus();
+                assert.equal(await row.locator('[role="tooltip"]').isVisible(), true);
+                await page.keyboard.press('Escape');
+                assert.equal(await row.locator('[role="tooltip"]').isVisible(), false);
+            }
+
             for (const theme of ['light', 'dark']) {
                 await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                assert.equal(await studio.locator('[aria-current="page"]').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'Active navigation retains readable text in ' + theme);
+                await page.locator('h1').click();
                 for (const width of [1440, 640, 390, 320]) {
                     await page.setViewportSize({width, height: 900});
                     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width + ' in ' + theme);

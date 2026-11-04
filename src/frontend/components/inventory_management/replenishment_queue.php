@@ -122,7 +122,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <?php forecast_status_summary(
                     $coverage['is_guidance_usable'] ? 'Buying suggestions include forecast evidence' : 'Buying suggestions use stock rules',
                     $coverage['is_guidance_usable'] ? 'Some products may still have missing forecasts. Check each row’s basis.' : 'Usable current forecasts are not available for buying guidance.',
-                    'Review stock and the suggested quantity. Buying is your decision; record goods through Stock Receiving after they arrive.'
+                    $canReceive ? 'Review suggested quantities before buying. Record bought goods in Stock Receiving.' : 'Review stock and suggested quantities. The Inventory Manager records bought goods.'
                 ); ?>
             <?php endif; ?>
             <?php if ($error): ?>

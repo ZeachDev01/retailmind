@@ -137,7 +137,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <div class="topbar">
             <div>
                 <h1>Import Sales History</h1>
-                <p class="page-subtitle">Upload this Store's past daily sales totals for model retraining.</p>
+                <p class="page-subtitle">Add past daily sales from this Store.</p>
             </div>
             <div class="topbar-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">
@@ -147,7 +147,6 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         </div>
 
         <?php forecast_workflow('data'); ?>
-        <p class="forecast-notice">Import daily sales here, then <a href="../report/data_readiness.php">check whether the records are ready</a>. Importing does not train or approve a model.</p>
         <?php if ($message): ?>
             <div class="alert tag-success" role="status">
                 <i class="bi bi-check-circle" aria-hidden="true"></i>
@@ -163,8 +162,8 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <?php endif; ?>
 
         <section class="dashboard-section" aria-labelledby="upload-heading">
-            <h2 id="upload-heading">Upload sales history</h2>
-            <p class="section-description">Adds forecasting history only. Inventory, receipts, and revenue stay unchanged. Train a model separately after importing.</p>
+            <h2 id="upload-heading"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Upload sales history <?php forecast_help('import-scope-help', 'This adds history only; it does not change stock, receipts or revenue, or train a model.', 'About importing history'); ?></h2>
+            <ol class="forecast-import-steps" aria-label="Import steps"><li><span>1</span> Choose CSV</li><li><span>2</span> Preview &amp; validate</li><li><span>3</span> Confirm import</li></ol>
             <form method="post" enctype="multipart/form-data">
                 <?= csrf_field() ?>
                 <div class="form-group">

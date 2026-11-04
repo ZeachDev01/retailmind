@@ -123,6 +123,8 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                         <?= csrf_field() ?>
                         <button type="submit" name="action" value="generate" class="btn btn-secondary" <?= $isGenerating ? 'disabled' : '' ?>><?= $isGenerating ? 'Generating...' : 'Generate forecasts' ?></button>
                     </form>
+                <?php elseif (has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY)): ?>
+                    <a class="btn btn-primary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review buying suggestions</a>
                 <?php endif; ?>
             </div>
         </header>
@@ -132,8 +134,18 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         $nextUrl = $primaryIssue['action_url'] ?? null;
         $nextLabel = $primaryIssue['action_label'] ?? 'Check sales data';
         $nextText = $primaryIssue ? $primaryIssue['responsible_role'] . ': ' . $nextLabel . '.' : 'Check sales data and model approval.';
+        if (in_array($primaryIssue['severity'] ?? '', ['healthy', 'success'], true)) {
+            $nextText = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY)
+                ? 'Review expected sales and buying suggestions.'
+                : 'Review product forecasts below. No forecast issues need action.';
+            $nextUrl = null;
+        }
         if (empty($coverage['approved_model_version'])) {
-            $nextText = 'The Super Administrator checks training results; the Administrator reviews eligible Store models.';
+            $nextText = has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
+                ? 'Check the training results before sending a model for Administrator review.'
+                : (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)
+                    ? 'Review the candidate model and its approval requirements.'
+                    : 'Use stock rules for buying while the Administrator reviews the model.');
             $nextUrl = has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
                 ? app_url('components/system_administrator/ml_settings.php')
                 : (has_capability(RoleCapabilityPolicy::APPROVE_MODELS) ? app_url('components/administrator/model_review.php') : null);
@@ -147,6 +159,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             $nextLabel
         );
         ?>
+        <details class="forecast-related"><summary>More forecasting tools</summary>
         <nav class="forecasting-nav-chips" aria-label="Forecasting Destinations">
             <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast Exceptions</a>
             <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data Readiness</a>
@@ -158,6 +171,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php')) ?>">Store Calendar</a>
             <a href="<?= htmlspecialchars(app_url('components/inventory_management/promotions.php')) ?>">Promotions</a>
         </nav>
+        </details>
         <?php if ($isDemoMode): ?>
             <div class="forecast-notice" role="status"><strong>Historical demo · <?= htmlspecialchars($demoSource) ?></strong> — not current Store forecasts.</div>
         <?php endif; ?>
@@ -178,8 +192,8 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <?php if ($coverage['is_observation_mode'] || $coverage['is_recommendations_suspended']): ?>
             <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
         <?php endif; ?>
-        <section class="forecast-actions" aria-labelledby="heading-actions">
-            <h2 id="heading-actions">Needs attention</h2>
+        <details class="forecast-details forecast-actions" <?= array_filter($operationalIssues, static fn(array $issue): bool => ($issue['severity'] ?? '') === 'critical') ? 'open' : '' ?>>
+            <summary id="heading-actions">Forecast checks &middot; <?= count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true))) ?> to review</summary>
             <div role="list">
             <?php foreach ($operationalIssues as $issueIndex => $issue):
                 $sevBadgeClass = match($issue['severity'] ?? 'info') {
@@ -201,7 +215,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </div>
             <?php endforeach; ?>
             </div>
-        </section>
+        </details>
         <?php require __DIR__ . '/forecast_stock_chart.php'; ?>
         <div class="forecast-panel" id="product-forecasts">
             <div class="forecast-panel-heading">

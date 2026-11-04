@@ -60,7 +60,7 @@ if ($search !== '' || $statusFilter !== '') {
 }
 
 // Pagination handling
-$perPage = 15;
+$perPage = 25;
 $totalFiltered = count($filteredRows);
 $totalPages = max(1, (int)ceil($totalFiltered / $perPage));
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10000]]) ?: 1;
@@ -166,7 +166,7 @@ function build_query(array $params): string {
         <header class="page-heading">
             <div>
                 <h1>Forecast Data Readiness</h1>
-                <p class="page-subtitle">See what is ready, what is missing, and what to do next.</p>
+                <p class="page-subtitle">Check which products have enough sales data for training.</p>
             </div>
             <div class="page-heading-actions">
                 <?php if (has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)): ?>
@@ -186,18 +186,33 @@ function build_query(array $params): string {
         forecast_status_summary(
             $rows ? "{$trainingReadyCount} of " . count($rows) . ' products ready to train' : 'No product readiness results',
             $firstBlocker ? $firstBlocker['reason'] . (count($blockedRows) > 1 ? ' Check the product rows for other blockers.' : '') : ($rows ? 'None in the sales data checks. Model quality and approval are separate.' : 'No product history is available to check.'),
-            $firstBlocker ? $firstBlocker['next'] : ($rows ? 'The Super Administrator can review Model Training.' : 'Add products and record or import their daily sales.')
+            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
+                ? ($firstBlocker ? $firstBlocker['next'] : ($rows ? 'Sales data is ready. Review training before starting a new model.' : 'Add products and record or import their daily sales.'))
+                : 'The Super Administrator handles training data. Use current forecasts or stock rules for Store work.',
+            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
+                ? app_url('components/system_administrator/' . ($firstBlocker || !$rows ? 'forecast_import.php' : 'ml_settings.php'))
+                : app_url('components/report/predictions.php'),
+            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
+                ? ($firstBlocker || !$rows ? 'Import sales history' : 'Review training')
+                : 'View forecasts'
         );
         ?>
         <?php if ($isHistoricalDemo): ?>
             <p class="forecast-notice"><strong>Historical demo.</strong> Old records can test past predictions; they do not fill today’s missing dates. <a href="forecast_replay.php">See the historical comparison</a>.</p>
         <?php endif; ?>
-        <ul class="forecast-data-checks" aria-label="Three required data checks">
-            <li><strong>Enough history</strong><?= $historyReadyCount ?> / <?= count($rows) ?> products have 140 usable days</li>
-            <li><strong>Recent records</strong><?= $recentReadyCount ?> / <?= count($rows) ?> products support the latest 28 days</li>
-            <li><strong>Testing records</strong><?= $testingReadyCount ?> / <?= count($rows) ?> products support three 28-day tests</li>
-        </ul>
-
+        <section class="forecast-readiness-visual" aria-label="Three required data checks">
+            <?php foreach ([
+                ['history', 'Enough history', $historyReadyCount, '140 usable sales days per product.', 'clock-history'],
+                ['recent', 'Recent records', $recentReadyCount, 'Supported records for the latest 28 days.', 'calendar-check'],
+                ['testing', 'Testing records', $testingReadyCount, 'Three supported 28-day testing periods.', 'clipboard-check'],
+            ] as [$check, $label, $passed, $help, $icon]): ?>
+                <div>
+                    <h2><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i> <?= $label ?><?php forecast_help('check-' . $check, $help, 'About ' . strtolower($label)); ?></h2>
+                    <strong><?= $passed ?><span> / <?= count($rows) ?> products</span></strong>
+                    <meter min="0" max="<?= max(1, count($rows)) ?>" value="<?= $passed ?>" aria-label="<?= $label ?>: <?= $passed ?> of <?= count($rows) ?> products"><?= $passed ?> / <?= count($rows) ?></meter>
+                </div>
+            <?php endforeach; ?>
+        </section>
         <details class="forecast-details">
             <summary>How training eligibility works</summary>
             <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
@@ -240,25 +255,18 @@ function build_query(array $params): string {
             </form>
 
             <div class="table-wrap" role="region" aria-label="Product readiness catalog" tabindex="0">
-                <table class="data-table">
+                <table class="data-table readiness-catalog">
                     <thead>
                         <tr>
                             <th scope="col">Product</th>
-                            <th scope="col">What is happening</th>
-                            <th scope="col">Required data checks</th>
-                            <th scope="col">History dates</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Usable days</th>
+                            <th scope="col">Data checks</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($pagedRows as $row):
-                            $status = $row['forecast_status'] ?? 'Insufficient Data';
                             $readinessState = forecast_readiness_state($row);
-                            $badgeClass = match ($status) {
-                                'Forecast Generated' => 'status-badge-gen',
-                                'Ready for training', 'Ready for Forecasting' => 'status-badge-ready',
-                                'Model Requires Retraining' => 'status-badge-retrain',
-                                default => 'status-badge-need',
-                            };
                             $firstSale = $row['first_sale_date'] ?? null;
                             $lastSale = $row['last_sale_date'] ?? null;
                             $historyRange = ($firstSale && $lastSale)
@@ -271,32 +279,33 @@ function build_query(array $params): string {
                                     <span class="u-text-muted" style="font-size:0.8rem;"><?= htmlspecialchars($row['sku']) ?> &middot; <?= htmlspecialchars($row['category']) ?></span>
                                 </td>
                                 <td>
-                                    <strong><?= htmlspecialchars($readinessState['label']) ?></strong>
-                                    <p><?= htmlspecialchars($readinessState['reason']) ?></p>
-                                    <details>
-                                        <summary>Training details</summary>
-                                        <p><strong>Next:</strong> <?= htmlspecialchars($readinessState['next']) ?></p>
-                                        <p>Checked through <?= htmlspecialchars($row['eligibility_through_date']) ?></p>
-                                        <p>Training Eligibility: <?= $row['training_eligible'] ? 'Ready for training' : 'Insufficient Data' ?></p>
-                                        <?php foreach (array_merge($row['eligibility_blockers'], $row['eligibility_actions']) as $detail): ?>
-                                            <p><?= htmlspecialchars($detail) ?></p>
-                                        <?php endforeach; ?>
-                                        <p><?= (int)$row['days_with_sales'] ?> days with sales; <?= (int)$row['genuine_zero_days'] ?> confirmed zero-sales days; <?= number_format((int)$row['total_qty_sold']) ?> units sold.</p>
-                                    </details>
-                                    <?php if (!empty($row['forecast_reason'])): ?>
-                                        <?php forecast_help('readiness-' . (int)$row['product_id'], $row['forecast_reason'], 'Readiness details for ' . $row['product_name']); ?>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="readiness-checks">
-                                        <span>Enough history <strong><?= (int)$row['accumulated_usable_days'] >= (int)$row['required_usable_days'] ? 'Passed' : 'Missing' ?></strong></span>
-                                        <small><?= (int)$row['accumulated_usable_days'] ?> / <?= (int)$row['required_usable_days'] ?> usable days</small>
-                                        <span>Recent 28 days <strong><?= $row['has_feature_window'] ? 'Passed' : 'Blocked' ?></strong></span>
-                                        <span>Three test periods <strong><?= $row['has_holdout_coverage'] ? 'Passed' : 'Blocked' ?></strong></span>
+                                    <div class="readiness-status-line">
+                                        <span><?= htmlspecialchars($readinessState['label']) ?></span>
+                                        <?php forecast_help('readiness-' . (int)$row['product_id'], $readinessState['reason'] . ' ' . $readinessState['next'], 'Readiness details for ' . $row['product_name']); ?>
                                     </div>
                                 </td>
+                                <td class="readiness-days">
+                                    <span><?= (int)$row['accumulated_usable_days'] ?> / <?= (int)$row['required_usable_days'] ?></span>
+                                    <meter min="0" max="<?= max(1, (int)$row['required_usable_days']) ?>" value="<?= min((int)$row['accumulated_usable_days'], max(1, (int)$row['required_usable_days'])) ?>" aria-label="Usable sales days for <?= htmlspecialchars($row['product_name']) ?>"></meter>
+                                </td>
                                 <td>
-                                    <?= $historyRange ?>
+                                    <details class="readiness-row-details">
+                                        <summary><span class="readiness-check-icons" aria-label="Recent records and testing coverage">
+                                            <i class="bi bi-calendar-<?= $row['has_feature_window'] ? 'check' : 'x' ?>" role="img" aria-label="Recent 28 days: <?= $row['has_feature_window'] ? 'Passed' : 'Blocked' ?>"></i>
+                                            <i class="bi bi-clipboard-<?= $row['has_holdout_coverage'] ? 'check' : 'x' ?>" role="img" aria-label="Three test periods: <?= $row['has_holdout_coverage'] ? 'Passed' : 'Blocked' ?>"></i>
+                                        </span> Details</summary>
+                                        <div class="readiness-row-evidence">
+                                            <p>Recent 28 days: <strong><?= $row['has_feature_window'] ? 'Passed' : 'Blocked' ?></strong></p>
+                                            <p>Three test periods: <strong><?= $row['has_holdout_coverage'] ? 'Passed' : 'Blocked' ?></strong></p>
+                                            <p>Checked through <?= htmlspecialchars($row['eligibility_through_date']) ?></p>
+                                            <p>History dates: <?= $historyRange ?></p>
+                                            <?php foreach (array_merge($row['eligibility_blockers'], $row['eligibility_actions']) as $detail): ?>
+                                                <p><?= htmlspecialchars($detail) ?></p>
+                                            <?php endforeach; ?>
+                                            <p><?= (int)$row['days_with_sales'] ?> days with sales; <?= (int)$row['genuine_zero_days'] ?> confirmed zero-sales days; <?= number_format((int)$row['total_qty_sold']) ?> units sold.</p>
+                                            <?php if (!empty($row['forecast_reason'])): ?><p><?= htmlspecialchars($row['forecast_reason']) ?></p><?php endif; ?>
+                                        </div>
+                                    </details>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

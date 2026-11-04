@@ -256,7 +256,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         <div class="topbar">
             <div>
                 <h1>Model Training</h1>
-                <p class="page-subtitle">Train a candidate, review its results, and schedule retraining.</p>
+                <p class="page-subtitle">Prepare a new model for Administrator review.</p>
             </div>
             <div class="ml-page-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a>
@@ -292,8 +292,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         <section class="dashboard-section" aria-labelledby="training-title">
             <div class="section-header">
                 <div>
-                    <h2 id="training-title">Candidate model & training</h2>
-                    <p class="section-description">Training learns sales patterns. Approval decides whether the model may be used.</p>
+                    <h2 id="training-title"><i class="bi bi-cpu" aria-hidden="true"></i> Candidate model &amp; training <?php forecast_help('training-scope-help', 'Training creates a candidate. It does not replace the approved model.', 'About candidate training'); ?></h2>
                 </div>
             </div>
 

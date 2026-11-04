@@ -57,7 +57,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
 
         <section class="forecast-overview" aria-label="Forecast exception summary">
             <div><small>Using stock rules</small><strong><?= count($exceptions) ?> products</strong></div>
-            <div class="forecast-coverage"><small>With usable forecasts</small><strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products</strong> <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></div>
+            <div class="forecast-coverage"><small>With usable forecasts</small><strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products</strong> <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?><meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Products with usable forecasts"><?= (int)$coverage['forecast_backed_count'] ?> / <?= (int)$coverage['scope_count'] ?></meter></div>
             <div><small>Store status</small><strong><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></strong><small><?= $coverage['is_guidance_usable'] ? 'Guidance usable today' : 'Stock rules only' ?></small></div>
         </section>
 

@@ -29,27 +29,63 @@ function forecast_readiness_state(array $row): array
 
 function forecast_workflow(string $current): void
 {
+    if (current_role() === 'super_admin') {
+        $pages = [
+            ['forecast_import.php', 'Import history', 'cloud-arrow-up', 'system_administrator'],
+            ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
+            ['ml_settings.php', 'Model training', 'cpu', 'system_administrator'],
+            ['forecast_analytics.php', 'Analytics', 'bar-chart-line', 'report'],
+            ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
+            ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],
+        ];
+        $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        ?>
+        <nav class="forecast-studio-nav" aria-label="Forecasting workspace">
+            <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>
+                <a href="<?= htmlspecialchars(app_url('components/' . $folder . '/' . $file)) ?>" <?= $page === $file ? 'aria-current="page"' : '' ?>>
+                    <i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span>
+                </a>
+            <?php endforeach; ?>
+        </nav>
+        <div class="forecast-studio-caption"><span>Sales data <i class="bi bi-arrow-right" aria-hidden="true"></i> Model <i class="bi bi-arrow-right" aria-hidden="true"></i> Forecast</span>
+            <?php forecast_help('forecast-process-help', 'Import history, check data readiness, then train a candidate. The Administrator reviews approval. Analytics checks results; Exceptions identifies products needing attention.', 'About the forecasting workflow'); ?>
+        </div>
+        <?php
+        return;
+    }
+    $role = current_role() === 'super_admin'
+        ? ['Super Administrator', 'Prepare sales data and train models.']
+        : (current_role() === 'admin'
+            ? ['Administrator', 'Review models and monitor Store forecasts.']
+            : ['Inventory Manager', 'Check expected sales and plan what to buy.']);
     $steps = [
-        ['data', 'Check sales data', 'report/data_readiness.php', \App\Authorization\RoleCapabilityPolicy::VIEW_FORECASTS, 'Store staff'],
+        ['data', 'Check sales data', 'report/data_readiness.php', \App\Authorization\RoleCapabilityPolicy::VIEW_FORECASTS, 'Super Administrator'],
         ['train', 'Train model', 'system_administrator/ml_settings.php', \App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS, 'Super Administrator'],
         ['review', 'Review & approve', 'administrator/model_review.php', \App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS, 'Administrator'],
         ['forecast', 'See expected sales', 'report/predictions.php', \App\Authorization\RoleCapabilityPolicy::VIEW_FORECASTS, 'Store staff'],
         ['buy', 'Plan buying', 'inventory_management/replenishment_queue.php', null, 'Inventory Manager'],
     ];
     ?>
-    <nav class="forecast-workflow" aria-label="Forecasting steps">
+    <div class="forecast-role-context">
+        <p><strong><?= htmlspecialchars($role[0]) ?></strong><span><?= htmlspecialchars($role[1]) ?></span></p>
+        <details class="forecast-workflow">
+        <summary>View workflow</summary>
+        <nav aria-label="Forecasting steps">
+        <p class="forecast-workflow-note">Model setup and approval happen when needed. Scheduled jobs update forecasts; staff review the results.</p>
         <ol>
             <?php foreach ($steps as $index => [$key, $label, $path, $capability, $owner]): ?>
                 <li>
                     <?php if ($capability === null || has_capability($capability)): ?>
-                        <a href="<?= htmlspecialchars(app_url('components/' . $path)) ?>" <?= $key === $current ? 'aria-current="step"' : '' ?>><span><?= $index + 1 ?></span><?= htmlspecialchars($label) ?></a>
+                        <a href="<?= htmlspecialchars(app_url('components/' . $path)) ?>" <?= $key === $current ? 'aria-current="location"' : '' ?>><span class="forecast-step-number" aria-hidden="true"><?= $index + 1 ?></span><span><?= htmlspecialchars($label) ?><small><?= htmlspecialchars($owner) ?></small></span></a>
                     <?php else: ?>
-                        <span class="forecast-workflow-owner"><span><?= $index + 1 ?></span><?= htmlspecialchars($label) ?><small><?= htmlspecialchars($owner) ?></small></span>
+                        <span class="forecast-workflow-owner"><span class="forecast-step-number" aria-hidden="true"><?= $index + 1 ?></span><span><?= htmlspecialchars($label) ?><small><?= htmlspecialchars($owner) ?></small></span></span>
                     <?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ol>
-    </nav>
+        </nav>
+        </details>
+    </div>
     <?php
 }
 
@@ -57,10 +93,12 @@ function forecast_status_summary(string $title, string $blocker, string $next, ?
 {
     ?>
     <section class="forecast-status-summary" aria-label="Current forecasting status">
-        <h2><?= htmlspecialchars($title) ?></h2>
-        <p><strong>Blocking this:</strong> <?= htmlspecialchars($blocker) ?></p>
-        <p><strong>Next:</strong> <?= htmlspecialchars($next) ?></p>
-        <?php if ($url): ?><a class="btn btn-secondary" href="<?= htmlspecialchars($url) ?>"><?= htmlspecialchars($linkLabel) ?></a><?php endif; ?>
+        <div class="forecast-status-content">
+            <h2><i class="bi bi-activity" aria-hidden="true"></i> <?= htmlspecialchars($title) ?></h2>
+            <p><?= htmlspecialchars($next) ?></p>
+            <?php forecast_help('forecast-status-help', $blocker, 'Status details'); ?>
+        </div>
+        <?php if ($url): ?><a class="btn btn-primary" href="<?= htmlspecialchars($url) ?>"><?= htmlspecialchars($linkLabel) ?></a><?php endif; ?>
     </section>
     <?php
 }

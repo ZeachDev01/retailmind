@@ -102,7 +102,7 @@ const fixture = action => {
         await page.goto(origin + '/components/report/data_readiness.php');
         await page.getByText('How training eligibility works', {exact: true}).click();
         assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
-        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in Model Training');
+        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 1, 'Readiness gives the authorized technical owner a direct next action');
         const after = JSON.parse(fixture('state'));
         assert.equal(after.sales, before.sales, 'History imports must not create receipts');
         assert.equal(after.stock, before.stock, 'History imports must not change stock');
