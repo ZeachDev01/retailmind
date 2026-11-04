@@ -1,0 +1,590 @@
+[
+  {
+    "image": 1,
+    "paragraph": "P0001",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-01.jpeg",
+    "before": "",
+    "after": "  "
+  },
+  {
+    "image": 2,
+    "paragraph": "P0138",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-02.png",
+    "before": "Zoho Inventory is an online inventory management tool popular among small and medium retail businesses. It helps users monitor stock levels, handle sales orders, get alerts for low stock, and create basic inventory reports. The system boosts efficiency by minimizing manual data entry and making inventory tracking easier. However, it lacks AI-powered demand forecasting, which can limit its usefulness for large department stores that depend on predictive analytics for precise demand planning. Figure 2 Zoho Inventory Dashboard",
+    "after": "  "
+  },
+  {
+    "image": 3,
+    "paragraph": "P0154",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-03.jpeg",
+    "before": " Figure 3 SAP Inventory Management System",
+    "after": "  "
+  },
+  {
+    "image": 4,
+    "paragraph": "P0174",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-04.jpeg",
+    "before": " Figure 4 Oracle NetSuite Inventory Management",
+    "after": "  "
+  },
+  {
+    "image": 5,
+    "paragraph": "P0199",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-05.png",
+    "before": "  Figure 5",
+    "after": " \n "
+  },
+  {
+    "image": 6,
+    "paragraph": "P0233",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-06.png",
+    "before": "The development of the proposed system follows the Agile Scrum software development methodology, which supports an iterative and collaborative approach to system development. Through incremental development cycles, this methodology allows the proponents to continuously refine the system based on stakeholder feedback and changing requirements. It also helps ensure that the proposed system remains aligned with the operational needs of Shalom Store while maintaining flexibility throughout the development process.  Figure 6",
+    "after": "  "
+  },
+  {
+    "image": 7,
+    "paragraph": "P0259",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-07.png",
+    "before": "3.1.2 Current Technical Situation Figure 7 Current Technical Situation",
+    "after": "  "
+  },
+  {
+    "image": 8,
+    "paragraph": "P0304",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-08.png",
+    "before": "3.3 Design of Software, Systems, Product, and/or Processes 3.3.1 System Architecture Figure 8",
+    "after": "  "
+  },
+  {
+    "image": 9,
+    "paragraph": "P0319",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-09.png",
+    "before": "The forecasting scheduler queues eligible jobs for the Python worker. The worker uses historical evidence and the 14 specified model features to train and evaluate candidates or generate daily forecasts. The PHP application reads persisted forecast and evaluation records for display. Inventory and sales workflows use separate transaction services and can continue during forecasting work. Figure 9 Context Diagram",
+    "after": "  "
+  },
+  {
+    "image": 10,
+    "paragraph": "P0336",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-10.png",
+    "before": "3.3.3 Data Flow Diagram Figure 10 Data Flow Diagram",
+    "after": "  "
+  },
+  {
+    "image": 11,
+    "paragraph": "P0351",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-11.png",
+    "before": "  3.3.4 Use Case Diagram Figure 11",
+    "after": "The figure shows the use cases of the RetailMind system and the functions available to the System Administrator, Cashier, and Inventory Manager. It illustrates how each user role interacts with specific system features, including user management, sales processing, inventory monitoring, demand forecasting, replenishment recommendations, and report generation.  "
+  },
+  {
+    "image": 12,
+    "paragraph": "P0358",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-12.png",
+    "before": "3.3.5 Entity Relationship Diagram Figure 12 Entity Relationship Diagram",
+    "after": "This Figure 11 illustrates the logical structure of the RetailMind database and the relationships among its core entities. The ERD shows how administrative, inventory, and sales data are interconnected through entities such as users, roles, products, inventory, sales, forecasts, and reports. It highlights primary and foreign key relationships that support user management, inventory tracking, demand forecasting, sales processing, and system auditing. Overall, the diagram demonstrates how data flows across different system modules while maintaining data integrity and supporting efficient retail operations.  Table 5\nData Dictionary"
+  },
+  {
+    "image": 13,
+    "paragraph": "P0440",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-13.png",
+    "before": " 3.4.4 Description of the Prototype \tThe following figures illustrate the updated user interface of the RetailMind prototype across its role-based workspaces (Super Administrator, Administrator, Inventory Manager, and Cashier), highlighting inventory management, point-of-sale checkout, and cold-start demand forecasting safeguards.",
+    "after": "Figure 13: Landing and Staff Login Page \tSecure sign-in screen used by authorized Store personnel to authenticate and access their assigned workspace for inventory, sales, and replenishment operations. "
+  },
+  {
+    "image": 14,
+    "paragraph": "P0442",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-14.jpeg",
+    "before": "\tThe following figures illustrate the updated user interface of the RetailMind prototype across its role-based workspaces (Super Administrator, Administrator, Inventory Manager, and Cashier), highlighting inventory management, point-of-sale checkout, and cold-start demand forecasting safeguards.  Figure 13: Landing and Staff Login Page",
+    "after": " Figure 14: Admin Dashboard (Store Overview) \tCentral administrative control panel displaying store status alerts, cash variances, pending Stock Issues, current Fiscal Period, and daily, weekly, and monthly sales and gross profit summaries."
+  },
+  {
+    "image": 15,
+    "paragraph": "P0445",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-15.png",
+    "before": "\tSecure sign-in screen used by authorized Store personnel to authenticate and access their assigned workspace for inventory, sales, and replenishment operations.  Figure 14: Admin Dashboard (Store Overview)",
+    "after": " Figure 15: Operational Audit Log Viewer \tA filterable activity timeline displaying recorded store actions, active users, logged modules, and event timestamps to support operational accountability and security traceability."
+  },
+  {
+    "image": 16,
+    "paragraph": "P0448",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-16.png",
+    "before": "\tCentral administrative control panel displaying store status alerts, cash variances, pending Stock Issues, current Fiscal Period, and daily, weekly, and monthly sales and gross profit summaries.  Figure 15: Operational Audit Log Viewer",
+    "after": " Figure 16: Manage Store Staff \tStaff account management interface allowing the Administrator to create accounts, assign store roles, monitor password status, and manage operational access permissions."
+  },
+  {
+    "image": 17,
+    "paragraph": "P0452",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-17.png",
+    "before": " Figure 16: Manage Store Staff \tStaff account management interface allowing the Administrator to create accounts, assign store roles, monitor password status, and manage operational access permissions.",
+    "after": "Figure 17: Inventory Stock Overview \tSummary dashboard presenting total products, units on hand, out-of-stock and low-stock counts, batch expiration alerts, stock health distribution, and demand forecast versus current stock status. "
+  },
+  {
+    "image": 18,
+    "paragraph": "P0455",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-18.png",
+    "before": " Figure 17: Inventory Stock Overview \tSummary dashboard presenting total products, units on hand, out-of-stock and low-stock counts, batch expiration alerts, stock health distribution, and demand forecast versus current stock status.",
+    "after": "Figure 18: Products Management \tProduct catalog table displaying item details, side-by-side Cost Price, Selling Price, and computed unit Profit, current stock levels, reorder thresholds, and stock status indicators. "
+  },
+  {
+    "image": 19,
+    "paragraph": "P0458",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-19.png",
+    "before": " Figure 18: Products Management \tProduct catalog table displaying item details, side-by-side Cost Price, Selling Price, and computed unit Profit, current stock levels, reorder thresholds, and stock status indicators.",
+    "after": "Figure 19: Transaction History \tChronological transaction log allowing authorized users to filter and review recorded sales, cash refunds, drawer movements, and cashier shifts across selected date ranges. "
+  },
+  {
+    "image": 20,
+    "paragraph": "P0461",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-20.png",
+    "before": " Figure 19: Transaction History \tChronological transaction log allowing authorized users to filter and review recorded sales, cash refunds, drawer movements, and cashier shifts across selected date ranges.",
+    "after": "Figure 20: Receipt History \tReceipt management interface where authorized users can filter, view, and reprint finalized sales receipts while tracking linked cash refunds and correction records without altering the original sale. "
+  },
+  {
+    "image": 21,
+    "paragraph": "P0464",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-21.png",
+    "before": " Figure 20: Receipt History \tReceipt management interface where authorized users can filter, view, and reprint finalized sales receipts while tracking linked cash refunds and correction records without altering the original sale.",
+    "after": "Figure 21: Direct Stock Receiving \tStock receiving workspace where the Inventory Manager scans barcodes or selects products from the catalog to record incoming supplier deliveries, package quantities, and batch details. "
+  },
+  {
+    "image": 22,
+    "paragraph": "P0467",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-22.jpeg",
+    "before": " Figure 21: Direct Stock Receiving \tStock receiving workspace where the Inventory Manager scans barcodes or selects products from the catalog to record incoming supplier deliveries, package quantities, and batch details.",
+    "after": "Figure 22: Demand Forecast \tThe Demand Forecast workspace displays model generation status, forecast origin, and active algorithm readiness. During initial store deployment (cold-start phase), forecast status remains \"Unavailable\" until products accumulate at least 56 days of recorded sales history, while the Replenishment Recommendations module provides Stock-Rule buying guidance. "
+  },
+  {
+    "image": 23,
+    "paragraph": "P0470",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-23.png",
+    "before": " Figure 22: Demand Forecast \tThe Demand Forecast workspace displays model generation status, forecast origin, and active algorithm readiness. During initial store deployment (cold-start phase), forecast status remains \"Unavailable\" until products accumulate at least 56 days of recorded sales history, while the Replenishment Recommendations module provides Stock-Rule buying guidance.",
+    "after": "Figure 23: Inventory Counts and Stock Issue Reviews \tInventory control workspace used to record physical stock counts, document count discrepancies for approval, and review damaged, missing, or expired Stock Issues submitted by staff. "
+  },
+  {
+    "image": 24,
+    "paragraph": "P0473",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-24.png",
+    "before": " Figure 23: Inventory Counts and Stock Issue Reviews \tInventory control workspace used to record physical stock counts, document count discrepancies for approval, and review damaged, missing, or expired Stock Issues submitted by staff.",
+    "after": "Figure 24: Report Generation \tReporting interface that allows authorized users to filter, run, export to CSV, and print daily, weekly, and monthly sales, inventory, and demand forecasting reports. "
+  },
+  {
+    "image": 25,
+    "paragraph": "P0476",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-25.jpeg",
+    "before": " Figure 24: Report Generation \tReporting interface that allows authorized users to filter, run, export to CSV, and print daily, weekly, and monthly sales, inventory, and demand forecasting reports.",
+    "after": "Figure 25: Point of Sale (POS) \tCashier checkout workspace supporting barcode scanning and manual product lookup, real-time cart total and discount calculation, shift verification, and thermal receipt printing. "
+  },
+  {
+    "image": 26,
+    "paragraph": "P0479",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-26.png",
+    "before": " Figure 25: Point of Sale (POS) \tCashier checkout workspace supporting barcode scanning and manual product lookup, real-time cart total and discount calculation, shift verification, and thermal receipt printing.",
+    "after": "Figure 22A: Replenishment Recommendations (Cold-Start Stock-Rule Guidance) \tDisplays current on-hand stock alongside advisory Stock-Rule Suggestions while 28-day AI expected sales remain \u201cUnavailable\u201d during the initial store data collection period. "
+  },
+  {
+    "image": 27,
+    "paragraph": "P0482",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-27.jpeg",
+    "before": " Figure 22A: Replenishment Recommendations (Cold-Start Stock-Rule Guidance) \tDisplays current on-hand stock alongside advisory Stock-Rule Suggestions while 28-day AI expected sales remain \u201cUnavailable\u201d during the initial store data collection period.",
+    "after": "Figure 22B: Forecast Exceptions Queue \tHighlights products needing manual review when validation WAPE exceeds the 35% alert threshold or when the 7-day Seasonal Naive baseline outperforms the Random Forest model. "
+  },
+  {
+    "image": 28,
+    "paragraph": "P0485",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-28.jpeg",
+    "before": " Figure 22B: Forecast Exceptions Queue \tHighlights products needing manual review when validation WAPE exceeds the 35% alert threshold or when the 7-day Seasonal Naive baseline outperforms the Random Forest model.",
+    "after": "Figure 22C: Forecast Data Readiness \tTracks accumulated store sales history per product across readiness bands (<56 days: Insufficient/Needs More History; 56\u2013179 days: Low; 180\u2013364 days: Medium; 365+ days: High) before activating live AI forecasts. "
+  },
+  {
+    "image": 29,
+    "paragraph": "P0490",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-29.png",
+    "before": "\tTracks accumulated store sales history per product across readiness bands (<56 days: Insufficient/Needs More History; 56\u2013179 days: Low; 180\u2013364 days: Medium; 365+ days: High) before activating live AI forecasts.  ",
+    "after": "  "
+  },
+  {
+    "image": 30,
+    "paragraph": "P0510",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-30.png",
+    "before": "RetailMind provides four role workspaces. The Super Administrator handles technical platform governance and maintenance. The Administrator manages Store operations and oversight. The Inventory Manager maintains stock, records receiving and reviews buying guidance. The Cashier records sales, manages authorized shift activities and accesses permitted receipt and GCash functions. This chapter presents the implemented workflows and distinguishes public benchmark results, isolated system verification and Store acceptance evidence. 4.1 Admin Module In this module, the administrator can manage staff accounts, roles, permissions, and store access across user roles.",
+    "after": "  "
+  },
+  {
+    "image": 31,
+    "paragraph": "P0531",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-31.png",
+    "before": " 4.1.1 System Settings The system admin configures the system settings.",
+    "after": "  "
+  },
+  {
+    "image": 32,
+    "paragraph": "P0544",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-32.png",
+    "before": " 4.1.2 Fiscal Period Management The system admin opens and closes fiscal periods and locks inventory records after closing. ",
+    "after": " Figure 29: Add Fiscal Period Management "
+  },
+  {
+    "image": 33,
+    "paragraph": "P0552",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-33.png",
+    "before": " 4.1.3 Audit Logs The system admin views user activities and filters audit logs by user and date.",
+    "after": "Figure 29: Show Audit Logs  4.1.4 Report Generation"
+  },
+  {
+    "image": 34,
+    "paragraph": "P0557",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-34.png",
+    "before": " 4.1.4 Report Generation The system admin generates inventory, sales, and demand forecasting reports. ",
+    "after": "Figure 30: Generate Report  "
+  },
+  {
+    "image": 35,
+    "paragraph": "P0565",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-35.png",
+    "before": " 4.1.5 Product Management The inventory manager adds new products via barcode or manual input, updates product information, and archives or organizes product categories. ",
+    "after": "Figure 30: Manage Product  4.1.6 Inventory Transactions"
+  },
+  {
+    "image": 36,
+    "paragraph": "P0570",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-36.png",
+    "before": " 4.1.6 Inventory Transactions The inventory manager records physical product counts, documents the reason for any stock discrepancy, and adjusts inventory quantities after approval. ",
+    "after": "Figure 31: Inventory Counts  "
+  },
+  {
+    "image": 37,
+    "paragraph": "P0576",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-37.png",
+    "before": " 4.1.7 Demand Forecasting The Inventory Manager reviews expected recorded sales over 7, 14 and 28 days when eligible forecasts are available. Buying guidance identifies its basis as forecast-based or stock-rule-based. The resulting quantities assist Store personnel in planning purchases. Goods are entered into inventory through Direct Stock Receiving.",
+    "after": "Figure 32: Replenishment Recommendation  \tDuring initial system deployment at Shalom Store, the Demand Forecast and Replenishment Recommendation modules display 'Unavailable' for expected 28-day AI sales and categorize products under 'Needs More History' in the Forecast Data Readiness workspace. This reflects the system's cold-start safeguard: because Shalom Store previously used manual physical logbooks without digitized item-level daily sales histories, RetailMind first collects live POS sales transactions until a product reaches the minimum 56-day history threshold. While accumulating historical sales data, the system actively guides purchasing decisions using Stock-Rule Suggestions based on current stock and reorder levels."
+  },
+  {
+    "image": 38,
+    "paragraph": "P0585",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-38.png",
+    "before": " 4.1.8 Inventory Overview The inventory manager views low-stock products, receives low-stock notifications, and monitors out-of-stock items. ",
+    "after": "Figure 33: Stock Overview  "
+  },
+  {
+    "image": 39,
+    "paragraph": "P0592",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-39.png",
+    "before": " 4.1.9 Cashier Sales Transactions The Cashier views and reprints authorized receipts from Receipt History. Each finalized sale is retained as an original transaction. Authorized refunds and corrections are recorded separately and linked to the original sale. During checkout, the Store server verifies current stock and uses a checkout attempt identifier to prevent duplicate sales on retry.",
+    "after": "Figure 34: Receipt History  4.1.10 Stock Receiving"
+  },
+  {
+    "image": 40,
+    "paragraph": "P0597",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-40.png",
+    "before": " 4.1.10 Stock Receiving The Inventory Manager records incoming goods through Direct Stock Receiving. The system updates stock and retains a grouped Receiving History. Batch records preserve quantity and expiry details where applicable. Configured sealed-pack products distinguish unopened packs from loose units.",
+    "after": "Figure 34: Stock Receiving 1.12 Stock Reporting The Cashier can report damaged, expired or missing items through a Stock Issue. Authorized personnel review the report and record its disposition. Approved inventory changes are traceable through the stock movement records."
+  },
+  {
+    "image": 41,
+    "paragraph": "P0601",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-41.png",
+    "before": "Figure 34: Stock Receiving 1.12 Stock Reporting The Cashier can report damaged, expired or missing items through a Stock Issue. Authorized personnel review the report and record its disposition. Approved inventory changes are traceable through the stock movement records.",
+    "after": "Figure 35: Report Stock Issue 4.1.12 Transaction History The Transaction History page allows the Cashier to review recorded sales, cash refunds, drawer movements, and cashier shifts in separate tabs. The Cashier can filter records by date range and select a record number to view its details. The Sales tab displays the sale number, associated shift, transaction date, total amount, payment method, cash received, and change given."
+  },
+  {
+    "image": 42,
+    "paragraph": "P0606",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-42.png",
+    "before": "4.1.12 Transaction History The Transaction History page allows the Cashier to review recorded sales, cash refunds, drawer movements, and cashier shifts in separate tabs. The Cashier can filter records by date range and select a record number to view its details. The Sales tab displays the sale number, associated shift, transaction date, total amount, payment method, cash received, and change given. ",
+    "after": "Figure 36: Transaction History  4.2.1 System Testing"
+  },
+  {
+    "image": 43,
+    "paragraph": "P0856",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-43.jpg",
+    "before": "  ",
+    "after": "  "
+  },
+  {
+    "image": 44,
+    "paragraph": "P0904",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-44.jpeg",
+    "before": "  ",
+    "after": "Address: Brgy. Tinago, Ozamiz City Phone: 09106370493 E-mail: queenstephanie.betonio@nmsc.edu.ph"
+  },
+  {
+    "image": 45,
+    "paragraph": "P0934",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-45.png",
+    "before": "Primary:                      Aromahon Elementary School \t\t\t  Aromahon, Laguindingan Misamis Oriental \t\t\t  2011-2017",
+    "after": " PERSONAL BACKGROUND "
+  },
+  {
+    "image": 46,
+    "paragraph": "P0941",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-46.png",
+    "before": "EDUCATION BACKGROUND  ",
+    "after": "Address: Brgy. Gonosan, Molave Zamboanga Del Sur Phone: 09351888496 E-mail: mike.sordilla@nmsc.edu.ph"
+  },
+  {
+    "image": 47,
+    "paragraph": "P0987",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-47.jpeg",
+    "before": "Administrator Store Overview View Store performance, sales summaries, and operational alerts. Open dashboard links to review cash variances, pending Stock Issues, and Fiscal Periods.",
+    "after": "  Administrator Store Staff View staff accounts, assigned roles, and account status."
+  },
+  {
+    "image": 48,
+    "paragraph": "P0992",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-48.jpg",
+    "before": "Administrator Store Staff View staff accounts, assigned roles, and account status. Add or update staff information and manage operational access.",
+    "after": " Administrator Registers View available Registers and their current status."
+  },
+  {
+    "image": 49,
+    "paragraph": "P0997",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-49.jpg",
+    "before": "Administrator Registers View available Registers and their current status. Manage Register names, receipt paper widths, and availability.",
+    "after": "  Administrator Store Settings View operational thresholds and review limits for the Store."
+  },
+  {
+    "image": 50,
+    "paragraph": "P1002",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-50.jpg",
+    "before": "Administrator Store Settings View operational thresholds and review limits for the Store. Update the required values and select Save settings.",
+    "after": " Administrator Store Calendar View the Store calendar and daily operating statuses."
+  },
+  {
+    "image": 51,
+    "paragraph": "P1007",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-51.jpg",
+    "before": "Administrator Store Calendar View the Store calendar and daily operating statuses. Record open days, closures, holidays, and exceptional closures.",
+    "after": "  Administrator Fiscal Periods View and create Fiscal Periods for Store records."
+  },
+  {
+    "image": 52,
+    "paragraph": "P1012",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-52.jpg",
+    "before": "Administrator Fiscal Periods View and create Fiscal Periods for Store records. Review outstanding responsibilities before closing or locking a period.",
+    "after": " Administrator Promotions View and manage Store discounts and promotions."
+  },
+  {
+    "image": 53,
+    "paragraph": "P1017",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-53.jpg",
+    "before": "Administrator Promotions View and manage Store discounts and promotions. Set the promotion scope, discount, minimum quantity, and active dates.",
+    "after": "  Administrator GCash Overview View recorded service cash, wallet balances, and GCash activity."
+  },
+  {
+    "image": 54,
+    "paragraph": "P1022",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-54.jpg",
+    "before": "Administrator GCash Overview View recorded service cash, wallet balances, and GCash activity. Review transactions, closing checks, and unresolved exchanges.",
+    "after": " Administrator Cashier Shifts View Cashier Shift records, sales, drawer counts, and cash differences."
+  },
+  {
+    "image": 55,
+    "paragraph": "P1027",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-55.jpg",
+    "before": "Administrator Cashier Shifts View Cashier Shift records, sales, drawer counts, and cash differences. Filter by date, Cashier, or Register to review the relevant shift.",
+    "after": "  Administrator Database Backup Create and download an encrypted copy of Store records."
+  },
+  {
+    "image": 56,
+    "paragraph": "P1032",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-56.jpg",
+    "before": "Administrator Database Backup Create and download an encrypted copy of Store records. Use a passphrase of at least 16 characters and keep it separately; lost passphrases cannot be recovered.",
+    "after": " Administrator Generate Report View sales and other available Store reports."
+  },
+  {
+    "image": 57,
+    "paragraph": "P1037",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-57.jpg",
+    "before": "Administrator Generate Report View sales and other available Store reports. Choose the report and filters, then run, export, or print the results.",
+    "after": "  Administrator Operational Audit View recorded Store actions, users, modules, and timestamps."
+  },
+  {
+    "image": 58,
+    "paragraph": "P1042",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-58.jpg",
+    "before": "Administrator Operational Audit View recorded Store actions, users, modules, and timestamps. Search the history and open details to trace an operational event.",
+    "after": " Administrator Receipt History View completed Store receipts and related refund information."
+  },
+  {
+    "image": 59,
+    "paragraph": "P1047",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-59.jpg",
+    "before": "Administrator Receipt History View completed Store receipts and related refund information. Filter the list and open Full details to review the selected receipt.",
+    "after": "  Administrator Refund Correction Reviews Review corrections needed after a recorded refund."
+  },
+  {
+    "image": 60,
+    "paragraph": "P1052",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-60.jpg",
+    "before": "Administrator Refund Correction Reviews Review corrections needed after a recorded refund. Approve the exact cash or stock changes and assign the responsible staff.",
+    "after": " Inventory Manager Stock Overview View stock totals, low-stock alerts, and expiry information."
+  },
+  {
+    "image": 61,
+    "paragraph": "P1057",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-61.jpg",
+    "before": "Inventory Manager Stock Overview View stock totals, low-stock alerts, and expiry information. Use the overview to identify products that need attention.",
+    "after": "  Inventory Manager Products View product names, prices, stock levels, and status."
+  },
+  {
+    "image": 62,
+    "paragraph": "P1062",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-62.jpg",
+    "before": "Inventory Manager Products View product names, prices, stock levels, and status. Add or update products and manage their barcode and packaging details.",
+    "after": " Inventory Manager Replenishment Recommendations View suggested buying quantities based on stock rules and available forecasts."
+  },
+  {
+    "image": 63,
+    "paragraph": "P1067",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-63.jpg",
+    "before": "Inventory Manager Replenishment Recommendations View suggested buying quantities based on stock rules and available forecasts. Use recommendations as buying guidance; an unavailable forecast does not mean zero demand.",
+    "after": "  Inventory Manager Stock Receiving Record bought goods using the product catalog or barcode search."
+  },
+  {
+    "image": 64,
+    "paragraph": "P1072",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-64.jpg",
+    "before": "Inventory Manager Stock Receiving Record bought goods using the product catalog or barcode search. Review quantities, costs, and batch details before saving accepted stock.",
+    "after": " Inventory Manager Receiving History View the stock receipts available to your account."
+  },
+  {
+    "image": 65,
+    "paragraph": "P1077",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-65.jpg",
+    "before": "Inventory Manager Receiving History View the stock receipts available to your account. Search recorded entries and open their details to review received quantities.",
+    "after": "  Inventory Manager Inventory Counts Record physical product or batch counts and the reason for a discrepancy."
+  },
+  {
+    "image": 66,
+    "paragraph": "P1082",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-66.jpg",
+    "before": "Inventory Manager Inventory Counts Record physical product or batch counts and the reason for a discrepancy. Review pending counts before approval; stock changes only after approval.",
+    "after": " Inventory Manager Stock Issue Reviews View Stock Issues submitted for Inventory Manager review."
+  },
+  {
+    "image": 67,
+    "paragraph": "P1087",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-67.jpg",
+    "before": "Inventory Manager Stock Issue Reviews View Stock Issues submitted for Inventory Manager review. Check the reported goods and record the appropriate decision and notes.",
+    "after": "  Inventory Manager Supplier Pullouts Record goods removed from a selected product batch."
+  },
+  {
+    "image": 68,
+    "paragraph": "P1092",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-68.jpg",
+    "before": "Inventory Manager Supplier Pullouts Record goods removed from a selected product batch. Enter the actual quantity and reason, then review the pullout history.",
+    "after": " Inventory Manager Demand Forecast View available product demand estimates and forecast status."
+  },
+  {
+    "image": 69,
+    "paragraph": "P1097",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-69.jpeg",
+    "before": "Inventory Manager Demand Forecast View available product demand estimates and forecast status. Check the forecast period and readiness before using estimates for planning.",
+    "after": "  Inventory Manager Forecast Exceptions View products whose forecast results need further review."
+  },
+  {
+    "image": 70,
+    "paragraph": "P1102",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-70.jpeg",
+    "before": "Inventory Manager Forecast Exceptions View products whose forecast results need further review. Use the exception filters to identify the affected products and reasons.",
+    "after": " Inventory Manager Data Readiness View whether product history is ready for forecasting."
+  },
+  {
+    "image": 71,
+    "paragraph": "P1107",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-71.jpeg",
+    "before": "Inventory Manager Data Readiness View whether product history is ready for forecasting. Identify products needing more history or further data review.",
+    "after": "  Inventory Manager Insights & Risk View inventory risks, including excess stock, expiry exposure, and slow-moving goods."
+  },
+  {
+    "image": 72,
+    "paragraph": "P1112",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-72.jpg",
+    "before": "Inventory Manager Insights & Risk View inventory risks, including excess stock, expiry exposure, and slow-moving goods. Use the analysis and cycle-count information to prioritize stock checks.",
+    "after": " Inventory Manager Generate Report View the reports available in the Inventory workspace."
+  },
+  {
+    "image": 73,
+    "paragraph": "P1117",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-73.jpg",
+    "before": "Inventory Manager Generate Report View the reports available in the Inventory workspace. Select the report and filters, then review or export its results.",
+    "after": "  Inventory Manager Refund Correction Reviews View stock correction tasks assigned after an Administrator review."
+  },
+  {
+    "image": 74,
+    "paragraph": "P1122",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-74.jpg",
+    "before": "Inventory Manager Refund Correction Reviews View stock correction tasks assigned after an Administrator review. Record the approved stock action and notes while preserving the original refund.",
+    "after": " Cashier Shift Open a shift using an available Register and the actual starting cash."
+  },
+  {
+    "image": 75,
+    "paragraph": "P1127",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-75.jpg",
+    "before": "Cashier Shift Open a shift using an available Register and the actual starting cash. Review drawer movements and count cash before closing the shift.",
+    "after": "  Cashier Point of Sale Scan or search products, review quantities, and complete customer sales."
+  },
+  {
+    "image": 76,
+    "paragraph": "P1132",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-76.jpeg",
+    "before": "Cashier Point of Sale Scan or search products, review quantities, and complete customer sales. Open a Cashier Shift before checkout and print the receipt after a successful sale.",
+    "after": " Cashier GCash Record Cash-In and Cash-Out exchanges, fees, and reference numbers."
+  },
+  {
+    "image": 77,
+    "paragraph": "P1137",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-77.jpg",
+    "before": "Cashier GCash Record Cash-In and Cash-Out exchanges, fees, and reference numbers. Verify actual wallet and cash movements, then reconcile or hand over service funds.",
+    "after": "  Cashier Dashboard Overview View daily sales, transaction totals, stock alerts, and recent activity."
+  },
+  {
+    "image": 78,
+    "paragraph": "P1142",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-78.jpg",
+    "before": "Cashier Dashboard Overview View daily sales, transaction totals, stock alerts, and recent activity. Use the Cashier and GCash tabs to review the corresponding summaries.",
+    "after": " Cashier Cash Refunds Find the original sale and record returned quantities, item condition, and the refund reason."
+  },
+  {
+    "image": 79,
+    "paragraph": "P1147",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-79.jpg",
+    "before": "Cashier Cash Refunds Find the original sale and record returned quantities, item condition, and the refund reason. Only Restockable items return to available stock; complete the required payment verification and approvals.",
+    "after": "  Cashier Transaction History View your sales, Cash Refunds, drawer movements, and shifts."
+  },
+  {
+    "image": 80,
+    "paragraph": "P1152",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-80.jpg",
+    "before": "Cashier Transaction History View your sales, Cash Refunds, drawer movements, and shifts. Choose a history tab and date range to find the relevant record.",
+    "after": "Cashier Receipt History View the receipts available to your Cashier account. Open a saved receipt to review or print it without repeating the sale."
+  },
+  {
+    "image": 81,
+    "paragraph": "P1156",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-81.jpg",
+    "before": "Cashier Receipt History View the receipts available to your Cashier account. Open a saved receipt to review or print it without repeating the sale.",
+    "after": "  Cashier Report Stock Issue Report damaged, missing, expired, or other affected stock during an open shift."
+  },
+  {
+    "image": 82,
+    "paragraph": "P1161",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-82.jpg",
+    "before": "Cashier Report Stock Issue Report damaged, missing, expired, or other affected stock during an open shift. Identify the product, stock form, quantity, and explanation for Inventory Manager review.",
+    "after": " Cashier Refund Correction Reviews View cash correction tasks assigned after an Administrator review."
+  },
+  {
+    "image": 83,
+    "paragraph": "P1166",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-83.jpg",
+    "before": "Cashier Refund Correction Reviews View cash correction tasks assigned after an Administrator review. Record the approved drawer action and required notes without rewriting the original refund.",
+    "after": "  Cashier Notifications View notifications and unread items for your account."
+  },
+  {
+    "image": 84,
+    "paragraph": "P1171",
+    "path": "tmp\\manual\\capstone-adjustments\\images\\img-84.jpg",
+    "before": "Cashier Notifications View notifications and unread items for your account. Open the related record to review any action that needs attention.",
+    "after": ""
+  }
+]

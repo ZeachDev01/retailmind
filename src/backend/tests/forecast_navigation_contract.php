@@ -86,8 +86,8 @@ $assert($superForecastingLinks->length === 6, 'Super Administrator Forecasting g
 $expectedSuperOrder = [
     ['title' => 'Import Sales History', 'path' => app_url('components/system_administrator/forecast_import.php')],
     ['title' => 'Data Readiness', 'path' => app_url('components/report/data_readiness.php')],
-    ['title' => 'ML Operation', 'path' => app_url('components/system_administrator/ml_settings.php')],
-    ['title' => 'Forecast Model Governance', 'path' => app_url('components/report/forecast_analytics.php')],
+    ['title' => 'Model Training', 'path' => app_url('components/system_administrator/ml_settings.php')],
+    ['title' => 'Forecast Analytics', 'path' => app_url('components/report/forecast_analytics.php')],
     ['title' => 'Demand Forecast', 'path' => app_url('components/report/predictions.php')],
     ['title' => 'Forecast Exceptions', 'path' => app_url('components/report/forecast_exceptions.php')],
 ];
@@ -280,9 +280,9 @@ $assert(str_contains($dashboardFile, "'Candidate model awaiting review'") &&
     str_contains($dashboardFile, "'components/administrator/model_review.php'"),
     'Dashboard candidate review exception alert links to model_review.php');
 
-// ML Operation page exposes Forecast Data Import
+// Model Training page exposes Forecast Data Import
 $operation = file_get_contents(__DIR__ . '/../../frontend/components/system_administrator/ml_settings.php');
-$assert(str_contains($operation, 'components/system_administrator/forecast_import.php'), 'ML Operation exposes Forecast Data Import');
+$assert(str_contains($operation, 'components/system_administrator/forecast_import.php'), 'Model Training exposes Forecast Data Import');
 
 // Store Calendar contains contextual link to Demand Forecast
 $calendarFile = file_get_contents(__DIR__ . '/../../frontend/components/administrator/store_calendar.php');

@@ -22,7 +22,7 @@ foreach ([
 ] as $needle) {
     $assert(str_contains($route, $needle), "Administrator dashboard route is missing {$needle}");
 }
-foreach (['Recent Sales', 'System Health', 'Backup & Restore', 'ML Operation', 'Platform Settings', 'Protected Audit Records', 'Adjust Stock', 'Receive Stock', 'Store governance', 'Inventory oversight', 'Demand Forecast performance'] as $forbidden) {
+foreach (['Recent Sales', 'System Health', 'Backup & Restore', 'Model Training', 'Platform Settings', 'Protected Audit Records', 'Adjust Stock', 'Receive Stock', 'Store governance', 'Inventory oversight', 'Demand Forecast performance'] as $forbidden) {
     $assert(!str_contains($route, $forbidden), "Administrator dashboard route must not expose {$forbidden}");
 }
 $assert(str_contains($route, '300000'), 'Dashboard must schedule a five-minute refresh');

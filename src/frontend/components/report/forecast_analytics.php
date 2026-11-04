@@ -263,26 +263,28 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>">View Forecasts</a>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">ML Operation</a>
+                <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">Model Training</a>
             </div>
         </div>
 
+        <?php forecast_workflow(''); ?>
+        <p class="forecast-notice">This page explains performance. <a href="../system_administrator/ml_settings.php">Model Training shows the latest training result and blockers</a>.</p>
         <section class="model-context-card" aria-label="Model Governance">
             <?= csrf_field() ?>
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
                 <div class="gov-pill-grid">
                     <div class="gov-pill">
-                        <span class="gov-pill-label">Bound Model</span>
+                        <span class="gov-pill-label">Displayed model</span>
                         <span class="gov-pill-val">
                             <?php if ($displayedModelVersion): ?>
                                 <code><?= htmlspecialchars($displayedModelVersion) ?></code>
                             <?php else: ?>
-                                <span style="color:var(--muted);">Unresolved</span>
+                                <span style="color:var(--muted);">No model yet</span>
                             <?php endif; ?>
                         </span>
                     </div>
                     <div class="gov-pill">
-                        <span class="gov-pill-label">Approved Model</span>
+                        <span class="gov-pill-label">Approved model</span>
                         <span class="gov-pill-val">
                             <?php if ($approvedModel): ?>
                                 <code><?= htmlspecialchars($approvedModel) ?></code>
@@ -292,19 +294,19 @@ function format_wape_metric(?float $val, ?string $reason): string {
                         </span>
                     </div>
                     <div class="gov-pill">
-                        <span class="gov-pill-label">Governance Mode</span>
+                        <span class="gov-pill-label">Buying guidance</span>
                         <span class="gov-pill-val">
                             <?php if ($recommendationsSuspended): ?>
-                                <span class="comparison-tag gate-failed">Recommendations Suspended</span>
+                                <span class="comparison-tag gate-failed">Paused</span>
                             <?php elseif ($observationMode): ?>
-                                <span class="comparison-tag" style="background:#fef3c7; color:#92400e;">Observation Mode</span>
+                                <span class="comparison-tag" style="background:#fef3c7; color:#92400e;">Observation only</span>
                             <?php else: ?>
-                                <span class="comparison-tag gate-passed">Operational</span>
+                                <span class="comparison-tag gate-passed">Not paused</span>
                             <?php endif; ?>
                         </span>
                     </div>
                     <div class="gov-pill">
-                        <span class="gov-pill-label">Context</span>
+                        <span class="gov-pill-label">Sales source</span>
                         <span class="gov-pill-val">
                             <?= $isDemoMode ? 'Isolated Demo (' . htmlspecialchars($demoSource) . ')' : 'Operational Sales' ?>
                         </span>
@@ -312,7 +314,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
                 <div>
                     <?php if ($hasDemoReplay): ?>
-                        <a class="btn btn-secondary" href="forecast_replay.php">Train/Test Replay</a>
+                        <a class="btn btn-secondary" href="forecast_replay.php">Historical replay</a>
                     <?php endif; ?>
                 </div>
             </div>
@@ -320,25 +322,25 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <section class="forecast-analytics-tabs" aria-label="Forecast charts">
             <div class="analytics-tab-list" role="tablist" aria-label="Forecast analytics views">
                 <button class="analytics-tab is-active" id="analytics-tab-actual" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-actual" data-analytics-tab="actual">
-                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Actual vs Predicted
+                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Forecasts vs sales
                 </button>
                 <button class="analytics-tab" id="analytics-tab-features" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="analytics-panel-features" data-analytics-tab="features">
-                    <i class="bi bi-sliders" aria-hidden="true"></i> Feature Importance
+                    <i class="bi bi-sliders" aria-hidden="true"></i> Input influence
                 </button>
                 <button class="analytics-tab" id="analytics-tab-trend" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-trend" data-analytics-tab="trend" tabindex="-1">
                     <i class="bi bi-graph-up" aria-hidden="true"></i> Error trend
                 </button>
                 <button class="analytics-tab" id="analytics-tab-best" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-best" data-analytics-tab="best" tabindex="-1">
-                    <i class="bi bi-trophy" aria-hidden="true"></i> Best Performers
+                    <i class="bi bi-trophy" aria-hidden="true"></i> Lowest errors
                 </button>
                 <button class="analytics-tab" id="analytics-tab-attention" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-attention" data-analytics-tab="attention" tabindex="-1">
-                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Needs Attention
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Highest errors
                 </button>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features" hidden>
-                <h2 id="analytics-view-title">Feature Importance</h2>
-                <?php if (empty($featureImportance)): ?><p class="muted">Feature weights have not been recorded.</p><?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
+                <h2 id="analytics-view-title">Input influence</h2>
+                <?php if (empty($featureImportance)): ?><p class="muted">Input influence has not been recorded for this model.</p><?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-trend" role="tabpanel" aria-labelledby="analytics-tab-trend" data-analytics-panel="trend" hidden>
@@ -347,8 +349,8 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
-                <h2>Actual vs Predicted Demand</h2><p class="muted">Recorded units by product and date · forecast in blue, sales in green.</p>
-                <?php if (empty($actualChartData)): ?><p class="muted">No completed sales comparisons yet.</p><?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
+                <h2>Forecasts vs recorded sales</h2><p class="muted">Recorded units by product and date · forecast in blue, sales in green.</p>
+                <?php if (empty($actualChartData)): ?><p class="muted">No sales comparisons yet. Comparisons appear when forecast dates have recorded sales.</p><?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
                 <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Product &amp; date</th><th>Forecast units</th><th>Recorded sales</th></tr></thead><tbody>
                 <?php foreach ($actualChartData as $point): ?><tr><td><?= htmlspecialchars($point['product_name']) ?></td><td><?= htmlspecialchars((string)$point['forecast_value']) ?></td><td><?= htmlspecialchars((string)$point['actual_demand']) ?></td></tr><?php endforeach; ?>
                 </tbody></table></div></details><?php endif; ?>
@@ -357,7 +359,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             <div class="analytics-tab-panel" id="analytics-panel-best" role="tabpanel" aria-labelledby="analytics-tab-best" data-analytics-panel="best" hidden>
                 <h2>Lowest recorded errors</h2>
                 <?php if (empty($best)): ?>
-                    <p style="color:var(--muted);">No completed sales data available for ranking.</p>
+                    <p style="color:var(--muted);">No recorded sales comparisons to rank yet.</p>
                 <?php else: ?>
                     <div class="table-wrap">
                         <table class="data-table">
@@ -367,7 +369,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                     <th scope="col">SKU</th>
                                     <th scope="col">Predicted</th>
                                     <th scope="col">Actual</th>
-                                    <th scope="col">Mean Abs Error</th>
+                                    <th scope="col">Average error (units)</th>
                                     <th scope="col">WAPE</th>
                                 </tr>
                             </thead>
@@ -401,7 +403,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                     <th scope="col">SKU</th>
                                     <th scope="col">Predicted</th>
                                     <th scope="col">Actual</th>
-                                    <th scope="col">Mean Abs Error</th>
+                                    <th scope="col">Average error (units)</th>
                                     <th scope="col">WAPE</th>
                                 </tr>
                             </thead>
@@ -426,9 +428,9 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <section class="model-context-card" aria-label="Prediction Performance Evidence" style="margin-bottom: 1.5rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
                 <div>
-                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Store Prediction Performance Evidence</h2>
+                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Performance on Store sales</h2>
                     <p class="muted" style="margin:0; font-size:0.875rem;">
-                        Matched forecasts recorded before outcomes with genuine subsequent Store observations.
+                        Compares saved forecasts with later Store sales.
                     </p>
                 </div>
                 <div>
@@ -588,9 +590,9 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                 <th scope="col">Product</th>
                                 <th scope="col">SKU</th>
                                 <th scope="col">Target Date</th>
-                                <th scope="col">Horizon Day</th>
+                                <th scope="col">Days ahead</th>
                                 <th scope="col">Predicted Units</th>
-                                <th scope="col">Actual Valid Sales</th>
+                                <th scope="col">Recorded sales</th>
                                 <th scope="col">Difference</th>
                             </tr>
                         </thead>

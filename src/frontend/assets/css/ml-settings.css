@@ -115,10 +115,8 @@
 }
 
 .ml-settings-page .candidate-card {
-    background: var(--card-bg, #ffffff);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 8px;
-    padding: 1.25rem;
+    border-top: 1px solid var(--border, #e5e7eb);
+    padding-top: 1.25rem;
     margin-bottom: 1.25rem;
 }
 

@@ -42,19 +42,22 @@ const fixture = action => {
         };
         await login('super_admin');
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        await page.getByText('Training eligibility & product history', {exact: true}).click();
         const eligibilityPolicy = await page.locator('[aria-label="Training Eligibility policy"]').innerText();
         assert.match(eligibilityPolicy, /140 accumulated usable days/);
         for (const key of ['minimum_history_days', 'preferred_history_days', 'minimum_nonzero_sales_days', 'history_window_days']) {
             assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' is read-only policy');
         }
         await page.goto(origin + '/components/report/data_readiness.php');
+        await page.getByText('How training eligibility works', {exact: true}).click();
         assert.equal(await page.locator('[aria-label="Training Eligibility policy"]').innerText(), eligibilityPolicy,
-            'ML Operation and Data Readiness explain the same effective policy');
+            'Model Training and Data Readiness explain the same effective policy');
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
         for (const key of ['forecast_period_days', 'n_estimators', 'max_depth', 'min_samples_leaf',
             'min_samples_split', 'prediction_interval_lower', 'prediction_interval_upper', 'accuracy_threshold_wape']) {
             assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' cannot imply ineffective changes');
         }
+        await page.getByText('Fixed model recipe & approval requirements', {exact: true}).click();
         assert.match(await page.locator('main').innerText(), /15 trees, maximum depth 8, random seed 42/);
         await page.locator('#settings-heading').click();
         const values = await page.locator('#model-quality-settings').evaluate(form => Object.fromEntries(new FormData(form)));
@@ -97,8 +100,9 @@ const fixture = action => {
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
         await page.goto(origin + '/components/report/data_readiness.php');
+        await page.getByText('How training eligibility works', {exact: true}).click();
         assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
-        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in ML Operation');
+        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 0, 'Data imports belong in Model Training');
         const after = JSON.parse(fixture('state'));
         assert.equal(after.sales, before.sales, 'History imports must not create receipts');
         assert.equal(after.stock, before.stock, 'History imports must not change stock');

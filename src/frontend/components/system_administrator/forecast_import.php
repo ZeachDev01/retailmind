@@ -78,21 +78,10 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
     <?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Forecast Data Import</title>
+    <title>Import Sales History</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <style>
-        .forecast-import-page .import-workspace {
-            display: grid;
-            grid-template-columns: minmax(320px, 1.15fr) minmax(280px, 0.85fr);
-            gap: 1.5rem;
-            align-items: start;
-        }
-        @media (max-width: 900px) {
-            .forecast-import-page .import-workspace {
-                grid-template-columns: 1fr;
-            }
-        }
         .forecast-import-page .form-hint {
             font-size: 0.82rem;
             color: var(--muted, #64748b);
@@ -147,16 +136,18 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>Forecast Data Import</h1>
+                <h1>Import Sales History</h1>
                 <p class="page-subtitle">Upload this Store's past daily sales totals for model retraining.</p>
             </div>
             <div class="topbar-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/ml_settings.php')) ?>">
-                    <i class="bi bi-cpu" aria-hidden="true"></i> ML Operation
+                    Model Training
                 </a>
             </div>
         </div>
 
+        <?php forecast_workflow('data'); ?>
+        <p class="forecast-notice">Import daily sales here, then <a href="../report/data_readiness.php">check whether the records are ready</a>. Importing does not train or approve a model.</p>
         <?php if ($message): ?>
             <div class="alert tag-success" role="status">
                 <i class="bi bi-check-circle" aria-hidden="true"></i>
@@ -171,69 +162,64 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
             </div>
         <?php endif; ?>
 
-        <div class="import-workspace">
-            <section class="dashboard-section" aria-labelledby="upload-heading">
-                <h2 id="upload-heading">Upload sales history</h2>
-                <form method="post" enctype="multipart/form-data">
-                    <?= csrf_field() ?>
-                    <div class="form-group">
-                        <label for="forecast-csv">Sales history CSV file</label>
-                        <p class="form-hint" id="forecast-csv-hint">UTF-8 CSV &bull; Max 2 MB &bull; Up to 10,000 rows</p>
-                        <input type="file" id="forecast-csv" name="csv_file" accept=".csv,text/csv" aria-describedby="forecast-csv-hint" required>
-                    </div>
-                    <div class="btn-group">
-                        <button type="submit" class="btn">
-                            <i class="bi bi-search" aria-hidden="true"></i> Preview and validate
-                        </button>
-                        <a class="btn btn-secondary" href="?template=1">
-                            <i class="bi bi-download" aria-hidden="true"></i> Download CSV template
-                        </a>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">
-                            <i class="bi bi-clipboard2-check" aria-hidden="true"></i> Check data readiness
-                        </a>
-                    </div>
-                </form>
-            </section>
-
-            <section class="dashboard-section" aria-labelledby="format-heading">
-<details class="forecast-details"><summary id="format-heading">CSV columns &amp; import rules</summary>
-
-                <div class="table-wrap">
-                    <table class="format-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Column</th>
-                                <th scope="col">Type</th>
-                                <th scope="col">Requirement</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><code>sale_date</code></td>
-                                <td>Date</td>
-                                <td>Past date (<code>YYYY-MM-DD</code>) before today</td>
-                            </tr>
-                            <tr>
-                                <td><code>sku</code></td>
-                                <td>Text</td>
-                                <td>Active product SKU in this store</td>
-                            </tr>
-                            <tr>
-                                <td><code>quantity</code></td>
-                                <td>Integer</td>
-                                <td>Daily units sold (&ge; 0; enter 0 for confirmed zero sales)</td>
-                            </tr>
-                        </tbody>
-                    </table>
+        <section class="dashboard-section" aria-labelledby="upload-heading">
+            <h2 id="upload-heading">Upload sales history</h2>
+            <p class="section-description">Adds forecasting history only. Inventory, receipts, and revenue stay unchanged. Train a model separately after importing.</p>
+            <form method="post" enctype="multipart/form-data">
+                <?= csrf_field() ?>
+                <div class="form-group">
+                    <label for="forecast-csv">Sales history CSV file</label>
+                    <p class="form-hint" id="forecast-csv-hint">UTF-8 CSV &bull; Max 2 MB &bull; Up to 10,000 rows</p>
+                    <input type="file" id="forecast-csv" name="csv_file" accept=".csv,text/csv" aria-describedby="forecast-csv-hint" required>
                 </div>
-                <ul class="import-rules-list">
-                    <li><strong>Forecasting only:</strong> Does not create sales receipts or affect inventory and revenue.</li>
-                    <li><strong>Deduplication:</strong> Automatically skips POS sales days and matching imports; conflicting totals reject import.</li>
-                    <li><strong>Model retraining:</strong> Stores historical totals; initiate model retraining separately in ML Operation.</li>
-                </ul>
-            </details>
-</section>
-        </div>
+                <div class="btn-group">
+                    <button type="submit" class="btn">
+                        Preview and validate
+                    </button>
+                    <a class="btn btn-secondary" href="?template=1">
+                        Download CSV template
+                    </a>
+                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">
+                        Check data readiness
+                    </a>
+                </div>
+            </form>
+        </section>
+
+        <details class="forecast-details"><summary id="format-heading">CSV columns &amp; import rules</summary>
+
+            <div class="table-wrap">
+                <table class="format-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Column</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Requirement</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>sale_date</code></td>
+                            <td>Date</td>
+                            <td>Past date (<code>YYYY-MM-DD</code>) before today</td>
+                        </tr>
+                        <tr>
+                            <td><code>sku</code></td>
+                            <td>Text</td>
+                            <td>Active product SKU in this store</td>
+                        </tr>
+                        <tr>
+                            <td><code>quantity</code></td>
+                            <td>Integer</td>
+                            <td>Daily units sold (&ge; 0; enter 0 for confirmed zero sales)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <ul class="import-rules-list">
+                <li>Skips days with POS sales and matching imports. Conflicting totals reject the import.</li>
+            </ul>
+        </details>
 
         <?php if ($preview): ?>
         <section class="dashboard-section" aria-labelledby="preview-heading" style="margin-top: 1.5rem;">
@@ -272,10 +258,10 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                 <?= csrf_field() ?>
                 <div class="form-actions" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                     <button type="submit" class="btn" name="confirm_import" value="1">
-                        <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Import <?= count($preview['rows']) ?> daily totals
+                        Import <?= count($preview['rows']) ?> daily totals
                     </button>
                     <a class="btn btn-secondary" href="?cancel=1">
-                        <i class="bi bi-x-circle" aria-hidden="true"></i> Discard preview
+                        Discard preview
                     </a>
                 </div>
             </form>

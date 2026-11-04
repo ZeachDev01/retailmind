@@ -42,16 +42,18 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
 <!DOCTYPE html>
 <html lang="en"><head><?php retailmind_theme_head(); ?>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Train/test replay - RetailMind</title>
+<title>Historical Replay - RetailMind</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head><body class="forecast-workspace"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
-    <div class="topbar"><div><h1><?= $isM5 ? 'M5 historical demonstration' : 'Train/test replay' ?></h1><p class="page-subtitle"><?= $isM5 ? 'Original Walmart sales dates and measured backtest predictions. Stock is an illustrative scenario.' : 'Simulated recent sales. Real public quantities, shifted dates, illustrative stock.' ?></p></div>
-        <a class="btn btn-secondary" href="../system_administrator/ml_settings.php">ML Operation</a></div>
+    <div class="topbar"><div><h1><?= $isM5 ? 'M5 historical demonstration' : 'Historical replay' ?></h1><p class="page-subtitle"><?= $isM5 ? 'Original Walmart sales dates and measured backtest predictions. Stock is an illustrative scenario.' : 'Simulated recent sales. Real public quantities, shifted dates, illustrative stock.' ?></p></div>
+        <a class="btn btn-secondary" href="../system_administrator/ml_settings.php">Model Training</a></div>
     <p class="tag-warning" role="status">Experimental preview only. Training validation: <?= htmlspecialchars($result['validation_outcome']) ?>. No Store model or purchasing guidance was approved.</p>
+    <?php forecast_workflow(''); ?>
+    <p class="forecast-notice">This is a test against past sales, separate from today’s forecasts. <a href="data_readiness.php">Check readiness for today</a>.</p>
     <details class="forecast-details"><summary id="replay-method">Training &amp; test method</summary>
 
         <p>Training: <?= htmlspecialchars($source['date_window'][0]) ?> to <?= htmlspecialchars($result['training_end']) ?>
@@ -69,9 +71,9 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
         <p><?= htmlspecialchars($source['replay']['money']) ?></p>
         <p><a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Current stock</a>
             <?php if (!$isM5): ?><a class="btn btn-secondary" href="../invoice/sales.php">Simulated sales history</a><?php endif; ?>
-            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Normal buying guidance</a></p>
+            <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Replenishment recommendations</a></p>
     </details>
-    <section class="dashboard-section" aria-labelledby="replay-metrics"><h2 id="replay-metrics">How close were the held-out predictions?</h2>
+    <section class="dashboard-section" aria-labelledby="replay-metrics"><h2 id="replay-metrics">Prediction errors on test sales</h2>
         <details class="forecast-details"><summary>How to read these errors</summary><p>Errors cover <?= $isM5 ? (int)$source['products_mapped'] : 60 ?> product/origin totals per horizon. MAE and RMSE are units per horizon total; WAPE is error, not accuracy. Test scores do not override training-validation gates.</p></details>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>Horizon</th><th>MAE</th><th>RMSE</th><th>Model WAPE</th><th>Baseline WAPE</th></tr></thead><tbody>
         <?php foreach ($result['metrics'] as $horizon => $metrics): ?><tr>

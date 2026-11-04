@@ -1,0 +1,1699 @@
+P0001 [Normal] RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High Volume Department Store
+
+P0010 [Normal] A Capstone Project
+
+P0011 [Normal] Presented to the Faculty of
+
+P0012 [Normal] College of Information and Communication Technology,
+
+P0013 [Normal] Northwestern Mindanao State College
+
+P0014 [Normal] of Science and Technology
+
+P0018 [Normal] In Partial Fulfillment of the Requirements
+
+P0019 [Normal] for the degree of Bachelor of Science in Information Technology
+
+P0025 [Normal] By:
+
+P0026 [Normal] Queen Stephanie C. Betonio
+
+P0027 [Normal] Aisan Luis M. Nacua
+
+P0028 [Normal] Mike L. Sordilla
+
+P0031 [Normal] Marjon Senarlo
+
+P0032 [Normal] Adviser
+
+P0038 [Normal] June, 2026
+
+P0041 [Heading 1] CHAPTER 1
+
+P0042 [Heading 1] INTRODUCTION
+
+P0043 [Heading 2] 1.1 Project Context
+
+P0044 [Normal] Effective inventory management remains one of the most significant challenges in retail businesses, particularly in stores that experience high daily transaction volumes and frequent inventory movement. Shalom Store in Tangub City processes an average of 400 customer  transactions per day, manages approximately 1,200 active products, and replenishes its inventory twice a week to meet customer demand. In addition, the store offers a wide variety of merchandise across multiple product categories, including groceries, beverages, canned goods, snacks, personal care products, school and office supplies, and other consumer goods. The broad assortment of products, combined with frequent customer transactions and regular inventory replenishment, increases the complexity of monitoring inventory levels, identifying fast-moving products, and maintaining sufficient stock availability.
+
+P0045 [Normal] For the purposes of this study, a high-volume department store is operationally defined as a retail establishment that experiences a high frequency of daily customer transactions, manages a large number of active products, offers merchandise across multiple product categories, and requires frequent inventory replenishment due to continuous product movement. Based on this operational definition, Shalom Store was selected as the study site because it processes approximately 400 customer transactions daily, maintains around 1,200 active products, carries a diverse range of merchandise, and restocks its inventory twice a week. Although the store operates on a smaller scale than large national retail chains, its operational characteristics and inventory management requirements are comparable to those of a high-volume department store, making it an appropriate environment for implementing and evaluating the proposed AI-driven inventory management and demand forecasting system.
+
+P0046 [Normal] Like many retail businesses, the store faces challenges such as stock-outs, overstocking, delayed inventory updates, and difficulty predicting future product demand. These issues may result in lost sales opportunities, increased inventory holding costs, inefficient replenishment decisions, and reduced customer satisfaction. According to Blair (2023), inventory distortion caused by stock-outs, overstocking, and inventory shrinkage was projected to cost retailers approximately $1.77 trillion globally in 2023, emphasizing the importance of adopting more effective inventory management strategies.
+
+P0047 [Normal] If these inventory management problems remain unresolved, retailers may continue to experience lost sales opportunities, unnecessary inventory holding costs, inefficient stock replenishment, and poor customer service. Managers often struggle to make timely inventory decisions because they rely on outdated or incomplete inventory information, particularly during periods of fluctuating customer demand. These challenges become even more critical in high-volume department stores where frequent inventory transactions and continuous stock movement make manual monitoring increasingly difficult and prone to human error.
+
+P0048 [Normal] Recent studies suggest that Artificial Intelligence and Machine Learning have become effective technologies for improving inventory management. According to Sekhar (2024), AI significantly enhances demand forecasting, stock optimization, and automated replenishment by analyzing historical sales records, seasonal demand, market trends, and customer purchasing behavior. Similarly, machine learning techniques enable forecasting models to learn from historical sales data and continuously improve prediction accuracy, allowing retailers to anticipate future demand more effectively and make data-driven inventory decisions.
+
+P0049 [Normal] Despite the availability of computerized inventory systems, many existing solutions primarily focus on inventory recording, stock monitoring, and report generation while providing limited predictive capabilities for future demand. This study aims to develop RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Stores for Shalom Store in Tangub City. Specifically, the system seeks to analyze historical sales data, generate demand forecasts, provide low-stock notifications, and assist store personnel in making timely, data-driven inventory decisions that reduce stock-outs and overstocking while improving operational efficiency.
+
+P0050 [Normal] The proposed web-based system integrates a Random Forest Regressor  as its demand forecasting model. RFR is a supervised ensemble machine-learning algorithm that builds multiple decision trees using samples of the available data and combines their predictions to produce a final demand estimate. This approach enables the model to identify complex and nonlinear relationships among historical sales , sales trends, days of the week, months, and relevant calendar-based events. By combining the predictions of multiple trees, the model can provide stable forecasts while reducing the possibility that individual data patterns will excessively influence the results.
+
+P0051 [Normal] The Random Forest Regressor was selected because retail demand can be affected by interacting factors and may vary across products, categories, dates, and seasonal periods. Its ability to process several predictor variables and identify complex sales patterns makes it suitable for Shalom Store’s diverse inventory and transaction data. The forecasting model may be periodically retrained using newly accumulated sales records so that its predictions remain responsive to changing demand patterns. Its generated forecasts and replenishment recommendations will function as decision-support information, while final restocking decisions will remain under the control of authorized Inventory Managers.
+
+P0052 [Normal] The proposed system also contributes to the United Nations Sustainable Development Goals by supporting Industry, Innovation and Infrastructure under SDG 9 through the application of artificial intelligence and digital technologies to modernize retail inventory operations. It advances Responsible Consumption and Production under SDG 12 by providing demand forecasts and replenishment recommendations that can help reduce unnecessary overstocking, stock shortages, and potential product waste. Furthermore, RetailMind supports Decent Work and Economic Growth under SDG 8 by improving operational efficiency and assisting store personnel in making timely, informed, and data-driven inventory decisions.
+
+P0053 [Normal] Through real-time inventory monitoring, Random Forest-based demand forecasting, low-stock notifications, inventory analytics, and replenishment recommendations, RetailMind aims to reduce stock-outs and overstocking, improve inventory accuracy, and support timely inventory planning. The proposed system is expected to provide Shalom Store with a more organized, data-driven, and efficient approach to managing its inventory operations.
+
+P0054 [Heading 2] 1.2 Purpose and Description
+
+P0055 [Normal] This project aims to develop a web-based AI-driven inventory management and demand forecasting system designed specifically for Shalom Store, a high-volume department store in Tangub City. The proposed system seeks to address the challenges associated with manual inventory monitoring and optimize inventory operations by providing a centralized platform for managing inventory records, monitoring stock movements, and forecasting future product demand using artificial intelligence.
+
+P0056 [Normal] RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Store is intended to improve inventory management by enabling store personnel to monitor stock levels in real time, analyze historical sales data, and receive demand forecasting insights that support timely inventory replenishment decisions. The system functions as a decision support system by providing Inventory Managers with data-driven forecasts and replenishment recommendations while leaving the final inventory decisions to authorized personnel. The forecasting model will initially start collecting store sales data for a period of time due for the reason that there is no available store historical sale data for the initial set up and are designed to be periodically updated as new transaction data become available, allowing the system to improve its demand forecasting capability over time. Through this predictive capability, RetailMind aims to reduce stock-outs, minimize overstocking, improve inventory accuracy, and support informed decision-making. The generated forecasts serve as recommendations rather than automatic decisions, assisting Inventory Managers in evaluating replenishment needs, maintaining appropriate stock levels, and improving overall operational efficiency
+
+P0057 [Normal] This system will serve as a web-based information system that centralizes inventory-related activities and provides authorized users with convenient access to inventory information. By integrating inventory management with AI-based demand forecasting, the proposed system aims to provide Shalom Store with a more efficient, accurate, and intelligent approach to managing inventory while supporting better operational planning, inventory control, and customer service.
+
+P0058 [Heading 2] 1.3 Objectives of the Project
+
+P0059 [Heading 2] 1.3.1 General Objective
+
+P0060 [Normal] This project aims to develop a web-based, AI-driven inventory management and demand forecasting system designed to improve inventory management and demand forecasting for Shalom Store in Tangub City through the integration of a Random Forest Regressor.
+
+P0061 [Heading 2] 1.3.2 Specific Objectives
+
+P0062 [Normal] To address the general objective, the study will pursue the following specific objectives, each corresponding to a distinct phase of project development:
+
+P0063 [List Paragraph] To collect data and examine current inventory management practices and operational workflows in order to establish user requirements.
+
+P0064 [List Paragraph] To develop a responsive web-based system architecture with the following functionalities:
+
+P0065 [List Paragraph] Super Administrator
+
+P0066 [List Paragraph] • Manage technical platform configuration, maintenance and platform audit 	review.
+
+P0067 [Normal] System Administrator
+
+P0068 [List Paragraph] •  Manage user accounts by creating, updating, and deactivating system users and assigning roles and permissions.
+
+P0069 [List Paragraph] • Monitor all system activities through audit logs and activity tracking for security and transparency.
+
+P0070 [List Paragraph] • Manage fiscal periods by opening and closing inventory tracking cycles and locking ledger records after closure.
+
+P0072 [Normal] Inventory Manager
+
+P0073 [List Paragraph] • Manage product information by adding, updating, and organizing product categories and inventory records.
+
+P0074 [List Paragraph] • Register new products by manually encoding product information or scanning product barcodes for faster and more accurate inventory recording.
+
+P0075 [List Paragraph] •Monitor shared Store stock levels, including low-stock and out-of-stock products.
+
+P0076 [List Paragraph] • Perform stock transactions such as stock-in, stock-out, stock receiving, and inventory adjustments.
+
+P0077 [List Paragraph] • Upload and update inventory data using CSV bulk file import for faster data processing.
+
+P0078 [List Paragraph] • Access Random Forest-based demand forecasting results to support inventory replenishment and planning decisions.
+
+P0079 [List Paragraph] • Generate replenishment recommendations based on forecasted product demand and current inventory levels.
+
+P0080 [Normal] Cashier
+
+P0081 [Normal] • View real-time product availability and stock information.
+
+P0082 [Normal] • Process customer checkout transactions using a barcode scanner for fast and accurate product identification.
+
+P0083 [Normal] •Record daily sales transactions that update inventory records in real time.
+
+P0084 [Normal] • Report damaged, missing, or expired items to the Inventory Manager for proper inventory adjustment
+
+P0085 [Normal] • View basic transaction history related to handled products.
+
+P0086 [Normal] • Receive notifications regarding low-stock items and inventory updates relevant to their assigned area.
+
+P0087 [Normal] • Record authorized manual GCash Cash-In and Cash-Out services, including reference numbers, automatic fees and service-session reconciliation.
+
+P0088 [List Paragraph] To implement and integrate a Random Forest Regressor model into the RetailMind platform to analyze historical sales data and forecast future product demand for inventory replenishment planning.
+
+P0089 [List Paragraph] To evaluate and validate the system’s performance through user acceptance testing (UAT), assessing cross-device mobile responsiveness, data processing speed and forecasting accuracy using appropriate evaluation metrics.
+
+P0090 [List Paragraph] To  deploy the operational application on the existing Store PC and evaluate its inventory and replenishment support using dated deployment and acceptance evidence.
+
+P0091 [Heading 2] 1.4 Scope and Limitations of the Project
+
+P0092 [Normal] Shalom Store is a high-volume retail establishment located in Tangub City that processes approximately 400 customer transactions daily, manages around 1,200 active products across multiple categories, and replenishes its inventory twice a week. RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Store is a web-based system designed specifically for the store’s inventory operations and is accessible through desktop and mobile web browsers.
+
+P0093 [Normal] The system supports supports four role workspaces for platform governance, Store administration, inventory management and cashier operations. Its scope covers product and batch inventory, direct stock receiving, physical counts, Stock Issue review, cashier shifts, sales, Receipt History, authorized refunds and corrections, manual GCash services, reports, notifications and audit records. Manual GCash services record reference numbers, fees and internal cash and wallet reconciliation. Staff perform the external GCash transfer separately. Cost-based profit reporting depends on recorded purchase costs.
+
+P0094 [Normal] The Random Forest pipeline estimates recorded sales through a 28-day horizon, with evaluation summaries for 7, 14 and 28-day totals. The current feature set excludes category attributes, prices, promotions and local-event indicators. Forecasts and stock-rule suggestions remain advisory and are labeled by their basis. Training, quality checks, technical and operational review and completed observation evidence are separate from history-readiness labels.
+
+P0095 [Normal] The project is limited to the inventory management and demand forecasting operations of Shalom Store. Forecast accuracy depends on the availability, consistency, completeness, and representativeness of the historical sales data. Sudden changes in customer behavior, natural disasters, market disruptions, supplier shortages, theft, or damaged inventory may reduce forecasting accuracy. The local installation depends on the Store PC, server, database and configured network. Internet access is required for external services such as email and externally hosted assets. Finalized sales remain historical records, while authorized refunds and corrections use linked records rather than silently replacing the original transaction.
+
+P0096 [Heading 2] 1.5 Conceptual Framework
+
+P0097 [Normal] The conceptual framework of this study is based on the Input–Process–Output (IPO) model. It illustrates how inventory, sales, product, and user data are collected and processed by RetailMind to generate demand forecasts and other information that support inventory management and replenishment planning.
+
+T001 [TABLE] Input
+-Historical Sales
+-Current stock levels
+-User sales transactions
+-Product information
+-User information
+
+T002 [TABLE] Output
+
+• Retail: An AI-driven Inventory Management and Demand Forecasting System for High-Volume Department Store 
+
+T003 [TABLE] Process
+•User authentication and transaction recording
+•Inventory updating and monitoring
+• Sales-data cleaning and preprocessing
+• Feature extraction and chronological data splitting
+•Random Forest Regressor training and evaluation using MAE and RMSE
+•Demand forecasting, replenishment recommendation, and periodic retraining
+
+
+P0100 [Normal] Figure 1: Conceptual Framework
+
+P0101 [Normal] The Input phase consists of Store sales and stock records, product information, account information and dated Store Calendar records. Forecasting uses eligible recorded sales history, product identity and target-date information. Other operational inputs support inventory management, access control and classification of the available sales evidence.
+
+P0102 [Normal] The Process phase includes authentication, transaction validation, stock updates and chronological forecasting. The forecasting pipeline constructs 14 predictor features and evaluates Random Forest candidates against a weekly Seasonal Naive baseline using MAE, RMSE and WAPE. Automated qualification, prospective observation and Administrator approval determine whether a candidate may be used operationally.
+
+P0103 [Normal] The Output phase includes inventory information, notifications, reports, Receipt History and buying guidance. For eligible products, buying guidance can use current forecasts. The system identifies suggestions based on stock rules separately. Store personnel make the final purchasing decisions.
+
+P0104 [Heading 2] 1.6 Definition of Terms
+
+P0105 [Normal] The following terms are defined conceptually and operationally as they are used within the context of this study:
+
+P0106 [Normal] Artificial Intelligence (AI). It refers to computer technology that performs tasks requiring intelligent decision-making. This refers to RetailMind's capability to analyze historical sales data and generate demand forecasts using a Random Forest Regressor.
+
+P0107 [Normal] Barcode Scanner. It refers to an electronic device used to read barcode labels for product identification. This refers to the device used in RetailMind to record stock-in, stock-out, and sales transactions accurately.
+
+P0108 [Normal] Demand Forecasting. It refers to the process of estimating future customer demand using historical data. In this implementation, demand forecasting estimates expected recorded product sales for replenishment planning; it does not directly measure all customer demand lost during shortages.
+
+P0109 [Normal] Inventory Management. It refers to the process of monitoring and controlling product inventory. This refers to RetailMind's functions for tracking stock levels, recording inventory movements, and managing inventory records.
+
+P0110 [Normal] Machine Learning (ML). It refers to a field of artificial intelligence that enables systems to learn from historical data. This refers to the technology used by RetailMind to identify sales patterns and generate demand forecasts.
+
+P0111 [Normal] Overstock. It refers to a condition in which inventory exceeds customer demand. This refers to products identified by RetailMind as having stock levels higher than forecasted demand.
+
+P0112 [Normal] Random Forest Regressor (RFR). It refers to a supervised ensemble machine-learning algorithm that combines predictions from multiple decision trees to estimate a continuous numerical value. In RetailMind, the Random Forest Regressor uses product identity, forecast step, sales lags, rolling sales statistics and target-date indicators to estimate recorded sales in Base Units.
+
+P0113 [Normal] Replenishment. It refers to the process of restoring inventory to the required stock level. This refers to RetailMind's recommendations for restocking products based on forecasted demand and current inventory levels.
+
+P0114 [Normal] RetailMind. It refers to an AI-driven inventory management and demand forecasting system. This refers to the proposed web-based system that monitors inventory, records stock transactions, and forecasts product demand for Shalom Store.
+
+P0115 [Normal] Stock-out. It refers to a condition in which a product is unavailable due to insufficient inventory. This refers to RetailMind's detection of low or zero stock levels and generation of low-stock alerts.
+
+P0118 [Heading 1] CHAPTER II
+
+P0119 [Heading 1] REVIEW OF RELATED LITERATURE AND RELATED SYSTEM
+
+P0120 [Heading 2] 2.1 Related Literature
+
+P0121 [Normal] Effective inventory management is a core pillar of retail operations, as it ensures a stable product supply for customers while controlling excess inventory and operational costs. A well-designed inventory system helps balance supply and demand, reduce waste, and improve overall business performance. Modern inventory management systems deliver two categories of benefits: improved operational efficiency that supports decision-making at all organizational levels and an enhanced customer experience through reduced stockouts. Research on AI-driven retail systems shows that intelligent demand forecasting models can significantly improve the matching of supply and demand, leading to higher supply chain efficiency and addressing inefficiencies caused by traditional inventory management methods (Srinivas, 2024). However, many retail organizations still struggle with inefficient inventory management due to insufficient automation, fragmented data systems, and overreliance on traditional management methods.
+
+P0122 [Normal] According to the study by Veluru and Sekhar (2023), the integration of artificial intelligence in retail inventory management significantly enhances demand forecasting, stock optimization, and automated reordering by leveraging historical sales data, market trends, and external factors to generate accurate demand predictions and reduce forecasting errors; this approach directly aligns with RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Stores, It uses predictive information to support advisory replenishment planning, while authorized personnel retain responsibility for purchasing and receiving goods. thereby minimizing stockouts and overstocks, reducing manual errors, improving operational efficiency, and increasing profitability in high-volume retail environments.
+
+P0123 [Normal] Artificial intelligence has become a transformative force in the retail sector, driving improvements in operational efficiency, demand forecasting, and strategic decision-making through predictive analytics, machine learning, and real-time data processing. In the study by Jeyaganesh Viswanathan (2024), AI technologies are described as enabling retailers to analyze customer behavior more accurately, automate inventory replenishment, and optimize logistics operations, leading to reduced operational costs and improved responsiveness to rapidly changing market conditions. These advancements are directly reflected in RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Stores, which applies AI-driven analytics to forecast demand, support automated replenishment, and enhance inventory-related decision-making. By embedding intelligent automation into inventory operations, RetailMind supports the study’s view that AI-powered retail systems are essential for achieving efficiency, scalability, and sustained competitiveness in modern retail environments.transaction from number of departments and sections to get accurate on time information about inventory of department and store for any manager, employee or administrator to see it.
+
+P0124 [Normal] In the study conducted by N. B. Bhavikatta (2025), AI-driven inventory optimization is identified as a critical solution for reducing stockouts and mitigating overstock risks in modern supply chains. The research highlights that machine learning, predictive analytics, and deep learning technologies enhance demand forecasting accuracy, enable automated replenishment, and support multi-echelon inventory management. These findings strongly support the design of RetailMind, which applies AI-based forecasting and automated reordering mechanisms to maintain optimal stock levels in high-volume department stores. By leveraging AI to balance inventory availability and cost efficiency, RetailMind embodies the study’s conclusion that intelligent inventory systems significantly improve supply chain resilience and retail profitability.Forecasting demand for products-whether it is for goods sold online or in-store- is another critical part of improving the inventory. As well, this is particularly important in retail, where consumer demands can swing, often unpredictably, and the inventory can be dependent on seasonality. Forecasts, generated using a model incorporating a wide variety of statistical methods such as time series forecasting can be remarkably accurate, a far superior predictor of future demand than rule-based estimates of need (Makridakis, et al. 2020). With accurate forecasting of demand, retailers can predict changes in shopper behavior, adjust inventory levels appropriately, and limit stock outs.
+
+P0125 [Normal] Demand forecasting is a critical component of effective supply chain and inventory management, especially in markets characterized by high volatility and complex demand patterns. According to Mitta (2023), machine learning models, including deep learning and ensemble techniques, significantly improve demand prediction accuracy by analyzing historical data, market trends, and real-time variables. The study further explains that AI-driven forecasting enables organizations to better align inventory levels and replenishment decisions with anticipated demand, thereby reducing the risks of stockouts and overstocking. These findings are directly applicable to RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Stores, as RetailMind similarly employs predictive analytics and adaptive algorithms to dynamically manage inventory in response to changing demand. By integrating AI-based demand forecasting into inventory operations, RetailMind reflects the study’s conclusion that intelligent systems enhance inventory efficiency, responsiveness, and overall supply chain performance.
+
+P0126 [Normal] In this study Zavaleta-Zarate et al. (2026) developed an inventory-management framework that used Random Forest to forecast demand using daily retail transactions, temporal variables, lagged sales, and relevant external factors. The researchers arranged the data chronologically and applied time-series validation to ensure that earlier records were used to predict future demand. The generated forecasts were incorporated into replenishment planning and evaluated using operational indicators such as stock-outs and inventory fill rate. This study supports the use of a Random Forest Regressor in RetailMind because product demand at Shalom Store may be influenced by interacting historical sales, product-related information, calendar variables, and scheduled events. By analyzing these predictors, the model can generate demand estimates that assist Inventory Managers in making informed replenishment decisions.
+
+P0127 [Normal] Artificial intelligence has increasingly influenced grocery retail operations by improving efficiency, decision-making, and inventory control in local retail environments. The integration of AI technologies among grocery store operators in Laguna, Philippines demonstrates that AI supports the automation of routine tasks, the analysis of large volumes of operational data, and the optimization of inventory management (Alfonso & Alfonso, 2024). The findings indicate that AI adoption enhances operational efficiency and strengthens inventory-related decision-making, which are essential for minimizing stockouts and improving customer satisfaction. The study further emphasizes that the successful implementation of AI in grocery retail depends on organizational readiness, technological infrastructure, and the willingness of store operators to adopt data-driven systems.
+
+P0128 [Normal] The design and implementation of computerized sales and inventory systems have been widely adopted to address inefficiencies associated with manual retail operations. The study on the computerized sales and inventory system for MacSull Grocery Store in Talangan, Madridejos, Cebu examined how automating sales recording, stock monitoring, and income reporting can improve operational accuracy and efficiency (Illustrisimo et al., 2022). The research identified that the store’s previous manual processes led to frequent calculation errors, inaccurate stock counts, misplaced records, and delays in generating financial reports. The implementation of a computerized system enabled more accurate inventory tracking, real-time monitoring of stock levels, and timely preparation of income reports. The findings emphasize the importance of computerized inventory and sales systems in reducing errors, improving record management, and supporting effective decision-making in small to medium-sized grocery retail environments.
+
+P0129 [Normal] According to Bautista Jr. and Young (2022), inventory management plays a crucial role in effective supply and distribution operations, particularly in manufacturing firms. For companies producing food seasoning products in the Philippines, inventory stock represents a valuable asset that must be carefully monitored and controlled. An out-of-stock condition can significantly disrupt business processes, resulting in delays, lost sales, and reduced customer satisfaction. To prevent such issues, it is essential to implement an effective inventory management system that ensures inventory levels are sufficient to meet consumer demand without leading to excess stock. By balancing stock availability with demand requirements, organizations can maintain smooth production flows, minimize holding costs, and enhance overall supply chain efficiency.
+
+P0130 [Normal] Inventory and sales management are fundamental components of retail business operations, as they directly influence product availability, pricing decisions, and overall business growth. The study on the information system development plan for the RRJ/Mr. Lee retail store in Panabo City presents a sales and inventory management system designed to reduce paperwork and address inefficient manual inventory practices by aligning inventory records with actual sales levels (Lastimado et al., 2021). The research emphasizes that computerized inventory systems support more accurate tracking of stock movements and provide management with timely information for decision-making. The findings highlight the importance of information systems in improving operational efficiency, minimizing errors in inventory recording, and supporting effective inventory control in retail store environments.
+
+P0131 [Normal] The implementation of a web-based inventory management system significantly improves inventory control for small business enterprises in the Philippines, particularly those transitioning from manual, paper-based inventory practices (Tanaman et al. 2023). Their study, conducted in Pagadian City, Zamboanga del Sur, highlights how traditional inventory methods are often inefficient, prone to human error, and incapable of providing real-time stock visibility. By introducing a web-based platform, the system enabled business owners to monitor inventory levels online, update stock records in real time, and improve accuracy in inventory tracking. The findings of the study demonstrate that web-based inventory systems enhance operational efficiency, support better decision-making, and provide small enterprises with a practical and scalable solution for managing inventory in a digital environment.
+
+P0132 [Normal] Comparative evaluations of retail demand forecasting models further justify the use of ensemble tree-based algorithms over traditional linear and standalone statistical models. In the M5 Forecasting accuracy benchmark analyzed by Makridakis et al. (2022), machine learning methods that combine lagged sales series, rolling statistical aggregates, and calendar variables consistently outperformed traditional univariate time-series approaches across multi-item retail datasets. Unlike Multiple Linear Regression (MLR), which assumes a strictly linear relationship between predictors and target demand, or Autoregressive Integrated Moving Average (ARIMA), which requires training and tuning a separate parameter set for every individual product, a global Random Forest Regressor (RFR) learns cross-product demand behaviors simultaneously within a single unified model.
+
+P0133 [Normal] Similarly, empirical retail forecasting studies by Googerdchi and Jafari (2025) and Zavaleta-Zarate et al. (2026) highlight that the Random Forest Regressor mitigates overfitting in noisy daily retail transactions through bootstrap aggregating (bagging). Because daily retail logs frequently exhibit zero-sale days interspersed with sudden multi-unit purchases, single decision trees and linear models are highly sensitive to transaction variance. By constructing an ensemble of decorrelated decision trees and averaging their predictions across multi-day horizons (such as 14-day and 28-day replenishment windows), RFR smooths out daily transaction noise and provides stable demand estimates suitable for physical store restocking.
+
+P0134 [Heading 2] 2.1 Related System
+
+P0135 [Normal] Zoho Inventory is an online inventory management tool popular among small and medium retail businesses. It helps users monitor stock levels, handle sales orders, get alerts for low stock, and create basic inventory reports. The system boosts efficiency by minimizing manual data entry and making inventory tracking easier. However, it lacks AI-powered demand forecasting, which can limit its usefulness for large department stores that depend on predictive analytics for precise demand planning.
+
+P0136 [Normal] Figure 2
+
+P0137 [Normal] Zoho Inventory Dashboard
+
+P0150 [Normal] Zoho Inventory is an online inventory management tool popular among small and medium retail businesses. It helps users monitor stock levels, handle sales orders, get alerts for low stock, and create basic inventory reports. The system boosts efficiency by minimizing manual data entry and making inventory tracking easier. However, it lacks AI-powered demand forecasting, which can limit its usefulness for large department stores that depend on predictive analytics for precise demand planning.
+
+P0152 [Normal] Figure 3
+
+P0153 [Normal] SAP Inventory Management System
+
+P0165 [Normal] SAP Inventory Management System is a comprehensive solution designed for large retail companies with complex inventory requirements. It provides real-time tracking, automatic stock replenishment, and smooth integration with sales and supply chain modules. By analyzing historical sales data and analytics, it helps managers forecast demand and optimize inventory levels. The system improves operational efficiency by reducing manual inventory checks and minimizing stock shortages. However, its high cost and complexity make it more suitable for large organizations, potentially limiting its applicability for smaller or mid-sized department stores.
+
+P0172 [Normal] Figure 4
+
+P0173 [Normal] Oracle NetSuite Inventory Management
+
+P0189 [Normal] Oracle NetSuite Inventory Management is a cloud-based platform that allows retailers to oversee inventory across multiple stores. It includes features like demand planning, automated reorder points, order tracking, and real-time inventory tracking. The system enhances customer service by ensuring products are available and minimizing delays due to stockouts. Although NetSuite offers dependable inventory management and reporting, its forecasting is mainly rule-based and doesn't incorporate advanced AI models that can rapidly adjust to shifting consumer behaviors in high-volume retail settings.
+
+P0198 [Normal] Figure 5
+
+P0199 [Normal] IBM Watson Supply Chain Analytics System
+
+P0211 [Normal] IBM watson Supply Chain Analytics is an AI-based platform using machine learning and extensive data analysis to forecast demand and enhance inventory planning. It analyzes past sales, market patterns, and customer behaviors to generate predictive insights that support decision-making. IBM Watson improves operational efficiency by enabling proactive inventory management and reducing supply chain risks. However, despite its advanced features, the platform primarily targets enterprises and involves complex integration, making it less ideal for retailers seeking a straightforward, user-friendly inventory management solution.
+
+P0212 [Heading 2] 2.3 Synthesis
+
+P0213 [Normal] The reviewed inventory management systems demonstrate that modern inventory solutions have significantly improved inventory control through features such as real-time stock monitoring, inventory tracking, automated stock replenishment, inventory reporting, and demand planning. Zoho Inventory provides an efficient inventory management solution for small and medium-sized businesses through stock monitoring and reporting. SAP Inventory Management System offers comprehensive inventory control and enterprise resource planning integration for large organizations. Oracle NetSuite Inventory Management delivers cloud-based inventory management with real-time inventory visibility and automated replenishment, while IBM Watson Supply Chain Analytics utilizes artificial intelligence and machine learning to generate predictive insights that support demand forecasting and inventory optimization.
+
+P0214 [Normal] Despite these capabilities, the reviewed systems present several limitations in relation to the needs of Shalom Store. Zoho Inventory lacks integrated machine learning-based demand forecasting for predictive inventory planning. SAP Inventory Management System, Oracle NetSuite Inventory Management, and IBM Watson Supply Chain Analytics provide advanced forecasting and inventory management capabilities but are primarily designed for large enterprises. Their implementation often requires substantial financial investment, extensive system integration, and specialized technical expertise, making them less practical for a single retail establishment seeking a dedicated and user-friendly inventory management solution.
+
+P0215 [Normal] The system combines shared inventory and sales records with advisory buying guidance. The public benchmark compares Random Forest regression with a weekly Seasonal Naive baseline using chronological data splits. The Store pipeline evaluates candidates against eligible Store history. Authorized Store personnel decide what to buy and record goods through Direct Stock Receiving.
+
+P0216 [Heading 2] 2.4 Technical Background
+
+P0217 [Normal] Table 1
+
+P0218 [Normal] Hardware Tools
+
+T004 [TABLE] Hardware | Decriptions
+Laptop
+ | Used by the developers for designing, coding, testing, debugging, and maintaining the RetailMind system. It is also used for training and testing the machine learning model and managing the project database.
+Smartphone | Allows Inventory Managers and Floor Staff to access the web-based system, monitor stock levels, record transactions, and receive inventory notifications while inside the store.
+Barcode Scanner | Scans product barcodes during stock receiving and inventory transactions, minimizing manual encoding errors and speeding up inventory operations.
+Thermal Printer | Prints customer sales receipts and barcode labels during Point of Sale (POS) checkout and product registration, speeding up transaction processing and supporting accurate physical record-keeping.
+
+P0222 [Normal] Table 2
+
+P0223 [Normal] Software Tools
+
+T005 [TABLE] Software | Description
+Visual Studio Code | Primary source-code editor used to develop the RetailMind web application using PHP, HTML, CSS, JavaScript, and Python.
+PHP | Server-side programming language responsible for processing user requests, implementing business logic, managing inventory operations, and communicating with the database.
+HTML5 | Provides the structural layout of the RetailMind web pages, including dashboards, inventory modules, reports, and forecasting interfaces.
+CSS3 | Styles the web interface by defining layouts, typography, colors, tables, forms, and responsive designs for different screen sizes.
+JavaScript | Adds dynamic functionality such as form validation, notifications, real-time dashboard updates, interactive tables, and asynchronous communication with the server.
+Python | Programming language used to implement the machine learning component responsible for preprocessing historical sales data, training the Random Forest Regressor (RFR) model, generating demand forecasts, and exporting prediction results for integration into the RetailMind web application.
+Scikit-learn | Python machine learning library used to implement the Random Forest Regressor (RFR) model for training, evaluating, and generating demand forecasts based on historical sales data.
+Random Forest Regressor (RFR) | A supervised ensemble machine-learning algorithm that combines predictions from multiple decision trees to capture nonlinear patterns and interactions among historical sales, product, and calendar variables for demand forecasting.
+Pandas | Python library used to clean, organize, preprocess, and analyze historical sales data before it is processed by the forecasting model.
+Google Colab | Cloud-based Python notebook environment used to preprocess historical sales data, engineer predictor features, and train, validate, and benchmark the Random Forest Regressor (RFR) demand forecasting model using MAE, RMSE, and WAPE metrics prior to local system integration.
+MySQL | 	Relational database management system that stores users, inventory records, product information, sales transactions, forecasting results, audit logs, and reports.
+phpMyAdmin | Web-based administration tool used to create, modify, and manage the MySQL database during development and maintenance.
+XAMPP | Local development environment that includes Apache, PHP, and MySQL, allowing developers to build and test the RetailMind system before deployment.
+Google Chrome | Web browsers used to test the functionality, compatibility, and responsiveness of the RetailMind application.
+
+P0225 [Normal] The proposed system adopts a hybrid architecture in which PHP manages the web application, inventory operations, POS and GCash transactions, and database interactions, while Python implements the Random Forest Regressor (RFR) model using the Scikit-learn library for demand forecasting. Initial model experimentation, feature engineering, and validation are conducted in Google Colab before deploying the forecasting pipeline to the local environment. Historical sales data are retrieved from the MySQL database, processed by the Python forecasting module, and the generated predictions are stored back in the database for presentation through the PHP-based RetailMind web application
+
+P0226 [Heading 1] CHAPTER III
+
+P0227 [Heading 1] METHODOLOGY
+
+P0228 [Heading 2] 3.1 Requirement Analysis
+
+P0229 [Heading 3] 3.1.1 Research Design
+
+P0230 [Normal] The development of the proposed system follows the Agile Scrum software development methodology, which supports an iterative and collaborative approach to system development. Through incremental development cycles, this methodology allows the proponents to continuously refine the system based on stakeholder feedback and changing requirements. It also helps ensure that the proposed system remains aligned with the operational needs of Shalom Store while maintaining flexibility throughout the development process.
+
+P0232 [Normal] Figure 6
+
+P0233 [Normal] Agile Software Development Model
+
+P0246 [Normal] The development process begins with Requirements Gathering, during which interviews, observations, and consultations are conducted to identify the client’s inventory management practices, operational challenges, and system requirements. This is followed by the Design and Development phases, in which the system architecture, database, user interface, and web application are designed and implemented using PHP, HTML5, CSS3, JavaScript, and MySQL.
+
+P0247 [Normal] During development, a Python-based Random Forest Regressor (RFR), implemented using the Scikit-learn library, is integrated into the system. The model analyzes historical sales data using 14 engineered predictor variables—including product and horizon identifiers, autoregressive sales lags, rolling demand statistics, and calendar indicators—to generate 7-, 14-, and 28-day demand forecasts that support inventory replenishment planning.
+
+P0248 [Normal] After development, the system undergoes Testing, Deployment, and Review to ensure that its functions operate according to the specified requirements. Functional testing, integration testing, forecast accuracy testing, and User Acceptance Testing (UAT) are conducted to evaluate the system’s reliability, usability, integration, and forecasting performance.
+
+P0249 [Normal] Following deployment, RetailMind is continuously refined through stakeholder feedback, software enhancements, and development iterations. The Random Forest Regressor may also be periodically retrained using newly recorded sales data to keep its forecasts responsive to changing demand patterns and ensure that the system continues to support the operational requirements of Shalom Store.
+
+P0256 [Heading 3] 3.1.2 Current Technical Situation
+
+P0257 [Normal] Figure 7
+
+P0258 [Normal] Current Technical Situation
+
+P0272 [Normal] The figure illustrates the existing inventory management process employed by Shalom Store prior to the development of the proposed RetailMind system. When a customer purchases a product, the cashier records the transaction using a cash register; however, inventory quantities are not automatically updated. Instead, inventory records are manually maintained in a physical logbook by the inventory manager. To determine current stock levels, the inventory manager conducts periodic physical stock counts and manually compares the remaining inventory with the entries recorded in the logbook.
+
+P0273 [Normal] Based on these manually maintained records, the inventory manager determines when products require replenishment. Reordering decisions rely heavily on personal experience, observed remaining stock during physical inspections, and historical sales records. Due to the absence of real-time monitoring, automated inventory updates, and demand forecasting capabilities, low-stock situations are often identified only when inventory levels are already critically low. As a result, the existing manual process is time-consuming, prone to human error, and may lead to stock-outs, overstocking, inaccurate inventory records, and delays in inventory-related decision-making.
+
+P0274 [Heading 1] 3.2 Requirements Documentation
+
+P0275 [Heading 3] 3.2.1 Hardware and Software Requirements
+
+P0276 [Normal] The table below shows the hardware and software needed for the implementation of the
+
+P0277 [Normal] proposed system.
+
+P0279 [Normal] Table 3
+
+P0280 [Normal] Hardware Requirements
+
+T006 [TABLE] Components | Specification | Purpose
+PC/Laptop | For Shalom Store Employee
+• CPU: quad-core, at least
+2.0 GHz
+• RAM: at least 4 GB
+• Free storage space: 15 GB
+• Resolution of the display:
+1366 x 768
+• Internet: Broadband,
+download speed of at least
+10 Mbps | Utilized for development,
+day-to-day operations,
+and system access for
+inventory management
+duties.
+Server/Localhost | The system will be deployed 
+Local in Shalom computer:
+• Processor: Intel Xeon or a
+similar model
+• RAM: at least 8 GB
+• 250 GB of SSD storage
+• Operating system:
+Windows Server or Ubuntu
+Server | Enables local hosting of
+the database and
+application for system
+deployment and internal
+access.
+Smartphone / Tablet | Optional for department
+users:
+• Support for the newest
+browsers and a steady
+connection for iOS and
+Android | Enables department users
+to carry out mobile-based
+tasks and remotely access
+the system.
+Barcode Scanner (Optional) | USB or Wireless Barcode Scanner | Speeds up product identification during stock receiving and inventory transactions while reducing manual encoding errors.
+Thermal Printer | 58mm or 80mm USB / Bluetooth Direct Thermal Receipt & Label Printer | Prints customer sales receipts during Point of Sale (POS) checkout and product barcode labels during stock registration, supporting accurate physical record-keeping.
+
+P0282 [Normal] Table 4
+
+P0283 [Normal] Software Requirements
+
+T007 [TABLE] Tools | Description | Purpose
+Operating System | macOS 10.15+, Ubuntu
+20.04+, or Windows 11
+or later | provide the
+fundamental
+environment needed
+to run the system
+and development
+tools.
+Web Browser | Firefox, Safari, and
+Chrome (latest version) | enables users to
+engage with and
+access the web-
+based system.
+Programming Language | PHP 8+ | Utilized to construct
+the system backend
+logic and features.
+Database System | MySQL 8+ (for
+development) | Maintains and keeps
+track of user,
+transactions, and
+inventory data.
+Frameworks & Libraries |  Bootstrap 5 (UI) | Offers improved
+features, UI
+components, and
+structure to facilitate
+quicker
+development.
+Notification Integration | EmailJS, Twilio, or
+Gmail SMTP (if an SMS
+alert is required) | Delivers warnings or
+notifications in real
+time by SMS or
+email.
+Source Code Editor | Visual Studio Code | Used for writing, editing, debugging, and maintaining the system source code.
+Machine Learning Language | Python 3.11+ | Implements the demand forecasting module and processes historical sales data.
+Machine Learning Library | Scikit-learn | Provides the Random Forest Regressor algorithm used for predicting future product demand.
+Google Colab | A cloud-based notebook environment used to run Python code for the forecasting experiment. | Used to train and evaluate the Random Forest Regressor on a public M5 retail dataset subset and compare its 7-, 14-, and 28-day forecast errors with the Seasonal Naive baseline.
+Version Control (Optional) | Git and GitHub | Manages source code versions and facilitates collaboration among developers.
+
+P0285 [Heading 3] 3.2.2 Functional Requirements
+
+P0286 [Normal] The proposed RetailMind shall provide four workspaces for the Super Administrator, Administrator, Inventory Manager and Cashier. The application shall authenticate users and enforce the permissions of the active workspace. The Super Administrator shall manage technical platform settings and maintenance. The Store Administrator shall oversee delegated staff accounts, fiscal periods, operational reviews and eligible model approval.
+
+P0287 [Normal] The system shall provide a role-based dashboard that displays relevant information, including inventory summaries, low-stock notifications, recent transactions, sales trends, and demand forecasting results. Inventory Managers shall be able to add, update, archive, search, filter, and organize products and product categories. The system shall monitor inventory levels in real time and identify products as available, low-stock, or out-of-stock based on their recorded quantities and predefined minimum stock levels.
+
+P0288 [Normal] The Inventory Manager shall maintain product and stock records, record direct receiving, review physical counts and Stock Issues, and consult buying guidance. The Cashier shall record sales through an authorized shift, access permitted receipts, submit Stock Issues and record authorized manual GCash services. Finalized sales shall be preserved in Receipt History. Authorized refunds and corrections shall be recorded as linked transactions.
+
+P0289 [Normal] The forecasting pipeline shall use a Random Forest Regressor to estimate recorded sales within a 28-day horizon. The workspace shall display 7-, 14- and 28-day totals where eligible forecast output exists. Stock-rule suggestions shall be identified separately. Buying guidance shall remain advisory, and goods received shall be recorded through Direct Stock Receiving.
+
+P0290 [Normal] The forecasting module shall be developed using Python and the Scikit-learn library and integrated with the PHP-based web application. The Random Forest Regressor shall be trained using historical sales records and periodically retrained using newly recorded sales data. The generated forecasts shall be stored in the system and displayed through the dashboard and demand forecasting reports.
+
+P0291 [Normal] Based on forecasted demand, current inventory quantities, and predefined stock thresholds, the system shall provide replenishment recommendations to assist Inventory Managers in making timely restocking decisions. These recommendations shall function only as decision-support information, and final replenishment decisions shall remain under the authority of the Inventory Manager. The system shall also support CSV file imports for the efficient processing and updating of multiple product records.
+
+P0292 [Normal] RetailMind shall generate printable and exportable reports, including inventory summaries, stock movement reports, sales reports, low-stock reports, overstock reports, and demand forecasting reports. The system shall maintain an audit trail of user activities, including login sessions, inventory modifications, sales transactions, forecasting activities, and account management actions, for monitoring, accountability, and security purposes.
+
+P0293 [Normal] The System Administrator shall be able to manage fiscal periods by opening and closing inventory tracking cycles. Closed fiscal periods shall become read-only to preserve the integrity of historical records. The system shall also automatically send email notifications to Inventory Managers regarding low-stock products and significant changes in forecasted demand.
+
+P0294 [Heading 3] 3.2.3 Non-Functional Requirements
+
+P0295 [Normal] RetailMind shall provide a user-friendly, secure, and responsive web-based environment for inventory management and demand forecasting. The interface shall enable users with minimal technical knowledge to perform authorized tasks using desktop and mobile web browsers. User and business information shall be protected through secure authentication, encrypted passwords, session management, and role-based access control. Relevant user activities shall also be recorded in an audit log for accountability and security monitoring.
+
+P0296 [Normal] RetailMind protects account credentials through password hashing and enforces authenticated sessions and role-based access controls. Desktop and mobile browsers access the application through the Store server.
+
+P0297 [Normal] The forecasting component shall generate product-demand predictions using a trained Random Forest Regressor and selected historical, product-related, and calendar-based predictor variables. Forecasting performance shall be evaluated using Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE), where lower values indicate better forecasting accuracy. Generated forecasts and replenishment recommendations shall function only as decision-support information and shall not automatically perform inventory transactions.
+
+P0298 [Normal] RetailMind supports encrypted Database Backup packages and local restoration. An authorized Administrator or Super Administrator confirms replacement with their current login password. The restoration workflow checks the package and destination, handles account conflicts, creates a destination safety copy and pauses Store writes. The Store is reopened after verification and explicit confirmation. It shall be accessible to authorized users through an internet connection whenever the application server is available. The system shall accommodate increasing numbers of users, products, inventory transactions, and historical sales records without significantly affecting normal performance. A modular architecture shall support maintenance, software updates, bug fixes, security improvements, future enhancements, and periodic retraining of the Random Forest Regressor. Database backups and recovery procedures shall also be maintained to reduce the risk of permanent data loss and support the system’s long-term reliability.
+
+P0301 [Heading 2] 3.3 Design of Software, Systems, Product, and/or Processes
+
+P0302 [Heading 3] 3.3.1 System Architecture
+
+P0303 [Normal] Figure 8
+
+P0304 [Normal] System Architecture
+
+P0315 [Normal] The proposed system follows a three-tier architecture consisting of a presentation layer, an application layer and a data layer. Authorized personnel use desktop or mobile browsers to access the appropriate workspace. The Store PC hosts the PHP web application and the central MySQL-compatible database. The application validates requests and records inventory, sales, receiving, account and audit data.
+
+P0316 [Normal] The forecasting scheduler queues eligible jobs for the Python worker. The worker uses historical evidence and the 14 specified model features to train and evaluate candidates or generate daily forecasts. The PHP application reads persisted forecast and evaluation records for display. Inventory and sales workflows use separate transaction services and can continue during forecasting work.
+
+P0317 [Normal] Figure 9
+
+P0318 [Normal] Context Diagram
+
+P0331 [Normal] The RetailMind system connects the System Administrator, Inventory Manager, and Floor Cashier through a centralized inventory management workflow. The System Administrator manages user accounts, configures system settings, assigns user roles, monitors audit logs, and oversees inventory records. The Inventory Manager manages product information by updating inventory, recording stock transactions, monitoring inventory levels, generating reports, and reviewing AI-based demand forecasting results to support replenishment planning. The Floor Staff/Cashier logs into the system to record sales transactions, update stock movements, receive stock status notifications, and monitor product availability. Throughout the process, the system automatically updates inventory records, generates reports, provides low-stock alerts, and delivers demand forecasting insights, enabling accurate inventory monitoring, informed decision-making, and efficient inventory management within Shalom Store.
+
+P0333 [Heading 3] 3.3.3 Data Flow Diagram
+
+P0334 [Normal] Figure 10
+
+P0335 [Normal] Data Flow Diagram
+
+P0347 [Normal] This diagram illustrates the overall flow of data within the RetailMind system by showing how the System Administrator, Inventory Manager, and Cashier interact with the system's major processes and data stores. It demonstrates how user transactions are processed, stored, and retrieved to support user management, inventory control, sales recording, demand forecasting, replenishment planning, notifications, and report generation for efficient retail operations
+
+P0349 [Heading 3] 3.3.4 Use Case Diagram
+
+P0350 [Normal] Figure 11
+
+P0351 [Normal] Use Case Diagram
+
+P0352 [Normal] The figure shows the use cases of the RetailMind system and the functions available to the System Administrator, Cashier, and Inventory Manager. It illustrates how each user role interacts with specific system features, including user management, sales processing, inventory monitoring, demand forecasting, replenishment recommendations, and report generation.
+
+P0355 [Heading 3] 3.3.5 Entity Relationship Diagram
+
+P0356 [Normal] Figure 12
+
+P0357 [Normal] Entity Relationship Diagram
+
+P0359 [Normal] This Figure 11 illustrates the logical structure of the RetailMind database and the relationships among its core entities. The ERD shows how administrative, inventory, and sales data are interconnected through entities such as users, roles, products, inventory, sales, forecasts, and reports. It highlights primary and foreign key relationships that support user management, inventory tracking, demand forecasting, sales processing, and system auditing. Overall, the diagram demonstrates how data flows across different system modules while maintaining data integrity and supporting efficient retail operations.
+
+P0361 [Normal] Table 5
+Data Dictionary
+
+T008 [TABLE] Table | Field Name | Field Type | Length | Key | Description
+roles | role_id | INT | 11 | PK | Unique identifier for each role
+roles | role_name | VARCHAR | 50 | UK | Name of the role
+users | user_id | INT | 11 | PK | Unique identifier for each user
+users | role_id | INT | 11 | FK | References roles table
+users | full_name | VARCHAR | 100 | — | Full name of the user
+users | username | VARCHAR | 50 | UK | Login username
+users | password_hash | VARCHAR | 255 | — | Encrypted password
+users | status | ENUM | — | — | Account status
+users | created_at | TIMESTAMP | — | — | Account creation date
+system_settings | setting_id | INT | 11 | PK | System setting identifier
+system_settings | setting_key | VARCHAR | 100 | UK | Setting name
+system_settings | setting_value | TEXT | — | — | Setting value
+system_settings | updated_at | TIMESTAMP | — | — | Last updated timestamp
+fiscal_periods | fiscal_id | INT | 11 | PK | Unique identifier for each fiscal period
+fiscal_periods | period_name | VARCHAR | 50 | UK | Unique name assigned to the fiscal period
+fiscal_periods | start_date | DATE |  |  | Starting date of the fiscal period
+fiscal_periods | end_date | DATE |  |  | Ending date of the fiscal period
+fiscal_periods | status | ENUM |  |  | Current status of the fiscal period, such as Open or Closed
+fiscal_periods | created_by | INT | 11 | FK | References the user who created the fiscal period
+fiscal_periods | created_at | TIMESTAMP |  |  | Date and time when the fiscal period was created
+fiscal_periods | closed_at | TIMESTAMP |  |  | Date and time when the fiscal period was closed; null while open
+audit_logs | log_id | INT | 11 | PK | Audit log identifier
+audit_logs | user_id | INT | 11 | FK | User performing the action
+audit_logs | action | TEXT | — | — | Activity description
+audit_logs | log_date | TIMESTAMP | — | — | Date of activity
+categories | category_id | INT | 11 | PK | Category identifier
+categories | category_name | VARCHAR | 100 | — | Category name
+products | product_id | INT | 11 | PK | Product identifier
+products | category_id | INT | 11 | FK | Product category
+products | product_name | VARCHAR | 150 | — | Product name
+products | barcode | VARCHAR | 100 | UK | Product barcode
+products | reorder_level | INT | 11 | — | Minimum stock level
+inventory | inventory_id | INT | 11 | PK | Inventory identifier
+inventory | product_id | INT | 11 | FK | Product reference
+inventory | quantity | INT | 11 | — | Available quantity
+inventory | last_updated | TIMESTAMP | — | — | Last update timestamp
+inventory_transactions | transaction_id | INT | 11 | PK | Transaction identifier
+inventory_transactions | product_id | INT | 11 | FK | Product involved
+inventory_transactions | user_id | INT | 11 | FK | User responsible
+inventory_transactions | transaction_type | ENUM | — | — | Type of transaction
+inventory_transactions | quantity | INT | 11 | — | Quantity changed
+inventory_transactions | transaction_date | TIMESTAMP | — | — | Transaction date
+demand_forecasts | forecast_id | INT | 11 | PK | Forecast identifier
+demand_forecasts | product_id | INT | 11 | FK | Forecasted product
+demand_forecasts | forecast_period | VARCHAR | 50 | — | Forecast period
+demand_forecasts | predicted_demand | INT | 11 | — | Predicted demand
+demand_forecasts | generated_at | TIMESTAMP | — | — | Generation date
+replenishment_requests | request_id | INT | 11 | PK | Request identifier
+replenishment_requests | product_id | INT | 11 | FK | Product requested
+replenishment_requests | requested_by | INT | 11 | FK | Requesting user
+replenishment_requests | recommended_quantity | INT | 11 | — | Recommended quantity
+replenishment_requests | status | ENUM | — | — | Request status
+replenishment_requests | request_date | TIMESTAMP | — | — | Request date
+reports | report_id | INT | 11 | PK | Report identifier
+reports | report_type | VARCHAR | 100 | — | Type of report
+reports | generated_by | INT | 11 | FK | User who generated
+reports | generated_at | TIMESTAMP | — | — | Generation date
+sales | sale_id | INT | 11 | PK | Sale identifier
+sales | cashier_id | INT | 11 | FK | Cashier user
+sales | sale_date | TIMESTAMP | — | — | Sale date
+sales_items | sales_item_id | INT | 11 | PK | Sales item identifier
+sales_items | sale_id | INT | 11 | FK | Sale reference
+sales_items | product_id | INT | 11 | FK | Product sold
+sales_items | quantity | INT | 11 | — | Quantity sold
+sales_items | price | DECIMAL | 10,2 | — | Item price
+damage_reports | damage_id | INT | 11 | PK | Damage report ID
+damage_reports | product_id | INT | 11 | FK | Damaged product
+damage_reports | reported_by | INT | 11 | FK | Reporting user
+damage_reports | quantity | INT | 11 | — | Damaged quantity
+damage_reports | remarks | TEXT | — | — | Remarks
+damage_reports | report_date | TIMESTAMP | — | — | Report date
+notifications | notification_id | INT | 11 | PK | Notification identifier
+notifications | user_id | INT | 11 | FK | Recipient user
+notifications | message | TEXT | — | — | Notification message
+notifications | status | ENUM | — | — | Read status
+notifications | created_at | TIMESTAMP | — | — | Creation date
+
+P0364 [Heading 2] 3.4 Development and Testing
+
+P0365 [Heading 3] 3.4.1 Development
+
+P0366 [Normal] The proponents adopted the Agile Scrum development methodology to develop RetailMind, a web-based inventory management and demand forecasting system designed for Shalom Store. Agile Scrum enabled iterative development, continuous stakeholder feedback, and incremental improvements throughout the project lifecycle, ensuring that the system remained aligned with the operational requirements of the client.
+
+P0367 [Normal] The development process began with requirements gathering through interviews and observations of Shalom Store's existing inventory management practices. This phase identified challenges related to inventory monitoring, sales recording, stock replenishment, and demand forecasting. Based on the gathered requirements, the proponents designed the system architecture, database schema, user interface, and process flow. The web application was developed using PHP, HTML5, CSS3, JavaScript, Bootstrap, and MySQL, while the demand forecasting component was implemented using Python and the Scikit-learn library. The forecasting module utilizes a Random Forest Regressor (RFR) model that analyzes historical sales data using 14 engineered predictor features (product_id, horizon_day, lag_1, lag_7, lag_14, lag_28, rolling_mean_7, rolling_std_7, rolling_mean_28, rolling_std_28, day_of_week, day_of_month, month, and is_weekend) across 7-, 14-, and 28-day horizons. During model training, these predictor variables are automatically extracted from historical sales records, product information, and calendar data stored in the database, eliminating the need for additional manual data entry.
+
+P0368 [Normal] The developed system consists of several integrated modules, including user management, inventory management, barcode-supported product registration, sales transaction recording, inventory transactions, demand forecasting, inventory reporting, audit logging, notification services, and replenishment recommendation generation. As new sales transactions are recorded, they are stored in the database and become part of the historical sales dataset used for periodic retraining of the Random Forest model, allowing the forecasting module to improve its predictions as more sales data become available. Each completed module underwent continuous testing and refinement to verify functionality, usability, system integration, and forecasting performance. Feedback gathered during each Agile sprint was incorporated into subsequent iterations to ensure that the final system satisfied the project's functional and non-functional requirements before deployment.
+
+P0369 [Heading 3] 3.4.2 Machine Learning Training Pipeline
+
+P0370 [Normal] To validate the predictive capability of the Random Forest Regressor (RFR) before live store activation, the proponents implemented a reproducible training and evaluation pipeline in Google Colab using Python, pandas (v2.2.3), numpy, pyarrow, and scikit-learn. Because Shalom Store previously relied on manual physical logbooks without digitized item-level daily sales histories, pre-deployment model benchmarking was conducted using a pinned subset of the public M5 retail dataset (50 products from the CA_1 FOODS retail store category across 730 training days from March 1, 2014 to February 28, 2016), while enforcing a strict integration boundary so that public benchmark data remain completely isolated from Shalom Store's production database.
+
+P0371 [Normal] The machine learning method processes historical sales records to predict the target variable units_sold across 7-day, 14-day, and 28-day forecasting horizons using 14 engineered predictor features:
+
+P0372 [Normal] Table 6
+
+P0373 [Normal] Engineered Predictor Features Used in the Random Forest Regressor Training Pipeline
+
+T009 [TABLE] Feature Category | Engineered Feature Name(s) | Count | Operational Purpose in Demand Forecasting
+Product & Horizon Identifiers | product_id, horizon_day | 2 | Identifies the specific product and the target forecast step (1 to 28 days ahead) for multi-horizon prediction.
+Autoregressive Sales Lags | lag_1, lag_7, lag_14, lag_28 | 4 | Captures historical units sold 1 day, 1 week, 2 weeks, and 4 weeks prior to the forecast origin.
+Rolling Demand Statistics | rolling_mean_7, rolling_std_7, rolling_mean_28, rolling_std_28 | 4 | Measures recent short-term (7-day) and monthly (28-day) sales velocity and demand volatility.
+Calendar & Temporal Indicators | day_of_week, day_of_month, month, is_weekend | 4 | Captures weekly shopping cycles, weekend customer surges, payday periods, and monthly seasonality.
+
+P0375 [Normal] To prevent temporal data leakage—where future sales information inadvertently influence	past predictions during random shuffling—the pipeline enforces a strict Rolling-Origin Chronological Validation split . The model is trained on two years of historical daily sales (730 days), the subsequent two 28-day chronological blocks are used solely as validation folds to calibrate the sale-day classification threshold (set at 0.5), and the final held-out 28-day window serves as the unseen Testing Set. To ensure that the AI model provides measurable value over simple rule-based estimation, RFR predictions are benchmarked directly against a Seasonal Naive Baseline ('predict the exact same unit sales recorded on the same day last week') across 7-day, 14-day, and 28-day horizons.
+
+P0376 [Heading 3] 3.4.2 Testing
+
+P0377 [Normal] 3.4.2.1 Alpha Testing
+
+P0378 [Normal] To ensure the quality, reliability, and functionality of RetailMind, the proponents conducted both Alpha Testing and Beta Testing. Alpha Testing was performed internally to verify that all modules function correctly before release. Beta Testing was then conducted with the intended users of the system to evaluate its usability, functionality, reliability, and overall performance under actual operating conditions.
+
+P0379 [Heading 3] 3.4.2.2 Forecast Accuracy Testing
+
+P0380 [Normal] The demand forecasting module underwent Forecast Accuracy Testing in Google Colab to evaluate the predictive performance of the Random Forest Regressor (RFR) against the Seasonal Naive baseline before operational deployment. Model performance across 7-day, 14-day, and 28-day horizons was evaluated using Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), Weighted Absolute Percentage Error (WAPE), and Any-Sale-Day Classification F1-Score. Furthermore, to ensure safe operational deployment at Shalom Store, the system enforces strict Data Readiness bands based on accumulated local store history: below 56 days (Insufficient), 56–179 days (Low), 180–364 days (Medium), and 365+ days (High, subject to chronological validation pass).
+
+P0386 [Normal] Table 7
+
+P0387 [Normal] Forecast Accuracy Evaluation Activities and Expected Outcomes
+
+T010 [TABLE] Evaluation Activity | Validation Method / Metric | Expected Outcome
+Extract and engineer 14 temporal, lag, and rolling features from historical sales data | Automated feature pipeline (m5_sales_experiment.py) | 14 predictor columns generated without data leakage
+Perform chronological rolling-origin data splitting (Fold 3 held-out test) | 730-day training set, two 28-day validation blocks, final 28-day test set | Chronological train, validation, and test partitions created
+Train the Random Forest Regressor (RFR) and Seasonal Naive baseline model | Scikit-learn RandomForestRegressor vs. 7-day lag rule | Models trained and daily/horizon predictions exported to CSV
+Compute per-product horizon Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) | Horizon unit totals across 7, 14, and 28 days | MAE and RMSE values calculated in product units
+Compute Weighted Absolute Percentage Error (WAPE) and Sale-Day F1-Score | Aggregate error percentage and sale-day recall/F1 at 0.5 threshold | RFR outperforms baseline WAPE on 14-day and 28-day horizons
+
+P0389 [Normal] Table 9
+Alpha Testing Table
+
+T011 [TABLE] Module | Activity | Expected Outcome | Duration
+1. System Administrator |  |  | 
+Manage Users | Create, edit, and deactivate accounts; assign roles and permissions. | Account changes are saved and permissions are enforced. | 30 min
+System Settings | Update system and notification settings. | Updated settings take effect. | 20 min
+Fiscal Period Management | Open and close fiscal periods. | Period status changes; closing locks inventory records. | 20 min
+Audit Logs | View activity logs; filter by user and date. | Matching activities are displayed. | 20 min
+Report Generation | Generate inventory, sales, and demand forecast reports. | All three reports are generated. | 30 min
+2. Inventory Manager |  |  | 
+Product Management | Add products by barcode or manually; edit products; organize or archive categories. | Product and category changes are saved. | 45 min
+Inventory Transactions | Record stock in, stock out, and quantity adjustments. | Stock balances update immediately and accurately. | 60 min
+CSV Import | Upload and validate a CSV file; update product records in bulk. | Valid records are imported; invalid entries are flagged. | 30 min
+Demand Forecasting | Validate the Random Forest Regressor pipeline using the 14 engineered features; check Data Readiness status, Forecast Exceptions queue, and Replenishment Recommendations. | The system displays Data Readiness bands, flags forecast exceptions, and provides stock-rule replenishment suggestions while store sales history is being accumulated | 45 min
+Replenishment Requests | View suggested reorder quantities; create and track requests. | Suggested quantities and request statuses are displayed. | 30 min
+Inventory Overview
+
+ | Check low-stock alerts and out-of-stock items. | Low-stock notifications appear and out-of-stock items are listed. | 20 min
+3. Cashier |  |  | 
+Sales Transactions | Record sales and generate receipts. | Sales are saved, stock is deducted automatically, and receipts are generated. | 60 min
+Stock Receiving | Record deliveries and verify received quantities. | Stock increases by the verified quantities. | 30 min
+Damage Reporting | Report damaged, expired, or missing items; submit adjustment requests. | Reports and adjustment requests are saved. | 20 min
+Product Availability | Search for products and check stock before a sale. | Matching products and current stock levels are displayed. | 20 min
+Transaction History | Search past sales and review transaction details. | Matching sales and their details are displayed. | 20 min
+
+P0393 [Heading 3] 3.4.2.2 Beta Testing
+
+P0394 [Normal] Beta testing evaluates RetailMind with the Admin, Inventory Manager and Cashier at Shalom Store. Each respondent answers only the questionnaire for the role tested. The evaluation covers the eight ISO/IEC 25010 software quality characteristics used in the study: functional suitability, performance efficiency, compatibility, usability, reliability, security, maintainability and portability. Feedback will guide system improvements and retesting.
+
+P0397 [Normal] Table 10
+
+P0398 [Normal] Evaluation Form For Admin
+
+P0399 [Normal] Admin Beta Evaluation Questionnaire
+
+P0400 [Normal] Role: Admin
+
+P0401 [Normal] Respondent: _______________________            Date: ___________________
+
+P0402 [Normal] Signature: _________________________
+
+P0403 [Normal] Instruction: Rate only tasks you performed or directly observed in this role. Mark one box per statement: 5 = Strongly agree; 4 = Agree; 3 = Neutral; 2 = Disagree; 1 = Strongly disagree.
+
+T012 [TABLE] ISO/IEC 25010 Quality Characteristic | Evaluation Statement | 5 | 4 | 3 | 2 | 1
+Functional Suitability | 1. The system allows the Admin to create, update, and deactivate test staff accounts and assign the intended store roles. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 2. The system displays sales and gross profit for the selected dates that match the prepared test totals. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 3. The system enables the Admin to complete the assigned oversight tasks for cashier shifts, GCash records, fiscal periods, and operational audit records. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 4. The system allows the Admin to create and download a Database Backup for the assigned test. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 5. The system allows the Admin to request forecast generation and identify whether the job was queued, completed, or unsuccessful. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 1. The system loads the Store Overview quickly enough to review the selected reporting period. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 2. The system saves the assigned staff, register, or store setting changes without a disruptive wait. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 3. The system opens store reports quickly enough to continue reviewing store operations. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 4. The system returns the assigned records through Operational Audit filters without a disruptive wait. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 5. The system returns a status message upon requesting forecast generation quickly enough to continue other tasks. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 1. The system operates alongside another store application without interrupting administrative tasks. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 2. The system exports reports that open correctly in the viewer used by the store. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 3. The system consistently displays records created by the Cashier or Inventory Manager in the administrative reports. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 4. The system works properly across the administrative pages in the supported browser used for the test. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 5. The system prints reports that preserve readable headings, dates, and amounts. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 1. The system provides Admin menus that make it easy to find Store Staff, Registers, Store Settings, and Operational Audit. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 2. The system displays dates, sales amounts, and gross profit status clearly enough to interpret. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 3. The system clearly explains validation errors or unavailable information during administrative tasks. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 4. The system clearly indicates which reporting period is open or closed through the fiscal period status. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 5. The system makes it clear how to create and download a backup on the Database Backup page. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 1. The system retains accurate staff account and store setting changes when reopened. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 2. The system prevents attempts to change protected records within a closed test fiscal period. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 3. The system lists the created Database Backup in the backup list and allows it to be downloaded. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 4. The system returns consistent totals using the same report filters when no test records have changed. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 5. The system displays the results of a completed forecast job or an understandable unavailable status when the page is reopened. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 1. The system rejects incorrect passwords and requires signing in again after signing out to reopen protected pages. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 2. The system prevents direct stock editing and cashier checkout from the Admin workspace when testing access boundaries. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 3. The system records the assigned administrative action in the Operational Audit with the correct user and action details. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 4. The system restricts choices on the staff role assignment screen to the store roles allowed for Admin. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 5. The system blocks attempts from the Admin workspace to restore a database or retrain a forecasting model. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 1. The system allows changing an allowed store setting without needing a program change. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 2. The system performs the affected administrative task as expected when repeated after an assigned configuration change. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 3. The system allows the affected task to be repeated successfully after a reported administrative defect is corrected. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 4. The system displays the intended workspace upon signing in with an account after its test staff role is changed. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 5. The system allows reopening an existing administrative report with its expected values after a tested system update. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 1. The system allows signing in and reopening the required administrative pages in a second supported browser. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 2. The system allows reviewing the required administrative records on another supported device using the same store data. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 3. The system keeps the Admin pages readable and their required controls usable at the tested supported screen sizes. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 4. The system allows reviewing an administrative report after signing in again on another supported store computer. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 5. The system allows completing the assigned administrative task after resizing the supported browser window. | ☐ | ☐ | ☐ | ☐ | ☐
+
+P0408 [Normal] Table 11
+
+P0409 [Normal] Evaluation Form For Inventory Manager
+
+P0411 [Normal] Inventory Manager Beta Evaluation Questionnaire
+
+P0412 [Normal] Role: Inventory Manager
+
+P0413 [Normal] Respondent: _______________________            Date: ___________________
+
+P0414 [Normal] Signature: _________________________
+
+P0415 [Normal] Instruction: Rate only tasks you performed or directly observed in this role. Mark one box per statement: 5 = Strongly agree; 4 = Agree; 3 = Neutral; 2 = Disagree; 1 = Strongly disagree.
+
+T013 [TABLE] ISO/IEC 25010 Quality Characteristic | Evaluation Statement | 5 | 4 | 3 | 2 | 1
+Functional Suitability | 1. The system allows saving the intended product details, barcode, selling price, and inventory planning values. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 2. The system records the expected quantity and purchase cost upon receiving test stock and updates the displayed stock correctly. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 3. The system provides the product, stock, and planning information needed for the assigned review through the available forecasts and replenishment guidance. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 4. The system allows recording the assigned physical inventory count and reviewing its status. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 5. The system allows approving or rejecting a test stock issue according to the assigned scenario. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 1. The system loads product search and stock records quickly enough for inventory tasks. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 2. The system saves the assigned stock receiving or inventory count without a disruptive wait. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 3. The system opens forecast results and replenishment recommendations quickly enough for planning reviews. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 4. The system completes importing the prepared product CSV within an acceptable time for the test file size. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 5. The system returns the assigned records when filtering receiving history without a disruptive wait. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 1. The system imports the prepared product CSV file with the expected product values. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 2. The system generates barcode labels during the test that print legibly using the available printer. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 3. The system accurately reflects a completed Cashier sale in the reviewed stock records. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 4. The system accurately displays a product barcode entered using the connected scanner in the product barcode field. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 5. The system exports an inventory report during the test that opens correctly in the store viewer. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 1. The system provides Inventory Manager menus that make it easy to find Products, Stock Receiving, Inventory Counts, and Stock Issue Reviews. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 2. The system displays clear quantity units, purchase cost, and selling price labels for entering the intended values. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 3. The system makes it easy to distinguish current stock guidance from forecast information that is unavailable, old, or marked as demonstration data. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 4. The system makes it easy to find the product and quantity from the test delivery in the receiving history. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 5. The system clearly displays the reported product, quantity, and reason in the stock issue details before a review decision is made. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 1. The system retains accurate product and receiving details when their records are reopened. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 2. The system produces the expected stock effect for the assigned stock issue decision: approval deducts the reported quantity and rejection does not. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 3. The system retains the entered inventory count and its review status when reopened. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 4. The system rejects an invalid receiving entry without changing the saved stock quantity. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 5. The system accurately reflects the expected change in the product stock balance through the recorded sale and receiving movements. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 1. The system rejects incorrect passwords and requires signing in again after signing out to reopen protected pages. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 2. The system blocks attempts from the Inventory Manager workspace to manage users or perform cashier checkout. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 3. The system rejects an invalid quantity in the assigned receiving or stock issue test without saving that invalid movement. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 4. The system blocks attempts from the Inventory Manager workspace to generate forecasts or retrain models. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 5. The system requires signing in with the assigned account before submitting a stock receiving entry. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 1. The system allows updating an allowed product planning value without needing a program change. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 2. The system allows repeating the affected inventory task successfully after correcting a product detail through the allowed edit screen. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 3. The system ensures the affected task and related stock record work as expected when retested after a reported inventory defect is corrected. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 4. The system displays the updated value when the relevant product record is reopened after changing a test product planning value. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 5. The system allows reopening receiving history and saving a new test receiving entry correctly after a tested system update. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 1. The system allows signing in and reopening the required inventory pages in a second supported browser. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 2. The system allows reviewing saved inventory records on another supported device using the same store data. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 3. The system keeps the inventory pages readable and their required controls usable at the tested supported screen sizes. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 4. The system allows reopening the same receiving record after signing in on another supported store computer. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 5. The system allows completing the assigned product search after resizing the supported browser window. | ☐ | ☐ | ☐ | ☐ | ☐
+
+P0420 [Normal] Table 12
+
+P0421 [Normal] Evaluation Form For Cashier
+
+P0422 [Normal] Cashier Beta Evaluation Questionnaire
+
+P0423 [Normal] Role: Cashier
+
+P0424 [Normal] Respondent: _______________________            Date: ___________________
+
+P0425 [Normal] Signature: _________________________
+
+P0426 [Normal] Instruction: Rate only tasks you performed or directly observed in this role. Mark one box per statement: 5 = Strongly agree; 4 = Agree; 3 = Neutral; 2 = Disagree; 1 = Strongly disagree.
+
+P0427 [Normal] . For corrections, updates, devices or hardware, rate only what you actually tested.
+
+T014 [TABLE] ISO/IEC 25010 Quality Characteristic | Evaluation Statement | 5 | 4 | 3 | 2 | 1
+Functional Suitability | 1. The system allows the Cashier to open a shift, find products by scan or manual entry, and complete a sale for the selected items. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 2. The system generates a sale total, cash change, and receipt that match the expected values for the test transaction. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 3. The system displays the intended cash-in or cash-out type, amount, reference, and service fee in the saved GCash transaction. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 4. The system allows submitting a damaged or expired item report for Inventory Manager review. | ☐ | ☐ | ☐ | ☐ | ☐
+Functional Suitability | 5. The system allows recording an eligible test refund and reopening its refund receipt. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 1. The system adds the intended product to the cart quickly enough for checkout when scanning or searching for an item. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 2. The system updates cart totals quickly when an allowed item quantity is changed. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 3. The system completes payment and opens the receipt within an acceptable amount of time for serving a customer. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 4. The system opens transaction history quickly enough to find the assigned sale. | ☐ | ☐ | ☐ | ☐ | ☐
+Performance Efficiency | 5. The system saves the assigned GCash transaction without a disruptive wait. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 1. The system receives the intended product code into the POS scan field from the connected barcode scanner. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 2. The system prints the sale receipt legibly on the printer used in the test. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 3. The system operates alongside another store application without interrupting cashier tasks. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 4. The system consistently displays the completed sale in the stock record reviewed with the Inventory Manager. | ☐ | ☐ | ☐ | ☐ | ☐
+Compatibility | 5. The system consistently displays the recorded GCash transaction in the GCash record reviewed with the Admin. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 1. The system provides Cashier menus that make it easy to find Point of Sale, GCash, Cashier Shift, and Transaction History. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 2. The system displays payment fields, product quantities, and receipt details clearly enough to complete checkout. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 3. The system clearly explains what needs to be corrected through its messages for a missing shift, insufficient stock, or invalid payment. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 4. The system makes the product, quantity, and reason fields easy to understand on the stock issue form. | ☐ | ☐ | ☐ | ☐ | ☐
+Usability | 5. The system clearly displays the expected cash, counted cash, and difference on the shift closing screen. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 1. The system retains the completed sale in transaction history with the correct items and payment details when reopened. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 2. The system restores the expected cart items and quantities when holding and resuming the assigned sale. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 3. The system displays the expected comparison between counted cash and the recorded drawer amount when closing a shift. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 4. The system creates a pending report upon submitting a stock issue without immediately deducting the reported quantity. | ☐ | ☐ | ☐ | ☐ | ☐
+Reliability | 5. The system displays the saved test refund as a separate record while keeping the original completed sale available. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 1. The system rejects incorrect passwords and requires signing in again after signing out to reopen protected pages. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 2. The system blocks attempts from the Cashier workspace to receive stock, edit product records, or manage users. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 3. The system enforces the displayed eligibility and authorization requirements on the assigned refund attempt before recording it. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 4. The system blocks checkout when there is no open cashier shift in the assigned test. | ☐ | ☐ | ☐ | ☐ | ☐
+Security | 5. The system rejects an assigned checkout quantity that exceeds the available stock. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 1. The system provides an error message from a failed cashier task with enough information to report the problem to the Admin. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 2. The system allows repeating the affected sale task successfully after a reported checkout defect is corrected. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 3. The system allows finding a previously saved sale and completing a new test sale correctly after a tested system update. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 4. The system allows repeating the affected transaction task successfully after a reported GCash defect is corrected. | ☐ | ☐ | ☐ | ☐ | ☐
+Maintainability | 5. The system shows the expected sale details on the reprinted test receipt after a reported receipt defect is corrected. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 1. The system allows signing in and reopening the required cashier pages in a second supported browser. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 2. The system allows reviewing saved transaction history on another supported device using the same store data. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 3. The system keeps the cashier pages readable and their required controls usable at the tested supported screen sizes. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 4. The system allows reopening the same sale receipt after signing in on another supported store computer. | ☐ | ☐ | ☐ | ☐ | ☐
+Portability | 5. The system allows completing the assigned product lookup after resizing the supported browser window. | ☐ | ☐ | ☐ | ☐ | ☐
+
+P0430 [Heading 3] 3.4.3 Data Analysis Plan
+
+P0431 [Normal] The respondents shall answer the questionnaire using a five-point Likert Scale. Each response corresponds to a numerical value that will be used to compute the weighted mean for every statement. The computed weighted mean will determine the level of user acceptance and the Ranoverall effectiveness, usability, and functionality of the RetailMind system.
+
+T015 [TABLE] Point(s) | Verbal Interpretation
+5 | Excellent
+4 | Very Good
+3 | Good
+2 | Fair
+1 | Poor
+
+P0434 [Normal] Table 13
+
+P0435 [Normal] Scale Table
+
+T016 [TABLE] Rage of Weighted Mean | Point | Interpretation
+4.60–5.00 | 5 | Excellent  
+The system's functionality is well understood by the user.
+3.70–4.59 | 4 | Very Good 
+The user understands the functionality of the system and accepts minimal conditions.
+2.80–3.69 | 3 | Good 
+ The system is generally effective and functional, with minor improvements needed.
+1.90–2.79 | 2 | Fair 
+The user does not fully understand the functionality of the system.
+1.00–1.89 | 1 | Poor 
+The user does not understand the functionality of the system and rejects it.
+
+P0438 [Normal] 3.4.4 Description of the Prototype
+
+P0439 [Normal] The following figures illustrate the updated user interface of the RetailMind prototype across its role-based workspaces (Super Administrator, Administrator, Inventory Manager, and Cashier), highlighting inventory management, point-of-sale checkout, and cold-start demand forecasting safeguards.
+
+P0441 [Normal] Figure 13: Landing and Staff Login Page
+
+P0442 [Normal] Secure sign-in screen used by authorized Store personnel to authenticate and access their assigned workspace for inventory, sales, and replenishment operations.
+
+P0444 [Normal] Figure 14: Admin Dashboard (Store Overview)
+
+P0445 [Normal] Central administrative control panel displaying store status alerts, cash variances, pending Stock Issues, current Fiscal Period, and daily, weekly, and monthly sales and gross profit summaries.
+
+P0447 [Normal] Figure 15: Operational Audit Log Viewer
+
+P0448 [Normal] A filterable activity timeline displaying recorded store actions, active users, logged modules, and event timestamps to support operational accountability and security traceability.
+
+P0450 [Normal] Figure 16: Manage Store Staff
+
+P0451 [Normal] Staff account management interface allowing the Administrator to create accounts, assign store roles, monitor password status, and manage operational access permissions.
+
+P0453 [Normal] Figure 17: Inventory Stock Overview
+
+P0454 [Normal] Summary dashboard presenting total products, units on hand, out-of-stock and low-stock counts, batch expiration alerts, stock health distribution, and demand forecast versus current stock status.
+
+P0456 [Normal] Figure 18: Products Management
+
+P0457 [Normal] Product catalog table displaying item details, side-by-side Cost Price, Selling Price, and computed unit Profit, current stock levels, reorder thresholds, and stock status indicators.
+
+P0459 [Normal] Figure 19: Transaction History
+
+P0460 [Normal] Chronological transaction log allowing authorized users to filter and review recorded sales, cash refunds, drawer movements, and cashier shifts across selected date ranges.
+
+P0462 [Normal] Figure 20: Receipt History
+
+P0463 [Normal] Receipt management interface where authorized users can filter, view, and reprint finalized sales receipts while tracking linked cash refunds and correction records without altering the original sale.
+
+P0465 [Normal] Figure 21: Direct Stock Receiving
+
+P0466 [Normal] Stock receiving workspace where the Inventory Manager scans barcodes or selects products from the catalog to record incoming supplier deliveries, package quantities, and batch details.
+
+P0468 [Normal] Figure 22: Demand Forecast
+
+P0469 [Normal] The Demand Forecast workspace displays model generation status, forecast origin, and active algorithm readiness. During initial store deployment (cold-start phase), forecast status remains "Unavailable" until products accumulate at least 56 days of recorded sales history, while the Replenishment Recommendations module provides Stock-Rule buying guidance.
+
+P0471 [Normal] Figure 23: Inventory Counts and Stock Issue Reviews
+
+P0472 [Normal] Inventory control workspace used to record physical stock counts, document count discrepancies for approval, and review damaged, missing, or expired Stock Issues submitted by staff.
+
+P0474 [Normal] Figure 24: Report Generation
+
+P0475 [Normal] Reporting interface that allows authorized users to filter, run, export to CSV, and print daily, weekly, and monthly sales, inventory, and demand forecasting reports.
+
+P0477 [Normal] Figure 25: Point of Sale (POS)
+
+P0478 [Normal] Cashier checkout workspace supporting barcode scanning and manual product lookup, real-time cart total and discount calculation, shift verification, and thermal receipt printing.
+
+P0480 [Normal] Figure 22A: Replenishment Recommendations (Cold-Start Stock-Rule Guidance)
+
+P0481 [Normal] Displays current on-hand stock alongside advisory Stock-Rule Suggestions while 28-day AI expected sales remain “Unavailable” during the initial store data collection period.
+
+P0483 [Normal] Figure 22B: Forecast Exceptions Queue
+
+P0484 [Normal] Highlights products needing manual review when validation WAPE exceeds the 35% alert threshold or when the 7-day Seasonal Naive baseline outperforms the Random Forest model.
+
+P0486 [Normal] Figure 22C: Forecast Data Readiness
+
+P0487 [Normal] Tracks accumulated store sales history per product across readiness bands (<56 days: Insufficient/Needs More History; 56–179 days: Low; 180–364 days: Medium; 365+ days: High) before activating live AI forecasts.
+
+P0490 [Heading 2] 3.6 Implementation Plan
+
+P0499 [Normal] This Gantt chart presents the implementation schedule for the development of RetailMind: AI-Powered Inventory Management with Demand Forecasting from June 22, 2026 to October 31, 2026. It outlines the major phases of the project, including requirements gathering, system analysis and design, system development with AI model integration, client consultation, testing and debugging, deployment, and ongoing maintenance and enhancement, serving as a guide for monitoring project progress and ensuring timely completion of project activities.
+
+P0500 [Heading 3] 3.6 Implementation Plan
+
+P0501 [Normal] Table 14
+
+T017 [TABLE] Strategy | Activities | Persons Involved | Duration
+Data Gathering | Conduct interviews, observations, and requirement analysis with the retail store owner and staff to understand existing sales, inventory, and reporting processes. Identify system requirements, user roles, data needs, and operational challenges related to inventory monitoring and demand forecasting. | Client, Staff, Proponents | 2 Weeks
+System Design | Design the system architecture, database structure, entity relationship diagram, data flow diagrams, user interfaces, and functional modules based on the gathered requirements. This phase includes defining user roles, inventory workflows, sales processes, forecasting logic, and reporting mechanisms. | Proponents | 1 Month
+Sprint Development Cycles | Develop the system modules using Agile iterations. Modules include user management, product and inventory management, sales processing, demand forecasting, replenishment management, notifications, audit logging, and reporting. Each sprint focuses on incremental development and refinement of system features. | Proponents | 2 Months
+Consultation | Conduct regular consultations with the project adviser and client to present progress, gather feedback, validate system functionality, and implement recommended improvements throughout the development process. | Proponents, Adviser, Client | 3 Weeks
+Testing and Debugging | Perform unit testing, integration testing, system testing, and user acceptance testing to ensure correctness, reliability, and performance of the system. Identify, document, and resolve errors, bugs, and performance issues before deployment. | Proponents | 2 Weeks
+Deployment | Deploy the RetailMind system in the client’s operational environment. Configure the database and server, finalize system settings, prepare user manuals, and conduct system orientation and training for administrators, inventory managers, and cashiers. | Proponents, Client | 1 Month
+Maintenance and Enhancement | Monitor system performance after deployment, provide technical support, address issues reported by users, and implement necessary enhancements, updates, and optimizations to improve system efficiency and usability. | Proponents, Client | Ongoing
+
+P0504 [Heading 1] CHAPTER IV
+
+P0505 [Heading 1] RESULT AND DISCUSSION
+
+P0506 [Normal] This chapter presents the system test results and discussion. After accomplishing the phases of development presented in the previous chapter, the proposed system prototype and the corresponding test results are detailed below.
+
+P0507 [Normal] RetailMind provides four role workspaces. The Super Administrator handles technical platform governance and maintenance. The Administrator manages Store operations and oversight. The Inventory Manager maintains stock, records receiving and reviews buying guidance. The Cashier records sales, manages authorized shift activities and accesses permitted receipt and GCash functions. This chapter presents the implemented workflows and distinguishes public benchmark results, isolated system verification and Store acceptance evidence.
+
+P0508 [Normal] 4.1 Admin Module
+
+P0509 [Normal] In this module, the administrator can manage staff accounts, roles, permissions, and store access across user roles.
+
+P0519 [Normal] Figure 27: Add Users
+
+P0529 [Normal] 4.1.1 System Settings
+
+P0530 [Normal] The system admin configures the system settings.
+
+P0540 [Normal] Figure 28: Edit System Settings
+
+P0542 [Normal] 4.1.2 Fiscal Period Management
+
+P0543 [Normal] The system admin opens and closes fiscal periods and locks inventory records after closing.
+
+P0546 [Normal] Figure 29: Add Fiscal Period Management
+
+P0550 [Normal] 4.1.3 Audit Logs
+
+P0551 [Normal] The system admin views user activities and filters audit logs by user and date.
+
+P0553 [Normal] Figure 29: Show Audit Logs
+
+P0555 [Normal] 4.1.4 Report Generation
+
+P0556 [Normal] The system admin generates inventory, sales, and demand forecasting reports.
+
+P0558 [Normal] Figure 30: Generate Report
+
+P0563 [Normal] 4.1.5 Product Management
+
+P0564 [Normal] The inventory manager adds new products via barcode or manual input, updates product information, and archives or organizes product categories.
+
+P0566 [Normal] Figure 30: Manage Product
+
+P0568 [Normal] 4.1.6 Inventory Transactions
+
+P0569 [Normal] The inventory manager records physical product counts, documents the reason for any stock discrepancy, and adjusts inventory quantities after approval.
+
+P0571 [Normal] Figure 31: Inventory Counts
+
+P0574 [Normal] 4.1.7 Demand Forecasting
+
+P0575 [Normal] The Inventory Manager reviews expected recorded sales over 7, 14 and 28 days when eligible forecasts are available. Buying guidance identifies its basis as forecast-based or stock-rule-based. The resulting quantities assist Store personnel in planning purchases. Goods are entered into inventory through Direct Stock Receiving.
+
+P0577 [Normal] Figure 32: Replenishment Recommendation
+
+P0579 [Normal] During initial system deployment at Shalom Store, the Demand Forecast and Replenishment Recommendation modules display 'Unavailable' for expected 28-day AI sales and categorize products under 'Needs More History' in the Forecast Data Readiness workspace. This reflects the system's cold-start safeguard: because Shalom Store previously used manual physical logbooks without digitized item-level daily sales histories, RetailMind first collects live POS sales transactions until a product reaches the minimum 56-day history threshold. While accumulating historical sales data, the system actively guides purchasing decisions using Stock-Rule Suggestions based on current stock and reorder levels.
+
+P0583 [Normal] 4.1.8 Inventory Overview
+
+P0584 [Normal] The inventory manager views low-stock products, receives low-stock notifications, and monitors out-of-stock items.
+
+P0586 [Normal] Figure 33: Stock Overview
+
+P0590 [Normal] 4.1.9 Cashier Sales Transactions
+
+P0591 [Normal] The Cashier views and reprints authorized receipts from Receipt History. Each finalized sale is retained as an original transaction. Authorized refunds and corrections are recorded separately and linked to the original sale. During checkout, the Store server verifies current stock and uses a checkout attempt identifier to prevent duplicate sales on retry.
+
+P0593 [Normal] Figure 34: Receipt History
+
+P0595 [Normal] 4.1.10 Stock Receiving
+
+P0596 [Normal] The Inventory Manager records incoming goods through Direct Stock Receiving. The system updates stock and retains a grouped Receiving History. Batch records preserve quantity and expiry details where applicable. Configured sealed-pack products distinguish unopened packs from loose units.
+
+P0598 [Normal] Figure 34: Stock Receiving
+
+P0599 [Normal] 1.12 Stock Reporting
+
+P0600 [Normal] The Cashier can report damaged, expired or missing items through a Stock Issue. Authorized personnel review the report and record its disposition. Approved inventory changes are traceable through the stock movement records.
+
+P0602 [Normal] Figure 35: Report Stock Issue
+
+P0603 [Normal] 4.1.12 Transaction History
+
+P0604 [Normal] The Transaction History page allows the Cashier to review recorded sales, cash refunds, drawer movements, and cashier shifts in separate tabs. The Cashier can filter records by date range and select a record number to view its details. The Sales tab displays the sale number, associated shift, transaction date, total amount, payment method, cash received, and change given.
+
+P0607 [Normal] Figure 36: Transaction History
+
+P0609 [Normal] 4.2.1 System Testing
+
+P0610 [Normal] 4.2.1 Alpha Testing Result
+
+P0611 [Normal] Table 15
+Alpha Testing Table
+
+T018 [TABLE] Module | Activity | Expected Outcome | Duration
+1. System Administrator |  |  | 
+Manage Users | Create, edit, and deactivate accounts; assign roles and permissions. | Account changes are saved and permissions are enforced. | 1 hour
+System Settings | Update system and notification settings. | Updated settings take effect. | 1 hour
+Fiscal Period Management | Open and close fiscal periods. | Period status changes; closing locks inventory records. | 1 hour
+Audit Logs | View activity logs; filter by user and date. | Matching activities are displayed. | 1 hour
+Report Generation | Generate inventory, sales, and demand forecast reports. | All three reports are generated. | 1 hour
+2. Inventory Manager |  |  | 2 hour
+Product Management | Add products by barcode or manually; edit products; organize or archive categories. | Product and category changes are saved. | 2 hour
+Inventory Transactions | Record stock in, stock out, and quantity adjustments. | Stock balances update immediately and accurately. | 2 hour
+CSV Import | Upload and validate a CSV file; update product records in bulk. | Valid records are imported; invalid entries are flagged. | 2 hour
+Demand Forecasting | Validate the Random Forest Regressor pipeline using the 14 engineered features; check Data Readiness status, Forecast Exceptions queue, and Replenishment Recommendations. | The system displays Data Readiness bands, flags forecast exceptions, and provides stock-rule replenishment suggestions while store sales history is being accumulated | 2 hour
+Replenishment Requests | View suggested reorder quantities; create and track requests. | Suggested quantities and request statuses are displayed. | 2 hour
+Inventory Overview
+
+ | Check low-stock alerts and out-of-stock items. | Low-stock notifications appear and out-of-stock items are listed. | 2 hour
+3. Cashier |  |  | 
+Sales Transactions | Record sales and generate receipts. | Sales are saved, stock is deducted automatically, and receipts are generated. | 1 hour
+
+Stock Receiving | Record deliveries and verify received quantities. | Stock increases by the verified quantities. | 1 hour
+
+Damage Reporting | Report damaged, expired, or missing items; submit adjustment requests. | Reports and adjustment requests are saved. | 1 hour
+
+Product Availability | Search for products and check stock before a sale. | Matching products and current stock levels are displayed. | 1 hour
+
+Transaction History | Search past sales and review transaction details. | Matching sales and their details are displayed. | 1 hour
+
+
+P0615 [Normal] 4.3.2.1 Forecast Accuracy Testing Results (Google Colab Training & Validation)
+
+P0616 [Normal] Prior to activating live store forecasts, the proponents executed the demand forecasting experiment in Google Colab (m5_sales_experiment.py) using 50 retail products over a two-year training window (March 1, 2014 to February 28, 2016, totaling 730 days) and evaluated the trained Random Forest Regressor (RFR) on the final unseen 28-day test window (Fold 3). The model was trained using the 14 engineered predictor variables (product_id, horizon_day, lag_1, lag_7, lag_14, lag_28, rolling_mean_7, rolling_std_7, rolling_mean_28, rolling_std_28, day_of_week, day_of_month, month, and is_weekend) and compared directly against the Seasonal Naive baseline (predicting the previous week's sales). Table 12 presents the comparative forecast accuracy results across the 7-day, 14-day, and 28-day test horizons.
+
+P0619 [Normal] Table 12
+
+P0620 [Normal] Comparative Forecast Accuracy Results: Random Forest Regressor vs. Seasonal Naive Baseline (50 Products, Fold 3 Test Split)
+
+T019 [TABLE] Test Horizon | Total Actual Units | RF MAE (Units) | Baseline MAE (Units) | RF RMSE (Units) | Baseline RMSE (Units) | RF WAPE | Baseline WAPE
+7 days | 689 | 5.926 | 5.220 | 11.921 | 8.858 | 43.00% | 37.88%
+14 days | 1,538 | 9.977 | 11.600 | 16.414 | 20.131 | 32.44% | 37.71%
+28 days | 3,195 | 18.936 | 23.340 | 32.244 | 41.846 | 29.63% | 36.53%
+
+P0621 [Normal] Note: MAE and RMSE measure per-product horizon unit totals across the 50 evaluated products, not single-day errors. WAPE represents the aggregate absolute error as a percentage of total actual units sold (lower values indicate higher forecasting accuracy).
+
+P0622 [Normal] As shown in Table 12, the forecasting evaluation reveals an important operational insight across replenishment horizons:
+
+P0623 [Normal] The public M5 holdout provides benchmark evidence for the selected products. Seasonal Naive recorded lower error at 7 days, while Random Forest recorded lower error at 14 and 28 days. At 28 days, reported WAPE was 29.63% for Random Forest and 36.53% for Seasonal Naive. Aggregate results can mask weak forecasts for individual products. Any-sale-day classification measures the identification of sale days, and a missed sale day does not establish that a stock-out occurred.
+
+P0624 [Normal] RetailMind classifies Store history by usable days: Insufficient below 56, Low from 56 to 179, Medium from 180 to 364 and High at 365 or more. Closures, stock-outs and missing evidence are handled separately. Candidate qualification uses chronological evaluation against the baseline and configured quality gates. Prospective observation and local Administrator approval are separate requirements.
+
+P0625 [Normal] Table 13
+
+P0626 [Normal] Any-Sale-Day Classification Performance on Held-Out Test Set (Threshold = 0.5)
+
+T020 [TABLE] Model / Rule | True Positives (TP) | False Positives (FP) | False Negatives (FN) | True Negatives (TN) | Precision | Recall | F1-Score
+Random Forest (RFR) | 760 | 444 | 56 | 140 | 63.12% | 93.14% | 0.7525
+Seasonal Naive Baseline | 544 | 228 | 272 | 356 | 70.47% | 66.67% | 0.6851
+Always-Sale Benchmark | 816 | 584 | 0 | 0 | 58.29% | 100.00% | 0.7365
+
+P0628 [Normal] As presented in Table 13, the Random Forest model achieved the highest F1-Score (0.7525) and a 93.14% recall on active sale days, recording only 56 False Negatives compared to 272 False Negatives under the Seasonal Naive baseline. In a retail inventory context, minimizing False Negatives is critical because a False Negative represents an unpredicted sale day that can directly trigger a shelf stock-out.
+
+P0629 [Normal] Per-Product Error Analysis, Model Limitations, and Integration Safeguards
+
+P0630 [Normal] While the Random Forest Regressor outperformed the baseline across the aggregate 50-product portfolio on the 14-day and 28-day horizons (improving 28-day absolute error over the baseline for 28 out of 50 products), per-product diagnostic inspection revealed that RFR did not beat the simple baseline for 22 out of 50 products. This finding justifies two critical architectural safeguards built directly into the RetailMind web application:
+
+P0631 [Normal] 1. Forecast Exceptions Queue & WAPE Alert Threshold (35%): Because aggregate metrics can mask weak predictions on individual erratic items, RetailMind includes a dedicated Forecast Exceptions module. Any product whose validation WAPE exceeds the 35% threshold or fails to beat the 7-day baseline is automatically flagged in the exception queue for manual review by the Inventory Manager.
+
+P0632 [Normal] 2. Operational Data Readiness & Stock-Out Blind-Spot Mitigation: Pure historical sales records cannot distinguish between zero customer demand and zero shelf inventory (stock-outs). Unlike public benchmark datasets that lack physical stock-out logs, RetailMind's MySQL database natively records real-time inventory balances, stock issue reports, Cost/Sales prices, promotions, and Store Calendar closures. In production at Shalom Store, the public M5 demonstration data remain strictly isolated; local model activation requires accumulating sufficient store transaction history across the system's Data Readiness bands (<56 days: Insufficient; 56–179 days: Low; 180–364 days: Medium; 365+ days: High) and passing chronological validation before assisting the Inventory Manager with replenishment decisions.
+
+P0634 [Heading 1] Chapter V
+
+P0635 [Heading 1] SUMMARY, CONCLUSION AND RECOMMENDATION
+
+P0637 [Heading 2] 5.1 SUMMARY
+
+P0639 [Normal] RetailMind integrates inventory, receiving, checkout and forecasting workflows for Shalom Store. Four workspaces separate platform governance, Store administration, inventory management and cashier operations. The system maintains traceable stock movements, saved receipts, linked refunds and operational records. Buying guidance combines eligible forecast output or stock rules with recorded inventory information to support decisions by authorized personnel.
+
+P0640 [Normal] The public M5 benchmark showed that Random Forest produced lower error than Seasonal Naive at the reported 14- and 28-day horizons, while Seasonal Naive performed better at 7 days. Isolated tests demonstrated the operation of the forecasting pipeline. The reported evidence for installed unattended operation and predictive usefulness on genuine Store outcomes was still incomplete.
+
+P0641 [Heading 2] 5.2 CONCLUSION
+
+P0642 [Normal] Based on the development, pre-deployment model validation, and operational testing of RetailMind for Shalom Store in Tangub City, the proponents formulated the following conclusions:
+
+P0643 [Normal] Transitioning Shalom Store from manual physical logbooks to a centralized, role-based web application across four workspaces (Super Administrator, Administrator, Inventory Manager, and Cashier) streamlines barcode-assisted POS checkout, real-time stock monitoring, direct stock receiving, physical inventory counts, and manual GCash transaction logging.
+
+P0644 [Normal] Pre-deployment benchmarking of the 14-feature Random Forest Regressor (RFR) pipeline in Google Colab using a 50-product subset of the M5 retail dataset across 730 training days demonstrated that while the Seasonal Naive baseline yielded lower error on noisy 7-day horizons (37.88% vs. 43.00% WAPE), the Random Forest Regressor outperformed the baseline on 14-day (32.44% vs. 37.71% WAPE) and 28-day (29.63% vs. 36.53% WAPE) replenishment horizons, while achieving a 93.14% recall (0.7525 F1-Score) in active sale-day classification.
+
+P0645 [Normal] Integrating architectural safeguards—specifically the Forecast Data Readiness bands (<56 days: Insufficient up to 365+ days: High), the 35% WAPE Forecast Exceptions queue, and Stock-Rule Replenishment Suggestions—ensures that Shalom Store receives reliable inventory buying guidance during the initial cold-start data collection phase without contaminating live store records with external benchmark data.
+
+P0646 [Heading 2] 5.3 RECOMMENDATION
+
+P0647 [Normal] Based on the findings and limitations of the study, the following recommendations are proposed:
+
+P0648 [Normal] Continuous POS Data Accumulation for Local Model Activation: Shalom Store personnel should consistently record all daily checkout transactions, stock receiving entries, and physical counts in RetailMind so products can progress past the 56-day Data Readiness threshold and activate live 14-day and 28-day Random Forest demand forecasts.
+
+P0649 [Normal] Focus on 14-Day and 28-Day Replenishment Horizons: Store management should utilize the 14-day and 28-day forecast summaries alongside Stock-Rule Suggestions for bi-weekly and monthly purchasing decisions, while using the Forecast Exceptions module to manually review erratic items exceeding the 35% WAPE threshold.
+
+P0650 [Normal] Future Feature Expansion: Future researchers and developers may expand the 14-feature forecasting pipeline by incorporating recorded product category attributes, unit price changes, active store promotions, and local Tangub City calendar events once sufficient multi-year store transaction history has been accumulated.
+
+P0653 [Normal] References:
+
+P0654 [Normal] Blair, A. (2023, July 31). IHL study: Inventory distortion will cost retailers $1.77 trillion in 2023.
+
+P0655 [Normal] RetailTouchPoints.
+
+P0657 [Normal] Sekhar, C. (2024). Optimizing retail inventory management with AI: A predictive approach to
+
+P0658 [Normal] demand forecasting, stock optimization, and automated reordering. ResearchGate. https://www.researchgate.net/publication/385782748_Optimizing_Retail_Inventory_Management_with_AI_A_Predictive_Approach_to_Demand_Forecasting_Stock_Optimization_and_Automated_Reordering
+
+P0660 [Normal] Kalisetty, S., & Srinivas. (2024). Revolutionizing retail operations: Srinivas’s AI-driven approach
+
+P0661 [Normal] to demand forecasting and seamless supply chain management (SSRN Scholarly Paper No. 5203708). Social Science Research Network. https://doi.org/10.2139/ssrn.5203708
+
+P0663 [Normal] Veluru, C., & Sekhar, C. (2023). Optimizing Retail Inventory Management with AI: A Predictive
+
+P0664 [Normal] Approach to Demand Forecasting, Stock Optimization, and Automated Reordering. ResearchGate. https://www.researchgate.net/publication/385782748
+
+P0666 [Normal] Viswanathan, J. (2024). Artificial intelligence: Transforming the future of retail. ResearchGate.
+
+P0667 [Normal] https://www.researchgate.net/publication/383756320
+
+P0669 [Normal] Bhavikatta, N. B. (2025). AI-driven inventory optimization in supply chains: A comprehensive
+
+P0670 [Normal] review on reducing stockouts and mitigating overstock risks. Journal of Computer Science and Technology Studies, 7(7), 1–13. https://doi.org/10.32996/jcsts.2025.7.7.1
+
+P0672 [Normal] Mitta, N. R. (2023). AI-driven optimization of supply chain networks in manufacturing: Utilizing
+
+P0673 [Normal] machine learning for demand forecasting, inventory management, and logistics efficiency. Los Angeles Journal of Intelligent Systems and Pattern Recognition, 3, 404–446. https://lajispr.org/index.php/publication/article/view/70
+
+P0675 [Normal] Alfonso, M. P., & Alfonso, M. R. A. P. (2024). Factors affecting the integration of artificial
+
+P0676 [Normal] intelligence (AI) technologies among grocery store operators in Laguna, Philippines. ResearchGate. https://www.researchgate.net/publication/399491747
+
+P0678 [Normal] Lastimado, J. M. E., Allawan, A. E., Mora, E. L., Ubay, F. L. A., & Jadraque, G. R. (2021).
+
+P0679 [Normal] Information system development plan for the retail store RRJ/Mr. Lee (Panabo Branch). https://doi.org/10.17605/OSF.IO/P8TUQ
+
+P0682 [Normal] Illustrisimo, N. B., Ochea, R. M. F., Pacifico, J. E., Dionzon, M. D., Ilustrisimo, D., Villaceran, C.
+
+P0683 [Normal] D., Jr., Descotido, J. R. N. T., Potayre, C., Enoy, M. J. G., & Alegre, K. B. (2022). Design and implementation of a computerized sales and inventory system with stock monitoring and income reporting for MacSull Grocery.
+
+P0685 [Normal] Bautista Jr, J. and Young, M. Effective Inventory Management System in Efficient Supply and
+
+P0686 [Normal] Distribution Management in one of Manufacturer of Foods Seasoning Products in the Philippines, 2022
+
+P0688 [Normal] Tanaman, M. T., Baylosis, J. L. A., Abiles, B. J. A., & Catungal, M. L. P. (2023). Web-based
+
+P0689 [Normal] Inventory management system for small business enterprises in Pagadian City, Philippines. Semantic Scholar. https://www.semanticscholar.org/paper/Web-based-Inventory-Management-System-Tanaman-Lloyd/5855f264bb43e122caecc803766f74d96ab09abc
+
+P0692 [Normal] Googerdchi, K. F., & Jafari, S. M. (2025). Sales forecasting in retail using Random Forest 	Regression: A case study on Walmart. 2025 4th International Conference on Computing 	and Information Technology (ICCIT), 592–597. 	https://doi.org/10.1109/ICCIT63348.2025.10989314
+
+P0694 [Normal] Makridakis, S., Spiliotis, E., & Assimakopoulos, V. (2022). M5 accuracy competition: Results, 	findings, and conclusions. International Journal of Forecasting, 38(4), 1346–1364. 	https://doi.org/10.1016/j.ijforecast.2021.11.013
+
+P0696 [Normal] Zavaleta-Zarate, K., Escobal-Vera, J., & Zarate-Perez, E. (2026). Optimizing inventory in 	convenience stores to maximize ROI using Random Forest and genetic algorithms. 	Systems, 10(3), 64. https://doi.org/10.3390/systems10030064
+
+P0729 [Normal] APPENDICES
+
+P0731 [Normal] APPENDIX A.
+
+T021 [TABLE] Name | Signature | Email  | Mobile Number  | Project Role
+Queen Stephanie C. Betonio |  | 
+queenstephanie.betonio
+.edu.ph | 
+09106370493 | 
+Project Leader
+
+Aisan Luis M. Nacua |  | 
+aisanluis.nacua
+@nmsc.edu.ph
+ | 
+09271183583 | 
+Software Engineer
+
+Mike L. Sordilla |  | 
+mike.sordilla
+@nmsc.edu.ph
+ | 
+09351888496 | 
+Database Designer
+
+P0732 [Normal] Project Team Assignment Form
+
+P0748 [Normal] APPENDIX B.
+
+P0749 [Normal] Pre-Proposal Statement Template
+
+T022 [TABLE] Project Title: | RETAILMIND: AN AI-DRIVEN INVENTORY MANAGEMENT AND 
+ DEMAND FORECASTING SYSTEM FOR  HIGH VOLUME
+ DEPARTMENT STORE
+
+Proponents: | Queen Stephanie C. Betonio
+Aisan Luis M. Nacua
+Mike L. Sordilla
+Objectives: | This project aims to develop a web based, AI-driven inventory management and demand forecasting system tailored to high-volume department stores, specifically for the Shalom store in Tangub City.
+
+ Scope of the Study: | • The system will provide a centralized web-based interface for Shalom Store, allowing cashiers and inventory managers to record daily sales and track stock movements in real time. 
+• It will feature a responsive design to ensure seamless use across desktop and mobile web browsers. 
+• Store personnel will have access to a role-based dashboard for managing user accounts, monitoring inventory levels, displaying side-by-side Cost/Sales prices with gross profit, and uploading bulk product records via CSV files. 
+• Point-of-Sale (POS) checkout will support barcode scanning, thermal receipt printing, and manual GCash Cash-In/Cash-Out reference logging with auto-computed service fees. 
+• A Random Forest Regressor (RFR) machine learning model validated on 14 temporal, lag, and rolling sales features will generate 7-, 14-, and 28-day demand forecasts once sufficient store sales history is accumulated
+• Automated notifications and system alerts will inform inventory managers of: 
+• Low-stock and out-of-stock items. 
+• Forecasted demand spikes. 
+• Automated inventory replenishment recommendations.
+
+            Limitation of the Study: | A stable internet connection and the locally hosted store PC are required for the system to function properly. 
+• Store personnel may require initial training to transition from manual logbooks to the digital system. 
+• Forecasting accuracy depends on the completeness of historical sales data and may be affected by: 
+• Sudden shifts in customer purchasing behavior. 
+• Unforeseen market disruptions, supplier shortages, theft, or damaged inventory. 
+• Only cash and manual GCash reference logging are supported; the system does not integrate with external GCash APIs, e-commerce platforms, accounting software, or payroll systems. 
+• Once sales and checkout transactions are finalized and recorded, they cannot be modified by unauthorized users. 
+• The study is operationally and geographically limited to Shalom Store in Tangub City. 
+
+
+P0753 [Normal] APPENDIX C.
+
+P0754 [Normal] Project Working Title Forms
+
+T023 [TABLE] Name  | Id Number | Signature
+
+Queen Stephanie C. Betonio
+
+ | 
+2023-006070 | 
+
+Aisan Luis M. Nacua
+
+ | 
+2023-005993 | 
+
+Mike L. Sordila
+
+ | 
+2023-005691 | 
+
+P0757 [Normal] ProjectTitle:  Retailmind: An Ai-Driven Inventory Management And  Demand
+
+P0758 [Normal] Forecasting System For  High Volume  Department Store
+
+P0760 [Normal] Noted By:
+
+P0761 [Normal] MARJON D. SENARLO, MSIT
+
+P0762 [Normal] Adviser
+
+P0764 [Normal] Approved By:
+
+P0766 [Normal] JOSEPH MENYARD G. OGDOL, MSIT
+
+P0767 [Normal] Dean, College of Information and
+
+P0768 [Normal] Communication Technology
+
+P0770 [Normal] APPENDIX D.
+
+P0771 [Normal] Research/Capstone Project Hearing Notice Form
+
+P0772 [Normal] CAPSTONE PROJECT HEARING NOTICE
+
+P0774 [Normal] Date Filed: _________________
+
+P0775 [Normal] [ ] PROPOSAL [ ] ORAL DEFENSE
+
+P0776 [Normal] Date: ____________ Time: _____________ Venue: ____________
+
+P0777 [Normal] Capstone Project Title: RETAILMIND: AN AI-DRIVEN INVENTORY MANAGEMENT AND DEMAND FORECASTING SYSTEM FOR  HIGH VOLUME DEPARTMENT STORE
+
+P0778 [Normal] Proponent/s:
+
+P0779 [Normal] 1. Queen Stephanie C. Betonio
+
+P0780 [Normal] 2. Aisan Luis M. Nacua
+
+P0781 [Normal] 3. Mike L. Sordilla
+
+P0783 [Normal] CERTIFICATION
+
+P0785 [Normal] The undersigned members comprising the panel for oral examination hereby agree to the
+
+P0786 [Normal] schedule of hearing for the above research. (Signature over printed name).
+
+P0788 [Normal] MARJON D. SENARLO, MSIT                                 FERDINAND PAQUITO
+
+P0789 [Normal] Adviser                                                               Panel Member 1
+
+P0791 [Normal] DR. HIDEAR TALIRONGAN                     JOSEPH MEYNARD G. OGDOL, MSIT
+
+P0792 [Normal] Panel Member 2                                                               Panel Chair
+
+P0795 [Normal] APPROVED:
+
+P0796 [Normal] JOSEPH MEYNARD G. OGDOL,MSIT
+
+P0797 [Normal] Dean, College of Information and
+
+P0798 [Normal] Communication Technology
+
+P0799 [Normal] APPENDIX G.
+
+P0800 [Normal] Grammarian’s Certificate
+
+P0802 [Normal] GRAMMARIAN’S CERTIFICATE
+
+P0803 [Normal] This is to certify that the undersigned has reviewed and read through all the pages of the proposed study entitled “RetailMind: An AI-Driven Inventory Management and Demand Forecasting System for High-Volume Department Store” as against the set of structural rules that govern the composition of sentences, phrases, and words in the English language.
+
+P0805 [Normal] _______________________
+
+P0806 [Normal] Grammarian
+
+P0826 [Normal] Appendix F. Plagiarism Result Template
+
+P0827 [Normal] Retailmind: An Ai-Driven Inventory Management And  Demand  Forecasting System For  	                                  High Volume  Department Store
+
+P0897 [Normal] CURRICULUM VITAE
+
+P0904 [Normal] Name: Queen Stephanie C. Betonio
+
+P0905 [Normal] Address: Brgy. Tinago, Ozamiz City
+
+P0906 [Normal] Phone: 09106370493
+
+P0907 [Normal] E-mail: queenstephanie.betonio@nmsc.edu.ph
+
+P0910 [Normal] PERSONAL BACKGROUND
+
+P0911 [Normal] Age						: 21
+
+P0912 [Normal] Civil Status					: Single
+
+P0913 [Normal] Weight					: 54klg
+
+P0914 [Normal] Height						: 5’1
+
+P0915 [Normal] Date of Birth					: March 5, 2005
+
+P0916 [Normal] Religion					: Catholic
+
+P0917 [Normal] Gender					: Female
+
+P0918 [Normal] Citizenship					: Filipino
+
+P0921 [Normal] EDUCATION BACKGROUND
+
+P0923 [Normal] Tertiary:                       Bachelor of Science in Information Technology 			  			  Northwestern Mindanao State College of Science and Technology
+
+P0924 [Normal] Labuyo, Tangub City
+
+P0925 [Normal] 2023-2027
+
+P0927 [Normal] Secondary: 		  Laguindingan  National  High  School
+
+P0928 [Normal] Laguindingan  Misamis Oriental
+
+P0929 [Normal] 2017-2023
+
+P0931 [Normal] Primary:                      Aromahon Elementary School
+
+P0932 [Normal] Aromahon, Laguindingan Misamis Oriental
+
+P0933 [Normal] 2011-2017
+
+T024 [TABLE] Name: Aisan Luis M. Nacua
+Address: Purok - 1 Tabid, Ozamiz City ,Misamis Occidental, 7200
+Phone:  09271183583
+E-mail: aisanluis.nacua@nmsc.edu.ph
+
+P0936 [Normal] PERSONAL BACKGROUND
+
+T025 [TABLE] Age | : 21
+Civil Status | : Single
+Weight | : 46 kg
+Height | : 5’4
+Date of Birth | : August 31, 2005
+Religion | : Catholic
+Gender | : Male
+Citizenship | : Filipino
+
+P0938 [Normal] EDUCATION BACKGROUND
+
+T026 [TABLE] Tertiary: | Bachelor of Science in Information Technology
+Northwestern Mindanao State College of Science and Technology 
+2023-2027
+
+Secondary: | Tabid National High School
+Tabid, Ozamiz City Misamis Occidental
+2017–2023
+
+
+Primary: | Narciso Ledesma Central School
+Tabid, Ozamiz City Misamis Occidental
+2011–2017
+
+P0941 [Normal] Name: Mike L. Sordilla
+
+P0942 [Normal] Address: Brgy. Gonosan, Molave Zamboanga Del Sur
+
+P0943 [Normal] Phone: 09351888496
+
+P0944 [Normal] E-mail: mike.sordilla@nmsc.edu.ph
+
+P0948 [Normal] PERSONAL BACKGROUND
+
+P0949 [Normal] Age						: 22
+
+P0950 [Normal] Civil Status					: Single
+
+P0951 [Normal] Weight					: 64klg
+
+P0952 [Normal] Height						: 5’6
+
+P0953 [Normal] Date of Birth					: August 31, 2004
+
+P0954 [Normal] Religion					: Seventh Day Adventist
+
+P0955 [Normal] Gender					: Male
+
+P0956 [Normal] Citizenship					: Filipino
+
+P0958 [Normal] EDUCATION BACKGROUND
+
+P0960 [Normal] Tertiary:                       Bachelor of Science in Information Technology						  Northwestern Mindanao State College of Science and Technology
+
+P0961 [Normal] Labuyo, Tangub City
+
+P0962 [Normal] 2023-2027
+
+P0964 [Normal] Secondary: 		  Molave Vocational Tehcnical School
+
+P0965 [Normal] Mabini St. Molave, Zamboanga del Sur
+
+P0966 [Normal] 2017-2023
+
+P0968 [Normal] Primary:                      Gonosan Elementary School
+
+P0969 [Normal] Gonosan, Molave Zamboanga del Sur
+
+P0970 [Normal] 2011-2017
+
+P0982 [Normal] USER MANUAL
+
+P0984 [Heading 1] Administrator Store Overview
+
+P0985 [List Bullet] View Store performance, sales summaries, and operational alerts.
+
+P0986 [List Bullet] Open dashboard links to review cash variances, pending Stock Issues, and Fiscal Periods.
+
+P0989 [Heading 1] Administrator Store Staff
+
+P0990 [List Bullet] View staff accounts, assigned roles, and account status.
+
+P0991 [List Bullet] Add or update staff information and manage operational access.
+
+P0994 [Heading 1] Administrator Registers
+
+P0995 [List Bullet] View available Registers and their current status.
+
+P0996 [List Bullet] Manage Register names, receipt paper widths, and availability.
+
+P0999 [Heading 1] Administrator Store Settings
+
+P1000 [List Bullet] View operational thresholds and review limits for the Store.
+
+P1001 [List Bullet] Update the required values and select Save settings.
+
+P1004 [Heading 1] Administrator Store Calendar
+
+P1005 [List Bullet] View the Store calendar and daily operating statuses.
+
+P1006 [List Bullet] Record open days, closures, holidays, and exceptional closures.
+
+P1009 [Heading 1] Administrator Fiscal Periods
+
+P1010 [List Bullet] View and create Fiscal Periods for Store records.
+
+P1011 [List Bullet] Review outstanding responsibilities before closing or locking a period.
+
+P1014 [Heading 1] Administrator Promotions
+
+P1015 [List Bullet] View and manage Store discounts and promotions.
+
+P1016 [List Bullet] Set the promotion scope, discount, minimum quantity, and active dates.
+
+P1019 [Heading 1] Administrator GCash Overview
+
+P1020 [List Bullet] View recorded service cash, wallet balances, and GCash activity.
+
+P1021 [List Bullet] Review transactions, closing checks, and unresolved exchanges.
+
+P1024 [Heading 1] Administrator Cashier Shifts
+
+P1025 [List Bullet] View Cashier Shift records, sales, drawer counts, and cash differences.
+
+P1026 [List Bullet] Filter by date, Cashier, or Register to review the relevant shift.
+
+P1029 [Heading 1] Administrator Database Backup
+
+P1030 [List Bullet] Create and download an encrypted copy of Store records.
+
+P1031 [List Bullet] Use a passphrase of at least 16 characters and keep it separately; lost passphrases cannot be recovered.
+
+P1034 [Heading 1] Administrator Generate Report
+
+P1035 [List Bullet] View sales and other available Store reports.
+
+P1036 [List Bullet] Choose the report and filters, then run, export, or print the results.
+
+P1039 [Heading 1] Administrator Operational Audit
+
+P1040 [List Bullet] View recorded Store actions, users, modules, and timestamps.
+
+P1041 [List Bullet] Search the history and open details to trace an operational event.
+
+P1044 [Heading 1] Administrator Receipt History
+
+P1045 [List Bullet] View completed Store receipts and related refund information.
+
+P1046 [List Bullet] Filter the list and open Full details to review the selected receipt.
+
+P1049 [Heading 1] Administrator Refund Correction Reviews
+
+P1050 [List Bullet] Review corrections needed after a recorded refund.
+
+P1051 [List Bullet] Approve the exact cash or stock changes and assign the responsible staff.
+
+P1054 [Heading 1] Inventory Manager Stock Overview
+
+P1055 [List Bullet] View stock totals, low-stock alerts, and expiry information.
+
+P1056 [List Bullet] Use the overview to identify products that need attention.
+
+P1059 [Heading 1] Inventory Manager Products
+
+P1060 [List Bullet] View product names, prices, stock levels, and status.
+
+P1061 [List Bullet] Add or update products and manage their barcode and packaging details.
+
+P1064 [Heading 1] Inventory Manager Replenishment Recommendations
+
+P1065 [List Bullet] View suggested buying quantities based on stock rules and available forecasts.
+
+P1066 [List Bullet] Use recommendations as buying guidance; an unavailable forecast does not mean zero demand.
+
+P1069 [Heading 1] Inventory Manager Stock Receiving
+
+P1070 [List Bullet] Record bought goods using the product catalog or barcode search.
+
+P1071 [List Bullet] Review quantities, costs, and batch details before saving accepted stock.
+
+P1074 [Heading 1] Inventory Manager Receiving History
+
+P1075 [List Bullet] View the stock receipts available to your account.
+
+P1076 [List Bullet] Search recorded entries and open their details to review received quantities.
+
+P1079 [Heading 1] Inventory Manager Inventory Counts
+
+P1080 [List Bullet] Record physical product or batch counts and the reason for a discrepancy.
+
+P1081 [List Bullet] Review pending counts before approval; stock changes only after approval.
+
+P1084 [Heading 1] Inventory Manager Stock Issue Reviews
+
+P1085 [List Bullet] View Stock Issues submitted for Inventory Manager review.
+
+P1086 [List Bullet] Check the reported goods and record the appropriate decision and notes.
+
+P1089 [Heading 1] Inventory Manager Supplier Pullouts
+
+P1090 [List Bullet] Record goods removed from a selected product batch.
+
+P1091 [List Bullet] Enter the actual quantity and reason, then review the pullout history.
+
+P1094 [Heading 1] Inventory Manager Demand Forecast
+
+P1095 [List Bullet] View available product demand estimates and forecast status.
+
+P1096 [List Bullet] Check the forecast period and readiness before using estimates for planning.
+
+P1099 [Heading 1] Inventory Manager Forecast Exceptions
+
+P1100 [List Bullet] View products whose forecast results need further review.
+
+P1101 [List Bullet] Use the exception filters to identify the affected products and reasons.
+
+P1104 [Heading 1] Inventory Manager Data Readiness
+
+P1105 [List Bullet] View whether product history is ready for forecasting.
+
+P1106 [List Bullet] Identify products needing more history or further data review.
+
+P1109 [Heading 1] Inventory Manager Insights & Risk
+
+P1110 [List Bullet] View inventory risks, including excess stock, expiry exposure, and slow-moving goods.
+
+P1111 [List Bullet] Use the analysis and cycle-count information to prioritize stock checks.
+
+P1114 [Heading 1] Inventory Manager Generate Report
+
+P1115 [List Bullet] View the reports available in the Inventory workspace.
+
+P1116 [List Bullet] Select the report and filters, then review or export its results.
+
+P1119 [Heading 1] Inventory Manager Refund Correction Reviews
+
+P1120 [List Bullet] View stock correction tasks assigned after an Administrator review.
+
+P1121 [List Bullet] Record the approved stock action and notes while preserving the original refund.
+
+P1124 [Heading 1] Cashier Shift
+
+P1125 [List Bullet] Open a shift using an available Register and the actual starting cash.
+
+P1126 [List Bullet] Review drawer movements and count cash before closing the shift.
+
+P1129 [Heading 1] Cashier Point of Sale
+
+P1130 [List Bullet] Scan or search products, review quantities, and complete customer sales.
+
+P1131 [List Bullet] Open a Cashier Shift before checkout and print the receipt after a successful sale.
+
+P1134 [Heading 1] Cashier GCash
+
+P1135 [List Bullet] Record Cash-In and Cash-Out exchanges, fees, and reference numbers.
+
+P1136 [List Bullet] Verify actual wallet and cash movements, then reconcile or hand over service funds.
+
+P1139 [Heading 1] Cashier Dashboard Overview
+
+P1140 [List Bullet] View daily sales, transaction totals, stock alerts, and recent activity.
+
+P1141 [List Bullet] Use the Cashier and GCash tabs to review the corresponding summaries.
+
+P1144 [Heading 1] Cashier Cash Refunds
+
+P1145 [List Bullet] Find the original sale and record returned quantities, item condition, and the refund reason.
+
+P1146 [List Bullet] Only Restockable items return to available stock; complete the required payment verification and approvals.
+
+P1149 [Heading 1] Cashier Transaction History
+
+P1150 [List Bullet] View your sales, Cash Refunds, drawer movements, and shifts.
+
+P1151 [List Bullet] Choose a history tab and date range to find the relevant record.
+
+P1153 [Heading 1] Cashier Receipt History
+
+P1154 [List Bullet] View the receipts available to your Cashier account.
+
+P1155 [List Bullet] Open a saved receipt to review or print it without repeating the sale.
+
+P1158 [Heading 1] Cashier Report Stock Issue
+
+P1159 [List Bullet] Report damaged, missing, expired, or other affected stock during an open shift.
+
+P1160 [List Bullet] Identify the product, stock form, quantity, and explanation for Inventory Manager review.
+
+P1163 [Heading 1] Cashier Refund Correction Reviews
+
+P1164 [List Bullet] View cash correction tasks assigned after an Administrator review.
+
+P1165 [List Bullet] Record the approved drawer action and required notes without rewriting the original refund.
+
+P1168 [Heading 1] Cashier Notifications
+
+P1169 [List Bullet] View notifications and unread items for your account.
+
+P1170 [List Bullet] Open the related record to review any action that needs attention.

@@ -57,7 +57,7 @@ c.close(); print(json.dumps(r,default=str))`], {encoding: 'utf8'});
         await page.fill('#landing-login-password', process.env.DEMO_PASSWORD);
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('#landing-login-password').press('Enter')]);
         await page.goto('/components/report/forecast_replay.php');
-        await expect(page.getByRole('heading', {name: 'Train/test replay', exact: true})).toBeVisible();
+        await expect(page.getByRole('heading', {name: 'Historical replay', exact: true})).toBeVisible();
         await expect(page.locator('main')).toContainText('Training validation: failed');
         await expect(page.locator('#replay-comparison tbody tr')).toHaveCount(28);
         await expect(page.locator('#replay-stock-table tbody tr')).toHaveCount(20);

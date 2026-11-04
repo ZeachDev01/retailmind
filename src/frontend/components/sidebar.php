@@ -170,8 +170,8 @@ $superAdministratorSystemItems = [
 $superAdministratorForecastingItems = [
     ['path' => 'components/system_administrator/forecast_import.php', 'icon' => 'filing_cabinet', 'label' => 'Import Sales History'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
-    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'ML Operation'],
-    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Model Governance'],
+    ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'Model Training'],
+    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Analytics'],
     ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],
 ];
