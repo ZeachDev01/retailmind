@@ -173,19 +173,29 @@ const fixture = action => {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
             assert.equal(await page.locator('body.forecast-workspace').count(), 1);
-            if (route.includes('data_readiness')) eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
+            if (route.includes('data_readiness')) {
+                await page.getByText('How training eligibility works', {exact: true}).click();
+                eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
+            }
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width);
             }
         }
         await login('super_admin');
-        for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php']) {
+        for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php', 'report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php']) {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
-            for (const width of [1440, 390, 320]) {
-                await page.setViewportSize({width, height: 900});
-                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width);
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                for (const width of [1440, 640, 390, 320]) {
+                    await page.setViewportSize({width, height: 900});
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width + ' in ' + theme);
+                    if (process.env.FORECAST_SCREENSHOTS && [1440, 390].includes(width)) {
+                        fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
+                        await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, path.basename(route, '.php') + '-' + theme + '-' + width + '.png'), fullPage: true, animations: 'disabled'});
+                    }
+                }
             }
             if (route.includes('forecast_analytics')) {
                 assert.equal(await page.locator('#analytics-tab-actual').getAttribute('aria-selected'), 'true');
@@ -195,6 +205,10 @@ const fixture = action => {
                 assert.equal(await page.locator('#featureChart').count(), 0, 'Missing weights never produce invented feature importance');
             }
             if (route.includes('ml_settings')) {
+                const eligibility = page.locator('details').filter({has: page.locator('[aria-label="Training Eligibility policy"]')}).first();
+                assert.equal(await eligibility.getAttribute('open'), null, 'Training policy starts collapsed');
+                await eligibility.locator('summary').first().click();
+                await page.getByText('Fixed model recipe & approval requirements', {exact: true}).click();
                 assert.equal(await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText(), eligibilityPolicy, 'Readiness and settings explain one effective policy');
                 assert.match(await page.getByRole('region', {name: 'Effective model recipe', exact: true}).innerText(), /15 trees, maximum depth 8, random seed 42/);
                 assert.equal(await page.locator('[name="min_training_days"], [name="preferred_training_days"], [name="min_nonzero_days"], [name="max_training_days"], [name="forecast_horizon_days"], [name="lower_percentile"], [name="upper_percentile"], [name="n_estimators"], [name="max_depth"]').count(), 0, 'Disconnected inputs remain removed');
@@ -205,6 +219,7 @@ const fixture = action => {
                 const scheduleUrl = page.url();
                 const trainingStatus = await page.locator('.ml-job-status').innerText();
                 const timeHelp = page.getByRole('button', {name: 'About training time', exact: true});
+                await page.mouse.move(0, 0);
                 await timeHelp.scrollIntoViewIfNeeded();
                 await timeHelp.focus();
                 await timeHelp.press('Enter');
@@ -259,12 +274,19 @@ const fixture = action => {
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
         assert.match(await page.locator('#effective-training-schedule').innerText(), /Wednesday at 11:59 PM/, 'Unauthorized saves preserve the schedule');
         await page.goto(origin + '/components/report/data_readiness.php');
-        assert.equal(await page.locator('main').getByRole('link', {name: 'ML Operation', exact: true}).count(), 1, 'Readiness links authorized users to training settings');
+        assert.equal(await page.locator('main').getByRole('link', {name: 'Model Training', exact: true}).count(), 1, 'Readiness links authorized users to training settings');
         fixture('forecast_replay_workspace');
         const replay = await page.goto(origin + '/components/report/forecast_replay.php');
         assert.equal(replay.status(), 200);
         assert.equal(await page.locator('.replay-bar-pair').count(), 28);
         assert.match(await page.locator('main p[role="status"]').innerText(), /Experimental preview only/);
+        if (process.env.FORECAST_SCREENSHOTS) {
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'Replay fits ' + width);
+                await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'replay-' + width + '.png'), fullPage: true, animations: 'disabled'});
+            }
+        }
         await page.getByText('Daily comparison values', {exact: true}).click();
         assert.equal(await page.locator('#replay-comparison tbody tr').count(), 28);
         assert.deepEqual(pageErrors, [], 'No unexpected page errors occurred during test');

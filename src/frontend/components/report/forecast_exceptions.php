@@ -53,31 +53,13 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review recommendations</a>
             </div>
         </header>
+        <?php forecast_workflow('forecast'); ?>
 
-        <div class="card-grid" aria-label="Triage summary cards">
-            <div class="stat-card">
-                <div class="value"><?= count($exceptions) ?></div>
-                <div class="label">Products using stock rules</div>
-                <div class="hint"><?= $coverage['filtered']['is_filtered'] ? 'Showing ' . count($filteredExceptions) . ' matching' : 'Excluded from forecasts' ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="value"><?= (int)$coverage['scope_count'] ?></div>
-                <div class="label">Active catalog products</div>
-                <div class="hint">Products in this Store</div>
-            </div>
-            <div class="stat-card">
-                <div class="value"><?= (int)$coverage['forecast_backed_count'] ?></div>
-                <div class="label">With forecasts</div>
-                <div class="hint"><?= $coverage['scope_count'] > 0 ? round(($coverage['forecast_backed_count'] / $coverage['scope_count']) * 100) . '% coverage' : 'No active products' ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="value"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></div>
-                <div class="label">Store status</div>
-                <div class="hint"><?= $coverage['is_guidance_usable'] ? 'Guidance usable today' : 'Stock rules only' ?></div>
-            </div>
-        </div>
-
-        <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products have usable forecasts. <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
+        <section class="forecast-overview" aria-label="Forecast exception summary">
+            <div><small>Using stock rules</small><strong><?= count($exceptions) ?> products</strong></div>
+            <div class="forecast-coverage"><small>With usable forecasts</small><strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products</strong> <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></div>
+            <div><small>Store status</small><strong><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></strong><small><?= $coverage['is_guidance_usable'] ? 'Guidance usable today' : 'Stock rules only' ?></small></div>
+        </section>
 
         <section class="dashboard-section">
             <div class="section-header">
@@ -113,7 +95,7 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                             <th scope="col">Product</th>
                             <th scope="col">On hand</th>
                             <th scope="col">Stock-rule suggestion</th>
-                            <th scope="col">Exclusion reason</th>
+                            <th scope="col">Why no forecast</th>
 
                             <th scope="col">Action needed</th>
                             <th scope="col">Actions</th>
@@ -136,12 +118,12 @@ $canConfigureModels = role_capability_policy()->allows((string)current_role(), R
                                     <small><?= htmlspecialchars($row['exclusion_action'] ?? 'Replenishment continues on stock rules') ?></small>
                                 </td>
                                 <td>
-                                    <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="Inspect forecast for <?= htmlspecialchars($row['product_name']) ?>">Inspect</a>
+                                    <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="View forecast for <?= htmlspecialchars($row['product_name']) ?>">View forecast</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$filteredExceptions): ?>
-                            <tr><td colspan="6" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching forecast exceptions found.' : 'No excluded products. All active products have usable forecasts.' ?></td></tr>
+                            <tr><td colspan="6" class="u-text-muted u-text-center"><?= ($searchQuery !== '' || $reasonFilter !== '') ? 'No matching exceptions. Clear the filters to view all exceptions.' : ($coverage['scope_count'] === 0 ? 'No active products to check.' : 'No excluded products. All active products have usable forecasts.') ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>

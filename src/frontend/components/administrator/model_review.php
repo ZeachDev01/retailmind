@@ -139,6 +139,16 @@ $formatUnits = static function ($val): string {
                 <p class="page-subheading">Review the candidate, check evidence, then approve or reject.</p>
             </div>
         </header>
+        <?php forecast_workflow('review'); ?>
+        <?php
+        $failedChecks = array_filter($summary['required_checks'] ?? [], static fn(array $check): bool => empty($check['passed']));
+        $firstFailedCheck = $failedChecks ? reset($failedChecks) : null;
+        forecast_status_summary(
+            !empty($summary['is_current_approved']) ? 'This model is already approved' : (!empty($summary['can_approve']) ? 'Model is ready for your approval' : 'Model approval is blocked'),
+            $firstFailedCheck['label'] ?? (empty($summary['has_candidate']) ? 'No completed model is available to review.' : (!empty($summary['can_approve']) ? 'None of the required checks.' : 'Review the checks below for the remaining requirements.')),
+            !empty($summary['can_approve']) ? 'Review the evidence below before approving or rejecting.' : 'Check the failed requirements below. Training completion alone does not allow approval.'
+        );
+        ?>
 
         <?php if ($message): ?>
             <div id="review-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div>

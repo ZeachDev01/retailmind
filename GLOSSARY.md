@@ -132,6 +132,14 @@ _Avoid_: Automatic order, required purchase quantity
 The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
 _Avoid_: Suggested purchase quantity, guaranteed sales, stock quantity
 
+**Usable History Day**:
+A day when the Store is open and a Product's demand is supported by recorded evidence, including genuine zero sales. Closures, stockouts, and unknown observations do not count.
+_Avoid_: Day with sales, day since installation, active day
+
+**Store Training Eligibility**:
+Whether a Product's Store history satisfies the requirements for model training, including sufficient usable history, supported recent observations, and chronological evaluation coverage. Eligibility does not mean a model is approved or a usable Demand Forecast exists.
+_Avoid_: Forecast availability, model approval, history level
+
 **Stockout Day**:
 A Store trading day when a Product was unavailable for sale during part or all of the day. Recorded sales remain valid, but do not reveal how many additional units customers might have bought.
 _Avoid_: Zero demand, complete demand observation

@@ -117,6 +117,14 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
     <main class="main-content">
         <header class="page-heading"><div><h1>Replenishment Recommendations</h1><p class="page-subtitle">Review stock and suggested buying quantities.</p></div><a class="btn btn-secondary" href="../report/predictions.php">Demand Forecast</a></header>
 
+            <?php forecast_workflow('buy'); ?>
+            <?php if ($coverage): ?>
+                <?php forecast_status_summary(
+                    $coverage['is_guidance_usable'] ? 'Buying suggestions include forecast evidence' : 'Buying suggestions use stock rules',
+                    $coverage['is_guidance_usable'] ? 'Some products may still have missing forecasts. Check each row’s basis.' : 'Usable current forecasts are not available for buying guidance.',
+                    'Review stock and the suggested quantity. Buying is your decision; record goods through Stock Receiving after they arrive.'
+                ); ?>
+            <?php endif; ?>
             <?php if ($error): ?>
                 <div class="alert tag-warning" role="status">
                     <span><?= htmlspecialchars($error) ?></span>

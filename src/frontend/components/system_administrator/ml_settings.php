@@ -244,7 +244,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
     <?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>ML Operation</title>
+    <title>Model Training</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . rawurlencode($styleVersion)) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/ml-settings.css')) ?>">
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
@@ -255,8 +255,8 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
     <main class="main-content">
         <div class="topbar">
             <div>
-                <h1>ML Operation</h1>
-                <p class="page-subtitle">Train models, check results, and manage forecast settings.</p>
+                <h1>Model Training</h1>
+                <p class="page-subtitle">Train a candidate, review its results, and schedule retraining.</p>
             </div>
             <div class="ml-page-actions">
                 <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/system_administrator/forecast_import.php')) ?>">Import sales history</a>
@@ -270,11 +270,30 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             </div>
         <?php endif; ?>
 
+        <?php forecast_workflow('train'); ?>
+        <?php
+        if ($isTraining) {
+            forecast_status_summary('Training ' . (($trainingJob['status'] ?? '') === 'queued' ? 'queued' : 'in progress'), 'Results are not ready yet.', 'Wait for this job to finish. This page refreshes automatically.');
+        } elseif (($trainingJob['status'] ?? '') === 'failed') {
+            forecast_status_summary('Latest training attempt failed', 'The worker could not complete the latest job.', 'Review the training history and worker status before retrying. Any earlier model keeps its existing approval status.');
+        } elseif (!$latestCandidate) {
+            forecast_status_summary('No trained model yet', 'There are no completed training results to review.', 'Check sales data first, then train a candidate.', app_url('components/report/data_readiness.php'), 'Check sales data');
+        } elseif ($approvedVersion === $latestCandidate['model_version']) {
+            forecast_status_summary($isLocalDemo ? 'Demo model approved' : 'Latest model is selected', 'Approval alone does not confirm today’s product coverage.', 'Check Demand Forecast for usable expected sales.', app_url('components/report/predictions.php'), 'See forecast status');
+        } elseif (empty($candidateQuality['passed'])) {
+            forecast_status_summary('Training finished. Quality checks did not pass.', 'The model has not met the required prediction-error checks. Approval is blocked.', 'Review the accuracy results below and check the sales data before training again.');
+        } elseif (!$isLocalDemo && empty($candidateObsProgress['observation_complete'])) {
+            forecast_status_summary('Quality checks passed. Observation is pending.', 'The model still needs future predictions checked against actual Store sales.', 'Complete observation, then ask the Administrator to review the model.');
+        } else {
+            forecast_status_summary('Quality checks passed. Approval is still required.', 'Training does not give permission to use the model.', $isLocalDemo ? 'Review the results before approving this Demo model. Store approval is separate.' : 'Ask the Administrator to check the remaining approval requirements.');
+        }
+        ?>
+
         <section class="dashboard-section" aria-labelledby="training-title">
             <div class="section-header">
                 <div>
                     <h2 id="training-title">Candidate model & training</h2>
-                    <p class="section-description">Train a candidate, then compare its error with repeating last week’s sales.</p>
+                    <p class="section-description">Training learns sales patterns. Approval decides whether the model may be used.</p>
                 </div>
             </div>
 
@@ -306,6 +325,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
 
             <?php if ($latestCandidate): ?>
                 <div class="candidate-card">
+                    <details class="forecast-details"><summary>Candidate data &amp; model version</summary>
                     <div class="candidate-meta-grid">
                         <div class="candidate-meta-item">
                             <span class="candidate-meta-label">Model version</span>
@@ -324,7 +344,9 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                             <span class="candidate-meta-val"><?= htmlspecialchars($candidateEvidence['metadata']['data_window_start'] ?? '—') ?> to <?= htmlspecialchars($candidateEvidence['metadata']['data_window_end'] ?? '—') ?></span>
                         </div>
                     </div>
+                    </details>
 
+                    <details class="forecast-details"><summary>Accuracy results &amp; observation details</summary>
                     <div class="table-wrap">
                         <table aria-label="Candidate evaluation metrics">
                             <thead>
@@ -332,7 +354,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                                     <th scope="col">Forecast horizon</th>
                                     <th scope="col" class="u-num-col">Model error (WAPE)</th>
                                     <th scope="col" class="u-num-col">Baseline error (WAPE)</th>
-                                    <th scope="col">Quality gate</th>
+                                    <th scope="col">Quality check</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -358,6 +380,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                         <?php endif; ?>
                     <?php endif; ?>
 
+                    </details>
                     <?php if ($isLocalDemo): ?>
                         <p class="ml-eval-meta">Training recipe: <?= (int)($candidateEvidence['metadata']['parameters']['n_estimators'] ?? 0) ?> trees, max depth <?= (int)($candidateEvidence['metadata']['parameters']['max_depth'] ?? 0) ?>, 28 daily forecast targets per product.</p>
                         <form method="post" class="ml-action-form">
@@ -375,7 +398,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
 
             <div class="ml-section-links">
                 <a class="btn btn-secondary" href="../report/forecast_analytics.php">Forecast analytics</a>
-                <a class="btn btn-secondary" href="../report/predictions.php">Open forecasts</a>
             </div>
         </section>
 
@@ -424,7 +446,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             </form>
         </section>
-        <section class="dashboard-section">
+        <section class="ml-secondary"><details class="forecast-details"><summary>Training eligibility &amp; product history</summary>
             <?php require __DIR__ . '/../report/training_eligibility_policy.php'; ?>
             <details>
                 <summary>Training Eligibility by Product</summary>
@@ -448,19 +470,20 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </table>
                 </div>
             </details>
-        </section>
+        </details></section>
 
-        <section class="dashboard-section" aria-label="Effective model recipe">
-            <h2>Fixed model recipe</h2>
+        <section class="ml-secondary" aria-label="Effective model recipe">
+            <details class="forecast-details"><summary>Fixed model recipe &amp; approval requirements</summary>
             <p>Shared Random Forest: 15 trees, maximum depth 8, random seed 42.</p>
             <p>Forecast Horizons: 7, 14 and 28 days. Forecasts are point quantities; prediction intervals are unavailable.</p>
             <p>Training completion does not qualify a candidate. Chronological quality checks, required observation evidence,
                 compatible Store artifacts and explicit local Administrator approval remain required.
                 Failed or rejected candidates leave the approved model unchanged. Demo review never activates a Store model.</p>
+            </details>
         </section>
 
         <?php if (!$isLocalDemo): ?>
-        <section class="dashboard-section" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
+        <section class="ml-secondary" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
             <div class="section-header">
                 <div>
 
@@ -527,7 +550,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         </details></section>
         <?php endif; ?>
 
-        <section class="dashboard-section" aria-labelledby="runs-heading">
+        <section class="ml-secondary" aria-labelledby="runs-heading">
 <details class="forecast-details"><summary id="runs-heading">Recent training runs</summary>
             <div class="section-header">
                 <div>

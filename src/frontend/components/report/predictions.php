@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
         try {
             $jobService = new \App\Services\MlJobService($pdo);
             $jobService->enqueue('forecast_generation', (int)$_SESSION['user_id'], $_SESSION['role'], $_SERVER['REMOTE_ADDR'] ?? null);
-            $message = 'Forecast generation job has been enqueued. The background worker will process it shortly.';
+            $message = 'Forecast generation queued. Results will update after the background worker finishes.';
             $messageClass = 'tag-success';
         } catch (Throwable $e) {
             $message = 'Failed to enqueue job: ' . $e->getMessage();
@@ -118,7 +118,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <p class="page-subtitle">Expected sales. Stock on hand. What needs attention.</p>
             </div>
             <div class="page-heading-actions">
-                <a class="btn btn-primary" href="<?= htmlspecialchars(app_url('components/inventory_management/replenishment_queue.php')) ?>">Review replenishment</a>
                 <?php if (has_capability(RoleCapabilityPolicy::GENERATE_FORECASTS)): ?>
                     <form method="post" action="" style="display:inline-block; margin:0;">
                         <?= csrf_field() ?>
@@ -127,13 +126,34 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <?php endif; ?>
             </div>
         </header>
+        <?php forecast_workflow('forecast'); ?>
+        <?php
+        $primaryIssue = $operationalIssues[0] ?? null;
+        $nextUrl = $primaryIssue['action_url'] ?? null;
+        $nextLabel = $primaryIssue['action_label'] ?? 'Check sales data';
+        $nextText = $primaryIssue ? $primaryIssue['responsible_role'] . ': ' . $nextLabel . '.' : 'Check sales data and model approval.';
+        if (empty($coverage['approved_model_version'])) {
+            $nextText = 'The Super Administrator checks training results; the Administrator reviews eligible Store models.';
+            $nextUrl = has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
+                ? app_url('components/system_administrator/ml_settings.php')
+                : (has_capability(RoleCapabilityPolicy::APPROVE_MODELS) ? app_url('components/administrator/model_review.php') : null);
+            $nextLabel = has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS) ? 'Check training result' : 'Check model review';
+        }
+        forecast_status_summary(
+            $isGenerating ? 'Forecast update in progress' : ($coverage['is_guidance_usable'] ? 'Expected sales are available' : 'Current sales forecasts are unavailable'),
+            $coverage['is_guidance_usable'] && ($primaryIssue['category'] ?? '') === 'healthy' ? 'None.' : ($primaryIssue['condition'] ?? 'Current forecast coverage has not been confirmed.'),
+            $isGenerating ? 'Wait for the background job. Buying suggestions keep their current basis until it finishes.' : $nextText,
+            !$isGenerating ? $nextUrl : null,
+            $nextLabel
+        );
+        ?>
         <nav class="forecasting-nav-chips" aria-label="Forecasting Destinations">
             <a href="<?= htmlspecialchars(app_url('components/report/forecast_exceptions.php')) ?>">Forecast Exceptions</a>
             <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">Data Readiness</a>
             <?php if (has_capability(RoleCapabilityPolicy::APPROVE_MODELS)): ?>
                 <a href="<?= htmlspecialchars(app_url('components/administrator/model_review.php')) ?>">Model Review &amp; Approval</a>
             <?php elseif ($userRole === 'super_admin'): ?>
-                <a href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Forecast Model Governance</a>
+                <a href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php')) ?>">Forecast Analytics</a>
             <?php endif; ?>
             <a href="<?= htmlspecialchars(app_url('components/administrator/store_calendar.php')) ?>">Store Calendar</a>
             <a href="<?= htmlspecialchars(app_url('components/inventory_management/promotions.php')) ?>">Promotions</a>
@@ -149,11 +169,11 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <?php forecast_help('coverage-help', $coverage['coverage_summary_text'], 'About forecast availability'); ?>
             </div>
             <div class="forecast-coverage">
-                <strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products forecast-backed</strong>
+                <strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?> products with forecasts</strong>
                 <meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Forecast product coverage"></meter>
                 <small><?= (int)$coverage['stock_rule_count'] ?> use stock rules</small>
             </div>
-            <div><small>Forecast origin</small><strong><?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?></strong><small><?= htmlspecialchars($originAgeText) ?></small></div>
+            <div><small>Sales history through</small><strong><?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?></strong><small><?= htmlspecialchars($originAgeText) ?></small></div>
         </section>
         <?php if ($coverage['is_observation_mode'] || $coverage['is_recommendations_suspended']): ?>
             <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
@@ -201,8 +221,8 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
                 <div class="empty-state">
                     <i class="bi bi-graph-up-arrow empty-icon"></i>
-                    <h2>No Forecasts Available</h2>
-                    <p><?= $searchQuery !== '' ? 'No matching products found in current catalog.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
+                    <h2><?= $searchQuery !== '' ? 'No matching products' : 'No forecasts available' ?></h2>
+                    <p><?= $searchQuery !== '' ? 'No matching products found. Clear the search to view all products.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
                 </div>
             <?php else: ?>
                 <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">

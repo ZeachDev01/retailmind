@@ -300,6 +300,7 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
                 CASE WHEN stats.first_sale_date IS NULL THEN 0 ELSE DATEDIFF(CURDATE(), stats.first_sale_date) + 1 END AS calendar_history_days,
                 CASE WHEN stats.first_sale_date IS NULL THEN 0 ELSE GREATEST((DATEDIFF(CURDATE(), stats.first_sale_date) + 1) - stats.nonzero_sales_days, 0) END AS zero_sales_days,
                 stats.first_sale_date,
+                stats.last_sale_date,
                 stats.last_sale_at,
                 COALESCE(stats.sales_records, 0) AS sales_records,
                 COALESCE(stats.total_qty_sold, 0) AS total_qty_sold,
@@ -324,6 +325,7 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
                 SELECT si.product_id,
                        COUNT(DISTINCT CASE WHEN si.qty_sold > 0 THEN si.sale_day END) AS nonzero_sales_days,
                        MIN(si.sale_day) AS first_sale_date,
+                       MAX(si.sale_day) AS last_sale_date,
                        MAX(si.changed_at) AS last_sale_at,
                        SUM(si.sales_records) AS sales_records,
                        SUM(si.qty_sold) AS total_qty_sold
@@ -390,6 +392,7 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
         $row['has_holdout_coverage'] = (bool)($elig['has_holdout_coverage'] ?? false);
         $isEligible = (bool)($elig['eligible'] ?? false);
         $row['training_eligible'] = $isEligible;
+        $row['eligibility_through_date'] = $throughDate;
 
         if (!$hasPrediction) {
             if ($isEligible) {
