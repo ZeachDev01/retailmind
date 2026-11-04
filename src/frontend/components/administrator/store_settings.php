@@ -99,11 +99,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($updates['timezone'] !== '' && !in_array($updates['timezone'], timezone_identifiers_list(), true)) {
                 throw new InvalidArgumentException('Enter a valid IANA timezone such as Asia/Manila or UTC.');
             }
+            if ($updates['store_email'] !== trim((string)($settings['store_email'] ?? ''))
+                && !empty($settings['store_email_alerts_enabled'])) {
+                $updates['store_email_alerts_enabled'] = '0';
+            }
             \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
                 save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
             });
-            $message = 'Store and receipt settings saved.';
+            $message = isset($updates['store_email_alerts_enabled'])
+                ? 'Store and receipt settings saved. Test email again to enable alerts for the new Store email address.'
+                : 'Store and receipt settings saved.';
+        } elseif ($action === 'save_brevo' || $action === 'test_brevo') {
+            $senderEmail = trim((string)($_POST['brevo_sender_email'] ?? ''));
+            $apiKeyInput = trim((string)($_POST['brevo_api_key'] ?? ''));
+            $savedSettings = get_store_settings($pdo);
+            $apiKey = $apiKeyInput !== ''
+                ? $apiKeyInput
+                : (!empty($savedSettings['brevo_api_key']) ? decrypt_store_email_secret((string)$savedSettings['brevo_api_key']) : '');
+            if (filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false || $apiKey === '' || strlen($apiKey) > 512) {
+                throw new InvalidArgumentException('Enter a Brevo API key and a valid verified sender email address.');
+            }
+            $updates = [
+                'brevo_api_key' => $apiKeyInput !== ''
+                    ? encrypt_store_email_secret($apiKeyInput)
+                    : (string)$savedSettings['brevo_api_key'],
+                'brevo_sender_email' => $senderEmail,
+                'store_email_alerts_enabled' => '0',
+            ];
+            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
+                save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
+                $pdo->exec("DELETE FROM store_settings WHERE setting_key IN (
+                    'smtp_provider', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
+                    'smtp_from_email', 'smtp_password', 'smtp_email_enabled'
+                )");
+            });
+            log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Store Settings', null, null, [
+                'brevo_sender_email' => $senderEmail,
+            ]);
+
+            if ($action === 'test_brevo') {
+                $recipient = trim((string)($savedSettings['store_email'] ?? ''));
+                if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
+                    $message = 'Brevo settings saved. Add a valid Store email address, then send a test email.';
+                    $messageClass = 'tag-warning';
+                } else {
+                    if (send_email_notification($recipient, 'RetailMind email test', 'Your Brevo API settings are working. Store email alerts are now enabled.')) {
+                        $updates['store_email_alerts_enabled'] = '1';
+                        \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
+                            save_key_value_settings($pdo, 'store_settings', ['store_email_alerts_enabled' => $updates['store_email_alerts_enabled']], (int)$_SESSION['user_id']);
+                        });
+                        $message = 'Test email sent. Store email alerts are enabled.';
+                        $messageClass = 'tag-success';
+                    } else {
+                        $message = 'Test email failed. Check the Brevo API key, verified sender, and Store email address, then try again. Email alerts remain disabled.';
+                        $messageClass = 'tag-warning';
+                    }
+                }
+            } else {
+                $message = 'Brevo settings saved. Send a test email to enable Store email alerts.';
+                $messageClass = 'tag-success';
+            }
+        } elseif ($action === 'disable_brevo') {
+            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo): void {
+                save_key_value_settings($pdo, 'store_settings', ['store_email_alerts_enabled' => '0'], (int)$_SESSION['user_id']);
+            });
+            $message = 'Store email alerts disabled.';
         } elseif ($action === 'save_attention') {
             $updates = [];
             foreach ($fields as $key => $config) {
@@ -115,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             throw new InvalidArgumentException('Choose a Store Settings section to save.');
         }
-        $messageClass = 'tag-success';
+        if ($messageClass === '') $messageClass = 'tag-success';
     } catch (Throwable $exception) {
         $message = \App\Support\OperatorAlert::message($exception, 'The Store Setting could not be saved. Check the values and try again. Tell your Administrator if this keeps happening.');
         $messageClass = 'tag-warning';
@@ -131,8 +192,9 @@ $effective = $service->thresholdsFor('admin');
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Store Settings</title>
+    <title>Store Configuration</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/store-settings.css')) ?>">
 </head>
 <body class="store-settings-page">
 <div class="app-shell">
@@ -140,7 +202,7 @@ $effective = $service->thresholdsFor('admin');
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <h1>Store Settings</h1>
+                <h1>Store Configuration</h1>
                 <p class="page-subtitle">Maintain Store identity, customer receipts, and operational attention thresholds.</p>
             </div>
         </header>
@@ -221,6 +283,41 @@ $effective = $service->thresholdsFor('admin');
                 <div class="form-actions u-mt-1">
                     <button class="btn btn-primary" type="submit">Save attention thresholds</button>
                 </div>
+            </form>
+        </section>
+        <?php $brevoConfigured = !empty($settings['brevo_api_key']); ?>
+        <section class="dashboard-section" aria-labelledby="email-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="email-heading">Brevo email</h2>
+                    <p class="section-description">Brevo sends Store alerts and other application emails. Enter a Brevo API key and a verified sender address. The API key is encrypted at rest and never displayed.</p>
+                </div>
+            </div>
+            <form method="post" id="store-brevo-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_brevo" id="brevo-action">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="brevo_api_key">Brevo API key</label>
+                        <input id="brevo_api_key" name="brevo_api_key" type="password" autocomplete="new-password" placeholder="<?= $brevoConfigured ? 'Saved; leave blank to keep it' : 'Enter Brevo API key' ?>">
+                        <small class="field-help">Use an API key, not an SMTP key. Leave blank to keep the saved key.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="brevo_sender_email">Verified sender email</label>
+                        <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
+                        <small class="field-help">This sender must be verified in your Brevo account. Emails display the Store name.</small>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save Brevo settings</button>
+                    <button type="submit" class="btn btn-secondary" onclick="document.getElementById('brevo-action').value='test_brevo'">Save and send test email</button>
+                </div>
+            </form>
+            <form method="post" class="form-actions">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="disable_brevo">
+                <button type="submit" class="btn btn-secondary"<?= empty($settings['store_email_alerts_enabled']) ? ' disabled' : '' ?>>Disable Store alerts</button>
+                <span class="field-help" role="status"><?= !empty($settings['store_email_alerts_enabled']) ? 'Store email alerts are enabled.' : 'Store alerts are disabled until a test email succeeds.' ?></span>
             </form>
         </section>
     </main>

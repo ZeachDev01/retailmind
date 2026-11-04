@@ -37,7 +37,36 @@ $notifications->checkAndNotifyForecasts();
 
 // Persisted events let transaction checks queue email for the daily run, including email-only accounts.
 // Only a genuinely new or escalated condition is queued, so an unchanged rerun has nothing pending.
-$mailer = strtolower((string)env('MAIL_MAILER', 'smtp'));
+$emailDeliveryDisabled = strtolower((string)env('MAIL_MAILER', '')) === 'disabled';
+$storeSettings = get_store_settings($pdo);
+$storeEmailEnabled = !empty($storeSettings['store_email_alerts_enabled']);
+$storeEmailAddress = trim((string)($storeSettings['store_email'] ?? ''));
+$storeEmailTypes = ['low_stock', 'expiring_stock', 'expired_stock'];
+if ($storeEmailEnabled && filter_var($storeEmailAddress, FILTER_VALIDATE_EMAIL)) {
+    $pendingStoreEvents = $pdo->query("SELECT n.type, n.title, n.message, n.reference_id, n.reference_type, n.attention_key
+        FROM notifications n
+        LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
+        WHERE n.email_pending = 1 AND n.type IN ('low_stock', 'expiring_stock', 'expired_stock')
+          AND (n.attention_key IS NULL OR s.is_active = 1)
+        ORDER BY n.notification_id")->fetchAll(PDO::FETCH_ASSOC);
+    $clearStoreEvent = $pdo->prepare("UPDATE notifications SET email_pending = 0
+        WHERE email_pending = 1 AND type = ?
+          AND COALESCE(reference_id, -1) = COALESCE(?, -1)
+          AND COALESCE(reference_type, '') = COALESCE(?, '')");
+    $sentStoreEvents = [];
+    foreach ($pendingStoreEvents as $event) {
+        $eventKey = json_encode([$event['type'], $event['reference_id'], $event['reference_type']]);
+        if (isset($sentStoreEvents[$eventKey])) continue;
+        $sentStoreEvents[$eventKey] = true;
+        $subject = (string)$event['title'];
+        $body = (string)($storeSettings['store_name'] ?? 'Store') . " notification\n\n" . $event['message'];
+        if (send_email_notification($storeEmailAddress, $subject, $body)) {
+            $clearStoreEvent->execute([$event['type'], $event['reference_id'], $event['reference_type']]);
+        }
+    }
+} elseif ($storeEmailEnabled) {
+    error_log('Store email alerts are enabled but the Store email address is invalid; alerts remain queued.');
+}
 foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
     foreach ($notifications->recipients($role) as $recipient) {
         $pdo->beginTransaction();
@@ -51,6 +80,9 @@ foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
             $pending->execute([(int)$recipient['user_id'], $role]);
             $clear = $pdo->prepare('UPDATE notifications SET email_pending = 0 WHERE notification_id = ?');
             foreach ($pending->fetchAll(PDO::FETCH_ASSOC) as $event) {
+                if ($storeEmailEnabled && in_array($event['type'], $storeEmailTypes, true)) {
+                    continue;
+                }
                 $optionalLowStock = $event['type'] === 'low_stock';
                 $address = trim((string)($recipient['email'] ?? ''));
                 $optedIn = !empty($recipient['notify_email'])
@@ -60,10 +92,8 @@ foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
                     $clear->execute([(int)$event['notification_id']]);
                     continue;
                 }
-                if (send_email_notification($address, $event['title'], $event['message'])
-                    || !in_array($mailer, ['brevo', 'smtp', 'mail'], true)) {
-                    // A configured provider that fails stays queued for the next run; an unconfigured
-                    // environment has nothing to retry, and its attempt is already in the delivery log.
+                if (send_email_notification($address, $event['title'], $event['message']) || $emailDeliveryDisabled) {
+                    // Failed Brevo sends stay queued for the next run; disabled delivery has nothing to retry.
                     $clear->execute([(int)$event['notification_id']]);
                 }
             }

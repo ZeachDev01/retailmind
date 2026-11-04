@@ -1,0 +1,51 @@
+sku,barcode,product_name,brand,category_name,unit_price,cost_price,reorder_level,preferred_supplier,supplier_lead_time_days,safety_stock,minimum_order_quantity,units_per_package
+SAMPLE-001,2000000000001,Sample Product 001,Sample Brand,Groceries,11.25,5.60,10,Sample Supplier,7,2,1,1
+SAMPLE-002,2000000000002,Sample Product 002,Sample Brand,Beverages,12.50,6.20,10,Sample Supplier,7,2,1,1
+SAMPLE-003,2000000000003,Sample Product 003,Sample Brand,Snacks,13.75,6.80,10,Sample Supplier,7,2,1,1
+SAMPLE-004,2000000000004,Sample Product 004,Sample Brand,Household,15.00,7.40,10,Sample Supplier,7,2,1,1
+SAMPLE-005,2000000000005,Sample Product 005,Sample Brand,Personal Care,16.25,8.00,10,Sample Supplier,7,2,1,1
+SAMPLE-006,2000000000006,Sample Product 006,Sample Brand,Groceries,17.50,8.60,10,Sample Supplier,7,2,1,1
+SAMPLE-007,2000000000007,Sample Product 007,Sample Brand,Beverages,18.75,9.20,10,Sample Supplier,7,2,1,1
+SAMPLE-008,2000000000008,Sample Product 008,Sample Brand,Snacks,20.00,9.80,10,Sample Supplier,7,2,1,1
+SAMPLE-009,2000000000009,Sample Product 009,Sample Brand,Household,21.25,10.40,10,Sample Supplier,7,2,1,1
+SAMPLE-010,2000000000010,Sample Product 010,Sample Brand,Personal Care,22.50,11.00,10,Sample Supplier,7,2,1,1
+SAMPLE-011,2000000000011,Sample Product 011,Sample Brand,Groceries,23.75,11.60,10,Sample Supplier,7,2,1,1
+SAMPLE-012,2000000000012,Sample Product 012,Sample Brand,Beverages,25.00,12.20,10,Sample Supplier,7,2,1,1
+SAMPLE-013,2000000000013,Sample Product 013,Sample Brand,Snacks,26.25,12.80,10,Sample Supplier,7,2,1,1
+SAMPLE-014,2000000000014,Sample Product 014,Sample Brand,Household,27.50,13.40,10,Sample Supplier,7,2,1,1
+SAMPLE-015,2000000000015,Sample Product 015,Sample Brand,Personal Care,28.75,14.00,10,Sample Supplier,7,2,1,1
+SAMPLE-016,2000000000016,Sample Product 016,Sample Brand,Groceries,30.00,14.60,10,Sample Supplier,7,2,1,1
+SAMPLE-017,2000000000017,Sample Product 017,Sample Brand,Beverages,31.25,15.20,10,Sample Supplier,7,2,1,1
+SAMPLE-018,2000000000018,Sample Product 018,Sample Brand,Snacks,32.50,15.80,10,Sample Supplier,7,2,1,1
+SAMPLE-019,2000000000019,Sample Product 019,Sample Brand,Household,33.75,16.40,10,Sample Supplier,7,2,1,1
+SAMPLE-020,2000000000020,Sample Product 020,Sample Brand,Personal Care,35.00,17.00,10,Sample Supplier,7,2,1,1
+SAMPLE-021,2000000000021,Sample Product 021,Sample Brand,Groceries,36.25,17.60,10,Sample Supplier,7,2,1,1
+SAMPLE-022,2000000000022,Sample Product 022,Sample Brand,Beverages,37.50,18.20,10,Sample Supplier,7,2,1,1
+SAMPLE-023,2000000000023,Sample Product 023,Sample Brand,Snacks,38.75,18.80,10,Sample Supplier,7,2,1,1
+SAMPLE-024,2000000000024,Sample Product 024,Sample Brand,Household,40.00,19.40,10,Sample Supplier,7,2,1,1
+SAMPLE-025,2000000000025,Sample Product 025,Sample Brand,Personal Care,41.25,20.00,10,Sample Supplier,7,2,1,1
+SAMPLE-026,2000000000026,Sample Product 026,Sample Brand,Groceries,42.50,20.60,10,Sample Supplier,7,2,1,1
+SAMPLE-027,2000000000027,Sample Product 027,Sample Brand,Beverages,43.75,21.20,10,Sample Supplier,7,2,1,1
+SAMPLE-028,2000000000028,Sample Product 028,Sample Brand,Snacks,45.00,21.80,10,Sample Supplier,7,2,1,1
+SAMPLE-029,2000000000029,Sample Product 029,Sample Brand,Household,46.25,22.40,10,Sample Supplier,7,2,1,1
+SAMPLE-030,2000000000030,Sample Product 030,Sample Brand,Personal Care,47.50,23.00,10,Sample Supplier,7,2,1,1
+SAMPLE-031,2000000000031,Sample Product 031,Sample Brand,Groceries,48.75,23.60,10,Sample Supplier,7,2,1,1
+SAMPLE-032,2000000000032,Sample Product 032,Sample Brand,Beverages,50.00,24.20,10,Sample Supplier,7,2,1,1
+SAMPLE-033,2000000000033,Sample Product 033,Sample Brand,Snacks,51.25,24.80,10,Sample Supplier,7,2,1,1
+SAMPLE-034,2000000000034,Sample Product 034,Sample Brand,Household,52.50,25.40,10,Sample Supplier,7,2,1,1
+SAMPLE-035,2000000000035,Sample Product 035,Sample Brand,Personal Care,53.75,26.00,10,Sample Supplier,7,2,1,1
+SAMPLE-036,2000000000036,Sample Product 036,Sample Brand,Groceries,55.00,26.60,10,Sample Supplier,7,2,1,1
+SAMPLE-037,2000000000037,Sample Product 037,Sample Brand,Beverages,56.25,27.20,10,Sample Supplier,7,2,1,1
+SAMPLE-038,2000000000038,Sample Product 038,Sample Brand,Snacks,57.50,27.80,10,Sample Supplier,7,2,1,1
+SAMPLE-039,2000000000039,Sample Product 039,Sample Brand,Household,58.75,28.40,10,Sample Supplier,7,2,1,1
+SAMPLE-040,2000000000040,Sample Product 040,Sample Brand,Personal Care,60.00,29.00,10,Sample Supplier,7,2,1,1
+SAMPLE-041,2000000000041,Sample Product 041,Sample Brand,Groceries,61.25,29.60,10,Sample Supplier,7,2,1,1
+SAMPLE-042,2000000000042,Sample Product 042,Sample Brand,Beverages,62.50,30.20,10,Sample Supplier,7,2,1,1
+SAMPLE-043,2000000000043,Sample Product 043,Sample Brand,Snacks,63.75,30.80,10,Sample Supplier,7,2,1,1
+SAMPLE-044,2000000000044,Sample Product 044,Sample Brand,Household,65.00,31.40,10,Sample Supplier,7,2,1,1
+SAMPLE-045,2000000000045,Sample Product 045,Sample Brand,Personal Care,66.25,32.00,10,Sample Supplier,7,2,1,1
+SAMPLE-046,2000000000046,Sample Product 046,Sample Brand,Groceries,67.50,32.60,10,Sample Supplier,7,2,1,1
+SAMPLE-047,2000000000047,Sample Product 047,Sample Brand,Beverages,68.75,33.20,10,Sample Supplier,7,2,1,1
+SAMPLE-048,2000000000048,Sample Product 048,Sample Brand,Snacks,70.00,33.80,10,Sample Supplier,7,2,1,1
+SAMPLE-049,2000000000049,Sample Product 049,Sample Brand,Household,71.25,34.40,10,Sample Supplier,7,2,1,1
+SAMPLE-050,2000000000050,Sample Product 050,Sample Brand,Personal Care,72.50,35.00,10,Sample Supplier,7,2,1,1
