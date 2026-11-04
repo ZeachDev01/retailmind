@@ -7,8 +7,7 @@
     "require": {
         "php": ">=8.1",
         "ext-fileinfo": "*",
-        "ext-gd": "*",
-        "phpmailer/phpmailer": "^6.10"
+        "ext-gd": "*"
     },
     "config": {
         "sort-packages": true,

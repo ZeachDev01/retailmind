@@ -177,9 +177,9 @@ $superAdministratorForecastingItems = [
 ];
 
 $administratorSystemItems = [
-    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'Store Staff'],
-    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Registers'],
-    ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Settings'],
+    ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'User Manager'],
+    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Add Counter'],
+    ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Configuration'],
     ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
     ['path' => 'components/administrator/database_backup.php', 'icon' => 'data_backup', 'label' => 'Database Backup'],
@@ -198,6 +198,7 @@ $administratorForecastingItems = [
 $administratorReportItems = [
     ['path' => 'components/administrator/shift_report.php', 'icon' => 'overtime', 'label' => 'Cashier Shifts'],
     ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
+    ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
     ['path' => 'components/report/report_generation.php', 'icon' => 'statistics', 'label' => 'Generate Report'],
 ];
 
@@ -218,8 +219,7 @@ $administratorSections = [
         'items' => [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'shop', 'label' => 'Store Overview'],
             ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
-            ['icon' => 'business', 'label' => 'Store Administration', 'items' => $administratorSystemItems],
-            ['path' => 'components/invoice/sales.php', 'icon' => 'document', 'label' => 'Receipt History'],
+            ['icon' => 'business', 'label' => 'Store Management', 'items' => $administratorSystemItems],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
             ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
             ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $administratorForecastingItems],
@@ -393,7 +393,7 @@ $GLOBALS['rm_navigation_shell'] = [
             <details class="sidebar-preferences-menu">
                 <summary class="sidebar-account-preferences">
                     <?= sidebar_icon('settings', 'bi-sliders') ?>
-                    <span>Preferences</span>
+                    <span>Settings</span>
                     <?= sidebar_icon('next', 'bi-chevron-right sidebar-preferences-chevron') ?>
                 </summary>
                 <div class="sidebar-preferences-options">

@@ -14,10 +14,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Enter a valid recipient email address to send a test message.';
             $messageClass = 'tag-danger';
         } else {
-            $sent = send_email_notification($recipient, 'RetailMind email test', "This is a RetailMind SMTP test sent on " . date('Y-m-d H:i:s') . '.');
+            $sent = send_email_notification($recipient, 'RetailMind email test', "This is a RetailMind Brevo API test sent on " . date('Y-m-d H:i:s') . '.');
             $message = $sent
                 ? 'Test email sent successfully.'
-                : 'Test email could not be delivered. Verify the mail server configuration and try again.';
+                : 'Test email could not be delivered. Verify the Brevo API key and sender in Store Settings.';
             $messageClass = $sent ? 'tag-success' : 'tag-danger';
         }
     } elseif ($action === 'save_dormancy') {
@@ -118,6 +118,10 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
         <section class="dashboard-section" aria-labelledby="heading-email-test">
             <div class="section-header">
                 <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
+<<<<<<< HEAD
+                <p class="section-description">Test outbound email using the Brevo API settings saved in Store Settings.</p>
+=======
+>>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
             </div>
             <form method="post" class="form-inline-action">
                 <?= csrf_field() ?>
@@ -135,6 +139,10 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                            placeholder="admin@example.com"
                            aria-required="true"
                            required>
+<<<<<<< HEAD
+                    <small class="field-help" id="test_email_help">Address to receive a test message from the configured Brevo sender.</small>
+=======
+>>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
                 </div>
                 <button type="submit" class="btn"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
             </form>

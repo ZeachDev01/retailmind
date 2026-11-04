@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? 'save');
     if ($action === 'test_email') {
         $recipient = trim((string)($_POST['test_email'] ?? ''));
-        $sent = send_email_notification($recipient, 'RetailMind email test', "This is a RetailMind SMTP test sent on " . date('Y-m-d H:i:s') . '.');
-        $message = $sent ? 'Test email sent successfully.' : 'Test email failed. Check Composer installation and MAIL_* settings in .env.';
+        $sent = send_email_notification($recipient, 'RetailMind email test', "This is a RetailMind Brevo API test sent on " . date('Y-m-d H:i:s') . '.');
+        $message = $sent ? 'Test email sent successfully.' : 'Test email failed. Check the Brevo API key and sender in Store Settings.';
         $messageClass = $sent ? 'tag-success' : 'tag-warning';
     } elseif ($action === 'save_attention') {
         try {
@@ -55,5 +55,5 @@ $attentionSettings = $attentionSettingsService->platformSettings();
 <div class="dashboard-section"><h3>Platform attention thresholds</h3><p class="section-description">Technical thresholds and hard safety limits are governed only by the Super Administrator. Store Settings may choose stricter values but cannot exceed these limits.</p><form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="save_attention"><div class="form-grid">
 <?php foreach ($attentionFields as $key => $label): ?><div class="form-group"><label><?= htmlspecialchars($label) ?></label><input type="number" min="0" step="0.01" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)$attentionSettings[$key]) ?>" required></div><?php endforeach; ?>
 </div><button class="btn">Save attention thresholds</button></form></div>
-<div class="dashboard-section"><h3>Email delivery test</h3><p class="section-description">SMTP credentials remain in the server’s <code>.env</code> file and are not displayed in the browser.</p><form method="post" style="display:flex;gap:.75rem;align-items:end;flex-wrap:wrap"><?= csrf_field() ?><input type="hidden" name="action" value="test_email"><div class="form-group" style="min-width:280px;margin:0"><label>Test recipient</label><input type="email" name="test_email" value="<?= htmlspecialchars((string)$settings['store_email']) ?>" required></div><button class="btn">Send test email</button></form></div>
+<div class="dashboard-section"><h3>Email delivery test</h3><p class="section-description">Email is sent through the Brevo API key saved in Store Settings.</p><form method="post" style="display:flex;gap:.75rem;align-items:end;flex-wrap:wrap"><?= csrf_field() ?><input type="hidden" name="action" value="test_email"><div class="form-group" style="min-width:280px;margin:0"><label>Test recipient</label><input type="email" name="test_email" value="<?= htmlspecialchars((string)$settings['store_email']) ?>" required></div><button class="btn">Send test email</button></form></div>
 </main></div></body></html>

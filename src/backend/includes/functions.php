@@ -595,53 +595,19 @@ function check_and_notify_low_stock(PDO $pdo): void
     (new NotificationService($pdo))->checkAndNotifyLowStock();
 }
 
-/**
- * Load PHPMailer from Composer, or from the bundled frontend/components copy.
- */
-function ensure_phpmailer_loaded(): bool
-{
-    if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
-        return true;
-    }
-
-    $composerAutoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
-    if (is_file($composerAutoload)) {
-        require_once $composerAutoload;
-    }
-    if (class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
-        return true;
-    }
-
-    $phpmailerPath = dirname(__DIR__, 2) . '/frontend/components/phpmailer/PHPMailer/src';
-    $requiredFiles = [
-        $phpmailerPath . '/Exception.php',
-        $phpmailerPath . '/PHPMailer.php',
-        $phpmailerPath . '/SMTP.php',
-    ];
-    foreach ($requiredFiles as $file) {
-        if (!is_file($file)) {
-            return false;
-        }
-    }
-    foreach ($requiredFiles as $file) {
-        require_once $file;
-    }
-
-    return class_exists('PHPMailer\\PHPMailer\\PHPMailer');
-}
-
 function send_brevo_email(string $email, string $subject, string $message): bool
 {
-    $apiKey = trim((string)env('BREVO_API_KEY', ''));
-    $from = trim((string)env('MAIL_FROM_ADDRESS', ''));
+    $config = get_store_brevo_settings(App\Core\Database::connection());
+    $apiKey = trim((string)$config['brevo_api_key']);
+    $from = trim((string)($config['brevo_sender_email'] ?? ''));
     if ($apiKey === '' || !filter_var($from, FILTER_VALIDATE_EMAIL) || !function_exists('curl_init')) {
-        throw new RuntimeException('Brevo email configuration is incomplete. Set BREVO_API_KEY, MAIL_FROM_ADDRESS, and enable cURL.');
+        throw new RuntimeException('Configure a Brevo API key and verified sender address in Store Settings, and enable cURL.');
     }
 
     $payload = json_encode([
         'sender' => [
             'email' => $from,
-            'name' => (string)env('MAIL_FROM_NAME', 'RetailMind'),
+            'name' => (string)($config['store_name'] ?? 'RetailMind'),
         ],
         'to' => [['email' => $email]],
         'subject' => $subject,
@@ -663,10 +629,6 @@ function send_brevo_email(string $email, string $subject, string $message): bool
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => max(5, (int)env('MAIL_TIMEOUT', 30)),
     ];
-    $caInfo = trim((string)env('MAIL_CAINFO', ''));
-    if ($caInfo !== '' && is_file($caInfo)) {
-        $curlOptions[CURLOPT_CAINFO] = $caInfo;
-    }
     curl_setopt_array($curl, $curlOptions);
     $response = curl_exec($curl);
     $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
@@ -680,56 +642,82 @@ function send_brevo_email(string $email, string $subject, string $message): bool
     return true;
 }
 
-/**
- * Send an email through PHPMailer SMTP when configured. Falls back to PHP mail.
- */
+function store_email_key(): string
+{
+    static $key = null;
+    if ($key !== null) return $key;
+
+    $path = App\Backup\RecoveryStore::path('store-email.key');
+    if (!is_file($path)) {
+        $handle = @fopen($path, 'x+b');
+        if ($handle !== false) {
+            $written = fwrite($handle, bin2hex(random_bytes(32)) . "\n");
+            fflush($handle);
+            if (function_exists('fsync')) fsync($handle);
+            fclose($handle);
+            if ($written !== 65) throw new RuntimeException('Email credential encryption is unavailable.');
+            @chmod($path, 0600);
+        }
+    }
+    $encoded = trim((string)@file_get_contents($path));
+    if (!preg_match('/^[a-f0-9]{64}$/D', $encoded)) {
+        throw new RuntimeException('Email credential encryption is unavailable.');
+    }
+    return $key = hex2bin($encoded);
+}
+
+function encrypt_store_email_secret(string $secret): string
+{
+    if (!extension_loaded('openssl')) throw new RuntimeException('OpenSSL is required to save Brevo credentials.');
+    $iv = random_bytes(12);
+    $tag = '';
+    $ciphertext = openssl_encrypt($secret, 'aes-256-gcm', store_email_key(), OPENSSL_RAW_DATA, $iv, $tag);
+    if ($ciphertext === false) throw new RuntimeException('Brevo credentials could not be encrypted.');
+    return 'v1:' . base64_encode($iv . $tag . $ciphertext);
+}
+
+function decrypt_store_email_secret(string $encrypted): string
+{
+    if (!str_starts_with($encrypted, 'v1:') || !extension_loaded('openssl')) {
+        throw new RuntimeException('Saved Brevo credentials cannot be read. Enter the API key again.');
+    }
+    $payload = base64_decode(substr($encrypted, 3), true);
+    if ($payload === false || strlen($payload) < 29) {
+        throw new RuntimeException('Saved Brevo credentials cannot be read. Enter the API key again.');
+    }
+    $secret = openssl_decrypt(substr($payload, 28), 'aes-256-gcm', store_email_key(), OPENSSL_RAW_DATA,
+        substr($payload, 0, 12), substr($payload, 12, 16));
+    if ($secret === false) throw new RuntimeException('Saved Brevo credentials cannot be read. Enter the API key again.');
+    return $secret;
+}
+
+function get_store_brevo_settings(PDO $pdo): array
+{
+    $settings = get_store_settings($pdo);
+    $encryptedKey = trim((string)($settings['brevo_api_key'] ?? ''));
+    $settings['brevo_api_key_saved'] = $encryptedKey !== '';
+    $settings['brevo_api_key'] = $settings['brevo_api_key_saved']
+        ? decrypt_store_email_secret($encryptedKey)
+        : '';
+    return $settings;
+}
+
+/** Send all application email through the Brevo API. */
 function send_email_notification(string $email, string $subject, string $message): bool
 {
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return false;
-    }
-
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
     $success = false;
-    $provider = 'disabled';
+    $provider = strtolower((string)env('MAIL_MAILER', '')) === 'disabled' ? 'disabled' : 'brevo-api';
     $errorMessage = null;
-    try {
-        $mailer = strtolower((string)env('MAIL_MAILER', 'smtp'));
-        if ($mailer === 'brevo') {
-            $provider = 'brevo-api';
+    if ($provider === 'disabled') {
+        $errorMessage = 'Email delivery disabled by the current environment.';
+    } else {
+        try {
             $success = send_brevo_email($email, $subject, $message);
-        } elseif ($mailer === 'smtp' && ensure_phpmailer_loaded()) {
-            $provider = 'smtp';
-            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-            $mail->isSMTP();
-            $mail->Host = (string)env('MAIL_HOST', '');
-            $mail->Port = (int)env('MAIL_PORT', 587);
-            $mail->SMTPAuth = (string)env('MAIL_USERNAME', '') !== '';
-            $mail->Username = (string)env('MAIL_USERNAME', '');
-            $mail->Password = (string)env('MAIL_PASSWORD', '');
-            $encryption = strtolower((string)env('MAIL_ENCRYPTION', 'tls'));
-            if ($encryption === 'ssl') {
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            } elseif ($encryption === 'tls') {
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            }
-            $from = (string)env('MAIL_FROM_ADDRESS', 'no-reply@retailmind.local');
-            $mail->setFrom($from, (string)env('MAIL_FROM_NAME', 'RetailMind'));
-            $mail->addAddress($email);
-            $mail->Subject = $subject;
-            $mail->Body = $message;
-            $mail->AltBody = strip_tags($message);
-            $success = $mail->send();
-        } elseif ($mailer === 'mail') {
-            $provider = 'php-mail';
-            $from = (string)env('MAIL_FROM_ADDRESS', 'no-reply@retailmind.local');
-            $headers = "From: {$from}\r\nContent-Type: text/plain; charset=UTF-8";
-            $success = mail($email, $subject, $message, $headers);
-        } else {
-            $errorMessage = 'Email is not configured. Install PHPMailer and set MAIL_* values.';
+        } catch (Throwable $exception) {
+            $errorMessage = $exception->getMessage();
+            error_log('Email delivery failed: ' . $errorMessage);
         }
-    } catch (Throwable $exception) {
-        $errorMessage = $exception->getMessage();
-        error_log('Email delivery failed: ' . $exception->getMessage());
     }
 
     try {
