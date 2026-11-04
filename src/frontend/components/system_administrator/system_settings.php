@@ -60,7 +60,6 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
         <header class="topbar">
             <div>
                 <h1>Platform Settings</h1>
-                <p class="page-subtitle">Configure account dormancy and notification dispatch.</p>
             </div>
         </header>
 
@@ -74,7 +73,6 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
         <section class="dashboard-section" aria-labelledby="heading-dormancy">
             <div class="section-header">
                 <h2 id="heading-dormancy"><i class="bi bi-shield-lock" aria-hidden="true"></i> Dormancy Policy</h2>
-                <p class="section-description">Deactivation thresholds for inactive accounts. Warning lead time must be fewer days than deactivation.</p>
             </div>
             <form method="post">
                 <?= csrf_field() ?>
@@ -82,7 +80,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="disable_days">
-                            Disable inactive accounts (days)
+                            Disable after inactivity (days)
                             <span class="required-mark" aria-hidden="true">*</span>
                         </label>
                         <input type="number"
@@ -91,14 +89,12 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                                id="disable_days"
                                name="disable_days"
                                value="<?= htmlspecialchars((string)$dormancyThresholds['disable_days']) ?>"
-                               aria-describedby="disable_days_help"
                                aria-required="true"
                                required>
-                        <small class="field-help" id="disable_days_help">Days of inactivity before an account is automatically locked.</small>
                     </div>
                     <div class="form-group">
                         <label for="warn_days">
-                            Warn before deactivation (days)
+                            Warn after inactivity (days)
                             <span class="required-mark" aria-hidden="true">*</span>
                         </label>
                         <input type="number"
@@ -110,7 +106,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                                aria-describedby="warn_days_help"
                                aria-required="true"
                                required>
-                        <small class="field-help" id="warn_days_help">Days of inactivity before alerting administrators prior to deactivation.</small>
+                        <small class="field-help" id="warn_days_help">Must be fewer than the disable threshold.</small>
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
@@ -122,7 +118,10 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
         <section class="dashboard-section" aria-labelledby="heading-email-test">
             <div class="section-header">
                 <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
+<<<<<<< HEAD
                 <p class="section-description">Test outbound email using the Brevo API settings saved in Store Settings.</p>
+=======
+>>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
             </div>
             <form method="post" class="form-inline-action">
                 <?= csrf_field() ?>
@@ -138,10 +137,12 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                            value="<?= htmlspecialchars((string)$settings['store_email']) ?>"
                            autocomplete="email"
                            placeholder="admin@example.com"
-                           aria-describedby="test_email_help"
                            aria-required="true"
                            required>
+<<<<<<< HEAD
                     <small class="field-help" id="test_email_help">Address to receive a test message from the configured Brevo sender.</small>
+=======
+>>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
                 </div>
                 <button type="submit" class="btn"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
             </form>

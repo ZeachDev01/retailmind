@@ -74,9 +74,8 @@ $pdo->exec("
         training_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
         model_version VARCHAR(100),
         status VARCHAR(50),
-        dataset_kind VARCHAR(50) DEFAULT 'store',
         metrics_json TEXT,
-        created_at DATETIME
+        completed_at DATETIME
     );
 
     CREATE TABLE inventory (
@@ -234,13 +233,6 @@ assert_true(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_
 echo "\n--- Section 2: Server-Side Gating & Automated Qualification ---\n";
 // =========================================================================
 $candidateV1 = 'store_rf_candidate_20261015';
-file_put_contents($testModelsDir . '/random_forest_candidate_' . $candidateV1 . '.json', json_encode([
-    'model_version' => $candidateV1,
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-    'features' => ["product_id", "horizon_day", "lag_1", "lag_7", "lag_14", "lag_28"],
-]));
-
 // 2.1 Demo artifact rejection server-side
 $demoThrown = false;
 try {
@@ -271,6 +263,36 @@ try {
 }
 assert_true($unauthThrown, 'Server-side activation rejects unauthorized role');
 
+// 2.3b Inventory Manager role rejection
+$imThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 6, 'Inventory Manager approving', 'inventory_manager');
+} catch (DomainException $e) {
+    $imThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Unauthorized'), 'Inventory Manager rejection identifies unauthorized role');
+}
+assert_true($imThrown, 'Server-side activation rejects Inventory Manager role');
+
+// 2.3c Wrong-active-Workspace rejection (e.g. multi-role account whose active workspace is Cashier or Inventory Manager)
+$wrongWsThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 2, 'Admin operating in wrong active Cashier workspace', 'cashier');
+} catch (DomainException $e) {
+    $wrongWsThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Unauthorized'), 'Wrong active workspace rejection identifies unauthorized workspace');
+}
+assert_true($wrongWsThrown, 'Server-side activation rejects wrong active workspace');
+
+// 2.3d Remote activation rejection
+$remoteActivationThrown = false;
+try {
+    $activationService->activateStoreModel($candidateV1, '2026-10-15', 2, 'Remote administrator approval attempt', 'admin', '192.168.1.100', true);
+} catch (DomainException $e) {
+    $remoteActivationThrown = true;
+    assert_true(str_contains($e->getMessage(), 'Remote mutation rejected'), 'Remote activation rejection identifies remote mutation refusal');
+}
+assert_true($remoteActivationThrown, 'Server-side activation rejects remote mutation');
+
 // Configure quality thresholds: 7d <= 0.25, 14d <= 0.30, 28d <= 0.35
 $evalService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
 
@@ -281,7 +303,10 @@ foreach ([7 => [0.18, 0.28, 5.2, 7.1], 14 => [0.21, 0.32, 6.8, 9.4], 28 => [0.24
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-07-01', '2026-09-22', '2026-10-14 23:00:00')
     ")->execute([$candidateV1, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-10-14 23:00:00')")->execute([$candidateV1]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-10-14 23:00:00')")->execute([$candidateV1]);
+require_once __DIR__ . '/support/governance_fixture.php';
+governance_fixture($pdo, $activationService, [$candidateV1]);
+$testModelsDir = $activationService->getModelsDir();
 
 // 2.4 Failed evaluation check (e.g. regression against baseline)
 $pdo->beginTransaction();
@@ -297,7 +322,8 @@ assert_true(!$readinessObsIncomplete['ready'], 'Candidate without 28 observation
 assert_true($readinessObsIncomplete['status'] === 'under_evaluation', 'Status is under_evaluation while checks remain');
 assert_true($readinessObsIncomplete['status_label'] === 'Under evaluation', 'Status label is "Under evaluation"');
 
-// Seed 28 days of prospective observation for candidateV1
+// Seed 28 days of prospective observation for candidateV1 (synthetic workflow evidence)
+echo "  [INFO] Synthetic observation evidence is isolated workflow evidence only.\n";
 $pdo->exec("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (1, 500, 'receive', '2026-09-01 07:00:00')");
 for ($i = 1; $i <= 28; $i++) {
     $tDate = sprintf('2026-09-%02d', $i);
@@ -417,7 +443,9 @@ foreach ([7 => [0.15, 0.28, 4.5, 7.1], 14 => [0.18, 0.32, 5.9, 9.4], 28 => [0.20
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'passed', '2026-08-01', '2026-10-22', '2026-10-31 23:00:00')
     ")->execute([$candidateV2, $h, $mae, $mae * 1.25, $w, $bmae, $bmae * 1.25, $bw]);
 }
-$pdo->prepare("INSERT INTO model_training_runs (model_version, status, dataset_kind, created_at) VALUES (?, 'completed', 'store', '2026-10-31 23:00:00')")->execute([$candidateV2]);
+$pdo->prepare("INSERT INTO model_training_runs (model_version, status, completed_at) VALUES (?, 'completed', '2026-10-31 23:00:00')")->execute([$candidateV2]);
+governance_fixture($pdo, $activationService, [$candidateV1, $candidateV2]);
+$testModelsDir = $activationService->getModelsDir();
 
 // Seed 28 days of observation for candidate V2
 for ($i = 1; $i <= 28; $i++) {
@@ -508,6 +536,23 @@ assert_true($statusResumed['is_recommendations_suspended'] === false, 'Recommend
 echo "\n--- Section 9: Recovery Artifact Validation & Rejection Matrix (Ticket #370) ---\n";
 // =========================================================================
 
+governance_fixture($pdo, $activationService, [$candidateV1, $candidateV2,
+    'store_rf_candidate_absent', 'store_rf_candidate_empty', 'store_rf_candidate_isolatedmeta',
+    'store_rf_candidate_v1schema', 'store_rf_candidate_noeval']);
+$testModelsDir = $activationService->getModelsDir();
+$scopedModelsDir = $testModelsDir . '/store/' . substr(hash('sha256', '127.0.0.1:3306:isolated_governance_fixture'), 0, 16);
+unlink($scopedModelsDir . '/random_forest_candidate_store_rf_candidate_absent.joblib');
+file_put_contents($scopedModelsDir . '/random_forest_candidate_store_rf_candidate_empty.joblib', '');
+foreach (['store_rf_candidate_isolatedmeta' => ['dataset_kind', 'demo'],
+    'store_rf_candidate_v1schema' => ['feature_version', '1.0.0']] as $version => [$field, $value]) {
+    $stmt = $pdo->prepare('SELECT metrics_json FROM model_training_runs WHERE model_version = ? ORDER BY training_run_id DESC LIMIT 1');
+    $stmt->execute([$version]);
+    $metrics = json_decode($stmt->fetchColumn(), true);
+    $metrics['metadata'][$field] = $value;
+    $pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE model_version = ?')
+        ->execute([json_encode($metrics, JSON_THROW_ON_ERROR), $version]);
+}
+
 // 9.1 Reject absent recovery artifact (file does not exist on disk)
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_absent']);
 $absentThrown = false;
@@ -515,7 +560,7 @@ try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to absent file', 'admin');
 } catch (RuntimeException $e) {
     $absentThrown = true;
-    assert_true(str_contains($e->getMessage(), 'not found on disk'), 'Rollback rejection mentions artifact not found on disk');
+    assert_true(str_contains($e->getMessage(), 'missing or unreadable'), 'Rollback rejection mentions artifact not found on disk');
 }
 assert_true($absentThrown, 'Rollback rejects absent model artifact on disk');
 // Verify state unmodified
@@ -523,18 +568,18 @@ $statusAbsentCheck = $activationService->getActivationStatus();
 assert_true($statusAbsentCheck['approved_model_version'] === $candidateV1, 'Approved model unmodified following absent artifact rejection');
 
 // 9.2 Reject 0-byte / empty recovery artifact
-file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_empty.json', '');
+
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_empty']);
 $emptyThrown = false;
 try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to 0-byte file', 'admin');
 } catch (RuntimeException $e) {
     $emptyThrown = true;
-    assert_true(str_contains($e->getMessage(), 'empty or corrupted'), 'Rollback rejection mentions empty or corrupted file');
+    assert_true(str_contains($e->getMessage(), 'missing or unreadable'), 'Rollback rejection mentions empty or corrupted file');
 }
 assert_true($emptyThrown, 'Rollback rejects 0-byte recovery artifact');
 
-// 9.3 Reject corrupted content recovery artifact
+// 9.3 Untrusted JSON bytes cannot replace qualified Store training and a namespaced joblib artifact
 file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_corrupt.json', 'CORRUPT_BYTES_DATA_UNREADABLE');
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_corrupt']);
 $corruptThrown = false;
@@ -542,9 +587,9 @@ try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to corrupted file', 'admin');
 } catch (RuntimeException $e) {
     $corruptThrown = true;
-    assert_true(str_contains($e->getMessage(), 'corrupted or unreadable'), 'Rollback rejection mentions corrupted or unreadable');
+    assert_true(str_contains($e->getMessage(), 'metadata does not match'), 'Rollback rejection identifies missing trusted training metadata');
 }
-assert_true($corruptThrown, 'Rollback rejects corrupted content recovery artifact');
+assert_true($corruptThrown, 'Rollback rejects untrusted JSON recovery content');
 
 // 9.4 Reject demo recovery artifact by name
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['demo_rf_recovery_v1']);
@@ -553,55 +598,43 @@ try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to demo artifact', 'admin');
 } catch (RuntimeException $e) {
     $demoNameThrown = true;
-    assert_true(str_contains($e->getMessage(), 'demo/kaggle artifact'), 'Rollback rejection cites demo isolation');
+    assert_true(str_contains($e->getMessage(), 'non-demo Store model'), 'Rollback rejection cites demo isolation');
 }
 assert_true($demoNameThrown, 'Rollback rejects demo recovery artifact by name');
 
 // 9.5 Reject demo recovery artifact by metadata
-file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_isolatedmeta.json', json_encode([
-    'model_version' => 'store_rf_candidate_isolatedmeta',
-    'dataset_kind' => 'demo',
-    'feature_version' => '2.0.0',
-]));
+
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_isolatedmeta']);
 $demoMetaThrown = false;
 try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to demo metadata', 'admin');
 } catch (RuntimeException $e) {
     $demoMetaThrown = true;
-    assert_true(str_contains($e->getMessage(), 'demo dataset'), 'Rollback rejection cites demo dataset');
+    assert_true(str_contains($e->getMessage(), 'metadata does not match'), 'Rollback rejection cites demo dataset');
 }
 assert_true($demoMetaThrown, 'Rollback rejects demo recovery artifact by metadata');
 
 // 9.6 Reject incompatible recovery artifact (obsolete feature schema != 2.0.0)
-file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_v1schema.json', json_encode([
-    'model_version' => 'store_rf_candidate_v1schema',
-    'dataset_kind' => 'store',
-    'feature_version' => '1.0.0',
-]));
+
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_v1schema']);
 $incompatThrown = false;
 try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback to v1.0.0 schema', 'admin');
 } catch (RuntimeException $e) {
     $incompatThrown = true;
-    assert_true(str_contains($e->getMessage(), 'incompatible feature version'), 'Rollback rejection cites incompatible feature version');
+    assert_true(str_contains($e->getMessage(), 'metadata does not match'), 'Rollback rejection cites incompatible feature version');
 }
 assert_true($incompatThrown, 'Rollback rejects incompatible recovery artifact schema');
 
 // 9.7 Reject unqualified recovery artifact (lacks evaluations & training records)
-file_put_contents($testModelsDir . '/random_forest_candidate_store_rf_candidate_noeval.json', json_encode([
-    'model_version' => 'store_rf_candidate_noeval',
-    'dataset_kind' => 'store',
-    'feature_version' => '2.0.0',
-]));
+
 $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_previous_approved_model_version'")->execute(['store_rf_candidate_noeval']);
 $noEvalThrown = false;
 try {
     $activationService->rollbackStoreModel($adminId, 'Attempt rollback without evals', 'admin');
 } catch (RuntimeException $e) {
     $noEvalThrown = true;
-    assert_true(str_contains($e->getMessage(), 'lacks valid qualification metadata'), 'Rollback rejection cites lack of qualification metadata');
+    assert_true(str_contains($e->getMessage(), 'quality gates'), 'Rollback rejection cites lack of qualification metadata');
 }
 assert_true($noEvalThrown, 'Rollback rejects unqualified recovery artifact');
 
@@ -614,6 +647,8 @@ try {
     assert_true(str_contains($e->getMessage(), 'Remote mutation rejected'), 'Rejection identifies remote mutation refusal');
 }
 assert_true($remoteThrown, 'Server-side rollback rejects remote mutation');
+
+foreach (glob($testModelsDir . '/*.json') ?: [] as $file) unlink($file);
 
 // Reset previous model to empty
 $pdo->prepare("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_previous_approved_model_version'")->execute();
@@ -659,7 +694,7 @@ try {
     $activationService->resumeRecommendations($adminId, 'admin');
 } catch (RuntimeException $e) {
     $resumeEmptyThrown = true;
-    assert_true(str_contains($e->getMessage(), 'no approved Store model version configured'), 'Resume rejection cites missing approved model');
+    assert_true(str_contains($e->getMessage(), 'non-demo Store model'), 'Resume rejection cites missing approved model');
 }
 assert_true($resumeEmptyThrown, 'Resume refused when no approved model is configured');
 assert_true($activationService->getActivationStatus()['is_recommendations_suspended'] === true, 'Recommendations remain suspended after failed resume');
@@ -671,7 +706,7 @@ try {
     $activationService->resumeRecommendations($adminId, 'admin');
 } catch (RuntimeException $e) {
     $resumeDemoThrown = true;
-    assert_true(str_contains($e->getMessage(), 'demo/kaggle artifact'), 'Resume rejection cites demo isolation');
+    assert_true(str_contains($e->getMessage(), 'non-demo Store model'), 'Resume rejection cites demo isolation');
 }
 assert_true($resumeDemoThrown, 'Resume refused when active model is demo artifact');
 
@@ -682,7 +717,7 @@ try {
     $activationService->resumeRecommendations($adminId, 'admin');
 } catch (RuntimeException $e) {
     $resumeAbsentThrown = true;
-    assert_true(str_contains($e->getMessage(), 'not found on disk'), 'Resume rejection cites artifact missing on disk');
+    assert_true(str_contains($e->getMessage(), 'missing or unreadable'), 'Resume rejection cites artifact missing on disk');
 }
 assert_true($resumeAbsentThrown, 'Resume refused when active model artifact missing from disk');
 
@@ -693,7 +728,7 @@ try {
     $activationService->resumeRecommendations($adminId, 'admin');
 } catch (RuntimeException $e) {
     $resumeIncompatThrown = true;
-    assert_true(str_contains($e->getMessage(), 'incompatible feature version'), 'Resume rejection cites incompatible schema');
+    assert_true(str_contains($e->getMessage(), 'metadata does not match'), 'Resume rejection cites incompatible schema');
 }
 assert_true($resumeIncompatThrown, 'Resume refused when active model has incompatible schema');
 
@@ -775,7 +810,7 @@ try {
     $activationService->rollbackStoreModel($adminId, 'Circular rollback attempt', 'admin');
 } catch (RuntimeException $e) {
     $secondRollbackBlocked = true;
-    assert_true(str_contains($e->getMessage(), 'no compatible previous approved Store model artifact found'), 'Rejection identifies empty previous model');
+    assert_true(str_contains($e->getMessage(), 'non-demo Store model'), 'Rejection identifies empty previous model');
 }
 assert_true($secondRollbackBlocked, 'Circular rollback prevented without previous model');
 

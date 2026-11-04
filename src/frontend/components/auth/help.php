@@ -194,21 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <strong>Store setup complete.</strong> Essential product, opening-stock, and Store calendar setup tasks are confirmed. Automatic onboarding reminders are now turned off without affecting personal orientation invitations for new Administrators. You can revisit guidance anytime from Help in your account menu.
             </div>
         <?php endif; ?>
-        <div class="help-layout">
-            <section class="workspace-guidance help-workflows" aria-labelledby="workspace-guidance-title">
-                <?php $guidanceIsHelp = true; include __DIR__ . '/workspace_overview.php'; ?>
-            </section>
-            <aside class="help-setup" aria-labelledby="store-setup-checklist-title">
-                <?php include __DIR__ . '/store_setup_checklist.php'; ?>
-                <p class="help-setup-note">Complete the work before confirming setup.</p>
-            </aside>
-        </div>
-        <section class="help-preferences" aria-labelledby="help-preferences-title">
-            <div>
-                <h2 id="help-preferences-title">All set?</h2>
-                <p>Reopen Help anytime from your account menu.</p>
-            </div>
-            <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>
+        <section class="workspace-guidance help-workflows" aria-labelledby="workspace-guidance-title">
+            <?php $guidanceIsHelp = true; include __DIR__ . '/workspace_overview.php'; ?>
         </section>
     </main>
 </div>

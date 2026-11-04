@@ -248,7 +248,7 @@ Alerts favor easy words and calm hierarchy. Dialogs use the strongest depth toke
 
 ### Workspace Help
 
-Workspace Help retains the incumbent visual system: compact action rows pair existing navigation icons in square tiles with destination labels and arrows. Circular icon wells distinguish setup tasks. Native “How it works” disclosures contain the full workflow guidance; default-view summaries and repeated subtext are omitted. Entrance Navy anchors the Store setup header; blue actions and theme-aware reading surfaces preserve hierarchy in both themes. Its approved composition, responsive behavior, screenshot matrix, review limits and **Ship** verdict are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). This surface decision adds no global tokens or visual-world rules.
+Workspace Help presents role-specific walkthroughs as divided rows within task groups, using existing navigation icons, summaries, and Start / Continue / Replay actions. Wide layouts place each group introduction beside its topic list; intermediate and mobile layouts stack them, with full-width actions on small screens. An active walkthrough appears in a separate resume panel. Button labels retain explicit contrasting foregrounds in both themes, and Help-only CSS avoids changing the shared onboarding presentation. The current implementation, verification and limits are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). No global tokens or visual-world rules were added.
 
 ## Do's and Don'ts
 
@@ -271,3 +271,11 @@ Workspace Help retains the incumbent visual system: compact action rows pair exi
 ## Workspace guidance feedback — 2026-11-02
 
 Overview preferences now save in place and replace their controls with a persistent profile-menu Help reminder. Reuse the semantic success alert and visible keyboard focus. Motion is a 150 ms exit and 220 ms arrival, reduced to 80 ms opacity feedback for reduced motion. Save failures retain the controls; JavaScript-disabled submissions keep the server redirect fallback. See `.impeccable/surfaces/workspace-help.md` for the scope and verification verdict. No global tokens, dependencies or image assets added.
+
+## Forecast workspace — 2026-11-03
+
+Forecast screens prioritize expected sales, on-hand stock and required action. Reuse compact status rows, paired quantity bars, native disclosures and the shared keyboard-accessible info tooltip. Missing measurements remain unavailable; forecast quantities stay distinct from suggested buying quantities. Scope, confirmed direction and checks are recorded in the [Forecast workspace surface brief](../.impeccable/surfaces/forecast-workspace.md).
+
+Backup & Restore copy was simplified on 2026-11-03: retain essential replacement and key-security warnings, use concise upload limits, and avoid repeating labels in helper paragraphs. The [Backup & Restore surface brief](../.impeccable/surfaces/s-system-administrator-backup-restore-php-24753d25.md) records scope and verification. Existing layout and tokens remain unchanged.
+
+Identity review now leads with each backup person and shows only the fields for their selected account path. Server-account references and preservation details use native disclosures; final access and restore consent remain visible. Scope and verification are recorded in the [Identity reconciliation surface brief](../.impeccable/surfaces/administrator-identity-reconciliation-php-60878ea8.md).

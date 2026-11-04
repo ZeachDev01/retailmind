@@ -279,10 +279,8 @@ function get_store_settings(PDO $pdo): array
 function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
 {
     $dailySalesSql = forecast_daily_sales_sql($pdo);
-    $settings = get_ml_settings($pdo);
-    $minimumHistoryDays = max(1, (int)$settings['minimum_history_days']);
-    $preferredHistoryDays = max($minimumHistoryDays, (int)$settings['preferred_history_days']);
-    $minimumNonzeroDays = max(1, (int)$settings['minimum_nonzero_sales_days']);
+    $eligibilityPolicy = App\Forecasting\StoreTrainingEligibilityService::policy();
+    $requiredUsableDays = $eligibilityPolicy['minimum_usable_days'];
     $platformSettings = get_key_value_settings($pdo, 'platform_settings', ['ml_approved_model_version' => 'rf-v2']);
     $currentModelVersion = $platformSettings['ml_approved_model_version'];
 
@@ -377,27 +375,26 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
         $row['missing_dates'] = (int)$row['zero_sales_days'];
         $row['can_show_forecast'] = false;
         $row['forecast_status'] = 'Insufficient Data';
-        $row['forecast_reason'] = sprintf(
-            '%d calendar days and %d days with sales are available. At least %d calendar days and %d nonzero-sales days are required.',
-            $calendarDays,
-            $nonzeroDays,
-            $minimumHistoryDays,
-            $minimumNonzeroDays
-        );
-
         $pid = (int)$row['product_id'];
         $elig = $eligibilityMap[$pid] ?? null;
-        $accumulatedUsable = $elig ? (int)$elig['accumulated_usable_days'] : (int)$row['nonzero_sales_days'];
+        $accumulatedUsable = (int)($elig['accumulated_usable_days'] ?? 0);
         $row['accumulated_usable_days'] = $accumulatedUsable;
-        $row['required_usable_days'] = App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS;
-        $row['has_feature_window'] = $elig ? (bool)$elig['has_feature_window'] : false;
-        $row['has_holdout_coverage'] = $elig ? (bool)$elig['has_holdout_coverage'] : false;
-        $isEligible = $elig ? (bool)$elig['eligible'] : false;
+        $row['required_usable_days'] = $requiredUsableDays;
+        $row['usable_days_remaining'] = max(0, $requiredUsableDays - $accumulatedUsable);
+        $row['days_with_sales'] = (int)($elig['days_with_sales'] ?? 0);
+        $row['genuine_zero_days'] = (int)($elig['genuine_zero_days'] ?? 0);
+        $row['calendar_history_days'] = (int)($elig['calendar_span_days'] ?? 0);
+        $row['eligibility_blockers'] = $elig['blockers'] ?? ['Training Eligibility could not be checked.'];
+        $row['eligibility_actions'] = $elig['actions'] ?? ['Check demand history and retry.'];
+        $row['has_feature_window'] = (bool)($elig['has_feature_window'] ?? false);
+        $row['has_holdout_coverage'] = (bool)($elig['has_holdout_coverage'] ?? false);
+        $isEligible = (bool)($elig['eligible'] ?? false);
+        $row['training_eligible'] = $isEligible;
 
         if (!$hasPrediction) {
             if ($isEligible) {
                 $row['forecast_status'] = 'Ready for training';
-                $row['forecast_reason'] = 'Ready for training. Product meets all prerequisites (' . $accumulatedUsable . ' usable days, supported feature window, and holdout coverage).';
+                $row['forecast_reason'] = 'Ready for training. Product meets all prerequisites (' . $accumulatedUsable . ' usable days, supported feature window, and holdout coverage). Forecast Readiness bands are separate evidence ratings; candidate qualification, observation, local Administrator approval, and daily Forecast Generation remain separate steps.';
             } else {
                 $row['forecast_status'] = 'Insufficient Data';
                 $row['forecast_reason'] = ($elig && !empty($elig['reason']))
@@ -419,9 +416,7 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
 
         $row['can_show_forecast'] = true;
         $row['forecast_status'] = 'Forecast Generated';
-        $row['forecast_reason'] = $calendarDays >= $preferredHistoryDays
-            ? "{$calendarDays} complete calendar days are available, meeting the preferred history target."
-            : "Forecast available. Collecting {$preferredHistoryDays} complete calendar days is preferred.";
+        $row['forecast_reason'] = 'Forecast available. Training Eligibility and Forecast Readiness evidence bands are separate from candidate qualification, observation, local Administrator approval, and daily Forecast Generation.';
     }
     unset($row);
 
@@ -526,8 +521,9 @@ function notification_workspace_scope(PDO $pdo, string $alias = 'notifications')
  */
 function get_unread_notifications(PDO $pdo, int $user_id): array
 {
+    reconcile_notification_stock($pdo, $user_id);
     $stmt = $pdo->prepare("SELECT notification_id, type, title, message, reference_id, reference_type, created_at
-                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE
+                           FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE
                            ORDER BY created_at DESC");
     $stmt->execute([$user_id]);
     return $stmt->fetchAll();
@@ -538,9 +534,22 @@ function get_unread_notifications(PDO $pdo, int $user_id): array
  */
 function get_notification_count(PDO $pdo, int $user_id): int
 {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND is_read = FALSE");
+    reconcile_notification_stock($pdo, $user_id);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND " . notification_workspace_scope($pdo) . " AND " . notification_visibility_scope() . " AND resolved_at IS NULL AND is_read = FALSE");
     $stmt->execute([$user_id]);
     return (int)$stmt->fetchColumn();
+}
+
+function notification_visibility_scope(): string
+{
+    return "notifications.resolved_at IS NULL AND (notifications.type <> 'low_stock' OR EXISTS (SELECT 1 FROM products np WHERE notifications.reference_type = 'product' AND np.product_id = notifications.reference_id))";
+}
+
+function reconcile_notification_stock(PDO $pdo, int $userId): void
+{
+    require_once __DIR__ . '/../app/Services/NotificationService.php';
+    $workspace = function_exists('current_role') ? current_role() : (string)($_SESSION['role'] ?? '');
+    (new NotificationService($pdo))->reconcileStockAlerts($userId, $workspace);
 }
 
 /**

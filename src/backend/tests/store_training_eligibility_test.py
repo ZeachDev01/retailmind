@@ -70,11 +70,12 @@ $reader = new App\Forecasting\DemandHistoryService();
 $payload = $reader->getTrainingHistory($pdo, '2024-06-08');
 $scheduler = new App\Forecasting\ForecastingSchedulerService($pdo);
 $now = new DateTime('2024-06-08 17:10:00', new DateTimeZone('UTC'));
+$detected = $scheduler->runScheduler((clone $now)->modify('-20 minutes'));
 $first = $scheduler->runScheduler($now);
 $second = $scheduler->runScheduler($now);
 $pdo->exec("DELETE FROM ml_jobs; UPDATE products SET status='inactive'");
 $none = $scheduler->runScheduler($now);
-echo json_encode(['payload' => $payload, 'first' => $first, 'second' => $second, 'none' => $none,
+echo json_encode(['payload' => $payload, 'detected' => $detected, 'first' => $first, 'second' => $second, 'none' => $none,
     'input_time' => $now->format('Y-m-d H:i:s e')], JSON_THROW_ON_ERROR);
 '''
         result = subprocess.run(['php'], input=php, cwd=BACKEND, capture_output=True, text=True)
@@ -97,6 +98,7 @@ echo json_encode(['payload' => $payload, 'first' => $first, 'second' => $second,
         self.assertNotIn(5, eligibility)
         self.assertTrue(eligibility[2]['reason'])
         self.assertEqual(len(payload['history']), 160 + 140 + 160)
+        self.assertEqual(result['detected']['retrain_jobs_queued'], 0)
         self.assertEqual(result['first']['retrain_jobs_queued'], 1)
         self.assertEqual(result['second']['retrain_jobs_queued'], 0)
         self.assertEqual(result['none']['retrain_jobs_queued'], 0)

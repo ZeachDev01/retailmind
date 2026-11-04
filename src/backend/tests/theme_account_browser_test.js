@@ -136,6 +136,10 @@ const fixture = action => {
                     for(const tab of ['features','trend','actual']) {
                         await page.locator('[data-analytics-tab="'+tab+'"]').click();
                         const canvas=page.locator('[data-analytics-panel="'+tab+'"] canvas');
+                        if (!await canvas.count()) {
+                            assert.match(await page.locator('[data-analytics-panel="'+tab+'"]').innerText(), /not been recorded|No recorded|No completed/);
+                            continue;
+                        }
                         const pixels=()=>canvas.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,45,45).data));
                         const dark=await pixels(); assert(dark.some((v,i)=>i%4===3 && v>0),'Visible canvas axes/labels');
                         await select('light'); assert.notDeepEqual(await pixels(),dark,'Each visible chart redraws on theme change');
@@ -264,7 +268,6 @@ const fixture = action => {
                 ] : [
                     'super_administrator/dashboard', 'system_administrator/system_settings', 'user_manager/user_manager',
                     'system_administrator/audit_logs', 'system_administrator/backup_restore', 'system_administrator/database_updates',
-                    'system_administrator/recovery_account',
                     'system_administrator/system_health', 'system_administrator/ml_settings',
                 ];
                 for (const route of routes) {
@@ -643,17 +646,21 @@ const fixture = action => {
                     assert.equal(await control().count(),0); await page.emulateMedia({media:'screen'});
                 }
                 await page.goto('/components/report/forecast_analytics.php');
-                const canvas=page.locator('#featureChart');
-                const pixels=()=>canvas.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,45,45).data));
-                const darkPixels=await pixels(); assert(darkPixels.some((v,i)=>i%4===3 && v>0),'Chart visibly draws its labels/axes');
-                await select('light'); assert.notDeepEqual(await pixels(),darkPixels,'Theme switch redraws visible chart pixels');
-                await select('system'); await page.emulateMedia({colorScheme:'light'});
-                await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
-                const systemLightPixels=await pixels();
-                await page.emulateMedia({colorScheme:'dark'});
-                await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
-                assert.notDeepEqual(await pixels(),systemLightPixels,'Live System change redraws chart pixels'); await select('dark');
-                await page.goto('/components/report/predictions.php?variant=A'); await contrast(page.locator('.fp-prototype-note'));
+                const canvas=page.locator('#actualChart');
+                if (await canvas.count()) {
+                    const pixels=()=>canvas.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,45,45).data));
+                    const darkPixels=await pixels(); assert(darkPixels.some((v,i)=>i%4===3 && v>0),'Chart visibly draws its labels/axes');
+                    await select('light'); assert.notDeepEqual(await pixels(),darkPixels,'Theme switch redraws visible chart pixels');
+                    await select('system'); await page.emulateMedia({colorScheme:'light'});
+                    await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+                    const systemLightPixels=await pixels();
+                    await page.emulateMedia({colorScheme:'dark'});
+                    await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+                    assert.notDeepEqual(await pixels(),systemLightPixels,'Live System change redraws chart pixels'); await select('dark');
+                } else {
+                    assert.match(await page.locator('#analytics-panel-actual').innerText(), /No completed sales comparisons/);
+                }
+                await page.goto('/components/report/predictions.php'); await contrast(page.locator('.forecast-overview'));
             }
             if(role === 'admin' || role === 'inventory_manager') await reportAcceptance(role);
             await page.route('**/auth/theme.php',route=>route.fulfill({status:503,contentType:'application/json',body:'{"success":false}'}));

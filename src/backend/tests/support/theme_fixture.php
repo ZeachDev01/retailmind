@@ -8,6 +8,29 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if ($argv[1] === 'forecast_workspace') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("INSERT INTO platform_settings (setting_key,setting_value) VALUES ('ml_approved_model_version','workspace-test') ON DUPLICATE KEY UPDATE setting_value='workspace-test';
+        INSERT INTO ml_jobs (job_id,trigger_type,status,queued_at,completed_at) VALUES (10,'forecast_generation','succeeded',NOW(),NOW());
+        INSERT INTO model_training_runs (model_name,model_version,status,metrics_json) VALUES ('Random Forest','workspace-test','completed','{\"metadata\":{\"dataset_kind\":\"store\"}}');
+        UPDATE inventory SET quantity_on_hand=20 WHERE product_id=1");
+    $statement = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
+        VALUES (10,1,CURDATE()-INTERVAL 1 DAY,CURDATE()+INTERVAL (? - 1) DAY,?,2,'workspace-test','High')");
+    for ($day = 1; $day <= 28; $day++) $statement->execute([$day, $day]);
+    exit;
+}
+if ($argv[1] === 'forecast_replay_workspace') {
+    $pdo->exec("USE `{$database}`");
+    $source = ['date_window' => ['2020-01-01'], 'replay' => ['shift_days' => 0, 'stock_scenario' => 'Illustrative test stock', 'money' => 'Synthetic test amounts']];
+    $result = ['preview_job' => 20, 'jobs' => [20], 'model_version' => 'workspace-replay', 'validation_outcome' => 'test only', 'training_end' => '2020-01-28', 'test_start' => '2020-01-29', 'test_end' => '2020-02-25', 'metrics' => [7 => ['mae' => 1, 'rmse' => 1, 'wape' => null, 'baseline_wape' => null]]];
+    $setting = $pdo->prepare('INSERT INTO platform_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+    $setting->execute(['demo_import_metadata', json_encode($source)]);
+    $setting->execute(['demo_replay_result', json_encode($result)]);
+    $pdo->exec("INSERT INTO ml_jobs (job_id,trigger_type,status,queued_at,completed_at) VALUES (20,'forecast_observation','succeeded',NOW(),NOW())");
+    $statement = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level) VALUES (20,1,'2020-01-28',DATE_ADD('2020-01-28',INTERVAL ? DAY),?,2,'workspace-replay','High')");
+    for ($day = 1; $day <= 28; $day++) $statement->execute([$day, $day]);
+    exit;
+}
 if ($argv[1] === 'create_admin_with_temp_password') {
     $pdo->exec("USE `{$database}`");
     $username = $argv[3] ?? 'new_admin';

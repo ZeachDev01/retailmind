@@ -91,6 +91,7 @@ $pdo->exec("CREATE TABLE notifications (
     attention_severity TEXT NULL,
     attention_count INTEGER NULL,
     attention_destination TEXT NULL,
+    resolved_at TEXT NULL,
     is_read INTEGER DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     workspace TEXT NOT NULL DEFAULT '',

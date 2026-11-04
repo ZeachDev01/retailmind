@@ -40,9 +40,8 @@ const { chromium } = require('playwright');
         
         assert.equal(await page.locator('#inventory-draft-status').count(), 1, 'Status notice must be present initially');
 
-        // Wait ~4.2 seconds to verify auto-removal
-        await page.waitForTimeout(4200);
-        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Status notice must be removed after ~4 seconds');
+        await page.waitForTimeout(3100);
+        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Status notice must be removed after three seconds');
 
         await page.locator('[name="item_name"]').fill('second product');
         await page.evaluate(() => RetailMindInventoryDrafts.flush());
@@ -92,8 +91,8 @@ const { chromium } = require('playwright');
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.includes('Draft restored. Review items and quantities before saving.'));
         assert.equal(await page.locator('#inventory-draft-status').count(), 1, 'Draft restored notice must be visible');
 
-        await page.waitForTimeout(4200);
-        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Draft restored notice must auto-remove after ~4 seconds');
+        await page.waitForTimeout(3100);
+        assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Draft restored notice must auto-remove after three seconds');
 
         // 3. Verify error alerts do NOT auto-remove (sticky until dismissed)
         await page.reload();

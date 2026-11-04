@@ -1,0 +1,31 @@
+{
+  "observed_at": "2026-11-03T08:25:53.1710021+08:00",
+  "inspection_revision": "7ba914f5ef92a117a8b04df3468d01f6d41d7b17",
+  "installed_root_revision": "982a8a07a7f6fe285ca72cd6b28b7494130ed48f",
+  "os": "Microsoft Windows 11 Pro",
+  "os_version": "10.0.26200",
+  "last_boot": "2026-11-01T06:31:30.5902980+08:00",
+  "services": [
+    {
+      "Name": "Apache2.4",
+      "State": "Running",
+      "StartMode": "Auto",
+      "StartName": "LocalSystem",
+      "PathName": "\"C:\\xampp\\apache\\bin\\httpd.exe\" -k runservice"
+    },
+    {
+      "Name": "mysql",
+      "State": "Running",
+      "StartMode": "Auto",
+      "StartName": "LocalSystem",
+      "PathName": "\"C:\\xampp\\mysql\\bin\\mysqld.exe\" \"--defaults-file=c:\\xampp\\mysql\\bin\\my.ini\" \"mysql\""
+    }
+  ],
+  "retailmind_tasks": [],
+  "root_runner_config_exists": false,
+  "path_php": "C:\\tools\\php85\\php.exe",
+  "path_python": "C:\\Python314\\python.exe",
+  "xampp_php_version": "PHP 8.5.12 (cli) (built: Oct 20 2026 04:19:35) (ZTS Visual C++ 2022 x64)",
+  "python_version": "Python 3.14.5",
+  "retailmind_scheduler_log_exists": false
+}

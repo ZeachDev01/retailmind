@@ -1,0 +1,9 @@
+Starting Forecasting Runner and Installation Contract Test...
+  ok - Configuration retention contract verified (with 01:00 Asia/Manila schedule and no credentials)
+  ok - Delayed database startup recovers on retry without failing
+  ok - Persistent database unavailability exhausts bounded retries
+  ok - Persistent failure surfaces visibly and recovers on subsequent success
+  ok - Remote database interfaces rejected to protect local boundary
+  ok - Effective schedule resolution contract verified (01:00 daily, Sunday 01:00 Asia/Manila)
+  Not tested - Unattended restart and full worker completion require independent target-installation evidence; see the operational acceptance report.
+All forecasting runner installation contract tests passed.

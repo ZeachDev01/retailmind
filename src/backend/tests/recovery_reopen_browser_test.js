@@ -73,6 +73,7 @@ const fixture = action => {
 
         const recoveryUrl = origin + '/components/backup/recovery.php';
         await page.goto(recoveryUrl);
+        assert.match(await page.locator('body').evaluate(element => getComputedStyle(element).fontFamily), /Segoe UI/, 'Recovery styles load during maintenance');
 
         // Login as Initiating Administrator (theme_admin)
         await page.locator('#recovery-username').fill('theme_admin');
@@ -122,6 +123,33 @@ const fixture = action => {
         }
         await page.locator('[data-recovery-submit="checklist"]').click();
         assert.match(await page.locator('[data-recovery-alert="notice"]').innerText(), /checklist confirmations saved/i);
+
+        assert.equal(await page.locator('[data-recovery-card="checklist"]').getAttribute('open'), null, 'Completed checklist collapses');
+        assert.equal(await page.locator('[data-recovery-results]').getAttribute('open'), null, 'Completed verification collapses');
+        assert.equal(await page.locator('[data-recovery-actions]').getAttribute('open'), null, 'Other recovery options stay collapsed during review');
+        await page.reload();
+        assert.equal(await page.locator('[data-recovery-alert="notice"]').count(), 0, 'Refreshing does not resubmit the checklist or repeat its notice');
+        for (const chk of ['stock', 'receipt', 'upload', 'attribution']) {
+            assert.equal(await page.locator(`[data-recovery-confirm="${chk}"]`).isChecked(), true, 'Saved confirmation survives refresh');
+        }
+        for (const theme of ['light', 'dark']) {
+            await page.locator('.theme-trigger').click();
+            await page.locator(`[data-theme-mode="${theme}"]`).click();
+            assert.equal(await page.locator('html').getAttribute('data-theme'), theme, 'Theme control applies ' + theme);
+            for (const width of [390, 812, 1440]) {
+                await page.setViewportSize({ width, height: 960 });
+                assert(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), 'Completed review fits viewport ' + width);
+                await page.screenshot({ path: path.join(proofDirectory, `reopen-checklist-complete-${theme}-${width}.png`), fullPage: true });
+            }
+        }
+        await page.locator('[data-recovery-card="checklist"] > summary').click();
+
+        await page.locator('[data-recovery-confirm="stock"]').uncheck();
+        await page.locator('[data-recovery-submit="checklist"]').click();
+        assert.equal(await page.locator('[data-recovery-confirm="stock"]').isChecked(), false, 'Unchecking a saved confirmation persists');
+        assert.equal(await page.locator('[data-recovery-alert="guidance"]').count(), 1, 'Revoked confirmation blocks reopening');
+        await page.locator('[data-recovery-confirm="stock"]').check();
+        await page.locator('[data-recovery-submit="checklist"]').click();
 
         // 8. Explicitly reopen store with fresh password and single-active-store confirmation
         await page.locator('#reopen-operator-password').fill(password);

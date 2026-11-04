@@ -48,6 +48,7 @@ try {
         workspace TEXT NOT NULL DEFAULT "",
         inapp_enabled INTEGER NOT NULL DEFAULT 1,
         email_pending INTEGER NOT NULL DEFAULT 0,
+        resolved_at DATETIME NULL,
         type VARCHAR(50) NOT NULL,
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,

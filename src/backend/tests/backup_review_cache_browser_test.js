@@ -24,6 +24,33 @@ const {chromium} = require('playwright');
         <div class="form-group"><label for="test-password">Current login password</label><input id="test-password" type="password" name="restore_password" required></div>
         <button>Review backup</button></form>`;
     const reviewSource = fs.readFileSync(path.join(frontend, 'components/system_administrator/identity_reconciliation.php'), 'utf8');
+    const approvalAssignment = reviewSource.match(/\$recordedApproval = [^\n]+/)[0];
+    const approvalCard = reviewSource.match(/<\?php if \([^\n]+\): \?>\s*<section class="dashboard-section reconcile-evidence"[\s\S]*?<\?php endif; \?>/)[0];
+    const approvalRendering = spawnSync(process.env.PHP_BINARY || 'php', ['-r', `
+        $escape = fn($value) => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+        $saved = ['approved_by' => 1, 'approved_at' => '2026-10-31 23:37:37 UTC',
+            'package_id' => 'previous-package', 'active_administrators' => 1];
+        $reconciler = new class($saved) {
+            function __construct(private array $saved) {}
+            function latestApproval() { return $this->saved; }
+        };
+        $results = [];
+        foreach (['fresh', 'different-package', 'current-approval'] as $scenario) {
+            $review = $scenario === 'fresh' ? null : ['ready' => true];
+            $approval = $scenario === 'current-approval' ? array_replace($saved, ['package_id' => 'current-package']) : null;
+            eval(base64_decode('${Buffer.from(approvalAssignment).toString('base64')}'));
+            ob_start();
+            eval('?>' . base64_decode('${Buffer.from(approvalCard).toString('base64')}'));
+            $results[$scenario] = ob_get_clean();
+        }
+        echo json_encode($results);
+    `], {encoding: 'utf8'});
+    assert.equal(approvalRendering.status, 0, approvalRendering.stderr);
+    const approvalResults = JSON.parse(approvalRendering.stdout);
+    assert.equal(approvalResults.fresh.trim(), '', 'Fresh review must not show a saved approval');
+    assert.equal(approvalResults['different-package'].trim(), '', 'Selecting another package must not show a saved approval');
+    assert(approvalResults['current-approval'].includes('current-package'), 'Current approval shows its own package evidence');
+    assert(!approvalResults['current-approval'].includes('previous-package'), 'Current approval must not show another package');
     const packageSection = reviewSource.match(/<section class="dashboard-section reconcile-package"[\s\S]*?<\/section>/)[0];
     const reviewed = spawnSync(process.env.PHP_BINARY || 'php', ['-r', `
         function app_url($path) { return '/' . $path; }
@@ -32,7 +59,7 @@ const {chromium} = require('playwright');
         $draft = null;
         $editing = false;
         $package = ['manifest' => ['snapshot_at' => '2026-10-31 06:54:41']];
-        $restorer = new class { function supportedSizeLine() { return 'Encrypted Store packages up to 12 MB.'; } };
+        $restorer = new class { function supportedUploadBytes() { return 12 * 1048576; } };
         eval('?>' . base64_decode('${Buffer.from(packageSection).toString('base64')}'));
     `], {encoding: 'utf8'});
     assert.equal(reviewed.status, 0, reviewed.stderr);

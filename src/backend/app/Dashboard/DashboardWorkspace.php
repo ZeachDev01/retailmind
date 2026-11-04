@@ -102,7 +102,7 @@ final class DashboardWorkspace
         $nowValue = $now->format('Y-m-d H:i:s');
         $backup = $this->row("SELECT created_at FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore' ORDER BY created_at DESC LIMIT 1");
         $recovery = $this->row(
-            "SELECT ra.sealed_at, ra.last_used_at, u.status
+            "SELECT ra.sealed_at, u.status
              FROM recovery_accounts ra JOIN users u ON u.user_id = ra.user_id
              WHERE u.is_recovery_account = 1 LIMIT 1"
         );
@@ -133,17 +133,7 @@ final class DashboardWorkspace
                 'status' => $privilegedAnomalies > 0 ? 'critical' : 'healthy',
                 'detail' => $privilegedAnomalies > 0 ? 'Locked or unsealed privileged access requires review.' : 'No locked or unsealed privileged access detected.',
             ],
-            'access' => [
-                'recovery' => [
-                    'label' => 'Recovery Account',
-                    'status' => $recovery === [] ? 'not_configured' : ($unsealedRecovery > 0 ? 'unsealed' : 'sealed'),
-                    'detail' => $recovery === []
-                        ? 'No Recovery Account is configured.'
-                        : ($unsealedRecovery > 0 ? 'The Recovery Account is currently unsealed.' : 'The Recovery Account is sealed.'),
-                    'last_used_at' => $recovery['last_used_at'] ?? null,
-                    'destination' => 'components/system_administrator/recovery_account.php',
-                ],
-            ],
+            'access' => [],
         ];
     }
 

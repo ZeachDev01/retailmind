@@ -38,14 +38,12 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     </details>
 
     <div class="guidance-dock-body" id="guidance-step-content">
-        <h3 id="guidance-step-title" class="guidance-step-title"><?= htmlspecialchars($topic['steps'][$currentStep]['action']) ?></h3>
+        <h3 id="guidance-step-title" class="guidance-step-title" tabindex="-1"><?= htmlspecialchars($topic['steps'][$currentStep]['action']) ?></h3>
         <p id="guidance-step-desc" class="guidance-step-desc"><?= htmlspecialchars($topic['steps'][$currentStep]['description']) ?></p>
-        <?php if (!empty($topic['steps'][$currentStep]['learn_more'])): ?>
-            <details class="guidance-learn-more" id="guidance-learn-more">
-                <summary>Learn more</summary>
-                <p><?= htmlspecialchars($topic['steps'][$currentStep]['learn_more']) ?></p>
-            </details>
-        <?php endif; ?>
+        <details class="guidance-learn-more" id="guidance-learn-more" <?= empty($topic['steps'][$currentStep]['learn_more']) ? 'hidden' : '' ?>>
+            <summary>Learn more</summary>
+            <p><?= htmlspecialchars($topic['steps'][$currentStep]['learn_more'] ?? '') ?></p>
+        </details>
     </div>
 
     <div class="guidance-dock-footer">
@@ -53,7 +51,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         <button type="button" class="btn btn-primary guidance-btn-next" id="guidance-btn-next"><?= $currentStep === $stepCount - 1 ? 'Finish guidance' : 'Next' ?></button>
     </div>
 
-    <div id="guidance-completion-status" class="guidance-completion-status u-hidden" role="status" aria-live="polite">
+    <div id="guidance-completion-status" class="guidance-completion-status" role="status" aria-live="polite" hidden>
         <div class="guidance-completion-header">
             <span class="guidance-checkmark" aria-hidden="true">✓</span>
             <div>
@@ -72,9 +70,16 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     const csrfToken = <?= json_encode($csrfToken) ?>;
     const postUrl = <?= json_encode($helpPostUrl) ?>;
     let currentStep = <?= (int)$currentStep ?>;
+    let revealedElements = [];
 
     const dock = document.getElementById('guidance-dock');
     if (!dock) return;
+    document.body.append(dock);
+    document.body.classList.add('has-guidance-dock');
+    const dockResize = new ResizeObserver(function() {
+        document.documentElement.style.setProperty('--guidance-dock-space', (dock.offsetHeight + 40) + 'px');
+    });
+    dockResize.observe(dock);
 
     const stepCountEl = dock.querySelector('.guidance-step-count');
     const titleEl = document.getElementById('guidance-step-title');
@@ -90,6 +95,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
 
     function closeProductModal() {
         const modal = document.getElementById('add-product-modal');
+        if (modal && modal.contains(dock)) document.body.append(dock);
         if (modal && modal.classList.contains('open')) {
             if (window.RetailMindUI && typeof window.RetailMindUI.closeOverlay === 'function') {
                 window.RetailMindUI.closeOverlay(modal);
@@ -101,15 +107,28 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
     }
 
     function applySpotlight(stepIndex) {
+        revealedElements.forEach(el => { el.hidden = true; });
+        revealedElements = [];
         document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
             el.classList.remove('guidance-spotlight-target');
         });
         const step = steps[stepIndex];
         if (!step || !step.target) return;
-        const targetEl = document.querySelector(step.target);
+        let targetEl = document.querySelector(step.target);
+        // Search dropdowns replace their hidden native select with a visible trigger.
+        if (targetEl && targetEl.matches('select[data-search-dropdown]')) {
+            targetEl = targetEl.closest('.rm-search-dropdown')?.querySelector('[role="combobox"]') || targetEl;
+        }
         if (targetEl) {
+            for (let ancestor = targetEl; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+                if (ancestor.hidden) {
+                    revealedElements.push(ancestor);
+                    ancestor.hidden = false;
+                }
+            }
             const modal = targetEl.closest('#add-product-modal');
             if (modal) {
+                modal.querySelector('[role="dialog"]').append(dock);
                 if (window.RetailMindUI && typeof window.RetailMindUI.openOverlay === 'function') {
                     window.RetailMindUI.openOverlay(modal);
                 } else {
@@ -118,27 +137,17 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
                 }
                 const panel = targetEl.closest('.wizard-panel');
                 if (panel && panel.dataset.panel) {
-                    const stepNum = Number(panel.dataset.panel);
-                    document.querySelectorAll('.wizard-panel').forEach(p => {
-                        p.classList.toggle('active', p === panel);
-                    });
-                    document.querySelectorAll('.wizard-step-indicator').forEach((ind, i) => {
-                        ind.classList.toggle('active', i + 1 === stepNum);
-                        ind.classList.toggle('complete', i + 1 < stepNum);
-                    });
-                    const backBtn = document.getElementById('wizard-back');
-                    const nextBtn = document.getElementById('wizard-next');
-                    const saveBtn = document.getElementById('wizard-save');
-                    if (backBtn) backBtn.hidden = (stepNum === 1);
-                    if (nextBtn) nextBtn.hidden = (stepNum === 5);
-                    if (saveBtn) saveBtn.hidden = (stepNum !== 5);
+                    document.getElementById('add-product-form').dispatchEvent(new CustomEvent('retailmind:guidance-step', {
+                        detail: {step: Number(panel.dataset.panel)}
+                    }));
                 }
             } else {
+                document.body.append(dock);
                 closeProductModal();
             }
 
             targetEl.classList.add('guidance-spotlight-target');
-            targetEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+            targetEl.scrollIntoView({behavior: 'instant', block: 'start', inline: 'nearest'});
         }
     }
 
@@ -153,12 +162,12 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
 
         if (learnMoreEl) {
             if (step.learn_more) {
-                learnMoreEl.style.display = '';
+                learnMoreEl.hidden = false;
                 const p = learnMoreEl.querySelector('p');
                 if (p) p.textContent = step.learn_more;
                 learnMoreEl.open = false;
             } else {
-                learnMoreEl.style.display = 'none';
+                learnMoreEl.hidden = true;
             }
         }
 
@@ -166,7 +175,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         nextBtn.textContent = (index === steps.length - 1) ? 'Finish guidance' : 'Next';
 
         applySpotlight(index);
-        titleEl.focus();
+        titleEl.focus({preventScroll: true});
     }
 
     function saveProgress(action, stepIndex) {
@@ -199,7 +208,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         });
         closeProductModal();
         const currentTarget = steps[currentStep] ? document.querySelector(steps[currentStep].target) : null;
-        dock.remove();
+        removeDock();
         if (currentTarget) {
             if (!currentTarget.hasAttribute('tabindex') && !/^(INPUT|SELECT|TEXTAREA|BUTTON|A)$/i.test(currentTarget.tagName)) {
                 currentTarget.setAttribute('tabindex', '-1');
@@ -228,7 +237,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
             closeProductModal();
             bodyEl.style.display = 'none';
             footerEl.style.display = 'none';
-            completionEl.classList.remove('u-hidden');
+            completionEl.hidden = false;
             doneBtn.focus();
         }
     });
@@ -237,14 +246,24 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
 
     doneBtn.addEventListener('click', function() {
         closeProductModal();
-        dock.remove();
+        removeDock();
     });
 
+    function removeDock() {
+        revealedElements.forEach(el => { el.hidden = true; });
+        dockResize.disconnect();
+        dock.remove();
+        document.body.classList.remove('has-guidance-dock');
+        document.documentElement.style.removeProperty('--guidance-dock-space');
+    }
+
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && document.body.contains(dock)) {
+        if (e.key === 'Escape' && document.body.contains(dock) && getComputedStyle(dock).visibility !== 'hidden') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
             exitWalkthrough();
         }
-    });
+    }, true);
 
     // Initial spotlight
     if (document.readyState === 'loading') {

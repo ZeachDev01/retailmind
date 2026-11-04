@@ -45,14 +45,15 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
 <title>Train/test replay - RetailMind</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
-</head><body><div class="app-shell">
+    <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
+</head><body class="forecast-workspace"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content">
     <div class="topbar"><div><h1><?= $isM5 ? 'M5 historical demonstration' : 'Train/test replay' ?></h1><p class="page-subtitle"><?= $isM5 ? 'Original Walmart sales dates and measured backtest predictions. Stock is an illustrative scenario.' : 'Simulated recent sales. Real public quantities, shifted dates, illustrative stock.' ?></p></div>
         <a class="btn btn-secondary" href="../system_administrator/ml_settings.php">ML Operation</a></div>
     <p class="tag-warning" role="status">Experimental preview only. Training validation: <?= htmlspecialchars($result['validation_outcome']) ?>. No Store model or purchasing guidance was approved.</p>
-    <section class="dashboard-section" aria-labelledby="replay-method">
-        <h2 id="replay-method">What was trained and tested</h2>
+    <details class="forecast-details"><summary id="replay-method">Training &amp; test method</summary>
+
         <p>Training: <?= htmlspecialchars($source['date_window'][0]) ?> to <?= htmlspecialchars($result['training_end']) ?>
             (<?= $isM5 ? (int)$source['products_mapped'] * (int)$source['experiment']['initial_training_days'] : (int)$source['total_records'] ?> daily observations).
             Test: <?= htmlspecialchars($result['test_start']) ?> to <?= htmlspecialchars($result['test_end']) ?>
@@ -69,9 +70,9 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
         <p><a class="btn btn-secondary" href="../inventory_management/inventory_overview.php">Current stock</a>
             <?php if (!$isM5): ?><a class="btn btn-secondary" href="../invoice/sales.php">Simulated sales history</a><?php endif; ?>
             <a class="btn btn-secondary" href="../inventory_management/replenishment_queue.php">Normal buying guidance</a></p>
-    </section>
+    </details>
     <section class="dashboard-section" aria-labelledby="replay-metrics"><h2 id="replay-metrics">How close were the held-out predictions?</h2>
-        <p>Errors cover <?= $isM5 ? (int)$source['products_mapped'] : 60 ?> product/origin totals per horizon. MAE and RMSE are units per horizon total; WAPE is error, not accuracy. Test scores do not override training-validation gates.</p>
+        <details class="forecast-details"><summary>How to read these errors</summary><p>Errors cover <?= $isM5 ? (int)$source['products_mapped'] : 60 ?> product/origin totals per horizon. MAE and RMSE are units per horizon total; WAPE is error, not accuracy. Test scores do not override training-validation gates.</p></details>
         <div class="table-wrap"><table class="data-table"><thead><tr><th>Horizon</th><th>MAE</th><th>RMSE</th><th>Model WAPE</th><th>Baseline WAPE</th></tr></thead><tbody>
         <?php foreach ($result['metrics'] as $horizon => $metrics): ?><tr>
             <td><?= (int)$horizon ?> days</td><td><?= number_format((float)$metrics['mae'], 2) ?></td><td><?= number_format((float)$metrics['rmse'], 2) ?></td>
@@ -83,12 +84,22 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
         <form method="get"><label for="replay-product">Product</label><select data-search-dropdown name="product_id" id="replay-product">
             <?php foreach ($products as $product): ?><option value="<?= (int)$product['product_id'] ?>" <?= (int)$product['product_id'] === $productId ? 'selected' : '' ?>><?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name']) ?></option><?php endforeach; ?>
         </select><button class="btn btn-secondary" type="submit">Compare product</button></form>
-        <p><?= $isM5 ? 'Actual units come from original M5 daily totals. Displayed predictions are rounded daily units; the metrics above use the original unrounded predictions.' : 'Actual units below come from the seeded simulated sales, including confirmed zero-sales days in this complete replay.' ?> Difference is predicted minus actual.</p>
+        <details class="forecast-details"><summary>About these recorded values</summary>        <p><?= $isM5 ? 'Actual units come from original M5 daily totals. Displayed predictions are rounded daily units; the metrics above use the original unrounded predictions.' : 'Actual units below come from the seeded simulated sales, including confirmed zero-sales days in this complete replay.' ?> Difference is predicted minus actual.</p></details>
+        <?php $replayChartDays = array_reverse($daily); $replayMax = 1;
+        foreach ($replayChartDays as $day) $replayMax = max($replayMax, (float)$day['predicted_units'], (float)($day['actual_units'] ?? 0)); ?>
+        <div class="forecast-key"><span><i aria-hidden="true"></i>Predicted</span><span><i class="stock-key" aria-hidden="true"></i><?= $isM5 ? 'Historical sales' : 'Simulated sales' ?></span></div>
+        <small class="muted">0–<?= htmlspecialchars((string)$replayMax) ?> units per day · dates and exact values below</small>
+        <div class="daily-forecast-chart replay-chart" aria-hidden="true">
+            <?php foreach ($replayChartDays as $day): ?>
+            <div><span class="replay-bar-pair"><i style="height: <?= max(0, (float)$day['predicted_units']) / $replayMax * 100 ?>%"></i><?php if ($day['actual_units'] !== null): ?><i class="stock" style="height: <?= max(0, (float)$day['actual_units']) / $replayMax * 100 ?>%"></i><?php endif; ?></span><small><?= htmlspecialchars(substr($day['target_date'], -2)) ?></small></div>
+            <?php endforeach; ?>
+        </div>
+        <details class="forecast-details"><summary>Daily comparison values</summary>
         <div class="table-wrap"><table class="data-table" id="replay-comparison"><thead><tr><th>Sale date</th><th>Forecast origin</th><th>Predicted</th><th><?= $isM5 ? 'Actual M5 sales' : 'Simulated actual' ?></th><th>Difference</th></tr></thead><tbody>
         <?php foreach ($daily as $row): $difference = $row['actual_units'] === null ? null : (int)$row['predicted_units'] - (int)$row['actual_units']; ?><tr>
             <td><?= htmlspecialchars($row['target_date']) ?></td><td><?= htmlspecialchars($row['forecast_origin']) ?></td>
             <td><?= (int)$row['predicted_units'] ?></td><td><?= $row['actual_units'] === null ? 'Unknown' : (int)$row['actual_units'] ?></td><td><?= $difference === null ? 'Unknown' : ($difference > 0 ? '+' : '') . $difference ?></td>
-        </tr><?php endforeach; ?></tbody></table></div>
+        </tr><?php endforeach; ?></tbody></table></div></details>
     </section>
     <section class="dashboard-section" aria-labelledby="replay-stock"><h2 id="replay-stock"><?= $isM5 ? 'Stock rules and historical expected sales' : 'Current stock and experimental buying preview' ?></h2>
         <?php if ($isM5): ?>

@@ -15,6 +15,14 @@ class ForecastingSchedulerService {
         $this->pdo = $pdo;
     }
 
+    public static function canAutomaticallyRetry(array $job): bool {
+        $diagnostic = (string)($job['diagnostic_reference'] ?? '');
+        return ($job['status'] ?? '') === 'failed'
+            && (int)($job['attempts'] ?? 0) < 3
+            && !str_starts_with($diagnostic, 'BLOCKED:')
+            && !str_contains($diagnostic, 'EXHAUSTED');
+    }
+
     private function hasCutoffColumn(): bool {
         if ($this->hasCutoffColumn !== null) {
             return $this->hasCutoffColumn;
@@ -85,44 +93,18 @@ class ForecastingSchedulerService {
         // 1. Recover expired worker leases before scheduling
         $this->recoverExpiredLeases($now);
         
-        // Default settings if missing
-        $dailyTime = '23:00';
-        $weeklyDay = 'Sunday';
-        $weeklyTime = '01:00';
-        
-        // Fetch from platform_settings (or ml_settings)
+        // Effective settings resolution & recording (01:00 daily, Sunday 01:00 retrain Asia/Manila)
         try {
-            $stmt = $this->pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
-            $settings = [];
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $settings[$row['setting_key']] = $row['setting_value'];
-            }
-            if (empty($settings['schedule_daily_forecast_time'])) {
-                try {
-                    $stmt2 = $this->pdo->query("SELECT setting_key, setting_value FROM ml_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
-                    if ($stmt2) {
-                        while ($row = $stmt2->fetch(PDO::FETCH_ASSOC)) {
-                            if (empty($settings[$row['setting_key']])) {
-                                $settings[$row['setting_key']] = $row['setting_value'];
-                            }
-                        }
-                    }
-                } catch (\Throwable) {}
-            }
+            $effectiveSchedule = $this->recordEffectiveSchedule();
         } catch (\Throwable $e) {
             $this->preserveLocalDiagnostic('Database connection error in scheduler: ' . $e->getMessage(), 'DB_UNAVAILABLE');
             return $result;
         }
-        
-        if (!empty($settings['schedule_daily_forecast_time'])) {
-            $dailyTime = $settings['schedule_daily_forecast_time'];
-        }
-        if (!empty($settings['schedule_weekly_retrain_day'])) {
-            $weeklyDay = $settings['schedule_weekly_retrain_day'];
-        }
-        if (!empty($settings['schedule_weekly_retrain_time'])) {
-            $weeklyTime = $settings['schedule_weekly_retrain_time'];
-        }
+
+        $dailyTime = $effectiveSchedule['daily_forecast_time'];
+        $weeklyDay = $effectiveSchedule['weekly_retrain_day'];
+        $weeklyTime = $effectiveSchedule['weekly_retrain_time'];
+        $result['effective_schedule'] = $effectiveSchedule;
         
         $currentDate = $now->format('Y-m-d');
         $currentTime = $now->format('H:i');
@@ -160,7 +142,6 @@ class ForecastingSchedulerService {
             $currentDate,
             $currentTime,
             $currentDayName,
-            $dailyTime,
             $weeklyDay,
             $weeklyTime,
             $result
@@ -217,16 +198,7 @@ class ForecastingSchedulerService {
                 }
             }
             if ($status === 'failed') {
-                $diag = (string)($existingJob['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingJob['attempts'] ?? 0);
-                // Treat blocked conditions as non-retryable automatically
-                if (str_starts_with($diag, 'BLOCKED:')) {
-                    return;
-                }
-                // Max 3 total attempts
-                if ($attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingJob)) return;
                 // Retry the SAME logical job on a later tick rather than a busy loop
                 $jobService->retryJob((int)$existingJob['job_id']);
                 return;
@@ -293,11 +265,7 @@ class ForecastingSchedulerService {
                 }
             }
             if ($status === 'failed') {
-                $diag = (string)($existingJob['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingJob['attempts'] ?? 0);
-                if (str_starts_with($diag, 'BLOCKED:') || $attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingJob)) return;
                 $jobService->retryJob((int)$existingJob['job_id']);
                 return;
             }
@@ -467,31 +435,65 @@ class ForecastingSchedulerService {
         string $currentDate,
         string $currentTime,
         string $currentDayName,
-        string $dailyTime,
         string $weeklyDay,
         string $weeklyTime,
         array &$result
     ): void {
-        $latestTraining = $this->pdo->query("SELECT metrics_json FROM model_training_runs
-            WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetchColumn();
+        $latestTraining = $this->pdo->query("SELECT * FROM model_training_runs
+            WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
         
-        $firstTrainingDue = $latestTraining === false && $currentTime >= $dailyTime;
-        $weeklyTrainingDue = strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime;
-        
-        // Missed weekly training catch-up after downtime (e.g. computer was off over weekend/weeks)
-        $downtimeRetrainDue = false;
-        if ($latestTraining !== false && !$weeklyTrainingDue) {
-            $meta = json_decode((string)$latestTraining, true)['metadata'] ?? [];
-            $lastEvidence = $meta['data_window_end'] ?? null;
-            if ($lastEvidence !== null) {
-                $daysSinceLastTraining = (int)round((strtotime($targetCutoff) - strtotime($lastEvidence)) / 86400);
-                if ($daysSinceLastTraining >= 7) {
-                    $downtimeRetrainDue = true;
+        $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
+        $lastEvidence = json_decode((string)($latestTraining['metrics_json'] ?? ''), true)['metadata']['data_window_end'] ?? null;
+        $hasNewHistory = $lastEvidence === null || $lastEvidence < $targetCutoff;
+        $history = [];
+        if (!$isDemo && $hasNewHistory) {
+            $history = (new DemandHistoryService())->getTrainingHistory($this->pdo, $targetCutoff);
+            $result['training_eligibility'] = $history['eligibility'];
+        }
+
+        $firstTrainingDue = false;
+        if (!$isDemo && $latestTraining === false && !empty($history['history'])) {
+            $stmt = $this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_initial_training_due'");
+            $saved = $stmt->fetchColumn();
+            $initial = json_decode((string)$saved, true);
+            $schedule = $weeklyDay . ' ' . $weeklyTime;
+            if (($initial['schedule'] ?? null) !== $schedule) {
+                $due = (clone $now)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+                // Initial eligibility must precede its first opportunity, including exact-time detection.
+                if ($due <= $now) $due->modify('+1 day');
+                $initial = ['schedule' => $schedule, 'due_at' => $due->format('Y-m-d H:i:s')];
+                if ($saved === false) {
+                    $stmt = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_initial_training_due', ?)");
+                } else {
+                    $stmt = $this->pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_initial_training_due'");
                 }
+                $stmt->execute([json_encode($initial)]);
             }
+            $firstTrainingDue = $initial['due_at'] <= $now->format('Y-m-d H:i:s');
+        }
+        $weeklyTrainingDue = ($isDemo || $latestTraining !== false) && strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime;
+        
+        // Compare the most recent selected opportunity with completed training evidence.
+        $downtimeRetrainDue = false;
+        if ($latestTraining !== false) {
+            $opportunity = (clone $now)->modify('last ' . $weeklyDay)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+            if (strcasecmp($currentDayName, $weeklyDay) === 0 && $currentTime >= $weeklyTime) {
+                $opportunity = (clone $now)->setTime((int)substr($weeklyTime, 0, 2), (int)substr($weeklyTime, 3, 2));
+            }
+            $completedAt = $latestTraining['completed_at'] ?? null;
+            // Legacy runs lack timestamps; their cutoff still establishes the training day.
+            $coveredThrough = $completedAt
+                ? new DateTime($completedAt, new DateTimeZone('Asia/Manila'))
+                : ($lastEvidence !== null ? (new DateTime($lastEvidence, new DateTimeZone('Asia/Manila')))->modify('+1 day')->setTime(23, 59, 59) : null);
+            $downtimeRetrainDue = $coveredThrough !== null && $opportunity > $coveredThrough;
+            $weeklyTrainingDue = $weeklyTrainingDue && ($coveredThrough === null || $opportunity > $coveredThrough);
         }
 
         if (!$firstTrainingDue && !$weeklyTrainingDue && !$downtimeRetrainDue) {
+            return;
+        }
+
+        if (!$isDemo && (!$hasNewHistory || empty($history['history']))) {
             return;
         }
 
@@ -514,31 +516,16 @@ class ForecastingSchedulerService {
                 return;
             }
             if ($status === 'failed') {
-                $diag = (string)($existingRetrain['diagnostic_reference'] ?? '');
-                $attempts = (int)($existingRetrain['attempts'] ?? 0);
-                if (str_starts_with($diag, 'BLOCKED:') || $attempts >= 3) {
-                    return;
-                }
+                if (!self::canAutomaticallyRetry($existingRetrain)) return;
                 // Retry eligible temporary failure on later tick
                 $jobService->retryJob((int)$existingRetrain['job_id']);
                 return;
             }
         }
 
-        $isDemo = (bool)$this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn();
-        $lastEvidence = json_decode((string)$latestTraining, true)['metadata']['data_window_end'] ?? null;
-        $hasNewHistory = $lastEvidence === null || $lastEvidence < $targetCutoff;
-
-        if (!$isDemo && $hasNewHistory) {
-            $history = (new DemandHistoryService())->getTrainingHistory($this->pdo, $targetCutoff);
-            $result['training_eligibility'] = $history['eligibility'];
-        }
-
-        // Demo history is frozen; only its existing weekly schedule or downtime catch-up applies.
-        if (($isDemo && ($weeklyTrainingDue || $downtimeRetrainDue)) || (!$isDemo && $hasNewHistory && !empty($history['history']))) {
-            $jobService->enqueueSystem('model_retraining', $targetCutoff);
-            $result['retrain_jobs_queued']++;
-        }
+        // Demo history is frozen; Store runs have already passed the new-history gate.
+        $jobService->enqueueSystem('model_retraining', $targetCutoff);
+        $result['retrain_jobs_queued']++;
     }
 
     private function findJob(string $triggerType, string $cutoff, string $currentDate): ?array {
@@ -631,5 +618,106 @@ class ForecastingSchedulerService {
 
     private function preserveLocalDiagnostic(string $message, string $ref): void {
         self::recordLocalDiagnostic($message, $ref);
+    }
+
+    /**
+     * Resolves the effective operational forecasting schedule.
+     * Accepted policy is 01:00 daily generation and Sunday 01:00 retraining in Asia/Manila.
+     * Corrects conflicting fallback/default (such as legacy 23:00 default) while
+     * preserving explicitly selected operational schedules.
+     */
+    public function getEffectiveSchedule(): array {
+        $dailyTime = '01:00';
+        $weeklyDay = 'Sunday';
+        $weeklyTime = '01:00';
+        $timezone = 'Asia/Manila';
+        $isExplicit = false;
+
+        try {
+            // 1. Check platform_settings first
+            $stmt = $this->pdo->query("SELECT * FROM platform_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
+            $platformSettings = [];
+            if ($stmt) {
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $platformSettings[$row['setting_key']] = $row;
+                }
+            }
+
+            // 2. Check ml_settings fallback
+            $mlSettings = [];
+            try {
+                $stmt2 = $this->pdo->query("SELECT * FROM ml_settings WHERE setting_key IN ('schedule_daily_forecast_time', 'schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
+                if ($stmt2) {
+                    while ($row = $stmt2->fetch(PDO::FETCH_ASSOC)) {
+                        $mlSettings[$row['setting_key']] = $row;
+                    }
+                }
+            } catch (\Throwable) {}
+
+            // Resolve daily forecast time
+            $dailyRow = $platformSettings['schedule_daily_forecast_time'] ?? $mlSettings['schedule_daily_forecast_time'] ?? null;
+            if ($dailyRow !== null && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', trim((string)$dailyRow['setting_value']))) {
+                $val = trim((string)$dailyRow['setting_value']);
+                $hasOperatorUpdate = !empty($dailyRow['updated_by']);
+
+                // If value is 23:00 without explicit operator update, it is the legacy conflicting default
+                if ($val === '23:00' && !$hasOperatorUpdate) {
+                    $dailyTime = '01:00';
+                    $isExplicit = false;
+                } else {
+                    $dailyTime = $val;
+                    $isExplicit = true;
+                }
+            }
+
+            // Resolve weekly retrain day
+            $dayRow = $platformSettings['schedule_weekly_retrain_day'] ?? $mlSettings['schedule_weekly_retrain_day'] ?? null;
+            if ($dayRow !== null && in_array(ucfirst(strtolower(trim((string)$dayRow['setting_value']))), ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'], true)) {
+                $weeklyDay = ucfirst(strtolower(trim((string)$dayRow['setting_value'])));
+                if (!empty($dayRow['updated_by']) || $weeklyDay !== 'Sunday') {
+                    $isExplicit = true;
+                }
+            }
+
+            // Resolve weekly retrain time
+            $timeRow = $platformSettings['schedule_weekly_retrain_time'] ?? $mlSettings['schedule_weekly_retrain_time'] ?? null;
+            if ($timeRow !== null && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', trim((string)$timeRow['setting_value']))) {
+                $val = trim((string)$timeRow['setting_value']);
+                if (!empty($timeRow['updated_by']) || $val !== '01:00') {
+                    $weeklyTime = $val;
+                    $isExplicit = true;
+                }
+            }
+        } catch (\Throwable) {}
+
+        return [
+            'daily_forecast_time' => $dailyTime,
+            'weekly_retrain_day' => $weeklyDay,
+            'weekly_retrain_time' => $weeklyTime,
+            'timezone' => $timezone,
+            'is_explicit' => $isExplicit,
+            'source' => $isExplicit ? 'explicit_operational' : 'default_policy',
+        ];
+    }
+
+    public function recordEffectiveSchedule(?array $schedule = null): array {
+        $effective = $schedule ?? $this->getEffectiveSchedule();
+        $nowStr = (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
+        $record = array_merge($effective, ['recorded_at' => $nowStr]);
+
+        try {
+            $json = json_encode($record, JSON_UNESCAPED_SLASHES);
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM platform_settings WHERE setting_key = 'ml_effective_schedule'");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn() > 0) {
+                $up = $this->pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'ml_effective_schedule'");
+                $up->execute([$json]);
+            } else {
+                $ins = $this->pdo->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_effective_schedule', ?)");
+                $ins->execute([$json]);
+            }
+        } catch (\Throwable) {}
+
+        return $effective;
     }
 }

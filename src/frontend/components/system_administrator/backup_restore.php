@@ -188,20 +188,18 @@ $storePaused = RecoveryStore::isPaused();
                 <div class="backup-create-main">
                     <div class="backup-create-copy">
                         <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
-                        <p>Save a copy of Store records and images.</p>
                     </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
                 </div>
                 <div class="backup-create-footer">
-                    <p><i class="bi bi-download" aria-hidden="true"></i> Download each backup and store it away from this server.</p>
+                    <p><i class="bi bi-download" aria-hidden="true"></i> Download and store off this server.</p>
                     <details class="backup-tips">
                         <summary>What to keep</summary>
                         <ul class="backup-guidance-list">
-                            <li>Server creation does not confirm the file is saved locally; download immediately.</li>
-                            <li>No backup passphrase is needed.</li>
-                            <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
+                            <li>Backups include Store records and images. Download each file after creation.</li>
+                            <li>Download the recovery key from the Recovery key tab and keep it separate.</li>
                         </ul>
                     </details>
                 </div>
@@ -232,7 +230,7 @@ $storePaused = RecoveryStore::isPaused();
                     </div>
                     <div class="restore-introduction" id="restore-warning">
                         <strong><i class="bi bi-shield-check" aria-hidden="true"></i> Read-only validation</strong>
-                        <p>Verifies integrity and checks identity conflicts before restoring. No store records or files are replaced.</p>
+                        <p>Checks integrity and identity conflicts without replacing records or files.</p>
                     </div>
                     <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
                         <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>">
@@ -244,8 +242,7 @@ $storePaused = RecoveryStore::isPaused();
                         </div>
                         <div class="form-group">
                             <label for="restore-password">Administrator password</label>
-                            <p class="backup-hint" id="restore-password-hint">Current session password for authorization.</p>
-                            <input id="restore-password" type="password" name="restore_password" autocomplete="current-password" aria-describedby="restore-password-hint<?= $invalidField === 'restore' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'restore' ? ' aria-invalid="true"' : '' ?> required>
+                            <input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required>
                         </div>
                         <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
                     </form>
@@ -260,7 +257,6 @@ $storePaused = RecoveryStore::isPaused();
                                     <?php endforeach; ?>
                                 </ul>
                             <?php endif; ?>
-                            <p class="backup-hint">Read-only check complete. No store records or files were replaced.</p>
                         </div>
                     <?php endif; ?>
                 </section>
@@ -297,7 +293,7 @@ $storePaused = RecoveryStore::isPaused();
                                 <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
+                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>

@@ -112,16 +112,15 @@ final class AttentionNotificationService
         $detectedAt = $item->detectedAt->format('Y-m-d H:i:s');
         if ($state !== null) {
             $firstDetected = (bool)$state['is_active'] ? (string)$state['first_detected_at'] : $detectedAt;
-            // Level memory only increases, so a condition that de-escalates and rises again re-alerts,
-            // while an unchanged peak never repeats an alert.
+            // Remember the peak within an occurrence; recovery resets it for a fresh occurrence.
             $statement = $this->pdo->prepare(
                 'UPDATE attention_states
                  SET fingerprint = ?, is_active = 1, first_detected_at = ?, last_detected_at = ?, resolved_at = NULL,
-                     notification_level = CASE WHEN notification_level > ? THEN notification_level ELSE ? END
+                     notification_level = ?
                  WHERE user_id = ? AND attention_key = ?'
             );
-            $statement->execute([$fingerprint, $firstDetected, $now, $item->notificationLevel(),
-                $item->notificationLevel(), $userId, $item->key]);
+            $level = (bool)$state['is_active'] ? max((int)$state['notification_level'], $item->notificationLevel()) : $item->notificationLevel();
+            $statement->execute([$fingerprint, $firstDetected, $now, $level, $userId, $item->key]);
             return;
         }
         $statement = $this->pdo->prepare(
@@ -144,13 +143,16 @@ final class AttentionNotificationService
         );
         // Resolved conditions are no longer new or escalated, so their queued daily email is dropped.
         $unsend = $this->pdo->prepare(
-            'UPDATE notifications SET email_pending = 0 WHERE user_id = ? AND attention_key = ? AND email_pending = 1'
+            "UPDATE notifications SET email_pending = 0,
+                resolved_at = CASE WHEN type IN ('low_stock', 'expiring_stock', 'expired_stock')
+                    THEN COALESCE(resolved_at, ?) ELSE resolved_at END
+             WHERE user_id = ? AND attention_key = ?"
         );
         $now = $this->clock->now()->format('Y-m-d H:i:s');
         foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $key) {
             if (!in_array($key, $currentKeys, true)) {
                 $resolve->execute([$now, $userId, $key]);
-                $unsend->execute([$userId, $key]);
+                $unsend->execute([$now, $userId, $key]);
             }
         }
     }

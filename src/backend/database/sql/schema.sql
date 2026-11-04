@@ -881,6 +881,7 @@ CREATE TABLE `notifications` (
   `attention_severity` varchar(20) DEFAULT NULL,
   `attention_count` int(11) DEFAULT NULL,
   `attention_destination` varchar(255) DEFAULT NULL,
+  `resolved_at` datetime DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`notification_id`),
@@ -1711,7 +1712,7 @@ INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('accuracy_thr
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_lower','10');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('prediction_interval_upper','90');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('holiday_dates','');
-INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','23:00');
+INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_daily_forecast_time','01:00');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_day','Sunday');
 INSERT IGNORE INTO ml_settings (setting_key,setting_value) VALUES ('schedule_weekly_retrain_time','01:00');
 

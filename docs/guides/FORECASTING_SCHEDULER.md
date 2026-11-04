@@ -6,7 +6,7 @@ The commands below run forecasting only. Also configure the independent [daily n
 
 ## Automatic training rules
 
-- After the configured daily forecast time (default 23:00), a Store with no completed training candidate is checked for its first training run. It does not have to wait for the weekly training day.
+- After the configured daily forecast time (default 01:00 Asia/Manila), a Store with no completed training candidate is checked for its first training run. It does not have to wait for the weekly training day.
 - The existing history reader requires at least one active product with **140 consecutive usable daily observations through yesterday**. This includes genuine zero-sales days; it is not a minimum sales volume or a promise of accuracy. Missing evidence, closures, and stockout exclusions can prevent qualification.
 - Once a completed candidate exists, retraining follows the configured weekly day/time (default Sunday 01:00). It requires newer eligible history than the last completed candidate's recorded data window. Unchanged or stale Store history is skipped.
 - A queued/running training job blocks another automatic training job, including manual jobs and jobs from a previous day. Any training attempt on the same calendar day prevents repeated automatic attempts that day. The CLI also takes a local filesystem lock against overlapping scheduler ticks.
@@ -49,7 +49,7 @@ For an installation that must run after Windows sign-out, configure a suitable t
    - Security options: Select **Run whether user is logged on or not** with an account allowed to read the application, access its database, and write its logs/artifacts. Administrator elevation is not required for ordinary forecasting.
 4. **Triggers Tab:**
    - New Trigger -> Begin the task: **On a schedule** -> **Daily**
-   - Set the time to after Store close (e.g., `11:00 PM`) and recur every `1` days.
+   - Set the time to after Store close (e.g., `01:00 AM` Asia/Manila) and recur every `1` days.
    - Also, add a trigger to run the worker process loop every 5 minutes if you prefer the PHP scheduler to trigger tasks dynamically.
 5. **Actions Tab:**
    - Action: **Start a program**

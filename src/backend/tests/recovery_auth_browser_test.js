@@ -98,7 +98,7 @@ const fixture = action => {
         await page.locator('[data-recovery-submit="login"]').click();
         assert.match(await page.locator('[data-recovery-alert="error"]').innerText(), /Invalid recovery credentials/);
 
-        // Test unrelated admin
+        // Test inactive admin
         await page.locator('#recovery-username').fill('other_admin');
         await page.locator('#recovery-password').fill(password);
         await page.locator('[data-recovery-submit="login"]').click();
@@ -118,7 +118,7 @@ const fixture = action => {
         // Assert Initiating Admin console
         assert.equal(await page.locator('[data-recovery-card="authenticated"]').count(), 1, 'Initiating admin console authenticated');
         assert.match(await page.locator('[data-recovery-card="authenticated"]').innerText(), /theme_admin/);
-        assert.equal(await page.locator('[data-recovery-admin-notice]').count(), 1, 'Admin notice is displayed');
+        assert.equal(await page.locator('[data-recovery-status="paused"]').count(), 1, 'Store paused status is displayed');
         assert.equal(await page.locator('[data-recovery-super-evidence]').count(), 0, 'Super admin evidence hidden from ordinary admin');
 
         for (const width of [390, 1440]) {
@@ -139,7 +139,7 @@ const fixture = action => {
         // Assert Super Administrator console and role-restricted evidence
         assert.equal(await page.locator('[data-recovery-card="authenticated"]').count(), 1, 'Super admin console authenticated');
         assert.equal(await page.locator('[data-recovery-super-evidence]').count(), 1, 'Super admin evidence is visible');
-        assert.equal(await page.locator('[data-recovery-submit="reopen"]').count(), 1, 'Reopen button visible to Super Admin');
+        assert.equal(await page.locator('[data-recovery-submit="reopen"]').count(), 0, 'Reopen is unavailable before operator review');
 
         for (const width of [390, 1440]) {
             await page.setViewportSize({ width, height: 960 });
@@ -147,15 +147,16 @@ const fixture = action => {
             await page.screenshot({ path: path.join(proofDirectory, `recovery-super-${width}.png`), fullPage: true });
         }
 
-        // Test Super Admin reopening the Store
-        page.on('dialog', async dialog => await dialog.accept());
-        await page.locator('[data-recovery-submit="reopen"]').click();
+        // Forged requests cannot skip recovery and operator review.
+        await page.locator('[data-recovery-form="logout"]').evaluate(form => {
+            form.querySelector('[name="action"]').value = 'reopen';
+            form.requestSubmit();
+        });
+        await page.waitForLoadState();
+        assert.match(await page.locator('[data-recovery-alert="error"]').innerText(), /only be reopened from operator review/i);
+        assert.equal(await page.locator('[data-recovery-status="paused"]').count(), 1, 'Premature reopening leaves Store paused');
 
-        // Assert Store is reopened
-        assert.equal(await page.locator('[data-recovery-status="online"]').count(), 1, 'Status changes to Store Online');
-        assert.equal(await page.locator('[data-recovery-card="idle"]').count(), 1, 'Idle card displayed');
-
-        console.log('Recovery auth browser test: passed (missing tables, pre-restore auth, role evidence, reopening, mobile/desktop fit)');
+        console.log('Recovery auth browser test: passed (missing tables, pre-restore auth, role evidence, premature reopen rejection, mobile/desktop fit)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

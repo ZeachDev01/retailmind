@@ -154,6 +154,11 @@ try {
     $assert($eval14['observation_complete'] === false, '14 days is not complete');
     $assert($eval14['status'] === 'under_evaluation', 'Status is still under_evaluation at 14 days');
 
+    $pdo->exec("UPDATE demand_forecasts SET limitation_marker='Historical M5 experiment; original dates; not an approved forecast' WHERE target_date='2026-06-01'");
+    $historicalProgress = $evalService->getCandidateObservationProgress($candidateVersion, '2026-06-14');
+    $assert($historicalProgress['usable_observed_days'] === 13, 'Historical backtests cannot advance observation even without a created_at column');
+    $pdo->exec("UPDATE demand_forecasts SET limitation_marker='Observation only' WHERE target_date='2026-06-01'");
+
     // 4. Recorded closures pause accumulation without resetting completed evidence
     // Days 15 and 16 are closed
     for ($d = 15; $d <= 16; $d++) {
@@ -239,6 +244,23 @@ try {
     $assert($prog['status'] === 'awaiting_approval', 'Progress helper returns status');
     $assert($prog['observation_complete'] === true, 'Progress helper returns observation_complete');
     $assert(!empty($prog['explanation']), 'Progress helper returns explanation');
+    require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
+    $pdo->prepare("INSERT INTO model_training_runs (model_version, status) VALUES (?, 'completed')")->execute([$candidateVersion]);
+    $issues = (new App\Forecasting\DemandForecastService($pdo))->getOperationalIssues([
+        'scope_count' => 1, 'is_observation_mode' => true, 'approved_model_version' => 'previous_approved_model',
+    ]);
+    $observationIssues = array_values(array_filter($issues, static fn($issue) => $issue['category'] === 'observation_mode'));
+    $assert(count($observationIssues) === 1 && str_contains($observationIssues[0]['condition'], $candidateVersion)
+        && str_contains($observationIssues[0]['condition'], 'day 28 of 28'), 'Operational progress reports the candidate actual 28 observed days, not the incumbent progress');
+
+    $pdo->exec("ALTER TABLE demand_forecasts ADD COLUMN created_at DATETIME");
+    $pdo->exec("UPDATE demand_forecasts SET created_at='2026-05-31 12:00:00'");
+    $assert($evalService->getCandidateObservationProgress($candidateVersion, '2026-07-03')['usable_observed_days'] === 28,
+        'Predictions recorded before target dates retain prospective observation credit');
+    $pdo->exec("UPDATE demand_forecasts SET created_at='2026-06-01 12:00:00' WHERE target_date='2026-06-01'");
+    $assert($evalService->getCandidateObservationProgress($candidateVersion, '2026-07-03')['usable_observed_days'] === 27,
+        'A historical origin cannot grant observation credit to predictions recorded after the target date began');
+
 
 } catch (Throwable $e) {
     $failures[] = 'CandidateObservationProgress tests threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();

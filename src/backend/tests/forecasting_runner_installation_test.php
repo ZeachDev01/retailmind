@@ -46,6 +46,12 @@ try {
         'model_storage' => 'C:\\xampp\\htdocs\\retailmind\\src\\backend\\storage\\ml_models',
         'service_account' => 'NT AUTHORITY\\SYSTEM',
         'installed_at' => '2026-11-02 07:00:00',
+        'effective_schedule' => [
+            'daily_forecast_time' => '01:00',
+            'weekly_retrain_day' => 'Sunday',
+            'weekly_retrain_time' => '01:00',
+            'timezone' => 'Asia/Manila',
+        ],
     ];
     file_put_contents($configPath, json_encode($testConfig, JSON_PRETTY_PRINT));
 
@@ -56,8 +62,62 @@ try {
     assert_same('C:\\xampp\\htdocs\\retailmind', $loaded['project_root'], 'Project root must be retained');
     assert_same('C:\\xampp\\htdocs\\retailmind\\src\\backend\\storage\\ml_models', $loaded['model_storage'], 'Model storage path must be retained');
     assert_same('NT AUTHORITY\\SYSTEM', $loaded['service_account'], 'Service account must be retained');
+    assert_same('01:00', $loaded['effective_schedule']['daily_forecast_time'], 'Effective daily forecast time must be 01:00');
+    assert_same('Sunday', $loaded['effective_schedule']['weekly_retrain_day'], 'Effective weekly retrain day must be Sunday');
+    assert_same('01:00', $loaded['effective_schedule']['weekly_retrain_time'], 'Effective weekly retrain time must be 01:00');
+    assert_same('Asia/Manila', $loaded['effective_schedule']['timezone'], 'Effective timezone must be Asia/Manila');
+    require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+    require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
+    $governanceDb = new PDO('sqlite::memory:');
+    $installedGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb);
+    assert_same($testConfig['model_storage'], $installedGovernance->getModelsDir(), 'Approval and recovery use the installed worker model storage');
+    $explicitGovernance = new App\Forecasting\StoreModelGovernanceService($governanceDb, null, '/isolated/model-fixture');
+    assert_same('/isolated/model-fixture', $explicitGovernance->getModelsDir(), 'Explicit model storage injection remains authoritative');
 
-    echo "  ok - Configuration retention contract verified\n";
+
+    // Verify no credentials retained in config
+    $rawConfig = (string)file_get_contents($configPath);
+    foreach (['password', 'secret', 'token', 'db_pass'] as $credKey) {
+        assert_true(!str_contains(strtolower($rawConfig), $credKey), "Runner configuration must retain no credentials ($credKey found)");
+    }
+
+    echo "  ok - Configuration retention contract verified (with 01:00 Asia/Manila schedule and no credentials)\n";
+
+    if (PHP_OS_FAMILY === 'Windows') {
+        $installerRoot = sys_get_temp_dir() . '/rm-installer-' . bin2hex(random_bytes(6));
+        mkdir($installerRoot);
+        $pythonBinary = trim((string)shell_exec('where.exe python.exe'));
+        $pythonBinary = explode("\n", $pythonBinary)[0];
+        $fixtureProcess = proc_open([
+            'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+            '-File', __DIR__ . '/support/forecasting_installer_fixture.ps1',
+            '-Installer', dirname(__DIR__) . '/scripts/install_forecasting_scheduler.ps1',
+            '-ProjectRoot', $installerRoot, '-PhpBinary', PHP_BINARY, '-PythonBinary', trim($pythonBinary),
+        ], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $installerPipes);
+        $installerOutput = stream_get_contents($installerPipes[1]) . stream_get_contents($installerPipes[2]);
+        fclose($installerPipes[1]);
+        fclose($installerPipes[2]);
+        assert_same(0, proc_close($fixtureProcess), 'Isolated Windows PowerShell installer succeeds: ' . $installerOutput);
+        $installedConfig = $installerRoot . '/src/backend/config/forecasting_runner.json';
+        try {
+            $installedBytes = file_get_contents($installedConfig);
+            assert_true(!str_starts_with($installedBytes, "\xEF\xBB\xBF"), 'Windows PowerShell installer writes BOM-free UTF-8 JSON');
+            $installed = json_decode($installedBytes, true, 512, JSON_THROW_ON_ERROR);
+            assert_same(PHP_BINARY, $installed['php_binary'], 'PHP decodes retained installer paths');
+            $pythonProcess = proc_open([trim($pythonBinary), '-c', 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))', $installedConfig], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pythonPipes);
+            $pythonOutput = stream_get_contents($pythonPipes[1]) . stream_get_contents($pythonPipes[2]);
+            fclose($pythonPipes[1]);
+            fclose($pythonPipes[2]);
+            assert_same(0, proc_close($pythonProcess), 'Python decodes retained installer paths: ' . $pythonOutput);
+        } finally {
+            unlink($installedConfig);
+            foreach (['config', 'storage/logs', 'storage/ml_models', 'storage', ''] as $subdirectory) {
+                rmdir($installerRoot . '/src/backend/' . $subdirectory);
+            }
+            rmdir($installerRoot . '/src');
+            rmdir($installerRoot);
+        }
+    }
 
     // =========================================================================
     // 2. Database Readiness Check and Retry Loop Contract
@@ -174,6 +234,32 @@ try {
     );
 
     echo "  ok - Remote database interfaces rejected to protect local boundary\n";
+
+    // =========================================================================
+    // 5. Effective Forecasting Schedule Resolution Contract
+    // =========================================================================
+    // Contract checks must never connect to the configured Store database.
+    $scheduleDb = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $scheduleDb->exec("CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+        CREATE TABLE ml_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT, updated_by INT)");
+    $schedulerService = new ForecastingSchedulerService($scheduleDb);
+    $effectiveSched = $schedulerService->getEffectiveSchedule();
+
+    assert_same('01:00', $effectiveSched['daily_forecast_time'], 'Effective schedule daily forecast time must be 01:00');
+    assert_same('Sunday', $effectiveSched['weekly_retrain_day'], 'Effective schedule weekly retrain day must be Sunday');
+    assert_same('01:00', $effectiveSched['weekly_retrain_time'], 'Effective schedule weekly retrain time must be 01:00');
+    assert_same('Asia/Manila', $effectiveSched['timezone'], 'Effective schedule timezone must be Asia/Manila');
+
+    // Verify recording into platform_settings
+    $schedulerService->recordEffectiveSchedule($effectiveSched);
+    $persistedJson = $scheduleDb->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_effective_schedule'")->fetchColumn();
+    assert_true(!empty($persistedJson), 'ml_effective_schedule must be persisted in platform_settings');
+    $decodedPersisted = json_decode((string)$persistedJson, true);
+    assert_same('01:00', $decodedPersisted['daily_forecast_time'], 'Persisted daily forecast time must be 01:00');
+
+    echo "  ok - Effective schedule resolution contract verified (01:00 daily, Sunday 01:00 Asia/Manila)\n";
+
+    echo "  Not tested - Unattended restart and full worker completion require independent target-installation evidence; see the operational acceptance report.\n";
 
 } finally {
     // Restore or cleanup config

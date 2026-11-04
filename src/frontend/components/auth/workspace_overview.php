@@ -153,7 +153,7 @@ $primaryActionLabel = $isAdmin
     <?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
         <section class="guidance-continue-card" aria-label="Continue guidance">
             <div>
-                <h2>Continue where you left off</h2>
+                <h3>Continue where you left off</h3>
                 <p>Resume <?= htmlspecialchars($activeTopicDef['title']) ?> walkthrough (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</p>
             </div>
             <a href="<?= htmlspecialchars(app_url($activeTopicDef['path'] . '?guidance=' . $activeTopicDef['id'])) ?>" class="btn btn-primary">Resume <?= htmlspecialchars($activeTopicDef['title']) ?> (Step <?= ($walkthroughProgress['active_step'] ?? 0) + 1 ?> of <?= count($activeTopicDef['steps']) ?>)</a>
@@ -162,7 +162,7 @@ $primaryActionLabel = $isAdmin
     <?php if ($isAdmin): ?>
         <section class="guidance-walkthroughs" aria-labelledby="get-oriented-title">
             <div class="guidance-walkthroughs-header">
-                <h2 id="get-oriented-title">Get oriented</h2>
+                <h3 id="get-oriented-title">Get oriented</h3>
                 <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
             </div>
             <div class="walkthrough-topics-list">
@@ -202,7 +202,7 @@ $primaryActionLabel = $isAdmin
         </section>
         <section class="guidance-walkthroughs-daily" aria-labelledby="daily-oversight-title">
             <div class="guidance-walkthroughs-header">
-                <h2 id="daily-oversight-title">Daily oversight</h2>
+                <h3 id="daily-oversight-title">Daily oversight</h3>
                 <p>Learn recurring review workflows for your Workspace.</p>
             </div>
             <div class="walkthrough-topics-list">
@@ -239,7 +239,7 @@ $primaryActionLabel = $isAdmin
     <?php else: ?>
         <section class="guidance-walkthroughs" aria-labelledby="first-useful-tasks-title">
             <div class="guidance-walkthroughs-header">
-                <h2 id="first-useful-tasks-title">First useful tasks</h2>
+                <h3 id="first-useful-tasks-title">First useful tasks</h3>
                 <p>Follow working walkthroughs on existing pages. Complete steps at your pace without altering operational records.</p>
             </div>
             <div class="walkthrough-topics-list">
@@ -248,7 +248,7 @@ $primaryActionLabel = $isAdmin
                     $isDone = in_array($tId, $completedTopics, true);
                     $isInProgress = ($walkthroughProgress['active_topic'] === $tId);
                     $stepTotal = count($tDef['steps']);
-                    $iconName = $imIcons[$tId] ?? 'workflow';
+                    $iconName = $topicIcons[$tId] ?? 'workflow';
                 ?>
                 <div class="walkthrough-topic-card" id="topic-card-<?= htmlspecialchars($tId) ?>">
                     <div class="walkthrough-topic-main">
@@ -274,23 +274,6 @@ $primaryActionLabel = $isAdmin
             </div>
         </section>
     <?php endif; ?>
-    <ul class="workspace-guidance-links">
-        <?php foreach ($workflows as $wf): ?>
-        <li>
-            <h3 class="workspace-workflow-heading">
-                <a href="<?= htmlspecialchars(app_url('components/' . $wf['path'])) ?>">
-                    <span class="help-function-icon"><?= sidebar_icon($wf['icon']) ?></span>
-                    <span><?= htmlspecialchars($wf['link_label']) ?></span>
-                    <svg class="help-function-arrow" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
-                </a>
-            </h3>
-            <details class="help-workflow-details">
-                <summary aria-label="How it works: <?= htmlspecialchars($wf['title']) ?>">How it works</summary>
-                <p><?= htmlspecialchars($wf['guidance']) ?></p>
-            </details>
-        </li>
-        <?php endforeach; ?>
-    </ul>
 <?php elseif ($activeWorkflow): ?>
     <p class="workspace-guidance-nav">
         <?php foreach ($allWalkthroughPaths as $pDef): ?>

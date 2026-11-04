@@ -161,7 +161,59 @@ def test_feature_pipeline_kaggle_dataset_integration():
 
     print("Test passed: test_feature_pipeline_kaggle_dataset_integration")
 
+def test_feature_pipeline_closure_aware_origin_and_weekday_closures():
+    """
+    Ticket #415 Vertical Slice 1:
+    Verify that build_feature_matrix allows cutoffs falling on supported weekend closures
+    (e.g. Sunday cutoff for a Monday-Friday store) and resolves lag_1 to the latest observed trading day.
+    Also verify that weekday supported closures (classification == 'closed') do not block generation,
+    while stockouts (classification == 'stockout_censored') are correctly identified as unsupported gaps.
+    """
+    dates = pd.date_range("2024-06-03", "2024-07-07", freq="D")
+    records = []
+    for d in dates:
+        d_str = d.strftime("%Y-%m-%d")
+        is_weekend = d.dayofweek >= 5
+        # Product 1: Mon-Fri store, closed on weekends, holiday closure on Wed 2024-06-19
+        if is_weekend:
+            records.append({"date": d_str, "product_id": 1, "units_sold": None, "classification": "closed"})
+        elif d_str == "2024-06-19":
+            records.append({"date": d_str, "product_id": 1, "units_sold": None, "classification": "closed"})
+        else:
+            records.append({"date": d_str, "product_id": 1, "units_sold": 15.0, "classification": "valid_demand"})
+
+        # Product 2: Mon-Fri store, but has stockout on Thursday 2024-07-04
+        if is_weekend:
+            records.append({"date": d_str, "product_id": 2, "units_sold": None, "classification": "closed"})
+        elif d_str == "2024-07-04":
+            records.append({"date": d_str, "product_id": 2, "units_sold": None, "classification": "stockout_censored"})
+        else:
+            records.append({"date": d_str, "product_id": 2, "units_sold": 12.0, "classification": "valid_demand"})
+
+    df = pd.DataFrame(records)
+
+    # Sunday cutoff: 2024-07-07 (Store was closed Saturday 07-06 and Sunday 07-07)
+    cutoff = "2024-07-07"
+    matrix = build_feature_matrix(df, cutoff_date=cutoff, horizon_days=28)
+
+    # Product 1 should be included; Product 2 must be excluded due to stockout
+    assert set(matrix["product_id"]) == {1}, f"Expected only Product 1 in matrix, got {set(matrix['product_id'])}"
+    assert len(matrix) == 28, f"Expected 28 horizon rows for Product 1, got {len(matrix)}"
+
+    # Check that lag_1 resolved to Friday 2024-07-05 (latest observed trading day at or before Sunday cutoff)
+    p1_row1 = matrix.iloc[0]
+    assert p1_row1["lag_1"] == 15.0, f"Expected lag_1=15.0 (from Friday), got {p1_row1['lag_1']}"
+    assert p1_row1["horizon_day"] == 1
+    assert p1_row1["target_date"] == pd.Timestamp("2024-07-08")  # Monday
+
+    # Verify rolling stats were computed without error
+    assert p1_row1["rolling_mean_7"] > 0
+    assert p1_row1["rolling_mean_28"] > 0
+
+    print("Test passed: test_feature_pipeline_closure_aware_origin_and_weekday_closures")
+
 if __name__ == "__main__":
     test_feature_pipeline_lags_and_horizon_conditioning()
     test_feature_pipeline_rolling_and_calendar_features()
     test_feature_pipeline_kaggle_dataset_integration()
+    test_feature_pipeline_closure_aware_origin_and_weekday_closures()

@@ -2810,8 +2810,10 @@ foreach ($products as $product) {
             });
         });
 
-        function setWizardStep(step) {
-            queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
+        addProductForm.addEventListener('retailmind:guidance-step', event => setWizardStep(event.detail.step, false));
+
+        function setWizardStep(step, saveDraft = true) {
+            if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
             wizardStep = Math.max(1, Math.min(5, step));
             document.querySelectorAll('.wizard-panel').forEach(panel => panel.classList.toggle('active', Number(panel.dataset.panel) === wizardStep));
             document.querySelectorAll('.wizard-step-indicator').forEach((indicator, index) => {

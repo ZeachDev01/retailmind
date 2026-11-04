@@ -31,6 +31,7 @@ $pdo->exec("CREATE TABLE products (product_id INT, sku TEXT, product_name TEXT, 
     CREATE TABLE sale_reversals (reversal_id INTEGER PRIMARY KEY, sale_id INT, status TEXT, approved_at TEXT);
     CREATE TABLE sale_reversal_items (reversal_id INT, sale_item_id INT, product_id INT, quantity INT);
     CREATE TABLE platform_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
+    CREATE TABLE ml_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT, updated_by INT, updated_at TEXT);
     CREATE TABLE model_training_runs (training_run_id INTEGER PRIMARY KEY, status TEXT, metrics_json TEXT);
     CREATE TABLE ml_jobs (
         job_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,19 +76,19 @@ $tick = static function (string $time) use ($scheduler, &$clock): array {
 };
 
 // 1. Existing schedule tests (first eligible training, weekly retraining, duplicate checks)
-assert_same(0, $tick('2024-05-17 23:05:00')['retrain_jobs_queued'], 'Insufficient history must not train');
-assert_same(0, $tick('2024-05-20 22:00:00')['retrain_jobs_queued'], 'First training waits until after close');
-$first = $tick('2024-05-20 23:05:00');
+assert_same(0, $tick('2024-05-17 01:05:00')['retrain_jobs_queued'], 'Insufficient history must not train');
+assert_same(0, $tick('2024-05-20 00:30:00')['retrain_jobs_queued'], 'First training waits until daily forecast time (01:00)');
+$first = $tick('2024-05-20 01:05:00');
 assert_same(1, $first['forecast_jobs_queued'], 'Daily generation is preserved');
 assert_same(1, $first['retrain_jobs_queued'], 'First eligible model trains without waiting for Sunday');
 assert_same(140, $first['training_eligibility'][0]['consecutive_usable_days'], 'Threshold is usable days, not sales volume');
-assert_same(0, $tick('2024-05-20 23:10:00')['retrain_jobs_queued'], 'Repeated ticks cannot duplicate training');
-assert_same(0, $tick('2024-05-21 23:05:00')['retrain_jobs_queued'], 'Pending training from a previous day blocks duplicates');
+assert_same(0, $tick('2024-05-20 01:10:00')['retrain_jobs_queued'], 'Repeated ticks cannot duplicate training');
+assert_same(0, $tick('2024-05-21 01:05:00')['retrain_jobs_queued'], 'Pending training from a previous day blocks duplicates');
 $job = $pdo->query("SELECT requester_id FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetch(PDO::FETCH_ASSOC);
 assert_same(null, $job['requester_id'], 'Automatic training is attributed to the system');
 $pdo->exec("UPDATE ml_jobs SET status = 'succeeded';
     INSERT INTO model_training_runs VALUES (1, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-05-19\"}}');");
-assert_same(0, $tick('2024-05-22 23:05:00')['retrain_jobs_queued'], 'Completed candidate waits for weekly retraining, even before approval');
+assert_same(0, $tick('2024-05-22 01:05:00')['retrain_jobs_queued'], 'Completed candidate waits for weekly retraining, even before approval');
 assert_same(1, $tick('2024-05-26 01:10:00')['retrain_jobs_queued'], 'Weekly training runs with newer eligible history');
 $pdo->exec("UPDATE ml_jobs SET status = 'succeeded';
     UPDATE model_training_runs SET metrics_json = '{\"metadata\":{\"data_window_end\":\"2024-05-25\"}}';
@@ -102,7 +103,7 @@ $pdo->exec("UPDATE ml_jobs SET queued_at = '2024-05-19', status = 'running' WHER
 assert_same(0, $tick('2024-05-22 23:30:00')['retrain_jobs_queued'], 'Older manual running training blocks automatic training');
 $pdo->exec("DELETE FROM ml_jobs;
     INSERT INTO platform_settings VALUES ('demo_import_metadata', '{}');");
-assert_same(0, $tick('2024-05-20 23:30:00')['retrain_jobs_queued'], 'Daily first-training trigger must not change Demo scheduling');
+assert_same(0, $tick('2024-05-20 01:30:00')['retrain_jobs_queued'], 'Daily first-training trigger must not change Demo scheduling');
 assert_same(1, $tick('2024-05-26 01:30:00')['retrain_jobs_queued'], 'Existing weekly Demo schedule is preserved');
 assert_same('keep-approved', $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn(), 'Automatic training never replaces the approved model');
 assert_same('1', $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_observation_mode'")->fetchColumn(), 'Automatic training never enables routine purchasing');
@@ -350,4 +351,156 @@ assert_same(1, $obsRes4['observation_jobs_queued'], 'Next candidate enters obser
 $obsJob4 = $pdo->query("SELECT model_version FROM ml_jobs WHERE trigger_type = 'forecast_observation' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 assert_same('v_candidate_store_2_weekly', $obsJob4['model_version'], 'Candidate 2 enters observation now that candidate 1 is approved');
 
-echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation, candidate observation queueing, candidate preservation, downtime observation catch-up, review transition).\n";
+// =========================================================================
+// Ticket #416 Requirements: 01:00 Daily Generation & Sunday 01:00 Training (Asia/Manila)
+// =========================================================================
+
+// --- 11A. Default schedule policy: 01:00 daily generation, Sunday 01:00 retraining ---
+$pdo->exec("DELETE FROM platform_settings WHERE setting_key LIKE '%schedule%'; DELETE FROM ml_settings;");
+$schedPolicy = $scheduler->getEffectiveSchedule();
+assert_same('01:00', $schedPolicy['daily_forecast_time'], 'Default daily forecast time must be 01:00');
+assert_same('Sunday', $schedPolicy['weekly_retrain_day'], 'Default weekly retrain day must be Sunday');
+assert_same('01:00', $schedPolicy['weekly_retrain_time'], 'Default weekly retrain time must be 01:00');
+assert_same('Asia/Manila', $schedPolicy['timezone'], 'Default schedule timezone must be Asia/Manila');
+assert_same(false, $schedPolicy['is_explicit'], 'Default policy is not marked explicit');
+
+// --- 11B. Conflicting 23:00 fallback/default is corrected to 01:00 ---
+$pdo->exec("INSERT INTO ml_settings (setting_key, setting_value, updated_by) VALUES ('schedule_daily_forecast_time', '23:00', NULL)");
+$correctedSched = $scheduler->getEffectiveSchedule();
+assert_same('01:00', $correctedSched['daily_forecast_time'], 'Conflicting 23:00 default without operator update is corrected to 01:00');
+assert_same(false, $correctedSched['is_explicit'], 'Corrected default is not treated as explicit');
+
+// --- 11C. Explicitly selected operational schedule is preserved ---
+$pdo->exec("UPDATE ml_settings SET setting_value = '03:30', updated_by = 1 WHERE setting_key = 'schedule_daily_forecast_time'");
+$explicitSched = $scheduler->getEffectiveSchedule();
+assert_same('03:30', $explicitSched['daily_forecast_time'], 'Explicit operational schedule 03:30 is preserved');
+assert_same(true, $explicitSched['is_explicit'], 'Explicit schedule is marked explicit');
+
+// Explicit selection of 23:00 by an operator is also preserved
+$pdo->exec("UPDATE ml_settings SET setting_value = '23:00', updated_by = 1 WHERE setting_key = 'schedule_daily_forecast_time'");
+$explicit23 = $scheduler->getEffectiveSchedule();
+assert_same('23:00', $explicit23['daily_forecast_time'], 'Explicitly chosen 23:00 by operator is preserved');
+assert_same(true, $explicit23['is_explicit'], 'Operator chosen 23:00 is marked explicit');
+
+// --- 11D. Effective settings are recorded and returned by runScheduler() ---
+$pdo->exec("DELETE FROM ml_settings; DELETE FROM ml_jobs; UPDATE platform_settings SET setting_value = 'v_approved_incumbent' WHERE setting_key = 'ml_approved_model_version';");
+$schedTick = $tick('2024-06-16 01:05:00'); // Sunday 01:05 AM
+assert_same('01:00', $schedTick['effective_schedule']['daily_forecast_time'], 'runScheduler returns effective daily schedule');
+assert_same('Sunday', $schedTick['effective_schedule']['weekly_retrain_day'], 'runScheduler returns effective weekly day');
+assert_same('01:00', $schedTick['effective_schedule']['weekly_retrain_time'], 'runScheduler returns effective weekly time');
+assert_same('Asia/Manila', $schedTick['effective_schedule']['timezone'], 'runScheduler returns effective timezone');
+
+$persistedEff = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_effective_schedule'")->fetchColumn();
+assert_same(true, !empty($persistedEff), 'ml_effective_schedule is recorded in platform_settings');
+$decodedEff = json_decode((string)$persistedEff, true);
+assert_same('01:00', $decodedEff['daily_forecast_time'], 'Persisted effective daily time is 01:00');
+assert_same('Asia/Manila', $decodedEff['timezone'], 'Persisted effective timezone is Asia/Manila');
+
+// Scheduled run before 01:00 (e.g. 00:30 AM) does NOT trigger daily work
+$pdo->exec("DELETE FROM ml_jobs;");
+$pdo->exec("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units)
+    VALUES (999, 1, '2024-06-15', '2024-06-16', 1, 10)");
+$earlyTick = $tick('2024-06-17 00:30:00'); // Monday 00:30 AM (before 01:00)
+assert_same(0, $earlyTick['forecast_jobs_queued'], 'Daily forecast does not trigger before 01:00');
+
+// Scheduled run at or after 01:00 (e.g. 01:05 AM) triggers daily work
+$dueTick = $tick('2024-06-17 01:05:00'); // Monday 01:05 AM
+assert_same(1, $dueTick['forecast_jobs_queued'], 'Daily forecast triggers at 01:00');
+
+$pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('schedule_weekly_retrain_day', 'Funday'), ('schedule_weekly_retrain_time', '25:00')");
+assert_same('Sunday', $scheduler->getEffectiveSchedule()['weekly_retrain_day'], 'Invalid legacy weekday falls back to Sunday');
+assert_same('01:00', $scheduler->getEffectiveSchedule()['weekly_retrain_time'], 'Invalid legacy time falls back to 1 AM');
+
+// Regular weekly runs use the selected minute and Philippine cutoff, including changed schedules.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+    INSERT INTO model_training_runs VALUES (20, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-06-15\"}}');
+    UPDATE platform_settings SET setting_value = 'Monday' WHERE setting_key = 'schedule_weekly_retrain_day';
+    UPDATE platform_settings SET setting_value = '12:34' WHERE setting_key = 'schedule_weekly_retrain_time';");
+assert_same(0, $tick('2024-06-17 12:33:59')['retrain_jobs_queued'], 'Regular training waits until the selected minute');
+assert_same(1, $tick('2024-06-17 12:34:00')['retrain_jobs_queued'], 'Regular training starts at the selected minute');
+assert_same('2024-06-16', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Weekly run excludes partial Philippine day');
+assert_same(0, $tick('2024-06-17 12:35:00')['retrain_jobs_queued'], 'Later checks cannot duplicate the weekly run');
+
+$pdo->exec("DELETE FROM ml_jobs;
+    UPDATE platform_settings SET setting_value = 'Tuesday' WHERE setting_key = 'schedule_weekly_retrain_day';
+    UPDATE platform_settings SET setting_value = '23:59' WHERE setting_key = 'schedule_weekly_retrain_time';");
+assert_same(0, $tick('2024-06-17 12:34:00')['retrain_jobs_queued'], 'Changed weekday replaces the old weekly opportunity');
+assert_same(0, $tick('2024-06-18 23:58:59')['retrain_jobs_queued'], 'Changed time waits until 11:59 PM');
+assert_same(1, $tick('2024-06-18 23:59:00')['retrain_jobs_queued'], 'Changed explicit time controls the actual queued job');
+assert_same('2024-06-17', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Changed run uses the latest completed day');
+
+foreach (['00:00' => '2024-06-17 00:00:00', '12:00' => '2024-06-17 12:00:00'] as $time => $due) {
+    $pdo->exec("DELETE FROM ml_jobs;
+        UPDATE platform_settings SET setting_value = 'Monday' WHERE setting_key = 'schedule_weekly_retrain_day';");
+    $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'schedule_weekly_retrain_time'")->execute([$time]);
+    assert_same(1, $tick($due)['retrain_jobs_queued'], 'Midnight and noon are valid weekly opportunities: ' . $time);
+    assert_same('2024-06-16', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Midnight/noon use the Philippine cutoff');
+}
+
+// Initial eligibility after the hour must wait for tomorrow, even on a nonweekly day.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+    DELETE FROM platform_settings WHERE setting_key = 'ml_initial_training_due';
+    UPDATE platform_settings SET setting_value = 'Sunday' WHERE setting_key = 'schedule_weekly_retrain_day';
+    UPDATE platform_settings SET setting_value = '01:00' WHERE setting_key = 'schedule_weekly_retrain_time';");
+assert_same(0, $tick('2024-06-10 10:00:00')['retrain_jobs_queued'], 'After-hour detection cannot train during Store hours');
+assert_same(0, $tick('2024-06-11 00:59:59')['retrain_jobs_queued'], 'Restart before first due time still waits');
+assert_same(1, $tick('2024-06-11 01:00:00')['retrain_jobs_queued'], 'Initial run uses next selected time on a nonweekly day');
+assert_same('2024-06-10', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Initial run uses completed Philippine day');
+
+// A Sunday missed since Friday training is due Monday before the selected hour (< seven days).
+$pdo->exec("DELETE FROM ml_jobs;
+    INSERT INTO model_training_runs VALUES (30, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-06-13\"}}');");
+assert_same(1, $tick('2024-06-17 00:30:00')['retrain_jobs_queued'], 'Missed weekly opportunity catches up before selected hour within seven days');
+assert_same('2024-06-16', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Missed weekly run uses current evidence, not fabricated old cutoff');
+
+// Frozen Demo evidence must use actual run time when deciding whether a week was missed.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+    ALTER TABLE model_training_runs ADD COLUMN completed_at TEXT;
+    INSERT INTO model_training_runs VALUES (40, 'completed', '{\"metadata\":{\"data_window_end\":\"2020-01-01\"}}', '2024-06-16 02:00:00');
+    INSERT INTO platform_settings VALUES ('demo_import_metadata', '{}');");
+assert_same(0, $tick('2024-06-17 00:30:00')['retrain_jobs_queued'], 'Frozen history is not a missed week after Sunday training completed');
+
+// Initial detection strictly precedes the selected opportunity; restart retains that opportunity.
+foreach (['2024-06-10 00:30:00' => ['2024-06-10 01:00:00', '2024-06-09'],
+          '2024-06-10 01:00:00' => ['2024-06-11 01:00:00', '2024-06-10'],
+          '2024-06-10 10:00:00' => ['2024-06-11 01:00:00', '2024-06-10']] as $detected => [$due, $cutoff]) {
+    $pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+        DELETE FROM platform_settings WHERE setting_key IN ('demo_import_metadata', 'ml_initial_training_due');");
+    assert_same(0, $tick($detected)['retrain_jobs_queued'], 'Initial detection waits: ' . $detected);
+    $restarted = new ForecastingSchedulerService($pdo);
+    $clock = $due;
+    assert_same(1, $restarted->runScheduler(new DateTime($due, new DateTimeZone('Asia/Manila')))['retrain_jobs_queued'], 'Restart retains initial opportunity: ' . $detected);
+    assert_same($cutoff, $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Initial job cutoff follows actual due day');
+}
+
+// An initial opportunity missed overnight catches up before the next selected hour.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM platform_settings WHERE setting_key = 'ml_initial_training_due';");
+assert_same(0, $tick('2024-06-10 10:00:00')['retrain_jobs_queued'], 'Initial due state begins on eligibility detection');
+assert_same(1, $tick('2024-06-12 00:30:00')['retrain_jobs_queued'], 'Missed initial training catches up at startup before selected hour');
+assert_same('2024-06-11', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Initial catch-up uses current evidence');
+assert_same(0, $tick('2024-06-12 00:31:00')['retrain_jobs_queued'], 'Queued initial catch-up is deduplicated');
+$pdo->exec("UPDATE ml_jobs SET status = 'running', lease_expires_at = '2024-06-13 00:00:00' WHERE trigger_type = 'model_retraining';");
+assert_same(0, $tick('2024-06-12 00:32:00')['retrain_jobs_queued'], 'Running initial catch-up is deduplicated');
+
+// A changed explicit time replaces an initial opportunity without immediately training.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM platform_settings WHERE setting_key = 'ml_initial_training_due';");
+$tick('2024-06-10 10:00:00');
+$pdo->exec("UPDATE platform_settings SET setting_value = '12:00' WHERE setting_key = 'schedule_weekly_retrain_time';");
+assert_same(0, $tick('2024-06-11 10:00:00')['retrain_jobs_queued'], 'Changed initial schedule waits for the new time');
+assert_same(1, $tick('2024-06-11 12:00:00')['retrain_jobs_queued'], 'Changed initial schedule queues at the selected time');
+assert_same('2024-06-10', $pdo->query("SELECT evidence_cutoff FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Changed initial schedule retains Philippine cutoff');
+
+// Failed catch-up cannot retry while new Store history is ineligible.
+$pdo->exec("DELETE FROM ml_jobs; DELETE FROM model_training_runs;
+    UPDATE platform_settings SET setting_value = '01:00' WHERE setting_key = 'schedule_weekly_retrain_time';
+    INSERT INTO model_training_runs VALUES (50, 'completed', '{\"metadata\":{\"data_window_end\":\"2024-06-13\"}}', '2024-06-14 02:00:00');
+    INSERT INTO ml_jobs (trigger_type, status, evidence_cutoff, attempts, diagnostic_reference) VALUES ('model_retraining', 'failed', '2024-06-16', 1, 'TRANSIENT');
+    UPDATE products SET status = 'inactive';");
+assert_same(0, $tick('2024-06-17 00:30:00')['retrain_jobs_queued'], 'Ineligible Store history blocks missed training');
+assert_same('failed', $pdo->query("SELECT status FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Ineligible Store history blocks automatic retry');
+$pdo->exec("UPDATE products SET status = 'active';");
+$tick('2024-06-17 00:31:00');
+assert_same('queued', $pdo->query("SELECT status FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Eligible history permits retry of the same catch-up job');
+assert_same(1, (int)$pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE trigger_type = 'model_retraining'")->fetchColumn(), 'Retry preserves one logical training job');
+
+echo "Forecasting scheduler: passed (first eligible training, weekly new history, duplicate prevention, Demo isolation, approval unchanged, downtime recovery, 3-attempt ceiling, lease safety, blocked conditions, operational isolation, candidate observation queueing, candidate preservation, downtime observation catch-up, review transition, 01:00 daily generation, Sunday 01:00 retraining, conflicting default correction, explicit schedule preservation, effective settings recording).\n";

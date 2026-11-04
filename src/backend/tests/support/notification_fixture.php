@@ -54,7 +54,7 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec("SET time_zone = '+08:00'");
     if ($argv[1] === 'bread_create') {
-        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,warning_lead_time_days) VALUES (901,'REMINDER-BREAD','REMINDER-BREAD','Reminder Bread',25,3,1,2)");
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,warning_lead_time_days) VALUES (901,'REMINDER-BREAD','REMINDER-BREAD','Reminder Bread',25,3,2)");
         $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (901,10)');
         $pdo->exec("INSERT INTO product_batches (batch_id,product_id,batch_number,quantity,remaining_quantity,expiration_date) VALUES (901,901,'COLLECT-10',10,10,'2000-10-25')");
         $clock = new class implements \App\Attention\Clock {
@@ -64,7 +64,22 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
     } elseif (str_starts_with($argv[1], 'workspace_')) {
         // #262 Workspace-scoped coverage. User 2 holds super_admin plus the admin,
         // inventory_manager, and cashier secondary roles (see theme_fixture.php).
-        if ($argv[1] === 'workspace_seed') {
+        if ($argv[1] === 'workspace_check_stock') {
+            (new NotificationService($pdo))->checkAndNotifyLowStock();
+        } elseif ($argv[1] === 'workspace_admin_review') {
+            (new \App\Attention\AttentionCenter($pdo))->synchronizeItems(1, [new \App\Attention\AttentionItem(
+                'store.cash.review', 'warning', 'cash', 'Cash variance review', 'Review this cash variance.',
+                new DateTimeImmutable('now'), 'components/administrator/cashier_shifts.php', null, true
+            )], true, 'store.cash.');
+        } elseif ($argv[1] === 'workspace_receive_stock') {
+            require_once __DIR__ . '/../../app/Services/ReceivingService.php';
+            (new ReceivingService($pdo))->receiveStock([
+                'product_id' => 1, 'quantity_mode' => 'units', 'received_qty' => 100,
+                'damaged_qty' => 0, 'cost_price' => '10.00', 'supplier' => 'Recovery Supplier',
+                'invoice_number' => 'RECOVERY-420', 'batch_number' => 'RECOVERY-420',
+                'expiration_date' => '2027-12-31',
+            ], 3);
+        } elseif ($argv[1] === 'workspace_seed') {
             $pdo->exec('DELETE FROM notifications WHERE user_id = 2');
             $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,workspace,is_read,created_at) VALUES (?,2,?,?,'Disposable Workspace fixture.',?,?,?)");
             foreach ([
@@ -96,12 +111,13 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
 require __DIR__ . '/theme_fixture.php';
 if ($argv[1] !== 'create') exit;
 $pdo->exec('DELETE FROM notifications');
-$product = $pdo->prepare('INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (?,?,?,?,1,1,1)');
+$pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Notification workflow period','2026-01-01','2027-12-31','open',1)");
+$product = $pdo->prepare('INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (?,?,?,?,1,1)');
 $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,reference_type,reference_id,workspace,is_read,created_at) VALUES (?,?,?,?,?,?,?,'inventory_manager',FALSE,'2026-10-01 12:00:00')");
 for ($id = 1; $id <= 27; $id++) {
     if ($id <= 13) {
         $product->execute([1000 + $id, 'NOTICE-' . $id, 'NOTICE-' . $id, 'Notice ' . $id]);
-        $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (' . (1000 + $id) . ',100)');
+        $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (' . (1000 + $id) . ',3)');
     }
     $insert->execute([$id, 3, $id <= 13 ? 'low_stock' : 'system', $id <= 13 ? 'Low Stock Alert: Outdated name' : 'Notice ' . $id, 'Review this Store update.', $id <= 13 ? 'product' : null, $id <= 13 ? 1000 + $id : null]);
 }
@@ -116,3 +132,10 @@ $migration['up']($pdo);
 // Deleted-product alerts must not affect counts, category options, or pagination.
 $insert->execute([9100, 3, 'low_stock', 'Low Stock Alert: Deleted test product', 'Current: 6, Threshold: 10', 'product', 999999]);
 $insert->execute([9101, 2, 'low_stock', 'Low Stock Alert: Deleted private product', 'Current: 6, Threshold: 10', 'product', 999999]);
+
+// Resolved updates, whether read or unread, must not affect any inbox surface.
+foreach (['low_stock', 'system', 'adjustment', 'fiscal_period'] as $index => $type) {
+    $id = 9200 + $index;
+    $insert->execute([$id, 3, $type, 'Resolved notice ' . $type, 'Already resolved.', $type === 'low_stock' ? 'product' : null, $type === 'low_stock' ? 1001 : null]);
+    $pdo->exec("UPDATE notifications SET resolved_at = '2026-10-02 12:00:00', is_read = " . ($index % 2) . " WHERE notification_id = {$id}");
+}

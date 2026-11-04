@@ -239,8 +239,16 @@ Applying the currently approved forecasting model to Store data after close or t
 _Avoid_: Model training, automatic ordering, retraining
 
 **Model Retraining**:
-Replacing the currently approved forecasting model with a newly fitted Random Forest after chronological validation. It runs weekly after close or through a manual Super Administrator request and is recorded as a Protected Audit Record.
+Preparing and evaluating a candidate forecasting model using Store sales history. Retraining does not replace the approved model; a qualified candidate requires explicit local Administrator approval before operational use.
 _Avoid_: Forecast generation, live request training, Administrator retraining
+
+**Usable Sales History**:
+Recorded Product demand observations suitable for training, including supported days with genuine zero sales. Missing observations, Store closures, and Stockout Days do not add usable days.
+_Avoid_: Product age, elapsed calendar days, days with sales only
+
+**Training Eligibility**:
+A Product's readiness to contribute to Model Retraining based on sufficient Usable Sales History, supported recent inputs, and chronological evaluation coverage. It does not establish that a trained candidate is qualified for operational use.
+_Avoid_: Model approval, guaranteed forecast accuracy
 
 **Forecast Data Import**:
 The Super Administrator's addition of historical daily sales totals from the same Store for demand forecasting. Explicit zero sales are observations; omitted dates remain unknown. Imported history does not create receipts, change stock or revenue, or start Model Retraining.

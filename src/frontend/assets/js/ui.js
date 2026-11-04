@@ -138,7 +138,7 @@
     qs(".rm-toast-close", toast).addEventListener("click", remove);
     stack.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(remove, Number(duration || (kind === "warning" ? 20000 : 4300)));
+    setTimeout(remove, Math.min(Number(duration || 3000), 3000));
     return toast;
   };
 
@@ -417,8 +417,8 @@
           ? "success"
           : "info";
       node.dataset.rmAlertProcessed = "1";
-      // Keep instructions and failures available after their toast expires.
       if (kind === "success") node.hidden = true;
+      else setTimeout(() => { node.hidden = true; }, 3000);
       notices.push({ message, kind });
     });
     notices.forEach((notice) => {

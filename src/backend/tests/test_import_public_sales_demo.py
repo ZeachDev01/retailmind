@@ -12,7 +12,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from import_public_sales_demo import read_experiment, import_m5_preview
 from public_sales_experiment import SOURCE_URL
-from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL
+from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL, SOURCE_REVISION
 
 
 class PublicDemoImportTests(unittest.TestCase):
@@ -25,7 +25,12 @@ class PublicDemoImportTests(unittest.TestCase):
             history.to_csv(directory / 'daily_history.csv', index=False)
             report = {'source_url': M5_SOURCE_URL, 'store_id': 'CA_1', 'category': 'FOODS',
                       'products': codes, 'observations': len(history), 'training_start': '2014-03-01',
-                      'data_end': str(history.date.max().date())}
+                      'data_end': str(history.date.max().date()), 'source_revision': SOURCE_REVISION,
+                      'source_sha256': 'a' * 64, 'seed': 42, 'initial_training_days': 730,
+                      'initial_training_end': '2016-02-28',
+                      'folds': [{'fold': n, 'origin': origin, 'training_label_end': origin,
+                                 'split': 'test' if n == 3 else 'validation'}
+                                for n, origin in enumerate(['2016-02-28', '2016-03-27', '2016-04-24'], 1)]}
             (directory / 'metrics.json').write_text(json.dumps(report), encoding='utf-8')
             loaded, products, evidence = read_experiment(directory)
             self.assertEqual(len(loaded), 40700)
@@ -33,6 +38,15 @@ class PublicDemoImportTests(unittest.TestCase):
             self.assertEqual(str(loaded.date.min().date()), '2014-03-01')
             self.assertEqual(evidence['source_url'], M5_SOURCE_URL)
             self.assertTrue(products.description.str.startswith('M5 FOODS_').all())
+            for field, value in [('source_revision', 'changed'), ('seed', 7),
+                                 ('source_sha256', ''), ('initial_training_days', 729),
+                                 ('initial_training_end', '2016-03-01'),
+                                 ('folds', [dict(report['folds'][0], training_label_end='2016-02-29'),
+                                            *report['folds'][1:]])]:
+                with self.subTest(field=field):
+                    (directory / 'metrics.json').write_text(json.dumps(dict(report, **{field: value})), encoding='utf-8')
+                    with self.assertRaisesRegex(ValueError, 'provenance|chronological'):
+                        read_experiment(directory)
             evidence['folds'] = [{'fold': number, 'origin': '2016-01-01'} for number in (1, 2, 3)]
             source = {'source_kind': 'm5_daily', 'prepared_history_sha256': hashlib.sha256((directory / 'daily_history.csv').read_bytes()).hexdigest()}
             candidate = {'model_version': 'demo_test', 'metrics_json': json.dumps({'metadata': {'dataset_kind': 'demo', 'source': source}})}

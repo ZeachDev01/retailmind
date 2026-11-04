@@ -107,8 +107,28 @@ try {
 
     $pdo->exec("INSERT INTO products (product_id, sku, product_name) VALUES (1, 'SKU-001', 'Test Product')");
 
+    $pdo->exec("CREATE TABLE store_weekly_schedule (
+        schedule_id INTEGER PRIMARY KEY, effective_date TEXT, recorded_at TEXT, source TEXT, recorded_by INTEGER,
+        monday_open INTEGER, tuesday_open INTEGER, wednesday_open INTEGER, thursday_open INTEGER,
+        friday_open INTEGER, saturday_open INTEGER, sunday_open INTEGER
+    )");
+
     $service = new DemandHistoryService();
     $cutoff = '2026-10-10 18:00:00';
+
+    echo "--- Imported-only history and subsequent Store evidence ---\n";
+    $pdo->exec("INSERT INTO forecast_sales_imports VALUES (1, '2026-09-29', 3), (1, '2026-09-30', 0)");
+    $importOnly = $service->getDailyEvidence($pdo, 1, '2026-09-29', '2026-10-01', '2026-10-01 23:59:59');
+    $assert(array_column($importOnly, 'classification') === ['valid_demand', 'genuine_zero', 'missing_evidence'], 'Imported quantities, supported zero and absent dates remain distinct');
+    $assert(array_column($importOnly, 'valid_sales_units') === [3, 0, 0], 'Bulk imported quantities retain exact units');
+    $assert($importOnly[1]['out_of_stock'] === null && $importOnly[1]['price'] === null && $importOnly[1]['is_on_promotion'] === null, 'Imported zero invents no availability, price or promotion evidence');
+    $partialImport = $service->getDailyEvidence($pdo, 1, '2026-09-30', '2026-09-30', '2026-09-30 12:00:00')[0];
+    $assert($partialImport['classification'] === 'missing_evidence', 'Whole-day imports are unavailable before end of day');
+    $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-09-30', 'closed', '2026-09-29 12:00:00')");
+    $withClosure = $service->getDailyEvidence($pdo, 1, '2026-09-30', '2026-09-30', '2026-10-01 23:59:59')[0];
+    $assert($withClosure['classification'] === 'closed', 'Adding Store evidence immediately restores calendar precedence');
+    $pdo->exec('DELETE FROM forecast_sales_imports; DELETE FROM store_calendar');
+
 
     // -------------------------------------------------------------
     // Test 1: Empty state (Missing Evidence)
