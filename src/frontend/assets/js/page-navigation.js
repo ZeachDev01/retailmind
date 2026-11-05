@@ -17,6 +17,29 @@
     const pageNodes = [];
     const pageAssets = [];
 
+    function startProgress() {
+        const previous = document.getElementById('rm-nav-progress');
+        if (previous && !previous.classList.contains('is-complete')) return;
+        previous?.remove();
+        const line = document.createElement('div');
+        line.id = 'rm-nav-progress';
+        line.setAttribute('aria-hidden', 'true');
+        document.body.append(line);
+    }
+    function finishProgress() {
+        const line = document.getElementById('rm-nav-progress');
+        if (!line || line.classList.contains('is-complete')) return;
+        line.style.setProperty('--progress-from', getComputedStyle(line, '::after').transform);
+        nativeAdd.call(line, 'animationend', () => line.remove(), {once: true});
+        line.classList.add('is-complete');
+    }
+    if (document.readyState !== 'complete') {
+        startProgress();
+        nativeAdd.call(window, 'load', () => {
+            if (!sequence) finishProgress();
+        }, {once: true});
+    }
+
     // Legacy pages register document handlers and timers; give them the lifetime of their content.
     function currentOwner() {
         return owner || (document.currentScript?.hasAttribute('data-rm-page') ? page : null);
@@ -191,6 +214,7 @@
         pending?.abort();
         pending = new AbortController();
         const request = ++sequence;
+        startProgress();
         status(content);
         let committed = false;
         try {
@@ -333,6 +357,7 @@
             console.error('Page navigation failed:', error);
         } finally {
             if (request === sequence) {
+                finishProgress();
                 const main = document.querySelector('.main-content');
                 main?.setAttribute('aria-busy', 'false');
                 if (!main?.querySelector('[role="alert"][data-navigation-status]')) main?.querySelector('[data-navigation-status]')?.remove();
@@ -404,7 +429,7 @@
         while (walker.nextNode()) if (walker.currentNode.textContent === 'rm-shell-end') end = walker.currentNode;
         if (end) {
             for (let node = end.nextSibling; node; node = node.nextSibling) if (node !== content) pageNodes.push(node);
-            for (const node of document.body.childNodes) if (!node.contains(end) && node !== content && !node.matches?.('.theme-save-alert, #rm-toast-stack')) pageNodes.push(node);
+            for (const node of document.body.childNodes) if (!node.contains(end) && node !== content && !node.matches?.('.theme-save-alert, #rm-toast-stack, #rm-nav-progress')) pageNodes.push(node);
         }
         history.replaceState({}, '', location.href);
         activeMenu(new URL(location.href));

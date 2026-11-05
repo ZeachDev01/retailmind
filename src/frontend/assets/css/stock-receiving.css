@@ -251,6 +251,9 @@
 .receiving-extras summary:hover { color: var(--theme-info-text, #1d4ed8); }
 .receiving-extras[open] summary { margin-bottom: .5rem; }
 .receiving-extras .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.receiving-line .receiving-extras .form-section { margin-bottom: .5rem; }
+.receiving-extras .form-group { margin-bottom: 0; }
+.receiving-extras textarea { min-height: 3.5rem; }
 .receiving-form .receiving-extras [aria-invalid="true"] { border-color: var(--theme-danger-text, var(--danger, #dc2626)); }
 .receiving-form[data-readonly="true"] .playlist-drag-handle { display: none; }
 .receiving-form #package_conversion, .receiving-form [data-field="package_conversion"] { display: block; margin-top: .5rem; color: var(--muted); }

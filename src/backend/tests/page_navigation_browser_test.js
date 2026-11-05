@@ -89,6 +89,32 @@ const render = (html, partial) => {
                     await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
                     page.on('pageerror', error => errors.push(error.message));
                     await page.goto(origin + '/first.php');
+                    let releaseRefresh;
+                    const refreshPending = new Promise(resolve => { releaseRefresh = resolve; });
+                    await page.route('**/deferred.js', async route => { await refreshPending; await route.continue(); });
+                    try {
+                        await page.reload({waitUntil: 'commit'});
+                        await page.locator('#rm-nav-progress').waitFor({state: 'visible'});
+                        assert.equal(await page.locator('#rm-nav-progress').evaluate(node => getComputedStyle(node, '::after').backgroundColor), 'rgb(37, 99, 235)', 'Refresh shows the blue loading line');
+                        if (process.env.NAVIGATION_SCREENSHOTS) {
+                            for (const width of [1280, 390]) {
+                                await page.setViewportSize({width, height: 800});
+                                await page.screenshot({path: `${process.env.NAVIGATION_SCREENSHOTS}/refresh-${width}-${fallback}.png`, animations: 'disabled'});
+                            }
+                            await page.setViewportSize({width: 1280, height: 800});
+                        }
+                    } finally { releaseRefresh(); }
+                    await page.waitForLoadState('load');
+                    await page.unroute('**/deferred.js');
+                    await page.waitForFunction(() => {
+                        const line = document.querySelector('#rm-nav-progress');
+                        if (!line) return false;
+                        const style = getComputedStyle(line, '::after');
+                        const transform = new DOMMatrixReadOnly(style.transform);
+                        return Math.abs(parseFloat(style.width) * transform.a - innerWidth) < 1;
+                    });
+                    assert.equal(await page.locator('#control').isEnabled(), true, 'Content is usable while the loading line finishes across the viewport');
+                    await page.locator('#rm-nav-progress').waitFor({state: 'detached'});
                     const stockPrefetches = [];
                     page.on('request', request => {
                         if (/\/(?:pos|inventory_overview)\.php$/.test(new URL(request.url()).pathname)) stockPrefetches.push(request.url());
@@ -107,7 +133,7 @@ const render = (html, partial) => {
                     if (fallback) await page.evaluate(() => Object.defineProperty(document.documentElement, 'requestFullscreen', {value: () => Promise.reject(new Error('Unavailable'))}));
                     await page.locator('[data-fullscreen-toggle]').click();
                     await page.waitForFunction(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen'));
-                    const waitPage = path => page.waitForFunction(path => location.pathname + location.search === path && !document.querySelector('[data-navigation-status]'), path);
+                    const waitPage = path => page.waitForFunction(path => location.pathname + location.search === path && !document.querySelector('[data-navigation-status], #rm-nav-progress'), path);
                     await page.evaluate(() => {
                         window.navigationFrames = [];
                         new MutationObserver(() => {
@@ -126,7 +152,7 @@ const render = (html, partial) => {
                         await waitPage('/' + id + '.php');
                         await page.evaluate(() => window.workspaceTransitionFinished);
                         assert.deepEqual(await page.evaluate(() => window.workspaceTransitionStyle), {group: 'none', old: 'none', incoming: 'workspace-text-enter'}, 'All workspace pages use a stable text fade');
-                        assert.equal(await page.locator('#rm-nav-progress').count(), 0, 'Workspace navigation has no blue loading line');
+                        assert.equal(await page.locator('#rm-nav-progress').count(), 0, 'Completed navigation clears the blue loading line');
                         await page.waitForTimeout(3300);
                         assert.equal(await page.locator('.rm-toast').count(), 0, 'Navigation removes outgoing toasts whose timers and dismiss handlers were cancelled');
                         assert(await page.evaluate(() => navigationFrames.length > 0 && navigationFrames.every(frame => frame.opacity === '1' && frame.transform === 'none')), 'Sidebar navigation keeps outgoing and incoming content opaque and stationary');
@@ -163,16 +189,25 @@ const render = (html, partial) => {
                     assert.equal((await download).suggestedFilename(), 'report.csv');
                     await page.locator('#error').click();
                     await page.locator('[data-navigation-status][role=alert]').waitFor();
+                    await page.locator('#rm-nav-progress').waitFor({state: 'detached'});
+                    assert.equal(await page.locator('#rm-nav-progress').count(), 0, 'Failed navigation clears the loading line');
                     assert(!(await page.locator('[data-navigation-status]').textContent()).includes('connection'), 'Loading errors do not assume an internet connection failure');
                     assert(!(await page.locator('#page-content').textContent()).includes('SQLSTATE'));
                     assert.equal(new URL(page.url()).search, '?search=needle');
                     await page.locator('#slow').click();
                     await page.locator('[data-navigation-status][role=status]').waitFor();
+                    await page.locator('#rm-nav-progress').waitFor({state: 'visible'});
+                    assert.equal(await page.locator('#rm-nav-progress').evaluate(node => getComputedStyle(node).position), 'fixed', 'Loading line stays outside page layout');
+                    assert.notEqual(await page.locator('#rm-nav-progress').evaluate(node => getComputedStyle(node, '::after').animationName), 'none', 'Pending navigation animates the loading line');
                     await page.locator('#first').click(); await waitPage('/first.php');
+                    assert.equal(await page.locator('#rm-nav-progress').count(), 0, 'Competing navigation clears the loading line');
                     assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));
                     assert.deepEqual(errors, []);
                     const transitions = await page.evaluate(() => window.workspaceTransitions);
                     await page.emulateMedia({reducedMotion: 'reduce'});
+                    await page.locator('#slow').click();
+                    await page.locator('#rm-nav-progress').waitFor({state: 'visible'});
+                    assert.equal(await page.locator('#rm-nav-progress').evaluate(node => getComputedStyle(node, '::after').animationName), 'none', 'Reduced motion retains static loading feedback');
                     await page.locator('#second').click(); await waitPage('/second.php');
                     assert.equal(await page.evaluate(() => window.workspaceTransitions), transitions, 'Reduced motion skips workspace transitions');
                     await page.emulateMedia({reducedMotion: 'no-preference'});

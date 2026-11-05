@@ -327,29 +327,25 @@ $categoryIcon = static function (string $categoryName): string {
                         <div class="form-section">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="cost_price">Purchase cost per base unit (optional)</label>
+                                    <label for="cost_price">Purchase cost / base unit</label>
                                     <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
-                                    <small id="cost_hint" data-field="cost_hint">Cost for one base unit, even when receiving cases. Blank uses the saved product cost for this batch; edit if different.</small>
+                                    <small id="cost_hint" data-field="cost_hint">Per base unit. Blank uses saved cost.</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="batch_number">Batch/Lot Number</label>
+                                    <label for="batch_number">Batch / lot</label>
                                     <input type="text" name="batch_number" id="batch_number" data-field="batch_number" maxlength="100" placeholder="Batch #">
                                 </div>
                                 <div class="form-group">
-                                    <label for="expiration_date">Expiration Date</label>
+                                    <label for="expiration_date">Expiration date</label>
                                     <input type="date" name="expiration_date" id="expiration_date" data-field="expiration_date">
                                 </div>
                             </div>
                         </div>
 
                         <div class="form-section receiving-quantity">
-                            <div class="form-group"><label for="discrepancy_notes">Damage details (optional)</label><textarea name="discrepancy_notes" id="discrepancy_notes" data-field="discrepancy_notes"></textarea></div>
-                        </div>
-
-                        <div class="form-section receiving-quantity">
                             <div class="form-group">
-                                <label for="notes">Notes / Comments</label>
-                                <textarea name="notes" id="notes" data-field="notes" placeholder="Any additional notes about this receipt..."></textarea>
+                                <label for="notes">Notes / damage details</label>
+                                <textarea name="notes" id="notes" data-field="notes" rows="2" placeholder="Damage or other notes"></textarea>
                             </div>
                         </div>
                     </details>
@@ -956,7 +952,6 @@ function isLineTouched(row) {
         || field('cost_price')?.value.trim()
         || field('batch_number')?.value.trim()
         || field('expiration_date')?.value.trim()
-        || field('discrepancy_notes')?.value.trim()
         || field('notes')?.value.trim()
     );
 }
@@ -1020,7 +1015,7 @@ function connectLine(row) {
         });
     }
 
-    for (const name of ['cost_price', 'batch_number', 'expiration_date', 'discrepancy_notes', 'notes']) {
+    for (const name of ['cost_price', 'batch_number', 'expiration_date', 'notes']) {
         const input = row.querySelector(`[data-field="${name}"]`);
         if (input) {
             input.addEventListener('input', () => updateExtrasDisclosure(row));
@@ -1125,6 +1120,9 @@ function addReceivingLine(values = {}) {
         if (name !== 'product_id' && value !== undefined && value !== null) {
             restoreField(row.querySelector('[data-field="' + name + '"]'), String(value));
         }
+    }
+    if (values.discrepancy_notes) {
+        restoreField(row.querySelector('[data-field="notes"]'), [values.discrepancy_notes, values.notes].filter(Boolean).join('\n'));
     }
     const pulloutInput = row.querySelector('[data-field="pullout_id"]');
     if (pulloutInput && pulloutInput.value) {
@@ -1378,7 +1376,6 @@ function renderReview() {
             price ? 'Cost: ₱' + price + ' per unit' : 'Cost: unknown',
             field('batch_number').value && 'Batch: ' + field('batch_number').value,
             field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
-            field('discrepancy_notes').value,
             field('notes').value,
         ].filter(Boolean);
         if (details.length) {

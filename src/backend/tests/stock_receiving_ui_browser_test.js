@@ -24,6 +24,7 @@ function fixture(action) {
     let server, browser;
     try {
         const data = JSON.parse(fixture('create'));
+        fixture('open_fiscal_period');
         const listener = net.createServer();
         await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
         const port = listener.address().port;
@@ -146,6 +147,10 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
         await page.locator('.receiving-extras summary').first().click();
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras disclosure opened on summary click');
+        assert.equal(await page.locator('.receiving-extras').first().locator('textarea').count(), 1, 'one shared field for notes and damage details');
+        assert.equal(await page.locator('#cost_price').isVisible(), true);
+        assert.equal(await page.locator('#batch_number').isVisible(), true);
+        assert.equal(await page.locator('#expiration_date').isVisible(), true);
         await page.locator('#received_qty').fill('12');
         await page.locator('#damaged_qty').fill('2');
         await page.locator('#cost_price').fill('3.50');
@@ -245,6 +250,9 @@ function fixture(action) {
         fs.mkdirSync(output, {recursive: true});
         await page.goto(url);
         const measurements = [];
+        await page.evaluate(() => addReceivingLine({product_id: 1, discrepancy_notes: 'Damaged packaging', notes: 'Check delivery'}));
+        assert.equal(await page.locator('#notes').inputValue(), 'Damaged packaging\nCheck delivery', 'legacy separate details restore into the shared notes field');
+        await page.goto(url);
         for (const theme of ['light', 'dark']) {
             await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, theme);
             for (const width of [1440, 768, 390, 320]) {
@@ -318,6 +326,12 @@ function fixture(action) {
                     if (width === 1440 || width === 390) {
                         await page.evaluate(() => window.scrollTo({top:0, behavior:'instant'}));
                         await page.screenshot({path: path.join(output, `${theme}-${width}-step${step}.png`), fullPage: true});
+                        if (step === 2) {
+                            if (!await page.locator('.receiving-extras').first().evaluate(el => el.open)) {
+                                await page.locator('.receiving-extras summary').first().click();
+                            }
+                            await page.screenshot({path: path.join(output, `${theme}-${width}-optional-details.png`), fullPage: true});
+                        }
                     }
                 }
             }
@@ -341,7 +355,7 @@ function fixture(action) {
         await page.locator('#cost_price').fill('4.50');
         await page.locator('#batch_number').fill('B-99');
         await page.locator('#expiration_date').fill('2028-06-30');
-        await page.locator('#notes').fill('Rejection test note');
+        await page.locator('#notes').fill('Rejection test note: one damaged unit');
         await page.locator('#supplier').fill('Review test store');
         await page.locator('#invoice_number').fill('REVIEW-123');
         await page.locator('#receiving_next').click();
@@ -361,7 +375,7 @@ function fixture(action) {
         assert.equal(await page.locator('#cost_price').inputValue(), '4.50', 'server rejection retains cost price');
         assert.equal(await page.locator('#batch_number').inputValue(), 'B-99', 'server rejection retains batch number');
         assert.equal(await page.locator('#expiration_date').inputValue(), '2028-06-30', 'server rejection retains expiry date');
-        assert.equal(await page.locator('#notes').inputValue(), 'Rejection test note', 'server rejection retains notes');
+        assert.equal(await page.locator('#notes').inputValue(), 'Rejection test note: one damaged unit', 'server rejection retains combined notes and damage details');
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras auto-expanded on server rejection restoration');
         if (await page.locator('.swal2-confirm').isVisible({timeout: 1000}).catch(() => false)) {
             await page.locator('.swal2-confirm').click();
@@ -373,6 +387,7 @@ function fixture(action) {
         ]);
         assert.match(await page.locator('.message.success').innerText(), /47 accepted units/);
         const state = JSON.parse(fixture('inventory_state'));
+        assert.equal(state.stock_receiving.find(row => Number(row.product_id) === 1).notes, 'Rejection test note: one damaged unit', 'combined notes persist on the receipt');
         assert.equal(Number(state.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 57, 'package submission updates persisted stock once');
         const replay = await page.context().request.post(url, {form:Object.fromEntries(new URLSearchParams(savedRequest.postData()))});
         assert.match(await replay.text(), /cannot be identified/);

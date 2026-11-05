@@ -1,4 +1,41 @@
 /* Shared workspace loading feedback and page transitions. */
+#rm-nav-progress {
+    position: fixed;
+    inset: 0 0 auto;
+    height: 3px;
+    z-index: 10000;
+    overflow: hidden;
+    pointer-events: none;
+    view-transition-name: navigation-progress;
+}
+#rm-nav-progress::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #2563eb;
+    transform-origin: left;
+    animation: rm-navigation-progress 8s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+@keyframes rm-navigation-progress {
+    from { transform: scaleX(.08); }
+    to { transform: scaleX(.85); }
+}
+#rm-nav-progress.is-complete::after {
+    animation: rm-navigation-complete .6s cubic-bezier(.16, 1, .3, 1) forwards;
+}
+@keyframes rm-navigation-complete {
+    from { transform: var(--progress-from); }
+    75%, to { transform: scaleX(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #rm-nav-progress::after { animation: none; width: 100%; }
+    #rm-nav-progress.is-complete::after { animation-duration: .15s; }
+}
+::view-transition-group(navigation-progress),
+::view-transition-new(navigation-progress) { animation: none; }
+::view-transition-old(navigation-progress) { display: none; }
+
 .page-navigation-status {
     display: flex;
     align-items: center;

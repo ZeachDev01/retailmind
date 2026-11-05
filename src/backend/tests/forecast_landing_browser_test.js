@@ -409,7 +409,7 @@ const fixture = action => {
                 if (file === 'data_readiness.php') {
                     assert.equal(await page.locator('[data-navigation-status][role="status"]').evaluate(el => getComputedStyle(el).position), 'fixed', 'Loading feedback does not shift the page');
                     assert.equal(await page.locator('.forecast-studio-nav').evaluate(el => el.getBoundingClientRect().top), navTop, 'Forecast navigation stays in place while loading');
-                    assert.equal(await page.locator('#rm-nav-progress').isVisible(), false, 'Forecast switching does not flash a blue loading line');
+                    assert.equal(await page.locator('#rm-nav-progress').isVisible(), true, 'Pending forecast switching shows the blue loading line');
                 }
                 await page.waitForURL('**/' + file);
                 await page.waitForFunction(() => window.forecastTransition);
@@ -626,7 +626,8 @@ const fixture = action => {
                 await page.evaluate(() => window.forecastTransitionFinished);
                 assert.equal(await page.evaluate(() => document === window.workspaceDocument), true, role + ' retains its workspace shell');
                 assert.equal(await page.evaluate(() => window.forecastTransition.text.incoming), 'workspace-text-enter', role + ' uses the shared text fade at ' + width);
-                assert.equal(await page.locator('#rm-nav-progress').count(), 0, role + ' has no loading line');
+                await page.locator('#rm-nav-progress').waitFor({state: 'detached'});
+                assert.equal(await page.locator('#rm-nav-progress').count(), 0, role + ' clears the loading line after navigation');
                 if (process.env.FORECAST_SCREENSHOTS) await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, role + '-workspace-' + width + '.png')});
             }
         }
