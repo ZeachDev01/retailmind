@@ -114,7 +114,7 @@ if (!fs.existsSync(chromium.executablePath())) {
         }
         await searchPage.close();
         for (const paperWidthMm of [80, 58]) {
-            for (const variant of ['short', 'long']) {
+            for (const variant of ['short', 'long', 'logo']) {
                 const html = execFileSync(process.env.PHP_BINARY || 'php',
                     [path.join(__dirname, 'support/sale_receipt_fixture.php'), variant, String(paperWidthMm)], { encoding: 'utf8' });
                 const page = await browser.newPage();
@@ -147,7 +147,22 @@ if (!fs.existsSync(chromium.executablePath())) {
                         'preview preserves selected paper width when it fits and shrinks within narrow screens');
                     assert.deepEqual(metrics.overflow, [], 'receipt copy and numbers fit without horizontal clipping');
                 }
+                if (variant === 'logo') {
+                    await page.evaluate(() => {
+                        window.originalDecode = HTMLImageElement.prototype.decode;
+                        HTMLImageElement.prototype.decode = () => new Promise(resolve => { window.releaseLogo = resolve; });
+                    });
+                }
                 await page.locator('button').click();
+                if (variant === 'logo') {
+                    assert.equal(await page.evaluate(() => window.printCalls), 0, 'printing waits for logo decoding');
+                    await page.evaluate(() => {
+                        HTMLImageElement.prototype.decode = window.originalDecode;
+                        window.releaseLogo();
+                    });
+                    await page.waitForFunction(() => window.printCalls === 1);
+                    assert(await page.locator('.receipt-print-root .receipt-logo').evaluate(image => image.complete && image.naturalWidth > 0));
+                }
                 assert.equal(await page.evaluate(() => window.printCalls), 1, 'only deliberate action prints');
                 assert.equal(await page.locator('.receipt-print-root .sale-receipt').count(), 1);
                 await page.emulateMedia({ media: 'print' });
@@ -194,11 +209,25 @@ if (!fs.existsSync(chromium.executablePath())) {
                 assert.ok((await page.locator('.receipt-print-root').innerText()).includes('MODAL-SELECTED'), 'modal prints its selected receipt');
                 assert.equal(await page.locator('.receipt-print-root .sale-receipt').count(), 1);
                 await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+                if (variant === 'logo') {
+                    const failure = await page.evaluate(async () => {
+                        const messages = [];
+                        window.RetailMindUI = {toast: message => messages.push(message)};
+                        HTMLImageElement.prototype.decode = () => Promise.reject(new Error('Image decode failed'));
+                        const calls = window.printCalls;
+                        await window.printReceiptSection(document.querySelector('button'));
+                        return {messages, printed: window.printCalls !== calls, copy: !!document.querySelector('.receipt-print-root')};
+                    });
+                    assert.equal(failure.printed, false, 'failed logo decoding never prints an incomplete receipt');
+                    assert.equal(failure.copy, false, 'failed printing clears the temporary copy');
+                    assert.match(failure.messages[0], /Receipt saved.*try again/);
+                    assert.equal(await page.locator('.sale-receipt').count(), 2, 'both completed receipts survive a printing failure');
+                }
                 await page.close();
             }
         }
         for (const paperWidthMm of [58, 80]) {
-            const html = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/sale_receipt_fixture.php'), 'gcash', String(paperWidthMm)], {encoding: 'utf8'});
+            const html = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/sale_receipt_fixture.php'), 'gcash', String(paperWidthMm), 'logo'], {encoding: 'utf8'});
             const page = await browser.newPage({viewport: {width: 390, height: 900}});
             await page.setContent(`<html><head><style>${css}</style></head><body><dialog open class="sale-receipt-dialog">${html}</dialog></body></html>`);
             await page.addScriptTag({content: script});

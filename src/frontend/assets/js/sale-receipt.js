@@ -20,7 +20,7 @@
     }
 
     window.addEventListener('afterprint', clearPrintCopy);
-    window.printReceiptSection = function (trigger) {
+    window.printReceiptSection = async function (trigger) {
         const receipt = trigger
             ? trigger.closest('.receipt-container')?.querySelector('.receipt-print-area')
             : document.querySelector('.receipt-print-area');
@@ -33,11 +33,16 @@
         printRoot.appendChild(receipt.cloneNode(true));
         document.body.appendChild(printRoot);
         document.body.classList.add('sale-receipt-printing');
+        const copy = printRoot;
         try {
+            const images = [...copy.querySelectorAll('img')];
+            if (images.length) await Promise.all(images.map(image => image.decode()));
+            if (printRoot !== copy || !copy.isConnected) return;
             window.print();
         } catch (error) {
+            if (printRoot !== copy) return;
             clearPrintCopy();
-            throw error;
+            window.RetailMindUI?.toast('Receipt saved. Printing could not start. Use the receipt’s Print button to try again.', 'error');
         }
     };
     window.exportReceiptPdf = window.printReceiptSection;
@@ -54,11 +59,7 @@
         requestAnimationFrame(() => {
             const button = dialog.querySelector('.receipt-actions button');
             if (!button || !dialog.open || !dialog.isConnected) return;
-            try {
-                window.printReceiptSection(button);
-            } catch (error) {
-                window.RetailMindUI?.toast('Receipt saved. Printing could not start. Use the receipt’s Print button to try again.', 'error');
-            }
+            window.printReceiptSection(button);
         });
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', autoPrintReceipt, {once: true});

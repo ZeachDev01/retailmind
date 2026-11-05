@@ -76,7 +76,7 @@ if (in_array($argv[1], ['store_settings_state', 'store_settings_failure', 'store
             'audit' => $pdo->query("SELECT user_id, new_value FROM activity_log WHERE action='Store settings update' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC),
         ], JSON_THROW_ON_ERROR);
     } elseif ($argv[1] === 'store_settings_failure') {
-        $pdo->exec("CREATE TRIGGER reject_store_settings BEFORE INSERT ON store_settings FOR EACH ROW BEGIN IF NEW.setting_key='store_phone' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Fixture persistence failure'; END IF; END");
+        $pdo->exec("CREATE TRIGGER reject_store_settings BEFORE INSERT ON store_settings FOR EACH ROW BEGIN IF NEW.setting_key IN ('store_phone','receipt_logo') THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Fixture persistence failure'; END IF; END");
     } else {
         $pdo->exec('DROP TRIGGER reject_store_settings');
     }

@@ -10,6 +10,7 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareGCashViewData($receipt ?? [], 
     <div class="sale-receipt gcash-service-receipt receipt-print-area" data-paper-width-mm="<?= $v['paper_width_mm'] ?>" aria-label="GCash Service Receipt">
         <div class="receipt-header">
             <div class="receipt-brand">
+                <?php if ($v['store']['logo'] !== ''): ?><img class="receipt-logo" src="<?= $v['store']['logo'] ?>" alt="Store logo"><?php endif; ?>
                 <h1><?= $v['store']['name'] ?></h1>
                 <div>GCash Service Receipt</div>
                 <?php foreach (['address', 'contact', 'tin'] as $key): ?><div><?= $v['store'][$key] ?></div><?php endforeach; ?>

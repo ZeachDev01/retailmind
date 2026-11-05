@@ -49,6 +49,9 @@
     border-top: 1px solid var(--border);
 }
 
+.store-settings-page .receipt-logo-form { margin-top: 1.5rem; }
+.store-settings-page .receipt-logo-preview { display: block; max-width: 100%; width: auto; max-height: 192px; margin-top: .75rem; background: #fff; }
+
 @media (max-width: 600px) {
     .store-settings-page .form-grid {
         grid-template-columns: minmax(0, 1fr);

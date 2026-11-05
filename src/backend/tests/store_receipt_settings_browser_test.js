@@ -54,7 +54,7 @@ const values = {
             await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
-            await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            await Promise.all([page.waitForURL(url => url.pathname.includes('/components/')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         };
         await login('admin');
         const platform = '/components/system_administrator/system_settings.php';
@@ -83,7 +83,7 @@ const values = {
         assert.deepEqual(state().platform, saved.platform, 'Receipt save cannot change platform settings');
         assert.deepEqual(state().store, saved.store, 'Extra keys are not persisted');
 
-        const stable = state();
+        let stable = state();
         for (const [invalid, feedback] of [
             [{store_name: '   '}, /Store name is required/],
             [{store_email: 'invalid'}, /valid store email/],
@@ -99,13 +99,52 @@ const values = {
             assert.match(await (await post({action, ...values, disable_days: '1'})).text(), /Choose a Store Settings section/);
             assert.deepEqual(state(), stable);
         }
+        const logoFile = {name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII=', 'base64')};
+        await page.goto(route);
+        await page.locator('#receipt_logo').setInputFiles(logoFile);
+        await page.getByRole('button', {name: 'Save receipt logo', exact: true}).click();
+        await page.locator('.alert').filter({hasText: 'Receipt logo saved'}).waitFor({state: 'attached'});
+        assert.match(await page.locator('.alert').textContent(), /Receipt logo saved/);
+        const originalLogo = await page.locator('#receipt-logo-preview').getAttribute('src');
+        assert.match(originalLogo, /^data:image\/png;base64,/);
+        assert(await page.locator('#receipt-logo-preview').evaluate(image => image.complete && image.naturalWidth > 0));
+        for (const width of [375, 1440]) {
+            await page.setViewportSize({width, height: 1000});
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+            await page.locator('#receipt_logo').scrollIntoViewIfNeeded();
+            await page.screenshot({path: path.join(output, 'logo-' + width + '.png')});
+        }
+        const logoPost = file => context.request.post(route, {multipart: {csrf_token: token, action: 'save_receipt_logo', receipt_logo: file}});
+        const invalidLogo = await logoPost({name: 'fake.png', mimeType: 'image/png', buffer: Buffer.from('<svg onload="alert(1)"></svg>')});
+        assert.match(await invalidLogo.text(), /Choose a valid JPG or PNG/);
+        await page.goto(route);
+        assert.equal(await page.locator('#receipt-logo-preview').getAttribute('src'), originalLogo, 'Rejected upload keeps the saved logo');
+        const jpeg = spawnSync(php, ['-r', '$im=imagecreatetruecolor(1000,500); imagejpeg($im);'], {env});
+        assert.equal(jpeg.status, 0);
+        const replacement = {name: 'replacement.jpg', mimeType: 'image/jpeg', buffer: jpeg.stdout};
+        fixture('store_settings_failure');
+        assert.doesNotMatch(await (await logoPost(replacement)).text(), /Receipt logo saved/);
+        await page.goto(route);
+        assert.equal(await page.locator('#receipt-logo-preview').getAttribute('src'), originalLogo, 'Failed save keeps the previous logo');
+        fixture('store_settings_allow');
+        assert.match(await (await logoPost(replacement)).text(), /Receipt logo saved/);
+        await page.goto(route);
+        assert.notEqual(await page.locator('#receipt-logo-preview').getAttribute('src'), originalLogo, 'JPG replaces the saved PNG');
+        assert.deepEqual(await page.locator('#receipt-logo-preview').evaluate(image => [image.naturalWidth, image.naturalHeight]), [384, 192], 'Large logos fit the thermal bounds without changing aspect ratio');
+        assert.match(await (await logoPost({...logoFile, buffer: Buffer.alloc(2 * 1024 * 1024 + 1)})).text(), /Choose a valid JPG or PNG/);
+        assert.equal((await context.request.post(route, {multipart: {action: 'save_receipt_logo', receipt_logo: logoFile}})).status(), 403);
+        assert.match(await (await post({action: 'remove_receipt_logo'})).text(), /Receipt logo removed/);
+        await page.goto(route);
+        assert.equal(await page.locator('#receipt-logo-preview').count(), 0);
+        stable = state();
+
         for (const csrf_token of ['', 'invalid']) {
             assert.equal((await post({action: 'save_receipts', ...values, csrf_token})).status(), 403);
             assert.deepEqual(state(), stable);
         }
         assert.equal((await context.request.post(route, {form: {action: 'save_receipts', ...values}})).status(), 403);
         assert.deepEqual(state(), stable);
-        assert.equal((await context.request.post(route, {headers: {'X-RetailMind-Remote': '1'}, form: {csrf_token: token, action: 'save_receipts', ...values}})).status(), 403);
+        assert.equal((await context.request.post(route, {headers: {'CF-Ray': 'test-remote'}, form: {csrf_token: token, action: 'save_receipts', ...values}})).status(), 403);
         assert.deepEqual(state(), stable, 'Remote monitoring cannot save');
         fixture('store_settings_failure');
         const failed = await post({action: 'save_receipts', ...values, store_name: 'Must roll back'});
@@ -125,6 +164,7 @@ const values = {
             await login(role);
             assert.equal((await context.request.get(route)).status(), 403);
             assert.equal((await context.request.post(route, {form: {action: 'save_receipts', ...values}})).status(), 403);
+            assert.equal((await context.request.post(route, {form: {action: 'remove_receipt_logo'}})).status(), 403);
             assert.deepEqual(state(), stable, role + ' cannot write Store settings');
         }
         await page.goto(platform);

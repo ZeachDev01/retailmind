@@ -10,6 +10,7 @@ use RuntimeException;
 require_once __DIR__ . '/../Services/PhilippineTime.php';
 require_once __DIR__ . '/../Services/SalesWorkflowService.php';
 require_once __DIR__ . '/../Backup/RecordProvenance.php';
+require_once __DIR__ . '/ReceiptLogo.php';
 
 /**
  * Authoritative engine for Sale, Refund, and GCash receipt generation,
@@ -154,6 +155,7 @@ final class ReceiptEngine
         $contact = array_filter([$settings['store_phone'] ?? '', $settings['store_email'] ?? '']);
         return [
             'name' => $settings['store_name'] ?: 'Shalom Store',
+            'logo' => ReceiptLogo::source($settings['receipt_logo'] ?? ''),
             'tagline' => 'Official sales receipt',
             'address' => $settings['store_address'] ?: 'Address not configured',
             'contact' => $contact ? implode(' / ', $contact) : 'Contact not configured',
@@ -301,6 +303,7 @@ final class ReceiptEngine
             'is_historical' => !empty($sale['receipt_historical_notice']),
             'store' => [
                 'name' => $escape($store['name'] ?? ''),
+                'logo' => empty($sale['receipt_historical_notice']) ? ReceiptLogo::source($store['logo'] ?? '') : '',
                 'tagline' => $escape($store['tagline'] ?? ''),
                 'address' => $escape($store['address'] ?? ''),
                 'contact' => $escape($store['contact'] ?? ''),
@@ -352,6 +355,7 @@ final class ReceiptEngine
             'paper_width_mm' => $paperWidthMm,
             'store' => [
                 'name' => $escape($store['name'] ?? ''),
+                'logo' => ReceiptLogo::source($store['logo'] ?? ''),
                 'address' => $escape($store['address'] ?? ''),
                 'contact' => $escape($store['contact'] ?? ''),
                 'tin' => $escape($store['tin'] ?? ''),
@@ -396,6 +400,7 @@ final class ReceiptEngine
             'paper_width_mm' => $paperWidthMm,
             'store' => [
                 'name' => $escape($store['name'] ?? ''),
+                'logo' => ReceiptLogo::source($store['logo'] ?? ''),
                 'address' => $escape($store['address'] ?? ''),
                 'contact' => $escape($store['contact'] ?? ''),
                 'tin' => $escape($store['tin'] ?? ''),

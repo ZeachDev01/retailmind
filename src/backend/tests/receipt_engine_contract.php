@@ -218,4 +218,39 @@ foreach ([58,80] as $width) {
     $assert(str_contains($gcashHtml,'data-paper-width-mm="'.$width.'"') && str_contains($gcashHtml,'0000000000901')
         && str_contains($gcashHtml,'₱105.00'), 'GCash rendering preserves reference and customer amounts at either width');
 }
+$logo = 'data:image/png;base64,' . base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII='));
+$pdo->prepare("INSERT INTO store_settings VALUES ('receipt_logo', ?)")->execute([$logo]);
+$pdo->exec("INSERT INTO sales VALUES (503,1,2,25,'cash','2026-11-05 10:00:00');
+    INSERT INTO sale_items VALUES (3,503,100,1,25,25);
+    INSERT INTO cash_refunds SELECT 202,cashier_id,sale_id,shift_id,refund_amount,payment_method,payment_reference,reason,created_at FROM cash_refunds WHERE refund_id=201;
+    INSERT INTO cash_refund_items SELECT 2,202,sale_item_id,product_id,quantity,subtotal FROM cash_refund_items WHERE refund_id=201;
+    INSERT INTO gcash_transactions SELECT 905,cashier_id,shift_id,verification_status,completed_at,reference_number,NULL,principal_amount,gross_fee,transaction_type,fee_method FROM gcash_transactions WHERE transaction_id=901");
+$pdo->beginTransaction();
+$engine->preserveSale(503);
+$engine->preserveRefund(202);
+$engine->preserveGCash(905);
+$pdo->commit();
+$pdo->exec("UPDATE store_settings SET setting_value='' WHERE setting_key='receipt_logo'");
+$logoSale = $engine->fetchSale(503);
+$logoRefund = $engine->fetchRefundForCashier(202,1,1);
+$logoGCash = $engine->fetchGCash(905,1,'cashier');
+$assert(($logoSale['receipt_store']['logo'] ?? '') === $logo
+    && ($logoRefund['store']['logo'] ?? '') === $logo && ($logoGCash['store']['logo'] ?? '') === $logo,
+    'Removing the current logo never changes any completed receipt logo');
+foreach ([58,80] as $width) {
+    ob_start(); ReceiptEngine::renderSale($logoSale,$engine->fetchItems(503),$logoSale['receipt_store'],$width); $saleHtml = ob_get_clean();
+    ob_start(); ReceiptEngine::renderRefund($logoRefund,$width); $refundHtml = ob_get_clean();
+    ob_start(); ReceiptEngine::renderGCash($logoGCash,$width); $gcashHtml = ob_get_clean();
+    foreach ([$saleHtml,$refundHtml,$gcashHtml] as $html) {
+        $assert(str_contains($html,'src="'.$logo.'"') && strpos($html,'receipt-logo') < strpos($html,'<h'),
+            'Every receipt places the original logo above Store details at either paper width');
+    }
+}
+$assert(ReceiptEngine::prepareSaleViewData($reprintedSale,$reprintedItems,$reprintedSale['receipt_store'])['store']['logo'] === '',
+    'Receipts saved before logo support remain without a logo');
+$assert(ReceiptEngine::prepareSaleViewData($legacySale,[],['logo'=>$logo])['store']['logo'] === '',
+    'Legacy sales never acquire a later logo from current settings');
+$assert(ReceiptEngine::prepareSaleViewData($reprintedSale,[],['logo'=>'https://attacker.test/logo.png'])['store']['logo'] === '',
+    'Receipt rendering rejects external or executable logo sources');
+
 echo "Receipt engine contract: passed\n";

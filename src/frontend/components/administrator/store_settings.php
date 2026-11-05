@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin']);
+require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptLogo.php';
 
 $receiptFields = [
     'store_name' => 'Store name',
@@ -110,6 +111,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = isset($updates['store_email_alerts_enabled'])
                 ? 'Store and receipt settings saved. Test email again to enable alerts for the new Store email address.'
                 : 'Store and receipt settings saved.';
+        } elseif ($action === 'save_receipt_logo' || $action === 'remove_receipt_logo') {
+            $logo = $action === 'remove_receipt_logo' ? '' : \App\Receipts\ReceiptLogo::fromUpload($_FILES['receipt_logo'] ?? null);
+            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $logo, $action): void {
+                save_key_value_settings($pdo, 'store_settings', ['receipt_logo' => $logo], (int)$_SESSION['user_id']);
+                log_activity($pdo, (int)$_SESSION['user_id'], 'Receipt logo update', 'Store Settings', null, null, ['action' => $action]);
+            });
+            $message = $logo === '' ? 'Receipt logo removed. Existing receipts keep their original logo.' : 'Receipt logo saved. New receipts will use this logo.';
         } elseif ($action === 'save_brevo' || $action === 'test_brevo') {
             $senderEmail = trim((string)($_POST['brevo_sender_email'] ?? ''));
             $apiKeyInput = trim((string)($_POST['brevo_api_key'] ?? ''));
@@ -254,6 +262,26 @@ $effective = $service->thresholdsFor('admin');
                 </div>
                 <div class="form-actions u-mt-1">
                     <button type="submit" class="btn btn-primary">Save store settings</button>
+                </div>
+            </form>
+            <form method="post" enctype="multipart/form-data" class="receipt-logo-form">
+                <?= csrf_field() ?>
+                <div class="form-group">
+                    <label for="receipt_logo">Receipt logo</label>
+                    <input type="file" id="receipt_logo" name="receipt_logo" accept="image/jpeg,image/png" aria-describedby="receipt-logo-help">
+                    <small class="field-help" id="receipt-logo-help">JPG or PNG, up to 2 MB and 4 million pixels. Saved in black and white for 58/80 mm receipts. Use a simple, high-contrast logo. Existing receipts keep their original logo.</small>
+                    <?php $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? ''); ?>
+                    <?php if ($receiptLogo !== ''): ?>
+                        <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo">
+                    <?php else: ?>
+                        <p class="field-help">No receipt logo saved.</p>
+                    <?php endif; ?>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" name="action" value="save_receipt_logo" class="btn btn-primary">Save receipt logo</button>
+                    <?php if ($receiptLogo !== ''): ?>
+                        <button type="submit" name="action" value="remove_receipt_logo" class="btn btn-secondary">Remove receipt logo</button>
+                    <?php endif; ?>
                 </div>
             </form>
         </section>

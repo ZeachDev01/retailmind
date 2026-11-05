@@ -22,6 +22,26 @@ try {
     $result = StorePackageFormat::decode($package, $schema);
     $assert($result['sql'] === $sql, 'Unicode and binary SQL round trip unchanged');
     $assert($result['rows']['items'][0]['note'] === "\xc3\xb1\xff\x00", 'Rows expose decoded binary values without executing SQL');
+    $logo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII=';
+    $logoRows = ['store_settings' => ['setting_key' => 'receipt_logo', 'setting_value' => $logo]];
+    foreach (['sale_receipt_details', 'refund_receipt_details', 'gcash_transactions'] as $table) {
+        $column = $table === 'gcash_transactions' ? 'receipt_details_json' : 'details_json';
+        $logoRows[$table] = [$column => json_encode(['store' => ['logo' => $logo]], JSON_THROW_ON_ERROR)];
+    }
+    $logoSchema = [];
+    $logoBody = SqlBackupFormat::HEADER . "SET FOREIGN_KEY_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n";
+    foreach ($logoRows as $table => $row) {
+        $ddl = 'CREATE TABLE `' . $table . '` (' . implode(', ', array_map(static fn($column) => '`' . $column . '` text', array_keys($row))) . ') ENGINE=InnoDB';
+        $logoSchema[$table] = ['ddl' => $ddl, 'columns' => array_keys($row)];
+        $logoBody .= 'DROP TABLE IF EXISTS `' . $table . "`;\n" . $ddl . ";\nINSERT INTO `" . $table . '` (`' . implode('`, `', array_keys($row)) . '`) VALUES ('
+            . implode(', ', array_map(static fn($value) => "X'" . bin2hex($value) . "'", array_values($row))) . ");\n";
+    }
+    $logoBody .= 'SET FOREIGN_KEY_CHECKS=1;';
+    $logoSql = $logoBody . "\n-- SHA256: " . hash('sha256', $logoBody) . "\n";
+    $restored = StorePackageFormat::decode(StorePackageFormat::encode($logoSql, [], $logoSchema), $logoSchema);
+    foreach ($logoRows as $table => $row) {
+        $assert($restored['rows'][$table][0] === $row, 'Backup restores current and historical receipt logos without external uploads: ' . $table);
+    }
     $reject(fn() => StorePackageFormat::decode(substr($package, 0, -1), $schema), 'Truncated package rejected');
     $modified = $package; $modified[strlen($modified)-1] = chr(ord($modified[strlen($modified)-1]) ^ 1);
     $reject(fn() => StorePackageFormat::decode($modified, $schema), 'Authentication rejects altered ciphertext');

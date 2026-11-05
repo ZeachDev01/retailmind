@@ -30,6 +30,7 @@
 .sale-receipt *, .sale-receipt *::before, .sale-receipt *::after { box-sizing: border-box; }
 .sale-receipt .receipt-header { display: block; margin: 0; padding: 0 0 1mm; border-bottom: 1px dashed #555; }
 .sale-receipt .receipt-brand { text-align: center; }
+.sale-receipt .receipt-logo { display: block; width: auto; height: auto; max-width: 48mm; max-height: 24mm; margin: 0 auto 1mm; background: #fff; }
 .sale-receipt .receipt-brand :is(h1, h3) { margin: 0 0 1mm; font-size: 16px; line-height: 1.2; }
 .sale-receipt .receipt-store-line, .sale-receipt .receipt-brand div { color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
 .sale-receipt .receipt-meta { margin-top: 1mm; text-align: left; color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }

@@ -4,6 +4,10 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Receipt Logo**:
+The Store's chosen brand image displayed above the receipt details. Each Store has one Receipt Logo; it is not a complete receipt design or template.
+_Avoid_: Receipt template, receipt background
+
 **Starter Category**:
 A common Product category available when a Store begins with no categories. Staff choose the category that fits each Product and may create other categories.
 _Avoid_: Default product category, automatic classification

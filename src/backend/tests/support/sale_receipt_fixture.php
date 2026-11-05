@@ -9,6 +9,9 @@ $store = ['name' => $long ? 'Synthetic Store with a very long customer-facing na
     'tagline' => 'Sale Receipt', 'address' => '123 Example Street, Tangub City',
     'contact' => '555-0100 • example@example.test', 'tin' => 'TIN: EXAMPLE-123',
     'currency_symbol' => '₱', 'footer' => 'Thank you for shopping with us.'];
+if (($argv[1] ?? '') === 'logo' || ($argv[3] ?? '') === 'logo') {
+    $store['logo'] = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII=';
+}
 if (($argv[1] ?? '') === 'gcash') {
     require_once __DIR__ . '/../../bootstrap/app.php';
     $store['name'] = str_repeat('Long Store name ', 7);
