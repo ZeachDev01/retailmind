@@ -2801,7 +2801,7 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 .cashier-pos-page .checkout-panel > .pos-panel-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
 .cashier-pos-page .pos-toolbar { gap: 0.5rem; }
 .cashier-pos-page .pos-toolbar .btn { width: auto; }
-.cashier-pos-page :is(#refresh-catalog, #clear-cart-btn, .quick-grid-toggle) {
+.cashier-pos-page :is(#clear-cart-btn, .quick-grid-toggle) {
     width: 44px;
     height: 44px;
     flex: 0 0 44px;

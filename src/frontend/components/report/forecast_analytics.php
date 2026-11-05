@@ -7,6 +7,24 @@ use App\Forecasting\CandidateEvaluationService;
 
 require_role(['super_admin']);
 require_capability(RoleCapabilityPolicy::CONFIGURE_MODELS);
+
+function analytics_empty_state(string $icon, string $title, string $description, string $path, string $action): void
+{
+    ?>
+    <div class="analytics-empty-state">
+        <span class="analytics-empty-art" aria-hidden="true">
+            <span class="analytics-empty-shape analytics-empty-shape-back"></span>
+            <span class="analytics-empty-shape analytics-empty-shape-front"></span>
+            <span class="analytics-empty-dot"></span>
+            <span class="analytics-empty-icon"><i class="bi bi-<?= htmlspecialchars($icon) ?>"></i></span>
+        </span>
+        <h3><?= htmlspecialchars($title) ?></h3>
+        <p><?= htmlspecialchars($description) ?></p>
+        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url($path)) ?>"><?= htmlspecialchars($action) ?><i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+    </div>
+    <?php
+}
+
 $storeId = store_scope_id($pdo);
 $saleUnitsSql = sales_units_sql($pdo, 'si');
 
@@ -172,7 +190,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
     <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
     <title>Forecast Analytics</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
     <style>
         .model-context-card {
             background: var(--card-bg, #ffffff);
@@ -264,8 +282,8 @@ function format_wape_metric(?float $val, ?string $reason): string {
         </div>
 
         <?php forecast_workflow(''); ?>
-        <?php if ($recommendationsSuspended || $observationMode): ?>
-            <p class="forecast-notice" role="status"><?= $recommendationsSuspended ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></p>
+        <?php if ($observationMode && !$recommendationsSuspended): ?>
+            <p class="forecast-notice" role="status">Observation only. Forecasts are not approved for routine buying.</p>
         <?php endif; ?>
         <details class="forecast-details"><summary>Model &amp; data details</summary>
         <section class="model-context-card" aria-label="Model Governance">
@@ -340,17 +358,23 @@ function format_wape_metric(?float $val, ?string $reason): string {
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features" hidden>
                 <h2 id="analytics-view-title">Input influence</h2>
-                <?php if (empty($featureImportance)): ?><p class="muted">Input influence has not been recorded for this model.</p><?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
+                <?php if (empty($featureImportance)): ?>
+                    <?php analytics_empty_state('sliders', 'No input insights yet', 'Input influence measurements have not been recorded.', 'components/system_administrator/ml_settings.php', 'Review model evidence'); ?>
+                <?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-trend" role="tabpanel" aria-labelledby="analytics-tab-trend" data-analytics-panel="trend" hidden>
                 <h2>Prediction error over training runs</h2>
-                <?php if (empty($trainingTrend)): ?><p class="muted">No recorded training error yet.</p><?php else: ?><canvas id="trendChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
+                <?php if (empty($trainingTrend)): ?>
+                    <?php analytics_empty_state('graph-up', 'No error trend yet', 'Completed training runs with WAPE results will appear here.', 'components/system_administrator/ml_settings.php', 'View training results'); ?>
+                <?php else: ?><canvas id="trendChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
                 <h2>Forecasts vs recorded sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
-                <?php if (empty($actualChartData)): ?><p class="muted">No sales comparisons yet. Comparisons appear when forecast dates have recorded sales.</p><?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
+                <?php if (empty($actualChartData)): ?>
+                    <?php analytics_empty_state('bar-chart', 'Ready for your first comparison', 'Compare saved forecasts once their target dates have recorded sales.', 'components/report/data_readiness.php', 'Check data readiness'); ?>
+                <?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
                 <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Product &amp; date</th><th>Forecast units</th><th>Recorded sales</th></tr></thead><tbody>
                 <?php foreach ($actualChartData as $point): ?><tr><td><?= htmlspecialchars($point['product_name']) ?></td><td><?= htmlspecialchars((string)$point['forecast_value']) ?></td><td><?= htmlspecialchars((string)$point['actual_demand']) ?></td></tr><?php endforeach; ?>
                 </tbody></table></div></details><?php endif; ?>
@@ -359,7 +383,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             <div class="analytics-tab-panel" id="analytics-panel-best" role="tabpanel" aria-labelledby="analytics-tab-best" data-analytics-panel="best" hidden>
                 <h2>Lowest recorded errors</h2>
                 <?php if (empty($best)): ?>
-                    <p style="color:var(--muted);">No recorded sales comparisons to rank yet.</p>
+                    <?php analytics_empty_state('trophy', 'No product rankings yet', 'Rankings appear when forecasts can be matched with sales.', 'components/report/predictions.php', 'View demand forecasts'); ?>
                 <?php else: ?>
                     <div class="table-wrap">
                         <table class="data-table">
@@ -393,7 +417,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             <div class="analytics-tab-panel" id="analytics-panel-attention" role="tabpanel" aria-labelledby="analytics-tab-attention" data-analytics-panel="attention" hidden>
                 <h2>Forecasts Needing Attention</h2>
                 <?php if (empty($worst)): ?>
-                    <p style="color:var(--muted);">No variance flags recorded.</p>
+                    <?php analytics_empty_state('exclamation-triangle', 'No error comparisons yet', 'Sales comparisons are needed to identify the highest errors.', 'components/report/predictions.php', 'View demand forecasts'); ?>
                 <?php else: ?>
                     <div class="table-wrap">
                         <table class="data-table">
@@ -444,6 +468,9 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 </div>
             </div>
 
+            <?php if ((int)$perfEvidence['usable_comparison_count'] === 0): ?>
+                <?php analytics_empty_state('calendar-check', 'Waiting for Store sales', 'Results appear after forecast dates have usable Store observations.', 'components/report/predictions.php', 'View demand forecasts'); ?>
+            <?php endif; ?>
             <details class="forecast-details"><summary>Observation evidence &amp; daily errors</summary>
             <p style="margin-bottom:0.75rem;"><?= htmlspecialchars($perfEvidence['explanation']) ?></p>
             <p class="muted">Daily errors compare one Product/day at lead times 1–7, 1–14, and 1–28 days; they are not errors of summed horizon totals. Technical qualification separately evaluates summed horizons using chronological backtests.</p>
@@ -516,11 +543,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <details class="forecast-details"><summary>Historical model checks · 7, 14 &amp; 28 days</summary>
         <p class="muted">Technical qualification: chronological backtests compare summed 7-, 14-, and 28-day Product totals. These historical tests are separate from subsequent Store outcome evidence above.</p>
         <?php if (empty($evaluations)): ?>
-            <div class="empty-state">
-                <i class="bi bi-bar-chart empty-icon"></i>
-                <h2>No Evaluation Records Available</h2>
-                <p>Retrain a candidate model to record evaluation benchmarks.</p>
-            </div>
+            <?php analytics_empty_state('clipboard-data', 'No model checks yet', 'Review training results before approving a model.', 'components/system_administrator/ml_settings.php', 'Review model training'); ?>
         <?php else: ?>
             <div class="horizon-grid">
                 <?php foreach ([7, 14, 28] as $h):
@@ -565,7 +588,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                                 <span class="metric-val"><?= format_wape_metric($data['baseline_wape'] !== null ? (float)$data['baseline_wape'] : null, null) ?></span>
                             </div>
                         <?php else: ?>
-                            <p style="color:var(--muted);">No evaluation data recorded for <?= $h ?> days.</p>
+                            <?php analytics_empty_state('clipboard-data', "No {$h}-day evaluation yet", 'No measurements recorded for this forecast window.', 'components/system_administrator/ml_settings.php', 'Review model training'); ?>
                         <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
@@ -581,7 +604,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 <span class="metric-label" style="font-size:0.85rem;">Observed sales for past target dates</span>
             </div>
             <?php if (empty($actualVsForecast)): ?>
-                <p style="color:var(--muted); margin:0;">No completed forecast target dates recorded.</p>
+                <?php analytics_empty_state('clock-history', 'No prediction history yet', 'Saved predictions appear once their target dates are reached.', 'components/report/predictions.php', 'View demand forecasts'); ?>
             <?php else: ?>
                 <div class="table-wrap">
                     <table class="data-table">

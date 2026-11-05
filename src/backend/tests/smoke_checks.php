@@ -72,7 +72,7 @@ $checks = [
     ],
     'Dedicated system health page present' => [
         'file' => 'src/frontend/components/system_administrator/system_health.php',
-        'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands', 'system-health-groups', 'Refresh checks'],
+        'needles' => ['SystemHealthService', 'Environment checks', 'Recommended maintenance commands', 'system-health-groups', 'system-health-checked'],
         'forbidden' => ['embed=1', 'data-embedded-close', 'system-health-embedded'],
     ],
     'System health uses direct navigation' => [

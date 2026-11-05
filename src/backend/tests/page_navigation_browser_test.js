@@ -67,6 +67,23 @@ const render = (html, partial) => {
                 for (const fallback of [false, true]) {
                     submitted = undefined;
                     const page = await browser.newPage({viewport: {width: 1280, height: 800}});
+                    await page.addInitScript(() => {
+                        const start = document.startViewTransition.bind(document);
+                        window.workspaceTransitions = 0;
+                        document.startViewTransition = callback => {
+                            window.workspaceTransitions++;
+                            const transition = start(callback);
+                            window.workspaceTransitionFinished = transition.finished;
+                            transition.ready.then(() => {
+                                window.workspaceTransitionStyle = {
+                                    group: getComputedStyle(document.documentElement, '::view-transition-group(workspace-content)').animationName,
+                                    old: getComputedStyle(document.documentElement, '::view-transition-old(workspace-content)').display,
+                                    incoming: getComputedStyle(document.documentElement, '::view-transition-new(workspace-content)').animationName,
+                                };
+                            }).catch(() => {});
+                            return transition;
+                        };
+                    });
                     page.setDefaultTimeout(10000);
                     const errors = [];
                     await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
@@ -107,6 +124,9 @@ const render = (html, partial) => {
                         await page.evaluate(() => { navigationFrames.length = 0; });
                         await page.locator('#' + id).click();
                         await waitPage('/' + id + '.php');
+                        await page.evaluate(() => window.workspaceTransitionFinished);
+                        assert.deepEqual(await page.evaluate(() => window.workspaceTransitionStyle), {group: 'none', old: 'none', incoming: 'workspace-text-enter'}, 'All workspace pages use a stable text fade');
+                        assert.equal(await page.locator('#rm-nav-progress').count(), 0, 'Workspace navigation has no blue loading line');
                         await page.waitForTimeout(3300);
                         assert.equal(await page.locator('.rm-toast').count(), 0, 'Navigation removes outgoing toasts whose timers and dismiss handlers were cancelled');
                         assert(await page.evaluate(() => navigationFrames.length > 0 && navigationFrames.every(frame => frame.opacity === '1' && frame.transform === 'none')), 'Sidebar navigation keeps outgoing and incoming content opaque and stationary');
@@ -151,6 +171,14 @@ const render = (html, partial) => {
                     await page.locator('#first').click(); await waitPage('/first.php');
                     assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));
                     assert.deepEqual(errors, []);
+                    const transitions = await page.evaluate(() => window.workspaceTransitions);
+                    await page.emulateMedia({reducedMotion: 'reduce'});
+                    await page.locator('#second').click(); await waitPage('/second.php');
+                    assert.equal(await page.evaluate(() => window.workspaceTransitions), transitions, 'Reduced motion skips workspace transitions');
+                    await page.emulateMedia({reducedMotion: 'no-preference'});
+                    await page.evaluate(() => { document.startViewTransition = undefined; });
+                    await page.locator('#first').click(); await waitPage('/first.php');
+                    assert.equal(await page.evaluate(() => window.workspaceTransitions), transitions, 'Browsers without View Transitions still navigate');
                     await page.locator('#expired').click();
                     await page.getByRole('heading', {name: 'Sign in'}).waitFor();
                     await page.close();

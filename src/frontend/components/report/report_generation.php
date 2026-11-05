@@ -928,7 +928,6 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
     <main class="main-content">
         <header class="page-heading topbar">
             <div>
-                <p class="report-eyebrow">Store reports</p>
                 <h1 id="page-heading"><?= htmlspecialchars($pageTitle) ?></h1>
                 <p class="report-page-description"><?= $selectedReport === 'gross_profit' ? 'Understand what you earned after discounts, refunds, and product costs.' : 'Review Store activity and export the records you need.' ?></p>
             </div>
@@ -941,14 +940,15 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
             <?php endif; ?>
         </header>
 
-        <div class="dashboard-section report-filters">
-            <h2 id="report-filters-heading">Report settings</h2>
+        <div class="report-workspace">
+        <section class="report-filters no-print" aria-labelledby="report-filters-heading">
+            <h2 id="report-filters-heading">Choose your report</h2>
             <form method="GET" class="report-filter-grid" id="report-filter-form">
                 <div class="form-group report-type-field">
                     <label for="report">Report</label>
                     <select id="report" name="report">
                         <?php foreach ($reportCatalog as $key => $label): ?>
-                            <option value="<?= htmlspecialchars($key) ?>" <?= $selectedReport === $key ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                            <option value="<?= htmlspecialchars($key) ?>" <?= $selectedReport === $key ? 'selected' : '' ?>><?= htmlspecialchars($key === 'sales_period' ? 'Sales report' : $label) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -964,8 +964,8 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                         <input type="hidden" name="period" id="period_input" value="<?= htmlspecialchars($activePeriod) ?>">
                     </div>
                 <?php else: ?>
-                    <div class="form-group" id="granularity_group">
-                        <label for="granularity">Sales Period</label>
+                    <div class="form-group" id="granularity_group" <?= $selectedReport !== 'sales_period' ? 'style="display:none;"' : '' ?>>
+                        <label for="granularity">Group sales by</label>
                         <select id="granularity" name="granularity">
                             <?php foreach (['daily' => 'Daily', 'weekly' => 'Weekly', 'monthly' => 'Monthly'] as $key => $label): ?>
                                 <option value="<?= htmlspecialchars($key) ?>" <?= $filters['granularity'] === $key ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
@@ -975,11 +975,11 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                 <?php endif; ?>
                 <?php $hideDates = in_array($selectedReport, ['low_stock', 'inventory_valuation', 'expiration'], true); ?>
                 <div class="form-group" id="from_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
-                    <label for="from">From</label>
+                    <label for="from">Start date</label>
                     <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
                 </div>
                 <div class="form-group" id="to_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
-                    <label for="to">To</label>
+                    <label for="to">End date</label>
                     <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
                 <div class="form-group report-product-field">
@@ -1004,14 +1004,14 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <button type="submit" class="btn report-run-btn">Run Report</button>
+                <button type="submit" class="btn report-run-btn">Generate report</button>
             </form>
-        </div>
+        </section>
 
         <?php if ($validationError !== null): ?>
-            <div class="alert alert-danger u-my-1" role="alert" id="gp-validation-error"><?= htmlspecialchars($validationError) ?></div>
+            <div class="alert alert-danger u-my-1" role="alert" data-rm-alert-processed="1" id="gp-validation-error"><?= htmlspecialchars($validationError) ?></div>
         <?php elseif ($loadError !== null): ?>
-            <div class="alert alert-danger u-my-1" role="alert" id="gp-load-error"><?= htmlspecialchars($loadError) ?></div>
+            <div class="alert alert-danger u-my-1" role="alert" data-rm-alert-processed="1" id="gp-load-error"><?= htmlspecialchars($loadError) ?></div>
         <?php endif; ?>
 
         <?php if ($validationError === null && $loadError === null): ?>
@@ -1198,7 +1198,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                 <div class="dashboard-section report-results">
                     <div class="section-header">
                         <div>
-                            <h2><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
+                            <h2><?= htmlspecialchars($selectedReport === 'sales_period' ? 'Sales report' : $reportCatalog[$selectedReport]) ?></h2>
                             <div class="report-meta">
                                 <?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>
                                     <span>Current stock</span>
@@ -1208,6 +1208,9 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                     <span><?= htmlspecialchars($filters['from']) ?> to <?= htmlspecialchars($filters['to']) ?></span>
                                 <?php endif; ?>
                                 <span><?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
+                                <?php if ($selectedReport === 'sales_period'): ?>
+                                    <span class="badge"><?= htmlspecialchars(ucfirst($filters['granularity'])) ?> totals</span>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <div class="report-actions no-print">
@@ -1239,7 +1242,11 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                     <?php endif; ?>
 
                     <?php if (!$reportData['rows']): ?>
-                        <p class="report-empty-state">No records match these filters. Try a different date range, product, or category.</p>
+                        <div class="report-empty-state">
+                            <h3>No records found</h3>
+                            <p>Try a different <?= $hideDates ? 'product or category' : 'date range, product, or category' ?>, then generate the report again.</p>
+                            <a href="#report" class="report-adjust-filters no-print">Adjust report filters</a>
+                        </div>
                     <?php else: ?>
                     <div class="table-wrap" tabindex="0" role="region" aria-label="Report records">
                         <table class="report-records-table">
@@ -1265,6 +1272,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                 </div>
             <?php endif; ?>
         <?php endif; ?>
+        </div>
     </main>
 </div>
 <script>

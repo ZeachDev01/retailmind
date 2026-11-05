@@ -70,6 +70,117 @@ const fixture = action => {
             }
         };
 
+        const legacyReports = fs.readFileSync('src/frontend/assets/css/reports.css', 'utf8').split('.analytics-empty-state {')[0];
+        await page.route('**/assets/css/reports.css', route => route.fulfill({contentType: 'text/css', body: legacyReports}));
+        await login('super_admin');
+        await page.evaluate(async legacy => {
+            await navigator.serviceWorker.ready;
+            const cache = await caches.open('retailmind-static-v2');
+            await cache.put(new URL('/assets/css/reports.css', location.origin), new Response(legacy, {headers: {'Content-Type': 'text/css'}}));
+        }, legacyReports);
+        await page.emulateMedia({reducedMotion: 'no-preference'});
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            for (const source of ['system_administrator/forecast_import.php', 'system_administrator/ml_settings.php', 'report/predictions.php']) {
+                await page.goto(origin + '/components/' + source);
+                await page.locator('.forecast-studio-nav a[href$="/forecast_analytics.php"]').click();
+                await page.waitForURL('**/forecast_analytics.php');
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
+                assert.ok(await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.some(link => new URL(link.href).pathname.endsWith('/assets/css/reports.css') && new URL(link.href).searchParams.has('v'))), 'Analytics uses versioned CSS even with an older service-worker cache');
+                for (const tab of ['actual', 'features', 'trend', 'best', 'attention', 'actual']) {
+                    await page.locator('#analytics-tab-' + tab).click();
+                    const empty = page.locator('#analytics-panel-' + tab + ' .analytics-empty-state');
+                    const geometry = await empty.locator('.analytics-empty-art').evaluate(el => {
+                        const art = el.getBoundingClientRect();
+                        const icon = el.querySelector('.analytics-empty-icon').getBoundingClientRect();
+                        return {width: art.width, height: art.height, x: icon.x + icon.width / 2 - art.x - art.width / 2, y: icon.y + icon.height / 2 - art.y - art.height / 2, glyph: getComputedStyle(el.querySelector('i'), '::before').content};
+                    });
+                    assert.equal(geometry.width, 144, 'Empty artwork keeps its width after navigation from ' + source);
+                    assert.equal(geometry.height, 112, 'Empty artwork keeps its height');
+                    assert.ok(Math.abs(geometry.x) < 2 && Math.abs(geometry.y) < 2, 'Empty icon stays centered: ' + JSON.stringify(geometry));
+                    assert.ok(!['none', 'normal'].includes(geometry.glyph), 'Empty icon glyph survives navigation');
+                    assert.equal(await empty.locator('.analytics-empty-shape-front').evaluate(el => el.getAnimations().some(animation => animation.playState === 'running')), false, 'Empty artwork stays assembled during the workspace fade');
+                    if (process.env.FORECAST_SCREENSHOTS && source.includes('ml_settings') && tab !== 'actual') {
+                        fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
+                        await empty.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'empty-navigation-' + tab + '-' + width + '.png')});
+                    }
+                }
+            }
+        }
+        await page.unroute('**/assets/css/reports.css');
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        await page.goto(origin + '/components/report/forecast_analytics.php');
+        const emptyShape = page.locator('#analytics-panel-actual .analytics-empty-shape-front');
+        assert.equal(await emptyShape.evaluate(el => getComputedStyle(el).animationName), 'none', 'Reduced motion keeps geometric art still');
+        await page.emulateMedia({reducedMotion: 'no-preference'});
+        assert.equal(await emptyShape.evaluate(el => getComputedStyle(el).animationName), 'none', 'Empty artwork remains assembled with normal motion');
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        for (const theme of ['light', 'dark']) {
+            await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+            for (const width of [1440, 390, 320]) {
+                await page.setViewportSize({width, height: 900});
+                for (const tab of ['actual', 'features', 'trend', 'best', 'attention']) {
+                    await page.locator('#analytics-tab-' + tab).click();
+                    const panel = page.locator('#analytics-panel-' + tab);
+                    const empty = panel.locator('.analytics-empty-state');
+                    assert.equal(await empty.isVisible(), true, tab + ' explains missing evidence');
+                    assert.ok((await empty.locator('h3').innerText()).length > 0);
+                    const description = await empty.locator('p').innerText();
+                    assert.ok(description.length > 0 && description.length <= 100, 'Empty-state subtext stays concise');
+                    assert.equal(await empty.locator('.analytics-empty-art').getAttribute('aria-hidden'), 'true', 'Decorative shapes stay out of the accessibility tree');
+                    assert.match(await empty.getByRole('link').getAttribute('href'), /components\/(report|system_administrator)\//);
+                    assert.equal(await panel.locator('canvas').count(), 0, 'Empty panels never invent chart data');
+                    assert.equal(await empty.evaluate(el => el.scrollWidth <= el.clientWidth), true, tab + ' empty state fits ' + width);
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Empty analytics fits ' + width);
+                    if (process.env.FORECAST_SCREENSHOTS && theme === 'light' && width !== 320) {
+                        fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
+                        await panel.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, `analytics-empty-${tab}-${width}.png`)});
+                    }
+                }
+            }
+        }
+        for (const label of ['Historical model checks · 7, 14 & 28 days', 'Recent prediction logs']) {
+            const details = page.locator('details').filter({has: page.getByText(label, {exact: true})});
+            await details.locator('summary').click();
+            assert.equal(await details.locator('.analytics-empty-state').isVisible(), true, label + ' has an empty state');
+        }
+        await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+        await page.setViewportSize({width: 1440, height: 900});
+
+        await page.goto(origin + '/components/report/forecast_exceptions.php');
+        const exceptionTable = page.getByRole('region', {name: 'Forecast exceptions queue'});
+        assert.equal(await exceptionTable.locator('thead th').count(), 5, 'Exceptions use five focused columns');
+        const exceptionHelp = exceptionTable.locator('.info-tooltip-trigger').first();
+        assert.ok((await exceptionTable.locator('.readiness-status-line > span').first().innerText()).length < (await exceptionTable.locator('.tooltip-box').first().innerText()).length, 'Rows show a short reason while retaining the full explanation');
+        await exceptionHelp.focus();
+        assert.equal(await exceptionTable.locator('.tooltip-box').first().isVisible(), true);
+        assert.match(await exceptionTable.locator('.tooltip-box').first().innerText(), /Next step:/);
+        await exceptionHelp.press('Escape');
+        const reasonValue = await page.locator('#filter-reason option').nth(1).getAttribute('value');
+        await page.locator('#filter-reason').selectOption(reasonValue);
+        await page.getByRole('button', {name: 'Filter', exact: true}).click();
+        await page.waitForURL(url => url.searchParams.get('reason') === reasonValue);
+        await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
+        assert.equal(await page.locator('#filter-reason').inputValue(), reasonValue, 'Reason filtering retains the exact backend value');
+        await page.locator('#filter-search').fill('NoExceptionProductMatches');
+        await page.getByRole('button', {name: 'Filter', exact: true}).click();
+        await page.waitForURL(url => url.searchParams.get('search') === 'NoExceptionProductMatches');
+        await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
+        assert.match(await exceptionTable.innerText(), /No matches/);
+        assert.equal(await exceptionTable.locator('tbody td').getAttribute('colspan'), '5');
+        await page.getByRole('link', {name: 'Clear', exact: true}).click();
+        await page.waitForURL(url => !url.search);
+        await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
+        if (process.env.FORECAST_SCREENSHOTS) {
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({width, height: 900});
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Populated exceptions fit ' + width);
+                await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'exceptions-populated-' + width + '.png'), fullPage: true});
+            }
+        }
+
+        await page.setViewportSize({width: 1440, height: 900});
+        await page.mouse.move(0, 0);
         const checkWorkflow = async (role, expectedRole) => {
             const workflow = page.locator('.forecast-workflow');
             assert.equal(await workflow.getAttribute('open'), null, 'Full workflow starts collapsed');
@@ -130,6 +241,17 @@ const fixture = action => {
         const s2Heading = page.locator('#heading-actions');
         assert.match(await s1Heading.innerText(), /Forecast status/);
         assert.match(await s2Heading.innerText(), /Forecast checks/);
+        const checks = page.locator('.forecast-actions');
+        if (await checks.getAttribute('open') === null) await s2Heading.click();
+        assert.equal(await checks.locator('.action-issue-card .status-badge').count(), 0, 'Checks use readable rows instead of sentence badges');
+        assert.ok((await checks.locator('.forecast-check-copy strong').allTextContents()).every(title => title.length < 65), 'Check titles stay concise');
+        const issueHelp = checks.locator('.info-tooltip-trigger').first();
+        assert.equal(await checks.locator('.forecast-check-title .info-tooltip-trigger').count(), await checks.locator('.action-issue-card').count(), 'Each issue keeps its help beside its title');
+        assert.ok((await issueHelp.boundingBox()).width >= 44, 'Inline issue help retains its touch target');
+        await issueHelp.focus();
+        assert.equal(await checks.locator('.tooltip-box').first().isVisible(), true, 'Full check details remain keyboard accessible');
+        await issueHelp.press('Escape');
+        assert.equal(await checks.locator('.tooltip-box').first().isVisible(), false, 'Check details dismiss with Escape');
         const performance = page.locator('details').filter({has: page.locator('#heading-performance')});
         assert.equal(await performance.getAttribute('open'), null, 'Technical performance starts collapsed');
         const productPosition = await page.locator('#product-forecasts').evaluate(el => el.getBoundingClientRect().top);
@@ -154,14 +276,17 @@ const fixture = action => {
         // Test search interaction
         await searchInput.fill('NonexistentProductQuery12345');
         await page.locator('.search-form button[type="submit"]').click();
-        await page.waitForLoadState('domcontentloaded');
+        await page.waitForURL(url => url.searchParams.get('search') === 'NonexistentProductQuery12345');
+        await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
         assert.match(await page.locator('.empty-state').innerText(), /No matching products found|No Forecasts Available/);
 
         // Clear search
         await page.locator('a:has-text("Clear")').click();
-        await page.waitForLoadState('domcontentloaded');
+        await page.waitForURL(url => !url.searchParams.has('search'));
+        await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
 
         // Check responsive layout across viewports and themes
+        await checks.evaluate(el => el.open = true);
         for (const theme of ['light', 'dark']) {
             await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
             for (const width of [1440, 640, 390, 320]) {
@@ -171,6 +296,16 @@ const fixture = action => {
                 assert.equal(await s1Heading.isVisible(), true, `Section 1 visible on width ${width}px theme ${theme}`);
                 assert.equal(await s2Heading.isVisible(), true, `Section 2 visible on width ${width}px theme ${theme}`);
                 assert.equal(await page.locator('main').evaluate(el => document.documentElement.scrollWidth <= window.innerWidth), true, `No page overflow at ${width}px in ${theme}`);
+                await issueHelp.evaluate(el => el.blur());
+                await issueHelp.focus();
+                const tooltipBounds = await checks.locator('.tooltip-box').first().boundingBox();
+                assert.ok(tooltipBounds.x >= 0 && tooltipBounds.x + tooltipBounds.width <= width, 'Issue help fits ' + width + 'px');
+                await issueHelp.press('Escape');
+                if (process.env.FORECAST_SCREENSHOTS && [1440, 390].includes(width)) {
+                    await checks.evaluate(el => el.open = true);
+                    await checks.locator('.forecast-check-copy strong').first().waitFor({state: 'visible'});
+                    await checks.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, `forecast-checks-${theme}-${width}.png`)});
+                }
             }
         }
         await page.setViewportSize({width: 1440, height: 900});
@@ -240,6 +375,70 @@ const fixture = action => {
             }
         }
         await login('super_admin');
+        await page.addInitScript(() => {
+            const start = document.startViewTransition.bind(document);
+            document.startViewTransition = callback => {
+                const transition = start(callback);
+                window.forecastTransition = {started: true};
+                transition.ready.then(() => {
+                    window.forecastTransition.duration = getComputedStyle(document.documentElement, '::view-transition-group(forecast-active-tab)').animationDuration;
+                    window.forecastTransition.text = {
+                        group: getComputedStyle(document.documentElement, '::view-transition-group(workspace-content)').animationName,
+                        old: getComputedStyle(document.documentElement, '::view-transition-old(workspace-content)').display,
+                        incoming: getComputedStyle(document.documentElement, '::view-transition-new(workspace-content)').animationName,
+                        oldTab: getComputedStyle(document.documentElement, '::view-transition-old(forecast-active-tab)').display,
+                    };
+                }).catch(() => { window.forecastTransition.failed = true; });
+                window.forecastTransitionFinished = transition.finished;
+                return transition;
+            };
+        });
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            await page.emulateMedia({reducedMotion: 'no-preference'});
+            await page.goto(origin + '/components/system_administrator/forecast_import.php');
+            await page.evaluate(() => { window.forecastDocument = document; });
+            await page.route('**/data_readiness.php', async route => {
+                await new Promise(resolve => setTimeout(resolve, 250));
+                await route.continue();
+            });
+            for (const file of ['data_readiness.php', 'ml_settings.php', 'forecast_analytics.php', 'predictions.php', 'forecast_exceptions.php', 'forecast_import.php']) {
+                await page.evaluate(() => { window.forecastTransition = null; });
+                const navTop = await page.locator('.forecast-studio-nav').evaluate(el => el.getBoundingClientRect().top);
+                await page.locator('.forecast-studio-nav a[href$="/' + file + '"]').click();
+                if (file === 'data_readiness.php') {
+                    assert.equal(await page.locator('[data-navigation-status][role="status"]').evaluate(el => getComputedStyle(el).position), 'fixed', 'Loading feedback does not shift the page');
+                    assert.equal(await page.locator('.forecast-studio-nav').evaluate(el => el.getBoundingClientRect().top), navTop, 'Forecast navigation stays in place while loading');
+                    assert.equal(await page.locator('#rm-nav-progress').isVisible(), false, 'Forecast switching does not flash a blue loading line');
+                }
+                await page.waitForURL('**/' + file);
+                await page.waitForFunction(() => window.forecastTransition);
+                assert.equal(await page.evaluate(() => window.forecastTransition.started), true, 'Page transition starts for ' + file);
+                await page.waitForFunction(() => window.forecastTransition?.duration || window.forecastTransition?.failed);
+                assert.equal(await page.evaluate(() => window.forecastTransition.duration), '0.24s', 'Navigation animates the active forecast tab at ' + width);
+                assert.deepEqual(await page.evaluate(() => window.forecastTransition.text), {group: 'none', old: 'none', incoming: 'workspace-text-enter', oldTab: 'none'}, 'Text fades in without overlapping old text or stretching its layout');
+                if (process.env.FORECAST_SCREENSHOTS && file === 'data_readiness.php') {
+                    await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'forecast-transition-' + width + '.png')});
+                }
+                await page.evaluate(() => window.forecastTransitionFinished);
+                assert.equal(await page.evaluate(() => document === window.forecastDocument), true, 'Forecast navigation preserves the document');
+                const icons = await page.locator('.forecast-studio-nav i').evaluateAll(elements => elements.map(el => ({content: getComputedStyle(el, '::before').content, font: getComputedStyle(el, '::before').fontFamily})));
+                assert.ok(icons.every(icon => icon.content !== 'none' && icon.content !== 'normal' && icon.font.includes('bootstrap-icons')), 'Forecast icons remain drawn after ' + file + ': ' + JSON.stringify(icons));
+            }
+            await page.unroute('**/data_readiness.php');
+            await page.emulateMedia({reducedMotion: 'reduce'});
+            await page.evaluate(() => { window.forecastTransition = null; });
+            await page.locator('.forecast-studio-nav a[href$="/data_readiness.php"]').click();
+            await page.waitForURL('**/data_readiness.php');
+            assert.equal(await page.locator('.forecast-studio-nav').evaluate(el => getComputedStyle(el).viewTransitionName), 'none', 'Reduced motion keeps navigation still');
+            assert.equal(await page.evaluate(() => window.forecastTransition), null, 'Reduced motion opts out of page transitions');
+        }
+        await page.evaluate(() => { window.savedForecastTransition = document.startViewTransition; document.startViewTransition = undefined; });
+        await page.locator('.forecast-studio-nav a[href$="/ml_settings.php"]').click();
+        await page.waitForURL('**/ml_settings.php');
+        await page.locator('#schedule_weekly_retrain_day').waitFor();
+        assert.equal(await page.locator('.main-content [data-navigation-status][role="alert"]').count(), 0, 'Navigation still works without View Transitions');
+        await page.evaluate(() => { document.startViewTransition = window.savedForecastTransition; });
         for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php', 'report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php']) {
             const response = await page.goto(origin + '/components/' + route);
             assert.equal(response.status(), 200, route);
@@ -257,12 +456,41 @@ const fixture = action => {
                 const row = page.locator('.readiness-catalog tbody tr').first();
                 await page.setViewportSize({width: 1440, height: 900});
                 assert.ok(await row.evaluate(el => el.getBoundingClientRect().height) <= 80, 'Closed readiness rows stay compact');
-                const details = row.locator('details');
-                assert.equal(await details.getAttribute('open'), null);
-                await details.locator('summary').focus();
+                const details = row.locator('[data-readiness-details]');
+                await details.focus();
                 await page.keyboard.press('Enter');
-                assert.match(await details.innerText(), /Recent 28 days:|Three test periods:/);
-                await page.keyboard.press('Enter');
+                const drawer = page.getByRole('dialog', {name: 'Product data checks'});
+                await drawer.waitFor({state: 'visible'});
+                assert.match(await drawer.innerText(), /Recent 28 days/);
+                assert.match(await drawer.innerText(), /Three test periods/);
+                assert.equal(await drawer.locator('h3').first().innerText(), await row.locator('strong').first().innerText());
+                const bounds = await drawer.boundingBox();
+                const overlayBounds = await page.locator('#readiness-drawer').boundingBox();
+                assert.ok(Math.abs(bounds.x + bounds.width - overlayBounds.x - overlayBounds.width) < 2, 'Details drawer aligns with the right edge of its overlay');
+                assert.ok(await row.evaluate(el => el.getBoundingClientRect().height) <= 80, 'Opening details does not expand the table row');
+                await drawer.getByRole('button', {name: 'Close data checks'}).focus();
+                await page.keyboard.press('Tab');
+                assert.equal(await drawer.getByRole('button', {name: 'Close data checks'}).evaluate(el => el === document.activeElement), true, 'Keyboard focus stays in the drawer');
+                if (process.env.FORECAST_SCREENSHOTS) await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'readiness-drawer-desktop.png'), animations: 'disabled'});
+                await page.keyboard.press('Escape');
+                await drawer.waitFor({state: 'hidden'});
+                assert.equal(await details.evaluate(el => el === document.activeElement), true, 'Closing returns focus to Details');
+                const productRows = page.locator('.readiness-catalog tbody tr');
+                const secondRow = await productRows.count() > 1 ? productRows.nth(1) : row;
+                await page.locator('#readiness-drawer-body').evaluate(el => el.textContent = 'Stale evidence');
+                await secondRow.locator('[data-readiness-details]').click();
+                assert.equal(await drawer.locator('h3').first().innerText(), await secondRow.locator('strong').first().innerText(), 'Opening Details replaces stale evidence with the selected product');
+                await page.setViewportSize({width: 390, height: 844});
+                const mobileBounds = await drawer.boundingBox();
+                assert.ok(mobileBounds.x >= 0 && mobileBounds.x + mobileBounds.width <= await page.evaluate(() => document.documentElement.clientWidth) + 1, 'Drawer fits mobile width');
+                assert.equal(await drawer.evaluate(el => el.scrollWidth <= el.clientWidth), true, 'Drawer content has no horizontal overflow');
+                if (process.env.FORECAST_SCREENSHOTS) await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'readiness-drawer-mobile.png'), animations: 'disabled'});
+                await drawer.getByRole('button', {name: 'Close data checks'}).click();
+                await drawer.waitFor({state: 'hidden'});
+                await page.setViewportSize({width: 1440, height: 900});
+                await details.click();
+                await page.locator('#readiness-drawer').click({position: {x: 10, y: 10}});
+                await drawer.waitFor({state: 'hidden'});
                 const rowHelp = row.locator('.info-tooltip-trigger');
                 await rowHelp.focus();
                 assert.equal(await row.locator('[role="tooltip"]').isVisible(), true);
@@ -277,6 +505,11 @@ const fixture = action => {
                 for (const width of [1440, 640, 390, 320]) {
                     await page.setViewportSize({width, height: 900});
                     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width + ' in ' + theme);
+                    if (route.includes('ml_settings') && width === 1440) {
+                        const fields = await page.locator('.ml-schedule-grid select').evaluateAll(elements => elements.map(el => el.getBoundingClientRect()));
+                        assert.ok(Math.abs(fields[0].top - fields[1].top) < 1, 'Weekday and hour fields align despite the help button');
+                        assert.ok(Math.abs(fields[2].top - fields[3].top) < 1, 'Minute and period fields align');
+                    }
                     if (process.env.FORECAST_SCREENSHOTS && [1440, 390].includes(width)) {
                         fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
                         await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, path.basename(route, '.php') + '-' + theme + '-' + width + '.png'), fullPage: true, animations: 'disabled'});
@@ -376,6 +609,27 @@ const fixture = action => {
         await page.getByText('Daily comparison values', {exact: true}).click();
         assert.equal(await page.locator('#replay-comparison tbody tr').count(), 28);
         assert.deepEqual(pageErrors, [], 'No unexpected page errors occurred during test');
+        for (const [role, destination] of [
+            ['admin', 'administrator/gcash_overview.php'],
+            ['super_admin', 'system_administrator/system_health.php'],
+            ['inventory_manager', 'inventory_management/products.php'],
+            ['cashier', 'cashier/dashboard.php'],
+        ]) {
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({width, height: 900});
+                await page.emulateMedia({reducedMotion: 'no-preference'});
+                await login(role);
+                await page.evaluate(theme => { document.documentElement.dataset.theme = theme; window.workspaceDocument = document; window.forecastTransition = null; }, width === 390 ? 'dark' : 'light');
+                await page.locator('#appSidebar a[href$="/' + destination + '"]').evaluate(link => link.click());
+                await page.waitForURL('**/components/' + destination);
+                await page.waitForFunction(() => window.forecastTransition?.text && document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
+                await page.evaluate(() => window.forecastTransitionFinished);
+                assert.equal(await page.evaluate(() => document === window.workspaceDocument), true, role + ' retains its workspace shell');
+                assert.equal(await page.evaluate(() => window.forecastTransition.text.incoming), 'workspace-text-enter', role + ' uses the shared text fade at ' + width);
+                assert.equal(await page.locator('#rm-nav-progress').count(), 0, role + ' has no loading line');
+                if (process.env.FORECAST_SCREENSHOTS) await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, role + '-workspace-' + width + '.png')});
+            }
+        }
         console.log('PASS: Forecast landing browser test passed cleanly!');
     } finally {
         if (browser) await browser.close();

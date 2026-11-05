@@ -96,9 +96,6 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                     <h1>Store Operations</h1>
                     <?php if (!empty($dashboard['freshness']['generated_at'])): ?><p class="dashboard-freshness"><i class="bi bi-clock" aria-hidden="true"></i> Updated <?= $escape($formatDate($dashboard['freshness']['generated_at'])) ?> Philippine time</p><?php endif; ?>
                 </div>
-                <div class="page-heading-actions">
-                    <a class="btn btn-quiet btn-icon" id="dashboardRefreshBtn" title="Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?>" href="<?= $escape($rangeUrl) ?>" data-manual-refresh data-dashboard-action><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</a>
-                </div>
             </header>
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>

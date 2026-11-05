@@ -148,7 +148,6 @@ $storePaused = RecoveryStore::isPaused();
                 <div><h1>Backup &amp; Restore</h1></div>
                 <div class="backup-pagination-actions">
                     <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php')) ?>"><i class="bi bi-person-check" aria-hidden="true"></i> Identity Reconciliation</a>
-                    <a class="backup-history-link" href="#backup-history"><i class="bi bi-clock-history" aria-hidden="true"></i> View history</a>
                 </div>
             </header>
 

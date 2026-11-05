@@ -30,10 +30,9 @@ const {chromium} = require('playwright');
                     'granularity' => 'daily',
                     'period' => $activePeriod,
                 ];
-                $reportCatalog = [
-                    'sales_period' => 'Daily, Weekly and Monthly Sales',
-                    'gross_profit' => 'Gross Profit Report',
-                ];
+                require_once '../../../backend/app/Services/ReportAccessService.php';
+                $reportCatalog = App\\Services\\ReportAccessService::catalogForRole('admin');
+                $todayPh = '2026-10-17';
                 $products = [
                     ['product_id' => 101, 'sku' => 'COF-101', 'product_name' => 'Artisan Coffee'],
                     ['product_id' => 102, 'sku' => 'TEA-102', 'product_name' => 'Matcha Tea'],
@@ -177,8 +176,9 @@ const {chromium} = require('playwright');
                 await page.addScriptTag({path: path.join(root, 'src/frontend/assets/js/ui.js')});
                 await page.evaluate(() => window.RetailMindUI.initPageContent());
                 if (variant === 'error') {
-                    await page.locator('.rm-toast').waitFor({state: 'attached'});
-                    await page.locator('.rm-toast').waitFor({state: 'detached'});
+                    await page.waitForTimeout(3200);
+                    assert(await page.locator('#gp-validation-error').isVisible(), 'Invalid dates keep recovery feedback after shared alerts expire');
+                    assert.equal(await page.locator('#gp-validation-error').innerText(), 'Start date must not be after end date.');
                 }
                 for (const theme of ['light', 'dark']) {
                     await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
@@ -211,6 +211,25 @@ const {chromium} = require('playwright');
                         }
                     }
                 }
+            }
+            const reportTypes = await page.locator('#report option').evaluateAll(options => options.map(option => option.value));
+            for (const report of reportTypes.filter(report => report !== 'gross_profit')) {
+                await page.setContent(renderHtml({...salesState, selected_report: report}));
+                for (const asset of ['style.css', 'reports.css', 'report-generation.css', 'theme.css']) {
+                    await page.addStyleTag({path: path.join(root, 'src/frontend/assets/css', asset)});
+                }
+                assert.equal(await page.locator('.report-workspace > .report-filters').count(), 1, `${report}: filters share workspace`);
+                assert.equal(await page.locator('.report-workspace > .report-results').count(), 1, `${report}: results share workspace`);
+                assert.equal(await page.locator('#granularity').isVisible(), report === 'sales_period', `${report}: grouping only appears for sales totals`);
+                assert.equal(await page.locator('#from').isVisible(), !['low_stock', 'inventory_valuation', 'expiration'].includes(report), `${report}: dates match report scope`);
+                for (const width of [1440, 768, 375]) {
+                    await page.setViewportSize({width, height: 960});
+                    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${report}/${width}: workspace fits`);
+                }
+                await page.emulateMedia({media: 'print'});
+                assert.equal(await page.locator('.report-filters').isVisible(), false, `${report}: print hides filters`);
+                assert(await page.locator('.report-records-table').isVisible(), `${report}: print retains records`);
+                await page.emulateMedia({media: 'screen'});
             }
             await page.close();
             console.log('  ok - Report workspace (sales/profit/empty/error, light/dark, seven widths, production searchable controls, exports) verified');

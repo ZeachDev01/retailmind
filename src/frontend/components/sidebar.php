@@ -300,12 +300,14 @@ $GLOBALS['rm_navigation_shell'] = [
 <script>
     (function() {
         var href = <?= json_encode(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-        if (document.head && !document.querySelector('link[href="' + href + '"]')) {
-            var link = document.createElement('link');
+        var link = document.querySelector('link[href="' + href + '"]');
+        if (document.head && !link) {
+            link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = href;
             document.head.appendChild(link);
         }
+        if (link) link.removeAttribute('data-rm-page-asset');
     })();
 </script>
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">

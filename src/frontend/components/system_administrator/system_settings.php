@@ -117,16 +117,15 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 
         <section class="dashboard-section" aria-labelledby="heading-email-test">
             <div class="section-header">
-                <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
-<<<<<<< HEAD
-                <p class="section-description">Test outbound email using the Brevo API settings saved in Store Settings.</p>
-=======
->>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
+                <div>
+                    <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
+                    <p class="section-description">Test outbound email using the Brevo API settings saved in Store Settings.</p>
+                </div>
             </div>
-            <form method="post" class="form-inline-action">
+            <form method="post">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="test_email">
-                <div class="form-group form-inline-field">
+                <div class="form-group">
                     <label for="test_email">
                         Recipient email
                         <span class="required-mark" aria-hidden="true">*</span>
@@ -137,14 +136,14 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                            value="<?= htmlspecialchars((string)$settings['store_email']) ?>"
                            autocomplete="email"
                            placeholder="admin@example.com"
+                           aria-describedby="test_email_help"
                            aria-required="true"
                            required>
-<<<<<<< HEAD
                     <small class="field-help" id="test_email_help">Address to receive a test message from the configured Brevo sender.</small>
-=======
->>>>>>> 45dcc92ff63cad9ed66d7ddc0c5f2ff504182085
                 </div>
-                <button type="submit" class="btn"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
+                </div>
             </form>
         </section>
     </main>

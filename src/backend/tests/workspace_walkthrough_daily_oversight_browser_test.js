@@ -135,11 +135,11 @@ const fixture = (action, extra) => {
         assert.ok(await learnMore.locator('p').isVisible(), 'Learn more expands explanation');
         await learnMore.locator('summary').click();
 
-        // Advance to Step 2: Refresh Store status
+        // Advance to Step 2: Check Store status freshness
         await dock.getByRole('button', {name: 'Next', exact: true}).click();
         await page.waitForFunction(() => document.querySelector('.guidance-step-count')?.textContent.includes('Step 2 of 3'));
-        assert.match(await dock.locator('.guidance-step-title').innerText(), /Refresh Store status/i);
-        assert.ok(await page.locator('#dashboardRefreshBtn').evaluate(el => el.classList.contains('guidance-spotlight-target')), 'dashboardRefreshBtn has spotlight');
+        assert.match(await dock.locator('.guidance-step-title').innerText(), /Check Store status freshness/i);
+        assert.ok(await page.locator('.dashboard-freshness').evaluate(el => el.classList.contains('guidance-spotlight-target')), 'Updated timestamp has spotlight');
 
         // Test Back button
         await dock.getByRole('button', {name: 'Back', exact: true}).click();

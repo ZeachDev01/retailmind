@@ -544,9 +544,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
                                 <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
                             </button>
-                            <button type="button" class="btn btn-small btn-secondary" id="refresh-catalog" title="Refresh catalog" aria-label="Refresh catalog">
-                                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                            </button>
                         </div>
                     </div>
 
@@ -1239,14 +1236,14 @@ function applyCatalogDelta(items = [], replace = false) {
     });
 }
 
-function syncCatalog(isManual = false) {
+function syncCatalog() {
     if (!catalogSyncPromise) {
-        catalogSyncPromise = refreshCatalog(isManual).finally(() => { catalogSyncPromise = null; });
+        catalogSyncPromise = refreshCatalog().finally(() => { catalogSyncPromise = null; });
     }
     return catalogSyncPromise;
 }
 
-async function refreshCatalog(isManual = false) {
+async function refreshCatalog() {
     if (!posShiftOpen || (typeof cartWorkspace !== 'undefined' && cartWorkspace.context?.locked)) {
         return { success: false, reason: 'Shift closed or locked' };
     }
@@ -1271,9 +1268,6 @@ async function refreshCatalog(isManual = false) {
         }
         if (res.status === 304) {
             setCatalogStatus();
-            if (isManual) {
-                showCartMessage('Catalog is already up to date.', 'info');
-            }
             return { success: true, notModified: true, updated: 0 };
         }
 
@@ -1282,26 +1276,20 @@ async function refreshCatalog(isManual = false) {
             if (data.success && Array.isArray(data.catalog)) {
                 const etag = res.headers?.get ? res.headers.get('ETag') : data.etag;
                 if (!await applyCatalogDelta(data.catalog, data.delta !== true)) {
-                    setCatalogStatus('Cached stock and prices may be outdated. Refresh catalog to retry.');
+                    setCatalogStatus('Cached stock and prices may be outdated. Reload the page to retry.');
                     showCartMessage('Catalog refresh failed. Cached stock and prices may be outdated.', 'warning');
                     return { success: false };
                 }
                 if (etag) currentCatalogEtag = etag;
                 setCatalogStatus();
-                if (isManual) {
-                    const count = data.catalog.length;
-                    showCartMessage(count > 0 ? `Catalog refreshed with ${count} products.` : 'Catalog is already up to date.', 'success');
-                }
                 return { success: true, notModified: false, updated: data.catalog.length };
             }
         }
 
-        setCatalogStatus('Cached stock and prices may be outdated. Refresh catalog to retry.');
-        if (isManual) showCartMessage('Catalog refresh failed. Cached stock and prices may be outdated.', 'warning');
+        setCatalogStatus('Cached stock and prices may be outdated. Reload the page to retry.');
         return { success: false };
     } catch (err) {
         setCatalogStatus('Offline: cached stock and prices may be outdated. Checkout requires a connection.');
-        if (isManual) showCartMessage('Could not reach server to refresh catalog.', 'warning');
         return { success: false, error: err };
     }
 }
@@ -1316,7 +1304,7 @@ function startCatalogSyncLoop() {
             return;
         }
         try {
-            await syncCatalog(false);
+            await syncCatalog();
         } catch (err) {
             console.warn('Background catalog sync failed:', err);
         }
@@ -1330,12 +1318,12 @@ window.addEventListener('pagehide', () => {
     catalogProductMap.clear();
 });
 window.addEventListener('focus', () => {
-    if (posDb && document.visibilityState === 'visible') syncCatalog(false);
+    if (posDb && document.visibilityState === 'visible') syncCatalog();
 });
 document.addEventListener('visibilitychange', () => {
-    if (posDb && document.visibilityState === 'visible') syncCatalog(false);
+    if (posDb && document.visibilityState === 'visible') syncCatalog();
 });
-window.addEventListener('online', () => syncCatalog(false));
+window.addEventListener('online', () => syncCatalog());
 window.addEventListener('pageshow', event => {
     if (event.persisted) location.reload();
 });
@@ -2260,19 +2248,6 @@ cashQuick.addEventListener('click', event => {
         setQuickTender(button.dataset.tender === 'exact' ? getNetTotal() : button.dataset.tender);
     }
 });
-const refreshCatalogBtn = document.getElementById('refresh-catalog');
-if (refreshCatalogBtn) {
-    refreshCatalogBtn.addEventListener('click', async () => {
-        try {
-            refreshCatalogBtn.disabled = true;
-            await syncCatalog(true);
-        } catch (e) {
-            showCartMessage('Could not reach server to refresh catalog.', 'warning');
-        } finally {
-            refreshCatalogBtn.disabled = false;
-        }
-    });
-}
 let quickSearchTimer = null;
 skuInput.addEventListener('input', () => {
     clearTimeout(quickSearchTimer);

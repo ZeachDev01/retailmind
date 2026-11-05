@@ -171,10 +171,10 @@ class WorkspaceWalkthroughService
                                     'learn_more' => 'The queue flags conditions that need administrator review before trading periods close. Reviewing an item opens its permitted operational workflow without automatically acknowledging or clearing alerts.',
                                 ],
                                 [
-                                    'target' => '#dashboardRefreshBtn',
-                                    'action' => 'Refresh Store status',
-                                    'description' => 'Check for the latest operational updates and shift balances across your Store registers.',
-                                    'learn_more' => 'Store operations update periodically. Use Refresh to pull the most recent cashier shifts and reconciliations while keeping refresh paused when reviewing exceptions.',
+                                    'target' => '.dashboard-freshness',
+                                    'action' => 'Check Store status freshness',
+                                    'description' => 'Check when operational updates and shift balances were last loaded.',
+                                    'learn_more' => 'Store operations update periodically. The Updated timestamp shows when the current view was generated. Automatic updates pause while you interact with forms.',
                                 ],
                                 [
                                     'target' => '#store-status-section',

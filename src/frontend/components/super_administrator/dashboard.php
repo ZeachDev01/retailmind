@@ -98,9 +98,6 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
                         <i class="bi bi-clock" aria-hidden="true"></i>
                         <span>Updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></span>
                     </p>
-                    <a class="btn btn-quiet btn-icon" id="dashboardRefreshBtn" title="Last updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?>" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>" data-manual-refresh data-dashboard-action>
-                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
-                    </a>
                 </div>
             </header>
 

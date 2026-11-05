@@ -56,3 +56,15 @@ Verification: PHP syntax, navigation and landing contracts, the disposable-datab
 ## Compact readiness catalog - 2026-11-04
 
 Follow-up: dense product rows replace repeated reason paragraphs and two disclosures with a short status plus tooltip, a usable-day count/meter, and one Details disclosure with recent/testing icons. Full dates, blockers, actions and history evidence remain available on demand. Row padding is reduced and pagination increases from 15 to 25 products. Desktop screenshot review shows a compact two-line product row; the browser regression asserts a closed row height at most 80px and keyboard access to details and help. Existing light/dark and mobile checks remain in place. Calculations and eligibility policy are unchanged.
+
+## Analytics empty states - 2026-11-05
+
+Refined all five analytics tabs and the supporting Store performance, historical checks and prediction-log empty states. Reused the existing shared renderer, icons and theme tokens with layered geometric shapes, concise subtext and the existing next-action links. Shapes assemble once in 650-900ms and remain still under reduced motion or print. Missing evidence remains unavailable; no forecast logic or authorization changed.
+
+Verification: PHP syntax, diff whitespace and the disposable-database forecast landing browser suite passed. Coverage includes all five empty tabs at 320/390/1440px in both themes, short subtext, decorative accessibility, finite animation and reduced motion. Inspected desktop/mobile empty-state captures and the dark mobile page; screenshots are in `tmp/forecast-empty-refresh/`. Full ML training/backtest suite was not rerun for this presentation change.
+
+## Compact forecast checks - 2026-11-05
+
+Demand Forecast checks now use short issue titles, semantic status icons, one owner line and aligned existing actions. The review count is secondary. Full conditions and effects remain in the shared keyboard/touch help; critical issues still open the disclosure automatically. Actions, roles and forecast calculations are preserved.
+
+Verification: PHP syntax, diff whitespace and the disposable-database forecast landing browser suite passed. Added concise-title, sentence-badge removal and keyboard-help checks; open checks fit 320/390/640/1440px in both themes. Inspected desktop/mobile light/dark section captures in `tmp/forecast-checks-refresh/`. Live localhost inspection ended because Computer Use could not verify the current browser URL; visual checks used the rendered test application. Full ML training/backtest suite was not rerun.

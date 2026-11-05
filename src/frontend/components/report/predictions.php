@@ -183,19 +183,38 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
         <?php endif; ?>
         <details class="forecast-details forecast-actions" <?= array_filter($operationalIssues, static fn(array $issue): bool => ($issue['severity'] ?? '') === 'critical') ? 'open' : '' ?>>
-            <summary id="heading-actions">Forecast checks &middot; <?= count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true))) ?> to review</summary>
+            <summary id="heading-actions"><span>Forecast checks <span class="forecast-check-count"><?= count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true))) ?> to review</span></span></summary>
             <div role="list">
             <?php foreach ($operationalIssues as $issueIndex => $issue):
-                $sevBadgeClass = match($issue['severity'] ?? 'info') {
-                    'critical' => 'tag-danger', 'warning' => 'tag-warning',
-                    'healthy', 'success' => 'tag-success', default => 'tag-info'
+                $issueIcon = match($issue['severity'] ?? 'info') {
+                    'critical' => 'exclamation-octagon', 'warning' => 'exclamation-triangle',
+                    'healthy', 'success' => 'check-circle', default => 'info-circle'
+                };
+                $issueTitle = match($issue['category'] ?? '') {
+                    'paused' => 'Buying suggestions paused',
+                    'blocked_recovery' => 'Forecast update blocked',
+                    'exhausted_recovery' => 'Forecast update needs support',
+                    'retry_scheduled' => 'Forecast update will retry',
+                    'empty_store' => 'No active products',
+                    'stale_guidance' => 'Forecasts need updating',
+                    'no_approved_model' => 'No approved model',
+                    'partial_coverage' => (int)$coverage['stock_rule_count'] . ' products use stock rules',
+                    'stock_rules_only' => 'All products use stock rules',
+                    'candidate_review' => 'Candidate ready for review',
+                    'observation_mode' => 'Model under observation',
+                    'updating' => 'Forecast update in progress',
+                    'healthy' => 'All checks passed',
+                    default => $issue['condition']
                 };
             ?>
                 <div class="action-issue-card" role="listitem">
-                    <div>
-                        <span class="status-badge <?= $sevBadgeClass ?>"><?= htmlspecialchars($issue['condition']) ?></span>
-                        <?php if (!in_array($issue['severity'] ?? '', ['healthy', 'success'], true)): ?><small class="muted"><?= htmlspecialchars($issue['responsible_role']) ?></small><?php endif; ?>
-                        <?php forecast_help('issue-' . $issueIndex, $issue['effect'], 'Effect of this forecast status'); ?>
+                    <i class="bi bi-<?= $issueIcon ?> forecast-check-icon is-<?= htmlspecialchars($issue['severity'] ?? 'info') ?>" role="img" aria-label="<?= htmlspecialchars(ucfirst($issue['severity'] ?? 'info')) ?>"></i>
+                    <div class="forecast-check-copy">
+                        <div class="forecast-check-title">
+                            <strong><?= htmlspecialchars($issueTitle) ?></strong>
+                            <?php forecast_help('issue-' . $issueIndex, $issue['condition'] . ' ' . $issue['effect'], 'Details: ' . $issueTitle); ?>
+                        </div>
+                        <?php if (!in_array($issue['severity'] ?? '', ['healthy', 'success'], true)): ?><small><?= htmlspecialchars($issue['responsible_role']) ?></small><?php endif; ?>
                     </div>
                     <?php if (!empty($issue['action_url'])): ?>
                         <a href="<?= htmlspecialchars($issue['action_url']) ?>"><?= htmlspecialchars($issue['action_label']) ?> &rarr;</a>

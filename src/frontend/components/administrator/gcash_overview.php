@@ -145,7 +145,6 @@ function gcash_admin_money(mixed $val): string {
                 </span>
             </div>
             <div class="gcash-topbar-actions">
-                <button type="button" class="btn btn-secondary" id="gcash-refresh" aria-label="Refresh GCash overview"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i>Refresh</button>
                 <?php if (!(function_exists('is_remote_request') && is_remote_request())): ?><a class="btn btn-secondary" id="gcash-export" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>" aria-label="Export transaction report to CSV"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a><?php endif; ?>
                 <?php if (in_array('cashier', current_workspace_roles(), true)): ?>
                     <button type="button" class="btn btn-primary" id="gcash-record">Record Exchange</button>

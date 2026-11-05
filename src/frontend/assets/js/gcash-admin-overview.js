@@ -195,7 +195,6 @@
         url.searchParams.set('export', 'csv');
         event.currentTarget.href = url;
     });
-    document.getElementById('gcash-refresh')?.addEventListener('click', () => location.reload());
     document.getElementById('gcash-record')?.addEventListener('click', () => document.getElementById('gcash-record-dialog').showModal());
     workspace.querySelectorAll('dialog').forEach(dialog => {
         dialog.addEventListener('click', event => {

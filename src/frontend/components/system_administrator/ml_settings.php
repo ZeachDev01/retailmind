@@ -413,7 +413,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             <form method="post">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save_schedule">
-                <div class="form-grid">
+                <div class="form-grid ml-schedule-grid">
                     <div class="form-group<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' invalid' : '' ?>">
                         <label for="schedule_weekly_retrain_day">Training weekday</label>
                         <select id="schedule_weekly_retrain_day" name="schedule_weekly_retrain_day" required<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' aria-invalid="true" aria-describedby="schedule_day_error"' : '' ?>>

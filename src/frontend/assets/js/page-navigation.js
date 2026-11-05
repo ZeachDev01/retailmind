@@ -143,56 +143,6 @@
         }
         pageNodes.push(node);
     }
-    function getProgressBar() {
-        let el = document.getElementById('rm-nav-progress');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'rm-nav-progress';
-            el.className = 'rm-nav-progress';
-            el.setAttribute('aria-hidden', 'true');
-            el.innerHTML = '<div class="rm-nav-progress-bar"></div>';
-            document.body.prepend(el);
-        }
-        return el.querySelector('.rm-nav-progress-bar');
-    }
-    function startProgress() {
-        const bar = getProgressBar();
-        if (!bar) return;
-        bar.parentElement.style.display = 'block';
-        bar.style.opacity = '1';
-        bar.style.width = '25%';
-        bar.parentElement.classList.add('animating');
-        clearTimeout(bar._timer);
-        bar._timer = setTimeout(() => {
-            if (bar.style.opacity === '1') bar.style.width = '70%';
-        }, 150);
-    }
-    function finishProgress() {
-        const bar = getProgressBar();
-        if (!bar) return;
-        clearTimeout(bar._timer);
-        bar.parentElement.classList.remove('animating');
-        bar.style.width = '100%';
-        bar._timer = setTimeout(() => {
-            bar.style.opacity = '0';
-            bar._timer = setTimeout(() => {
-                bar.style.width = '0%';
-                bar.parentElement.style.display = 'none';
-            }, 200);
-        }, 120);
-    }
-    function failProgress() {
-        const bar = getProgressBar();
-        if (!bar) return;
-        clearTimeout(bar._timer);
-        bar.parentElement.classList.remove('animating');
-        bar.style.opacity = '0';
-        bar._timer = setTimeout(() => {
-            bar.style.width = '0%';
-            bar.parentElement.style.display = 'none';
-        }, 150);
-    }
-
     const prefetchCache = new Map();
     function clearPrefetch() {
         prefetchCache.clear();
@@ -242,7 +192,6 @@
         pending = new AbortController();
         const request = ++sequence;
         status(content);
-        startProgress();
         let committed = false;
         try {
             let response, payload;
@@ -260,7 +209,6 @@
             }
             if (request !== sequence) return;
             if (response.headers.get('Content-Disposition')?.includes('attachment')) {
-                finishProgress();
                 const blob = URL.createObjectURL(await response.blob());
                 const link = document.createElement('a');
                 link.href = blob;
@@ -305,56 +253,67 @@
             })).catch(error => { nextAssets.filter(node => !pageAssets.includes(node)).forEach(node => node.remove()); throw error; });
             await window.RetailMindInventoryDrafts?.flush?.();
             if (request !== sequence) { nextAssets.filter(node => !pageAssets.includes(node)).forEach(node => node.remove()); return; }
-            cleanup(nextAssets);
-            pageAssets.push(...nextAssets);
-            const persistentClasses = ['sidebar-collapsed', 'no-scroll'].filter(name => document.body.classList.contains(name));
-            document.body.className = incoming.body.className;
-            document.body.classList.add(...persistentClasses);
-            for (const attr of Array.from(document.body.attributes)) {
-                if (attr.name.startsWith('data-') && !['data-rm-authenticated', 'data-rm-backup-status'].includes(attr.name)) document.body.removeAttribute(attr.name);
-            }
-            for (const attr of incoming.body.attributes) if (attr.name.startsWith('data-')) document.body.setAttribute(attr.name, attr.value);
-            const replacement = document.importNode(main, true);
-            if (!replacement.id) replacement.id = 'page-content';
-            content.replaceWith(replacement);
-            // Reveal the committed page before optional page scripts run. A slow
-            // or failed receipt script must not leave a completed result above
-            // the viewport (the operator would still see the old page position).
-            const root = document.documentElement;
-            const scrollBehavior = root.style.scrollBehavior;
-            root.style.scrollBehavior = 'auto';
-            replacement.scrollTop = 0;
-            window.scrollTo(0, 0);
-            root.style.scrollBehavior = scrollBehavior;
-            // Some legacy pages keep dialogs after </main>; move those with the page as well.
-            main.remove();
-            incoming.querySelector('.app-shell')?.replaceWith(...incoming.querySelector('.app-shell').childNodes);
-            for (const child of Array.from(incoming.body.childNodes)) {
-                if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) continue;
-                const node = document.importNode(child, true);
-                document.body.append(node);
-                pageNodes.push(node);
-            }
-            document.title = incoming.title;
-            if (options.history === 'none') history.replaceState({}, '', finalURL.href);
-            else history.pushState({}, '', finalURL.href);
-            currentURL = finalURL.href;
-            activeMenu(finalURL);
-            const profile = document.querySelector('.sidebar-profile-copy strong');
-            if (profile && payload.shell?.name) profile.textContent = payload.shell.name;
-            const avatar = document.querySelector('#sidebarProfile .sidebar-avatar');
-            if (avatar && payload.shell?.avatar) avatar.outerHTML = payload.shell.avatar;
-            const mobileAvatar = document.querySelector('.admin-mobile-avatar');
-            if (mobileAvatar && payload.shell?.mobileAvatar) mobileAvatar.innerHTML = payload.shell.mobileAvatar;
-            for (const notification of document.querySelectorAll('.global-notification-button')) {
-                if (!Number.isFinite(payload.shell?.notifications)) continue;
-                notification.querySelector('strong')?.remove();
-                const count = payload.shell.notifications;
-                notification.setAttribute('aria-label', 'Notifications' + (count ? ': ' + count + ' unread' : ''));
-                if (count) { const badge = document.createElement('strong'); badge.textContent = count > 99 ? '99+' : count; notification.append(badge); }
-            }
-            committed = true;
-            finishProgress();
+            const animatePage = document.startViewTransition &&
+                new URL(currentURL).pathname !== finalURL.pathname && !document.body.classList.contains('reduce-motion') && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const commit = () => {
+                if (request !== sequence) return;
+                cleanup(nextAssets);
+                pageAssets.push(...nextAssets);
+                const persistentClasses = ['sidebar-collapsed', 'no-scroll'].filter(name => document.body.classList.contains(name));
+                document.body.className = incoming.body.className;
+                document.body.classList.add(...persistentClasses);
+                for (const attr of Array.from(document.body.attributes)) {
+                    if (attr.name.startsWith('data-') && !['data-rm-authenticated', 'data-rm-backup-status'].includes(attr.name)) document.body.removeAttribute(attr.name);
+                }
+                for (const attr of incoming.body.attributes) if (attr.name.startsWith('data-')) document.body.setAttribute(attr.name, attr.value);
+                const replacement = document.importNode(main, true);
+                if (!replacement.id) replacement.id = 'page-content';
+                content.replaceWith(replacement);
+                // Reveal the committed page before optional page scripts run. A slow
+                // or failed receipt script must not leave a completed result above
+                // the viewport (the operator would still see the old page position).
+                const root = document.documentElement;
+                const scrollBehavior = root.style.scrollBehavior;
+                root.style.scrollBehavior = 'auto';
+                replacement.scrollTop = 0;
+                window.scrollTo(0, 0);
+                root.style.scrollBehavior = scrollBehavior;
+                // Some legacy pages keep dialogs after </main>; move those with the page as well.
+                main.remove();
+                incoming.querySelector('.app-shell')?.replaceWith(...incoming.querySelector('.app-shell').childNodes);
+                for (const child of Array.from(incoming.body.childNodes)) {
+                    if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) continue;
+                    const node = document.importNode(child, true);
+                    document.body.append(node);
+                    pageNodes.push(node);
+                }
+                document.title = incoming.title;
+                if (options.history === 'none') history.replaceState({}, '', finalURL.href);
+                else history.pushState({}, '', finalURL.href);
+                currentURL = finalURL.href;
+                activeMenu(finalURL);
+                const profile = document.querySelector('.sidebar-profile-copy strong');
+                if (profile && payload.shell?.name) profile.textContent = payload.shell.name;
+                const avatar = document.querySelector('#sidebarProfile .sidebar-avatar');
+                if (avatar && payload.shell?.avatar) avatar.outerHTML = payload.shell.avatar;
+                const mobileAvatar = document.querySelector('.admin-mobile-avatar');
+                if (mobileAvatar && payload.shell?.mobileAvatar) mobileAvatar.innerHTML = payload.shell.mobileAvatar;
+                for (const notification of document.querySelectorAll('.global-notification-button')) {
+                    if (!Number.isFinite(payload.shell?.notifications)) continue;
+                    notification.querySelector('strong')?.remove();
+                    const count = payload.shell.notifications;
+                    notification.setAttribute('aria-label', 'Notifications' + (count ? ': ' + count + ' unread' : ''));
+                    if (count) { const badge = document.createElement('strong'); badge.textContent = count > 99 ? '99+' : count; notification.append(badge); }
+                }
+                committed = true;
+            };
+            if (animatePage) {
+                content.querySelector('[data-navigation-status]')?.remove();
+                const transition = document.startViewTransition(commit);
+                transition.ready.catch(() => {}); // Navigation still succeeds if the browser skips the animation.
+                await transition.updateCallbackDone;
+                if (request !== sequence) return;
+            } else commit();
             initializing = true;
             for (const script of headScripts.filter(script => !script.hasAttribute('defer'))) await execute(script, finalURL);
             if (payload.cart && window.cartWorkspace) Object.assign(window.cartWorkspace, new CartWorkspace(payload.cart));
@@ -367,7 +326,6 @@
             currentURL = location.href;
             window.dispatchEvent(new CustomEvent('retailmind:pagechange', {detail: {url: finalURL.href}}));
         } catch (error) {
-            failProgress();
             if (request !== sequence || error.name === 'AbortError') return;
             initializing = false;
             if (options.history === 'none' && !committed) history.replaceState({}, '', currentURL);

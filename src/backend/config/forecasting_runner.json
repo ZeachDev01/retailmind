@@ -1,0 +1,14 @@
+{
+  "php_binary": "C:\\tools\\php85\\php.exe",
+  "python_binary": "C:\\xampp\\htdocs\\retailmind\\.venv\\Scripts\\python.exe",
+  "project_root": "C:\\xampp\\htdocs\\retailmind",
+  "model_storage": "C:\\xampp\\htdocs\\retailmind\\src\\backend\\storage\\ml_models",
+  "service_account": "NT AUTHORITY\\SYSTEM",
+  "installed_at": "2026-11-05 09:57:00",
+  "effective_schedule": {
+    "daily_forecast_time": "01:00",
+    "weekly_retrain_day": "Sunday",
+    "weekly_retrain_time": "01:00",
+    "timezone": "Asia/Manila"
+  }
+}

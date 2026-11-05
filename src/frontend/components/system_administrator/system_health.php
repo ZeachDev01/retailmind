@@ -74,7 +74,6 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                     <p class="system-health-checked"><i class="bi bi-clock" aria-hidden="true"></i> Checked <?= htmlspecialchars($checkedAt) ?></p>
                 </div>
                 <div class="page-heading-actions">
-                    <a class="btn btn-quiet btn-icon" href="<?= htmlspecialchars(app_url('components/system_administrator/system_health.php')) ?>" title="Run all health checks again" aria-label="Refresh health checks"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh checks</a>
                     <span class="decision-pill <?= $overall === 'healthy' ? 'ok' : ($overall === 'critical' ? 'critical' : 'action') ?>" role="status" aria-live="polite"><i class="bi <?= htmlspecialchars($icons[$overall]) ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$overall]) ?></span>
                 </div>
             </header>

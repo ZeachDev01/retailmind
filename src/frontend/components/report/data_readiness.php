@@ -264,26 +264,6 @@ function build_query(array $params): string {
                 </div>
             <?php endforeach; ?>
         </section>
-        <section class="forecast-help-card" aria-labelledby="forecast-help-heading">
-            <h2 id="forecast-help-heading"><i class="bi bi-info-circle" aria-hidden="true"></i> Help &amp; definitions</h2>
-            <p>Quick explanations for training readiness and forecast statuses.</p>
-            <details class="forecast-help-item">
-                <summary>How training eligibility works</summary>
-                <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
-            </details>
-
-            <details class="forecast-help-item">
-                <summary>Other forecast statuses</summary>
-                <section class="forecast-overview" aria-label="Readiness overview stats">
-                    <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
-                    <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
-                    <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
-                    <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
-                    <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
-                </section>
-            </details>
-        </section>
-
         <section class="dashboard-section" aria-label="Product readiness management">
             <div class="section-header">
                 <h2>Product readiness</h2>
@@ -345,23 +325,42 @@ function build_query(array $params): string {
                                     <meter min="0" max="<?= max(1, (int)$row['required_usable_days']) ?>" value="<?= min((int)$row['accumulated_usable_days'], max(1, (int)$row['required_usable_days'])) ?>" aria-label="Usable sales days for <?= htmlspecialchars($row['product_name']) ?>"></meter>
                                 </td>
                                 <td>
-                                    <details class="readiness-row-details">
-                                        <summary><span class="readiness-check-icons" aria-label="Recent records and testing coverage">
-                                            <i class="bi bi-calendar-<?= $row['has_feature_window'] ? 'check' : 'x' ?>" role="img" aria-label="Recent 28 days: <?= $row['has_feature_window'] ? 'Passed' : 'Blocked' ?>"></i>
-                                            <i class="bi bi-clipboard-<?= $row['has_holdout_coverage'] ? 'check' : 'x' ?>" role="img" aria-label="Three test periods: <?= $row['has_holdout_coverage'] ? 'Passed' : 'Blocked' ?>"></i>
-                                        </span> Details</summary>
-                                        <div class="readiness-row-evidence">
-                                            <p>Recent 28 days: <strong><?= $row['has_feature_window'] ? 'Passed' : 'Blocked' ?></strong></p>
-                                            <p>Three test periods: <strong><?= $row['has_holdout_coverage'] ? 'Passed' : 'Blocked' ?></strong></p>
-                                            <p>Checked through <?= htmlspecialchars($row['eligibility_through_date']) ?></p>
-                                            <p>History dates: <?= $historyRange ?></p>
-                                            <?php foreach (array_merge($row['eligibility_blockers'], $row['eligibility_actions']) as $detail): ?>
-                                                <p><?= htmlspecialchars($detail) ?></p>
-                                            <?php endforeach; ?>
-                                            <p><?= (int)$row['days_with_sales'] ?> days with sales; <?= (int)$row['genuine_zero_days'] ?> confirmed zero-sales days; <?= number_format((int)$row['total_qty_sold']) ?> units sold.</p>
-                                            <?php if (!empty($row['forecast_reason'])): ?><p><?= htmlspecialchars($row['forecast_reason']) ?></p><?php endif; ?>
-                                        </div>
-                                    </details>
+                                    <button type="button" class="btn btn-small btn-secondary" data-readiness-details="readiness-evidence-<?= (int)$row['product_id'] ?>" aria-haspopup="dialog" aria-controls="readiness-drawer" aria-label="Data checks for <?= htmlspecialchars($row['product_name']) ?>">Details <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
+                                    <template id="readiness-evidence-<?= (int)$row['product_id'] ?>">
+                                        <section class="readiness-evidence-product">
+                                            <h3><?= htmlspecialchars($row['product_name']) ?></h3>
+                                            <p class="u-text-muted"><?= htmlspecialchars($row['sku']) ?> &middot; <?= htmlspecialchars($row['category']) ?></p>
+                                            <p class="readiness-evidence-status"><?= htmlspecialchars($readinessState['label']) ?></p>
+                                            <p><?= htmlspecialchars($readinessState['reason']) ?></p>
+                                        </section>
+                                        <section class="readiness-evidence-section">
+                                            <h3>Data checks</h3>
+                                            <dl class="readiness-evidence-list">
+                                                <?php foreach ([
+                                                    ['Usable sales history', (int)$row['accumulated_usable_days'] >= (int)$row['required_usable_days']],
+                                                    ['Recent 28 days', $row['has_feature_window']],
+                                                    ['Three test periods', $row['has_holdout_coverage']],
+                                                ] as [$checkLabel, $passed]): ?>
+                                                    <div><dt><?= $checkLabel ?></dt><dd class="readiness-check-result <?= $passed ? 'is-passed' : 'is-blocked' ?>"><i class="bi bi-<?= $passed ? 'check-circle' : 'exclamation-circle' ?>" aria-hidden="true"></i> <?= $passed ? 'Passed' : 'Blocked' ?></dd></div>
+                                                <?php endforeach; ?>
+                                                <div><dt>Usable days</dt><dd><?= (int)$row['accumulated_usable_days'] ?> / <?= (int)$row['required_usable_days'] ?></dd></div>
+                                            </dl>
+                                        </section>
+                                        <section class="readiness-evidence-section">
+                                            <h3>Sales history</h3>
+                                            <dl class="readiness-evidence-list">
+                                                <div><dt>Checked through</dt><dd><?= htmlspecialchars($row['eligibility_through_date']) ?></dd></div>
+                                                <div><dt>History dates</dt><dd><?= $historyRange ?></dd></div>
+                                                <div><dt>Days with sales</dt><dd><?= (int)$row['days_with_sales'] ?></dd></div>
+                                                <div><dt>Confirmed zero-sales days</dt><dd><?= (int)$row['genuine_zero_days'] ?></dd></div>
+                                                <div><dt>Units sold</dt><dd><?= number_format((int)$row['total_qty_sold']) ?></dd></div>
+                                            </dl>
+                                        </section>
+                                        <?php foreach (['Needs attention' => $row['eligibility_blockers'], 'Next steps' => $row['eligibility_actions']] as $heading => $details): ?>
+                                            <?php if ($details): ?><section class="readiness-evidence-section"><h3><?= $heading ?></h3><ul><?php foreach ($details as $detail): ?><li><?= htmlspecialchars($detail) ?></li><?php endforeach; ?></ul></section><?php endif; ?>
+                                        <?php endforeach; ?>
+                                        <?php if (!empty($row['forecast_reason'])): ?><section class="readiness-evidence-section"><h3>Forecast note</h3><p><?= htmlspecialchars($row['forecast_reason']) ?></p></section><?php endif; ?>
+                                    </template>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -393,7 +392,49 @@ function build_query(array $params): string {
                 </nav>
             <?php endif; ?>
         </section>
+        <section class="forecast-help-card" aria-labelledby="forecast-help-heading">
+            <h2 id="forecast-help-heading"><i class="bi bi-info-circle" aria-hidden="true"></i> Help &amp; definitions</h2>
+            <p>Quick explanations for training readiness and forecast statuses.</p>
+            <details class="forecast-help-item">
+                <summary>How training eligibility works</summary>
+                <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
+            </details>
+
+            <details class="forecast-help-item">
+                <summary>Other forecast statuses</summary>
+                <section class="forecast-overview" aria-label="Readiness overview stats">
+                    <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
+                    <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
+                    <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
+                    <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
+                    <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
+                </section>
+            </details>
+        </section>
+
     </main>
 </div>
+<div class="rm-drawer-overlay" id="readiness-drawer" aria-hidden="true">
+    <aside class="rm-drawer" role="dialog" aria-modal="true" aria-labelledby="readiness-drawer-title">
+        <header class="rm-drawer-header">
+            <div><h2 id="readiness-drawer-title">Product data checks</h2><p>Sales history and training readiness</p></div>
+            <button type="button" class="rm-close" data-close-drawer aria-label="Close data checks"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </header>
+        <div class="rm-drawer-body" id="readiness-drawer-body"></div>
+    </aside>
+</div>
+<script>
+(() => {
+    const drawer = document.getElementById('readiness-drawer');
+    const body = document.getElementById('readiness-drawer-body');
+    document.querySelector('.readiness-catalog').addEventListener('click', event => {
+        const button = event.target.closest('[data-readiness-details]');
+        if (!button) return;
+        body.replaceChildren(document.getElementById(button.dataset.readinessDetails).content.cloneNode(true));
+        body.scrollTop = 0;
+        RetailMindUI.openOverlay(drawer);
+    });
+})();
+</script>
 </body>
 </html>

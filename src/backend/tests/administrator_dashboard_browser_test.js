@@ -47,6 +47,7 @@ function render(period, data = payload) {
             return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: render(url.searchParams.get('period') || 'today')});
         });
         await page.goto('http://dashboard.test/');
+        assert.equal(await page.getByRole('link', {name: 'Refresh', exact: true}).count(), 0, 'Dashboard omits the manual Refresh control');
         assert.equal(await page.locator('#gross-sales-card-value').innerText(), '₱100.00');
         assert.match(await page.getByRole('link', {name: 'View Stock Issues', exact: true}).getAttribute('href'), /administrator\/stock_issues\.php$/);
         assert.match(await page.getByRole('link', {name: 'View sales exceptions', exact: true}).getAttribute('href'), /sales\.php\?tab=reversals$/);
