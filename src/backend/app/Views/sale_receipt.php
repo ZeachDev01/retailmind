@@ -9,7 +9,7 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareSaleViewData($sale ?? [], $ite
     <div class="receipt-header">
         <div class="receipt-brand">
             <?php if ($v['store']['logo'] !== ''): ?><img class="receipt-logo" src="<?= $v['store']['logo'] ?>" alt="Store logo"><?php endif; ?>
-            <h1><?= $v['store']['name'] ?></h1>
+            <?php if ($v['store']['name'] !== ''): ?><h1><?= $v['store']['name'] ?></h1><?php endif; ?>
             <div class="receipt-store-line"><?= $v['store']['tagline'] ?></div>
             <div><?= $v['store']['address'] ?></div>
             <div><?= $v['store']['contact'] ?></div>

@@ -153,9 +153,10 @@ final class ReceiptEngine
     {
         $settings = $this->storeSettings();
         $contact = array_filter([$settings['store_phone'] ?? '', $settings['store_email'] ?? '']);
+        $logo = ReceiptLogo::source($settings['receipt_logo'] ?? '');
         return [
-            'name' => $settings['store_name'] ?: 'Shalom Store',
-            'logo' => ReceiptLogo::source($settings['receipt_logo'] ?? ''),
+            'name' => $settings['store_name'] !== '' ? $settings['store_name'] : ($logo !== '' ? '' : 'Shalom Store'),
+            'logo' => $logo,
             'tagline' => 'Official sales receipt',
             'address' => $settings['store_address'] ?: 'Address not configured',
             'contact' => $contact ? implode(' / ', $contact) : 'Contact not configured',

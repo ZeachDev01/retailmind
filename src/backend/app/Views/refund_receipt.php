@@ -6,7 +6,7 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareRefundViewData($details ?? [],
     <div class="receipt-header">
         <div class="receipt-brand">
             <?php if ($v['store']['logo'] !== ''): ?><img class="receipt-logo" src="<?= $v['store']['logo'] ?>" alt="Store logo"><?php endif; ?>
-            <h3><?= $v['store']['name'] ?></h3>
+            <?php if ($v['store']['name'] !== ''): ?><h3><?= $v['store']['name'] ?></h3><?php endif; ?>
             <div class="receipt-store-line">Refund Receipt</div>
             <div><?= $v['store']['address'] ?></div>
             <div><?= $v['store']['contact'] ?></div>

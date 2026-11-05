@@ -19,6 +19,7 @@ $fieldMeta = [
         'type' => 'text',
         'autocomplete' => 'organization',
         'required' => true,
+        'help' => 'Optional when a receipt logo is saved. The logo appears alone on receipts.',
     ],
     'business_identifier' => [
         'type' => 'text',
@@ -55,6 +56,7 @@ $fieldMeta = [
     ],
 ];
 $settings = get_store_settings($pdo);
+$receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? '');
 
 $service = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
 $fields = [
@@ -91,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $updates[$key] = trim($_POST[$key]);
             }
-            if ($updates['store_name'] === '') {
-                throw new InvalidArgumentException('Store name is required.');
+            if ($updates['store_name'] === '' && $receiptLogo === '') {
+                throw new InvalidArgumentException('Store name is required unless a receipt logo is saved.');
             }
             if ($updates['store_email'] !== '' && filter_var($updates['store_email'], FILTER_VALIDATE_EMAIL) === false) {
                 throw new InvalidArgumentException('Enter a valid store email address.');
@@ -112,6 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Store and receipt settings saved. Test email again to enable alerts for the new Store email address.'
                 : 'Store and receipt settings saved.';
         } elseif ($action === 'save_receipt_logo' || $action === 'remove_receipt_logo') {
+            if ($action === 'remove_receipt_logo' && trim((string)($settings['store_name'] ?? '')) === '') {
+                throw new InvalidArgumentException('Save a Store name before removing the receipt logo.');
+            }
             $logo = $action === 'remove_receipt_logo' ? '' : \App\Receipts\ReceiptLogo::fromUpload($_FILES['receipt_logo'] ?? null);
             \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $logo, $action): void {
                 save_key_value_settings($pdo, 'store_settings', ['receipt_logo' => $logo], (int)$_SESSION['user_id']);
@@ -192,6 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $settings = get_store_settings($pdo);
+$receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? '');
 $requested = $service->storeSettings();
 $effective = $service->thresholdsFor('admin');
 ?>
@@ -228,9 +234,9 @@ $effective = $service->thresholdsFor('admin');
                 <div class="form-grid">
                     <?php foreach ($receiptFields as $key => $label):
                         $meta = $fieldMeta[$key] ?? [];
-                        $isRequired = !empty($meta['required']);
+                        $isRequired = !empty($meta['required']) && !($key === 'store_name' && $receiptLogo !== '');
                         $isFull = !empty($meta['full']);
-                        $helpId = !empty($meta['help']) ? $key . '_help' : '';
+                        $helpId = !empty($meta['help']) && ($key !== 'store_name' || $receiptLogo !== '') ? $key . '_help' : '';
                     ?>
                         <div class="form-group<?= $isFull ? ' full' : '' ?>">
                             <label for="<?= htmlspecialchars($key) ?>">
@@ -269,8 +275,7 @@ $effective = $service->thresholdsFor('admin');
                 <div class="form-group">
                     <label for="receipt_logo">Receipt logo</label>
                     <input type="file" id="receipt_logo" name="receipt_logo" accept="image/jpeg,image/png" aria-describedby="receipt-logo-help">
-                    <small class="field-help" id="receipt-logo-help"><strong>Recommended size: 384 × 192 px (wide) or 192 × 192 px (square).</strong><br>JPG or PNG, up to 2 MB and 4 million pixels. Automatically fits 58/80 mm receipts in black and white. Use a simple, high-contrast logo. Existing receipts keep their original logo.</small>
-                    <?php $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? ''); ?>
+                    <small class="field-help" id="receipt-logo-help"><strong>Recommended size: 384 × 192 px (wide) or 192 × 192 px (square).</strong><br>JPG or PNG, up to 2 MB and 4 million pixels. Automatically fits 58/80 mm receipts in black and white and trims blank edges. Use a simple, high-contrast logo. Existing receipts keep their original logo. Remove it to print the Store name only.</small>
                     <?php if ($receiptLogo !== ''): ?>
                         <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo">
                     <?php else: ?>

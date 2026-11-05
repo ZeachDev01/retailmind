@@ -47,6 +47,7 @@ final class ReceiptLogo
                 if ($brightness < 160) imagesetpixel($output, $x, $y, $black);
             }
         }
+        $output = self::trimBlankMargins($output);
         ob_start();
         try {
             if (!imagepng($output, null, 9)) throw new RuntimeException('The receipt logo could not be processed. Try another image.');
@@ -64,6 +65,58 @@ final class ReceiptLogo
             || preg_match('~\Adata:image/png;base64,([A-Za-z0-9+/]+={0,2})\z~', $value, $match) !== 1) return '';
         $png = base64_decode($match[1], true);
         $info = $png === false ? false : @getimagesizefromstring($png);
-        return $info && $info[2] === IMAGETYPE_PNG && $info[0] <= 384 && $info[1] <= 192 ? $value : '';
+        if (!$info || $info[2] !== IMAGETYPE_PNG || $info[0] > 384 || $info[1] > 192) return '';
+        if (!function_exists('imagecreatefromstring')) return $value;
+        $image = @imagecreatefromstring($png);
+        if ($image === false) return $value;
+        $trimmed = self::trimBlankMargins($image);
+        if ($trimmed === $image) return $value;
+        ob_start();
+        try {
+            if (!imagepng($trimmed, null, 9)) return $value;
+            $png = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        return 'data:image/png;base64,' . base64_encode($png);
+    }
+
+    private static function trimBlankMargins(\GdImage $image): \GdImage
+    {
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $trueColor = imageistruecolor($image);
+        $minX = $width;
+        $minY = $height;
+        $maxX = -1;
+        $maxY = -1;
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                $color = imagecolorat($image, $x, $y);
+                if ($trueColor) {
+                    $red = ($color >> 16) & 255;
+                    $green = ($color >> 8) & 255;
+                    $blue = $color & 255;
+                } else {
+                    $rgb = imagecolorsforindex($image, $color);
+                    $red = $rgb['red'];
+                    $green = $rgb['green'];
+                    $blue = $rgb['blue'];
+                }
+                if (0.299 * $red + 0.587 * $green + 0.114 * $blue < 160) {
+                    if ($x < $minX) $minX = $x;
+                    if ($x > $maxX) $maxX = $x;
+                    if ($y < $minY) $minY = $y;
+                    if ($y > $maxY) $maxY = $y;
+                }
+            }
+        }
+        if ($maxX < 0 || ($minX === 0 && $minY === 0 && $maxX === $width - 1 && $maxY === $height - 1)) {
+            return $image;
+        }
+        $trimmed = imagecreatetruecolor($maxX - $minX + 1, $maxY - $minY + 1);
+        imagefill($trimmed, 0, 0, imagecolorallocate($trimmed, 255, 255, 255));
+        imagecopy($trimmed, $image, 0, 0, $minX, $minY, imagesx($trimmed), imagesy($trimmed));
+        return $trimmed;
     }
 }

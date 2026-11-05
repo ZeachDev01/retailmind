@@ -219,6 +219,7 @@ foreach ([58,80] as $width) {
         && str_contains($gcashHtml,'₱105.00'), 'GCash rendering preserves reference and customer amounts at either width');
 }
 $logo = 'data:image/png;base64,' . base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII='));
+$expectedLogo = \App\Receipts\ReceiptLogo::source($logo);
 $pdo->prepare("INSERT INTO store_settings VALUES ('receipt_logo', ?)")->execute([$logo]);
 $pdo->exec("INSERT INTO sales VALUES (503,1,2,25,'cash','2026-11-05 10:00:00');
     INSERT INTO sale_items VALUES (3,503,100,1,25,25);
@@ -234,18 +235,28 @@ $pdo->exec("UPDATE store_settings SET setting_value='' WHERE setting_key='receip
 $logoSale = $engine->fetchSale(503);
 $logoRefund = $engine->fetchRefundForCashier(202,1,1);
 $logoGCash = $engine->fetchGCash(905,1,'cashier');
-$assert(($logoSale['receipt_store']['logo'] ?? '') === $logo
-    && ($logoRefund['store']['logo'] ?? '') === $logo && ($logoGCash['store']['logo'] ?? '') === $logo,
+$assert(($logoSale['receipt_store']['logo'] ?? '') === $expectedLogo
+    && ($logoRefund['store']['logo'] ?? '') === $expectedLogo && ($logoGCash['store']['logo'] ?? '') === $expectedLogo,
     'Removing the current logo never changes any completed receipt logo');
 foreach ([58,80] as $width) {
     ob_start(); ReceiptEngine::renderSale($logoSale,$engine->fetchItems(503),$logoSale['receipt_store'],$width); $saleHtml = ob_get_clean();
     ob_start(); ReceiptEngine::renderRefund($logoRefund,$width); $refundHtml = ob_get_clean();
     ob_start(); ReceiptEngine::renderGCash($logoGCash,$width); $gcashHtml = ob_get_clean();
     foreach ([$saleHtml,$refundHtml,$gcashHtml] as $html) {
-        $assert(str_contains($html,'src="'.$logo.'"') && strpos($html,'receipt-logo') < strpos($html,'<h'),
+        $assert(str_contains($html,'src="'.$expectedLogo.'"') && strpos($html,'receipt-logo') < strpos($html,'<h'),
             'Every receipt places the original logo above Store details at either paper width');
     }
 }
+$pdo->exec("UPDATE store_settings SET setting_value='' WHERE setting_key='store_name'");
+$pdo->prepare("UPDATE store_settings SET setting_value=? WHERE setting_key='receipt_logo'")->execute([$logo]);
+$blankStore = $engine->storeInfo();
+$assert($blankStore['name'] === '' && $blankStore['logo'] === $expectedLogo,
+    'A saved logo allows a blank Store name');
+ob_start();
+ReceiptEngine::renderSale(['sale_id'=>1,'sale_date'=>'2026-11-05 10:00:00'],[],$blankStore,80);
+$blankHtml = ob_get_clean();
+$assert(!str_contains($blankHtml,'<h1>') && str_contains($blankHtml,'src="'.$expectedLogo.'"'),
+    'A blank Store name is omitted above the receipt logo');
 $assert(ReceiptEngine::prepareSaleViewData($reprintedSale,$reprintedItems,$reprintedSale['receipt_store'])['store']['logo'] === '',
     'Receipts saved before logo support remain without a logo');
 $assert(ReceiptEngine::prepareSaleViewData($legacySale,[],['logo'=>$logo])['store']['logo'] === '',

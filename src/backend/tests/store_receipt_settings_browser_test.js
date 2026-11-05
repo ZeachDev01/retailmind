@@ -108,6 +108,7 @@ const values = {
         const originalLogo = await page.locator('#receipt-logo-preview').getAttribute('src');
         assert.match(originalLogo, /^data:image\/png;base64,/);
         assert(await page.locator('#receipt-logo-preview').evaluate(image => image.complete && image.naturalWidth > 0));
+        assert.deepEqual(await page.locator('#receipt-logo-preview').evaluate(image => [image.naturalWidth, image.naturalHeight]), [48, 16], 'Blank logo margins are trimmed');
         for (const width of [375, 1440]) {
             await page.setViewportSize({width, height: 1000});
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -131,6 +132,15 @@ const values = {
         await page.goto(route);
         assert.notEqual(await page.locator('#receipt-logo-preview').getAttribute('src'), originalLogo, 'JPG replaces the saved PNG');
         assert.deepEqual(await page.locator('#receipt-logo-preview').evaluate(image => [image.naturalWidth, image.naturalHeight]), [384, 192], 'Large logos fit the thermal bounds without changing aspect ratio');
+        assert.match(await (await post({action: 'save_receipts', ...values, store_name: ''})).text(), /Store and receipt settings saved/);
+        await page.goto(route);
+        assert.equal(await page.locator('#store_name').inputValue(), '');
+        assert.equal(await page.locator('#store_name').getAttribute('required'), null, 'Store name is optional when a logo is saved');
+        assert.equal(await page.locator('#receipt-logo-preview').count(), 1);
+        assert.equal(state().store.find(row => row.setting_key === 'store_name').setting_value, '');
+        assert.match(await (await post({action: 'remove_receipt_logo'})).text(), /Save a Store name before removing/);
+        assert.equal(await page.locator('#receipt-logo-preview').count(), 1, 'Logo removal cannot leave the receipt without an identity');
+        assert.match(await (await post({action: 'save_receipts', ...values})).text(), /Store and receipt settings saved/);
         assert.match(await (await logoPost({...logoFile, buffer: Buffer.alloc(2 * 1024 * 1024 + 1)})).text(), /Choose a valid JPG or PNG/);
         assert.equal((await context.request.post(route, {multipart: {action: 'save_receipt_logo', receipt_logo: logoFile}})).status(), 403);
         assert.match(await (await post({action: 'remove_receipt_logo'})).text(), /Receipt logo removed/);
