@@ -269,7 +269,7 @@ $effective = $service->thresholdsFor('admin');
                 <div class="form-group">
                     <label for="receipt_logo">Receipt logo</label>
                     <input type="file" id="receipt_logo" name="receipt_logo" accept="image/jpeg,image/png" aria-describedby="receipt-logo-help">
-                    <small class="field-help" id="receipt-logo-help">JPG or PNG, up to 2 MB and 4 million pixels. Saved in black and white for 58/80 mm receipts. Use a simple, high-contrast logo. Existing receipts keep their original logo.</small>
+                    <small class="field-help" id="receipt-logo-help"><strong>Recommended size: 384 × 192 px (wide) or 192 × 192 px (square).</strong><br>JPG or PNG, up to 2 MB and 4 million pixels. Automatically fits 58/80 mm receipts in black and white. Use a simple, high-contrast logo. Existing receipts keep their original logo.</small>
                     <?php $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? ''); ?>
                     <?php if ($receiptLogo !== ''): ?>
                         <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo">
