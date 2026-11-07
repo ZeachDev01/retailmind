@@ -613,21 +613,12 @@ class DemandHistoryService
             }
         }
         
-        // ADR-0005 Readiness Policy:
-        $usable = $summary['usable_history_days'];
-        if ($usable < 56) {
-            $summary['readiness_level'] = 'Insufficient';
-            $summary['limitation_marker'] = 'Usable history under 56 days (minimum required for reliable forecasting)';
-        } elseif ($usable < 180) {
-            $summary['readiness_level'] = 'Low';
-            $summary['limitation_marker'] = 'Early history (56-179 days)';
-        } elseif ($usable < 365) {
-            $summary['readiness_level'] = 'Medium';
-            $summary['limitation_marker'] = 'Standard history (180-364 days)';
-        } else {
-            $summary['readiness_level'] = 'High';
-            $summary['limitation_marker'] = null;
-        }
+        // ADR-0005 Readiness Policy, from the shared band definition. This service
+        // always qualifies a mature Product, so a usable count at or above the High
+        // threshold still reads as High.
+        $readiness = ForecastMetrics::readinessLevel($summary['usable_history_days'], true);
+        $summary['readiness_level'] = $readiness['level'];
+        $summary['limitation_marker'] = $readiness['limitation_marker'];
         
         return $summary;
     }

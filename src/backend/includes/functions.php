@@ -394,32 +394,19 @@ function get_forecasting_readiness(PDO $pdo, ?string $throughDate = null): array
         $row['training_eligible'] = $isEligible;
         $row['eligibility_through_date'] = $throughDate;
 
-        if (!$hasPrediction) {
-            if ($isEligible) {
-                $row['forecast_status'] = 'Ready for training';
-                $row['forecast_reason'] = 'Ready for training. Product meets all prerequisites (' . $accumulatedUsable . ' usable days, supported feature window, and holdout coverage). Forecast Readiness bands are separate evidence ratings; candidate qualification, observation, local Administrator approval, and daily Forecast Generation remain separate steps.';
-            } else {
-                $row['forecast_status'] = 'Insufficient Data';
-                $row['forecast_reason'] = ($elig && !empty($elig['reason']))
-                    ? $elig['reason']
-                    : sprintf('%d accumulated usable days available. At least %d accumulated usable days are required.', $accumulatedUsable, App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS);
-            }
-            continue;
-        }
-        if ($modelVersion !== $currentModelVersion) {
-            $row['forecast_status'] = 'Model Requires Retraining';
-            $row['forecast_reason'] = 'The stored forecast was created by an older model version.';
-            continue;
-        }
-        if ($lastSaleAt && $generatedAt && strtotime((string)$lastSaleAt) > strtotime((string)$generatedAt)) {
-            $row['forecast_status'] = 'Model Requires Retraining';
-            $row['forecast_reason'] = 'Sales history changed after the latest forecast.';
-            continue;
-        }
-
-        $row['can_show_forecast'] = true;
-        $row['forecast_status'] = 'Forecast Generated';
-        $row['forecast_reason'] = 'Forecast available. Training Eligibility and Forecast Readiness evidence bands are separate from candidate qualification, observation, local Administrator approval, and daily Forecast Generation.';
+        // One ladder, owned by ForecastUsability: no forecast -> eligibility;
+        // stale model version or a sale after generation -> retraining; else the
+        // stored forecast is usable evidence.
+        $readiness = App\Forecasting\ForecastUsability::readinessStatus(
+            $elig ?? [],
+            $hasPrediction ? ['model_version' => $modelVersion] : null,
+            $currentModelVersion,
+            $lastSaleAt !== null ? (string)$lastSaleAt : null,
+            $generatedAt !== null ? (string)$generatedAt : null
+        );
+        $row['forecast_status'] = $readiness['status'];
+        $row['forecast_reason'] = $readiness['reason'];
+        $row['can_show_forecast'] = $readiness['status'] === 'Forecast Generated';
     }
     unset($row);
 

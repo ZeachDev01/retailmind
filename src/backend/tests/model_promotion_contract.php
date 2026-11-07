@@ -3,11 +3,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
+use App\Forecasting\StoreModelGovernanceService;
 
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {
@@ -64,11 +64,11 @@ try {
     ");
 
     $evalService = new CandidateEvaluationService($pdo);
-    $promotionService = new ModelPromotionService($pdo, $evalService);
+    $governance = new StoreModelGovernanceService($pdo, $evalService);
 
     // 1. Missing evaluation rejection
     try {
-        $promotionService->promote('v_missing', 1);
+        $governance->promote('v_missing', 1);
         $assert(false, 'Should throw exception for missing evaluations');
     } catch (InvalidArgumentException $e) {
         $assert(strpos($e->getMessage(), 'incomplete') !== false || strpos($e->getMessage(), 'missing') !== false, 'Correct exception for missing eval');
@@ -82,7 +82,7 @@ try {
                ('v_failed', 28, 'passed', '2026-01-01', '2026-12-31')
     ");
     try {
-        $promotionService->promote('v_failed', 1);
+        $governance->promote('v_failed', 1);
         $assert(false, 'Should throw exception for failed evaluations');
     } catch (InvalidArgumentException $e) {
         $assert(strpos($e->getMessage(), 'failed') !== false || strpos($e->getMessage(), 'rejected') !== false, 'Correct exception for failed eval');
@@ -95,7 +95,7 @@ try {
                ('v_success', 14, 'passed', '2026-01-01', '2026-12-31'),
                ('v_success', 28, 'passed', '2026-01-01', '2026-12-31')
     ");
-    $promotionService->promote('v_success', 2);
+    $governance->promote('v_success', 2);
     
     $settings = $pdo->query("SELECT setting_key, setting_value FROM platform_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
     $assert($settings['ml_approved_model_version'] === 'v_success', 'Successfully sets approved model version');
@@ -114,13 +114,13 @@ try {
                ('v_success_2', 14, 'passed', '2026-01-01', '2026-12-31'),
                ('v_success_2', 28, 'passed', '2026-01-01', '2026-12-31')
     ");
-    $promotionService->promote('v_success_2', 3);
+    $governance->promote('v_success_2', 3);
     $settings = $pdo->query("SELECT setting_key, setting_value FROM platform_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
     $assert($settings['ml_approved_model_version'] === 'v_success_2', 'Successfully sets new approved model version');
     $assert($settings['ml_previous_approved_model_version'] === 'v_success', 'Successfully retains previous model version');
 
     // 5. Successful rollback
-    $promotionService->rollback(3);
+    $governance->rollback(3);
     $settings = $pdo->query("SELECT setting_key, setting_value FROM platform_settings")->fetchAll(PDO::FETCH_KEY_PAIR);
     $assert($settings['ml_approved_model_version'] === 'v_success', 'Successfully restored previous model version');
     
@@ -130,22 +130,22 @@ try {
     $assert((int)$logs[0]['user_id'] === 3, 'Audit log has correct user');
 
     // 6. Rollback fails if no previous
-    $promotionService->promote('v_success_2', 3); // previous is v_success
+    $governance->promote('v_success_2', 3); // previous is v_success
     $pdo->exec("DELETE FROM platform_settings WHERE setting_key = 'ml_previous_approved_model_version'");
     try {
-        $promotionService->rollback(3);
+        $governance->rollback(3);
         $assert(false, 'Should throw exception if no previous model to rollback to');
     } catch (RuntimeException $e) {
         $assert(strpos($e->getMessage(), 'compatible') !== false || strpos($e->getMessage(), 'previous') !== false, 'Correct exception for missing previous');
     }
 
 } catch (Throwable $e) {
-    $failures[] = 'ModelPromotionService tests threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
+    $failures[] = 'Model promotion tests threw: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
 }
 
 if ($failures) {
-    fwrite(STDERR, "ModelPromotionService tests failed:\n- " . implode("\n- ", $failures) . "\n");
+    fwrite(STDERR, "Model promotion (StoreModelGovernanceService) tests failed:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);
 }
 
-echo "ModelPromotionService tests: passed\n";
+echo "Model promotion (StoreModelGovernanceService) tests: passed\n";

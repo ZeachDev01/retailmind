@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
+require_once __DIR__ . '/../app/Forecasting/ForecastAggregateReader.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 use App\Forecasting\DemandForecastService;
@@ -88,24 +89,17 @@ try {
     ");
     $pdo->sqliteCreateFunction('CURDATE', fn() => '2026-12-01');
     $pdo->sqliteCreateFunction('NOW', fn() => '2026-12-01');
-    $reportRoot = __DIR__ . '/../../frontend/components/report/';
-    foreach (['forecast_analytics.php', 'report_generation.php'] as $reportFile) {
-        $source = file_get_contents($reportRoot . $reportFile);
-        if ($reportFile === 'report_generation.php') {
-            $source = substr($source, strpos($source, "case 'forecast_actual':"));
-        }
-        if (!preg_match('/"\s*(SELECT[^"]*FROM demand_forecasts df[^"]*)"/s', $source, $match)) {
-            throw new RuntimeException("Missing forecast report query in $reportFile");
-        }
-        $sql = str_replace(['DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)', '{$productSql}', '{$saleUnitsSql}'],
-                           ["DATE(df.forecast_origin, '+28 days')", '', sales_units_sql($pdo, 'si')], $match[1]);
-        $query = $pdo->prepare($sql);
-        $query->execute($reportFile === 'report_generation.php' ? ['2026-01-01', '2026-12-31'] : []);
-        $rows = $query->fetchAll(PDO::FETCH_ASSOC);
-        $assert(count($rows) === 1, "$reportFile must exclude observation forecasts");
-        $assert((int)($rows[0]['predicted_units'] ?? $rows[0]['forecast_quantity'] ?? 0) === 7,
-                "$reportFile must preserve approved forecast values");
-    }
+
+    // Direct test of the shared aggregate reader. This replaces the old practice
+    // of scraping the report sources for embedded SQL and replaying it.
+    $reader = new \App\Forecasting\ForecastAggregateReader($pdo);
+    $assert($reader->read(10) === [], 'Observation job must not expose routine aggregates');
+    $approved = $reader->read(11);
+    $assert(count($approved) === 1 && isset($approved[1]), 'Approved job must aggregate product 1');
+    $assert((int)($approved[1]['forecast_28_day'] ?? 0) === 7, 'Aggregate must preserve approved forecast values');
+    $assert($approved[1]['complete_forecast'] === false, 'A single-row horizon must be incomplete');
+    $latest = $reader->readLatestSuccessful();
+    $assert((int)($latest[1]['forecast_28_day'] ?? 0) === 7, 'Latest successful aggregate must preserve approved forecast values');
     
     if (empty($failures)) {
         echo "PASS: test_aggregates_forecast_horizons\n";

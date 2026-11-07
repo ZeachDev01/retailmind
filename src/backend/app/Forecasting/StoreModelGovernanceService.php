@@ -412,6 +412,10 @@ class StoreModelGovernanceService
     /**
      * Determines whether a candidate model version meets all criteria for live Store activation.
      * Enforces ADR-0005 quality and observation gates and ADR-0022 local Administrator operational approval.
+     *
+     * Under ADR-0022 the automated technical qualification auto-accepts the technical review whenever
+     * the automated gates pass and no Super Administrator rejection was recorded; a manual
+     * technical sign-off is not a mandatory activation gate.
      */
     public function validateActivationReadiness(string $modelVersion, string $asOfDate): array
     {
@@ -489,6 +493,9 @@ class StoreModelGovernanceService
         }
 
         $automatedTechPassed = $checks['quality_gates_passed'] && $checks['observation_period_completed'] && $checks['not_demo_artifact'] && $checks['valid_version_format'];
+        if ($automatedTechPassed && $techDecision !== 'rejected') {
+            $checks['technical_review_accepted'] = true;
+        }
         if (empty($reasons)) {
             $artifact = $this->validateModelArtifactCompatibility($modelVersion, 'Activation');
             if (!$artifact['valid']) $reasons[] = $artifact['reason'];
@@ -676,7 +683,7 @@ class StoreModelGovernanceService
                 throw new \InvalidArgumentException("Candidate $modelVersion failed evaluation gate at horizon " . $eval['horizon_days']);
             }
         }
-        $thresholds = $this->evaluationService->getThresholds();
+        $thresholds = $this->getThresholds();
         $hasThresholds = ($thresholds['7'] !== null || $thresholds['14'] !== null || $thresholds['28'] !== null);
         if ($hasThresholds) {
             $gateResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
@@ -908,7 +915,7 @@ class StoreModelGovernanceService
         // 1. Candidate Quality Evaluation
         $qualityResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
         $candidateEvals = $qualityResult['horizons'];
-        $thresholds = $this->evaluationService->getThresholds();
+        $thresholds = $this->getThresholds();
 
         $horizonsData = [];
         $dataWindowStart = null;

@@ -149,6 +149,8 @@ foreach ($actualVsForecast as $row) {
 }
 foreach ($productPerf as &$perf) {
     $perf['mean_err'] = $perf['count'] > 0 ? $perf['abs_err'] / $perf['count'] : 0;
+    // Deliberately not ForecastMetrics::wape: this display stores a percentage
+    // (x100) and shows 0 rather than null when a Product has no actual demand.
     $perf['wape'] = $perf['actual'] > 0 ? ($perf['abs_err'] / $perf['actual']) * 100 : 0;
 }
 unset($perf);

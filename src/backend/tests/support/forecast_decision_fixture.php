@@ -138,7 +138,7 @@ switch ($argv[1]) {
     case 'suspend':
     case 'activate':
         $pdo->exec("UPDATE ml_jobs SET status='succeeded' WHERE job_id=10");
-        $settings = new App\Forecasting\CandidateEvaluationService($pdo);
+        $settings = new App\Forecasting\StoreModelGovernanceService($pdo);
         $settings->setObservationMode($argv[1] === 'observe', 3);
         $settings->setRecommendationsSuspended($argv[1] === 'suspend', 3);
         break;

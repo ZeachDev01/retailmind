@@ -13,8 +13,7 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreTrainingEligibilityService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
@@ -23,8 +22,7 @@ require_once __DIR__ . '/../app/Services/MlJobService.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Forecasting\StoreTrainingEligibilityService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\DemandForecastService;
@@ -186,10 +184,9 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)"
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 5)");
 
 $evalService = new CandidateEvaluationService($pdo);
-$promotionService = new ModelPromotionService($pdo, $evalService);
 $testModelsDir = sys_get_temp_dir() . '/retailmind_test_models_' . uniqid();
 mkdir($testModelsDir, 0777, true);
-$activationService = new StoreActivationService($pdo, $evalService, $promotionService, $testModelsDir);
+$activationService = new StoreModelGovernanceService($pdo, $evalService, $testModelsDir);
 
 register_shutdown_function(function() use ($testModelsDir) {
     if (is_dir($testModelsDir)) {
@@ -292,7 +289,7 @@ try {
 assert_true($remoteActivationThrown, 'Server-side activation rejects remote mutation');
 
 // Configure quality thresholds: 7d <= 0.25, 14d <= 0.30, 28d <= 0.35
-$evalService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
+$activationService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
 
 // Seed evaluations for candidateV1: WAPE passes thresholds AND outperforms baseline
 foreach ([7 => [0.18, 0.28, 5.2, 7.1], 14 => [0.21, 0.32, 6.8, 9.4], 28 => [0.24, 0.36, 8.5, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {

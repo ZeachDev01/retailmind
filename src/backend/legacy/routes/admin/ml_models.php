@@ -2,7 +2,6 @@
 require_once __DIR__ . '/../../../includes/auth.php';
 require_once __DIR__ . '/../../../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../../../app/Forecasting/StoreModelGovernanceService.php';
-require_once __DIR__ . '/../../../app/Forecasting/ModelPromotionService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\CandidateEvaluationService;

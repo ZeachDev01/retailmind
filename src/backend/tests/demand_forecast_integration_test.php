@@ -10,6 +10,7 @@ require_once __DIR__ . '/../includes/functions.php';
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\StoreModelGovernanceService;
 
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {
@@ -334,21 +335,21 @@ try {
     ");
 
     // Test Ineligible Case: Observation Mode
-    $evalService = new CandidateEvaluationService($pdo);
-    $evalService->setObservationMode(true, 1);
+    $governance = new StoreModelGovernanceService($pdo);
+    $governance->setObservationMode(true, 1);
     $obsRecs = array_column($queueService->getRecommendations(20, $asOfDate), null, 'product_id');
     $assert($obsRecs[1]['basis'] === 'Stock-rule suggestion', "Observation mode must fall back to stock rule");
     $assert($obsRecs[1]['expected_sales_28_day'] === null, "Observation mode expected sales must be null");
     $assert(str_contains($obsRecs[1]['forecast_status'], 'Observation Mode: forecast is observation telemetry only'), "Observation mode label must be present");
-    $evalService->setObservationMode(false, 1);
+    $governance->setObservationMode(false, 1);
 
     // Test Ineligible Case: Recommendation Suspension
-    $evalService->setRecommendationsSuspended(true, 1);
+    $governance->setRecommendationsSuspended(true, 1);
     $suspRecs = array_column($queueService->getRecommendations(20, $asOfDate), null, 'product_id');
     $assert($suspRecs[1]['basis'] === 'Stock-rule suggestion', "Suspension must fall back to stock rule");
     $assert($suspRecs[1]['expected_sales_28_day'] === null, "Suspension expected sales must be null");
     $assert(str_contains($suspRecs[1]['forecast_status'], 'Recommendations Suspended by Administrator'), "Suspension label must be present");
-    $evalService->setRecommendationsSuspended(false, 1);
+    $governance->setRecommendationsSuspended(false, 1);
 
     // Test Ineligible Case: Failed Job
     $pdo->exec("UPDATE ml_jobs SET status = 'failed' WHERE job_id = 20");
