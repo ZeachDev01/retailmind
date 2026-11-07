@@ -412,6 +412,10 @@ class StoreModelGovernanceService
     /**
      * Determines whether a candidate model version meets all criteria for live Store activation.
      * Enforces ADR-0005 quality and observation gates and ADR-0022 local Administrator operational approval.
+     *
+     * Under ADR-0022 the automated technical qualification auto-accepts the technical review whenever
+     * the automated gates pass and no Super Administrator rejection was recorded; a manual
+     * technical sign-off is not a mandatory activation gate.
      */
     public function validateActivationReadiness(string $modelVersion, string $asOfDate): array
     {
@@ -489,6 +493,9 @@ class StoreModelGovernanceService
         }
 
         $automatedTechPassed = $checks['quality_gates_passed'] && $checks['observation_period_completed'] && $checks['not_demo_artifact'] && $checks['valid_version_format'];
+        if ($automatedTechPassed && $techDecision !== 'rejected') {
+            $checks['technical_review_accepted'] = true;
+        }
         if (empty($reasons)) {
             $artifact = $this->validateModelArtifactCompatibility($modelVersion, 'Activation');
             if (!$artifact['valid']) $reasons[] = $artifact['reason'];

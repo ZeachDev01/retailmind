@@ -13,13 +13,10 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
-use App\Forecasting\StoreActivationService;
 use App\Forecasting\StoreModelGovernanceService;
 
 function assert_test(bool $condition, string $message): void {

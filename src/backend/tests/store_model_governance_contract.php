@@ -12,14 +12,10 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
 
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\StoreModelGovernanceService;
-use App\Forecasting\StoreActivationService;
-use App\Forecasting\ModelPromotionService;
 
 function assert_test(bool $condition, string $message): void {
     if (!$condition) {
@@ -251,7 +247,7 @@ $governance->recordOperationalReview($candidateVersion, 'accepted', 'Operational
 // ADR-0022 verification: Local Administrator operational approval permits activation without mandatory Super Admin review
 $readiness = $governance->validateActivationReadiness($candidateVersion, '2026-09-28');
 assert_test($readiness['checks']['operational_review_accepted'] === true, 'Operational review accepted');
-assert_test($readiness['checks']['technical_review_accepted'] === false, 'Technical review not yet recorded');
+assert_test($readiness['checks']['technical_review_accepted'] === true, 'Automated technical qualification accepted without mandatory Super Admin sign-off');
 assert_test($readiness['ready'] === true, 'ADR-0022: Local Administrator approval qualifies candidate without mandatory Super Admin sign-off');
 
 // Completed training metadata is authoritative; an opaque file alone cannot prove compatibility.
@@ -408,19 +404,13 @@ try {
 $pdo->exec("UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_previous_approved_model_version'");
 
 // =========================================================================
-echo "\n--- Test 5: Backwards Compatibility Shims ---\n";
+echo "\n--- Test 5: Single Governance Module Ownership ---\n";
 // =========================================================================
-// StoreActivationService backward compatibility
-$activationShim = new StoreActivationService($pdo);
-assert_test($activationShim instanceof StoreModelGovernanceService, 'StoreActivationService extends StoreModelGovernanceService');
-$shimStatus = $activationShim->getActivationStatus();
-assert_test($shimStatus['approved_model_version'] === $candidateVersion, 'StoreActivationService shim returns correct status');
-
-// ModelPromotionService backward compatibility
-$promotionShim = new ModelPromotionService($pdo);
-assert_test($promotionShim instanceof StoreModelGovernanceService, 'ModelPromotionService extends StoreModelGovernanceService');
-$reviewStatus = $promotionShim->getReviewStatus($candidateVersion);
-assert_test($reviewStatus['operational_review']['decision'] === 'accepted', 'ModelPromotionService shim returns review status');
+// One module owns activation status and review state (Ticket #433)
+$governanceStatus = $governance->getActivationStatus();
+assert_test($governanceStatus['approved_model_version'] === $candidateVersion, 'Governance module returns correct activation status');
+$reviewStatus = $governance->getReviewStatus($candidateVersion);
+assert_test($reviewStatus['operational_review']['decision'] === 'accepted', 'Governance module returns review status');
 
 // Governance owns lifecycle settings; CandidateEvaluationService no longer proxies them
 assert_test(!method_exists(CandidateEvaluationService::class, 'setObservationMode'), 'CandidateEvaluationService no longer proxies observation mode');

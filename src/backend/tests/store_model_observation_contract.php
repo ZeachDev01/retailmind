@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\DemandHistoryService;
 
@@ -133,7 +133,7 @@ try {
     ");
 
     $evalService = new CandidateEvaluationService($pdo);
-    $promotionService = new ModelPromotionService($pdo, $evalService);
+    $promotionService = new StoreModelGovernanceService($pdo, $evalService);
 
     // -------------------------------------------------------------
     // Test 1: Store Evidence & Identity Separation

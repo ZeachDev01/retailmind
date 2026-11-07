@@ -63,7 +63,7 @@ if ($action === 'approve') {
     $version = $argv[2] ?? '';
     if (!str_starts_with($version, 'demo_')) throw new RuntimeException('Explicit Demo model version required.');
     $evaluation = new App\Forecasting\CandidateEvaluationService($pdo);
-    (new App\Forecasting\ModelPromotionService($pdo, $evaluation))->promote($version, 1);
+    (new App\Forecasting\StoreModelGovernanceService($pdo, $evaluation))->promote($version, 1);
     $governance = new App\Forecasting\StoreModelGovernanceService($pdo, $evaluation);
     $governance->setObservationMode(false, 1);
     $governance->setRecommendationsSuspended(false, 1);

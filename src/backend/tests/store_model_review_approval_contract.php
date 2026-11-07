@@ -14,8 +14,7 @@ require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../app/Authorization/AuthorizationContext.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreTrainingEligibilityService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
@@ -25,8 +24,7 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Authorization\AuthorizationContext;
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Forecasting\StoreTrainingEligibilityService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\DemandForecastService;
@@ -188,10 +186,9 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)"
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 5)");
 
 $evalService = new CandidateEvaluationService($pdo);
-$promotionService = new ModelPromotionService($pdo, $evalService);
 $testModelsDir = sys_get_temp_dir() . '/retailmind_test_models_' . uniqid();
 mkdir($testModelsDir, 0777, true);
-$activationService = new StoreActivationService($pdo, $evalService, $promotionService, $testModelsDir);
+$activationService = new StoreModelGovernanceService($pdo, $evalService, $testModelsDir);
 
 register_shutdown_function(function() use ($testModelsDir) {
     if (is_dir($testModelsDir)) {

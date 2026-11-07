@@ -12,14 +12,14 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Support\OperatorAlert;
 
 require_capability(RoleCapabilityPolicy::APPROVE_MODELS);
 
 $actorId = (int)($_SESSION['user_id'] ?? 0);
 $actorRole = (string)current_role();
-$activationService = new StoreActivationService($pdo);
+$activationService = new StoreModelGovernanceService($pdo);
 
 $message = '';
 $messageClass = '';
