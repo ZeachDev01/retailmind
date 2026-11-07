@@ -6,7 +6,7 @@ Scope: committed code at `HEAD` (c23091a). Uncommitted working-tree WIP excluded
 
 Legend: **Status** — `IMPL` = implemented in the current deepening change set; `open` = not yet done.
 
-Count: 34 opportunities.
+Count: 48 opportunities.
 
 ---
 
