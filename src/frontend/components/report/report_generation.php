@@ -1072,11 +1072,11 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                 <?php $hideDates = in_array($selectedReport, ['low_stock', 'inventory_valuation', 'expiration'], true); ?>
                 <div class="form-group" id="from_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="from">Start date</label>
-                    <input type="date" id="from" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                    <input type="date" id="from" name="from" autocomplete="off" value="<?= htmlspecialchars($filters['from']) ?>">
                 </div>
                 <div class="form-group" id="to_group" <?= $hideDates ? 'style="display:none;"' : '' ?>>
                     <label for="to">End date</label>
-                    <input type="date" id="to" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                    <input type="date" id="to" name="to" autocomplete="off" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
                 <div class="form-group report-product-field">
                     <label for="product_id">Product</label>

@@ -270,9 +270,8 @@ function build_query(array $params): string {
             </div>
 
             <form method="GET" action="" class="filter-toolbar" role="search" aria-label="Filter products">
-                <?= csrf_field() ?>
                 <div class="filter-group">
-                    <input type="search" name="search" class="input-text" placeholder="Search product, SKU, category" value="<?= htmlspecialchars($search) ?>" aria-label="Search products">
+                    <input type="search" name="search" class="input-text" autocomplete="off" placeholder="Search product, SKU, category…" value="<?= htmlspecialchars($search) ?>" aria-label="Search products">
                     <select name="status" class="input-select" aria-label="Filter by forecast status">
                         <option value="">All Statuses</option>
                         <option value="Forecast Generated" <?= $statusFilter === 'Forecast Generated' ? 'selected' : '' ?>>Forecast Generated</option>

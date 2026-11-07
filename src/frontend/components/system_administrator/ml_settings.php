@@ -311,7 +311,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 <form class="ml-action-form" method="post">
                     <?= csrf_field() ?>
                     <button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay ? 'disabled' : '' ?>>
-                        <?= $isTraining ? 'Training in progress...' : 'Train candidate model' ?>
+                        <?= $isTraining ? 'Training in progress…' : 'Train candidate model' ?>
                     </button>
                 </form>
                 <div class="ml-job-status" role="status" aria-live="polite">
@@ -383,7 +383,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                         <form method="post" class="ml-action-form">
                             <?= csrf_field() ?>
                             <input type="hidden" name="model_version" value="<?= htmlspecialchars($latestCandidate['model_version']) ?>">
-                            <button class="btn" name="action" value="approve_demo" <?= $isTraining || empty($candidateQuality['passed']) || $approvedVersion === $latestCandidate['model_version'] ? 'disabled' : '' ?>>
+                            <button type="submit" class="btn" name="action" value="approve_demo" <?= $isTraining || empty($candidateQuality['passed']) || $approvedVersion === $latestCandidate['model_version'] ? 'disabled' : '' ?>>
                                 <?= $approvedVersion === $latestCandidate['model_version'] ? 'Demo model approved' : 'Approve demo model' ?>
                             </button>
                         </form>
@@ -445,7 +445,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
                 <?php if (isset($scheduleErrors['schedule_time'])): ?><small id="schedule_time_error" class="field-error"><?= htmlspecialchars($scheduleErrors['schedule_time']) ?></small><?php endif; ?>
                 <div class="form-actions">
-                    <button class="btn" type="submit">Save weekly schedule</button>
+                    <button class="btn" type="submit">Save Weekly Schedule</button>
                     <p class="section-description">Daily Forecast Generation remains separate at <?= htmlspecialchars(DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['daily_forecast_time'])->format('g:i A')) ?>, Philippine time (Asia/Manila).</p>
                 </div>
             </form>
@@ -547,7 +547,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 <?php endforeach; ?>
 
                 <div class="form-actions">
-                    <button type="submit" class="btn">Save settings</button>
+                    <button type="submit" class="btn">Save Settings</button>
                     <p class="section-description">Saved limits are used when candidate quality is evaluated. Saving does not train or approve a model.</p>
                 </div>
             </form>
@@ -583,7 +583,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                             <td><?= htmlspecialchars(format_display_datetime($run['started_at'] ?? null)) ?></td>
                             <td><?= htmlspecialchars($formatRunTrigger($run['trigger_type'] ?? null)) ?></td>
                             <td><span class="<?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span></td>
-                            <td class="u-num-col"><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . ' s' : '-' ?></td>
+                            <td class="u-num-col"><?= $run['duration_seconds'] !== null ? number_format((float)$run['duration_seconds'], 2) . '&nbsp;s' : '—' ?></td>
                             <td class="u-num-col"><?= number_format((int)($run['eligible_products'] ?? 0)) ?></td>
                             <td class="u-num-col"><?= number_format((int)($run['sales_records_used'] ?? 0)) ?></td>
                             <td class="table-cell-note"><?= htmlspecialchars($formatRunDetails($run['error_message'] ?? null)) ?></td>

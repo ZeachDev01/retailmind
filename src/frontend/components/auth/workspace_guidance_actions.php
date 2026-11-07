@@ -3,7 +3,7 @@
     <input type="hidden" name="return_to" value="<?= htmlspecialchars(basename($_SERVER['SCRIPT_NAME'] ?? '') === 'help.php'
         ? app_url(\App\Authorization\RoleWorkspaceRouter::pathFor(current_role()))
         : (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '')) ?>">
-    <button class="btn btn-primary" name="guidance_status" value="completed">Finish overview</button>
-    <button class="btn btn-secondary" name="guidance_status" value="skipped">Skip guidance</button>
-    <button class="btn btn-secondary" name="guidance_status" value="deferred">Not now</button>
+    <button type="submit" class="btn btn-primary" name="guidance_status" value="completed">Finish overview</button>
+    <button type="submit" class="btn btn-secondary" name="guidance_status" value="skipped">Skip guidance</button>
+    <button type="submit" class="btn btn-secondary" name="guidance_status" value="deferred">Not now</button>
 </form>

@@ -7,11 +7,11 @@
         <form method="POST" enctype="multipart/form-data" class="user-form" id="createUserForm">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="create">
-            <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" aria-describedby="createUsernameHelp createUsernameNotice"><small class="field-help" id="createUsernameHelp">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
-            <div class="form-group"><label for="createFirstName">First Name</label><input id="createFirstName" name="first_name" maxlength="50" value="<?= htmlspecialchars($createFormValues['first_name'], ENT_QUOTES, 'UTF-8') ?>" required></div>
-            <div class="form-group"><label for="createLastName">Last Name</label><input id="createLastName" name="last_name" maxlength="50" value="<?= htmlspecialchars($createFormValues['last_name'], ENT_QUOTES, 'UTF-8') ?>"></div>
+            <div class="form-group" id="createUsernameGroup"><label for="createUsernameInput">Username</label><input id="createUsernameInput" name="username" value="<?= htmlspecialchars($createFormValues['username'], ENT_QUOTES, 'UTF-8') ?>" required autocomplete="off" spellcheck="false" aria-describedby="createUsernameHelp createUsernameNotice"><small class="field-help" id="createUsernameHelp">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small><small class="field-error" id="createUsernameNotice" aria-live="polite">This username is already in use.</small></div>
+            <div class="form-group"><label for="createFirstName">First Name</label><input id="createFirstName" name="first_name" maxlength="50" autocomplete="given-name" value="<?= htmlspecialchars($createFormValues['first_name'], ENT_QUOTES, 'UTF-8') ?>" required></div>
+            <div class="form-group"><label for="createLastName">Last Name</label><input id="createLastName" name="last_name" maxlength="50" autocomplete="family-name" value="<?= htmlspecialchars($createFormValues['last_name'], ENT_QUOTES, 'UTF-8') ?>"></div>
             <div class="duplicate-summary" id="createDuplicateSummary" role="alert" hidden>An account with this username or email already exists.</div>
-            <div class="form-group" id="createEmailGroup"><label for="createEmailInput">Email</label><input type="email" id="createEmailInput" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>" autocomplete="off" aria-describedby="createEmailNotice"><small class="field-error" id="createEmailNotice" aria-live="polite">This email is already in use.</small></div>
+            <div class="form-group" id="createEmailGroup"><label for="createEmailInput">Email</label><input type="email" id="createEmailInput" name="email" value="<?= htmlspecialchars($createFormValues['email'], ENT_QUOTES, 'UTF-8') ?>" autocomplete="email" spellcheck="false" aria-describedby="createEmailNotice"><small class="field-error" id="createEmailNotice" aria-live="polite">This email is already in use.</small></div>
             <div class="form-group">
                 <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
                 <input type="hidden" name="MAX_FILE_SIZE" value="<?= \App\Services\ProfileImageStorage::MAX_FILE_SIZE ?>">
@@ -20,7 +20,7 @@
             </div>
             <div class="form-group">
                 <label for="createUserPassword">Password</label>
-                <div class="password-field"><input type="password" name="password" id="createUserPassword" required minlength="8" aria-describedby="createPasswordHelp"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
+                <div class="password-field"><input type="password" name="password" id="createUserPassword" autocomplete="new-password" required minlength="8" aria-describedby="createPasswordHelp"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
                 <small class="field-help" id="createPasswordHelp">Use at least 8 characters with uppercase, lowercase, and a number.</small>
             </div>
             <div class="form-group" role="group" aria-labelledby="createRolesLabel" aria-describedby="createRolesHelp">

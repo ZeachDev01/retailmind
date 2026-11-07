@@ -1492,6 +1492,7 @@ dialog[id^="gcash-"] {
     width: min(540px, calc(100% - 2rem));
     max-height: calc(100dvh - 2rem);
     overflow: auto;
+    overscroll-behavior: contain;
     padding: 1.35rem;
     border: 1px solid var(--border);
     border-radius: 18px;

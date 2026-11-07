@@ -178,7 +178,7 @@ $superAdministratorForecastingItems = [
 
 $administratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'User Manager'],
-    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Add Counter'],
+    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Registers'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Configuration'],
     ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
@@ -429,8 +429,8 @@ $GLOBALS['rm_navigation_shell'] = [
 <div class="global-topbar" aria-label="Global tools">
     <button type="button" class="global-search-trigger" data-command-open aria-label="Search products, reports, settings, and pages">
         <?= sidebar_icon('search') ?>
-        <span>Search products, reports, settings, and pages...</span>
-        <kbd>Ctrl K</kbd>
+        <span>Search products, reports, settings, and pages…</span>
+        <kbd>Ctrl&nbsp;K</kbd>
     </button>
     <a class="global-notification-button" href="<?= sidebar_e(app_url('components/notification/notifications.php')) ?>" aria-label="Notifications<?= $notificationCount > 0 ? ': ' . (int)$notificationCount . ' unread' : '' ?>">
         <?= sidebar_icon('notification') ?>
@@ -443,7 +443,7 @@ $GLOBALS['rm_navigation_shell'] = [
     <section class="command-dialog" role="dialog" aria-modal="true" aria-label="Search RetailMind">
         <div class="command-search-row">
             <?= sidebar_icon('search', 'bi-search') ?>
-            <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products, reports, settings, and pages..." autocomplete="off">
+            <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products, reports, settings, and pages…" autocomplete="off">
             <button type="button" class="command-close" data-command-close aria-label="Close search"><?= sidebar_icon('close', 'bi-x-lg') ?></button>
         </div>
         <div class="command-results" id="commandResults"></div>

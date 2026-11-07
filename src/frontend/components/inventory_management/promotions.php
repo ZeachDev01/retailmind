@@ -106,7 +106,7 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
                     <input type="hidden" name="action" value="create">
                     <div class="form-group">
                         <label for="promotion-promotion_name">Name</label>
-                        <input id="promotion-promotion_name" name="promotion_name" required>
+                        <input id="promotion-promotion_name" name="promotion_name" autocomplete="off" required>
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
@@ -118,7 +118,7 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
                         </div>
                         <div class="form-group">
                             <label for="promotion-discount_value">Value</label>
-                            <input type="number" id="promotion-discount_value" name="discount_value" min="0.01" step="0.01" required>
+                            <input type="number" id="promotion-discount_value" name="discount_value" min="0.01" step="0.01" autocomplete="off" required>
                         </div>
                     </div>
                     <div class="form-grid">
@@ -132,7 +132,7 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
                         </div>
                         <div class="form-group">
                             <label for="promotion-minimum_quantity">Minimum quantity</label>
-                            <input type="number" id="promotion-minimum_quantity" name="minimum_quantity" min="1" value="1">
+                            <input type="number" id="promotion-minimum_quantity" name="minimum_quantity" min="1" value="1" autocomplete="off">
                         </div>
                     </div>
                     <div class="form-group" id="product-scope" hidden>

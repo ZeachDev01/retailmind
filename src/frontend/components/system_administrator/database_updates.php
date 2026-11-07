@@ -110,7 +110,7 @@ header('Content-Type: text/html; charset=UTF-8');
         <form method="post" style="margin: 0;">
           <?= csrf_field() ?>
           <button type="submit" class="btn" aria-label="Apply pending database updates">
-            <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Apply database updates
+            <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Apply Database Updates
           </button>
         </form>
       <?php endif; ?>

@@ -372,11 +372,11 @@ try {
                             </div>
                             <div class="form-group">
                                 <label for="filter-date-from">Reported from</label>
-                                <input type="date" name="date_from" id="filter-date-from" value="<?= htmlspecialchars($filters['date_from']) ?>">
+                                <input type="date" name="date_from" id="filter-date-from" autocomplete="off" value="<?= htmlspecialchars($filters['date_from']) ?>">
                             </div>
                             <div class="form-group">
                                 <label for="filter-date-to">Reported to</label>
-                                <input type="date" name="date_to" id="filter-date-to" value="<?= htmlspecialchars($filters['date_to']) ?>">
+                                <input type="date" name="date_to" id="filter-date-to" autocomplete="off" value="<?= htmlspecialchars($filters['date_to']) ?>">
                             </div>
                         </div>
                     </details>

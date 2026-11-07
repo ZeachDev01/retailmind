@@ -69,7 +69,7 @@ try {
             <div class="rh-relative rh-min-w-0 rh-flex-[1_1_20rem]">
                 <label class="rh-sr-only" for="history_search">Search receiving history</label>
                 <svg class="rh-pointer-events-none rh-absolute rh-bottom-0 rh-left-3 rh-top-0 rh-my-auto rh-h-5 rh-w-5 rh-text-[var(--muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-                <input class="rh-m-0 rh-min-h-11 rh-w-full rh-rounded-[10px] rh-border rh-border-solid rh-border-[var(--muted)] rh-bg-[var(--theme-surface,#fff)] rh-py-3 rh-pl-10 rh-pr-3 rh-text-base rh-text-[var(--text)]" type="search" id="history_search" name="q" value="<?= htmlspecialchars($search) ?>" autocomplete="off" maxlength="200" placeholder="Product, SKU, store, receipt, or staff">
+                <input class="rh-m-0 rh-min-h-11 rh-w-full rh-rounded-[10px] rh-border rh-border-solid rh-border-[var(--muted)] rh-bg-[var(--theme-surface,#fff)] rh-py-3 rh-pl-10 rh-pr-3 rh-text-base rh-text-[var(--text)]" type="search" id="history_search" name="q" value="<?= htmlspecialchars($search) ?>" autocomplete="off" maxlength="200" placeholder="Product, SKU, store, receipt, or staff…">
             </div>
             <button type="submit" class="btn btn-primary">Search</button>
             <?php if ($search !== ''): ?>

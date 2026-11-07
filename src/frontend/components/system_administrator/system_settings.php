@@ -88,7 +88,9 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                                step="1"
                                id="disable_days"
                                name="disable_days"
+                               inputmode="numeric"
                                value="<?= htmlspecialchars((string)$dormancyThresholds['disable_days']) ?>"
+                               autocomplete="off"
                                aria-required="true"
                                required>
                     </div>
@@ -102,11 +104,12 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                                step="1"
                                id="warn_days"
                                name="warn_days"
+                               inputmode="numeric"
                                value="<?= htmlspecialchars((string)$dormancyThresholds['warn_days']) ?>"
+                               autocomplete="off"
                                aria-describedby="warn_days_help"
                                aria-required="true"
                                required>
-                        <small class="field-help" id="warn_days_help">Must be fewer than the disable threshold.</small>
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
@@ -135,14 +138,15 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                            name="test_email"
                            value="<?= htmlspecialchars((string)$settings['store_email']) ?>"
                            autocomplete="email"
-                           placeholder="admin@example.com"
+                           spellcheck="false"
+                           placeholder="admin@example.com…"
                            aria-describedby="test_email_help"
                            aria-required="true"
                            required>
                     <small class="field-help" id="test_email_help">Address to receive a test message from the configured Brevo sender.</small>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-send" aria-hidden="true"></i> Send test email</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-send" aria-hidden="true"></i> Send Test Email</button>
                 </div>
             </form>
         </section>

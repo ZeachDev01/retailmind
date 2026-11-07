@@ -163,7 +163,7 @@ $active_batch_reminders = $inventory_workspace
                         <option value="<?= htmlspecialchars($type) ?>" <?= $category === $type ? 'selected' : '' ?>><?= htmlspecialchars($category_labels[$type] ?? ucfirst(str_replace('_', ' ', $type))) ?></option>
                     <?php endforeach; ?>
                 </select>
-                <button type="submit" class="mark-all-btn btn-secondary">Apply filter</button>
+                <button type="submit" class="mark-all-btn btn-secondary">Apply Filter</button>
             </form>
 
             <div class="notifications-header">
@@ -181,8 +181,8 @@ $active_batch_reminders = $inventory_workspace
                 <div class="empty-state">
                     <div class="empty-state-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></div>
                     <?php if ($view === 'unread'): ?>
-                        <h2>You're all caught up</h2>
-                        <a class="mark-all-btn" href="?<?= htmlspecialchars(http_build_query(['category' => $category, 'view' => 'all'])) ?>">View all notifications</a>
+                        <h2>You’re all caught up</h2>
+                        <a class="mark-all-btn" href="?<?= htmlspecialchars(http_build_query(['category' => $category, 'view' => 'all'])) ?>">View All Notifications</a>
                     <?php else: ?>
                         <h2><?= $category === '' ? 'No notifications' : 'No notifications in this category' ?></h2>
                     <?php endif; ?>
@@ -236,7 +236,7 @@ $active_batch_reminders = $inventory_workspace
                                                 default => 'components/inventory_management/stock_issues.php',
                                             };
                                         }
-                                        ?><?php if (!empty($destination)): ?><a class="btn btn-quiet btn-small mt-2" href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review condition' ?></a><?php endif; ?></div>
+                                        ?><?php if (!empty($destination)): ?><a class="btn btn-quiet btn-small mt-2" href="<?= htmlspecialchars(app_url((string)$destination)) ?>"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review Condition' ?></a><?php endif; ?></div>
                                 </div>
                             </div>
                         </div>
@@ -247,7 +247,7 @@ $active_batch_reminders = $inventory_workspace
                 <div class="notification-more">
                     <p class="u-text-muted-legacy">Showing <?= count($notifications) ?> of <?= (int)$total ?> notifications</p>
                     <?php if ($limit < $total): ?>
-                        <a class="mark-all-btn" href="?<?= htmlspecialchars(http_build_query(['category' => $category, 'view' => $view, 'batch' => $batch + 1])) ?>">Show more</a>
+                        <a class="mark-all-btn" href="?<?= htmlspecialchars(http_build_query(['category' => $category, 'view' => $view, 'batch' => $batch + 1])) ?>">Show More</a>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>

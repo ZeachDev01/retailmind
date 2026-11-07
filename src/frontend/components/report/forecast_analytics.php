@@ -17,7 +17,7 @@ function analytics_empty_state(string $icon, string $title, string $description,
             <span class="analytics-empty-shape analytics-empty-shape-back"></span>
             <span class="analytics-empty-shape analytics-empty-shape-front"></span>
             <span class="analytics-empty-dot"></span>
-            <span class="analytics-empty-icon"><i class="bi bi-<?= htmlspecialchars($icon) ?>"></i></span>
+            <span class="analytics-empty-icon"><i class="bi bi-<?= htmlspecialchars($icon) ?>" aria-hidden="true"></i></span>
         </span>
         <h3><?= htmlspecialchars($title) ?></h3>
         <p><?= htmlspecialchars($description) ?></p>
@@ -343,38 +343,38 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <section class="forecast-analytics-tabs" aria-label="Forecast charts">
             <div class="analytics-tab-list" role="tablist" aria-label="Forecast analytics views">
                 <button class="analytics-tab is-active" id="analytics-tab-actual" type="button" role="tab" aria-selected="true" aria-controls="analytics-panel-actual" data-analytics-tab="actual">
-                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Forecasts vs sales
+                    <i class="bi bi-bar-chart" aria-hidden="true"></i> Forecasts vs Sales
                 </button>
                 <button class="analytics-tab" id="analytics-tab-features" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="analytics-panel-features" data-analytics-tab="features">
-                    <i class="bi bi-sliders" aria-hidden="true"></i> Input influence
+                    <i class="bi bi-sliders" aria-hidden="true"></i> Input Influence
                 </button>
                 <button class="analytics-tab" id="analytics-tab-trend" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-trend" data-analytics-tab="trend" tabindex="-1">
-                    <i class="bi bi-graph-up" aria-hidden="true"></i> Error trend
+                    <i class="bi bi-graph-up" aria-hidden="true"></i> Error Trend
                 </button>
                 <button class="analytics-tab" id="analytics-tab-best" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-best" data-analytics-tab="best" tabindex="-1">
-                    <i class="bi bi-trophy" aria-hidden="true"></i> Lowest errors
+                    <i class="bi bi-trophy" aria-hidden="true"></i> Lowest Errors
                 </button>
                 <button class="analytics-tab" id="analytics-tab-attention" type="button" role="tab" aria-selected="false" aria-controls="analytics-panel-attention" data-analytics-tab="attention" tabindex="-1">
-                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Highest errors
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Highest Errors
                 </button>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-features" role="tabpanel" aria-labelledby="analytics-tab-features" data-analytics-panel="features" hidden>
-                <h2 id="analytics-view-title">Input influence</h2>
+                <h2 id="analytics-view-title">Input Influence</h2>
                 <?php if (empty($featureImportance)): ?>
                     <?php analytics_empty_state('sliders', 'No input insights yet', 'Input influence measurements have not been recorded.', 'components/system_administrator/ml_settings.php', 'Review model evidence'); ?>
                 <?php else: ?><canvas id="featureChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-trend" role="tabpanel" aria-labelledby="analytics-tab-trend" data-analytics-panel="trend" hidden>
-                <h2>Prediction error over training runs</h2>
+                <h2>Prediction Error Over Training Runs</h2>
                 <?php if (empty($trainingTrend)): ?>
                     <?php analytics_empty_state('graph-up', 'No error trend yet', 'Completed training runs with WAPE results will appear here.', 'components/system_administrator/ml_settings.php', 'View training results'); ?>
                 <?php else: ?><canvas id="trendChart" role="img" aria-label="Recorded model measurements"></canvas><?php endif; ?>
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
-                <h2>Forecasts vs recorded sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
+                <h2>Forecasts vs Recorded Sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
                 <?php if (empty($actualChartData)): ?>
                     <?php analytics_empty_state('bar-chart', 'Ready for your first comparison', 'Compare saved forecasts once their target dates have recorded sales.', 'components/report/data_readiness.php', 'Check data readiness'); ?>
                 <?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
@@ -384,7 +384,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
 
             <div class="analytics-tab-panel" id="analytics-panel-best" role="tabpanel" aria-labelledby="analytics-tab-best" data-analytics-panel="best" hidden>
-                <h2>Lowest recorded errors</h2>
+                <h2>Lowest Recorded Errors</h2>
                 <?php if (empty($best)): ?>
                     <?php analytics_empty_state('trophy', 'No product rankings yet', 'Rankings appear when forecasts can be matched with sales.', 'components/report/predictions.php', 'View demand forecasts'); ?>
                 <?php else: ?>
@@ -768,7 +768,7 @@ function drawAnalyticsPanel(panel) {
 const analyticsTabs = Array.from(document.querySelectorAll('[data-analytics-tab]'));
 const analyticsPanels = Array.from(document.querySelectorAll('[data-analytics-panel]'));
 
-function activateAnalyticsTab(tab) {
+function activateAnalyticsTab(tab, updateUrl = true) {
     const target = tab.dataset.analyticsTab;
     analyticsTabs.forEach(item => {
         const active = item === tab;
@@ -779,6 +779,11 @@ function activateAnalyticsTab(tab) {
     analyticsPanels.forEach(panel => {
         panel.hidden = panel.dataset.analyticsPanel !== target;
     });
+    if (updateUrl && window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', target);
+        window.history.replaceState(null, '', url);
+    }
     drawAnalyticsPanel(target);
 }
 
@@ -797,7 +802,13 @@ analyticsTabs.forEach((tab, index) => {
     });
 });
 
-drawAnalyticsPanel('actual');
+const initialTabParam = new URLSearchParams(window.location.search).get('tab');
+const initialTab = analyticsTabs.find(t => t.dataset.analyticsTab === initialTabParam) || analyticsTabs[0];
+if (initialTab) {
+    activateAnalyticsTab(initialTab, false);
+} else {
+    drawAnalyticsPanel('actual');
+}
 
 const redrawAnalytics = () => {
     const activeTab = document.querySelector('[data-analytics-tab].is-active');

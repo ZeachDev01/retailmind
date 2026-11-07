@@ -319,8 +319,8 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                 <!-- Review Notes & Form Inputs -->
                                 <div class="form-group">
                                     <label for="review-notes-<?= (int)$report['adjustment_id'] ?>">Reviewer note</label>
-                                    <small id="note-help-<?= (int)$report['adjustment_id'] ?>">Optional when approving. <strong>Required</strong> when rejecting or returning to cashier.</small>
-                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" rows="2" placeholder="Write feedback or guidance for the cashier..." aria-describedby="note-help-<?= (int)$report['adjustment_id'] ?>"></textarea>
+                                    <small id="note-help-<?= (int)$report['adjustment_id'] ?>">Optional when approving. <strong>Required to reject or return.</strong></small>
+                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" rows="2" placeholder="Write feedback or guidance for the cashier…" aria-describedby="note-help-<?= (int)$report['adjustment_id'] ?>"></textarea>
                                 </div>
                                 <?php if ($report['adjustment_type'] === 'other'): ?>
                                     <div class="form-group">

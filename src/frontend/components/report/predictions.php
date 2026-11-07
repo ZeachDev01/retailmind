@@ -257,13 +257,13 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </div>
                 <div class="forecast-panel-toolbar">
                     <nav class="forecast-basis-tabs" aria-label="Forecast filter basis">
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'all', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'all' ? 'is-active' : '' ?>">All (<?= (int)$coverage['scope_count'] ?>)</a>
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'forecast_backed', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'forecast_backed' ? 'is-active' : '' ?>">Forecast-backed (<?= (int)$coverage['forecast_backed_count'] ?>)</a>
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'stock_rules', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'stock_rules' ? 'is-active' : '' ?>">Stock rules (<?= (int)$coverage['stock_rule_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'all', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'all' ? 'is-active' : '' ?>"<?= $basisFilter === 'all' ? ' aria-current="page"' : '' ?>>All (<?= (int)$coverage['scope_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'forecast_backed', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'forecast_backed' ? 'is-active' : '' ?>"<?= $basisFilter === 'forecast_backed' ? ' aria-current="page"' : '' ?>>Forecast-backed (<?= (int)$coverage['forecast_backed_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'stock_rules', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'stock_rules' ? 'is-active' : '' ?>"<?= $basisFilter === 'stock_rules' ? ' aria-current="page"' : '' ?>>Stock rules (<?= (int)$coverage['stock_rule_count'] ?>)</a>
                     </nav>
                     <form method="get" action="" class="search-form" role="search">
                         <?php if ($basisFilter !== 'all'): ?><input type="hidden" name="basis" value="<?= htmlspecialchars($basisFilter) ?>"><?php endif; ?>
-                        <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                        <input type="search" name="search" autocomplete="off" aria-label="Search products by name, SKU, or ID" placeholder="Name, SKU, or ID…" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
                         <button type="submit" class="btn btn-secondary">Search</button>
                         <?php if ($searchQuery !== ''): ?>
                             <a href="predictions.php<?= $basisFilter !== 'all' ? '?basis=' . urlencode($basisFilter) : '' ?>" class="btn btn-quiet">Clear</a>
@@ -273,7 +273,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             </div>
             <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
                 <div class="empty-state">
-                    <i class="bi bi-graph-up-arrow empty-icon"></i>
+                    <i class="bi bi-graph-up-arrow empty-icon" aria-hidden="true"></i>
                     <h2><?= $searchQuery !== '' ? 'No matching products' : 'No forecasts available' ?></h2>
                     <p><?= $searchQuery !== '' ? 'No matching products found. Clear the search to view all products.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
                 </div>
@@ -322,7 +322,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     </td>
                                     <td class="forecast-action-cell" data-label="Action">
                                         <a class="btn btn-sm btn-secondary forecast-row-link" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
-                                            View forecast
+                                            View Forecast
                                         </a>
                                     </td>
                                 </tr>
@@ -342,9 +342,9 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 <?php if ($currentProductPage < $totalProductPages): ?>
                                     <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage + 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">Next &rarr;</a>
                                 <?php endif; ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View all</a>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View All</a>
                             <?php elseif ($showAllProducts): ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show paginated</a>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show Paginated</a>
                             <?php endif; ?>
                         </div>
                     </nav>

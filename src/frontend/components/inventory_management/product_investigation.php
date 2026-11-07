@@ -117,7 +117,7 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
     <main class="main-content">
         <div class="topbar">
             <div>
-                <a href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>" class="btn btn-quiet"><i class="bi bi-arrow-left"></i> Back to Demand Forecast</a>
+                <a href="<?= htmlspecialchars(app_url('components/report/predictions.php')) ?>" class="btn btn-quiet"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to Demand Forecast</a>
                 <h1>
                     <?= htmlspecialchars($product['product_name'] ?? 'Unknown Product') ?>
                     <?php if ($isDemoProduct): ?><span class="demo-badge">Demo Product (S001)</span><?php endif; ?>
@@ -128,7 +128,7 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
 
         <?php if (isset($errorState)): ?>
             <div class="empty-state">
-                <i class="bi bi-exclamation-triangle empty-icon"></i>
+                <i class="bi bi-exclamation-triangle empty-icon" aria-hidden="true"></i>
                 <h2><?= $errorState === 'missing_product' ? 'Product not found' : 'Forecast unavailable' ?></h2>
                 <p>Unable to provide forecast data for this product at this time.</p>
             </div>

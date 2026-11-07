@@ -12,7 +12,7 @@ $reviewFirst = $restoreReviewFirst ?? true;
     </div>
     <form method="post" enctype="multipart/form-data" action="<?= $escape(app_url($reviewFirst ? 'components/system_administrator/identity_reconciliation.php' : 'components/backup/restore.php')) ?>" aria-describedby="restore-package-warning" data-password-authorization<?= $reviewFirst ? ' data-identity-form' : '' ?>>
         <?= csrf_field() ?>
-        <div class="form-group"><label for="incoming-package">Backup file (.rmpkg)</label><input id="incoming-package" type="file" name="backup_file" accept=".rmpkg" aria-describedby="incoming-package-help" required><p id="incoming-package-help" class="backup-hint">Max <?= number_format($restoreLimit / 1048576, 1) ?> MB</p></div>
+        <div class="form-group"><label for="incoming-package">Backup file (.rmpkg)</label><input id="incoming-package" type="file" name="backup_file" accept=".rmpkg" aria-describedby="incoming-package-help" required><p id="incoming-package-help" class="backup-hint">Max <?= number_format($restoreLimit / 1048576, 1) ?>&nbsp;MB</p></div>
         <div class="form-group"><label for="incoming-password">Current login password</label><input id="incoming-password" type="password" name="restore_password" autocomplete="current-password" required></div>
         <?php if (!$reviewFirst): ?>
         <p><label><input type="checkbox" name="confirm_replacement" value="1" required> I understand the snapshot replaces newer records and Store operations remain paused until verification.</label></p>

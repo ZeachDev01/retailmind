@@ -182,11 +182,11 @@ foreach ($periods as $period) {
                         </div>
                         <div class="form-group">
                             <label for="start_date">Start date</label>
-                            <input type="date" id="start_date" name="start_date" required aria-required="true">
+                            <input type="date" id="start_date" name="start_date" autocomplete="off" required aria-required="true">
                         </div>
                         <div class="form-group">
                             <label for="end_date">End date</label>
-                            <input type="date" id="end_date" name="end_date" required aria-required="true">
+                            <input type="date" id="end_date" name="end_date" autocomplete="off" required aria-required="true">
                         </div>
                         <button type="submit" class="btn btn-primary fiscal-create-button"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create period</button>
                     </div>

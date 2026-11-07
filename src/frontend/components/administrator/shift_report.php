@@ -279,11 +279,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         <h3>Complete Review</h3>
                         <div class="form-group u-mt-10">
                             <label for="explanation">Final explanation <span class="required-mark" aria-hidden="true">*</span></label>
-                            <textarea id="explanation" name="explanation" rows="3" required placeholder="Root cause or verification notes..."></textarea>
+                            <textarea id="explanation" name="explanation" rows="3" required placeholder="Root cause or verification notes…"></textarea>
                         </div>
                         <div class="form-group u-mt-10">
                             <label for="remaining_shortage">Remaining shortage (₱)</label>
-                            <input id="remaining_shortage" name="remaining_shortage" type="number" step="0.01" min="0" aria-describedby="review-notice" value="<?= shift_report_e($targetedShift['review_shortage'] ?? (floatval($targetedShift['Variance']) < 0 ? abs(floatval($targetedShift['Variance'])) : 0)) ?>">
+                            <input id="remaining_shortage" name="remaining_shortage" type="number" step="0.01" min="0" autocomplete="off" aria-describedby="review-notice" value="<?= shift_report_e($targetedShift['review_shortage'] ?? (floatval($targetedShift['Variance']) < 0 ? abs(floatval($targetedShift['Variance'])) : 0)) ?>">
                         </div>
                         <details class="shift-review-notice">
                             <summary>Review terms</summary>
@@ -299,7 +299,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         <h3>Draft notes</h3>
                         <div class="form-group u-mt-10">
                             <label for="draft_notes">Draft notes</label>
-                            <textarea id="draft_notes" name="draft_notes" rows="5" placeholder="Working notes..."><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
+                            <textarea id="draft_notes" name="draft_notes" rows="5" placeholder="Working notes…"><?= shift_report_e($targetedShift['review_draft_notes'] ?? '') ?></textarea>
                         </div>
                         <button type="submit" class="btn btn-secondary u-mt-10">Save draft</button>
                     </form>
@@ -321,7 +321,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                                 <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
                                 <div class="form-group">
                                     <label for="reopen_reason">Reason to reopen <span class="required-mark" aria-hidden="true">*</span></label>
-                                    <input id="reopen_reason" name="reopen_reason" type="text" required placeholder="e.g. Found missing voucher">
+                                    <input id="reopen_reason" name="reopen_reason" type="text" autocomplete="off" required placeholder="e.g. Found missing voucher">
                                 </div>
                                 <button type="submit" class="btn btn-secondary u-mt-10">Confirm reopen</button>
                             </form>
@@ -368,11 +368,11 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         <form method="get" class="report-filter-grid" aria-label="Filter shifts">
             <div class="form-group">
                 <label for="from">From date</label>
-                <input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" required>
+                <input id="from" name="from" type="date" value="<?= shift_report_e($filters['from']) ?>" autocomplete="off" required>
             </div>
             <div class="form-group">
                 <label for="to">To date</label>
-                <input id="to" name="to" type="date" value="<?= shift_report_e($filters['to']) ?>" required>
+                <input id="to" name="to" type="date" value="<?= shift_report_e($filters['to']) ?>" autocomplete="off" required>
             </div>
             <div class="form-group">
                 <label for="cashier_id">Cashier</label>
@@ -395,7 +395,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
             </div>
             <div class="form-group">
                 <label for="shift_id">Jump to Shift</label>
-                <input id="shift_id" name="shift_id" type="text" list="shift-options" value="<?= shift_report_e($filters['shift_id']) ?>" placeholder="All shifts" pattern="[1-9][0-9]*|legacy" title="Enter a Shift ID or legacy; leave blank for all shifts.">
+                <input id="shift_id" name="shift_id" type="text" list="shift-options" value="<?= shift_report_e($filters['shift_id']) ?>" autocomplete="off" placeholder="All shifts" pattern="[1-9][0-9]*|legacy" title="Enter a Shift ID or legacy; leave blank for all shifts.">
                 <datalist id="shift-options">
                     <option value="legacy">Legacy / Unassigned Only</option>
                     <?php foreach ($shifts as $shift): ?>

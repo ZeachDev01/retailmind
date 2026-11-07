@@ -140,6 +140,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
+            <h1 class="u-sr-only">Inventory Counts</h1>
             <?php if ($message): ?>
                 <div class="alert tag-success"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
@@ -746,7 +747,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             const countId = btn.dataset.countId;
             if (!countId || !batchDetailModal) return;
             batchDetailTitle.textContent = 'Batches for Count #' + countId;
-            batchDetailBody.innerHTML = '<p class="muted">Loading batch details...</p>';
+            batchDetailBody.innerHTML = '<p class="muted">Loading batch details…</p>';
             batchDetailModal.showModal();
             fetch('inventory_counts.php?action=count_batches&count_id=' + encodeURIComponent(countId), {
                 headers: { Accept: 'application/json' }

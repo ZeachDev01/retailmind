@@ -90,6 +90,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main id="supplier-pullouts" class="main-content">
+        <h1 class="u-sr-only">Supplier Pullouts</h1>
         <div class="mb-6 flex gap-2 border-0 border-b border-solid border-[var(--border)]" role="tablist" aria-label="Supplier pullouts">
             <button type="button" id="pullout-record-tab" role="tab" aria-controls="pullout-record-panel" aria-selected="true" tabindex="0"
                     class="pullout-tab cursor-pointer border-0 border-b-2 border-solid border-blue-600 bg-transparent px-4 py-3 text-sm font-semibold text-[var(--theme-info-text,#2563eb)] hover:bg-[var(--surface-soft)]">
@@ -102,11 +103,11 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
         </div>
 
         <?php if ($message): ?>
-            <div class="message success"><?= htmlspecialchars($message) ?></div>
+            <div class="message success" role="alert" aria-live="polite"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
 
         <?php if ($error): ?>
-            <div class="message error"><?= htmlspecialchars($error) ?></div>
+            <div class="message error" role="alert" aria-live="polite"><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
         <div id="pullout-record-panel" role="tabpanel" aria-labelledby="pullout-record-tab" tabindex="0" class="min-w-0">

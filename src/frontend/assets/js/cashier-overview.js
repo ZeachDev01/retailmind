@@ -33,7 +33,7 @@
     });
     if (location.hash === '#gcash') selectTab(document.getElementById('tab-gcash'));
     async function loadOverview() {
-        status.textContent = 'Loading GCash overview...';
+        status.textContent = 'Loading GCash overview…';
         try {
             const response = await fetch(workspace.dataset.api, {headers: {Accept: 'application/json'}});
             const data = await response.json();

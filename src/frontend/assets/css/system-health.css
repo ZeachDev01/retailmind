@@ -95,8 +95,8 @@ html[data-theme="dark"] .system-health-page {
     resize: vertical;
 }
 
-.application-log-review-form select:focus,
-.application-log-review-form textarea:focus {
+.application-log-review-form select:focus-visible,
+.application-log-review-form textarea:focus-visible {
     outline: none;
     border-color: var(--primary);
     box-shadow: var(--focus-ring);

@@ -217,7 +217,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                     <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
                                         <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" aria-describedby="profile-picture-help profile-crop-error" required>
-                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image" aria-hidden="true"></i><?= !empty($account['profile_image']) ? 'Choose replacement' : 'Choose image' ?></label>
+                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image" aria-hidden="true"></i><?= !empty($account['profile_image']) ? 'Choose Replacement' : 'Choose Image' ?></label>
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
                                     <small class="field-help" id="profile-picture-help"><?= ProfileImageStorage::HELP ?></small>
@@ -244,7 +244,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                     <form method="POST" class="profile-picture-remove-form">
                                         <?= csrf_field() ?>
                                         <input type="hidden" name="action" value="remove_profile_image">
-                                        <button class="btn btn-quiet btn-small" type="submit"><i class="bi bi-trash3" aria-hidden="true"></i>Remove picture</button>
+                                        <button class="btn btn-quiet btn-small" type="submit"><i class="bi bi-trash3" aria-hidden="true"></i>Remove Picture</button>
                                     </form>
                                 <?php endif; ?>
                             </div>
@@ -269,11 +269,11 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         </div>
                         <div class="form-group full<?= isset($fieldErrors['email']) ? ' invalid' : '' ?>">
                             <label for="email">Email address</label>
-                            <input type="email" id="email" name="email" autocomplete="email" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
+                            <input type="email" id="email" name="email" autocomplete="email" spellcheck="false" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com…"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
                             <?php if (isset($fieldErrors['email'])): ?><small class="field-error" id="email-error"><?= htmlspecialchars($fieldErrors['email']) ?></small><?php endif; ?>
                         </div>
                         <div class="full profile-save-row">
-                            <button class="btn" type="submit"><i class="bi bi-check2" aria-hidden="true"></i>Save details</button>
+                            <button class="btn" type="submit"><i class="bi bi-check2" aria-hidden="true"></i>Save Details</button>
                         </div>
                     </form>
                 </section>
@@ -296,7 +296,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         <dl class="account-detail-list">
                             <div><dt>Last changed</dt><dd><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></dd></div>
                         </dl>
-                        <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">Change password</a>
+                        <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">Change Password</a>
                     </div>
                 </section>
             </div>

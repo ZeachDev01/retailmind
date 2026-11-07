@@ -152,6 +152,7 @@ $chartDataJson = json_encode([
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
+        <h1 class="u-sr-only">Stock Overview</h1>
         <header class="page-heading"><div>
             <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
@@ -1084,7 +1085,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const tbody = document.getElementById('view-batches-table-body');
-            tbody.innerHTML = '<tr><td class="u-empty-cell" colspan="7"><i class="bi bi-arrow-repeat"></i> Loading batches...</td></tr>';
+            tbody.innerHTML = '<tr><td class="u-empty-cell" colspan="7"><i class="bi bi-arrow-repeat"></i> Loading batches…</td></tr>';
             RetailMindUI.openOverlay(modal);
 
             fetch('inventory_overview.php?action=get_batches&product_id=' + encodeURIComponent(productId))

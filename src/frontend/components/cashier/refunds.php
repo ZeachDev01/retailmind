@@ -334,7 +334,7 @@ if ($receiptId > 0 && $receipt === null) {
                                 </div>
                                 <div>
                                     <label for="note">Note (required for Other)</label>
-                                    <input type="text" name="note" id="note" maxlength="255" placeholder="e.g. Customer changed mind, incorrect item size…">
+                                    <input type="text" name="note" id="note" maxlength="255" placeholder="e.g. Customer changed mind, incorrect item size…" autocomplete="off">
                                 </div>
                             </div>
 

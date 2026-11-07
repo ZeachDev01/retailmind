@@ -23,6 +23,9 @@ Before writing any code, walk down this ladder and stop at the first working ste
 - All code blocks, terminal commands, file paths, parameters, and error messages stay 100% exact.
 - If critical safety or security risk, warn clearly and directly.
 
+## Context Pointers
+- Workspace & Component Map: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
+
 ## Available Skills & Hooks
 - `/ponytail`: Apply 7-step minimalism ladder.
 - `/ponytail-review`: Hunt for over-engineering and dead abstractions.

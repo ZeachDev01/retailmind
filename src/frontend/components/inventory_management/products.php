@@ -582,10 +582,14 @@ foreach ($products as $product) {
             cursor: pointer;
         }
 
-        .product-add-menu-item:hover,
+        .product-add-menu-item:hover {
+            background: var(--surface-soft, #f1f5f9);
+        }
+
         .product-add-menu-item:focus-visible {
             background: var(--surface-soft, #f1f5f9);
-            outline: none;
+            outline: 2px solid var(--theme-info-text, #2563eb);
+            outline-offset: -2px;
         }
 
         .product-add-menu-item i {
@@ -1183,15 +1187,16 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
+                <h1 class="u-sr-only">Product Catalog</h1>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">
                             <button type="button" class="catalog-icon-button is-active" aria-label="List view" title="List view"><i class="bi bi-list-ul" aria-hidden="true"></i></button>
                             <button type="button" class="catalog-icon-button" id="column-button" aria-label="Choose visible columns" title="Choose visible columns"><i class="bi bi-grid" aria-hidden="true"></i></button>
                         </div>
-                        <label class="catalog-search">
+                        <label class="catalog-search" for="product-search">
                             <i class="bi bi-search" aria-hidden="true"></i>
-                            <input type="search" id="product-search" placeholder="Search products..." autocomplete="off">
+                            <input type="search" id="product-search" placeholder="Search products…" autocomplete="off" aria-label="Search products">
                         </label>
                         <label class="catalog-field catalog-show-field"><span>Show</span><select id="stock-filter" aria-label="Show products by stock status">
                             <option value="">All Products</option><option value="available">🟢 Available</option><option value="low">🟡 Low stock</option><option value="out">🔴 Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
@@ -1304,7 +1309,7 @@ foreach ($products as $product) {
                                         <td class="product-cell">
                                             <div class="product-name-line">
                                                 <span class="product-thumb">
-                                                    <?php if (!empty($product['product_image'])): ?><img src="<?= htmlspecialchars($product['product_image']) ?>" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'"><?php else: ?><i class="bi bi-box-seam" aria-hidden="true"></i><?php endif; ?>
+                                                    <?php if (!empty($product['product_image'])): ?><img alt="" width="34" height="34" loading="lazy" src="<?= htmlspecialchars($product['product_image']) ?>" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'"><?php else: ?><i class="bi bi-box-seam" aria-hidden="true"></i><?php endif; ?>
                                                 </span>
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
@@ -1385,19 +1390,19 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel active" data-panel="1">
                         <div class="form-grid">
-                            <div class="form-group full"><label>Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
+                            <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
                             <div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
-                            <div class="form-group"><label>Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
+                            <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <div class="form-group"><label>Parent Product Family</label><select data-search-dropdown name="parent_product_id">
+                            <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown name="parent_product_id" id="parent-product-id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>
-                            <div class="form-group"><label>Variant Label</label><input name="variant_label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
-                            <div class="form-group full"><label>Product Image</label>
+                            <div class="form-group"><label for="create-variant-label">Variant Label</label><input name="variant_label" id="create-variant-label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
+                            <div class="form-group full"><label for="product-image-input">Product Image</label>
                                 <div class="u-mb-05"><input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp"><small class="field-help">Supported formats: JPEG, PNG, GIF, WebP. Max size: 5MB.</small></div>
                                 <div id="image-preview-container" hidden>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem"><img id="image-preview" src="" alt="Product preview" style="max-width:200px;border-radius:4px;border:1px solid #ddd;"><button type="button" class="btn btn-small btn-quiet" id="clear-image-btn">Clear image</button></div>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem"><img id="image-preview" src="" alt="Product preview" width="200" height="200" style="max-width:200px;border-radius:4px;border:1px solid #ddd;"><button type="button" class="btn btn-small btn-quiet" id="clear-image-btn">Clear image</button></div>
                                 </div>
                             </div>
                         </div>
@@ -1413,7 +1418,7 @@ foreach ($products as $product) {
                                 <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
                             </div>
                             <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
-                            <div class="form-group"><label>Status</label><select name="status">
+                            <div class="form-group"><label for="create-product-status">Status</label><select name="status" id="create-product-status">
                                     <option value="active">Active</option>
                                     <option value="inactive">Inactive</option>
                                 </select></div>
@@ -1422,8 +1427,8 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="3">
                         <div class="form-grid">
-                            <div class="form-group"><label>Cost Price *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
-                            <div class="form-group"><label>Selling Price *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
+                            <div class="form-group"><label for="cost-price">Cost Price *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
+                            <div class="form-group"><label for="selling-price">Selling Price *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
                             <div class="form-group">
                                 <label for="product-base-unit">Base Unit</label>
                                 <select id="product-base-unit" data-unit-field="base_unit">
@@ -1501,9 +1506,9 @@ foreach ($products as $product) {
                             <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
                             <h3 class="full planning-section-title">Restocking</h3>
                             <div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
-                            <div class="form-group"><label>Minimum Order Quantity</label><input type="number" min="1" name="minimum_order_quantity" value="1"></div>
-                            <div class="form-group"><label>Reorder Level</label><input type="number" min="0" name="reorder_level" value="10"></div>
-                            <div class="form-group"><label>Safety Stock</label><input type="number" min="0" name="safety_stock" value="0"></div>
+                            <div class="form-group"><label for="create-min-order">Minimum Order Quantity</label><input type="number" min="1" id="create-min-order" name="minimum_order_quantity" value="1"></div>
+                            <div class="form-group"><label for="create-reorder-level">Reorder Level</label><input type="number" min="0" id="create-reorder-level" name="reorder_level" value="10"></div>
+                            <div class="form-group"><label for="create-safety-stock">Safety Stock</label><input type="number" min="0" id="create-safety-stock" name="safety_stock" value="0"></div>
                             <div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
                             <h3 class="full planning-section-title">Supplier</h3>
                             <div class="form-group full"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
@@ -1516,7 +1521,7 @@ foreach ($products as $product) {
                         <div class="u-info-note"><i class="bi bi-info-circle"></i> Starting stock is the number of items you have now. Use Stock Receiving to add future deliveries.</div>
                         <div class="form-grid u-mt-1">
                             <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" checked>Open printable barcode labels after saving</label>
-                            <div class="form-group"><label>Number of labels</label><input type="number" name="label_quantity" value="1" min="1" max="200"></div>
+                            <div class="form-group"><label for="create-label-qty">Number of labels</label><input type="number" id="create-label-qty" name="label_quantity" value="1" min="1" max="200"></div>
                         </div>
                     </section>
                 </div>
@@ -1531,11 +1536,11 @@ foreach ($products as $product) {
                 <div>
                     <h2 id="category-title">Add Category</h2>
                     <p>Create a clear category for organizing and filtering products.</p>
-                </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                </div><button type="button" class="rm-close" data-close-modal aria-label="Close add category"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <form method="POST">
                 <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="create_category">
-                    <div class="form-group"><label>Category Name</label><input type="text" name="category_name" required maxlength="100" placeholder="Example: Beverages"></div>
+                    <div class="form-group"><label for="create-category-name">Category Name</label><input type="text" id="create-category-name" name="category_name" required maxlength="100" placeholder="Example: Beverages"></div>
                 </div>
                 <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-success" type="submit">Save Category</button></footer>
             </form>
@@ -1549,7 +1554,7 @@ foreach ($products as $product) {
                     <div>
                         <h2 id="adjust-title">Emergency Stock Adjustment</h2>
                         <p>Use only after a verified count. The reason is recorded in the audit log.</p>
-                    </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                    </div><button type="button" class="rm-close" data-close-modal aria-label="Close emergency adjustment"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                 </header>
                 <form method="POST" data-confirm="This will directly change the current stock quantity and create an audit record." data-confirm-title="Confirm emergency adjustment" data-confirm-button="Apply adjustment" data-confirm-danger="1">
                     <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="adjust">
@@ -1565,8 +1570,8 @@ foreach ($products as $product) {
                             </datalist>
                             <small id="adjust-product-status" role="status">Scan into this field or type to find a product.</small>
                         </div>
-                        <div class="form-group"><label>Quantity Change</label><input type="number" name="qty_change" required placeholder="Use 5 to add or -3 to remove"></div>
-                        <div class="form-group"><label>Specific Approved Reason</label><input name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div>
+                        <div class="form-group"><label for="adjust-qty-change">Quantity Change</label><input type="number" id="adjust-qty-change" name="qty_change" required placeholder="Use 5 to add or -3 to remove"></div>
+                        <div class="form-group"><label for="adjust-reason">Specific Approved Reason</label><input id="adjust-reason" name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div>
                     </div>
                     <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-danger" type="submit">Apply Adjustment</button></footer>
                 </form>
@@ -1579,12 +1584,12 @@ foreach ($products as $product) {
                     <div>
                         <h2 id="reconcile-title">Physical Sales Pack Reconciliation</h2>
                         <p>Record verified physical counts of sealed packs and loose pieces.</p>
-                    </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                    </div><button type="button" class="rm-close" data-close-modal aria-label="Close pack reconciliation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                 </header>
                 <form method="POST" id="pack-reconcile-form" data-confirm="This will reconcile batch balances to match verified physical pack counts." data-confirm-title="Confirm pack reconciliation" data-confirm-button="Apply reconciliation">
                     <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="reconcile_sales_pack_stock">
                         <input type="hidden" name="product_id" id="reconcile-product-id">
-                        <div class="form-group"><label>Product</label><input type="text" id="reconcile-product-name" readonly class="form-input"></div>
+                        <div class="form-group"><label for="reconcile-product-name">Product</label><input type="text" id="reconcile-product-name" readonly class="form-input"></div>
                         <div class="form-grid">
                             <div class="form-group"><label for="reconcile-sealed-packs">Physical Sealed Packs</label><input type="number" min="0" step="1" name="sealed_packs" id="reconcile-sealed-packs" required value="0"></div>
                             <div class="form-group"><label for="reconcile-loose-pieces">Physical Loose Pieces</label><input type="number" min="0" step="1" name="loose_pieces" id="reconcile-loose-pieces" required value="0"></div>
@@ -1604,12 +1609,12 @@ foreach ($products as $product) {
                 <div>
                     <h2 id="bulk-category-title">Change Category</h2>
                     <p>Apply one category to every selected product.</p>
-                </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                </div><button type="button" class="rm-close" data-close-modal aria-label="Close change category"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <form method="POST" id="bulk-category-form">
                 <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="bulk_category">
                     <div id="bulk-category-ids"></div>
-                    <div class="form-group"><label>New Category</label><select data-search-dropdown name="category_id" required>
+                    <div class="form-group"><label for="bulk-category-select">New Category</label><select data-search-dropdown name="category_id" id="bulk-category-select" required>
                             <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                         </select></div>
                 </div>
@@ -1629,7 +1634,7 @@ foreach ($products as $product) {
                 <div>
                     <h2 id="column-title">Visible Columns</h2>
                     <p>Choose which optional columns appear in the table.</p>
-                </div><button type="button" class="rm-close" data-close-modal><i class="bi bi-x-lg"></i></button>
+                </div><button type="button" class="rm-close" data-close-modal aria-label="Close visible columns"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <div class="rm-modal-body"><label class="u-checkbox-row"><input type="checkbox" data-column="price" checked> Selling Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="cost" checked> Cost Price</label><label class="u-checkbox-row"><input type="checkbox" data-column="profit" checked> Profit</label></div>
             <footer class="rm-modal-actions"><button type="button" class="btn" data-close-modal>Done</button></footer>

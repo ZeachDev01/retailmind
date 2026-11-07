@@ -16,9 +16,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/sale-receipt.css')) ?>">
 </head>
 <body class="cashier-page">
+<a class="skip-link" href="#gcash-workspace">Skip to main content</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="gcash-workspace" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php'), ENT_QUOTES, 'UTF-8') ?>" data-assets="<?= htmlspecialchars(app_url('assets/'), ENT_QUOTES, 'UTF-8') ?>" data-csrf="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>" data-min-length="<?= $gcashRules['min_length'] ?>" data-max-length="<?= $gcashRules['max_length'] ?>">
+        <h1 class="sr-only">GCash Services</h1>
         <section id="gcash-session-panel" class="pos-panel gcash-session-panel" aria-labelledby="gcash-session-title">
             <div class="pos-panel-header gcash-session-header">
                 <div class="pos-panel-title gcash-session-brand">
@@ -121,13 +123,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
 
                             <div class="gcash-field">
                                 <label class="pos-field-label" for="gcash-amount">Principal amount (PHP)</label>
-                                <input class="pos-input gcash-amount-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000 · whole pesos" aria-describedby="gcash-amount-help">
+                                <input class="pos-input gcash-amount-input" id="gcash-amount" name="amount" type="number" inputmode="numeric" min="1" max="50000" step="1" required placeholder="1–50,000 · whole pesos" autocomplete="off" aria-describedby="gcash-amount-help">
                                 <small id="gcash-amount-help" class="sr-only">₱1–₱50,000 in whole pesos, excluding the service fee.</small>
                             </div>
 
                             <div class="gcash-field gcash-reference-field">
                                 <label class="pos-field-label" for="gcash-reference">GCash reference number</label>
-                                <input class="pos-input gcash-reference-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" inputmode="numeric" placeholder="Scan or enter digits" required aria-describedby="gcash-scan-status gcash-duplicate">
+                                <input class="pos-input gcash-reference-input" id="gcash-reference" name="reference" type="text" autocomplete="off" spellcheck="false" maxlength="2048" inputmode="numeric" placeholder="Scan or enter digits…" required aria-describedby="gcash-scan-status gcash-duplicate">
                                 <span id="gcash-scan-status" role="status" aria-live="polite"></span>
                                 <span id="gcash-duplicate" role="alert" hidden>Duplicate reference. Check transaction history.</span>
                                 <div class="gcash-reference-tools">
@@ -138,7 +140,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                                 </div>
                                 <section id="gcash-camera" class="gcash-camera" aria-label="Reference from photo" hidden>
                                     <button id="gcash-photo-preview-open" class="gcash-photo-preview-open" type="button">
-                                        <img id="gcash-photo-preview" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="Selected GCash receipt or notification photo">
+                                        <img id="gcash-photo-preview" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="Selected GCash receipt or notification photo" width="240" height="160">
                                         <span>Enlarge photo</span>
                                     </button>
                                     <p id="gcash-ocr-status" role="status" aria-live="polite"></p>
@@ -390,7 +392,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <h2 id="gcash-photo-dialog-title">Selected photo</h2>
                 <button class="btn btn-secondary" type="button" id="gcash-photo-dialog-close">Close photo</button>
             </div>
-            <img id="gcash-photo-dialog-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="Selected GCash receipt or notification photo enlarged">
+            <img id="gcash-photo-dialog-image" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="Selected GCash receipt or notification photo enlarged" width="800" height="600">
         </dialog>
 
         <dialog id="gcash-review-dialog" aria-labelledby="gcash-review-title">
@@ -415,11 +417,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <h2 id="gcash-open-title">Open GCash</h2>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-open-cash">Counted service cash (PHP)</label>
-                    <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-open-wallet">Checked GCash app balance (PHP)</label>
-                    <input class="pos-input" id="gcash-open-wallet" name="opening_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                    <input class="pos-input" id="gcash-open-wallet" name="opening_wallet" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                 </div>
                 <div class="gcash-actions">
                     <button class="btn btn-primary" type="submit" id="gcash-open-submit">Open GCash</button>
@@ -444,18 +446,18 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-correction-amounts">
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-close-cash">Counted service cash (PHP)</label>
-                        <input class="pos-input" id="gcash-close-cash" name="closing_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                        <input class="pos-input" id="gcash-close-cash" name="closing_cash" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                         <small id="gcash-close-cash-variance" role="status" aria-live="polite"></small>
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-close-wallet">Checked wallet balance (PHP)</label>
-                        <input class="pos-input" id="gcash-close-wallet" name="closing_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                        <input class="pos-input" id="gcash-close-wallet" name="closing_wallet" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                         <small id="gcash-close-wallet-variance" role="status" aria-live="polite"></small>
                     </div>
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-close-carryover">Unresolved carryover count</label>
-                    <input class="pos-input" id="gcash-close-carryover" name="carryover" type="number" min="0" step="1" value="0">
+                    <input class="pos-input" id="gcash-close-carryover" name="carryover" type="number" min="0" step="1" value="0" autocomplete="off" inputmode="numeric">
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-close-notes">Closing notes</label>
@@ -487,11 +489,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-correction-amounts">
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-handover-cash">Counted service cash (PHP)</label>
-                        <input class="pos-input" id="gcash-handover-cash" name="counted_cash" type="number" step="0.01" min="0" required placeholder="0.00">
+                        <input class="pos-input" id="gcash-handover-cash" name="counted_cash" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-handover-wallet">Checked wallet balance (PHP)</label>
-                        <input class="pos-input" id="gcash-handover-wallet" name="checked_wallet" type="number" step="0.01" min="0" required placeholder="0.00">
+                        <input class="pos-input" id="gcash-handover-wallet" name="checked_wallet" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                     </div>
                 </div>
                 <div class="gcash-field">
@@ -575,16 +577,16 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-funding-amount">Amount (PHP)</label>
-                        <input class="pos-input" id="gcash-funding-amount" name="amount" type="number" step="0.01" min="0.01" required placeholder="0.00">
+                        <input class="pos-input" id="gcash-funding-amount" name="amount" type="number" step="0.01" min="0.01" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                     </div>
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-funding-evidence">Evidence reference</label>
-                    <input class="pos-input" id="gcash-funding-evidence" name="evidence_reference" type="text" maxlength="120" placeholder="Required for wallet, transfer, or owner capital">
+                    <input class="pos-input" id="gcash-funding-evidence" name="evidence_reference" type="text" maxlength="120" placeholder="Required for wallet, transfer, or owner capital" autocomplete="off">
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-funding-reason">Reason</label>
-                    <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Minimum 5 characters">
+                    <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Minimum 5 characters" autocomplete="off">
                 </div>
                 <fieldset class="gcash-correction-approval">
                     <legend>Administrator approval</legend>
@@ -619,34 +621,34 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
                 <div class="gcash-field" id="gcash-resolve-ref-group">
                     <label class="pos-field-label" for="gcash-resolve-reference">Reference number</label>
-                    <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed">
+                    <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="gcash-field" id="gcash-resolve-notes-group">
                     <label class="pos-field-label" for="gcash-resolve-notes">Notes / reason</label>
-                    <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" minlength="5" maxlength="255" placeholder="Minimum 5 characters">
+                    <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" minlength="5" maxlength="255" placeholder="Minimum 5 characters" autocomplete="off">
                 </div>
                 <div id="gcash-return-fields" class="gcash-return-fields" hidden>
                     <div class="gcash-correction-amounts">
                         <div class="gcash-field">
                             <label class="pos-field-label">Cash returned/recovered (PHP)
-                                <input class="pos-input" type="number" name="returned_cash" min="0" step="0.01" value="0">
+                                <input class="pos-input" type="number" name="returned_cash" min="0" step="0.01" value="0" autocomplete="off" inputmode="decimal">
                             </label>
                         </div>
                         <div class="gcash-field">
                             <label class="pos-field-label">Wallet returned/recovered (PHP)
-                                <input class="pos-input" type="number" name="returned_wallet" min="0" step="0.01" value="0">
+                                <input class="pos-input" type="number" name="returned_wallet" min="0" step="0.01" value="0" autocomplete="off" inputmode="decimal">
                             </label>
                         </div>
                     </div>
                     <div class="gcash-correction-amounts">
                         <div class="gcash-field">
                             <label class="pos-field-label">Fee included (PHP)
-                                <input class="pos-input" type="number" name="fee_returned" min="0" step="0.01" value="0">
+                                <input class="pos-input" type="number" name="fee_returned" min="0" step="0.01" value="0" autocomplete="off" inputmode="decimal">
                             </label>
                         </div>
                         <div class="gcash-field">
                             <label class="pos-field-label">Return evidence
-                                <input class="pos-input" type="text" name="evidence" maxlength="255">
+                                <input class="pos-input" type="text" name="evidence" maxlength="255" autocomplete="off">
                             </label>
                         </div>
                     </div>
@@ -679,16 +681,16 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <div class="gcash-correction-amounts">
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-correction-cash-delta">Service cash change (+/− ₱)</label>
-                        <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00">
+                        <input class="pos-input" id="gcash-correction-cash-delta" name="service_cash_delta" type="number" step="0.01" value="0.00" autocomplete="off" inputmode="decimal">
                     </div>
                     <div class="gcash-field">
                         <label class="pos-field-label" for="gcash-correction-wallet-delta">Wallet change (+/− ₱)</label>
-                        <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00">
+                        <input class="pos-input" id="gcash-correction-wallet-delta" name="wallet_delta" type="number" step="0.01" value="0.00" autocomplete="off" inputmode="decimal">
                     </div>
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-correction-reason">Reason</label>
-                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="e.g. Service fee overcharged (min 5 chars)">
+                    <input class="pos-input" id="gcash-correction-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="e.g. Service fee overcharged (min 5 chars)" autocomplete="off">
                 </div>
                 <fieldset class="gcash-correction-approval">
                     <legend>Administrator approval</legend>

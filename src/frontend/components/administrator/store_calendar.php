@@ -259,9 +259,10 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             cursor: pointer;
             transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
         }
-        .calendar-day-cell:hover, .calendar-day-cell:focus {
+        .calendar-day-cell:hover, .calendar-day-cell:focus-visible {
             border-color: var(--primary-color, #2563eb);
-            outline: none;
+            outline: 2px solid var(--primary-color, #2563eb);
+            outline-offset: 1px;
             box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
         }
         .calendar-day-cell.selected-day {
@@ -476,11 +477,11 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="calendar_date">Start date</label>
-                        <input id="calendar_date" type="date" name="calendar_date" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
+                        <input id="calendar_date" type="date" name="calendar_date" autocomplete="off" required value="<?= htmlspecialchars($_POST['calendar_date'] ?? $today) ?>">
                     </div>
                     <div class="form-group">
                         <label for="through_date">End date <span class="muted">(optional)</span></label>
-                        <input id="through_date" type="date" name="through_date" aria-describedby="range-preview-hint" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
+                        <input id="through_date" type="date" name="through_date" autocomplete="off" aria-describedby="range-preview-hint" value="<?= htmlspecialchars($_POST['through_date'] ?? '') ?>">
                         <small class="form-hint" id="range-preview-hint" role="status" aria-live="polite">Leave blank for single date.</small>
                     </div>
                     <div class="form-group">
@@ -517,32 +518,32 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     </p>
                     <div class="form-group" style="margin-bottom: 1.25rem;">
                         <label for="schedule_effective_date">Effective Date</label>
-                        <input id="schedule_effective_date" type="date" name="effective_date" required value="<?= htmlspecialchars($schedEffective) ?>">
+                        <input id="schedule_effective_date" type="date" name="effective_date" autocomplete="off" required value="<?= htmlspecialchars($schedEffective) ?>">
                         <small class="form-hint">Date from which this weekly schedule takes effect.</small>
                     </div>
                     <fieldset class="form-group" style="border: none; padding: 0; margin: 0;">
                         <legend style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">Regular Trading Days</legend>
                         <div class="schedule-grid">
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="monday_open" value="1" <?= $schedMon ? 'checked' : '' ?>> Monday
+                            <label class="schedule-checkbox-card" for="monday_open">
+                                <input type="checkbox" id="monday_open" name="monday_open" value="1" <?= $schedMon ? 'checked' : '' ?>> Monday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="tuesday_open" value="1" <?= $schedTue ? 'checked' : '' ?>> Tuesday
+                            <label class="schedule-checkbox-card" for="tuesday_open">
+                                <input type="checkbox" id="tuesday_open" name="tuesday_open" value="1" <?= $schedTue ? 'checked' : '' ?>> Tuesday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="wednesday_open" value="1" <?= $schedWed ? 'checked' : '' ?>> Wednesday
+                            <label class="schedule-checkbox-card" for="wednesday_open">
+                                <input type="checkbox" id="wednesday_open" name="wednesday_open" value="1" <?= $schedWed ? 'checked' : '' ?>> Wednesday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="thursday_open" value="1" <?= $schedThu ? 'checked' : '' ?>> Thursday
+                            <label class="schedule-checkbox-card" for="thursday_open">
+                                <input type="checkbox" id="thursday_open" name="thursday_open" value="1" <?= $schedThu ? 'checked' : '' ?>> Thursday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="friday_open" value="1" <?= $schedFri ? 'checked' : '' ?>> Friday
+                            <label class="schedule-checkbox-card" for="friday_open">
+                                <input type="checkbox" id="friday_open" name="friday_open" value="1" <?= $schedFri ? 'checked' : '' ?>> Friday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="saturday_open" value="1" <?= $schedSat ? 'checked' : '' ?>> Saturday
+                            <label class="schedule-checkbox-card" for="saturday_open">
+                                <input type="checkbox" id="saturday_open" name="saturday_open" value="1" <?= $schedSat ? 'checked' : '' ?>> Saturday
                             </label>
-                            <label class="schedule-checkbox-card">
-                                <input type="checkbox" name="sunday_open" value="1" <?= $schedSun ? 'checked' : '' ?>> Sunday
+                            <label class="schedule-checkbox-card" for="sunday_open">
+                                <input type="checkbox" id="sunday_open" name="sunday_open" value="1" <?= $schedSun ? 'checked' : '' ?>> Sunday
                             </label>
                         </div>
                     </fieldset>

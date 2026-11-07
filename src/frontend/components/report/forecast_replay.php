@@ -106,14 +106,14 @@ $canReceive = has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY);
     <section class="dashboard-section" aria-labelledby="replay-stock"><h2 id="replay-stock"><?= $isM5 ? 'Stock rules and historical expected sales' : 'Current stock and experimental buying preview' ?></h2>
         <?php if ($isM5): ?>
         <p>Expected sales cover <?= htmlspecialchars($result['test_start']) ?> to <?= htmlspecialchars($result['test_end']) ?>. On hand is illustrative Demo stock today, not observed Walmart stock. Stock-rule suggestions are quantities to buy; expected sales are quantities predicted to sell. The Inventory Manager decides how much to buy.</p>
-        <div class="table-wrap"><table class="data-table" id="replay-stock-table"><thead><tr><th>Product</th><th>On hand</th><th>Stock-rule suggestion</th><th>Expected sales (historical 28 days)</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="data-table" id="replay-stock-m5-table"><thead><tr><th>Product</th><th>On hand</th><th>Stock-rule suggestion</th><th>Expected sales (historical 28 days)</th></tr></thead><tbody>
         <?php foreach ($preview as $item): ?><tr data-product-id="<?= (int)$item['product_id'] ?>">
             <td><?= htmlspecialchars($item['sku']) ?></td><td><?= (int)$item['current_stock'] ?> units</td>
             <td><?= (int)$stockRules[$item['product_id']]['stock_rule_quantity'] ?> units</td><td><?= (int)$item['forecast_28_day'] ?> units</td>
         </tr><?php endforeach; ?></tbody></table></div>
         <?php else: ?>
         <p>Future preview origin: <?= htmlspecialchars($result['test_end']) ?>. These future dates have no actual sales yet. Quantities reuse the normal lead-time, buffer, minimum-order and package rules, but remain unapproved experiments.</p>
-        <div class="table-wrap"><table class="data-table" id="replay-stock-table"><thead><tr><th>Product</th><th>On hand</th><th>Next 7 days</th><th>Next 14 days</th><th>Next 28 days</th><th>Preview buy quantity</th><th>Exposure</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="data-table" id="replay-stock-future-table"><thead><tr><th>Product</th><th>On hand</th><th>Next 7 days</th><th>Next 14 days</th><th>Next 28 days</th><th>Preview buy quantity</th><th>Exposure</th></tr></thead><tbody>
         <?php foreach ($preview as $item): ?><tr data-product-id="<?= (int)$item['product_id'] ?>">
             <td><?= htmlspecialchars($item['sku'] . ' — ' . $item['product_name']) ?></td><td><?= (int)$item['current_stock'] ?></td>
             <td><?= (int)$item['forecast_7_day'] ?></td><td><?= (int)$item['forecast_14_day'] ?></td><td><?= (int)$item['forecast_28_day'] ?></td>

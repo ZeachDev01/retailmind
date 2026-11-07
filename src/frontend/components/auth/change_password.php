@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
                 <div class="u-auth-actions">
-                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/logout.php')) ?>">Log out</a>
+                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/logout.php')) ?>">Log Out</a>
                     <button class="btn" type="submit">Save new password</button>
                 </div>
             </form>

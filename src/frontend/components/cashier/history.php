@@ -68,9 +68,11 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
 </head>
 <body class="cashier-history-page">
+<a class="skip-link" href="#history-main">Skip to main content</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
+    <main class="main-content" id="history-main">
+        <h1 class="sr-only">Transaction History</h1>
         <section class="history-workspace <?= htmlspecialchars($tabMeta[$type]['color'] ?? 'tab-sales') ?>" aria-label="Transaction history">
         <?php
         $tabMeta = [

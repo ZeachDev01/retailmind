@@ -66,7 +66,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
             <form method="get" action="" class="search-form exception-filters no-print" role="search" aria-label="Filter exception queue" style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin-bottom:1.25rem;">
                 <div>
                     <label for="filter-search" class="u-text-muted" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Search</label>
-                    <input type="search" id="filter-search" name="search" value="<?= htmlspecialchars($searchQuery) ?>" placeholder="Product name or SKU" class="input-text" style="min-width:200px;">
+                    <input type="search" id="filter-search" name="search" autocomplete="off" value="<?= htmlspecialchars($searchQuery) ?>" placeholder="Product name or SKU…" class="input-text" style="min-width:200px;">
                 </div>
                 <div>
                     <label for="filter-reason" class="u-text-muted" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Reason</label>
@@ -103,7 +103,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
                         ?>
                             <tr>
                                 <td>
-                                    <strong><a href="../products/product_detail.php?id=<?= (int)$row['product_id'] ?>"><?= htmlspecialchars($row['product_name']) ?></a></strong><br>
+                                    <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . (int)$row['product_id'])) ?>"><?= htmlspecialchars($row['product_name']) ?></a></strong><br>
                                     <span class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></span>
                                 </td>
                                 <td><strong><?= (int)$row['current_stock'] ?></strong> units</td>
@@ -115,7 +115,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
                                     </div>
                                 </td>
                                 <td>
-                                    <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="View forecast for <?= htmlspecialchars($row['product_name']) ?>">View forecast</a>
+                                    <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="View forecast for <?= htmlspecialchars($row['product_name']) ?>">View Forecast</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -152,7 +152,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
                                 <td><?= htmlspecialchars(ucfirst($row['decision'])) ?></td>
                                 <td><?= (int)$row['original_suggested_qty'] ?></td>
                                 <td><?= (int)$row['final_quantity'] ?></td>
-                                <td><?= htmlspecialchars($row['override_reason'] ?: '-') ?></td>
+                                <td><?= htmlspecialchars($row['override_reason'] ?: '—') ?></td>
                                 <td><?= htmlspecialchars($row['decided_by_name'] ?? 'Unknown') ?></td>
                             </tr>
                         <?php endforeach; ?>

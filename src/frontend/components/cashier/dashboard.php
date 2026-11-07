@@ -29,9 +29,11 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
 </head>
 
 <body class="cashier-page cashier-dashboard-page">
+    <a class="skip-link" href="#cashier-overview">Skip to main content</a>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="cashier-overview" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php?action=overview')) ?>" data-history="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>">
+            <h1 class="sr-only">Dashboard Overview</h1>
             <div class="gcash-tabs-nav-wrap">
                 <nav class="gcash-tablist" role="tablist" aria-label="Cashier overview">
                     <button type="button" role="tab" id="tab-cashier" class="gcash-tab active" aria-selected="true" aria-controls="panel-cashier" tabindex="0">
@@ -83,7 +85,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     <div class="dashboard-panel-header">
                         <div class="panel-header-title-group">
                             <h3>Hourly Sales</h3>
-                            <span class="panel-tag"><i class="bi bi-clock"></i> Today · PHT</span>
+                            <span class="panel-tag"><i class="bi bi-clock" aria-hidden="true"></i> Today · PHT</span>
                         </div>
                     </div>
                         <div class="cashier-sales-chart">
@@ -190,7 +192,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                     </a>
                 </div>
             </header>
-            <p id="gcash-overview-status" role="status">Loading GCash overview...</p>
+            <p id="gcash-overview-status" role="status">Loading GCash overview…</p>
             <div class="gcash-overview-ledger">
             <section class="pos-panel gcash-overview-section gcash-overview-balances gcash-workspace-balances" aria-labelledby="gcash-overview-balances-title">
                 <div class="pos-panel-header">

@@ -180,11 +180,11 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                             </div>
                             <div class="form-group">
                                 <label for="log-review-note">Review note <span class="required-indicator" aria-hidden="true">*</span></label>
-                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" required aria-describedby="<?= $noteDescribedBy ?>"<?= $noteInvalidAttr ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" placeholder="e.g. Investigated stack trace; verified database migration resolved the warning…" required aria-describedby="<?= $noteDescribedBy ?>"<?= $noteInvalidAttr ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                                 <p id="log-review-note-help" class="section-description">Describe root cause, resolution, or verification details. Max 1,000 characters.</p>
                             </div>
                             <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required<?= ($_POST['review_confirmed'] ?? '') === '1' ? ' checked' : '' ?><?= $confirmErrorAttr ?>> <span>I investigated these entries and verified the result. <span class="required-indicator" aria-hidden="true">*</span></span></label>
-                            <button type="submit" class="btn btn-primary">Save review and acknowledge log</button>
+                            <button type="submit" class="btn btn-primary">Save Review and Acknowledge Log</button>
                         </form>
                     <?php endif; ?>
                 <?php endif; ?>

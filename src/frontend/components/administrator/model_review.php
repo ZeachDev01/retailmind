@@ -221,7 +221,7 @@ $formatUnits = static function ($val): string {
                             <input type="hidden" name="model_version" value="<?= htmlspecialchars($summary['candidate_version']) ?>">
                             <div class="form-group" style="margin-bottom: 0.75rem;">
                                 <label for="justification">Operational Approval Notes</label>
-                                <input type="text" id="justification" name="justification" placeholder="e.g. Verified 28-day holdout and prospective observation" style="width: 100%;" required>
+                                <input type="text" id="justification" name="justification" autocomplete="off" placeholder="e.g. Verified 28-day holdout and prospective observation" style="width: 100%;" required>
                             </div>
                             <button type="submit" class="btn btn-primary" style="width: 100%;">
                                 <i class="bi bi-check-lg" aria-hidden="true"></i> Approve &amp; Activate Model
@@ -234,7 +234,7 @@ $formatUnits = static function ($val): string {
                             <input type="hidden" name="model_version" value="<?= htmlspecialchars($summary['candidate_version']) ?>">
                             <div class="form-group" style="margin-bottom: 0.75rem;">
                                 <label for="reject-reason">Rejection Reason</label>
-                                <input type="text" id="reject-reason" name="reason" placeholder="e.g. Unstable variance on promotional items" style="width: 100%;" required>
+                                <input type="text" id="reject-reason" name="reason" autocomplete="off" placeholder="e.g. Unstable variance on promotional items" style="width: 100%;" required>
                             </div>
                             <button type="submit" class="btn btn-secondary" style="width: 100%;">
                                 <i class="bi bi-x-lg" aria-hidden="true"></i> Reject Candidate
@@ -262,7 +262,8 @@ $formatUnits = static function ($val): string {
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="suspend">
                                 <div class="form-group" style="margin-bottom: 0.5rem;">
-                                    <input type="text" name="reason" placeholder="Reason for pause (e.g. Store inventory audit)" style="width: 100%;" required>
+                                    <label for="pause-reason" class="sr-only">Reason for pause</label>
+                                    <input type="text" id="pause-reason" name="reason" autocomplete="off" placeholder="Reason for pause (e.g. Store inventory audit)" style="width: 100%;" required>
                                 </div>
                                 <button type="submit" class="btn btn-secondary" style="width: 100%;">
                                     <i class="bi bi-pause-circle" aria-hidden="true"></i> Pause Purchasing Suggestions
@@ -290,7 +291,8 @@ $formatUnits = static function ($val): string {
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="rollback">
                                 <div class="form-group" style="margin-bottom: 0.5rem;">
-                                    <input type="text" name="reason" placeholder="Reason for rollback" style="width: 100%;" required>
+                                    <label for="rollback-reason" class="sr-only">Reason for rollback</label>
+                                    <input type="text" id="rollback-reason" name="reason" autocomplete="off" placeholder="Reason for rollback" style="width: 100%;" required>
                                 </div>
                                 <button type="submit" class="btn btn-secondary" style="width: 100%;">
                                     <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Roll Back to <?= htmlspecialchars($summary['previous_version']) ?>

@@ -112,9 +112,10 @@ function correction_e(mixed $value): string {
     <link rel="stylesheet" href="<?= correction_e(theme_url('assets/css/refund-corrections.css')) ?>">
 </head>
 <body class="cashier-page refund-corrections-page">
+<a class="skip-link" href="#refund-corrections-main">Skip to main content</a>
 <div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
-<main class="main-content">
+<main class="main-content" id="refund-corrections-main">
     <header class="correction-header">
         <div class="correction-title-row">
             <h1 class="correction-title">Refund corrections</h1>
@@ -165,7 +166,7 @@ function correction_e(mixed $value): string {
                     <label for="refund_id">Refund ID</label>
                     <div class="input-with-affix">
                         <span class="input-affix">#</span>
-                        <input id="refund_id" class="pos-input" name="refund_id" type="number" min="1" placeholder="1042" required>
+                        <input id="refund_id" class="pos-input" name="refund_id" type="number" min="1" placeholder="1042" autocomplete="off" inputmode="numeric" required>
                     </div>
                 </div>
 
@@ -195,7 +196,7 @@ function correction_e(mixed $value): string {
                         <label for="cash_amount">Amount (PHP)</label>
                         <div class="input-with-affix">
                             <span class="input-affix">₱</span>
-                            <input id="cash_amount" class="pos-input" name="cash_amount" type="number" step="0.01" placeholder="0.00">
+                            <input id="cash_amount" class="pos-input" name="cash_amount" type="number" step="0.01" placeholder="0.00" autocomplete="off" inputmode="decimal">
                         </div>
                     </div>
                 </div>
@@ -224,7 +225,7 @@ function correction_e(mixed $value): string {
                     </div>
                     <div class="form-group">
                         <label for="quantity">Units</label>
-                        <input id="quantity" class="pos-input" name="quantity" type="number" step="1" placeholder="0">
+                        <input id="quantity" class="pos-input" name="quantity" type="number" step="1" placeholder="0" autocomplete="off" inputmode="numeric">
                     </div>
                 </div>
             </fieldset>
@@ -234,8 +235,8 @@ function correction_e(mixed $value): string {
                 <textarea id="explanation" class="pos-input" name="explanation" required minlength="8" maxlength="2000" rows="3"></textarea>
             </div>
 
-            <label class="correction-confirm-box">
-                <input type="checkbox" required>
+            <label class="correction-confirm-box" for="approve-confirm-check">
+                <input id="approve-confirm-check" type="checkbox" required>
                 <span class="confirmation-label">I approve these exact changes and assigned staff.</span>
             </label>
 
@@ -454,8 +455,8 @@ function correction_e(mixed $value): string {
                             <textarea id="drawer-task-note" class="pos-input" name="note" required minlength="8" maxlength="255" rows="2"></textarea>
                         </div>
 
-                        <label class="correction-confirm-box">
-                            <input type="checkbox" required>
+                        <label class="correction-confirm-box" for="record-task-check">
+                            <input id="record-task-check" type="checkbox" required>
                             <span class="confirmation-label">I confirm the exact approved <?= $role === 'cashier' ? 'money movement occurred in my open drawer' : 'stock change was physically checked' ?>.</span>
                         </label>
 

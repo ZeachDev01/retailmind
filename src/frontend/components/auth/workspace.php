@@ -48,7 +48,7 @@ $assignedWorkspaces = array_values(array_filter(
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Change workspace</title>
+    <title>Change Workspace</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/workspace.css')) ?>">
 </head>
@@ -58,7 +58,7 @@ $assignedWorkspaces = array_values(array_filter(
         <main class="main-content workspace-selector-page">
             <header class="page-heading">
                 <div>
-                    <h1>Change workspace</h1>
+                    <h1>Change Workspace</h1>
                 </div>
             </header>
 

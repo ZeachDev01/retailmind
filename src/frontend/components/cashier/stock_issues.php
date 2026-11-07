@@ -105,9 +105,10 @@ foreach ($history as $hItem) {
 </head>
 
 <body class="cashier-stock-issues-page">
+    <a class="skip-link" href="#stock-issues-main">Skip to main content</a>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <main class="main-content">
+        <main class="main-content" id="stock-issues-main">
             <div class="topbar stock-issues-topbar">
                 <div class="stock-issues-header-info">
                     <div class="stock-issues-title-row">
@@ -235,12 +236,12 @@ foreach ($history as $hItem) {
                             </div>
                             <div class="form-group">
                                 <label for="quantity" class="required">Quantity</label>
-                                <input type="number" name="quantity" id="quantity" min="1" step="1" placeholder="1" required <?= $openShift ? '' : 'disabled' ?>>
+                                <input type="number" name="quantity" id="quantity" min="1" step="1" placeholder="1" autocomplete="off" inputmode="numeric" required <?= $openShift ? '' : 'disabled' ?>>
                             </div>
                         </div>
                         <div class="form-group stock-explanation-group">
                             <label for="explanation" class="required">Reason</label>
-                            <textarea name="explanation" id="explanation" placeholder="Reason for discrepancy..." required <?= $openShift ? '' : 'disabled' ?>></textarea>
+                            <textarea name="explanation" id="explanation" placeholder="Reason for discrepancy…" required <?= $openShift ? '' : 'disabled' ?>></textarea>
                         </div>
                     </div>
 
@@ -374,7 +375,7 @@ foreach ($history as $hItem) {
                                                 </div>
                                                 <div class="form-group">
                                                     <label for="edit-qty-<?= (int)$adj['adjustment_id'] ?>">Quantity</label>
-                                                    <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= (int)($adj['reported_qty'] ?: abs((int)$adj['adjustment_qty'])) ?>" required>
+                                                    <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= (int)($adj['reported_qty'] ?: abs((int)$adj['adjustment_qty'])) ?>" autocomplete="off" inputmode="numeric" required>
                                                 </div>
                                             </div>
                                             <div class="form-group">

@@ -17,9 +17,10 @@ $posCategories = $pdo->query("SELECT category_id, category_name FROM categories 
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
 </head>
 <body class="cashier-page">
+<a class="skip-link" href="#main-content">Skip to main content</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
+    <main class="main-content" id="main-content">
         <header class="topbar cashier-topbar">
             <div class="cashier-heading">
                 <h1>Find Product</h1>
@@ -45,7 +46,7 @@ $posCategories = $pdo->query("SELECT category_id, category_name FROM categories 
             <label class="pos-field-label" for="product-search">Product name, SKU, or barcode</label>
             <div class="search-bar-wrap">
                 <i class="bi bi-search" aria-hidden="true"></i>
-                <input id="product-search" class="pos-input" type="search" placeholder="Start typing a product name or code" autocomplete="off" autofocus>
+                <input id="product-search" class="pos-input" type="search" placeholder="Start typing a product name or code…" autocomplete="off" spellcheck="false" autofocus>
             </div>
 
             <?php if ($posCategories): ?>

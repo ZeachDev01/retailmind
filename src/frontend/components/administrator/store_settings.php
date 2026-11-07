@@ -277,7 +277,7 @@ $effective = $service->thresholdsFor('admin');
                     <input type="file" id="receipt_logo" name="receipt_logo" accept="image/jpeg,image/png" aria-describedby="receipt-logo-help">
                     <small class="field-help" id="receipt-logo-help"><strong>Recommended size: 384 × 192 px (wide) or 192 × 192 px (square).</strong><br>JPG or PNG, up to 2 MB and 4 million pixels. Automatically fits 58/80 mm receipts in black and white and trims blank edges. Use a simple, high-contrast logo. Existing receipts keep their original logo. Remove it to print the Store name only.</small>
                     <?php if ($receiptLogo !== ''): ?>
-                        <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo">
+                        <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo" width="192" height="96" loading="lazy">
                     <?php else: ?>
                         <p class="field-help">No receipt logo saved.</p>
                     <?php endif; ?>
@@ -306,7 +306,7 @@ $effective = $service->thresholdsFor('admin');
                         <?php $hasLimit = isset($effective[$key], $requested[$key]) && (float)$effective[$key] !== (float)$requested[$key]; ?>
                         <div class="form-group">
                             <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($config['label']) ?></label>
-                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="<?= htmlspecialchars($config['step']) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>"<?= $hasLimit ? ' aria-describedby="' . htmlspecialchars($key) . '-limit"' : '' ?> required>
+                            <input id="<?= htmlspecialchars($key) ?>" type="number" min="0" step="<?= htmlspecialchars($config['step']) ?>" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars((string)($requested[$key] ?? 0)) ?>" autocomplete="off"<?= $hasLimit ? ' aria-describedby="' . htmlspecialchars($key) . '-limit"' : '' ?> required>
                             <?php if ($hasLimit): ?>
                                 <small id="<?= htmlspecialchars($key) ?>-limit" class="field-help u-text-muted">Platform-limited value: <?= htmlspecialchars((string)$effective[$key]) ?></small>
                             <?php endif; ?>
@@ -337,7 +337,7 @@ $effective = $service->thresholdsFor('admin');
                     </div>
                     <div class="form-group">
                         <label for="brevo_sender_email">Verified sender email</label>
-                        <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
+                        <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" spellcheck="false" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
                         <small class="field-help">This sender must be verified in your Brevo account. Emails display the Store name.</small>
                     </div>
                 </div>

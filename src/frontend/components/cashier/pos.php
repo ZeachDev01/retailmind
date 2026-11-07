@@ -486,9 +486,10 @@ $quickCategoryIcon = static function (string $categoryName): string {
     <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/sale-receipt-dialog.js')) ?>" defer></script>
 </head>
 <body class="cashier-page cashier-pos-page">
+<a class="skip-link" href="#pos-main">Skip to main content</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
+    <main class="main-content" id="pos-main">
         <h1 class="sr-only">Point of Sale</h1>
         <?php foreach ([[$checkout_error, 'error'], [$lock_error, 'error'], [$checkout_notice, 'success']] as [$notice, $noticeType]): ?>
             <?php if ($notice !== ''): ?>
@@ -550,7 +551,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU" autocomplete="off" autofocus inputmode="search">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" autofocus inputmode="search" spellcheck="false">
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
@@ -874,7 +875,7 @@ function setTextIfPresent(id, value) {
 
 function quickProductMedia(product) {
     if (product.product_image) {
-        return `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><i class="bi bi-box-seam" aria-hidden="true" hidden></i>`;
+        return `<img src="${escapeHtml(product.product_image)}" alt="" width="48" height="48" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><i class="bi bi-box-seam" aria-hidden="true" hidden></i>`;
     }
     return `<i class="bi bi-box-seam" aria-hidden="true"></i>`;
 }
@@ -1653,7 +1654,7 @@ function renderCart() {
 
             rows += `<tr role="row">
                 <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
-                <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
+                <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity" autocomplete="off" inputmode="numeric"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
                 <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
                 <td role="cell"><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
             </tr>`;
@@ -1796,14 +1797,14 @@ async function checkoutNow() {
     }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
-        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()"></label>
+        ? `<label>Cash received <input id="review-cash" type="number" min="0" step="0.01" value="${escapeHtml(cashReceived.value)}" oninput="updateReviewedPayment()" autocomplete="off" inputmode="decimal"></label>
             <div class="cash-quick" role="group" aria-label="Quick cash amounts">
                 <button type="button" data-cash-amount="exact">Exact</button>
                 <button type="button" data-cash-amount="20">₱20</button>
                 <button type="button" data-cash-amount="50">₱50</button>
                 <button type="button" data-cash-amount="100">₱100</button>
             </div><div class="review-change"><span>Change due</span><output aria-label="Change due">₱<span id="review-change">0.00</span></output></div>`
-        : `<p>Complete and verify the ${escapeHtml(methodLabel)} payment externally for ₱${money(quote.total)}.</p><label>Payment Reference <input id="review-reference" value="${escapeHtml(paymentReference.value)}" oninput="updateReviewedPayment()"></label><label><input type="checkbox" id="review-verified"> I verified this payment externally.</label>`;
+        : `<p>Complete and verify the ${escapeHtml(methodLabel)} payment externally for ₱${money(quote.total)}.</p><label>Payment Reference <input id="review-reference" value="${escapeHtml(paymentReference.value)}" oninput="updateReviewedPayment()" autocomplete="off" spellcheck="false"></label><label><input type="checkbox" id="review-verified"> I verified this payment externally.</label>`;
 
     checkoutSummary.innerHTML = `
         <table class="review-items" aria-label="Items in this sale">
@@ -1952,6 +1953,7 @@ function renderStockConflictItems() {
             html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
                 <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
                        class="conflict-qty-input" data-conflict-key="${escapedKey}" style="width:60px; padding:0.25rem;"
+                       aria-label="Quantity for ${escapeHtml(name)}" autocomplete="off" inputmode="numeric"
                        onchange="updateConflictItemQty('${escapedKey}', Number(this.value), ${available})">
                 <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty('${escapedKey}', ${available})">Set to ${available}</button>
                 <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>

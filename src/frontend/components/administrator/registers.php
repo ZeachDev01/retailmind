@@ -132,7 +132,7 @@ $allRegisters = $registers->all();
                 <input type="hidden" name="action" value="create">
                 <div class="form-group">
                     <label for="register-name">Register name</label>
-                    <input id="register-name" type="text" name="name" maxlength="100" placeholder="e.g. Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
+                    <input id="register-name" type="text" name="name" maxlength="100" autocomplete="off" placeholder="e.g. Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
                 </div>
                 <div class="form-group">
                     <label for="register-paper-width">Receipt paper width</label>
@@ -188,7 +188,7 @@ $allRegisters = $registers->all();
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="rename">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
-                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" value="<?= htmlspecialchars($renameFailed ? $submittedName : $register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" <?= $renameFailed ? 'aria-describedby="register-feedback"' : '' ?> required>
+                                    <input id="rename-<?= (int)$register['register_id'] ?>" type="text" name="name" maxlength="100" autocomplete="off" value="<?= htmlspecialchars($renameFailed ? $submittedName : $register['name']) ?>" aria-label="Rename <?= htmlspecialchars($register['name']) ?>" <?= $renameFailed ? 'aria-describedby="register-feedback"' : '' ?> required>
                                     <button class="btn btn-secondary" type="submit" aria-label="Rename <?= htmlspecialchars($register['name']) ?>">Rename</button>
                                     <button class="btn btn-quiet register-rename-cancel" type="button" aria-label="Cancel rename" data-cancel-for="rename-form-<?= (int)$register['register_id'] ?>">Cancel</button>
                                 </form>

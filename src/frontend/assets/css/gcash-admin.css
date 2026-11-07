@@ -75,7 +75,7 @@
 
 /* Bottom Shortcut Bars */
 #gcash-admin-workspace .gcash-coin-shortcut-bar { margin-top: .75rem; display: flex; justify-content: flex-end; }
-#gcash-admin-workspace .gcash-coin-shortcut-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: .875rem; padding: .625rem 1rem; border-radius: 10px; border: 1px dashed var(--border); background: var(--card-bg, #fff); color: var(--muted); font: inherit; font-size: .8125rem; font-weight: 500; cursor: pointer; transition: all 150ms ease; width: 100%; box-shadow: 0 1px 2px rgb(15 23 42 / .02); }
+#gcash-admin-workspace .gcash-coin-shortcut-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: .875rem; padding: .625rem 1rem; border-radius: 10px; border: 1px dashed var(--border); background: var(--card-bg, #fff); color: var(--muted); font: inherit; font-size: .8125rem; font-weight: 500; cursor: pointer; transition: background 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; width: 100%; box-shadow: 0 1px 2px rgb(15 23 42 / .02); }
 #gcash-admin-workspace .gcash-coin-shortcut-btn:hover { background: var(--card-bg, #fff); border-color: var(--primary); color: var(--text); border-style: solid; box-shadow: 0 2px 8px rgb(15 23 42 / .04); }
 #gcash-admin-workspace .gcash-coin-shortcut-left { display: flex; align-items: center; gap: .5rem; }
 #gcash-admin-workspace .gcash-coin-shortcut-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; background: var(--theme-info-surface, #eff6ff); color: var(--primary); font-size: .8125rem; }

@@ -130,9 +130,11 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
 </head>
 <body class="receipts-page">
+<a class="skip-link" href="#receipts-main">Skip to main content</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content">
+    <main class="main-content" id="receipts-main">
+            <h1 class="u-sr-only">Receipt History</h1>
             <?php if ($selected_error): ?>
                 <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
@@ -149,11 +151,11 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
             <div class="receipt-filters" role="group" aria-label="Receipt filters">
                 <label>
                     <span>From date</span>
-                    <input type="date" id="receiptDateFrom" aria-describedby="receiptTableStatusMessage">
+                    <input type="date" id="receiptDateFrom" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label>
                     <span>To date</span>
-                    <input type="date" id="receiptDateTo" aria-describedby="receiptTableStatusMessage">
+                    <input type="date" id="receiptDateTo" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
                 <?php if ($can_manage_all): ?>
@@ -393,8 +395,8 @@ document.addEventListener('DOMContentLoaded', function() {
     drawerTabs.className = 'receipt-drawer-tabs';
     drawerTabs.setAttribute('role', 'tablist');
     drawerTabs.setAttribute('aria-label', 'Receipt details');
-    drawerTabs.innerHTML = '<button type="button" id="receiptPaperTab" role="tab" aria-controls="receiptContent">Receipt</button>' +
-        '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" disabled>Other Details</button>';
+    drawerTabs.innerHTML = '<button type="button" id="receiptPaperTab" role="tab" aria-controls="receiptContent" aria-selected="true" tabindex="0">Receipt</button>' +
+        '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" aria-selected="false" tabindex="-1" disabled>Other Details</button>';
     const drawerSummary = document.createElement('dl');
     drawerSummary.className = 'receipt-drawer-summary';
     otherPanel.append(drawerSummary);

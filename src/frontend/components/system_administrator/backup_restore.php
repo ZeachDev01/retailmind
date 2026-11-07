@@ -234,7 +234,7 @@ $storePaused = RecoveryStore::isPaused();
                     <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
                         <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>">
                             <label for="backup-file">Encrypted RetailMind package</label>
-                            <p class="backup-hint" id="backup-file-hint">.rmpkg only &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?> MB</p>
+                            <p class="backup-hint" id="backup-file-hint">.rmpkg only &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?>&nbsp;MB</p>
                             <div class="restore-file-field">
                                 <input id="backup-file" type="file" name="backup_file" accept=".rmpkg" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required>
                             </div>

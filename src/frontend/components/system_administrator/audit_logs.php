@@ -434,11 +434,11 @@ if ($dateTo !== '') {
                                 </div>
                                 <div class="form-group full">
                                     <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
-                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="Summarize review findings and any security actions taken" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="e.g. Verified IP address ownership; no compromised credentials found…" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                                 </div>
                             </div>
                             <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I confirm I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
-                            <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save review and clear listed attempts</button>
+                            <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save Review and Clear Listed Attempts</button>
                         </form>
                     <?php endif; ?>
                 </section>

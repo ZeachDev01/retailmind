@@ -80,7 +80,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <?php retailmind_theme_head(); ?>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Review backup</title>
+    <title>Review Backup</title>
     <link rel="stylesheet" href="<?= $escape(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
@@ -93,7 +93,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <main class="main-content">
         <header class="topbar recovery-heading">
             <div>
-                <h1>Review backup</h1>
+                <h1>Review Backup</h1>
             </div>
             <div class="recovery-heading-actions">
                 <a class="btn btn-secondary" href="<?= $escape(app_url('components/' . $backupPage)) ?>">
@@ -241,11 +241,11 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                             </div>
                                             <div class="form-group">
                                                 <label for="email-<?= $id ?>">Email (optional)</label>
-                                                <input id="email-<?= $id ?>" type="email" name="people[<?= $id ?>][email]" maxlength="120" value="<?= $escape($choice['email'] ?? '') ?>" autocomplete="off" placeholder="user@example.com">
+                                                <input id="email-<?= $id ?>" type="email" name="people[<?= $id ?>][email]" maxlength="120" value="<?= $escape($choice['email'] ?? '') ?>" autocomplete="off" spellcheck="false" placeholder="user@example.com">
                                             </div>
                                         </div>
-                                        <label class="resolution-option">
-                                            <input type="checkbox" name="people[<?= $id ?>][administrator]" value="1" <?= !empty($choice['administrator']) ? 'checked' : '' ?>>
+                                        <label class="resolution-option" for="admin-<?= $id ?>">
+                                            <input type="checkbox" id="admin-<?= $id ?>" name="people[<?= $id ?>][administrator]" value="1" <?= !empty($choice['administrator']) ? 'checked' : '' ?>>
                                             <span>
                                                 Make this new account an Administrator
                                                 <small>Imported roles: <strong><?= $escape(implode(', ', $person['ordinary_roles'])) ?></strong>.</small>
@@ -404,8 +404,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                 <div>
                                     <h2>Confirm restoration</h2>
                                 </div>
-                                <label class="resolution-option">
-                                    <input type="checkbox" name="confirm_replacement" value="1" required>
+                                <label class="resolution-option" for="confirm_replacement">
+                                    <input type="checkbox" id="confirm_replacement" name="confirm_replacement" value="1" required>
                                     <span>I understand this snapshot replaces newer records and Store operations remain paused until verification. Stop source sales and background workers before continuing.</span>
                                 </label>
                                 <div class="reconcile-actions">

@@ -163,18 +163,18 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                 <?= csrf_field() ?>
                 <div class="form-group">
                     <label for="forecast-csv">Sales history CSV file</label>
-                    <p class="form-hint" id="forecast-csv-hint">UTF-8 CSV &bull; Max 2 MB &bull; Up to 10,000 rows</p>
+                    <p class="form-hint" id="forecast-csv-hint">UTF-8 CSV &bull; Max 2&nbsp;MB &bull; Up to 10,000 rows</p>
                     <input type="file" id="forecast-csv" name="csv_file" accept=".csv,text/csv" aria-describedby="forecast-csv-hint" required>
                 </div>
                 <div class="btn-group">
                     <button type="submit" class="btn">
-                        Preview and validate
+                        Preview and Validate
                     </button>
                     <a class="btn btn-secondary" href="?template=1">
-                        Download CSV template
+                        Download CSV Template
                     </a>
                     <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">
-                        Check data readiness
+                        Check Data Readiness
                     </a>
                 </div>
             </form>
@@ -252,10 +252,10 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                 <?= csrf_field() ?>
                 <div class="form-actions" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                     <button type="submit" class="btn" name="confirm_import" value="1">
-                        Import <?= count($preview['rows']) ?> daily totals
+                        Import <?= count($preview['rows']) ?> Daily Totals
                     </button>
                     <a class="btn btn-secondary" href="?cancel=1">
-                        Discard preview
+                        Discard Preview
                     </a>
                 </div>
             </form>
