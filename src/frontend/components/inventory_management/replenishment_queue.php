@@ -10,6 +10,7 @@ require_once dirname(__DIR__, 3) . '/backend/includes/functions.php';
 use App\Core\Session;
 use App\Support\OperatorAlert;
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ReplenishmentQueueService;
 
 Session::start();
@@ -35,7 +36,7 @@ $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INV
 $jobId = null;
 $coverage = null;
 try {
-    $forecastService = new DemandForecastService($pdo);
+    $forecastService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
     $jobId = $forecastService->getLatestUsableJobId() ?? $forecastService->getLatestSuccessfulJobId();
     $coverage = $forecastService->getCoverage($jobId);
 

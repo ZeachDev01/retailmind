@@ -9,6 +9,7 @@ require_any_capability([
 $actorRole = (string)current_role();
 $userFilter = trim((string)($_GET['user_id'] ?? ''));
 $actionFilter = trim((string)($_GET['action'] ?? ''));
+$categoryFilter = trim((string)($_GET['category'] ?? ''));
 $moduleFilter = trim((string)($_GET['module'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
 $dateTo = trim((string)($_GET['date_to'] ?? ''));
@@ -22,6 +23,7 @@ if ($isExport) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $userFilter = trim((string)($_POST['user_id'] ?? ''));
     $actionFilter = trim((string)($_POST['action_filter'] ?? ''));
+    $categoryFilter = trim((string)($_POST['category'] ?? ''));
     $moduleFilter = trim((string)($_POST['module'] ?? ''));
     $dateFrom = trim((string)($_POST['date_from'] ?? ''));
     $dateTo = trim((string)($_POST['date_to'] ?? ''));
@@ -35,6 +37,7 @@ $protectedAuditRecords = new \App\Audit\ProtectedAuditRecordService($pdo, role_c
 $auditFilters = [
     'user_id' => $userFilter,
     'action' => $actionFilter,
+    'category' => $categoryFilter,
     'module' => $moduleFilter,
     'date_from' => $dateFrom,
     'date_to' => $dateTo,
@@ -90,6 +93,54 @@ function audit_log_action_class(string $action): string
     return 'is-neutral';
 }
 
+function audit_log_category_filter_url(string $category): string
+{
+    $query = [];
+    foreach (['user_id', 'action', 'module', 'date_from', 'date_to'] as $key) {
+        if (isset($_GET[$key]) && is_scalar($_GET[$key]) && trim((string)$_GET[$key]) !== '') {
+            $query[$key] = trim((string)$_GET[$key]);
+        }
+    }
+    $query['category'] = $category;
+
+    return app_url('components/system_administrator/audit_logs.php') . '?' . http_build_query($query);
+}
+
+function audit_log_detail_value_html(string $value): string
+{
+    if ($value === '' || $value === '-') {
+        return '<span class="audit-detail-empty">Not recorded</span>';
+    }
+
+    $segments = preg_split('/\s+\|\s+/', $value) ?: [$value];
+    $pairs = [];
+    $plain = [];
+    foreach ($segments as $segment) {
+        if (preg_match('/^([A-Za-z][A-Za-z0-9 _\/()-]{0,39}):\s*(.+)$/s', $segment, $matches)) {
+            $pairs[] = [$matches[1], $matches[2]];
+        } else {
+            $plain[] = $segment;
+        }
+    }
+
+    if ($pairs === []) {
+        return '<span class="audit-detail-plain">' . htmlspecialchars($value) . '</span>';
+    }
+
+    $html = '<span class="audit-detail-pairs">';
+    foreach ($pairs as [$label, $pairValue]) {
+        $html .= '<span class="audit-detail-pair">'
+            . '<span class="audit-detail-key">' . htmlspecialchars($label) . '</span>'
+            . '<span class="audit-detail-value">' . htmlspecialchars($pairValue) . '</span>'
+            . '</span>';
+    }
+    if ($plain !== []) {
+        $html .= '<span class="audit-detail-plain">' . htmlspecialchars(implode(' | ', $plain)) . '</span>';
+    }
+
+    return $html . '</span>';
+}
+
 function audit_log_table_cells(array $log): array
 {
     $previousValue = audit_log_display_value($log['previous_value'] ?? null);
@@ -108,32 +159,45 @@ function audit_log_table_cells(array $log): array
     }
     ob_start();
     ?>
-    <details class="audit-details">
-        <summary aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</summary>
+    <button type="button" class="audit-details-trigger btn btn-quiet btn-small"
+        aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</button>
+    <template class="audit-details-template">
         <dl class="audit-details-content">
-            <dt>IP Address</dt>
-            <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
-            <dt>Previous Value</dt>
-            <dd class="<?= $previousValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($previousValue) ?></dd>
-            <dt>New Value</dt>
-            <dd class="<?= $newValue === '-' ? 'is-empty' : '' ?>"><?= htmlspecialchars($newValue) ?></dd>
+            <div class="audit-detail-field">
+                <dt>IP Address</dt>
+                <dd class="audit-code"><?= htmlspecialchars((string)($log['ip_address'] ?? '-')) ?></dd>
+            </div>
+            <div class="audit-detail-field">
+                <dt>Previous Value</dt>
+                <dd><?= audit_log_detail_value_html($previousValue) ?></dd>
+            </div>
+            <div class="audit-detail-field">
+                <dt>New Value</dt>
+                <dd><?= audit_log_detail_value_html($newValue) ?></dd>
+            </div>
             <?php if ($log['action'] === \App\Attention\FailedSignInReviewService::ACTION): ?>
-                <dt>Reviewed Evidence</dt>
-                <dd><?= htmlspecialchars(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
+                <div class="audit-detail-field">
+                    <dt>Reviewed Evidence</dt>
+                    <dd><?= audit_log_detail_value_html(audit_log_display_value($log['metadata'] ?? null)) ?></dd>
+                </div>
             <?php endif; ?>
             <?php if ($log['action'] === \App\Attention\ApplicationLogReviewService::ACTION): ?>
-                <dt>Reviewed Log Excerpt</dt>
-                <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
+                <div class="audit-detail-field">
+                    <dt>Reviewed Log Excerpt</dt>
+                    <dd><pre><?= htmlspecialchars((string)(json_decode((string)($log['metadata'] ?? ''), true)['excerpt'] ?? '-')) ?></pre></dd>
+                </div>
             <?php endif; ?>
         </dl>
-    </details>
+    </template>
     <?php
     $details = (string)ob_get_clean();
     return [
         htmlspecialchars($formattedTimestamp),
         $user,
         '<span class="audit-action-badge ' . audit_log_action_class((string)$log['action']) . '">' . htmlspecialchars((string)$log['action']) . '</span>',
-        htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))),
+        '<a class="audit-category-filter" href="' . htmlspecialchars(audit_log_category_filter_url((string)$log['category'])) . '" aria-label="' .
+            htmlspecialchars('Select category ' . $log['category']) . '">' .
+            htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))) . '</a>',
         htmlspecialchars((string)($log['module'] ?? '-')),
         htmlspecialchars((string)($log['record_id'] ?? '-')),
         $details,
@@ -243,6 +307,9 @@ $activeFilters = [];
 if ($moduleFilter !== '') {
     $activeFilters[] = ['label' => 'Module', 'value' => $moduleFilter];
 }
+if ($categoryFilter !== '') {
+    $activeFilters[] = ['label' => 'Category', 'value' => ucwords(str_replace('_', ' ', $categoryFilter))];
+}
 if ($actionFilter !== '') {
     $activeFilters[] = ['label' => 'Action', 'value' => $actionFilter];
 }
@@ -283,6 +350,7 @@ if ($dateTo !== '') {
                     <input type="hidden" name="action" value="export_csv">
                     <input type="hidden" name="user_id" id="exportUserFilter" value="<?= htmlspecialchars($userFilter) ?>">
                     <input type="hidden" name="action_filter" id="exportActionFilter" value="<?= htmlspecialchars($actionFilter) ?>">
+                    <input type="hidden" name="category" id="exportCategoryFilter" value="<?= htmlspecialchars($categoryFilter) ?>">
                     <input type="hidden" name="module" id="exportModuleFilter" value="<?= htmlspecialchars($moduleFilter) ?>">
                     <input type="hidden" name="date_from" id="exportDateFrom" value="<?= htmlspecialchars($dateFrom) ?>">
                     <input type="hidden" name="date_to" id="exportDateTo" value="<?= htmlspecialchars($dateTo) ?>">
@@ -404,10 +472,23 @@ if ($dateTo !== '') {
             </section>
         </main>
     </div>
+    <div class="rm-drawer-overlay" id="auditDetailsDrawer" aria-hidden="true">
+        <aside class="rm-drawer" role="dialog" aria-modal="true" aria-labelledby="auditDetailsTitle">
+            <header class="rm-drawer-header">
+                <div>
+                    <h2 id="auditDetailsTitle">Audit record details</h2>
+                    <p id="auditDetailsMeta"></p>
+                </div>
+                <button type="button" class="rm-close" data-close-drawer aria-label="Close audit record details"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </header>
+            <div class="rm-drawer-body" id="auditDetailsBody"></div>
+        </aside>
+    </div>
 
     <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datatables.min.js')) ?>"></script>
     <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/columncontrol/dataTables.columnControl.min.js')) ?>"></script>
     <script defer src="<?= htmlspecialchars(app_url('assets/vendor/datatables/datetime/dataTables.dateTime.min.js')) ?>"></script>
+    <script defer src="<?= htmlspecialchars(app_url('assets/js/audit-log-drawer.js')) ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var reviewForm = document.getElementById('signInReviewForm');

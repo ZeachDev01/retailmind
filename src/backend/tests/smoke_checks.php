@@ -239,6 +239,10 @@ $checks = [
         'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'topStart: null', "bottom: [", "'info'", 'pageLength:', 'paging:', 'Export CSV'],
         'forbidden' => ['embed=1', 'data-embedded-close', 'Filter activity', 'Apply filters', 'audit-datatable-filters'],
     ],
+    'Audit table categories link to category filters' => [
+        'file' => 'src/frontend/components/system_administrator/audit_logs.php',
+        'needles' => ['audit-category-filter', "\$query['category']", 'Select category'],
+    ],
     'Audit Logs summary icons present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
         'needles' => ['audit-log-stats', 'bi-card-checklist', 'bi-person-check-fill', 'bi-boxes'],

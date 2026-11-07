@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
     const { csrf_token: expectedToken } = await current.json();
 
     let releaseScript;
-    await page.route('https://cdn.jsdelivr.net/npm/sweetalert2@11', route => new Promise(resolve => {
+    await page.route('**/assets/vendor/sweetalert2/sweetalert2.all.min.js', route => new Promise(resolve => {
       releaseScript = () => route.abort().then(resolve);
     }));
     let heroRequests = 0;
@@ -27,13 +27,13 @@ const { chromium } = require('playwright');
     await page.goto(actionUrl + '?login=1', {waitUntil: 'commit'});
     await page.locator('#landing-login-password-toggle').click();
     assert.equal(await form.locator('input[name="password"]').getAttribute('type'), 'text',
-      'Login controls must work while the external alert script is still loading');
+      'Login controls must work while the alert script is still loading');
     assert.equal(heroRequests, 0, 'Login does not download the obscured landing hero');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.querySelector('img[src*="retailmind-landing-hero.jpg"]')?.complete);
     assert.equal(heroRequests, 1, 'Closing login restores the landing hero');
     await releaseScript();
-    await page.unroute('https://cdn.jsdelivr.net/npm/sweetalert2@11');
+    await page.unroute('**/assets/vendor/sweetalert2/sweetalert2.all.min.js');
 
     for (const scenario of ['refresh', 'timeout', 'invalid-json', 'network-error']) {
       await page.goto(actionUrl, { waitUntil: 'domcontentloaded' });

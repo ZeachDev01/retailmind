@@ -919,10 +919,57 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars($pageTitle) ?></title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
-<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/report-generation.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/report-generation.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/report-generation.css')) ?>">
 </head>
 <body class="report-generation-page <?= $selectedReport === 'gross_profit' ? 'report-gross-profit' : '' ?>">
+<?php
+// Print-only letterhead details. Every lookup is guarded so the template can be
+// rendered in isolation by the report layout tests.
+$printStoreName = 'Shalom Store';
+$printStoreContact = [];
+if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings')) {
+    try {
+        $printStoreSettings = get_store_settings($pdo);
+        $printStoreName = trim((string)($printStoreSettings['store_name'] ?? '')) ?: $printStoreName;
+        foreach (['store_address', 'store_phone', 'store_email'] as $printStoreKey) {
+            $printStoreValue = trim((string)($printStoreSettings[$printStoreKey] ?? ''));
+            if ($printStoreValue !== '') {
+                $printStoreContact[] = $printStoreValue;
+            }
+        }
+    } catch (\Throwable $e) {
+        // Store settings are optional for the printed letterhead.
+    }
+}
+$printPreparedBy = trim((string)($_SESSION['display_name'] ?? ''));
+$printRoleLabel = function_exists('current_role') ? ucwords(str_replace('_', ' ', (string)current_role())) : '';
+
+$printProductLabel = 'All products';
+foreach ($products as $printProduct) {
+    if ((int)($printProduct['product_id'] ?? 0) === (int)$filters['product_id']) {
+        $printProductLabel = (string)($printProduct['product_name'] ?? 'All products');
+        break;
+    }
+}
+$printCategoryLabel = 'All categories';
+foreach ($categories as $printCategory) {
+    if ((int)($printCategory['category_id'] ?? 0) === (int)$filters['category_id']) {
+        $printCategoryLabel = (string)($printCategory['category_name'] ?? 'All categories');
+        break;
+    }
+}
+
+$printFromStamp = strtotime($filters['from'] . ' 00:00:00');
+$printToStamp = strtotime($filters['to'] . ' 00:00:00');
+$printRangeLabel = $printFromStamp === false || $printToStamp === false
+    ? $filters['from'] . ' to ' . $filters['to']
+    : ($filters['from'] === $filters['to']
+        ? date('M j, Y', $printFromStamp)
+        : date('M j, Y', $printFromStamp) . ' – ' . date('M j, Y', $printToStamp));
+$printGeneratedAt = isset($nowPh) && $nowPh instanceof DateTimeInterface ? $nowPh : new DateTimeImmutable('now');
+$printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
+?>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
@@ -942,7 +989,35 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 
         <div class="report-workspace">
         <section class="report-filters no-print" aria-labelledby="report-filters-heading">
-            <h2 id="report-filters-heading">Choose your report</h2>
+            <div class="report-filters-head">
+                <div class="report-filters-heading">
+                    <h2 id="report-filters-heading">Choose your report</h2>
+                    <p class="report-filters-hint">Pick a report and period, then generate it.</p>
+                </div>
+                <?php if ($validationError === null && $loadError === null): ?>
+                    <div class="report-actions report-filter-actions" aria-label="Report actions">
+                        <form method="POST">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="export_csv">
+                            <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
+                            <input type="hidden" name="period" value="<?= htmlspecialchars($activePeriod) ?>">
+                            <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
+                            <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
+                            <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
+                            <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
+                            <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                            <button type="submit" class="btn btn-secondary report-export-btn" id="export-csv-btn">
+                                <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9m0 0 3-3m-3 3L7 9"/><path d="M4 13v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/></svg>
+                                <span>Export CSV</span>
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">
+                            <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7V3h8v4"/><rect x="3" y="7" width="14" height="7" rx="2"/><path d="M6 12h8v5H6z"/></svg>
+                            <span>Print / Save as PDF</span>
+                        </button>
+                    </div>
+                <?php endif; ?>
+            </div>
             <form method="GET" class="report-filter-grid" id="report-filter-form">
                 <div class="form-group report-type-field">
                     <label for="report">Report</label>
@@ -1027,22 +1102,48 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                 <span class="badge"><?= ucfirst($activePeriod) ?></span>
                             </div>
                         </div>
-                        <div class="report-actions no-print">
-                            <form method="POST">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="export_csv">
-                                <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
-                                <input type="hidden" name="period" value="<?= htmlspecialchars($activePeriod) ?>">
-                                <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
-                                <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
-                                <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
-                                <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
-                                <button type="submit" class="btn btn-secondary" id="export-csv-btn">Export CSV</button>
-                            </form>
-                            <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
-                        </div>
                     </div>
 
+                    <div class="print-report-header">
+                        <div class="print-doc-brand">
+                            <span class="print-store-name"><?= htmlspecialchars($printStoreName) ?></span>
+                            <?php if ($printStoreContact): ?><span class="print-store-contact"><?= htmlspecialchars(implode(' · ', $printStoreContact)) ?></span><?php endif; ?>
+                        </div>
+                        <div class="print-doc-stamp">
+                            <span>Generated</span>
+                            <strong><?= htmlspecialchars($printGeneratedLabel) ?> PHT</strong>
+                        </div>
+                        <p class="print-report-eyebrow">RetailMind &middot; Profit report</p>
+                        <h1>Gross Profit Report</h1>
+                        <p class="print-report-scope"><strong><?= htmlspecialchars($printRangeLabel) ?></strong> &middot; <?= htmlspecialchars(ucfirst($activePeriod)) ?> period &middot; <?= number_format($totalRows) ?> product<?= $totalRows === 1 ? '' : 's' ?></p>
+                        <p class="print-report-filters">
+                            Product: <?= htmlspecialchars($printProductLabel) ?> &middot; Category: <?= htmlspecialchars($printCategoryLabel) ?>
+                            <?php if ($printPreparedBy !== ''): ?>&middot; Prepared by <?= htmlspecialchars($printPreparedBy) ?><?= $printRoleLabel !== '' ? ' (' . htmlspecialchars($printRoleLabel) . ')' : '' ?><?php endif; ?>
+                        </p>
+                    </div>
+
+                    <?php
+                        $summary = $reportData['summary'] ?? [];
+                        $sumStatus = (string)($summary['status'] ?? 'recorded');
+                        $isSumInc = $sumStatus === 'incomplete';
+                        $sumNetSales = (float)($summary['total_net_sales'] ?? 0);
+                        $sumNetCost = $summary['total_net_cost'] ?? null;
+                        $sumProfit = $summary['total_gross_profit'] ?? null;
+                        $sumMargin = $summary['total_margin'] ?? null;
+                        $sumUnits = (int)($summary['total_units'] ?? 0);
+                        if (!isset($summary['total_units'])) {
+                            foreach ($reportData['rows'] as $sumRow) {
+                                $sumUnits += (int)($sumRow['raw']['net_units'] ?? 0);
+                            }
+                        }
+                        $sumMoney = static function ($value): string {
+                            if ($value === null) {
+                                return '—';
+                            }
+                            $value = (float)$value;
+                            return ($value < 0 ? '-₱' : '₱') . number_format(abs($value), 2);
+                        };
+                    ?>
                     <div class="gross-profit-layout-c">
                         <!-- Left Panel on desktop: Product Table -->
                         <div class="gp-table-panel">
@@ -1102,6 +1203,18 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                             </tr>
                                         <?php endif; ?>
                                     </tbody>
+                                    <?php if (!empty($reportData['rows'])): ?>
+                                        <tfoot>
+                                            <tr class="gp-total-row">
+                                                <td class="gp-total-label">Totals <span class="gp-total-caption"><?= number_format($totalRows) ?> product<?= $totalRows === 1 ? '' : 's' ?></span></td>
+                                                <td class="num-cell"><?= number_format($sumUnits) ?></td>
+                                                <td class="num-cell <?= $sumNetSales < 0 ? 'is-negative' : '' ?>"><?= $sumMoney($sumNetSales) ?></td>
+                                                <td class="num-cell <?= !$isSumInc && $sumNetCost !== null && $sumNetCost < 0 ? 'is-negative' : '' ?>"><?= $isSumInc ? '—' : $sumMoney($sumNetCost) ?></td>
+                                                <td class="num-cell <?= !$isSumInc && $sumProfit !== null && $sumProfit < 0 ? 'is-negative' : '' ?>"><?= $isSumInc ? '—' : $sumMoney($sumProfit) ?></td>
+                                                <td class="gp-total-margin"><?= $isSumInc || $sumMargin === null ? '—' : 'Avg ' . number_format((float)$sumMargin, 2) . '%' ?></td>
+                                            </tr>
+                                        </tfoot>
+                                    <?php endif; ?>
                                 </table>
                             </div>
                             <p class="net-units-note" id="net-units-explanation">
@@ -1111,15 +1224,6 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 
                         <!-- Right Panel on desktop: At a glance summary -->
                         <div class="gp-summary-panel">
-                            <?php 
-                                $summary = $reportData['summary'] ?? [];
-                                $sumStatus = (string)($summary['status'] ?? 'recorded');
-                                $isSumInc = $sumStatus === 'incomplete';
-                                $sumNetSales = (float)($summary['total_net_sales'] ?? 0);
-                                $sumNetCost = $summary['total_net_cost'] ?? null;
-                                $sumProfit = $summary['total_gross_profit'] ?? null;
-                                $sumMargin = $summary['total_margin'] ?? null;
-                            ?>
                             <div class="gp-glance-card" id="at-a-glance-summary">
                                 <h3>At a glance</h3>
                                 <div class="glance-summary-list">
@@ -1196,6 +1300,27 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
             <?php else: ?>
                 <!-- Ordinary Reports (preserved) -->
                 <div class="dashboard-section report-results">
+                    <div class="print-report-header">
+                        <div class="print-doc-brand">
+                            <span class="print-store-name"><?= htmlspecialchars($printStoreName) ?></span>
+                            <?php if ($printStoreContact): ?><span class="print-store-contact"><?= htmlspecialchars(implode(' · ', $printStoreContact)) ?></span><?php endif; ?>
+                        </div>
+                        <div class="print-doc-stamp">
+                            <span>Generated</span>
+                            <strong><?= htmlspecialchars($printGeneratedLabel) ?> PHT</strong>
+                        </div>
+                        <p class="print-report-eyebrow">RetailMind &middot; Store report</p>
+                        <h1><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h1>
+                        <p class="print-report-scope">
+                            <strong><?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>Current stock<?php elseif ($selectedReport === 'expiration'): ?>As of <?= htmlspecialchars(date('M j, Y', strtotime($todayPh))) ?><?php else: ?><?= htmlspecialchars($printRangeLabel) ?><?php endif; ?></strong>
+                            &middot; <?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?>
+                            <?php if ($selectedReport === 'sales_period'): ?>&middot; <?= htmlspecialchars(ucfirst($filters['granularity'])) ?> totals<?php endif; ?>
+                        </p>
+                        <p class="print-report-filters">
+                            Product: <?= htmlspecialchars($printProductLabel) ?> &middot; Category: <?= htmlspecialchars($printCategoryLabel) ?>
+                            <?php if ($printPreparedBy !== ''): ?>&middot; Prepared by <?= htmlspecialchars($printPreparedBy) ?><?= $printRoleLabel !== '' ? ' (' . htmlspecialchars($printRoleLabel) . ')' : '' ?><?php endif; ?>
+                        </p>
+                    </div>
                     <div class="section-header">
                         <div>
                             <h2><?= htmlspecialchars($selectedReport === 'sales_period' ? 'Sales report' : $reportCatalog[$selectedReport]) ?></h2>
@@ -1213,22 +1338,7 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div class="report-actions no-print">
-                            <form method="POST">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="export_csv">
-                                <input type="hidden" name="report" value="<?= htmlspecialchars($selectedReport) ?>">
-                                <input type="hidden" name="granularity" value="<?= htmlspecialchars($filters['granularity']) ?>">
-                                <input type="hidden" name="from" value="<?= htmlspecialchars($filters['from']) ?>">
-                                <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
-                                <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
-                                <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
-                                <button type="submit" class="btn btn-secondary">Export CSV</button>
-                            </form>
-                            <button type="button" class="btn btn-secondary" onclick="window.print()" aria-label="Print or save as PDF">Print / Save as PDF</button>
-                        </div>
                     </div>
-                    <h2 class="report-print-title"><?= htmlspecialchars($reportCatalog[$selectedReport]) ?></h2>
 
                     <?php if (!empty($reportData['metrics'])): ?>
                         <dl class="report-metrics">
@@ -1270,6 +1380,13 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
                     </div>
                     <?php endif; ?>
                 </div>
+            <?php endif; ?>
+            <?php if ($validationError === null && $loadError === null): ?>
+                <footer class="print-doc-footer" aria-hidden="true">
+                    <span><?= htmlspecialchars($printStoreName) ?> &middot; RetailMind report</span>
+                    <span>Generated <?= htmlspecialchars($printGeneratedLabel) ?> PHT</span>
+                    <span>End of report &middot; <?= number_format($totalRows) ?> row<?= $totalRows === 1 ? '' : 's' ?></span>
+                </footer>
             <?php endif; ?>
         <?php endif; ?>
         </div>

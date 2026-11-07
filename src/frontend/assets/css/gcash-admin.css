@@ -30,7 +30,7 @@
 #gcash-admin-workspace .gcash-overview-section { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg, #fff); box-shadow: 0 1px 2px rgb(15 23 42 / .03); }
 #gcash-admin-workspace #tab-overview > section { margin: 0; }
 #gcash-admin-workspace .gcash-funds-panel { grid-column: 1; display: flex; flex-direction: column; justify-content: space-between; }
-#gcash-outstanding-reviews { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; }
+#gcash-outstanding-reviews { grid-column: 2; display: flex; flex-direction: column; }
 #gcash-reporting-scope, #gcash-completed-activity { grid-column: 1 / -1; }
 #gcash-admin-workspace .pos-panel-header { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: .5rem .75rem; flex-wrap: wrap; margin-bottom: 1rem; }
 #gcash-admin-workspace .pos-panel-header:has(+ .gcash-section-description) { margin-bottom: .375rem; }
@@ -57,6 +57,8 @@
 .gcash-row-details dd:last-child { margin-bottom: 0; }
 .gcash-panel-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
 #gcash-admin-workspace #gcash-outstanding-reviews { background: var(--card-bg, #fff); }
+#gcash-admin-workspace .gcash-review-clear { display: flex; align-items: center; gap: .5rem; margin: 0; color: var(--muted); font-size: .9375rem; line-height: 1.5; }
+#gcash-admin-workspace .gcash-review-clear i { flex: 0 0 auto; font-size: 1.15rem; color: var(--theme-success-text, #166534); }
 #gcash-outstanding-reviews .gcash-actions { display: grid; gap: .625rem; flex: 1; align-content: stretch; margin-top: 0; }
 #gcash-admin-workspace #gcash-outstanding-reviews .btn { justify-content: space-between; text-align: left; padding: .75rem 0; line-height: 1.4; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; font-weight: 600; height: 100%; }
 #gcash-admin-workspace #gcash-outstanding-reviews .btn:hover { border-color: var(--primary); background: var(--theme-info-surface, #eff6ff); }
@@ -128,7 +130,6 @@
 #gcash-admin-workspace .gcash-status-needs-checking { color: var(--theme-warning-text, #92400e); background: var(--theme-warning-surface, #fffbeb); border-color: rgb(217 119 6 / .28); }
 #gcash-admin-workspace .gcash-status-rejected { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); border-color: rgb(220 38 38 / .25); }
 #gcash-admin-workspace .gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 700; }
-#gcash-admin-workspace .gcash-scroll-hint { margin: .75rem 0 0; color: var(--muted); font-size: .8125rem; }
 #gcash-admin-workspace .gcash-pagination { display: flex; justify-content: space-between; align-items: center; margin: .875rem 0 0; padding: .875rem .25rem 0; border-top: 1px solid var(--border); background: transparent; font-size: .875rem; color: var(--muted); }
 #gcash-admin-workspace dialog { box-sizing: border-box; width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 18px; background: var(--card-bg, #fff); color: var(--text); box-shadow: 0 24px 64px rgb(15 23 42 / .24); }
 #gcash-admin-workspace dialog::backdrop { background: rgb(15 23 42 / .55); }
@@ -146,12 +147,9 @@
 #gcash-verify-error:empty { display: none; }
 #gcash-admin-workspace .gcash-waiver-summary { margin: 0 0 1rem; padding: .875rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); display: grid; gap: .375rem; font-size: .875rem; }
 #gcash-admin-workspace .gcash-waiver-summary p { margin: 0; color: var(--text); }
-@media (min-width: 1280px) {
-    #gcash-admin-workspace .gcash-scroll-hint { display: none; }
-}
 @media (max-width: 1180px) {
     #tab-overview { grid-template-columns: minmax(0, 1fr); }
-    #gcash-outstanding-reviews { grid-column: 1; grid-row: 2; }
+    #gcash-outstanding-reviews { grid-column: 1; }
     #gcash-outstanding-reviews .gcash-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

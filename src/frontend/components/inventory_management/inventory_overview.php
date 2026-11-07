@@ -146,7 +146,7 @@ $chartDataJson = json_encode([
 <title>Stock Overview</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+<script src="<?= htmlspecialchars(app_url('assets/vendor/chartjs/chart.umd.min.js') . '?v=' . filemtime(__DIR__ . '/../../assets/vendor/chartjs/chart.umd.min.js')) ?>" defer></script>
 </head>
 <body class="inventory-overview-page">
 <div class="app-shell">

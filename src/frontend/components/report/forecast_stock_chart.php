@@ -7,11 +7,11 @@ foreach ($chartProducts as $chartProduct) {
 }
 ?>
 <?php if ($chartProducts): ?>
-<section class="forecast-panel" aria-labelledby="stock-demand-title">
+<section class="forecast-panel forecast-chart-panel" aria-labelledby="stock-demand-title">
     <div class="forecast-panel-heading">
         <div>
             <h2 id="stock-demand-title">Stock vs expected sales · 7 days</h2>
-            <small class="muted">First <?= count($chartProducts) ?> forecast-backed products<?= $searchQuery !== '' ? ' matching your search' : '' ?> · Base Units</small>
+            <small class="muted">First <?= count($chartProducts) ?> forecast-backed product<?= count($chartProducts) === 1 ? '' : 's' ?><?= $searchQuery !== '' ? ' matching your search' : '' ?> · Base Units</small>
         </div>
         <div class="forecast-key"><span><i class="stock-key" aria-hidden="true"></i>On hand</span><span><i aria-hidden="true"></i>Expected sales</span></div>
     </div>

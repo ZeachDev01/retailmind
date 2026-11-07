@@ -140,8 +140,8 @@ $imTopics = $allWalkthroughPaths['first_useful_tasks']['topics'] ?? [];
 
 <?php
 $introText = $isAdmin
-    ? 'Oversee Store performance, staff and operational exceptions. Start with Store operations to see what needs attention.'
-    : 'Review stock and replenishment needs, then record goods that arrive. Start with Replenishment Recommendations for your daily buying review.';
+    ? 'Oversee Store performance, staff and operational exceptions.'
+    : 'Review stock and replenishment needs, then record the goods that arrive.';
 $primaryActionUrl = $isAdmin
     ? app_url('components/administrator/dashboard.php')
     : app_url('components/inventory_management/replenishment_queue.php');
@@ -286,15 +286,10 @@ $primaryActionLabel = $isAdmin
 <?php else: ?>
     <p><?= htmlspecialchars($introText) ?></p>
     <p class="workspace-guidance-nav">
-        <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a> &middot;
-        <?php foreach ($allWalkthroughPaths as $pDef): ?>
-            <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
-                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>"><?= htmlspecialchars($pDef['title'] . ': ' . $tDef['title']) ?></a> &middot;
-            <?php endforeach; ?>
-        <?php endforeach; ?>
+        <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>
 <?php endif; ?>
 <?php if (!$guidanceIsHelp): ?>
-<p class="workspace-guidance-note">Guidance is optional. It does not confirm Store setup or change operational records. Reopen it anytime from Help in your account menu.</p>
+<p class="workspace-guidance-note">Optional — guidance does not confirm Store setup or change operational records. Reopen it from Help in your account menu.</p>
 <?php endif; ?>

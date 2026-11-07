@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 
 require_role(['super_admin']);
 require_capability(RoleCapabilityPolicy::CONFIGURE_MODELS);
@@ -29,7 +30,7 @@ $storeId = store_scope_id($pdo);
 $saleUnitsSql = sales_units_sql($pdo, 'si');
 
 // 1. Determine currently displayed forecast and model version
-$demandService = new DemandForecastService($pdo);
+$demandService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $latestJobId = $demandService->getLatestSuccessfulJobId();
 
 $displayedModelVersion = null;

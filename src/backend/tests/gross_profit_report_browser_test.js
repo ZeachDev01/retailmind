@@ -201,7 +201,7 @@ const {chromium} = require('playwright');
                             assert.equal(await page.locator('.period-btn.is-active').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'Selected period keeps white text');
                         }
                         if (variant !== 'error') {
-                            assert.equal(await page.locator('.section-header .report-actions').count(), 1, 'Exports are grouped with results');
+                            assert.equal(await page.locator('.report-filters .report-actions').count(), 1, 'Exports are grouped with the report chooser');
                             assert.equal(await page.locator('form[method="POST"] input[name="action"]').inputValue(), 'export_csv');
                             assert.equal(await page.locator('form[method="POST"] input[name="csrf_token"]').count(), 1, 'CSV keeps CSRF protection');
                         }
@@ -228,6 +228,8 @@ const {chromium} = require('playwright');
                 }
                 await page.emulateMedia({media: 'print'});
                 assert.equal(await page.locator('.report-filters').isVisible(), false, `${report}: print hides filters`);
+                assert(await page.locator('.print-report-header').isVisible(), `${report}: print masthead is visible`);
+                assert.equal(await page.locator('.section-header').isVisible(), false, `${report}: print hides the screen heading`);
                 assert(await page.locator('.report-records-table').isVisible(), `${report}: print retains records`);
                 await page.emulateMedia({media: 'screen'});
             }
@@ -324,8 +326,16 @@ const {chromium} = require('playwright');
                 'Exclusion note text must explain operating expenses'
             );
 
+            await page.emulateMedia({media: 'print'});
+            assert(await page.locator('.print-report-header').isVisible(), 'Print masthead is visible');
+            assert.equal(await page.locator('.report-filters').isVisible(), false, 'Print hides the report chooser');
+            assert.equal(await page.locator('.section-header').isVisible(), false, 'Print hides the screen heading');
+            assert(await page.locator('.gp-product-table').isVisible(), 'Print retains the product table');
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Print output fits the page width');
+            await page.emulateMedia({media: 'screen'});
+
             await page.close();
-            console.log('  ok - Desktop layout C (table left, summary right, columns, values, return help, exclusion note) verified');
+            console.log('  ok - Desktop layout C (table left, summary right, columns, values, return help, exclusion note, print) verified');
         }
 
         // -------------------------------------------------------------

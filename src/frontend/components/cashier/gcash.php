@@ -18,7 +18,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
 <body class="cashier-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
-    <main class="main-content" id="gcash-workspace" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php'), ENT_QUOTES, 'UTF-8') ?>" data-csrf="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>" data-min-length="<?= $gcashRules['min_length'] ?>" data-max-length="<?= $gcashRules['max_length'] ?>">
+    <main class="main-content" id="gcash-workspace" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php'), ENT_QUOTES, 'UTF-8') ?>" data-assets="<?= htmlspecialchars(app_url('assets/'), ENT_QUOTES, 'UTF-8') ?>" data-csrf="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>" data-min-length="<?= $gcashRules['min_length'] ?>" data-max-length="<?= $gcashRules['max_length'] ?>">
         <section id="gcash-session-panel" class="pos-panel gcash-session-panel" aria-labelledby="gcash-session-title">
             <div class="pos-panel-header gcash-session-header">
                 <div class="pos-panel-title gcash-session-brand">

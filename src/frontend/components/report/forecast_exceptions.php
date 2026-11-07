@@ -5,10 +5,12 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $searchQuery = trim($_GET['search'] ?? '');
 $reasonFilter = trim($_GET['reason'] ?? '');
 

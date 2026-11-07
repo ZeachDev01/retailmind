@@ -40,9 +40,12 @@ function render(period, data = payload) {
         const chartScript = process.env.CHART_JS_PATH
             ? fs.readFileSync(process.env.CHART_JS_PATH, 'utf8') + `;const RealChart = window.Chart; window.Chart = class extends RealChart { constructor(canvas, config) { super(canvas, config); (window.testCharts ||= {})[canvas.id] = this; } };`
             : 'window.Chart = class { constructor(canvas, config) { this.data = config.data; this.options = config.options; this.config = config; (window.testCharts ||= {})[canvas.id] = this; } };';
-        await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({contentType: 'application/javascript', body: chartScript}));
+        let blockChart = false;
         await page.route('http://dashboard.test/**', route => {
             const url = new URL(route.request().url());
+            if (url.pathname === '/assets/vendor/chartjs/chart.umd.min.js') {
+                return blockChart ? route.abort() : route.fulfill({contentType: 'application/javascript', body: chartScript});
+            }
             const asset = url.pathname.match(/^\/assets\/(.*)/);
             return route.fulfill(asset ? {path: path.join(root, 'src/frontend/assets', asset[1])} : {contentType: 'text/html', body: render(url.searchParams.get('period') || 'today')});
         });
@@ -94,7 +97,7 @@ function render(period, data = payload) {
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No page-level horizontal overflow');
         await page.locator('#financial-breakdown > summary').tap({force: true}).catch(() => page.locator('#financial-breakdown > summary').click());
         assert(await page.locator('#financial-breakdown table').isVisible());
-        await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+        blockChart = true;
         await page.reload();
         assert(await page.getByText('Charts unavailable. Exact values remain in the detailed breakdowns.').isVisible());
         await page.getByRole('button', {name: 'Today', exact: true}).click();

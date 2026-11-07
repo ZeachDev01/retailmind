@@ -24,12 +24,15 @@ const {chromium} = require('playwright');
                 eval('?>'.stream_get_contents(STDIN));
             `, empty ? '1' : '0'], {input: template, encoding: 'utf8', cwd: path.join(root, 'src/frontend/components/cashier')});
             const page = await browser.newPage();
-            await page.route('https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js', route => route.fulfill({
-                contentType: 'application/javascript',
-                body: 'window.Chart = class { constructor(canvas, config) { window.salesChart = {id: canvas.id, config}; } };'
-            }));
             await page.route('http://dashboard.test/**', route => {
-                if (new URL(route.request().url()).pathname.endsWith('/gcash_api.php')) {
+                const pathname = new URL(route.request().url()).pathname;
+                if (pathname === '/assets/vendor/chartjs/chart.umd.min.js') {
+                    return route.fulfill({
+                        contentType: 'application/javascript',
+                        body: 'window.Chart = class { constructor(canvas, config) { window.salesChart = {id: canvas.id, config}; } };'
+                    });
+                }
+                if (pathname.endsWith('/gcash_api.php')) {
                     return route.fulfill({json: empty ? {success: false, message: 'GCash overview is unavailable. Try again later.'} : {
                         success: true, expected_service_cash: 12500, expected_wallet_balance: 28750.50,
                         cash_in_principal: 8400, cash_out_principal: 3200, gross_fees_cash: 180, gross_fees_wallet: 45,

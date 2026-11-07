@@ -4,6 +4,8 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 use App\Store\ScheduledDemandDriverService;
 
 require_capability(RoleCapabilityPolicy::VIEW_FORECASTS);
@@ -35,7 +37,7 @@ if (!$product) {
     $errorState = 'missing_product';
 }
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $latestJobId = $service->getLatestSuccessfulJobId();
 $forecast = null;
 

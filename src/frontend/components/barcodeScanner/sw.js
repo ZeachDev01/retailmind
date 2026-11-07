@@ -1,9 +1,11 @@
-const CACHE_NAME = 'barcode-scanner-v2';
+const CACHE_NAME = 'barcode-scanner-v3';
 const urlsToCache = [
   './',
   './index.html',
   './manifest.json',
-  'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
+  '../../assets/vendor/html5-qrcode/html5-qrcode.min.js',
+  '../../assets/css/utilities.css',
+  '../../assets/css/barcode-scanner.css'
 ];
 
 // Install event - cache resources

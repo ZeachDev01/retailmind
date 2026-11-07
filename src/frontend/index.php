@@ -324,8 +324,8 @@ unset($_SESSION['_login_username']);
         </section>
     </div>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
+    <link rel="stylesheet" href="<?= htmlspecialchars(landing_app_url('assets/vendor/sweetalert2/sweetalert2.min.css'), ENT_QUOTES, 'UTF-8') ?>">
+    <script src="<?= htmlspecialchars(landing_app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
     <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js?v=' . filemtime(__DIR__ . '/assets/js/ui.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>

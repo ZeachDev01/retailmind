@@ -38,10 +38,10 @@ const fixture = action => {
         page.setDefaultTimeout(10000);
         page.setDefaultNavigationTimeout(15000);
         if (process.env.SWAL_TEST_SCRIPT) {
-            await page.route('https://cdn.jsdelivr.net/npm/sweetalert2@11', route => route.fulfill({contentType: 'text/javascript', body: fs.readFileSync(process.env.SWAL_TEST_SCRIPT, 'utf8')}));
+            await page.route('**/assets/vendor/sweetalert2/sweetalert2.all.min.js', route => route.fulfill({contentType: 'text/javascript', body: fs.readFileSync(process.env.SWAL_TEST_SCRIPT, 'utf8')}));
         }
         if (process.env.SWAL_TEST_CSS) {
-            await page.route('https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css', route => route.fulfill({contentType: 'text/css', body: fs.readFileSync(process.env.SWAL_TEST_CSS, 'utf8')}));
+            await page.route('**/assets/vendor/sweetalert2/sweetalert2.min.css', route => route.fulfill({contentType: 'text/css', body: fs.readFileSync(process.env.SWAL_TEST_CSS, 'utf8')}));
         }
         for (const username of ['theme_admin', 'theme_super_admin']) {
             const context = await browser.newContext();

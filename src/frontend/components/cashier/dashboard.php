@@ -236,7 +236,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
 
         </main>
     </div>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+        <script src="<?= htmlspecialchars(app_url('assets/vendor/chartjs/chart.umd.min.js') . '?v=' . filemtime(__DIR__ . '/../../assets/vendor/chartjs/chart.umd.min.js')) ?>"></script>
         <script>
             if (typeof Chart !== 'undefined') {
                 const hourlySales = <?= json_encode($cashierMetrics['hourly_sales']) ?>;

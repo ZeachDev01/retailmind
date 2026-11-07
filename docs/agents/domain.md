@@ -4,40 +4,47 @@ How engineering skills should consume this repo's domain documentation when expl
 
 ## Before exploring, read these
 
-- **`docs/CONTEXT.md`**, or
-- **`CONTEXT-MAP.md`** at the repo root if it exists: it points at one `CONTEXT.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area being worked on. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`GLOSSARY.md`** at the repo root: the canonical vocabulary. Read it for Store
+  operations, roles, sales, inventory, and forecasting terms.
+- **`docs/CONTEXT.md`**: supplementary legacy context covering backup/restore,
+  recovery, identity, and account concepts. Read the sections relevant to your topic.
+- **`docs/adr/`**: read ADRs that touch the area being worked on.
 
-Also read **`GLOSSARY.md`** at the repository root for Store operations,
-migration, GCash, packaging, and replenishment terms. These two vocabulary
-files are retained at their existing paths with their definitions intact.
-Consult both for overlapping concepts; surface conflicting definitions rather
-than silently choosing one. Continue editing a term in the file that defines it.
+There is no `GLOSSARY-MAP.md`; this is a single-context repo.
 
-If any of these files do not exist, proceed silently. Do not flag their absence or suggest creating them upfront. The `/domain-modeling` skill creates them lazily when terms or decisions are resolved.
+## Precedence
+
+Where the two vocabulary files overlap, **`GLOSSARY.md` wins**. Surface any
+conflicting definition explicitly rather than silently choosing one:
+
+> _`docs/CONTEXT.md` defines X as…, but `GLOSSARY.md` defines it as… — using the glossary term._
+
+Continue editing a term in the file that defines it. Move terms only via `/domain-modeling`.
 
 ## File structure
 
-This is a single-context repo:
+Single-context repo:
 
 ```text
 /
-├── docs/CONTEXT.md
 ├── GLOSSARY.md
+├── docs/CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
+│   ├── 0001-single-store-administrator-boundaries.md
+│   └── ...
 └── src/
 ```
 
 ## Use the glossary's vocabulary
 
-When output names a domain concept—in an issue title, refactor proposal, hypothesis, or test name—use the term as defined in `docs/CONTEXT.md`. Do not drift to synonyms the glossary explicitly avoids.
+When output names a domain concept — issue title, refactor proposal, hypothesis, test name —
+use the term as defined in `GLOSSARY.md`. Do not drift to synonyms it explicitly avoids.
 
-If a needed concept is not in the glossary, either reconsider invented language or note the real gap for `/domain-modeling`.
+If a needed concept is missing, either reconsider invented language, or note the real gap for
+`/domain-modeling`.
 
 ## Flag ADR conflicts
 
 If an output contradicts an existing ADR, surface it explicitly rather than silently overriding it:
 
-> _Contradicts ADR-0007 (event-sourced orders), but worth reopening because…_
+> _Contradicts ADR-0007 (manual failed sign-in review), but worth reopening because…_

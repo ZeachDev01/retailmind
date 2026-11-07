@@ -251,10 +251,13 @@ const fixture = action => {
                     await page.keyboard.press('ArrowRight');
                     await page.waitForFunction(() => document.querySelector('#auditLogsTable_wrapper .dt-layout-table').scrollLeft > 0);
                     assert.equal((await search.boundingBox()).x, searchLeft, 'Horizontal table scrolling keeps search in place');
-                    const details = page.locator('#auditLogsTable summary').first();
+                    const details = page.locator('#auditLogsTable .audit-details-trigger').first();
                     await details.click();
-                    assert.equal(await details.evaluate(el => el.parentElement.open), true, 'Record details expand');
-                    assert.ok((await page.locator('.audit-details[open] dd').last().textContent()).includes('Long audit evidence'), 'Expanded details preserve long evidence');
+                    const detailsDrawer = page.locator('#auditDetailsDrawer');
+                    assert.equal(await detailsDrawer.getAttribute('aria-hidden'), 'false', 'Record details open in a drawer');
+                    assert.ok((await page.locator('#auditDetailsBody').textContent()).includes('Long audit evidence'), 'Drawer preserves long evidence');
+                    await detailsDrawer.locator('[data-close-drawer]').click();
+                    assert.equal(await detailsDrawer.getAttribute('aria-hidden'), 'true', 'Record details drawer closes');
                     await search.fill('theme_super_admin "Audit layout fixture 01"');
                     await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1' && !document.querySelector('#auditLogExportForm button').disabled && JSON.parse(document.getElementById('exportTableRequest').value).search.value.includes('theme_super_admin'));
                     assert.match(await page.locator('#exportTableRequest').inputValue(), /theme_super_admin/, 'Export waits for the latest applied search');

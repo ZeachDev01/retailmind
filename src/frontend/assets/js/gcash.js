@@ -3,6 +3,7 @@
     const workspace = document.getElementById('gcash-workspace');
     if (!workspace) return;
     const el = id => document.getElementById('gcash-' + id);
+    const assetBase = (workspace.dataset.assets || '/assets/').replace(/\/?$/, '/');
     const rules = {min: Number(workspace.dataset.minLength), max: Number(workspace.dataset.maxLength)};
     const parser = window.GCashReference;
     const reference = el('reference');
@@ -947,10 +948,10 @@
         if (window.Tesseract) return Promise.resolve();
         if (!libraryPromise) libraryPromise = new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
-            const timer = setTimeout(() => { script.remove(); libraryPromise = null; reject(new Error('OCR download timed out. Retry or use manual entry.')); }, 20000);
+            script.src = assetBase + 'vendor/tesseract/tesseract.min.js';
+            const timer = setTimeout(() => { script.remove(); libraryPromise = null; reject(new Error('OCR engine load timed out. Retry or use manual entry.')); }, 20000);
             script.onload = () => { clearTimeout(timer); resolve(); };
-            script.onerror = () => { clearTimeout(timer); script.remove(); libraryPromise = null; reject(new Error('Free OCR could not load. Check internet access or enter the reference manually.')); };
+            script.onerror = () => { clearTimeout(timer); script.remove(); libraryPromise = null; reject(new Error('OCR could not load. Enter the reference manually.')); };
             document.head.append(script);
         });
         return libraryPromise;
@@ -976,9 +977,14 @@
         try {
             await loadOCR();
             if (version !== cameraVersion || leaving) return;
-            const createdWorker = await window.Tesseract.createWorker('eng', 1, {logger: message => {
-                if (version === cameraVersion && !leaving) el('ocr-status').textContent = message.status + (typeof message.progress === 'number' ? ' ' + Math.round(message.progress * 100) + '%' : '');
-            }});
+            const createdWorker = await window.Tesseract.createWorker('eng', 1, {
+                workerPath: assetBase + 'vendor/tesseract/worker.min.js',
+                corePath: assetBase + 'vendor/tesseract/core',
+                langPath: assetBase + 'vendor/tesseract/lang',
+                logger: message => {
+                    if (version === cameraVersion && !leaving) el('ocr-status').textContent = message.status + (typeof message.progress === 'number' ? ' ' + Math.round(message.progress * 100) + '%' : '');
+                }
+            });
             if (version !== cameraVersion || leaving) { await createdWorker.terminate(); return; }
             worker = createdWorker;
             const result = await worker.recognize(file);
@@ -989,7 +995,7 @@
             el('ocr-status').textContent = candidate ? 'Check every digit against the photo before using it.' : 'No clear reference found. Type the number or choose another photo.';
             el('ocr-candidate').focus();
         } catch (error) {
-            if (version === cameraVersion && !leaving) { el('ocr-status').textContent = 'Could not read this photo. Check internet access, choose another photo, or enter the reference.'; }
+            if (version === cameraVersion && !leaving) { el('ocr-status').textContent = 'Could not read this photo. Choose another photo or enter the reference.'; }
         } finally {
             if (version === cameraVersion) {
                 if (worker) { worker.terminate().catch(() => {}); worker = null; }
