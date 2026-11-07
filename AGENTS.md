@@ -25,6 +25,7 @@ Before writing any code, walk down this ladder and stop at the first working ste
 
 ## Context Pointers
 - Workspace routes, views, modals, scripts, & services: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
+- Coding standards for review: [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
 
 ## Available Skills & Hooks
 - `/ponytail`: Apply 7-step minimalism ladder.
