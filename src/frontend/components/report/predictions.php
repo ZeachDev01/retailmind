@@ -90,6 +90,24 @@ $statusTitle = $isGenerating
 
 $displayProducts = $coverage['filtered']['is_filtered'] ? $coverage['filtered']['products'] : $coverage['products'];
 
+$basisFilter = $_GET['basis'] ?? 'all';
+if ($basisFilter === 'forecast_backed') {
+    $displayProducts = array_values(array_filter($displayProducts, static fn($p) => !empty($p['is_forecast_backed'])));
+} elseif ($basisFilter === 'stock_rules') {
+    $displayProducts = array_values(array_filter($displayProducts, static fn($p) => empty($p['is_forecast_backed'])));
+}
+
+$totalFilteredProducts = count($displayProducts);
+$showAllProducts = (isset($_GET['show']) && $_GET['show'] === 'all') || (isset($_GET['per_page']) && $_GET['per_page'] === 'all');
+$productsPerPage = 15;
+$currentProductPage = max(1, (int)($_GET['p'] ?? 1));
+$totalProductPages = max(1, (int)ceil($totalFilteredProducts / $productsPerPage));
+if ($currentProductPage > $totalProductPages) {
+    $currentProductPage = $totalProductPages;
+}
+$productOffset = ($currentProductPage - 1) * $productsPerPage;
+$paginatedProducts = $showAllProducts ? $displayProducts : array_slice($displayProducts, $productOffset, $productsPerPage);
+
 // Operational issues & performance summary
 $operationalIssues = $coverage['operational_issues'] ?? $service->getOperationalIssues($coverage, $userRole);
 $performanceSummary = $coverage['performance_summary'] ?? $service->getPerformanceSummary($displayedForecastModel, $coverage);
@@ -234,16 +252,24 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <div class="forecast-panel forecast-products" id="product-forecasts">
             <div class="forecast-panel-heading">
                 <div class="forecast-panel-title">
-                    <h2>Product Forecasts <span class="forecast-count">(<?= count($displayProducts) ?><?= $coverage['filtered']['is_filtered'] ? ' of ' . (int)$coverage['scope_count'] : '' ?>)</span></h2>
+                    <h2>Product Forecasts <span class="forecast-count">(<?= $totalFilteredProducts ?><?= $coverage['filtered']['is_filtered'] || $basisFilter !== 'all' ? ' of ' . (int)$coverage['scope_count'] : '' ?>)</span></h2>
                     <p class="forecast-panel-subtitle">Expected sales in Base Units · <?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', '7-, 14-, and 28-day totals each start the day after the forecast origin. These are expected sales, not quantities to buy. Review Replenishment Recommendations before purchasing.', 'About forecast quantities'); ?></p>
                 </div>
-                <form method="get" action="" class="search-form" role="search">
-                    <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
-                    <button type="submit" class="btn btn-secondary">Search</button>
-                    <?php if ($searchQuery !== ''): ?>
-                        <a href="predictions.php" class="btn btn-quiet">Clear</a>
-                    <?php endif; ?>
-                </form>
+                <div class="forecast-panel-toolbar">
+                    <nav class="forecast-basis-tabs" aria-label="Forecast filter basis">
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'all', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'all' ? 'is-active' : '' ?>">All (<?= (int)$coverage['scope_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'forecast_backed', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'forecast_backed' ? 'is-active' : '' ?>">Forecast-backed (<?= (int)$coverage['forecast_backed_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'stock_rules', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'stock_rules' ? 'is-active' : '' ?>">Stock rules (<?= (int)$coverage['stock_rule_count'] ?>)</a>
+                    </nav>
+                    <form method="get" action="" class="search-form" role="search">
+                        <?php if ($basisFilter !== 'all'): ?><input type="hidden" name="basis" value="<?= htmlspecialchars($basisFilter) ?>"><?php endif; ?>
+                        <input type="search" name="search" aria-label="Search products by name, SKU, or ID" placeholder="Name, SKU, or ID" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                        <button type="submit" class="btn btn-secondary">Search</button>
+                        <?php if ($searchQuery !== ''): ?>
+                            <a href="predictions.php<?= $basisFilter !== 'all' ? '?basis=' . urlencode($basisFilter) : '' ?>" class="btn btn-quiet">Clear</a>
+                        <?php endif; ?>
+                    </form>
+                </div>
             </div>
             <?php if (empty($displayProducts) || $coverage['scope_count'] === 0): ?>
                 <div class="empty-state">
@@ -266,7 +292,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($displayProducts as $f):
+                            <?php foreach ($paginatedProducts as $f):
                                 $name = $f['product_name'] ?? "Product #{$f['product_id']}";
                                 $sku = $f['sku'] ?? "PRD-{$f['product_id']}";
                                 $stock = (int)($f['current_stock'] ?? 0);
@@ -286,7 +312,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                     <td data-label="Forecast basis">
                                         <?php if ($isForecastBacked): ?>
                                             <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
-                                                <?= htmlspecialchars($readiness) ?>
+                                                 <?= htmlspecialchars($readiness) ?>
                                             </span>
                                             <?php forecast_help('basis-' . (int)$f['product_id'], (string)$f['basis'], 'Forecast evidence for ' . $name); ?>
                                         <?php else: ?>
@@ -295,7 +321,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                         <?php endif; ?>
                                     </td>
                                     <td class="forecast-action-cell" data-label="Action">
-                                        <a class="btn btn-sm btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
+                                        <a class="btn btn-sm btn-secondary forecast-row-link" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
                                             View forecast
                                         </a>
                                     </td>
@@ -304,6 +330,25 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                         </tbody>
                     </table>
                 </div>
+                <?php if ($totalFilteredProducts > $productsPerPage): ?>
+                    <nav class="forecast-pagination" aria-label="Products pagination">
+                        <span class="pagination-info">Showing <?= $showAllProducts ? '1–' . $totalFilteredProducts : ($productOffset + 1) . '–' . min($totalFilteredProducts, $productOffset + $productsPerPage) ?> of <?= $totalFilteredProducts ?> products</span>
+                        <div class="pagination-links">
+                            <?php if (!$showAllProducts && $totalProductPages > 1): ?>
+                                <?php if ($currentProductPage > 1): ?>
+                                    <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage - 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">&larr; Previous</a>
+                                <?php endif; ?>
+                                <span class="pagination-current">Page <?= $currentProductPage ?> of <?= $totalProductPages ?></span>
+                                <?php if ($currentProductPage < $totalProductPages): ?>
+                                    <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage + 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">Next &rarr;</a>
+                                <?php endif; ?>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View all</a>
+                            <?php elseif ($showAllProducts): ?>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show paginated</a>
+                            <?php endif; ?>
+                        </div>
+                    </nav>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
         <?php require __DIR__ . '/forecast_stock_chart.php'; ?>
@@ -380,7 +425,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                             </tbody>
                         </table>
                     </div>
-                    <p class="muted" style="font-size: 0.85rem; margin-top: 0.75rem; margin-bottom: 0;">
+                    <p class="muted forecast-performance-disclaimer">
                         <?= htmlspecialchars($performanceSummary['notes']) ?>
                     </p>
                 </div>

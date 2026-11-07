@@ -4,7 +4,7 @@
 #gcash-admin-workspace ::selection { background: var(--primary); color: #fff; }
 #gcash-admin-workspace .topbar { align-items: center; gap: .75rem 1rem; margin-bottom: 1rem; padding-bottom: .875rem; border-bottom: 1px solid var(--border); }
 #gcash-admin-workspace .topbar > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: .625rem .875rem; flex: 1 1 280px; }
-#gcash-admin-workspace .topbar h1 { margin: 0; font-size: 1.625rem; font-weight: 700; line-height: 1.2; letter-spacing: -.025em; }
+#gcash-admin-workspace .topbar h1 { margin: 0; font-size: 1.625rem; font-weight: 700; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance; }
 #gcash-admin-workspace .gcash-topbar-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: .5rem; flex: 0 1 auto; }
 #gcash-admin-workspace .gcash-section-description, #gcash-admin-workspace .gcash-emergency p, #gcash-admin-workspace .gcash-history-help p, #gcash-admin-workspace .gcash-empty-state p, #gcash-admin-workspace dialog > p { margin: 0 0 .875rem; color: var(--muted); font-size: .9375rem; line-height: 1.5; max-width: 72ch; }
 #gcash-admin-workspace .gcash-activity-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; padding-top: .875rem; border-top: 1px solid var(--border); }
@@ -12,39 +12,65 @@
 #gcash-admin-workspace .gcash-totals-help { font-size: .875rem; }
 #gcash-admin-workspace .gcash-totals-help summary { min-height: 44px; align-content: center; color: var(--primary); cursor: pointer; }
 #gcash-admin-workspace .gcash-totals-help p { margin-top: .5rem; max-width: 48ch; }
-#gcash-admin-workspace .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; font-size: .875rem; font-weight: 600; border-radius: 10px; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease; cursor: pointer; }
+#gcash-admin-workspace .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; font-size: .875rem; font-weight: 600; border-radius: 10px; touch-action: manipulation; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; cursor: pointer; }
+#gcash-admin-workspace .btn:active { transform: scale(0.98); }
 #gcash-admin-workspace .btn-secondary { background: var(--card-bg, #fff); border: 1px solid var(--border); color: var(--text); }
 #gcash-admin-workspace .btn-secondary:hover { background: var(--theme-surface-soft, #f8fafc); border-color: var(--primary); color: var(--primary); }
+#gcash-admin-workspace .btn-primary { background: var(--primary); border: 1px solid var(--primary); color: #fff; }
+#gcash-admin-workspace .btn-primary:hover { background: var(--primary-dark, #1d4ed8); border-color: var(--primary-dark, #1d4ed8); color: #fff; }
 #gcash-admin-workspace .btn:disabled { cursor: not-allowed; opacity: .6; }
 #gcash-admin-workspace .gcash-topbar-actions .btn { flex: 0 1 auto; width: auto; padding-inline: .875rem; }
 #gcash-session-status { flex: 0 0 auto; }
+#gcash-session-status.gcash-status-completed::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.25); animation: gcashPulse 2s infinite; }
+@keyframes gcashPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.15); } }
 #gcash-admin-workspace .gcash-section-nav { display: flex; overflow-x: auto; gap: .3125rem; padding: .3125rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f1f5f9); scrollbar-color: var(--border) transparent; }
-.gcash-section-nav button { display: inline-flex; flex: 1 0 auto; justify-content: center; align-items: center; gap: .5rem; min-height: 44px; padding: .5rem .875rem; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.gcash-section-nav button { display: inline-flex; flex: 1 0 auto; justify-content: center; align-items: center; gap: .5rem; min-height: 44px; padding: .5rem .875rem; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: .875rem; font-weight: 600; cursor: pointer; touch-action: manipulation; transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
 .gcash-section-nav button:hover { color: var(--text); background: rgb(255 255 255 / .6); }
 .gcash-section-nav button[aria-selected="true"] { color: var(--primary); background: var(--card-bg, #fff); border-color: rgb(37 99 235 / .18); box-shadow: 0 1px 3px rgb(15 23 42 / .06); }
-#gcash-admin-workspace .gcash-status, #gcash-admin-workspace .gcash-badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; font-weight: 600; line-height: 1.4; border-radius: 999px; padding: .2rem .625rem; white-space: nowrap; border: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); color: var(--muted); }
+#gcash-admin-workspace .gcash-status, #gcash-admin-workspace .gcash-badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; font-weight: 600; line-height: 1.4; border-radius: 999px; padding: .2rem .625rem; white-space: nowrap; border: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); color: var(--muted); font-variant-numeric: tabular-nums; }
 #gcash-admin-workspace .gcash-section-nav .gcash-badge { background: var(--card-bg, #fff); color: var(--text); border-color: var(--border); padding: .125rem .5rem; }
 #gcash-admin-workspace .gcash-section-nav button[aria-selected="true"] .gcash-badge:not(.gcash-status-needs-checking) { background: var(--theme-info-surface, #eff6ff); color: var(--primary); border-color: rgb(37 99 235 / .2); }
 #gcash-admin-workspace .gcash-section-nav .gcash-status-needs-checking { background: var(--theme-warning-surface, #fffbeb); color: var(--theme-warning-text, #92400e); border-color: rgb(217 119 6 / .28); }
 #tab-overview { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr); gap: 1rem; align-items: stretch; }
-#gcash-admin-workspace .gcash-overview-section { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg, #fff); box-shadow: 0 1px 2px rgb(15 23 42 / .03); }
+#gcash-admin-workspace .gcash-overview-section { min-width: 0; margin: 0 0 1rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg, #fff); box-shadow: 0 1px 3px rgb(15 23 42 / .04); }
 #gcash-admin-workspace #tab-overview > section { margin: 0; }
 #gcash-admin-workspace .gcash-funds-panel { grid-column: 1; display: flex; flex-direction: column; justify-content: space-between; }
 #gcash-outstanding-reviews { grid-column: 2; display: flex; flex-direction: column; }
 #gcash-reporting-scope, #gcash-completed-activity { grid-column: 1 / -1; }
 #gcash-admin-workspace .pos-panel-header { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: .5rem .75rem; flex-wrap: wrap; margin-bottom: 1rem; }
 #gcash-admin-workspace .pos-panel-header:has(+ .gcash-section-description) { margin-bottom: .375rem; }
-#gcash-admin-workspace .pos-panel-title { min-width: 0; }
-#gcash-admin-workspace .pos-panel-icon { display: none; }
-#gcash-admin-workspace h2, #gcash-admin-workspace dialog h2 { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.35; scroll-margin-top: 6rem; }
+#gcash-admin-workspace .pos-panel-title { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+#gcash-admin-workspace .pos-panel-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; background: var(--theme-info-surface, #eff6ff); color: var(--primary); font-size: 1.1rem; flex-shrink: 0; }
+#gcash-admin-workspace .gcash-icon-alert { background: var(--theme-warning-surface, #fffbeb); color: var(--theme-warning-text, #b45309); }
+#gcash-admin-workspace h2, #gcash-admin-workspace dialog h2 { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.35; scroll-margin-top: 6rem; text-wrap: balance; }
 #gcash-admin-workspace .gcash-overview-grid { display: grid; gap: .875rem; }
 #gcash-admin-workspace .gcash-balances-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0; border-top: 0; }
-#gcash-admin-workspace .gcash-card { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: .5rem 0; gap: .5rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+
+/* Enhanced Balance Cards */
+#gcash-admin-workspace .gcash-card { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; padding: 1rem 1.125rem; gap: .375rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); box-shadow: 0 1px 2px rgb(15 23 42 / .03); transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms ease, border-color 180ms ease; }
+#gcash-admin-workspace .gcash-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgb(15 23 42 / .06); border-color: rgb(37 99 235 / .3); }
 #gcash-admin-workspace .gcash-card-header { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: .5rem; }
-#gcash-admin-workspace .gcash-card-label { font-size: .9375rem; font-weight: 500; text-transform: none; letter-spacing: normal; color: var(--text); }
-#gcash-admin-workspace .gcash-card-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; letter-spacing: -.025em; color: var(--text); }
+#gcash-admin-workspace .gcash-balance-header-wrap { display: flex; align-items: center; gap: .625rem; }
+#gcash-admin-workspace .gcash-balance-icon-tile { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; font-size: 1.15rem; flex-shrink: 0; }
+#gcash-admin-workspace .gcash-icon-cash { background: #ecfdf5; color: #059669; }
+#gcash-admin-workspace .gcash-icon-wallet { background: #eff6ff; color: #007dfe; }
+#gcash-admin-workspace .gcash-card-label { font-size: .9375rem; font-weight: 700; color: var(--text); line-height: 1.25; }
+#gcash-admin-workspace .gcash-card-friendly-tag { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); margin-top: .1rem; }
+#gcash-admin-workspace .gcash-card-explain { display: flex; align-items: center; gap: .3rem; font-size: .8125rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; }
+#gcash-admin-workspace .gcash-card-explain i { font-size: .875rem; opacity: .85; }
+#gcash-admin-workspace .gcash-card-value { font-size: 1.625rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; letter-spacing: -.025em; color: var(--text); margin-top: .25rem; }
 #gcash-admin-workspace .gcash-card-balance .gcash-card-value { font-size: 1.875rem; }
-#gcash-admin-workspace .gcash-badge-expected { background: var(--card-bg, #fff); color: var(--muted); }
+#gcash-admin-workspace .gcash-badge-expected { background: var(--card-bg, #fff); color: var(--muted); border-color: var(--border); font-weight: 600; }
+#gcash-admin-workspace .gcash-badge-neutral { background: var(--card-bg, #fff); color: var(--muted); font-size: .75rem; }
+
+/* Combined Total Capital Banner */
+#gcash-admin-workspace .gcash-combined-pool { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; margin-top: .875rem; padding: .75rem 1rem; border-radius: 10px; background: linear-gradient(135deg, rgba(37, 99, 235, .05) 0%, rgba(16, 185, 129, .06) 100%); border: 1px dashed rgb(37 99 235 / .25); }
+#gcash-admin-workspace .gcash-combined-left { display: flex; align-items: center; gap: .625rem; }
+#gcash-admin-workspace .gcash-combined-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; background: var(--card-bg, #fff); color: var(--primary); font-size: 1rem; }
+#gcash-admin-workspace .gcash-combined-title { display: block; font-size: .875rem; font-weight: 700; color: var(--text); }
+#gcash-admin-workspace .gcash-combined-sub { display: block; font-size: .75rem; color: var(--muted); }
+#gcash-admin-workspace .gcash-combined-amount { font-size: 1.25rem; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+
 .gcash-fund-details { margin-top: .875rem; border-top: 1px solid var(--border); font-size: .875rem; }
 .gcash-fund-details summary { display: list-item; padding: .65rem 0 0; min-height: 44px; box-sizing: border-box; color: var(--primary); font-weight: 600; cursor: pointer; }
 .gcash-fund-details dl { display: grid; grid-template-columns: auto 1fr; gap: .375rem 1rem; margin: .5rem 0 0; padding: .625rem .875rem; border-radius: 8px; background: var(--theme-surface-soft, #f8fafc); }
@@ -56,27 +82,65 @@
 .gcash-row-details dd { margin: .125rem 0 .5rem; }
 .gcash-row-details dd:last-child { margin-bottom: 0; }
 .gcash-panel-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+
+/* Outstanding Reviews Panel */
 #gcash-admin-workspace #gcash-outstanding-reviews { background: var(--card-bg, #fff); }
-#gcash-admin-workspace .gcash-review-clear { display: flex; align-items: center; gap: .5rem; margin: 0; color: var(--muted); font-size: .9375rem; line-height: 1.5; }
-#gcash-admin-workspace .gcash-review-clear i { flex: 0 0 auto; font-size: 1.15rem; color: var(--theme-success-text, #166534); }
+#gcash-admin-workspace .gcash-badge-attention { background: var(--theme-warning-surface, #fffbeb); color: var(--theme-warning-text, #92400e); border-color: rgb(217 119 6 / .28); }
+#gcash-admin-workspace .gcash-review-allclear { display: flex; align-items: center; gap: .75rem; padding: 1.125rem 1rem; border-radius: 12px; background: #f0fdf4; border: 1px solid rgba(22, 163, 74, .2); }
+#gcash-admin-workspace .gcash-allclear-icon { font-size: 1.75rem; color: #16a34a; flex-shrink: 0; }
+#gcash-admin-workspace .gcash-review-clear { display: flex; align-items: center; gap: .5rem; margin: 0; color: #15803d; font-size: .9375rem; font-weight: 700; line-height: 1.4; }
+#gcash-admin-workspace .gcash-review-clear i { flex: 0 0 auto; font-size: 1.15rem; color: #16a34a; }
+#gcash-admin-workspace .gcash-allclear-sub { display: block; font-size: .8125rem; color: var(--muted); margin-top: .125rem; }
 #gcash-outstanding-reviews .gcash-actions { display: grid; gap: .625rem; flex: 1; align-content: stretch; margin-top: 0; }
-#gcash-admin-workspace #gcash-outstanding-reviews .btn { justify-content: space-between; text-align: left; padding: .75rem 0; line-height: 1.4; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; font-weight: 600; height: 100%; }
-#gcash-admin-workspace #gcash-outstanding-reviews .btn:hover { border-color: var(--primary); background: var(--theme-info-surface, #eff6ff); }
-#gcash-outstanding-reviews .btn i { color: var(--primary); margin-left: .75rem; }
+#gcash-admin-workspace .gcash-review-card-btn { display: flex; align-items: center; justify-content: space-between; text-align: left; padding: .75rem .875rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); font-weight: 600; width: 100%; transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease; cursor: pointer; }
+#gcash-admin-workspace .gcash-review-card-btn:hover { border-color: var(--primary); background: var(--card-bg, #fff); transform: translateY(-2px); box-shadow: 0 4px 16px rgb(15 23 42 / .06); }
+#gcash-admin-workspace .gcash-review-card-left { display: flex; align-items: center; gap: .625rem; }
+#gcash-admin-workspace .gcash-review-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; font-size: 1rem; flex-shrink: 0; }
+#gcash-admin-workspace .gcash-review-icon-unresolved { background: var(--theme-warning-surface, #fffbeb); color: var(--theme-warning-text, #b45309); }
+#gcash-admin-workspace .gcash-review-icon-diff { background: var(--theme-danger-surface, #fef2f2); color: var(--theme-danger-text, #b91c1c); }
+#gcash-admin-workspace .gcash-review-card-text strong { display: block; font-size: .875rem; color: var(--text); line-height: 1.25; }
+#gcash-admin-workspace .gcash-review-card-sub { display: block; font-size: .75rem; font-weight: 500; color: var(--muted); margin-top: .1rem; }
+#gcash-admin-workspace .gcash-review-card-btn i.bi-arrow-up-right { color: var(--primary); font-size: 1rem; flex-shrink: 0; }
+
+/* Filter Section */
 #gcash-admin-workspace .gcash-transaction-filters { display: grid; gap: .75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
 #gcash-admin-workspace .gcash-unified-filter-form { display: grid; gap: .75rem; }
 #gcash-admin-workspace .gcash-filter-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; }
 #gcash-admin-workspace .gcash-filter-scope-row { display: grid; grid-template-columns: minmax(130px, .8fr) repeat(2, minmax(135px, 1fr)) minmax(160px, 1.15fr) auto; align-items: end; gap: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
 #gcash-admin-workspace .gcash-filter-bar { display: grid; grid-template-columns: minmax(130px, .8fr) repeat(2, minmax(135px, 1fr)) minmax(160px, 1.15fr) auto; align-items: end; gap: .75rem; }
 #gcash-admin-workspace .gcash-filter-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-#gcash-admin-workspace .gcash-filter-label, #gcash-admin-workspace .gcash-money-filters label, #gcash-admin-workspace dialog label { font-size: .8125rem; color: var(--muted); font-weight: 600; }
+#gcash-admin-workspace .gcash-filter-label, #gcash-admin-workspace .gcash-money-filters label, #gcash-admin-workspace dialog label { display: flex; align-items: center; gap: .35rem; font-size: .8125rem; color: var(--muted); font-weight: 600; margin-bottom: .25rem; }
 #gcash-admin-workspace .form-control { width: 100%; min-height: 44px; min-width: 0; box-sizing: border-box; border: 1px solid var(--border); border-radius: 10px; padding: .5rem .75rem; background: var(--card-bg, #fff); color: var(--text); caret-color: var(--primary); font: inherit; font-size: .875rem; transition: border-color 150ms ease, box-shadow 150ms ease; }
 #gcash-admin-workspace .form-control:hover { border-color: var(--muted); }
 #gcash-admin-workspace .form-control::placeholder { color: var(--muted); opacity: 1; }
 #gcash-filter-status { font-size: .8125rem; line-height: 1.5; color: var(--muted); margin: .5rem 0 0; }
 #gcash-filter-status:empty { margin: 0; }
-#gcash-admin-workspace .gcash-metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 0; border-top: 0; }
-#gcash-admin-workspace .gcash-total-badge { background: var(--theme-success-surface, #f0fdf4); color: var(--theme-success-text, #15803d); border-color: rgb(22 163 74 / .25); }
+
+/* Completed Activity & Metrics */
+#gcash-admin-workspace .gcash-activity-header-badges { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+#gcash-admin-workspace .gcash-badge-revenue { background: var(--theme-success-surface, #f0fdf4); color: var(--theme-success-text, #15803d); border-color: rgb(22 163 74 / .25); font-weight: 600; padding: .25rem .75rem; }
+#gcash-admin-workspace .gcash-badge-revenue strong { font-variant-numeric: tabular-nums; }
+#gcash-admin-workspace .gcash-total-badge { background: var(--theme-info-surface, #eff6ff); color: var(--primary); border-color: rgb(37 99 235 / .25); font-weight: 600; padding: .25rem .75rem; }
+#gcash-admin-workspace .gcash-metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 0; border-top: 0; gap: .875rem; }
+#gcash-admin-workspace .gcash-metric-header { display: flex; align-items: center; gap: .625rem; }
+#gcash-admin-workspace .gcash-metric-icon-tile { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; font-size: 1.05rem; flex-shrink: 0; }
+#gcash-admin-workspace .gcash-icon-cashin { background: #eff6ff; color: #1d4ed8; }
+#gcash-admin-workspace .gcash-icon-cashout { background: #f5f3ff; color: #7c3aed; }
+#gcash-admin-workspace .gcash-icon-cashfee { background: #ecfdf5; color: #059669; }
+#gcash-admin-workspace .gcash-icon-walletfee { background: #f0fdfa; color: #0d9488; }
+#gcash-admin-workspace .gcash-metric-labels { display: flex; flex-direction: column; }
+#gcash-admin-workspace .gcash-flow-tag { display: inline-block; font-size: .7rem; font-weight: 600; margin-top: .1rem; }
+#gcash-admin-workspace .gcash-flow-in { color: #1d4ed8; }
+#gcash-admin-workspace .gcash-flow-out { color: #7c3aed; }
+#gcash-admin-workspace .gcash-fee-tag { display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .025em; border-radius: 4px; padding: 1px 5px; width: fit-content; margin-top: .1rem; }
+#gcash-admin-workspace .gcash-fee-tag-cash { background: #ecfdf5; color: #047857; }
+#gcash-admin-workspace .gcash-fee-tag-wallet { background: #f0fdfa; color: #0f766e; }
+#gcash-admin-workspace .gcash-income-value { color: #059669; }
+#gcash-admin-workspace .gcash-view-tx-btn { gap: .5rem; font-weight: 600; }
+#gcash-admin-workspace .gcash-view-tx-btn i { transition: transform 150ms ease; }
+#gcash-admin-workspace .gcash-view-tx-btn:hover i { transform: translateX(3px); }
+
+/* Transaction filters, tables, and pills */
 #gcash-transaction-filters { display: grid; gap: .75rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
 #gcash-admin-workspace #gcash-transaction-filters #gcash-reporting-scope { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .gcash-transaction-local-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .75rem; }
@@ -97,6 +161,7 @@
 #gcash-admin-workspace .gcash-table-wrap code { display: inline-block; color: var(--text); background: var(--theme-surface-soft, #f1f5f9); border: 1px solid var(--border); border-radius: 6px; padding: .125rem .45rem; font-size: .8125rem; white-space: nowrap; }
 #gcash-admin-workspace .gcash-cell-meta { display: block; margin-top: .2rem; color: var(--muted); font-size: .75rem; font-weight: 400; line-height: 1.4; }
 #gcash-admin-history-body tr[data-transaction] { cursor: pointer; }
+#gcash-admin-history-body tr[data-transaction]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 #gcash-admin-workspace #gcash-admin-history-table { min-width: 820px; }
 #gcash-admin-workspace #gcash-admin-diff-table { min-width: 840px; }
 #gcash-admin-workspace #gcash-admin-nc-table { min-width: 820px; }
@@ -131,7 +196,7 @@
 #gcash-admin-workspace .gcash-status-rejected { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); border-color: rgb(220 38 38 / .25); }
 #gcash-admin-workspace .gcash-variance-negative { color: var(--theme-danger-text, #b91c1c); font-weight: 700; }
 #gcash-admin-workspace .gcash-pagination { display: flex; justify-content: space-between; align-items: center; margin: .875rem 0 0; padding: .875rem .25rem 0; border-top: 1px solid var(--border); background: transparent; font-size: .875rem; color: var(--muted); }
-#gcash-admin-workspace dialog { box-sizing: border-box; width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; margin: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 18px; background: var(--card-bg, #fff); color: var(--text); box-shadow: 0 24px 64px rgb(15 23 42 / .24); }
+#gcash-admin-workspace dialog { box-sizing: border-box; width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; overscroll-behavior: contain; margin: auto; padding: 1.5rem; border: 1px solid var(--border); border-radius: 18px; background: var(--card-bg, #fff); color: var(--text); box-shadow: 0 24px 64px rgb(15 23 42 / .24); }
 #gcash-admin-workspace dialog::backdrop { background: rgb(15 23 42 / .55); }
 #gcash-admin-workspace dialog form { display: grid; gap: .75rem; }
 #gcash-admin-workspace dialog .gcash-actions { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .75rem; padding-top: .875rem; border-top: 1px solid var(--border); }
@@ -147,6 +212,59 @@
 #gcash-verify-error:empty { display: none; }
 #gcash-admin-workspace .gcash-waiver-summary { margin: 0 0 1rem; padding: .875rem 1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); display: grid; gap: .375rem; font-size: .875rem; }
 #gcash-admin-workspace .gcash-waiver-summary p { margin: 0; color: var(--text); }
+
+/* Dark mode specific fine-tuning */
+[data-theme="dark"] #gcash-admin-workspace { color-scheme: dark; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-cash,
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-cashfee { background: rgba(16, 185, 129, 0.16); color: #34d399; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-wallet { background: rgba(0, 125, 254, 0.18); color: #60a5fa; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-cashin { background: rgba(37, 99, 235, 0.18); color: #93c5fd; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-cashout { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-icon-walletfee { background: rgba(13, 148, 136, 0.18); color: #5eead4; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-income-value { color: #34d399; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-review-allclear { background: rgba(22, 163, 74, 0.12); border-color: rgba(22, 163, 74, 0.3); }
+[data-theme="dark"] #gcash-admin-workspace .gcash-review-clear { color: #4ade80; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-combined-pool { background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(16, 185, 129, 0.12) 100%); border-color: rgba(37, 99, 235, 0.35); }
+[data-theme="dark"] #gcash-admin-workspace .gcash-fee-tag-cash { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-fee-tag-wallet { background: rgba(13, 148, 136, 0.18); color: #5eead4; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-flow-in { color: #60a5fa; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-flow-out { color: #c4b5fd; }
+
+/* Tab Guidance Banners & Micro-Explorers */
+#gcash-admin-workspace .gcash-tab-guide { display: flex; align-items: flex-start; gap: .875rem; margin-bottom: 1.125rem; padding: .875rem 1.125rem; border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border); box-shadow: 0 1px 2px rgb(15 23 42 / .02); }
+#gcash-admin-workspace .gcash-tab-guide-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; font-size: 1.15rem; flex-shrink: 0; margin-top: .125rem; }
+#gcash-admin-workspace .gcash-guide-info { background: var(--theme-info-surface, #eff6ff); color: var(--primary); }
+#gcash-admin-workspace .gcash-guide-alert { background: var(--theme-warning-surface, #fffbeb); color: var(--theme-warning-text, #92400e); }
+#gcash-admin-workspace .gcash-guide-warn { background: var(--theme-danger-surface, #fef2f2); color: var(--theme-danger-text, #b91c1c); }
+#gcash-admin-workspace .gcash-tab-guide-content { display: flex; flex-direction: column; gap: .2rem; }
+#gcash-admin-workspace .gcash-tab-guide-title { font-size: .875rem; font-weight: 700; color: var(--text); text-wrap: balance; }
+#gcash-admin-workspace .gcash-tab-guide-desc { font-size: .8125rem; color: var(--muted); line-height: 1.45; }
+
+/* Type and Movement badges in tables */
+#gcash-admin-workspace .gcash-type-badge { display: inline-flex; align-items: center; gap: .3rem; font-size: .75rem; font-weight: 700; padding: .2rem .55rem; border-radius: 6px; white-space: nowrap; }
+#gcash-admin-workspace .gcash-type-cashin { background: #eff6ff; color: #1d4ed8; border: 1px solid rgb(37 99 235 / .2); }
+#gcash-admin-workspace .gcash-type-cashout { background: #f5f3ff; color: #6d28d9; border: 1px solid rgb(124 58 237 / .2); }
+#gcash-admin-workspace .gcash-movement-badge { background: var(--theme-surface-soft, #f1f5f9); color: var(--text); border: 1px solid var(--border); }
+#gcash-admin-workspace .gcash-movement-line { display: flex; align-items: center; gap: .35rem; font-size: .8125rem; font-variant-numeric: tabular-nums; }
+#gcash-admin-workspace .gcash-movement-label { color: var(--muted); font-size: .75rem; font-weight: 600; min-width: 42px; }
+#gcash-admin-workspace .gcash-delta-positive { color: #16a34a; font-weight: 700; }
+#gcash-admin-workspace .gcash-delta-negative { color: #dc2626; font-weight: 700; }
+
+/* Empty state inside tables */
+#gcash-admin-workspace .gcash-empty-inner { display: flex; flex-direction: column; align-items: center; gap: .35rem; padding: 1.5rem 1rem; }
+#gcash-admin-workspace .gcash-empty-inner i { font-size: 2rem; color: #16a34a; }
+#gcash-admin-workspace .gcash-empty-inner p { margin: 0; font-size: .9375rem; font-weight: 700; color: var(--text); }
+#gcash-admin-workspace .gcash-empty-sub { font-size: .8125rem; color: var(--muted); }
+
+/* Dark mode for guide and badges */
+[data-theme="dark"] #gcash-admin-workspace .gcash-type-cashin { background: rgba(37, 99, 235, 0.18); color: #93c5fd; border-color: rgba(37, 99, 235, 0.3); }
+[data-theme="dark"] #gcash-admin-workspace .gcash-type-cashout { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-color: rgba(124, 58, 237, 0.3); }
+[data-theme="dark"] #gcash-admin-workspace .gcash-guide-info { background: rgba(37, 99, 235, 0.15); color: #60a5fa; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-guide-alert { background: rgba(217, 119, 6, 0.15); color: #fbbf24; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-guide-warn { background: rgba(220, 38, 38, 0.15); color: #f87171; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-delta-positive { color: #4ade80; }
+[data-theme="dark"] #gcash-admin-workspace .gcash-delta-negative { color: #f87171; }
+
 @media (max-width: 1180px) {
     #tab-overview { grid-template-columns: minmax(0, 1fr); }
     #gcash-outstanding-reviews { grid-column: 1; }
@@ -165,7 +283,9 @@
     #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) .gcash-field, #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) .gcash-actions { width: auto !important; }
     #gcash-admin-workspace .form-control, #gcash-admin-workspace .pos-input { font-size: 1rem; padding: .5rem .625rem; }
     #gcash-admin-workspace .gcash-metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    #gcash-admin-workspace .gcash-metrics-grid .gcash-card { padding: .5rem 0; }
+    #gcash-admin-workspace .gcash-metrics-grid .gcash-card { padding: .75rem .875rem; }
+    #gcash-admin-workspace .gcash-card-value { font-size: 1.35rem; }
+    #gcash-admin-workspace .gcash-card-balance .gcash-card-value { font-size: 1.5rem; }
     #gcash-transaction-filters, #gcash-admin-workspace .gcash-transaction-filters { padding: .75rem; gap: .625rem; margin-bottom: .75rem; }
     .gcash-transaction-local-filters, #gcash-admin-workspace .gcash-filter-search-row { grid-template-columns: minmax(0, 1fr); gap: .625rem; }
     #gcash-admin-workspace .gcash-table-wrap { max-height: none; }
@@ -175,5 +295,18 @@
 @media (max-width: 480px) {
     #gcash-admin-workspace .gcash-balances-grid { grid-template-columns: minmax(0, 1fr); }
     #gcash-outstanding-reviews .gcash-actions { grid-template-columns: minmax(0, 1fr); }
+    #gcash-admin-workspace .gcash-metrics-grid { grid-template-columns: minmax(0, 1fr); }
     #gcash-admin-workspace .gcash-card-value { overflow-wrap: anywhere; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #gcash-session-status.gcash-status-completed::before { animation: none !important; }
+    #gcash-admin-workspace .btn,
+    #gcash-admin-workspace .gcash-card,
+    #gcash-admin-workspace .gcash-review-card-btn,
+    #gcash-admin-workspace .gcash-view-tx-btn i,
+    .gcash-section-nav button {
+        transition: none !important;
+        transform: none !important;
+    }
 }

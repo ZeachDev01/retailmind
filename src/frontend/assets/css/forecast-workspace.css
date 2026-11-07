@@ -194,10 +194,10 @@ html[data-theme="dark"] .forecast-import-page input[type="file"]::file-selector-
 .forecast-predictions-page .forecast-status-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; margin-bottom: .3rem; }
 .forecast-predictions-page .forecast-status-heading h2 {
     margin: 0;
-    color: var(--muted, #626b7a);
-    font-size: .8rem;
+    color: var(--text, #1f2937);
+    font-size: 1.15rem;
     font-weight: 700;
-    letter-spacing: .03em;
+    letter-spacing: .01em;
 }
 .forecast-predictions-page .forecast-status-message { margin: 0; max-width: 58ch; color: var(--muted, #626b7a); font-size: .95rem; line-height: 1.55; }
 .forecast-predictions-page .forecast-status-message strong { display: block; margin-bottom: .2rem; color: var(--text, #1f2937); font-size: 1.15rem; font-weight: 700; line-height: 1.35; }
@@ -216,18 +216,99 @@ html[data-theme="dark"] .forecast-import-page input[type="file"]::file-selector-
 .forecast-predictions-page .forecast-panel-title h2 { margin: 0; font-size: 1.1rem; }
 .forecast-predictions-page .forecast-count { color: var(--muted, #626b7a); font-weight: 500; }
 .forecast-predictions-page .forecast-panel-subtitle { display: block; max-width: 70ch; margin: .3rem 0 0; color: var(--muted, #626b7a); font-size: .88rem; }
+.forecast-predictions-page .forecast-panel-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    width: 100%;
+    margin-top: .75rem;
+}
+.forecast-predictions-page .forecast-basis-tabs {
+    display: inline-flex;
+    align-items: center;
+    background: var(--theme-surface-soft, #f1f5f9);
+    padding: 3px;
+    border-radius: 8px;
+    gap: 3px;
+}
+.forecast-predictions-page .forecast-basis-chip {
+    padding: .35rem .75rem;
+    font-size: .82rem;
+    font-weight: 500;
+    color: var(--muted, #626b7a);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: background 120ms ease, color 120ms ease;
+}
+.forecast-predictions-page .forecast-basis-chip:hover {
+    color: var(--text, #1f2937);
+}
+.forecast-predictions-page .forecast-basis-chip.is-active {
+    background: var(--card-bg, #fff);
+    color: var(--primary, #2563eb);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
 .forecast-predictions-page .search-form { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0; }
 .forecast-predictions-page .search-form .input-text { min-width: 240px; }
 .forecast-predictions-page .forecast-table { width: 100%; }
 .forecast-predictions-page .forecast-table th,
 .forecast-predictions-page .forecast-table td { padding: .8rem .75rem; border-bottom: 1px solid var(--border, #e5e7eb); }
 .forecast-predictions-page .forecast-table th { color: var(--muted, #626b7a); font-size: .78rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.forecast-predictions-page .forecast-table tbody tr { transition: background 120ms ease; }
 .forecast-predictions-page .forecast-table tbody tr:hover { background: var(--theme-surface-soft, #f8fafc); }
 .forecast-predictions-page .forecast-table tbody tr:last-child td { border-bottom: 0; }
 .forecast-predictions-page .forecast-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .forecast-predictions-page .forecast-table .forecast-strong { color: var(--text, #1f2937); font-weight: 700; }
 .forecast-predictions-page .forecast-product-cell strong { display: block; }
 .forecast-predictions-page .forecast-sku { display: block; color: var(--muted, #626b7a); }
+.forecast-predictions-page .forecast-table .forecast-row-link {
+    min-height: 34px;
+    padding: .35rem .8rem;
+    font-size: .84rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.forecast-predictions-page .forecast-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1rem;
+    padding-top: 1rem;
+    margin-top: .75rem;
+    border-top: 1px solid var(--border, #e5e7eb);
+    font-size: .88rem;
+}
+.forecast-predictions-page .pagination-info {
+    color: var(--muted, #626b7a);
+}
+.forecast-predictions-page .pagination-links {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+}
+.forecast-predictions-page .pagination-current {
+    font-weight: 600;
+    color: var(--text, #1f2937);
+    padding: 0 .25rem;
+}
+.forecast-predictions-page .pagination-toggle {
+    color: var(--primary, #2563eb);
+    text-decoration: none;
+    font-weight: 500;
+    margin-left: .5rem;
+}
+.forecast-predictions-page .pagination-toggle:hover {
+    text-decoration: underline;
+}
+.forecast-predictions-page .forecast-performance-disclaimer {
+    font-size: .85rem;
+    margin-top: .75rem;
+    margin-bottom: 0;
+}
 .forecast-predictions-page .forecast-chart-panel { padding-block: 1rem; }
 .forecast-predictions-page .forecast-chart-panel .forecast-bars { margin: .75rem 0 .25rem; }
 .forecast-predictions-page .forecast-tools { margin-block: .75rem; padding: .25rem 0; background: transparent; border: 0; border-top: 1px solid var(--border, #e5e7eb); border-radius: 0; }
@@ -266,23 +347,23 @@ html[data-theme="dark"] .forecast-import-page input[type="file"]::file-selector-
     }
     .forecast-predictions-page .forecast-table tr {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: .35rem 1rem;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .35rem .5rem;
         padding: .85rem 0;
         border-bottom: 1px solid var(--border, #e5e7eb);
     }
     .forecast-predictions-page .forecast-table tbody tr:last-child { border-bottom: 0; }
-    .forecast-predictions-page .forecast-table td { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; padding: .15rem 0; border: 0; text-align: left; font-size: .95rem; }
-    .forecast-predictions-page .forecast-table td::before { content: attr(data-label); color: var(--muted, #626b7a); font-size: .78rem; font-weight: 600; }
-    .forecast-predictions-page .forecast-table td.num { text-align: left; font-size: 1rem; font-weight: 600; }
-    .forecast-predictions-page .forecast-table td.forecast-strong { font-weight: 700; }
-    .forecast-predictions-page .forecast-table .forecast-product-cell,
-    .forecast-predictions-page .forecast-table .forecast-action-cell { grid-column: 1 / -1; }
-    .forecast-predictions-page .forecast-table .forecast-product-cell { display: block; }
-    .forecast-predictions-page .forecast-table .forecast-product-cell::before,
+    .forecast-predictions-page .forecast-table td { display: flex; flex-direction: column; align-items: flex-start; gap: .1rem; padding: 0; border: 0; text-align: left; font-size: .9rem; }
+    .forecast-predictions-page .forecast-table td::before { content: attr(data-label); color: var(--muted, #626b7a); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+    .forecast-predictions-page .forecast-table td.num { text-align: left; font-size: .95rem; font-weight: 600; }
+    .forecast-predictions-page .forecast-table td.forecast-strong { font-weight: 700; color: var(--text, #1f2937); }
+    .forecast-predictions-page .forecast-table .forecast-product-cell { grid-column: 1 / -1; margin-bottom: .2rem; }
+    .forecast-predictions-page .forecast-table .forecast-product-cell::before { display: none; }
+    .forecast-predictions-page .forecast-table td[data-label="Forecast basis"] { grid-column: 1 / 3; display: flex; flex-direction: row; align-items: center; gap: .35rem; margin-top: .35rem; }
+    .forecast-predictions-page .forecast-table td[data-label="Forecast basis"]::before { display: none; }
+    .forecast-predictions-page .forecast-table .forecast-action-cell { grid-column: 3 / -1; display: flex; justify-content: flex-end; align-items: center; margin-top: .35rem; }
     .forecast-predictions-page .forecast-table .forecast-action-cell::before { display: none; }
-    .forecast-predictions-page .forecast-table .forecast-action-cell { padding-top: .5rem; }
-    .forecast-predictions-page .forecast-table .forecast-action-cell .btn { width: 100%; }
+    .forecast-predictions-page .forecast-table .forecast-action-cell .btn { width: auto; min-height: 32px; padding: 4px 10px; font-size: .8rem; }
 }
 @media (max-width: 640px) {
     .forecast-predictions-page .forecast-status-card { padding: 1.15rem; }

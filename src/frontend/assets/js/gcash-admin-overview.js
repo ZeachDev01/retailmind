@@ -87,10 +87,11 @@
     const waiverError = document.getElementById('admin-waiver-error');
     const waiverNotes = document.getElementById('admin-waiver-notes');
 
+    const moneyFormatter = new Intl.NumberFormat('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     function formatMoney(val) {
         const num = parseFloat(val);
         if (isNaN(num)) return '—';
-        return (num < 0 ? '−' : '') + '₱' + Math.abs(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        return (num < 0 ? '−' : '') + '₱' + moneyFormatter.format(Math.abs(num));
     }
 
     const filterForm = document.getElementById('gcash-admin-filter-form');
@@ -251,6 +252,14 @@
         detailDialog.showModal();
     });
 
+    workspace.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('tr[data-transaction]');
+        if (!row || event.target.closest('button, a, input, select, textarea')) return;
+        event.preventDefault();
+        row.click();
+    });
+
     const verifyDialog = document.getElementById('gcash-verify-dialog');
     const verifyForm = document.getElementById('gcash-verify-form');
     workspace.addEventListener('click', event => {
@@ -282,6 +291,8 @@
         event.preventDefault();
         const button = verifyForm.querySelector('[type="submit"]');
         button.disabled = true;
+        const originalBtnText = button.textContent;
+        button.textContent = 'Verifying…';
         const autoPrint = document.getElementById('gcash-verify-print-receipt').checked;
         try {
             const response = await fetch(api, {
@@ -304,9 +315,11 @@
             await filterTransactions();
             if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('gcash-tab-unresolved'), autoPrint);
             button.disabled = false;
+            button.textContent = originalBtnText;
         } catch (error) {
             document.getElementById('gcash-verify-error').textContent = error.message;
             button.disabled = false;
+            button.textContent = originalBtnText;
         }
     });
 
@@ -358,7 +371,11 @@
             }
 
             const confirmBtn = document.getElementById('admin-waiver-confirm-btn');
-            if (confirmBtn) confirmBtn.disabled = true;
+            const originalConfirmText = confirmBtn ? confirmBtn.textContent : '';
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Saving…';
+            }
 
             try {
                 const res = await fetch(api, {
@@ -392,7 +409,10 @@
                     waiverError.hidden = false;
                 }
             } finally {
-                if (confirmBtn) confirmBtn.disabled = false;
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = originalConfirmText;
+                }
             }
         });
     }
