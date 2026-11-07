@@ -7,8 +7,10 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
 require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastAggregateReader.php';
+require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastMetrics.php';
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Forecasting\ForecastMetrics;
 use App\Services\GrossProfitService;
 use App\Services\PhilippineTime;
 use App\Services\ReportAccessService;
@@ -662,9 +664,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
             });
 
             $rows = [];
-            $sumAbsoluteError = 0.0;
             $sumSquaredError = 0.0;
             $actualValues = [];
+            $forecastValues = [];
             $actualTotal = 0;
             $forecastTotal = 0;
 
@@ -676,9 +678,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
                 $squaredError = $difference ** 2;
                 $percentageError = $actual > 0 ? ($absoluteError / $actual) * 100 : ($forecast === 0 ? 0.0 : null);
 
-                $sumAbsoluteError += $absoluteError;
                 $sumSquaredError += $squaredError;
                 $actualValues[] = $actual;
+                $forecastValues[] = $forecast;
                 $actualTotal += $actual;
                 $forecastTotal += $forecast;
 
@@ -699,8 +701,8 @@ function run_report(PDO $pdo, string $report, array $filters): array
             }
 
             $count = count($rows);
-            $mae = $count > 0 ? $sumAbsoluteError / $count : null;
-            $rmse = $count > 0 ? sqrt($sumSquaredError / $count) : null;
+            $mae = ForecastMetrics::mae($actualValues, $forecastValues);
+            $rmse = ForecastMetrics::rmse($actualValues, $forecastValues);
             $r2 = null;
 
             if ($count > 1) {

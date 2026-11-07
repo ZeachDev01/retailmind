@@ -1,0 +1,26 @@
+{
+    "thresholds": {
+        "low": 56,
+        "medium": 180,
+        "high": 365
+    },
+    "high_requires_qualification": true,
+    "bands": {
+        "insufficient": {
+            "level": "Insufficient",
+            "limitation_marker": "Usable history under 56 days (minimum required for reliable forecasting)"
+        },
+        "low": {
+            "level": "Low",
+            "limitation_marker": "Early history (56-179 days)"
+        },
+        "medium": {
+            "level": "Medium",
+            "limitation_marker": "Standard history (180-364 days)"
+        },
+        "high": {
+            "level": "High",
+            "limitation_marker": null
+        }
+    }
+}

@@ -226,19 +226,11 @@ class CandidateEvaluationService
             }
 
             $n = count($actuals);
-            $absErrors = [];
-            $sqErrors = [];
-            $sumActual = array_sum($actuals);
-
-            for ($i = 0; $i < $n; $i++) {
-                $diff = abs($preds[$i] - $actuals[$i]);
-                $absErrors[] = $diff;
-                $sqErrors[] = $diff * $diff;
-            }
-
-            $mae = array_sum($absErrors) / $n;
-            $rmse = sqrt(array_sum($sqErrors) / $n);
-            $wape = $sumActual > 0 ? (array_sum($absErrors) / $sumActual) : 0.0;
+            $mae = ForecastMetrics::mae($actuals, $preds);
+            $rmse = ForecastMetrics::rmse($actuals, $preds);
+            // Observation progress reports 0.0 rather than null for zero demand,
+            // so the shared null is remapped here.
+            $wape = ForecastMetrics::wape($actuals, $preds) ?? 0.0;
 
             $metrics[$horizon] = [
                 'mae' => round($mae, 4),
@@ -513,9 +505,8 @@ class CandidateEvaluationService
             $overCount = 0;
             $underCount = 0;
             $exactCount = 0;
-            $absErrors = [];
-            $sqErrors = [];
-            $sumActual = 0.0;
+            $actuals = [];
+            $preds = [];
 
             foreach ($comps as $c) {
                 $p = $c['predicted'];
@@ -532,15 +523,13 @@ class CandidateEvaluationService
                     $exactCount++;
                 }
 
-                $abs = abs($diff);
-                $absErrors[] = $abs;
-                $sqErrors[] = $diff * $diff;
-                $sumActual += $a;
+                $actuals[] = $a;
+                $preds[] = $p;
             }
 
-            $mae = array_sum($absErrors) / $count;
-            $rmse = sqrt(array_sum($sqErrors) / $count);
-            $wape = $sumActual > 0 ? (array_sum($absErrors) / $sumActual) : null;
+            $mae = ForecastMetrics::mae($actuals, $preds);
+            $rmse = ForecastMetrics::rmse($actuals, $preds);
+            $wape = ForecastMetrics::wape($actuals, $preds);
 
             // Baseline metrics on matching eligible periods
             $baseComps = $baselineByHorizon[$h];
@@ -554,14 +543,12 @@ class CandidateEvaluationService
             if ($baseCount > 0 && $baseCount === $count) {
                 $bOverUnits = 0.0;
                 $bUnderUnits = 0.0;
-                $bAbsErrors = [];
-                $bSqErrors = [];
-                $bSumActual = 0.0;
+                $bActuals = [];
+                $bPreds = [];
 
                 foreach ($baseComps as $bc) {
                     $bp = $bc['predicted'];
                     $ba = $bc['actual'];
-                    $bdiff = $bp - $ba;
 
                     if ($bp > $ba) {
                         $bOverUnits += ($bp - $ba);
@@ -569,15 +556,14 @@ class CandidateEvaluationService
                         $bUnderUnits += ($ba - $bp);
                     }
 
-                    $bAbs = abs($bdiff);
-                    $bAbsErrors[] = $bAbs;
-                    $bSqErrors[] = $bdiff * $bdiff;
-                    $bSumActual += $ba;
+                    $bActuals[] = $ba;
+                    $bPreds[] = $bp;
                 }
 
-                $baseMae = round(array_sum($bAbsErrors) / $baseCount, 4);
-                $baseRmse = round(sqrt(array_sum($bSqErrors) / $baseCount), 4);
-                $baseWape = $bSumActual > 0 ? round(array_sum($bAbsErrors) / $bSumActual, 4) : null;
+                $baseMae = round((float)ForecastMetrics::mae($bActuals, $bPreds), 4);
+                $baseRmse = round((float)ForecastMetrics::rmse($bActuals, $bPreds), 4);
+                $baseWape = ForecastMetrics::wape($bActuals, $bPreds);
+                $baseWape = $baseWape !== null ? round($baseWape, 4) : null;
                 $baseOverUnits = round($bOverUnits, 2);
                 $baseUnderUnits = round($bUnderUnits, 2);
             }

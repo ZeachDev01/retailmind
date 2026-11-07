@@ -2,8 +2,10 @@
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
+require_once __DIR__ . '/../app/Forecasting/ForecastMetrics.php';
 
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\ForecastMetrics;
 
 function assert_true(bool $condition, string $message): void {
     if (!$condition) {
@@ -17,28 +19,13 @@ function assert_same(mixed $expected, mixed $actual, string $message): void {
     }
 }
 
-// Unit test readiness rules calculation
-function calculate_readiness_test(int $days, bool $validationPassed): array {
-    if ($days < 56) {
-        return ['level' => 'Insufficient', 'limited' => true];
-    } elseif ($days < 180) {
-        return ['level' => 'Low', 'limited' => true];
-    } elseif ($days < 365) {
-        return ['level' => 'Medium', 'limited' => true];
-    } else {
-        if ($validationPassed) {
-            return ['level' => 'High', 'limited' => false];
-        } else {
-            return ['level' => 'Medium', 'limited' => true];
-        }
-    }
-}
-
-assert_same('Insufficient', calculate_readiness_test(30, true)['level'], 'Under 56 days is Insufficient');
-assert_same('Low', calculate_readiness_test(100, true)['level'], '56-179 days is Low');
-assert_same('Medium', calculate_readiness_test(250, true)['level'], '180-364 days is Medium');
-assert_same('High', calculate_readiness_test(400, true)['level'], '365+ with validation passed is High');
-assert_same('Medium', calculate_readiness_test(400, false)['level'], '365+ with validation failed stays Medium');
+// Readiness rules come from the shared band definition (issue #431); the
+// contract asserts behaviour through ForecastMetrics instead of a local copy.
+assert_same('Insufficient', ForecastMetrics::readinessLevel(30, true)['level'], 'Under 56 days is Insufficient');
+assert_same('Low', ForecastMetrics::readinessLevel(100, true)['level'], '56-179 days is Low');
+assert_same('Medium', ForecastMetrics::readinessLevel(250, true)['level'], '180-364 days is Medium');
+assert_same('High', ForecastMetrics::readinessLevel(400, true)['level'], '365+ with validation passed is High');
+assert_same('Medium', ForecastMetrics::readinessLevel(400, false)['level'], '365+ with validation failed stays Medium');
 
 if (getenv('RUN_DB_TESTS') === '1') {
     require_once __DIR__ . '/../config/db.php';
