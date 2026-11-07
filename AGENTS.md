@@ -24,7 +24,7 @@ Before writing any code, walk down this ladder and stop at the first working ste
 - If critical safety or security risk, warn clearly and directly.
 
 ## Context Pointers
-- Workspace & Component Map: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
+- Workspace routes, views, modals, scripts, & services: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
 
 ## Available Skills & Hooks
 - `/ponytail`: Apply 7-step minimalism ladder.
