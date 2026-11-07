@@ -23,6 +23,71 @@ class BatchAllocationEngine
     }
 
     /**
+     * Deep method to plan FEFO batch allocations and pack openings across multiple products in a cart.
+     *
+     * @param array<int, array{
+     *     product_id?: int,
+     *     product_name?: string,
+     *     pack_demand?: int,
+     *     pack?: int,
+     *     piece_demand?: int,
+     *     piece?: int,
+     *     pack_size?: ?int,
+     *     cost_price?: ?float,
+     *     has_pack_config?: bool,
+     *     quantity_on_hand?: int
+     * }> $productDemands
+     * @return array{
+     *     conflicts: array<int, array>,
+     *     product_plans: array<int, array|null>,
+     *     by_product: array<int, array>
+     * }
+     */
+    public function planCartDemands(array $productDemands): array
+    {
+        $allConflicts = [];
+        $productPlans = [];
+        $byProduct = [];
+
+        foreach ($productDemands as $key => $demand) {
+            $productId = (int)($demand['product_id'] ?? $key);
+            $productName = (string)($demand['product_name'] ?? "product #{$productId}");
+            $packDemand = (int)($demand['pack_demand'] ?? ($demand['pack'] ?? 0));
+            $pieceDemand = (int)($demand['piece_demand'] ?? ($demand['piece'] ?? 0));
+            $packSize = isset($demand['pack_size']) && $demand['pack_size'] !== null ? (int)$demand['pack_size'] : null;
+            $costPrice = isset($demand['cost_price']) && $demand['cost_price'] !== null && $demand['cost_price'] !== '' ? (float)$demand['cost_price'] : null;
+            $hasPackConfig = !empty($demand['has_pack_config']);
+            $quantityOnHand = (int)($demand['quantity_on_hand'] ?? 0);
+
+            $plan = $this->planCombinedDemand(
+                $productId,
+                $productName,
+                $packDemand,
+                $pieceDemand,
+                $packSize,
+                $costPrice,
+                $hasPackConfig,
+                $quantityOnHand
+            );
+
+            if (!empty($plan['conflicts'])) {
+                foreach ($plan['conflicts'] as $c) {
+                    $allConflicts[] = $c;
+                }
+            }
+
+            $productPlans[$productId] = $plan['product_plan'];
+            $byProduct[$productId] = $plan;
+        }
+
+        return [
+            'conflicts' => $allConflicts,
+            'product_plans' => $productPlans,
+            'by_product' => $byProduct,
+        ];
+    }
+
+    /**
      * Plans FEFO batch allocation for combined pack and piece demand, including automatic pack opening.
      */
     public function planCombinedDemand(

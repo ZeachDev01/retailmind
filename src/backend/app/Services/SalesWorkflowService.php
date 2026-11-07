@@ -143,7 +143,7 @@ class SalesWorkflowService
             $netTotal = $quote['total'];
             $payment = $this->resolvePayment($paymentMethod, $paymentDetails, $netTotal);
             $saleId = $this->insertSale($userId, $attribution, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
-            $this->ledger->fulfillSaleInventory($saleId, $sale, $userId);
+            $this->fulfillSaleItems($saleId, $sale, $userId);
 
             // The customer copy is committed with the sale and inventory work.
             (new ReceiptEngine($this->pdo))->preserveSale($saleId);
@@ -382,12 +382,14 @@ class SalesWorkflowService
         $total = 0;
         $items = [];
         $conflicts = [];
-        $productPlans = [];
 
         $itemsByProduct = [];
         foreach ($cleanCart as $item) {
             $itemsByProduct[$item['product_id']][] = $item;
         }
+
+        $productDemands = [];
+        $productContext = [];
 
         foreach ($itemsByProduct as $productId => $productItems) {
             $product = $this->lockProductForCheckout($productId);
@@ -421,30 +423,51 @@ class SalesWorkflowService
                 ? (float)$product['cost_price']
                 : null;
 
-            $planResult = self::planCombinedDemand(
-                $this->pdo,
-                $productId,
-                (string)($product['product_name'] ?? "product #{$productId}"),
-                $packDemand,
-                $pieceDemand,
-                $packSize,
-                $productCost,
-                $hasPackConfig,
-                (int)($product['quantity_on_hand'] ?? 0)
-            );
+            $productDemands[$productId] = [
+                'product_id' => $productId,
+                'product_name' => (string)($product['product_name'] ?? "product #{$productId}"),
+                'pack_demand' => $packDemand,
+                'piece_demand' => $pieceDemand,
+                'pack_size' => $packSize,
+                'cost_price' => $productCost,
+                'has_pack_config' => $hasPackConfig,
+                'quantity_on_hand' => (int)($product['quantity_on_hand'] ?? 0),
+            ];
 
-            if (!empty($planResult['conflicts'])) {
-                foreach ($planResult['conflicts'] as $c) {
-                    $conflicts[] = $c;
-                }
-                continue;
+            $productContext[$productId] = [
+                'product' => $product,
+                'pack_size' => $packSize,
+                'pack_price' => $packPrice,
+                'has_pack_config' => $hasPackConfig,
+                'items' => $productItems,
+            ];
+        }
+
+        $cartPlan = (new BatchAllocationEngine($this->pdo))->planCartDemands($productDemands);
+        if (!empty($cartPlan['conflicts'])) {
+            foreach ($cartPlan['conflicts'] as $c) {
+                $conflicts[] = $c;
             }
+        }
 
-            $productPlans[$productId] = $planResult['product_plan'];
+        if (!empty($conflicts)) {
+            throw new StockConflictException($conflicts);
+        }
+
+        $productPlans = $cartPlan['product_plans'];
+        $byProduct = $cartPlan['by_product'];
+
+        foreach ($productContext as $productId => $ctx) {
+            $product = $ctx['product'];
+            $packSize = $ctx['pack_size'];
+            $packPrice = $ctx['pack_price'];
+            $hasPackConfig = $ctx['has_pack_config'];
+            $planResult = $byProduct[$productId];
+
             $packBatchPlan = $planResult['pack_batch_plan'];
             $pieceBatchPlan = $planResult['piece_batch_plan'];
 
-            foreach ($productItems as $item) {
+            foreach ($ctx['items'] as $item) {
                 $isPack = $item['selling_form'] === 'pack';
                 $unitPrice = $isPack ? (float)$packPrice : (float)$product['unit_price'];
                 $subtotal = $unitPrice * $item['qty'];
@@ -469,10 +492,6 @@ class SalesWorkflowService
                     'batch_state' => $planResult['batch_state'] ?? [],
                 ];
             }
-        }
-
-        if (!empty($conflicts)) {
-            throw new StockConflictException($conflicts);
         }
 
         return ['total' => $total, 'items' => $items, 'plans' => $productPlans];
@@ -767,6 +786,17 @@ class SalesWorkflowService
     private function applyPackOpenings(array $productPlans, int $saleId, int $userId): void
     {
         $this->ledger->applyPackOpenings($productPlans, $saleId, $userId);
+    }
+
+    /**
+     * Authoritative sale item persistence and inventory fulfillment across the deep ledger seam.
+     */
+    private function fulfillSaleItems(int $saleId, array $sale, int $userId): void
+    {
+        $this->ledger->applyPackOpenings($sale['plans'] ?? [], $saleId, $userId);
+        foreach ($sale['items'] as $item) {
+            $this->recordSaleItem($saleId, $item, $userId);
+        }
     }
 
     private function recordSaleItem(int $saleId, array $item, int $userId): void

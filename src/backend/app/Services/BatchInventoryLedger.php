@@ -886,7 +886,8 @@ class BatchInventoryLedger
     }
 
     /**
-     * Fulfills all sale items and inventory depletion for a sale in one cohesive transaction step.
+     * Backward-compatibility adapter: Fulfills all sale items and inventory depletion for callers.
+     * Note: SalesWorkflowService::fulfillSaleItems is the primary authority for sale_items creation.
      */
     public function fulfillSaleInventory(int $saleId, array $sale, int $userId): void
     {

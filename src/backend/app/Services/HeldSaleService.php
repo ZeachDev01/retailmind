@@ -683,22 +683,24 @@ class HeldSaleService
             }
         }
 
-        // Run combined demand planning for each active product in the cart
-        $productPlans = [];
+        // Run combined demand planning across all active cart lines via deep batch allocation seam
+        $cartDemands = [];
         foreach ($demandsByProduct as $productId => $info) {
             $costPrice = isset($info['product']['cost_price']) && $info['product']['cost_price'] !== null && $info['product']['cost_price'] !== ''
                 ? (float)$info['product']['cost_price'] : null;
-            $productPlans[$productId] = (new BatchAllocationEngine($this->pdo))->planCombinedDemand(
-                $productId,
-                (string)$info['product']['product_name'],
-                $info['pack'],
-                $info['piece'],
-                $info['pack_size'],
-                $costPrice,
-                $info['has_pack_config'],
-                (int)($info['product']['quantity_on_hand'] ?? 0)
-            );
+            $cartDemands[$productId] = [
+                'product_id' => $productId,
+                'product_name' => (string)$info['product']['product_name'],
+                'pack_demand' => $info['pack'],
+                'piece_demand' => $info['piece'],
+                'pack_size' => $info['pack_size'],
+                'cost_price' => $costPrice,
+                'has_pack_config' => $info['has_pack_config'],
+                'quantity_on_hand' => (int)($info['product']['quantity_on_hand'] ?? 0),
+            ];
         }
+        $cartPlan = (new BatchAllocationEngine($this->pdo))->planCartDemands($cartDemands);
+        $productPlans = $cartPlan['by_product'];
 
         foreach ($parsedLines as $item) {
             $id = $item['id'];
