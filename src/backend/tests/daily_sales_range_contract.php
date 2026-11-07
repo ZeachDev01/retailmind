@@ -16,7 +16,7 @@ foreach ([
 }
 
 $count = 0;
-foreach (['DashboardService.php' => 3, 'SalesService.php' => 1] as $file => $expectedCount) {
+foreach (['DashboardService.php' => 4] as $file => $expectedCount) {
     $source = file_get_contents(__DIR__ . '/../app/Services/' . $file);
     preg_match_all('/(?:s\.)?sale_date >= CURDATE\(\) AND (?:s\.)?sale_date < DATE_ADD\(CURDATE\(\), INTERVAL 1 DAY\)/', $source, $matches);
     if (count($matches[0]) !== $expectedCount || preg_match('/DATE\((?:s\.)?sale_date\) = CURDATE\(\)/', $source)) {

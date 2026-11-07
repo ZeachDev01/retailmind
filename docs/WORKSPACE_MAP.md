@@ -23,7 +23,7 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
 - **Point of Sale**: `components/cashier/pos.php`
   - Partials & Modals: `src/backend/app/Views/sale_receipt_dialog.php`, `cash_drawer_counter.php`, `table_pagination.php`
   - Backing JS: `cart-workspace.js`, `checkout-attempt.js`, `checkout-quote.js`, `cash-drawer-counter.js`, `sale-receipt.js`, `sale-receipt-dialog.js`, `page-navigation.js`
-  - Backend Services: `App\Services\SalesService`, `SalesWorkflowService`, `CashierShiftService`, `HeldSaleService`
+  - Backend Services: `SalesWorkflowService`, `CashierShiftService`, `HeldSaleService`
 - **GCash Portal**: `components/cashier/gcash.php` (API: `gcash_api.php`, Receipt: `gcash_receipt.php`)
   - Partials: `src/backend/app/Views/gcash_receipt_dialog.php`, `gcash_receipt.php`
   - Backing JS: `gcash.js`, `gcash-reference.js`
@@ -64,9 +64,9 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
 ### Administrator (`admin`)
 - **Dashboard**: `components/administrator/dashboard.php`
   - Backend Services: `App\Dashboard\StoreOperationsDashboardWorkspace`, `App\Services\DashboardService`
-- **GCash Admin Overview**: `components/administrator/gcash_overview.php` (API: `gcash_overview_api.php`)
+- **GCash Admin Overview**: `components/administrator/gcash_overview.php` (API: `gcash_overview_api.php`, fragments: `gcash_overview_fragments.php`)
   - Backing JS: `gcash-admin-overview.js`
-  - Backend Services: `App\Services\GCashTransactionService`
+  - Backend Services: `App\Services\GCashTransactionService`, `App\GCash\AdminOverviewReport`
 - **Store Management**:
   - Register Counters: `components/administrator/registers.php` (`App\Services\RegisterService`)
   - Store Calendar: `components/administrator/store_calendar.php` (`App\Store\StoreCalendar`, JS: `store-staff-availability.js`)

@@ -1,0 +1,1 @@
+<?php if (!(function_exists('is_remote_request') && is_remote_request())): ?><a class="btn btn-secondary" id="gcash-export" data-fragment="export-link" href="?<?= gcash_admin_e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>" aria-label="Export transaction report to CSV"><i class="bi bi-download" aria-hidden="true"></i>Export Report</a><?php endif; ?>

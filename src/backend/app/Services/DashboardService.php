@@ -383,4 +383,36 @@ class DashboardService
         return "(CASE WHEN {$alias}.selling_form = 'pack' AND {$alias}.pack_size IS NOT NULL"
             . " THEN {$alias}.quantity * {$alias}.pack_size ELSE {$alias}.quantity END)";
     }
+
+    public function getSalesSummary(): array
+    {
+        $total = $this->pdo->query('SELECT COALESCE(SUM(total_amount), 0) FROM sales');
+        $today = $this->pdo->query('SELECT COALESCE(SUM(total_amount), 0) FROM sales WHERE sale_date >= CURDATE() AND sale_date < DATE_ADD(CURDATE(), INTERVAL 1 DAY)');
+        return [
+            'total_sales' => (float)$total->fetchColumn(),
+            'total_sales_today' => (float)$today->fetchColumn(),
+        ];
+    }
+
+    public function getRecentTransactions(int $limit = 10): array
+    {
+        $limit = max(1, min(100, $limit));
+        return $this->pdo->query(
+            "SELECT 
+                s.sale_id,
+                s.sale_id AS reference_no,
+                CONCAT('#', s.sale_id) AS receipt_no,
+                s.total_amount,
+                s.payment_method,
+                s.sale_date,
+                u.display_name AS cashier_name,
+                COUNT(si.sale_item_id) AS item_count
+             FROM sales s
+             JOIN users u ON s.cashier_id = u.user_id
+             LEFT JOIN sale_items si ON s.sale_id = si.sale_id
+             GROUP BY s.sale_id
+             ORDER BY s.sale_date DESC
+             LIMIT {$limit}"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

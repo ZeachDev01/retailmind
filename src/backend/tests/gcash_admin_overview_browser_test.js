@@ -113,7 +113,7 @@ const csvRows = bytes => {
         await page.locator('#btn-apply-filters').click();
         await page.waitForURL(url => url.searchParams.get('period') === 'today');
         const completedCount = await page.locator('#admin-metric-total-tx').textContent();
-        await page.route('**/gcash_overview.php?**', route => route.abort('failed'));
+        await page.route('**/gcash_overview_fragments.php?**', route => route.abort('failed'));
         await page.locator('#btn-apply-filters').click();
         await page.locator('#gcash-filter-status').filter({hasText: 'unavailable for this selection'}).waitFor();
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), 'Unavailable', 'A failed shared selection cannot display zero or stale totals');
@@ -121,7 +121,7 @@ const csvRows = bytes => {
         assert.equal(await page.locator('#gcash-tab-transactions .gcash-badge').textContent(), 'Unavailable');
         assert.equal(await page.locator('#admin-nc-count').textContent(), 'Unavailable', 'Failed review refresh cannot retain a numeric pending count');
         assert.equal((await page.locator('#gcash-session-status').textContent()).trim(), 'Unavailable');
-        await page.unroute('**/gcash_overview.php?**');
+        await page.unroute('**/gcash_overview_fragments.php?**');
         await page.locator('#btn-apply-filters').click();
         await page.waitForFunction(expected => document.getElementById('admin-metric-total-tx').textContent === expected, completedCount);
         await page.goto(origin + '/components/administrator/gcash_overview.php');
@@ -180,7 +180,7 @@ const csvRows = bytes => {
         // A delayed filter response preserves a tab chosen while it was loading.
         let releaseFilter;
         const filterGate = new Promise(resolve => { releaseFilter = resolve; });
-        await page.route('**/gcash_overview.php?**', async route => {
+        await page.route('**/gcash_overview_fragments.php?**', async route => {
             const response = await route.fetch();
             await filterGate;
             await route.fulfill({response});
@@ -192,7 +192,7 @@ const csvRows = bytes => {
         releaseFilter();
         await page.locator('#gcash-filter-status').filter({hasText: '0 matching transactions'}).waitFor({state: 'attached'});
         assert.equal(new URL(page.url()).searchParams.get('tab'), 'overview');
-        await page.unroute('**/gcash_overview.php?**');
+        await page.unroute('**/gcash_overview_fragments.php?**');
         await page.getByRole('tab', {name: 'Transactions'}).click();
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
@@ -201,7 +201,7 @@ const csvRows = bytes => {
         const obsoleteGate = new Promise(resolve => { releaseObsolete = resolve; });
         let obsoleteFinished;
         const obsoleteDone = new Promise(resolve => { obsoleteFinished = resolve; });
-        await page.route('**/gcash_overview.php?**', async route => {
+        await page.route('**/gcash_overview_fragments.php?**', async route => {
             if (new URL(route.request().url()).searchParams.get('search') !== 'no-such-gcash-reference') return route.continue();
             const response = await route.fetch();
             await obsoleteGate;
@@ -216,7 +216,7 @@ const csvRows = bytes => {
         await page.locator('#gcash-filter-status').filter({hasText: /[1-9][0-9]* matching transactions/}).waitFor();
         releaseObsolete();
         await obsoleteDone;
-        await page.unroute('**/gcash_overview.php?**');
+        await page.unroute('**/gcash_overview_fragments.php?**');
         assert.ok(await page.locator('#gcash-admin-history-body tr[data-transaction]').count() > 0);
         assert.equal(await page.locator('#admin-metric-total-tx').textContent(), completedCount);
         await page.getByRole('button', {name: /^Cash-In \(/}).click();
@@ -451,13 +451,13 @@ const csvRows = bytes => {
         await resolve.waitFor();
         assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).isChecked(), false, 'Each Administrator review resets printing');
         await page.keyboard.press('Escape');
-        await page.route('**/gcash_overview.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
+        await page.route('**/gcash_overview_fragments.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
         await page.getByRole('tab', {name: 'Transactions'}).click();
         await search.fill('failed-load');
         await page.locator('#gcash-filter-status').filter({hasText: 'Unable to load transactions'}).waitFor();
         assert.equal(await page.locator('#gcash-tab-unresolved .gcash-badge').textContent(), 'Unavailable');
         assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Review data unavailable'));
-        await page.unroute('**/gcash_overview.php?**');
+        await page.unroute('**/gcash_overview_fragments.php?**');
         await search.fill('');
         await page.getByRole('status').filter({hasText: /matching transactions/}).waitFor();
         await page.getByRole('tab', {name: 'Overview'}).click();

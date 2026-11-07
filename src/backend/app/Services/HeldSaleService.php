@@ -12,6 +12,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/../Audit/AuditRecordCategory.php';
 require_once __DIR__ . '/../Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/BatchAllocationEngine.php';
 require_once __DIR__ . '/SalesWorkflowService.php';
 
 /**
@@ -670,8 +671,7 @@ class HeldSaleService
         foreach ($demandsByProduct as $productId => $info) {
             $costPrice = isset($info['product']['cost_price']) && $info['product']['cost_price'] !== null && $info['product']['cost_price'] !== ''
                 ? (float)$info['product']['cost_price'] : null;
-            $productPlans[$productId] = \SalesWorkflowService::planCombinedDemand(
-                $this->pdo,
+            $productPlans[$productId] = (new BatchAllocationEngine($this->pdo))->planCombinedDemand(
                 $productId,
                 (string)$info['product']['product_name'],
                 $info['pack'],

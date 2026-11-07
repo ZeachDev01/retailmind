@@ -142,12 +142,11 @@
         }
     } catch (_) {}
 
-    function refreshReviews(html) {
-        document.getElementById('gcash-outstanding-reviews').replaceWith(html.getElementById('gcash-outstanding-reviews').cloneNode(true));
-        for (const section of ['reconciliation', 'unresolved']) {
-            document.getElementById('tab-' + section).replaceChildren(...html.getElementById('tab-' + section).childNodes);
-            const badge = '#gcash-tab-' + section + ' .gcash-badge';
-            workspace.querySelector(badge).textContent = html.querySelector(badge).textContent;
+    function swapFragments(html) {
+        for (const incoming of html.querySelectorAll('[data-fragment]')) {
+            const name = incoming.dataset.fragment;
+            const live = workspace.querySelector(`[data-fragment="${name}"]`);
+            if (live) live.replaceWith(incoming.cloneNode(true));
         }
     }
 
@@ -163,7 +162,7 @@
             row.append(cell);
             body.replaceChildren(row);
         }
-        for (const section of ['reconciliation', 'unresolved']) workspace.querySelector('#gcash-tab-' + section + ' .gcash-badge').textContent = 'Unavailable';
+        for (const name of ['reconciliation-badge', 'unresolved-badge']) workspace.querySelector(`[data-fragment="${name}"]`).textContent = 'Unavailable';
         for (const alert of workspace.querySelectorAll('#gcash-outstanding-reviews [data-review-tab]')) {
             alert.textContent = 'Review data unavailable. Refresh to try again';
             alert.disabled = true;
@@ -201,13 +200,16 @@
     [startInput, endInput].forEach(input => input.addEventListener('change', () => { periodInput.value = 'custom'; }));
     let searchTimer;
     let filterRequest;
+    const fragmentsUrl = workspace.dataset.fragments;
     async function filterTransactions() {
         clearTimeout(searchTimer);
         filterRequest?.abort();
         const controller = new AbortController();
         filterRequest = controller;
-        const url = new URL(filterForm.action);
+        const url = new URL(fragmentsUrl, location.href);
         url.search = new URLSearchParams(new FormData(filterForm)).toString();
+        const pageUrl = new URL(filterForm.action, location.href);
+        pageUrl.search = url.search;
         const status = document.getElementById('gcash-filter-status');
         status.textContent = 'Loading selected report…';
         document.getElementById('gcash-completed-activity').setAttribute('aria-busy', 'true');
@@ -219,26 +221,16 @@
             if (controller.signal.aborted || filterRequest !== controller) return false;
             const error = html.querySelector('.gcash-filter-error');
             if (error) throw new Error(error.textContent.trim());
-            const body = html.getElementById('gcash-admin-history-body');
-            if (!body) throw new Error('Unable to load transactions. Reload the page and try again.');
-            document.getElementById('gcash-admin-history-body').replaceChildren(...body.childNodes);
-            refreshReviews(html);
-            workspace.querySelector('.gcash-pagination').replaceWith(html.querySelector('.gcash-pagination'));
-            for (const selector of ['#gcash-session-status', '#gcash-completed-activity', '[aria-labelledby="gcash-admin-balances-title"]']) {
-                workspace.querySelector(selector).replaceWith(html.querySelector(selector));
-            }
-            for (const button of workspace.querySelectorAll('[data-type]')) {
-                const incoming = html.querySelector(`[data-type="${button.dataset.type}"]`);
-                button.textContent = incoming.textContent;
-                button.setAttribute('aria-pressed', String(button.dataset.type === typeInput.value));
-            }
-            const badge = workspace.querySelector('#gcash-tab-transactions .gcash-badge');
-            badge.textContent = html.querySelector('#gcash-tab-transactions .gcash-badge').textContent;
-            document.getElementById('gcash-matching-record-count').textContent = badge.textContent;
-            url.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
-            history.replaceState(null, '', url);
-            document.getElementById('gcash-export').href = url + '&export=csv';
-            status.textContent = `${badge.textContent} matching transactions`;
+            if (!html.querySelector('[data-fragment="transactions-body"]')) throw new Error('Unable to load transactions. Reload the page and try again.');
+            const focusedType = document.activeElement?.closest?.('[data-type]')?.dataset.type;
+            swapFragments(html);
+            if (focusedType !== undefined) workspace.querySelector(`[data-type="${focusedType}"]`)?.focus({preventScroll: true});
+            const count = document.getElementById('gcash-matching-record-count').textContent;
+            pageUrl.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
+            history.replaceState(null, '', pageUrl);
+            const exportLink = document.getElementById('gcash-export');
+            if (exportLink) exportLink.href = pageUrl + '&export=csv';
+            status.textContent = `${count} matching transactions`;
             return true;
         } catch (error) {
             if (error.name !== 'AbortError' && filterRequest === controller) {
@@ -250,8 +242,8 @@
                 cell.setAttribute('role', 'alert');
                 row.append(cell);
                 document.getElementById('gcash-admin-history-body').replaceChildren(row);
-                workspace.querySelector('.gcash-pagination').replaceChildren();
-                workspace.querySelector('#gcash-tab-transactions .gcash-badge').textContent = 'Unavailable';
+                workspace.querySelector('[data-fragment="transactions-pagination"]').replaceChildren();
+                workspace.querySelector('[data-fragment="transactions-badge"]').textContent = 'Unavailable';
                 document.getElementById('gcash-matching-record-count').textContent = 'Unavailable';
                 document.getElementById('gcash-session-status').textContent = 'Unavailable';
                 document.getElementById('gcash-session-status').classList.remove('gcash-status-completed');
@@ -277,15 +269,19 @@
         filterRequest?.abort();
         searchTimer = setTimeout(filterTransactions, 200);
     });
-    workspace.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
+    workspace.addEventListener('click', event => {
+        const button = event.target.closest('[data-type]');
+        if (!button) return;
         typeInput.value = button.dataset.type;
         filterTransactions();
-    }));
-    document.getElementById('gcash-export')?.addEventListener('click', event => {
+    });
+    workspace.addEventListener('click', event => {
+        const link = event.target.closest('#gcash-export');
+        if (!link) return;
         const url = new URL(filterForm.action);
         url.search = new URLSearchParams(new FormData(filterForm)).toString();
         url.searchParams.set('export', 'csv');
-        event.currentTarget.href = url;
+        link.href = url;
     });
     document.getElementById('gcash-record')?.addEventListener('click', () => document.getElementById('gcash-record-dialog').showModal());
     workspace.querySelectorAll('dialog').forEach(dialog => {

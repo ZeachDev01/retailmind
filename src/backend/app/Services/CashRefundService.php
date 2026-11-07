@@ -26,6 +26,7 @@ require_once __DIR__ . '/FiscalPeriodGuardService.php';
 require_once __DIR__ . '/../Receipts/ReceiptEngine.php';
 require_once __DIR__ . '/RefundExceptionService.php';
 require_once __DIR__ . '/SalesWorkflowService.php';
+require_once __DIR__ . '/BatchInventoryLedger.php';
 
 /**
  * Cash Refunds (ticket #92).
@@ -129,6 +130,7 @@ class CashRefundService
 
     private RoleCapabilityPolicy $policy;
     private \FiscalPeriodGuardService $fiscalPeriodGuard;
+    private BatchInventoryLedger $ledger;
 
     public function __construct(
         private PDO $pdo,
@@ -137,6 +139,7 @@ class CashRefundService
     ) {
         $this->policy = $policy ?? new RoleCapabilityPolicy();
         $this->fiscalPeriodGuard = new \FiscalPeriodGuardService($pdo);
+        $this->ledger = new BatchInventoryLedger($pdo, $this->fiscalPeriodGuard);
     }
 
     /**
@@ -764,36 +767,7 @@ class CashRefundService
      */
     private function restockReturnedUnit(array $line, int $cashierId): void
     {
-        $sellingForm = $line['selling_form'] ?? 'piece';
-        $packSize = isset($line['pack_size']) && (int)$line['pack_size'] > 0 ? (int)$line['pack_size'] : 1;
-        $baseUnitQty = $sellingForm === 'pack' ? (int)$line['quantity'] * $packSize : (int)$line['quantity'];
-        $alreadyRefundedBaseUnits = $sellingForm === 'pack' ? (int)$line['already_refunded'] * $packSize : (int)$line['already_refunded'];
-
-        $this->restoreSaleItemBatches(
-            (int)$line['sale_item_id'],
-            $baseUnitQty,
-            $alreadyRefundedBaseUnits,
-            $sellingForm,
-            $packSize
-        );
-
-        $restock = $this->pdo->prepare(
-            'UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?'
-        );
-        $restock->execute([$baseUnitQty, (int)$line['product_id']]);
-        if ($restock->rowCount() === 0) {
-            throw new DomainException(
-                "Product #{$line['product_id']} has no inventory record, so the return cannot be completed."
-            );
-        }
-
-        $this->pdo->prepare(
-            'UPDATE products SET quantity_sold = GREATEST(quantity_sold - ?, 0) WHERE product_id = ?'
-        )->execute([$baseUnitQty, (int)$line['product_id']]);
-
-        $this->pdo->prepare(
-            "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'return', ?)"
-        )->execute([(int)$line['product_id'], $baseUnitQty, $cashierId]);
+        $this->ledger->restockReturnedLine($line, $cashierId);
     }
 
     /**

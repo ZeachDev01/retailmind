@@ -2,19 +2,17 @@
 // admin/dashboard.php
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../app/Services/SalesService.php';
 require_once __DIR__ . '/../app/Services/DashboardService.php';
 require_any_capability([
     \App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE,
     \App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS,
 ]);
 
-$salesService = new SalesService($pdo);
 $dashboardService = new DashboardService($pdo);
 
 $adminMetrics = $dashboardService->getAdminMetrics((string)current_role());
-$salesSummary = $salesService->getSalesSummary();
-$recentTransactions = $salesService->getRecentTransactions();
+$salesSummary = $dashboardService->getSalesSummary();
+$recentTransactions = $dashboardService->getRecentTransactions();
 $recentCriticalActions = $dashboardService->getRecentCriticalActions((string)current_role());
 $periodTotal = max(1, $adminMetrics['open_periods'] + $adminMetrics['closed_periods']);
 $openPeriodWidth = min(100, round(($adminMetrics['open_periods'] / $periodTotal) * 100));

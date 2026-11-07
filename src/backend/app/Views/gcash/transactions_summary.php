@@ -1,0 +1,1 @@
+<span class="gcash-badge" data-fragment="transactions-summary">Matching records: <strong id="gcash-matching-record-count"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></strong></span>

@@ -6,10 +6,13 @@ namespace App\Services;
 use PDO;
 use RuntimeException;
 use InvalidArgumentException;
+use DomainException;
 use FiscalPeriodGuardService;
+use StockConflictException;
 use Throwable;
 
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/StockConflictException.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 
 /**
@@ -815,6 +818,307 @@ class BatchInventoryLedger
         return ['movement_id' => (int)$this->pdo->lastInsertId(), 'remaining_batch_qty' => $newRemainingQty,
             'remaining_batch_packs' => $newBatchSealed, 'remaining_batch_loose' => $newBatchLoose,
             'new_on_hand' => $currentOnHand - $quantity];
+    }
+
+    /**
+     * Executes automatic pack openings at checkout.
+     */
+    public function applyPackOpenings(array $productPlans, int $saleId, int $userId): void
+    {
+        $hasBatchForms = $this->hasColumn('product_batches', 'sealed_quantity') && $this->hasColumn('product_batches', 'loose_quantity');
+        $hasActivityLog = $this->hasTable('activity_log');
+
+        foreach ($productPlans as $productId => $plan) {
+            if (empty($plan['pack_openings'])) {
+                continue;
+            }
+
+            foreach ($plan['pack_openings'] as $opening) {
+                if ($hasBatchForms) {
+                    $stmt = $this->pdo->prepare(
+                        "UPDATE product_batches
+                         SET sealed_quantity = sealed_quantity - ?,
+                             loose_quantity = loose_quantity + ?
+                         WHERE batch_id = ? AND sealed_quantity >= ?"
+                    );
+                    $stmt->execute([
+                        $opening['packs'],
+                        $opening['pieces_opened'],
+                        $opening['batch_id'],
+                        $opening['packs'],
+                    ]);
+
+                    if ($stmt->rowCount() === 0) {
+                        $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+                        $productStmt->execute([$productId]);
+                        $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+                        throw new StockConflictException([[
+                            'product_id' => (int)$productId,
+                            'product_name' => (string)$productName,
+                            'selling_form' => 'pack',
+                            'requested_qty' => (int)$opening['packs'],
+                            'available_stock' => 0,
+                        ]]);
+                    }
+                }
+
+                if ($hasActivityLog) {
+                    $this->pdo->prepare(
+                        "INSERT INTO activity_log (user_id, action, category, module, record_id, metadata)
+                         VALUES (?, 'Automatic pack opening at checkout', 'store_operation', 'sales', ?, ?)"
+                    )->execute([
+                        $userId,
+                        $saleId,
+                        json_encode([
+                            'sale_id' => $saleId,
+                            'cashier_id' => $userId,
+                            'product_id' => (int)$productId,
+                            'batch_id' => (int)$opening['batch_id'],
+                            'packs_opened' => (int)$opening['packs'],
+                            'pieces_opened' => (int)$opening['pieces_opened'],
+                            'pieces_consumed' => (int)$opening['pieces_consumed'],
+                            'leftover_loose' => (int)$opening['leftover_loose'],
+                        ], JSON_THROW_ON_ERROR),
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
+     * Depletes batch allocations, records sale item batch link, and decrements inventory for a sale item line.
+     */
+    public function depleteSaleItem(int $saleId, int $saleItemId, array $item, int $userId): void
+    {
+        $productId = (int)$item['product_id'];
+        $sellingForm = $item['selling_form'] ?? 'piece';
+        $packSize = isset($item['pack_size']) && (int)$item['pack_size'] > 0 ? (int)$item['pack_size'] : null;
+        $baseUnitQty = (int)($item['base_unit_quantity'] ?? $item['quantity']);
+
+        $hasBatchForms = $this->hasColumn('product_batches', 'sealed_quantity') && $this->hasColumn('product_batches', 'loose_quantity');
+
+        if (!empty($item['batch_plan'])) {
+            foreach ($item['batch_plan'] as $batchAllocation) {
+                $qty = (int)$batchAllocation['quantity'];
+                $batchId = (int)$batchAllocation['batch_id'];
+
+                if ($hasBatchForms && in_array($sellingForm, ['pack', 'piece'], true)) {
+                    $isPack = $sellingForm === 'pack';
+                    $formCol = $isPack ? 'sealed_quantity' : 'loose_quantity';
+                    $effectivePackSize = ($packSize !== null && $packSize > 0) ? $packSize : 1;
+                    $formDeduct = $isPack ? (int)ceil($qty / $effectivePackSize) : $qty;
+
+                    $batchUpdate = $this->pdo->prepare(
+                        "UPDATE product_batches
+                         SET {$formCol} = {$formCol} - ?,
+                             remaining_quantity = remaining_quantity - ?
+                         WHERE batch_id = ? AND {$formCol} >= ? AND remaining_quantity >= ?"
+                    );
+                    $batchUpdate->execute([$formDeduct, $qty, $batchId, $formDeduct, $qty]);
+                } else {
+                    $batchUpdate = $this->pdo->prepare(
+                        "UPDATE product_batches
+                         SET remaining_quantity = remaining_quantity - ?
+                         WHERE batch_id = ? AND remaining_quantity >= ?"
+                    );
+                    $batchUpdate->execute([$qty, $batchId, $qty]);
+                }
+
+                if ($batchUpdate->rowCount() === 0) {
+                    $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+                    $productStmt->execute([$productId]);
+                    $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+                    throw new StockConflictException([[
+                        'product_id' => $productId,
+                        'product_name' => (string)$productName,
+                        'selling_form' => $sellingForm,
+                        'requested_qty' => $qty,
+                        'available_stock' => 0,
+                    ]]);
+                }
+
+                $this->recordSaleItemBatch($saleItemId, $batchAllocation);
+            }
+        }
+
+        $updateStmt = $this->pdo->prepare(
+            'UPDATE inventory SET quantity_on_hand = quantity_on_hand - ? WHERE product_id = ? AND quantity_on_hand >= ?'
+        );
+        $updateStmt->execute([$baseUnitQty, $productId, $baseUnitQty]);
+        if ($updateStmt->rowCount() === 0) {
+            $productStmt = $this->pdo->prepare('SELECT product_name FROM products WHERE product_id = ?');
+            $productStmt->execute([$productId]);
+            $productName = $productStmt->fetchColumn() ?: "product #{$productId}";
+            throw new StockConflictException([[
+                'product_id' => $productId,
+                'product_name' => (string)$productName,
+                'selling_form' => $sellingForm,
+                'requested_qty' => (int)$item['quantity'],
+                'available_stock' => 0,
+            ]]);
+        }
+
+        $this->pdo->prepare(
+            'UPDATE products SET quantity_sold = quantity_sold + ? WHERE product_id = ?'
+        )->execute([$baseUnitQty, $productId]);
+
+        $this->pdo->prepare(
+            "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'sale', ?)"
+        )->execute([$productId, -$baseUnitQty, $userId]);
+    }
+
+    /**
+     * Records an allocation row in sale_item_batches.
+     */
+    public function recordSaleItemBatch(int $saleItemId, array $batchAllocation): void
+    {
+        $columns = ['sale_item_id', 'batch_id', 'quantity'];
+        $placeholders = ['?', '?', '?'];
+        $values = [$saleItemId, (int)$batchAllocation['batch_id'], (int)$batchAllocation['quantity']];
+
+        $unitCost = $batchAllocation['unit_cost'] ?? null;
+        $costStatus = $batchAllocation['cost_status'] ?? 'missing';
+        $costSource = $batchAllocation['cost_source'] ?? null;
+        $costProvenance = $batchAllocation['cost_provenance'] ?? ($costSource ?? $costStatus);
+
+        if ($this->hasColumn('sale_item_batches', 'unit_cost')) {
+            $columns[] = 'unit_cost';
+            $placeholders[] = '?';
+            $values[] = $unitCost;
+        }
+        if ($this->hasColumn('sale_item_batches', 'cost_price')) {
+            $columns[] = 'cost_price';
+            $placeholders[] = '?';
+            $values[] = $unitCost;
+        }
+        if ($this->hasColumn('sale_item_batches', 'cost_status')) {
+            $columns[] = 'cost_status';
+            $placeholders[] = '?';
+            $values[] = $costStatus;
+        }
+        if ($this->hasColumn('sale_item_batches', 'cost_source')) {
+            $columns[] = 'cost_source';
+            $placeholders[] = '?';
+            $values[] = $costSource;
+        }
+        if ($this->hasColumn('sale_item_batches', 'cost_provenance')) {
+            $columns[] = 'cost_provenance';
+            $placeholders[] = '?';
+            $values[] = $costProvenance;
+        }
+
+        $sql = 'INSERT INTO sale_item_batches (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+        $this->pdo->prepare($sql)->execute($values);
+    }
+
+    /**
+     * Restocks returned items to their original batches and inventory.
+     */
+    public function restockReturnedLine(array $line, int $cashierId): void
+    {
+        $sellingForm = $line['selling_form'] ?? 'piece';
+        $packSize = isset($line['pack_size']) && (int)$line['pack_size'] > 0 ? (int)$line['pack_size'] : 1;
+        $baseUnitQty = $sellingForm === 'pack' ? (int)$line['quantity'] * $packSize : (int)$line['quantity'];
+        $alreadyRefundedBaseUnits = $sellingForm === 'pack' ? (int)$line['already_refunded'] * $packSize : (int)$line['already_refunded'];
+
+        $this->restoreSaleItemBatches(
+            (int)$line['sale_item_id'],
+            $baseUnitQty,
+            $alreadyRefundedBaseUnits,
+            $sellingForm,
+            $packSize
+        );
+
+        $restock = $this->pdo->prepare(
+            'UPDATE inventory SET quantity_on_hand = quantity_on_hand + ? WHERE product_id = ?'
+        );
+        $restock->execute([$baseUnitQty, (int)$line['product_id']]);
+        if ($restock->rowCount() === 0) {
+            throw new DomainException(
+                "Product #{$line['product_id']} has no inventory record, so the return cannot be completed."
+            );
+        }
+
+        $this->pdo->prepare(
+            'UPDATE products SET quantity_sold = GREATEST(quantity_sold - ?, 0) WHERE product_id = ?'
+        )->execute([$baseUnitQty, (int)$line['product_id']]);
+
+        $this->pdo->prepare(
+            "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'return', ?)"
+        )->execute([(int)$line['product_id'], $baseUnitQty, $cashierId]);
+    }
+
+    /**
+     * Reverses batch deductions in FIFO order against original sale_item_batches.
+     */
+    public function restoreSaleItemBatches(int $saleItemId, int $quantity, int $alreadyRefunded, string $sellingForm = 'piece', int $packSize = 1): void
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT batch_id, quantity
+             FROM sale_item_batches
+             WHERE sale_item_id = ?
+             ORDER BY sale_item_batch_id ASC' . $this->forUpdate()
+        );
+        $stmt->execute([$saleItemId]);
+        $allocations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $hasBatchForms = $this->hasColumn('product_batches', 'sealed_quantity') && $this->hasColumn('product_batches', 'loose_quantity');
+
+        $remainingToSkip = $alreadyRefunded;
+        $remainingToRestore = $quantity;
+
+        foreach ($allocations as $allocation) {
+            if ($remainingToRestore <= 0) {
+                break;
+            }
+
+            $allocated = (int)$allocation['quantity'];
+            if ($remainingToSkip >= $allocated) {
+                $remainingToSkip -= $allocated;
+                continue;
+            }
+
+            $available = $allocated - $remainingToSkip;
+            $remainingToSkip = 0;
+            $restore = min($remainingToRestore, $available);
+
+            if ($hasBatchForms) {
+                if ($sellingForm === 'pack') {
+                    if ($restore % $packSize !== 0) {
+                        throw new DomainException('Sales Pack batch allocation does not match whole pack contents.');
+                    }
+                    $packsRestored = intdiv($restore, $packSize);
+                    $update = $this->pdo->prepare(
+                        'UPDATE product_batches
+                         SET sealed_quantity = sealed_quantity + ?,
+                             remaining_quantity = remaining_quantity + ?
+                         WHERE batch_id = ?'
+                    );
+                    $update->execute([$packsRestored, $restore, (int)$allocation['batch_id']]);
+                } else {
+                    $update = $this->pdo->prepare(
+                        'UPDATE product_batches
+                         SET loose_quantity = loose_quantity + ?,
+                             remaining_quantity = remaining_quantity + ?
+                         WHERE batch_id = ?'
+                    );
+                    $update->execute([$restore, $restore, (int)$allocation['batch_id']]);
+                }
+            } else {
+                $update = $this->pdo->prepare(
+                    'UPDATE product_batches
+                     SET remaining_quantity = remaining_quantity + ?
+                     WHERE batch_id = ?'
+                );
+                $update->execute([$restore, (int)$allocation['batch_id']]);
+            }
+
+            $remainingToRestore -= $restore;
+        }
+
+        if ($remainingToRestore > 0) {
+            throw new DomainException('Returned quantity exceeds recorded sale item batch allocations.');
+        }
     }
 
     private function requireTransaction(): void
