@@ -15,10 +15,17 @@ use Throwable;
 class DemandForecastService
 {
     private PDO $pdo;
+    private CandidateEvaluationService $evalService;
+    private ReplenishmentQueueService $queueService;
+    /** @var callable */
+    private $canRetry;
 
-    public function __construct(PDO $pdo)
+    public function __construct(PDO $pdo, ?CandidateEvaluationService $evalService = null, ?ReplenishmentQueueService $queueService = null, ?callable $canRetry = null)
     {
         $this->pdo = $pdo;
+        $this->evalService = $evalService ?? new CandidateEvaluationService($this->pdo);
+        $this->queueService = $queueService ?? new ReplenishmentQueueService($this->pdo);
+        $this->canRetry = $canRetry ?? [ForecastingSchedulerService::class, 'canAutomaticallyRetry'];
     }
 
     /**
@@ -288,9 +295,8 @@ class DemandForecastService
         $isObservation = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservation = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $isObservation = $this->evalService->isObservationMode();
+            $isSuspended = $this->evalService->isRecommendationsSuspended();
         } catch (Throwable $e) {}
 
         if ($isObservation || $isSuspended) {
@@ -348,7 +354,7 @@ class DemandForecastService
                 }
             }
 
-            foreach ((new ReplenishmentQueueService($this->pdo))->getQueue($jid, $asOfDate) as $product) {
+            foreach ($this->queueService->getQueue($jid, $asOfDate) as $product) {
                 if (!empty($product['complete_forecast'])
                     && $product['forecast_origin'] === $acceptedOrigin
                     && $product['model_version'] === $approvedVersion
@@ -378,8 +384,7 @@ class DemandForecastService
         $usableJobId = $this->getLatestUsableJobId($asOfDate);
         $effectiveJobId = $jobId ?? $usableJobId ?? $this->getLatestSuccessfulJobId();
 
-        $queueService = new ReplenishmentQueueService($this->pdo);
-        $products = $queueService->getRecommendations($effectiveJobId, $asOfDate);
+        $products = $this->queueService->getRecommendations($effectiveJobId, $asOfDate);
 
         $scopeCount = count($products);
         $forecastBackedCount = 0;
@@ -399,9 +404,8 @@ class DemandForecastService
         $isObservation = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservation = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $isObservation = $this->evalService->isObservationMode();
+            $isSuspended = $this->evalService->isRecommendationsSuspended();
             $approvedVersion = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
         } catch (Throwable $e) {}
 
@@ -445,7 +449,7 @@ class DemandForecastService
         if ($scopeCount === 0) {
             $summaryText = 'No active products available in catalog.';
         } elseif ($latestAttemptStatus === 'failed') {
-            $recoveryText = ForecastingSchedulerService::canAutomaticallyRetry($latestJob)
+            $recoveryText = ($this->canRetry)($latestJob)
                 ? 'Automatic retry scheduled; no action needed.'
                 : 'Automatic recovery is blocked or exhausted. Super Administrator: inspect the failure before retrying.';
             if ($forecastBackedCount > 0) {
@@ -604,7 +608,7 @@ class DemandForecastService
             $attempts = (int)($latestJob['attempts'] ?? 1);
             $opMsg = (string)($latestJob['operator_message'] ?? '');
             $diagRef = (string)($latestJob['diagnostic_reference'] ?? '');
-            $isExhausted = !ForecastingSchedulerService::canAutomaticallyRetry($latestJob);
+            $isExhausted = !($this->canRetry)($latestJob);
             $isBlocked = str_starts_with($diagRef, 'BLOCKED:');
             $guidanceEffect = sprintf('Forecast guidance remains available for %d of %d Products; %d use stock rules.',
                 (int)($coverage['forecast_backed_count'] ?? 0), (int)($coverage['scope_count'] ?? 0),
@@ -734,8 +738,7 @@ class DemandForecastService
                 // Check if candidate passed evaluation gates
                 $isQualified = false;
                 try {
-                    $evalService = new CandidateEvaluationService($this->pdo);
-                    $quality = $evalService->evaluateCandidateQuality((string)$candidateVersion);
+                    $quality = $this->evalService->evaluateCandidateQuality((string)$candidateVersion);
                     $isQualified = !empty($quality['passed']);
                 } catch (Throwable) {}
 
@@ -789,8 +792,7 @@ class DemandForecastService
             $obsReq = 28;
             $obsModel = (string)$candidateVersion;
             try {
-                $evalService = new CandidateEvaluationService($this->pdo);
-                $prog = $evalService->getCandidateObservationProgress($obsModel);
+                $prog = $this->evalService->getCandidateObservationProgress($obsModel);
                 $obsDays = (int)($prog['usable_observed_days'] ?? 0);
                 $obsReq = (int)($prog['required_observed_days'] ?? 28);
             } catch (Throwable) {}
@@ -1054,8 +1056,7 @@ class DemandForecastService
         }
 
         if (!$modelVersion) {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            return $evalService->getPredictionPerformanceEvidence($this->pdo, 'none', $asOfDate, 'unavailable');
+            return $this->evalService->getPredictionPerformanceEvidence($this->pdo, 'none', $asOfDate, 'unavailable');
         }
 
         // Determine model association
@@ -1076,7 +1077,6 @@ class DemandForecastService
             }
         }
 
-        $evalService = new CandidateEvaluationService($this->pdo);
-        return $evalService->getPredictionPerformanceEvidence($this->pdo, $modelVersion, $asOfDate, $modelAssociation);
+        return $this->evalService->getPredictionPerformanceEvidence($this->pdo, $modelVersion, $asOfDate, $modelAssociation);
     }
 }

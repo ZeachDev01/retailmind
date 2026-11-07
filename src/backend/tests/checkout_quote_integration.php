@@ -100,7 +100,7 @@ try {
     $assert($quote['total'] === 80.0, 'Explicit selection above 10% needs no approval');
     $saved = $save($quote, $selected);
     $assert($saved['discount_amount'] === 20.0, 'Selected promotion persists');
-    $receiptService = new App\Receipts\ReceiptDetailsService($pdo);
+    $receiptService = new App\Receipts\ReceiptEngine($pdo);
     $pdo->exec("UPDATE promotions SET promotion_name='Changed after sale', discount_value=30 WHERE promotion_id=1");
     $receipt = $receiptService->fetchSale((int)$saved['sale_id']);
     $assert($receipt['promotion_name'] === 'Fixture promotion' && (float)$receipt['discount_amount'] === 20.0

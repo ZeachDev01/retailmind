@@ -1504,7 +1504,7 @@ final class GCashTransactionService
             );
 
             if ($outcome === 'Completed') {
-                (new \App\Receipts\GCashReceiptService($this->pdo()))->preserve($id);
+                (new \App\Receipts\ReceiptEngine($this->pdo()))->preserveGCash($id);
             }
             $this->pdo()->commit();
             return $id;
@@ -1695,7 +1695,7 @@ final class GCashTransactionService
             );
 
             if ($outcome === 'Completed') {
-                (new \App\Receipts\GCashReceiptService($this->pdo()))->preserve($id);
+                (new \App\Receipts\ReceiptEngine($this->pdo()))->preserveGCash($id);
             }
             $this->pdo()->commit();
             return $id;
@@ -2458,7 +2458,7 @@ final class GCashTransactionService
                     AuditRecordCategory::STORE_OPERATION
                 );
 
-                (new \App\Receipts\GCashReceiptService($this->pdo()))->preserve($transactionId);
+                (new \App\Receipts\ReceiptEngine($this->pdo()))->preserveGCash($transactionId);
 
                 $this->pdo()->commit();
                 \App\Dashboard\StoreOperationsDashboardWorkspace::invalidateCache();

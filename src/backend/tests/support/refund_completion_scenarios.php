@@ -18,7 +18,7 @@ foreach ([80 => 30, 58 => 40] as $width => $saleId) {
     $pdo->exec("INSERT INTO sale_items(sale_item_id,sale_id,product_id,quantity,unit_price,subtotal)
         VALUES({$failedSaleId},{$failedSaleId},30,1,25,25)");
     $pdo->beginTransaction();
-    $details = new \App\Receipts\ReceiptDetailsService($pdo);
+    $details = new \App\Receipts\ReceiptEngine($pdo);
     $details->preserveSale($saleId);
     $details->preserveSale($partialSaleId);
     $details->preserveSale($failedSaleId);

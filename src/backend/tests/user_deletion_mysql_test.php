@@ -18,7 +18,7 @@ try {
     $fixture('create');
     $config = require __DIR__ . '/../config/database.php';
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $service = new App\Services\UserLifecycleService($pdo, new App\Authorization\RoleCapabilityPolicy(), new App\Store\StoreScope($pdo));
+    $service = new App\Services\UserLifecycleService($pdo, new App\Authorization\RoleCapabilityPolicy(), null);
     $nextId = 100;
     $seed = static function (string $status = 'active', int $roleId = 4) use ($pdo, &$nextId): int {
         $id = $nextId++;

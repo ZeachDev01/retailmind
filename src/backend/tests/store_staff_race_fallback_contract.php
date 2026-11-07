@@ -14,7 +14,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -78,8 +77,7 @@ try {
         timestamp TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
-    (new StoreScope($pdo))->migrate();
-    $storeId = (new StoreScope($pdo))->id();
+    $storeId = 1;
 
     $roleId = static function (string $role) use ($pdo): int {
         $stmt = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ?');

@@ -11,7 +11,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
-require_once __DIR__ . '/../app/Authorization/AuthorizationContext.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
@@ -22,7 +21,6 @@ require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Services/MlJobService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Authorization\AuthorizationContext;
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ModelPromotionService;
@@ -206,8 +204,8 @@ register_shutdown_function(function() use ($testModelsDir) {
 echo "--- Section 1: Role Capability Boundaries (ADR-0022) ---\n";
 // =========================================================================
 $policy = new RoleCapabilityPolicy();
-$localCtx = AuthorizationContext::standard(false);
-$remoteCtx = AuthorizationContext::standard(true);
+$localCtx = false;
+$remoteCtx = true;
 
 // 1.1 Local Administrator permissions
 assert_true($policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $localCtx), 'Local Administrator has APPROVE_MODELS locally');

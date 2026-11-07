@@ -1013,23 +1013,23 @@ try {
         'receipt failure leaves no audit for a failed refund');
     $pdo->exec('DROP TRIGGER fail_refund_receipt');
 
-    $receiptService = new \App\Receipts\RefundReceiptService($pdo);
+    $receiptService = new \App\Receipts\ReceiptEngine($pdo);
     // A multi-item partial refund remains available without issuing another payout.
     $reprintSale = $sales->checkout([['product_id' => 1, 'qty' => 2], ['product_id' => 2, 'qty' => 2]],
         $casey, 'cashier', 'cash', ['cash_received' => 200]);
     $reprintSaleId = (int)$reprintSale['sale_id'];
     $reprintId = $refunds->refund($casey, 'cashier', $reprintSaleId,
         $returnOf($lineIdOf($reprintSaleId, 1), 1) + $returnOf($lineIdOf($reprintSaleId, 2), 1), 'customer_return');
-    $reprintSaved = $receiptService->forCashier($reprintId, $casey, 1);
+    $reprintSaved = $receiptService->fetchRefundForCashier($reprintId, $casey, 1);
     $assert(count($reprintSaved['items']) === 2 && $refunds->refundableAmount($reprintSaleId) > 0,
         'reprint fixture is a saved multi-item partial refund');
     $saleReceiptBeforeReprint = $pdo->query('SELECT * FROM sale_receipt_details')->fetchAll(PDO::FETCH_ASSOC);
     $refundsBeforeReprint = $refundCount($pdo);
-    $saved = $receiptService->forCashier($otherRefundId, $casey, 1);
+    $saved = $receiptService->fetchRefundForCashier($otherRefundId, $casey, 1);
     $assert($saved !== null && $saved['refund']['reason'] === 'Other', 'successful refund exposes a customer receipt');
-    $assert($receiptService->forCashier($otherRefundId, $dana, 1) === null, 'another Cashier cannot fetch a receipt');
-    $assert($receiptService->forCashier($otherRefundId, $casey, 2) === null, 'another Store cannot fetch a receipt');
-    $assert($receiptService->forCashier(999999, $casey, 1) === null, 'missing refund does not expose receipt data');
+    $assert($receiptService->fetchRefundForCashier($otherRefundId, $dana, 1) === null, 'another Cashier cannot fetch a receipt');
+    $assert($receiptService->fetchRefundForCashier($otherRefundId, $casey, 2) === null, 'another Store cannot fetch a receipt');
+    $assert($receiptService->fetchRefundForCashier(999999, $casey, 1) === null, 'missing refund does not expose receipt data');
     $customerJson = json_encode($saved);
     foreach (['note', 'disposition', 'restockable', 'damaged', 'Customer says the bottle', 'shift_id', 'cashier_id', 'register_id'] as $private) {
         $assert(!str_contains($customerJson, $private), 'customer snapshot excludes ' . $private);
@@ -1039,7 +1039,7 @@ try {
     $pdo->exec("UPDATE products SET product_name = 'Edited product', sku = 'EDITED-SKU'");
     $pdo->exec("UPDATE registers SET name = 'Edited Register ' || register_id");
     $pdo->exec("UPDATE users SET full_name = 'Edited Cashier'");
-    $assert($receiptService->forCashier($otherRefundId, $casey, 1) === $saved,
+    $assert($receiptService->fetchRefundForCashier($otherRefundId, $casey, 1) === $saved,
         'later Store, footer, product, Register, and Cashier edits cannot rewrite the receipt');
     foreach ([58, 80, 123] as $width) {
         ob_start();
@@ -1238,7 +1238,7 @@ try {
             && ($packAudit['lines'][0]['base_unit_quantity'] ?? null) === 6,
         'Protected Audit Record captures selling_form, pack_size, and base_unit_quantity'
     );
-    $packReceipt = $receiptService->forCashier($packRefund1, $casey, 1);
+    $packReceipt = $receiptService->fetchRefundForCashier($packRefund1, $casey, 1);
     ob_start();
     \App\Receipts\ReceiptEngine::renderRefund($packReceipt, 80);
     $packReceiptHtml = ob_get_clean();

@@ -16,7 +16,7 @@ set_exception_handler(static function (Throwable $exception): void {
 });
 
 use App\Core\Database;
-use App\Receipts\ReceiptDetailsService;
+use App\Receipts\ReceiptEngine;
 
 $config = require __DIR__ . '/../config/database.php';
 $server = new PDO(
@@ -74,7 +74,7 @@ try {
     ");
 
     $pdo->beginTransaction();
-    (new ReceiptDetailsService($pdo))->preserveSale(6);
+    (new ReceiptEngine($pdo))->preserveSale(6);
     $pdo->commit();
 
     $bootstrapPath = var_export(realpath(__DIR__ . '/../bootstrap/app.php'), true);

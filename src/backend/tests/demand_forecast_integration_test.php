@@ -86,7 +86,7 @@ try {
     // Slice 1: Transactional Persistence & Rollback of Partial Writes
     // -------------------------------------------------------------
     $pdo = createTestDatabase();
-    $service = new DemandForecastService($pdo);
+    $service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 
     $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at) VALUES (10, 'forecast_generation', 'running', '2026-10-09 00:00:00')");
 

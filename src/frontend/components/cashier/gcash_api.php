@@ -61,10 +61,10 @@ try {
         $cashierId = (int)$_SESSION['user_id'];
         if (($input['action'] ?? '') === 'record_cash_in') {
             $id = $service->recordCashIn($cashierId, $input);
-            $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\GCashReceiptService($pdo))->fetch($id, $cashierId, 'cashier') ? $id : null];
+            $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\ReceiptEngine($pdo))->fetchGCash($id, $cashierId, 'cashier') ? $id : null];
         } elseif (($input['action'] ?? '') === 'record_cash_out') {
             $id = $service->recordCashOut($cashierId, $input);
-            $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\GCashReceiptService($pdo))->fetch($id, $cashierId, 'cashier') ? $id : null];
+            $result = ['id' => $id, 'transaction_id' => $id, 'receipt_id' => (new \App\Receipts\ReceiptEngine($pdo))->fetchGCash($id, $cashierId, 'cashier') ? $id : null];
         } elseif (($input['action'] ?? '') === 'accept_exchange') {
             $txId = filter_var($input['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if (!$txId || ($input['accepted'] ?? false) !== true) throw new DomainException('Choose and explicitly accept this unfinished exchange.');

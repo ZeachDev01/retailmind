@@ -16,11 +16,10 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
 require_once __DIR__ . '/../app/Services/ReportAccessService.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/../app/Receipts/ReceiptTableService.php';
 
 use App\Authorization\RoleCapabilityPolicy;
-use App\Receipts\ReceiptDetailsService;
+use App\Receipts\ReceiptEngine;
 use App\Receipts\ReceiptTableService;
 use App\Services\ReportAccessService;
 
@@ -192,7 +191,7 @@ $pdo->exec("CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_v
 $pdo->exec("INSERT INTO store_settings VALUES ('store_name', 'RetailMind'), ('store_address', '123 Test St'), ('currency_symbol', '₱')");
 
 // Inventory Manager receipt lookup
-$receiptDetails = new ReceiptDetailsService($pdo);
+$receiptDetails = new ReceiptEngine($pdo);
 $sale = $receiptDetails->fetchSale(1, 1);
 $assert($sale !== null && (int)$sale['sale_id'] === 1, 'Inventory Manager can fetch receipt details for inventory work');
 

@@ -9,7 +9,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../config/db.php';
 
 use App\Receipts\ReceiptTableService;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -23,7 +22,7 @@ try {
     $suffix = bin2hex(random_bytes(4));
     $cashierRoleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name = 'cashier' LIMIT 1")->fetchColumn();
 
-    $storeId = (new StoreScope($pdo))->migrate();
+    $storeId = 1;
 
     $userStatement = $pdo->prepare(
         "INSERT INTO users (full_name, username, email, password_hash, role_id, status, must_change_password, branch_id)

@@ -11,7 +11,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 use App\Services\RecoveryAccountService;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -104,7 +103,6 @@ try {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
-    (new StoreScope($pdo))->migrate();
 
     $roleId = static function (string $role) use ($pdo): int {
         $stmt = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ?');

@@ -124,7 +124,7 @@ class InventoryService
             return store_product_scope('p');
         }
 
-        return (new App\Store\StoreScope($this->pdo))->productScope('p');
+        return ['', []];
     }
 
     public function getProductsWithBatchSummaries(?string $todayDate = null): array

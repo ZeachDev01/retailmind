@@ -6,7 +6,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\UserAccountNotifier;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -65,8 +64,7 @@ try {
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
     $pdo->exec('CREATE TABLE user_roles (user_id INTEGER NOT NULL, role_id INTEGER NOT NULL, is_primary INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, role_id))');
-    (new StoreScope($pdo))->migrate();
-    $storeId = (new StoreScope($pdo))->id();
+    $storeId = 1;
 
     $roleId = static function (string $role) use ($pdo): int {
         $stmt = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ?');

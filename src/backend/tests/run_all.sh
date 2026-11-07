@@ -73,7 +73,6 @@ node src/backend/tests/workspace_walkthrough_daily_oversight_browser_test.js
 node src/backend/tests/workspace_walkthrough_inventory_manager_browser_test.js
 node src/backend/tests/workspace_walkthrough_invitation_browser_test.js
 php src/backend/tests/cashier_workspace_authorization_contract.php
-php src/backend/tests/store_scope_contract.php
 php src/backend/tests/inventory_load_contract.php
 php src/backend/tests/user_lifecycle_contract.php
 php src/backend/tests/user_deletion_mysql_test.php

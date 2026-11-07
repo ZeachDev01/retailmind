@@ -154,7 +154,7 @@ try {
     // User lifecycle guards on historical actors (AC 3)
     $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,status,is_recovery_account) VALUES (?,?,?,?,?,?,NULL,\'disabled\',0)')
         ->execute([1000, 'Historical', 'Employee', 'Historical employee', 'historical_employee', '!']);
-    $lifecycle = new App\Services\UserLifecycleService($pdo, new App\Authorization\RoleCapabilityPolicy(), new App\Store\StoreScope($pdo));
+    $lifecycle = new App\Services\UserLifecycleService($pdo, new App\Authorization\RoleCapabilityPolicy(), null);
     $reject(fn() => $lifecycle->setStatus(2, 'super_admin', 1000, 'active'), 'Historical Actor cannot activate');
     $reject(fn() => $lifecycle->update(2, 'super_admin', 1000, ['role' => 'admin']), 'Historical Actor cannot receive a role');
     $reject(fn() => $lifecycle->resetPassword(2, 'super_admin', 1000, password_hash('NewPassword', PASSWORD_DEFAULT)), 'Historical Actor cannot receive a password');

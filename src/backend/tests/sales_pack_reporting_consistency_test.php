@@ -20,8 +20,6 @@ require_once __DIR__ . '/../app/Services/GrossProfitService.php';
 require_once __DIR__ . '/../app/Services/InventoryService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
-
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Services\CashRefundService;
@@ -430,7 +428,7 @@ $assert($afterEdit['summary']['total_net_sales'] === 120.00, 'Today\'s pack and 
 $assert($afterEdit['summary']['total_net_cost'] === 98.00, 'Today\'s catalog cost does not replace preserved source-batch costs');
 $assert($afterEdit['summary']['total_units'] === 14, 'Today\'s catalog pack size does not rewrite the sold pack contents');
 
-$receiptItems = (new App\Receipts\ReceiptDetailsService($pdo))->fetchItems($saleId);
+$receiptItems = (new App\Receipts\ReceiptEngine($pdo))->fetchItems($saleId);
 $packReceiptLine = array_values(array_filter($receiptItems, static fn(array $item): bool => ($item['selling_form'] ?? 'piece') === 'pack'))[0];
 $assert((float)$packReceiptLine['unit_price'] === 100.00 && (int)$packReceiptLine['pack_size'] === 12,
     'Receipt keeps the original pack price and contents after catalog edits');

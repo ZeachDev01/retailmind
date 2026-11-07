@@ -126,7 +126,7 @@ try {
     $assert($notifications->calls === 2, 'Both notification failures are isolated');
     $assert($saved['sale_id'] !== $results[0]['sale_id'], 'A new attempt has a new sale');
     $assert($service->recoverAttempt($atomic['checkout_attempt'], 1, 'cashier') === $saved, 'Post-commit failure still returns and recovers success');
-    $receipt = (new App\Receipts\ReceiptDetailsService($pdo))->fetchSale($saved['sale_id']);
+    $receipt = (new App\Receipts\ReceiptEngine($pdo))->fetchSale($saved['sale_id']);
     $assert(isset($receipt['receipt_items']), 'Saved customer receipt remains available');
     $assert($service->cancelAttempt($atomic['checkout_attempt'], 1, 'cashier') === $saved, 'Cancellation recovers an already committed sale instead');
     $cancelled = str_repeat('c', 32);

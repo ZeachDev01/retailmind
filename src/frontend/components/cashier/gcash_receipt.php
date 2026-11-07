@@ -7,7 +7,7 @@ if (current_role() === 'cashier') {
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
 $id = filter_var($_GET['transaction_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-$receipt = $id ? (new \App\Receipts\GCashReceiptService($pdo))->fetch($id, (int)$_SESSION['user_id'], (string)current_role()) : null;
+$receipt = $id ? (new \App\Receipts\ReceiptEngine($pdo))->fetchGCash($id, (int)$_SESSION['user_id'], (string)current_role()) : null;
 if (!$receipt) {
     http_response_code(404);
     exit('Saved GCash Service Receipt unavailable.');

@@ -9,11 +9,10 @@ require_once __DIR__ . '/../bootstrap/app.php';
 use App\Authorization\RoleCapabilityPolicy;
 use App\Core\Database;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
 
 try {
     $pdo = Database::connection();
-    $storeId = (new StoreScope($pdo))->id();
+    $storeId = 1;
     foreach (['users', 'user_roles', 'activity_log'] as $table) {
         $pdo->exec("CREATE TEMPORARY TABLE reset_fixture LIKE {$table}");
         $ddl = $pdo->query('SHOW CREATE TABLE reset_fixture')->fetch(PDO::FETCH_NUM)[1];

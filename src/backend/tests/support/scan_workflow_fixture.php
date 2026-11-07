@@ -23,7 +23,7 @@ $shortNumericSku = str_pad((string)(crc32($token) % 10000000), 7, '0', STR_PAD_L
 
 $pdo = Database::connection();
 
-$storeId = (int)(new App\Store\StoreScope($pdo))->id();
+$storeId = 1;
 
 $roleId = static function (PDO $pdo, string $name): int {
     $stmt = $pdo->prepare('SELECT role_id FROM roles WHERE role_name = ?');

@@ -4,6 +4,8 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 
 function assert_true(bool $condition, string $message): void {
     if (!$condition) {
@@ -56,7 +58,7 @@ if (getenv('RUN_DB_TESTS') === '1') {
         $stmt->execute([$origin, $target, $d]);
     }
 
-    $dfs = new DemandForecastService($pdo);
+    $dfs = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
     $aggs = $dfs->getForecastAggregates(9999);
     assert_same(1, count($aggs), 'Should return 1 aggregate');
     assert_same(35, $aggs[0]['forecast_7_day'], '7 days * 5 = 35');

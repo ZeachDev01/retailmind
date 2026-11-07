@@ -16,7 +16,6 @@ require_once __DIR__ . '/../includes/functions.php';
 use App\Attention\Clock;
 use App\Authorization\DormancyRunner;
 use App\Services\UserAccountNotifier;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -140,7 +139,6 @@ try {
         created_at TEXT NULL
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
-    (new StoreScope($pdo))->migrate();
 
     $now = new DateTimeImmutable('now');
     $daysAgo = static fn(int $days): string => $now->modify("-{$days} days")->format('Y-m-d H:i:s');

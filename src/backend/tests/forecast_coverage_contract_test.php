@@ -12,6 +12,7 @@ require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ReplenishmentQueueService;
 
 $failures = [];
@@ -123,7 +124,7 @@ function insert28DailyForecasts(
 // -----------------------------------------------------------------------------
 echo "--- Test 1: Empty Store handling ---\n";
 $pdo = createTestPdo();
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $coverage = $service->getCoverage(null, '2026-11-02');
 
 $assert($coverage['scope_count'] === 0, 'Empty store has scope_count 0');
@@ -153,7 +154,7 @@ $pdo->exec("
 // Product 1 has complete forecast for accepted origin 2026-11-01
 insert28DailyForecasts($pdo, 10, 1, '2026-11-01', 3, 'v1.0.0', 'High');
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $coverage = $service->getCoverage(10, '2026-11-02');
 
 $assert($coverage['scope_count'] === 2, 'Scope denominator counts ONLY active replenishment products (2 active)');
@@ -209,7 +210,7 @@ $pdo->exec("
 ");
 insert28DailyForecasts($pdo, 10, 1, '2026-10-30', 4, 'v1.0.0', 'High');
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $staleCoverage = $service->getCoverage(10, '2026-11-02');
 $assert($staleCoverage['forecast_backed_count'] === 0, 'Stale forecast must not be counted as forecast-backed');
 $assert($staleCoverage['stock_rule_count'] === 1, 'Stale forecast product falls back to stock rules');
@@ -234,7 +235,7 @@ $pdo->exec("
 // Forecast generated with v1.0.0, but approved model is now v2.0.0
 insert28DailyForecasts($pdo, 10, 1, '2026-11-01', 5, 'v1.0.0', 'High');
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $unapprovedCoverage = $service->getCoverage(10, '2026-11-02');
 $assert($unapprovedCoverage['forecast_backed_count'] === 0, 'Replaced/unapproved model forecast is not forecast-backed');
 $assert($unapprovedCoverage['stock_rule_count'] === 1, 'Product uses stock rules');
@@ -263,7 +264,7 @@ for ($h = 1; $h <= 27; $h++) {
 // P2 has 28 daily forecasts but readiness is 'Insufficient'
 insert28DailyForecasts($pdo, 10, 2, '2026-11-01', 2, 'v1.0.0', 'Insufficient');
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $cov = $service->getCoverage(10, '2026-11-02');
 $assert($cov['forecast_backed_count'] === 0, 'Neither incomplete nor insufficient readiness is forecast-backed');
 $covById = array_column($cov['products'], null, 'product_id');
@@ -290,7 +291,7 @@ $pdo->exec("
 ");
 insert28DailyForecasts($pdo, 10, 1, '2026-11-01', 4, 'v1.0.0', 'High');
 
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 // When calling without specifying job ID, it should resolve the latest usable job (10) while noting job 11 failed
 $cov = $service->getCoverage(null, '2026-11-02');
 $assert($cov['effective_job_id'] === 10, 'Effective job ID resolves to still-eligible job 10');
@@ -322,7 +323,7 @@ $pdo->exec("
     INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at)
     VALUES (1, 'forecast_generation', 'running', '2026-11-02 01:00:00');
 ");
-$service = new DemandForecastService($pdo);
+$service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $cov = $service->getCoverage(null, '2026-11-02');
 $assert($cov['is_updating'] === true, 'is_updating is true when job is running');
 $assert($cov['is_guidance_usable'] === false, 'Pending job does NOT count as usable guidance');
@@ -346,8 +347,8 @@ $pdo->exec("
 // Product 1 forecast backed; Product 2 has no forecast
 insert28DailyForecasts($pdo, 10, 1, '2026-11-01', 3, 'v1.0.0', 'High');
 
-$demandService = new DemandForecastService($pdo);
 $queueService = new ReplenishmentQueueService($pdo);
+$demandService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), $queueService);
 
 $cov = $demandService->getCoverage(10, '2026-11-02');
 $recs = $queueService->getRecommendations(10, '2026-11-02');

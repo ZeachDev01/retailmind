@@ -13,7 +13,6 @@ use App\Database\DailySalesTrendSeeder;
 use App\Database\ProductSeeder;
 use App\Database\Schema;
 use App\Services\GrossProfitService;
-use App\Store\StoreScope;
 
 try {
     $options = getopt('', ['confirm-local-database:']);
@@ -46,7 +45,7 @@ try {
         }
     }
     ProductSeeder::run($pdo, $products);
-    $storeId = (new StoreScope($pdo))->id();
+    $storeId = 1;
     $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
     $seed = (new DailySalesTrendSeeder($pdo, $now))->run();
 

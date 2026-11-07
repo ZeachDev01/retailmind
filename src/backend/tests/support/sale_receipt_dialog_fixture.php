@@ -1,6 +1,5 @@
 <?php
 // Synthetic saved paper in the shipped dialog template; never boots Store writes.
-require_once __DIR__ . '/../../app/Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/../../app/Receipts/ReceiptEngine.php';
 function app_url(string $path): string { return '/' . $path; }
 function receipt_store_info(): array { return $GLOBALS['store']; }

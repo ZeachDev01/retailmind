@@ -281,11 +281,11 @@ if ($argv[1] === 'receipts') {
     $pdo->beginTransaction();
     $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (2,4,1,25,'cash'),(3,4,1,25,'cash'),(4,1,NULL,25,'cash')");
     $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (2,2,1,1,25,25),(3,3,1,1,25,25),(4,4,1,1,25,25)');
-    (new App\Receipts\ReceiptDetailsService($pdo))->preserveSale(2);
+    (new App\Receipts\ReceiptEngine($pdo))->preserveSale(2);
     $pdo->exec("INSERT INTO cash_refunds (refund_id,sale_id,shift_id,cashier_id,refund_amount,reason) VALUES (1,2,1,4,25,'customer_return'),(2,4,1,1,25,'customer_return')");
     $pdo->exec('INSERT INTO cash_refund_items (refund_id,sale_item_id,product_id,quantity,unit_price,subtotal) VALUES (1,2,1,1,25,25),(2,4,1,1,25,25)');
-    (new App\Receipts\RefundReceiptService($pdo))->preserve(1);
-    (new App\Receipts\RefundReceiptService($pdo))->preserve(2);
+    (new App\Receipts\ReceiptEngine($pdo))->preserveRefund(1);
+    (new App\Receipts\ReceiptEngine($pdo))->preserveRefund(2);
     $pdo->commit();
     $pdo->exec("UPDATE products SET product_name='Edited live product' WHERE product_id=1");
     $pdo->exec("UPDATE registers SET name='Edited live Register' WHERE register_id=1");
@@ -353,5 +353,5 @@ $pdo->exec("INSERT INTO inventory_adjustments (product_id,adjustment_qty,adjustm
 App\Store\StoreWriteGate::begin($pdo); $pdo->commit();
 $pdo->exec("INSERT INTO sales (sale_id,cashier_id,shift_id,total_amount,payment_method) VALUES (1,4,1,25,'cash')");
 $pdo->exec('INSERT INTO sale_items (sale_item_id,sale_id,product_id,quantity,unit_price,subtotal) VALUES (1,1,1,1,25,25)');
-$pdo->beginTransaction(); (new App\Receipts\ReceiptDetailsService($pdo))->preserveSale(1); $pdo->commit();
+$pdo->beginTransaction(); (new App\Receipts\ReceiptEngine($pdo))->preserveSale(1); $pdo->commit();
 echo json_encode(['database'=>$database,'password'=>$password]);

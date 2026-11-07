@@ -26,7 +26,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Core/Database.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
-require_once __DIR__ . '/../app/Authorization/AuthorizationContext.php';
 require_once __DIR__ . '/../app/Store/StoreCalendar.php';
 require_once __DIR__ . '/../app/Store/ScheduledDemandDriverService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
@@ -44,7 +43,6 @@ require_once __DIR__ . '/../app/Attention/AttentionSettingsService.php';
 
 use App\Core\Database;
 use App\Authorization\RoleCapabilityPolicy;
-use App\Authorization\AuthorizationContext;
 use App\Store\StoreCalendar;
 use App\Store\ScheduledDemandDriverService;
 use App\Forecasting\DemandHistoryService;
@@ -583,7 +581,7 @@ assert_true($allStockRules, 'When no usable output remains, recommendations fall
 // Insert an earlier usable forecast run from yesterday (origin 2026-11-01) for Product 1
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff, queued_at, completed_at)
     VALUES (90, 'forecast_generation', 'succeeded', '2026-11-01', '2026-11-01 02:00:00', '2026-11-01 02:05:00')");
-$forecastService = new DemandForecastService($pdo);
+$forecastService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 $earlyRecords = [];
 for ($h = 1; $h <= 28; $h++) {
     $earlyRecords[] = [

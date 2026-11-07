@@ -17,10 +17,8 @@
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/SalesWorkflowService.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/../app/Receipts/ReceiptEngine.php';
 
-use App\Receipts\ReceiptDetailsService;
 use App\Receipts\ReceiptEngine;
 
 $failures = [];
@@ -572,7 +570,7 @@ try {
 // SECTION 9: Receipt details persistence & Catalog edit immutability
 // =========================================================================
 echo "\n--- Section 9: Receipt persistence & Catalog edit immutability ---\n";
-$receiptService = new ReceiptDetailsService($pdo);
+$receiptService = new ReceiptEngine($pdo);
 $saleReceipt = $receiptService->fetchSale($resultReplay1['sale_id']);
 $assert(isset($saleReceipt['receipt_items']), 'Preserved receipt items exist in snapshot');
 $itemsPreserved = $saleReceipt['receipt_items'];

@@ -120,7 +120,7 @@ $paginationFilters = array_intersect_key($_GET, array_flip(['sale_id', 'refund_i
 $paginationFilters = array_filter($paginationFilters, static fn($value): bool => is_scalar($value) && (int)$value > 0);
 $url = static fn(array $params): string => app_url('components/cashier/refunds.php?' . http_build_query($params + $paginationFilters + ['length' => $pageSize])) . '#refund-history';
 $receiptId = (int)($_GET['refund_id'] ?? 0);
-$receipt = $receiptId > 0 ? (new \App\Receipts\RefundReceiptService($pdo))->forCashier($receiptId, $actorId, $storeId) : null;
+$receipt = $receiptId > 0 ? (new \App\Receipts\ReceiptEngine($pdo))->fetchRefundForCashier($receiptId, $actorId, $storeId) : null;
 $autoPrintRefund = $receipt !== null && (int)($_SESSION['auto_print_refund'] ?? 0) === $receiptId;
 if ($autoPrintRefund) unset($_SESSION['auto_print_refund']);
 $autoPrintRefund = $autoPrintRefund && ($_GET['print_receipt'] ?? '') === '1';

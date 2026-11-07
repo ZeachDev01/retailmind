@@ -11,7 +11,6 @@ require_once __DIR__ . '/../app/Services/DashboardService.php';
 
 use App\Database\DailySalesTrendSeeder;
 use App\Database\ProductSeeder;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -28,7 +27,7 @@ try {
     $products = ProductSeeder::loadProducts(dirname(__DIR__, 3) . '/src/backend/database/seeds/product_seed.csv');
     $firstProducts = ProductSeeder::run($pdo, $products, true);
     $secondProducts = ProductSeeder::run($pdo, $products, true);
-    $storeId = (new StoreScope($pdo))->id();
+    $storeId = 1;
     $seedProductStatement = $pdo->prepare('SELECT COUNT(*) FROM products WHERE branch_id = ?');
     $seedProductStatement->execute([$storeId]);
     $seedProductCount = (int)$seedProductStatement->fetchColumn();

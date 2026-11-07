@@ -2,7 +2,6 @@
 // Deterministic authority contract for every supported RetailMind role.
 require_once __DIR__ . '/../bootstrap/app.php';
 
-use App\Authorization\AuthorizationContext;
 use App\Authorization\RoleCapabilityPolicy;
 
 $failures = [];
@@ -81,7 +80,7 @@ $assert(!$policy->allows('admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE), 'A
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Inventory Manager must not reach Database Backup');
 $assert(!$policy->allows('cashier', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP), 'Cashier must not reach Database Backup');
 
-$standard = AuthorizationContext::standard();
+$standard = false;
 $assert(!$policy->allows('super_admin', RoleCapabilityPolicy::STORE_OPERATIONS, null, $standard, 41), 'Super Administrator workspace must not grant Store operations without switching workspaces');
 $assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $standard, 41), 'Super Administrator workspace must not grant inventory mutation without switching workspaces');
 $assert(!$policy->allows('super_admin', RoleCapabilityPolicy::MANAGE_SALE_REVERSALS, null, $standard, 41), 'Super Administrator workspace must not grant Legacy Reversal decisions without switching workspaces');

@@ -1,6 +1,5 @@
 <?php
 // Synthetic data exercises the shipped paper renderer without changing Store data.
-require_once __DIR__ . '/../../app/Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/../../app/Receipts/ReceiptEngine.php';
 
 $paperWidthMm = (int)($argv[2] ?? 80);

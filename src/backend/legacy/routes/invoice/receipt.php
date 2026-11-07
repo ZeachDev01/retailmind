@@ -17,7 +17,7 @@ $can_manage_all = in_array(current_role(), ['admin', 'super_admin', 'inventory_m
 function receipt_store_info(): array {
     static $cached = null;
     if ($cached !== null) { return $cached; }
-    return $cached = (new App\Receipts\ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
+    return $cached = (new \App\Receipts\ReceiptEngine(App\Core\Database::connection()))->storeInfo();
 }
 
 function receipt_money($value, ?array $store = null): string {
@@ -26,15 +26,15 @@ function receipt_money($value, ?array $store = null): string {
 }
 
 function receipt_verification_code(array $sale): string {
-    return $sale['verification_code'] ?? App\Receipts\ReceiptDetailsService::verificationCode($sale);
+    return $sale['verification_code'] ?? \App\Receipts\ReceiptEngine::verificationCode($sale);
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id): ?array {
-    return (new App\Receipts\ReceiptDetailsService($pdo))->fetchSale($sale_id);
+    return (new \App\Receipts\ReceiptEngine($pdo))->fetchSale($sale_id);
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
-    return (new App\Receipts\ReceiptDetailsService($pdo))->fetchItems($sale_id);
+    return (new \App\Receipts\ReceiptEngine($pdo))->fetchItems($sale_id);
 }
 
 if (!function_exists('receipt_send_cache_headers')) {

@@ -411,7 +411,7 @@ unset($_SERVER['RETAILMIND_REMOTE']);
 assert_test(is_remote_request() === false, 'Local Store console is detected as non-remote request');
 
 $policy = new RoleCapabilityPolicy();
-$remoteCtx = \App\Authorization\AuthorizationContext::standard(true);
+$remoteCtx = true;
 assert_test(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $remoteCtx), 'Remote request is denied APPROVE_MODELS capability');
 assert_test(!$policy->allows('admin', RoleCapabilityPolicy::ROLL_BACK_MODELS, null, $remoteCtx), 'Remote request is denied ROLL_BACK_MODELS capability');
 

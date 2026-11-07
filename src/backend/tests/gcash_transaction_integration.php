@@ -326,11 +326,11 @@ $cashInTxId = $service->recordCashIn(4, [
     'preview_wallet_transfer' => 1000.00,
 ]);
 $check($cashInTxId > 0, 'Cash-In recorded successfully');
-$receipts = new App\Receipts\GCashReceiptService($pdo);
-$receipt = $receipts->fetch($cashInTxId, 4, 'cashier');
+$receipts = new App\Receipts\ReceiptEngine($pdo);
+$receipt = $receipts->fetchGCash($cashInTxId, 4, 'cashier');
 $check($receipt['reference_number'] === '0000000000101' && $receipt['principal_amount'] === '1000.00' && $receipt['cash_collected'] === '1010.00' && $receipt['wallet_sent'] === '1000.00', 'Saved Cash-In receipt preserves exact customer exchange and leading zeroes');
-$check($receipts->fetch($cashInTxId, 5, 'cashier') === null && $receipts->fetch($cashInTxId, 1, 'inventory_manager') === null, 'Receipt access follows active Workspace and cashier ownership');
-$check($receipts->fetch($cashInTxId, 1, 'admin') === $receipt, 'Administrator can read saved Store-wide receipt');
+$check($receipts->fetchGCash($cashInTxId, 5, 'cashier') === null && $receipts->fetchGCash($cashInTxId, 1, 'inventory_manager') === null, 'Receipt access follows active Workspace and cashier ownership');
+$check($receipts->fetchGCash($cashInTxId, 1, 'admin') === $receipt, 'Administrator can read saved Store-wide receipt');
 $cashierReceiptRow = $service->history(4, 1)['transactions'][0];
 $adminReceiptRow = $service->adminOverview(['actor_role' => 'admin', 'search' => '0000000000101'])['transactions'][0];
 $check($cashierReceiptRow['has_receipt'] === true && $adminReceiptRow['has_receipt'] === true, 'Both GCash history contexts expose a saved receipt action');
@@ -554,7 +554,7 @@ $coGkId = $service->recordCashOut(4, [
     'net_wallet' => 1010.00,
 ]);
 $check($coGkId > 0, 'Cash-Out Fee via GCash recorded successfully');
-$cashOutWalletReceipt = (new \App\Receipts\GCashReceiptService($pdo))->fetch($coGkId, 4, 'cashier');
+$cashOutWalletReceipt = (new \App\Receipts\ReceiptEngine($pdo))->fetchGCash($coGkId, 4, 'cashier');
 $check($cashOutWalletReceipt !== null && $cashOutWalletReceipt['wallet_received'] === '1010.00' && $cashOutWalletReceipt['cash_paid_out'] === '1000.00' && $cashOutWalletReceipt['cash_collected'] === '0.00', 'Cash-Out wallet fee receipt preserves actual customer transfers');
 
 $posSnapshotAfter = $snapshot();

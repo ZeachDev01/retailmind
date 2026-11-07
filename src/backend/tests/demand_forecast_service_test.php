@@ -2,9 +2,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
+require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
+require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 use App\Forecasting\DemandForecastService;
+use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {
@@ -54,7 +58,7 @@ try {
         $stmt->execute([10, 1, $origin, $targetDate, $i, 2, 'v1', 'High']);
     }
     
-    $service = new DemandForecastService($pdo);
+    $service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
     $aggregates = $service->getForecastAggregates(10);
     
     $assert(count($aggregates) === 1, "Expected 1 aggregated product forecast, got " . count($aggregates));

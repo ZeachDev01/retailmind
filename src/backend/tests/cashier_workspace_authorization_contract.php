@@ -2,7 +2,6 @@
 // Authorization contract for the active Cashier workspace (issue #86).
 require_once __DIR__ . '/../bootstrap/app.php';
 
-use App\Authorization\AuthorizationContext;
 use App\Authorization\RoleCapabilityPolicy;
 
 $failures = [];

@@ -312,7 +312,7 @@ try {
     $assert((int)$sale['shift_id'] === $shiftId, 'the sale records the open Cashier Shift it ran under');
     $assert(abs((float)$sale['total_amount'] - 50.00) < 0.001, 'the sale total is the cart total');
     $assert(abs((float)$sale['change_due'] - 50.00) < 0.001, 'the payment is recorded with the sale');
-    $receiptService = new \App\Receipts\ReceiptDetailsService($pdo);
+    $receiptService = new \App\Receipts\ReceiptEngine($pdo);
     $recordedReceipt = $receiptService->fetchSale($saleId, 1);
     $assert(($recordedReceipt['receipt_store']['name'] ?? null) === 'Original Store',
         'checkout preserves Store details with the sale');
@@ -338,7 +338,7 @@ try {
     $assert(!empty($recordedReceipt['verification_code']), 'checkout preserves verification details');
     $assert(($recordedReceipt['verification_url'] ?? null) === 'components/invoice/sales.php?tab=transactions&sale_id=' . $saleId,
         'checkout preserves the customer verification URL');
-    $assert($recordedReceipt['verification_code'] === \App\Receipts\ReceiptDetailsService::verificationCode($sale),
+    $assert($recordedReceipt['verification_code'] === \App\Receipts\ReceiptEngine::verificationCode($sale),
         'checkout preserves the exact transaction verification code');
     $assert(($recordedReceipt['verification_url'] ?? null) === 'components/invoice/sales.php?tab=transactions&sale_id=' . $saleId,
         'checkout preserves the customer verification URL');

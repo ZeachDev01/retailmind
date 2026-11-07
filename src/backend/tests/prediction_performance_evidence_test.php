@@ -27,6 +27,7 @@ require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\DemandHistoryService;
 
 $failures = [];
@@ -145,7 +146,7 @@ echo "Starting Ticket #414 Prediction-Performance Evidence Contract Test...\n\n"
 // -------------------------------------------------------------
 echo "--- Test 1: Unavailable State when no evidence or forecasts exist ---\n";
 $pdo = create_test_pdo();
-$forecastService = new DemandForecastService($pdo);
+$forecastService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 
 $evidence = $forecastService->getPredictionPerformanceEvidence('2026-10-31');
 $assert($evidence['status'] === 'unavailable', "Empty store status is unavailable");
@@ -233,7 +234,7 @@ $pdo->exec("UPDATE platform_settings SET setting_value = 'rf_store_v1' WHERE set
 // -------------------------------------------------------------
 echo "\n--- Test 4: Separate Overestimated & Underestimated units (No cancellation) ---\n";
 $pdo = create_test_pdo();
-$forecastService = new DemandForecastService($pdo);
+$forecastService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, model_version, completed_at)
             VALUES (1, 'forecast_generation', 'succeeded', 'rf_store_v1', '2026-10-01 01:15:00')");
@@ -364,7 +365,7 @@ $assert(str_contains($evidenceLoss['causal_claim_note'], 'Advisory guidance'), "
 // -------------------------------------------------------------
 echo "\n--- Test 8: Genuine Store evidence state (>= 28 days) ---\n";
 $pdo = create_test_pdo();
-$forecastService = new DemandForecastService($pdo);
+$forecastService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, model_version, completed_at)
             VALUES (1, 'forecast_generation', 'succeeded', 'rf_store_v1', '2026-09-01 01:15:00')");

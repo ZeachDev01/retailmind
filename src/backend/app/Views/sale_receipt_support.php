@@ -1,7 +1,6 @@
 <?php
 // Shared saved receipt context for POS completion and Receipt History.
 use App\Receipts\ReceiptEngine;
-use App\Receipts\ReceiptDetailsService;
 use App\Authorization\RoleCapabilityPolicy;
 
 $sale_id = (int)($_GET['sale_id'] ?? $_GET['id'] ?? $_GET['receipt_id'] ?? 0);
@@ -24,7 +23,7 @@ $canStartSale = has_capability(RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 function receipt_store_info(): array {
     static $cached = null;
     if ($cached !== null) { return $cached; }
-    return $cached = (new ReceiptDetailsService(App\Core\Database::connection()))->storeInfo();
+    return $cached = (new ReceiptEngine(App\Core\Database::connection()))->storeInfo();
 }
 
 function receipt_money($value, ?array $store = null): string {
@@ -33,15 +32,15 @@ function receipt_money($value, ?array $store = null): string {
 }
 
 function receipt_verification_code(array $sale): string {
-    return $sale['verification_code'] ?? ReceiptDetailsService::verificationCode($sale);
+    return $sale['verification_code'] ?? ReceiptEngine::verificationCode($sale);
 }
 
 function receipt_fetch_sale(PDO $pdo, int $sale_id, int $storeId): ?array {
-    return (new ReceiptDetailsService($pdo))->fetchSale($sale_id, $storeId);
+    return (new ReceiptEngine($pdo))->fetchSale($sale_id, $storeId);
 }
 
 function receipt_fetch_items(PDO $pdo, int $sale_id): array {
-    return (new ReceiptDetailsService($pdo))->fetchItems($sale_id);
+    return (new ReceiptEngine($pdo))->fetchItems($sale_id);
 }
 
 if (!function_exists('receipt_send_cache_headers')) {

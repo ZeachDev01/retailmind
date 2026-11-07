@@ -96,7 +96,7 @@ final class RoleCapabilityPolicy
         string $actorRole,
         string $capability,
         ?string $targetRole = null,
-        ?AuthorizationContext $context = null,
+        ?bool $context = null,
         ?int $actorUserId = null
     ): bool {
         if (!isset(self::BASE_CAPABILITIES[$actorRole])) {
@@ -107,7 +107,7 @@ final class RoleCapabilityPolicy
             return false;
         }
 
-        if ($context !== null && $context->isRemote()) {
+        if ($context === true) {
             if (in_array($capability, [
                 self::MANAGE_DATABASE_BACKUP,
                 self::MUTATE_INVENTORY,

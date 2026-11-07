@@ -4,7 +4,6 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/auth.php';
 
-use App\Authorization\AuthorizationContext;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\SupervisorApprovalService;
 use App\Services\GCashTransactionService;
@@ -20,8 +19,8 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 
 try {
     $policy = new RoleCapabilityPolicy();
-    $localContext = AuthorizationContext::standard();
-    $remoteContext = AuthorizationContext::remote();
+    $localContext = false;
+    $remoteContext = true;
 
     // 1. RoleCapabilityPolicy: Local evaluation
     $assert($policy->allows('super_admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE, null, $localContext), 'super_admin has platform governance locally');
@@ -44,8 +43,8 @@ try {
     $assert(!$policy->allows('cashier', RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP, null, $localContext), 'cashier lacks backup capability');
 
     // 2. RoleCapabilityPolicy: Remote evaluation (ADR-0019 read-only monitoring)
-    $assert($remoteContext->isRemote() === true, 'remote context identifies as remote');
-    $assert($localContext->isRemote() === false, 'standard context identifies as local');
+    $assert($remoteContext === true, 'remote context identifies as remote');
+    $assert($localContext === false, 'standard context identifies as local');
 
     // Read-only monitoring capabilities are preserved remotely
     $assert($policy->allows('admin', RoleCapabilityPolicy::VIEW_STORE_REPORTS, null, $remoteContext), 'admin can view store reports remotely');

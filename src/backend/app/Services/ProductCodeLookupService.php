@@ -6,8 +6,6 @@
 // Store from an exact SKU, unit barcode, or case barcode, and reports which
 // code kind matched so callers can pick the right quantity mode.
 
-require_once __DIR__ . '/../Store/StoreScope.php';
-
 class ProductCodeLookupService
 {
     public const OUTCOME_MATCH = 'match';
@@ -184,6 +182,6 @@ class ProductCodeLookupService
             return store_product_scope('p');
         }
 
-        return (new App\Store\StoreScope($this->pdo))->productScope('p');
+        return ['', []];
     }
 }

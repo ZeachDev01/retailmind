@@ -6,7 +6,6 @@ use App\Audit\ProtectedAuditRecordService;
 use App\Services\RecoveryAccountService;
 use App\Services\UserLifecycleService;
 use App\Authorization\RoleCapabilityPolicy;
-use App\Store\StoreScope;
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -84,7 +83,6 @@ try {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )");
     $pdo->exec("INSERT INTO roles (role_name) VALUES ('super_admin'), ('admin'), ('inventory_manager'), ('cashier')");
-    (new StoreScope($pdo))->migrate();
 
     $service = new RecoveryAccountService($pdo);
     $assert(

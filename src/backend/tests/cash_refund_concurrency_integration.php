@@ -147,16 +147,16 @@ try {
         'Only the successful refund preserves a customer receipt.');
     $assert((float)(new CashierShiftService($pdo))->calculateShift(1)['calculated_expected_cash'] === 100.0,
         'Only one cash payout leaves the drawer.');
-    $receiptService = new \App\Receipts\RefundReceiptService($pdo);
+    $receiptService = new \App\Receipts\ReceiptEngine($pdo);
     $refundId = (int)$pdo->query('SELECT refund_id FROM cash_refunds')->fetchColumn();
-    $savedReceipt = $receiptService->forCashier($refundId, 1, 1);
+    $savedReceipt = $receiptService->fetchRefundForCashier($refundId, 1, 1);
     $assert($savedReceipt !== null, 'The committed refund returns its customer receipt.');
     $pdo->exec("UPDATE products SET product_name='Edited product', sku='EDITED'");
     $pdo->exec("UPDATE registers SET name='Edited Register', paper_width_mm='58'");
     $pdo->exec("UPDATE users SET full_name='Edited Cashier'");
     $pdo->exec("INSERT INTO store_settings (setting_key, setting_value) VALUES ('store_name', 'Edited Store'), ('receipt_footer', 'Edited footer')
         ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
-    $assert($receiptService->forCashier($refundId, 1, 1) === $savedReceipt,
+    $assert($receiptService->fetchRefundForCashier($refundId, 1, 1) === $savedReceipt,
         'Committed customer details survive Store, product, Cashier and Register edits.');
     $assert((new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth(1, 'cashier') === 58,
         'Printing uses the current Register width without rewriting preserved details.');

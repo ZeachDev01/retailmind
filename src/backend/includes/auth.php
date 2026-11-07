@@ -423,15 +423,15 @@ function require_local_request(string $message = 'This action is not available d
     }
 }
 
-function current_authorization_context(?PDO $pdo = null): App\Authorization\AuthorizationContext
+function current_authorization_context(?PDO $pdo = null): bool
 {
-    return App\Authorization\AuthorizationContext::standard(is_remote_request());
+    return is_remote_request();
 }
 
 function has_capability(
     string $capability,
     ?string $targetRole = null,
-    ?App\Authorization\AuthorizationContext $context = null
+    ?bool $context = null
 ): bool {
     global $pdo;
     // Issue #86: the active workspace is authoritative. Capabilities are
@@ -448,7 +448,7 @@ function has_capability(
 function require_capability(
     string $capability,
     ?string $targetRole = null,
-    ?App\Authorization\AuthorizationContext $context = null
+    ?bool $context = null
 ): void {
     require_any_capability([$capability], $targetRole, $context);
 }
@@ -456,7 +456,7 @@ function require_capability(
 function require_any_capability(
     array $capabilities,
     ?string $targetRole = null,
-    ?App\Authorization\AuthorizationContext $context = null
+    ?bool $context = null
 ): void {
     global $pdo;
     if (!is_logged_in()) {
@@ -477,7 +477,7 @@ function store_scope_id(PDO $pdo): int
 {
     static $storeIds;
     $storeIds ??= new WeakMap();
-    return $storeIds[$pdo] ??= (new App\Store\StoreScope($pdo))->id();
+    return $storeIds[$pdo] ??= 1;
 }
 
 function default_profile_image_url(): string

@@ -7,7 +7,6 @@ use App\Authorization\DormancyRunner;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\UserAccountNotifier;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
 
 set_exception_handler(static function (Throwable $e): void { fwrite(STDERR, (string)$e); exit(1); });
 $database = $argv[2] ?? '';

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\StoreModelGovernanceService;
 
 $failures = [];
@@ -117,7 +118,7 @@ try {
     // -------------------------------------------------------------------------
     echo "--- Test 1: Healthy No-Action State ---\n";
     $pdo = createLandingTestDatabase();
-    $service = new DemandForecastService($pdo);
+    $service = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
 
     $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'rf_prod_v1')");
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");
@@ -171,7 +172,7 @@ try {
     // -------------------------------------------------------------------------
     echo "\n--- Test 3: Retry Scheduled vs Exhausted Recovery ---\n";
     $pdo2 = createLandingTestDatabase();
-    $service2 = new DemandForecastService($pdo2);
+    $service2 = new DemandForecastService($pdo2, new CandidateEvaluationService($pdo2), new ReplenishmentQueueService($pdo2));
     $pdo2->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'rf_prod_v1')");
     $pdo2->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");
     $pdo2->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)");
@@ -251,7 +252,7 @@ try {
     // -------------------------------------------------------------------------
     echo "\n--- Test 4: Qualified Candidate Awaiting Review & Approval ---\n";
     $pdo3 = createLandingTestDatabase();
-    $service3 = new DemandForecastService($pdo3);
+    $service3 = new DemandForecastService($pdo3, new CandidateEvaluationService($pdo3), new ReplenishmentQueueService($pdo3));
     $pdo3->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'rf_prod_v1')");
     $pdo3->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");
     $pdo3->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)");
@@ -295,7 +296,7 @@ try {
     // -------------------------------------------------------------------------
     echo "\n--- Test 5: Prospective Observation Progress ---\n";
     $pdo4 = createLandingTestDatabase();
-    $service4 = new DemandForecastService($pdo4);
+    $service4 = new DemandForecastService($pdo4, new CandidateEvaluationService($pdo4), new ReplenishmentQueueService($pdo4));
     $pdo4->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_approved_model_version', 'rf_prod_v1')");
     $pdo4->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('ml_observation_mode', '1')");
     $pdo4->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (1, 'SKU-001', 'Milk', 'active')");

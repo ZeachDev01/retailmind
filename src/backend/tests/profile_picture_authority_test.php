@@ -6,7 +6,6 @@ restore_exception_handler();
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\ProfileImageStorage;
 use App\Services\UserLifecycleService;
-use App\Store\StoreScope;
 
 function check(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);

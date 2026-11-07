@@ -1,9 +1,8 @@
 <?php
 
-require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
 require_once __DIR__ . '/../app/Receipts/ReceiptEngine.php';
 
-use App\Receipts\ReceiptDetailsService;
+use App\Receipts\ReceiptEngine;
 
 $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -27,9 +26,9 @@ $pdo->exec("INSERT INTO products VALUES (5, 1, 'ORIGINAL-SKU', 'Original product
 $pdo->exec('INSERT INTO sale_items VALUES (6, 43, 5, 1, 10, 10)');
 $pdo->exec('INSERT INTO sale_items VALUES (7, 42, 5, 1, 10, 10)');
 
-$service = new ReceiptDetailsService($pdo);
+$service = new ReceiptEngine($pdo);
 $sale = $service->fetchSale(42);
-$html = ReceiptDetailsService::renderMetadata($sale);
+$html = ReceiptEngine::renderMetadata($sale);
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) {
         throw new RuntimeException($message);
@@ -49,13 +48,13 @@ $assert(!array_key_exists('username', $sale) && !array_key_exists('email', $sale
 
 $pdo->exec("UPDATE registers SET name = 'Main Till' WHERE register_id = 12");
 $renamed = $service->fetchSale(42);
-$assert(str_contains(ReceiptDetailsService::renderMetadata($renamed), 'Register: Main Till'),
+$assert(str_contains(ReceiptEngine::renderMetadata($renamed), 'Register: Main Till'),
     'a rename updates the displayed name through the stable Register identity');
 $assert((int)$pdo->query('SELECT register_id FROM cashier_shifts WHERE shift_id = 23')->fetchColumn() === 12,
     'a rename preserves the shift Register identity');
 
 $legacy = $service->fetchSale(43);
-$assert(str_contains(ReceiptDetailsService::renderMetadata($legacy), 'Register: Legacy / Unassigned'),
+$assert(str_contains(ReceiptEngine::renderMetadata($legacy), 'Register: Legacy / Unassigned'),
     'an unlinked sale receives an explicit safe Register fallback');
 $assert($legacy['register_name'] === null, 'an unlinked sale is not assigned a Register');
 $assert($service->fetchSale(42, 1) !== null, 'the frontend Store can fetch its receipt');
@@ -93,7 +92,7 @@ foreach ([
     $source = file_get_contents($root . '/' . $route);
     if ($function === 'render_frontend_receipt') {
         $source .= file_get_contents($root . '/src/backend/app/Views/sale_receipt_support.php');
-        $assert(str_contains($source, '(new ReceiptDetailsService($pdo))->fetchSale($sale_id, $storeId)'),
+        $assert(str_contains($source, '(new ReceiptEngine($pdo))->fetchSale($sale_id, $storeId)'),
             'the frontend receipt query uses the scoped service');
         $assert(substr_count($source, 'receipt_fetch_sale($pdo, $sale_id, $storeId)') >= 2,
             'both frontend view paths fetch Store-scoped receipt details');
@@ -102,7 +101,7 @@ foreach ([
         $route . ' has a complete receipt renderer');
     $renderer = preg_replace('/^function receipt_render_details/', 'function ' . $function, $match[0]);
     if ($function === 'render_frontend_receipt') {
-        $renderer = str_replace('ReceiptDetailsService::', '\\App\\Receipts\\ReceiptDetailsService::', $renderer);
+        // All ReceiptEngine references in sale_receipt_support.php are already fully qualified.
     }
     $renderer = str_replace('App\\Core\\Database::connection()', 'receipt_pdo()', $renderer);
     eval($renderer);

@@ -6,7 +6,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 set_exception_handler(static function (Throwable $exception): void { fwrite(STDERR, $exception->getMessage()."\n"); exit(1); });
 
 use App\Core\Database;
-use App\Receipts\ReceiptDetailsService;
+use App\Receipts\ReceiptEngine;
 use App\Receipts\ReceiptTableService;
 
 $config = require __DIR__ . '/../config/database.php';
@@ -38,7 +38,7 @@ try {
         INSERT INTO sale_reversals(reversal_id,sale_id,reversal_type,status,reason,settlement_method,refund_amount,requested_by) VALUES(1,6,'refund','approved','Legacy evidence','cash',2,1),(2,1,'return','pending','Pending history','none',0,1),(3,4,'return','rejected','Rejected history','none',0,1)");
     $pdo->prepare("INSERT INTO checkout_attempts(cashier_id,attempt_id,request_hash,sale_id,result_json) VALUES(1,?,?,6,'{}')")->execute([str_repeat('a',32),str_repeat('b',64)]);
     $pdo->beginTransaction();
-    (new ReceiptDetailsService($pdo))->preserveSale(6);
+    (new ReceiptEngine($pdo))->preserveSale(6);
     $pdo->commit();
     $saved=$pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id=6')->fetchColumn();
     $pdo->exec("UPDATE registers SET name='Renamed Till' WHERE register_id=1; UPDATE users SET display_name='Renamed Seller' WHERE user_id=1; UPDATE products SET product_name='Renamed Product' WHERE product_id=1");

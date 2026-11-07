@@ -1,7 +1,6 @@
 <?php
 require_once __DIR__ . '/../app/Services/ForecastHistoryImportService.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
-require_once __DIR__ . '/../app/Authorization/AuthorizationContext.php';
 
 use App\Services\ForecastHistoryImportService;
 use App\Authorization\RoleCapabilityPolicy;

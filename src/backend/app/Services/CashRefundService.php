@@ -6,7 +6,7 @@ namespace App\Services;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
-use App\Receipts\RefundReceiptService;
+use App\Receipts\ReceiptEngine;
 use App\Store\StoreWriteGate;
 use DomainException;
 use InvalidArgumentException;
@@ -23,7 +23,7 @@ require_once __DIR__ . '/../Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../Store/StoreWriteGate.php';
 require_once __DIR__ . '/CashierShiftService.php';
 require_once __DIR__ . '/FiscalPeriodGuardService.php';
-require_once __DIR__ . '/../Receipts/RefundReceiptService.php';
+require_once __DIR__ . '/../Receipts/ReceiptEngine.php';
 require_once __DIR__ . '/RefundExceptionService.php';
 require_once __DIR__ . '/SalesWorkflowService.php';
 
@@ -247,7 +247,7 @@ class CashRefundService
                 }
             }
 
-            (new RefundReceiptService($this->pdo))->preserve($refundId);
+            (new ReceiptEngine($this->pdo))->preserveRefund($refundId);
 
             $this->audit(
                 $cashierId,

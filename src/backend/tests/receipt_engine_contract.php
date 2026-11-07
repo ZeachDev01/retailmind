@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . '/../app/Receipts/ReceiptEngine.php';
-require_once __DIR__ . '/../app/Receipts/ReceiptDetailsService.php';
 
 use App\Receipts\ReceiptEngine;
 

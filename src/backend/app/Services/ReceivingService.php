@@ -619,6 +619,6 @@ class ReceivingService
             return store_product_scope('p');
         }
 
-        return (new App\Store\StoreScope($this->pdo))->productScope('p');
+        return ['', []];
     }
 }
