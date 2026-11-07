@@ -12,6 +12,7 @@
     let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
     let worker, photoUrl, cameraVersion = 0, leaving = false;
     let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null, returnToken = null;
+    let bannerDismissTimer = null, bannerAnimationTimer = null, closedBannerDismissed = false;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
     const scanStatus = message => { el('scan-status').textContent = message; };
     const updateSave = () => {
@@ -92,12 +93,31 @@
             }
             disableTransactionForm(true);
             scanStatus('');
+            if (!closedBannerDismissed) {
+                banner.classList.remove('dismissing');
+                banner.hidden = false;
+                clearTimeout(bannerDismissTimer);
+                clearTimeout(bannerAnimationTimer);
+                bannerDismissTimer = setTimeout(() => {
+                    banner.classList.add('dismissing');
+                    bannerAnimationTimer = setTimeout(() => {
+                        banner.hidden = true;
+                        banner.classList.remove('dismissing');
+                        closedBannerDismissed = true;
+                    }, 400);
+                }, 2500);
+            } else {
+                banner.hidden = true;
+            }
             return;
         }
 
         if (waiveBtn) waiveBtn.hidden = true;
 
         if (currentSession.is_controlling_cashier) {
+            closedBannerDismissed = false;
+            clearTimeout(bannerDismissTimer);
+            clearTimeout(bannerAnimationTimer);
             statusPill.textContent = 'Active (You)';
             statusPill.className = 'gcash-status gcash-status-verified';
             banner.className = 'gcash-session-banner active';
@@ -781,18 +801,6 @@
             for (const transaction of rows) {
                 const row = document.createElement('tr');
                 cell(row, transaction.time_formatted || transaction.created_at);
-                const details = document.createElement('details');
-                details.className = 'gcash-history-details';
-                const summary = document.createElement('summary');
-                summary.textContent = 'Details';
-                details.append(summary);
-                const identity = document.createElement('small');
-                identity.textContent = '#' + transaction.transaction_id + ' · ' + (transaction.shift_id ? 'Shift #' + transaction.shift_id : 'No shift');
-                details.append(identity);
-                const cashierInfo = document.createElement('small');
-                cashierInfo.textContent = transaction.cashier_name || ('Cashier #' + transaction.cashier_id);
-                details.append(cashierInfo);
-
                 cell(row, transaction.reference_number || '—');
                 cell(row, transaction.transaction_type);
 
@@ -800,33 +808,10 @@
                 const feeCell = cell(row, '—');
                 if (transaction.is_legacy) {
                     amountCell.textContent = formatPhp(transaction.amount);
-                    const legInfo = document.createElement('small');
-                    legInfo.textContent = 'Legacy reference record';
-                    details.append(legInfo);
                 } else {
                     amountCell.textContent = formatPhp(transaction.principal_amount || transaction.amount);
-                    const feeInfo = document.createElement('small');
                     const fee = formatPhp(transaction.gross_fee || transaction.fee_amount || 0);
                     feeCell.textContent = fee;
-                    const feeMethod = transaction.fee_method || 'cash';
-                    feeInfo.textContent = `Fee: ${fee} (${feeMethod})`;
-                    details.append(feeInfo);
-
-                    if (Number(transaction.service_cash_delta || 0) !== 0 || Number(transaction.wallet_delta || 0) !== 0) {
-                        const deltas = document.createElement('small');
-                        const cashDelta = formatPhp(Number(transaction.service_cash_delta || 0), true);
-                        const walletDelta = formatPhp(Number(transaction.wallet_delta || 0), true);
-                        deltas.textContent = `Cash: ${cashDelta} · Wallet: ${walletDelta}`;
-                        details.append(deltas);
-                    }
-                }
-                if (transaction.adjustments && transaction.adjustments.length > 0) {
-                    for (const adj of transaction.adjustments) {
-                        const adjInfo = document.createElement('small');
-                        adjInfo.style.color = 'var(--color-warning, #d97706)';
-                        adjInfo.textContent = `Adj #${adj.adjustment_id}: Cash ${formatPhp(adj.service_cash_delta, true)} · Wallet ${formatPhp(adj.wallet_delta, true)} (${adj.reason})`;
-                        details.append(adjInfo);
-                    }
                 }
 
                 const statusCell = cell(row, '');
@@ -841,20 +826,10 @@
                     legacy.textContent = 'Legacy Reference';
                     statusCell.append(legacy);
                 }
-                if (transaction.notes) {
-                    const note = document.createElement('small');
-                    note.textContent = transaction.notes;
-                    details.append(note);
-                }
-                if (transaction.verification_note) {
-                    const note = document.createElement('small');
-                    note.textContent = transaction.verification_note + ' · ' + (transaction.reviewed_at_formatted || transaction.reviewed_at);
-                    details.append(note);
-                }
+
                 const actionCell = cell(row, '');
                 const actions = document.createElement('div');
                 actions.className = 'gcash-history-row-actions';
-                actionCell.append(actions, details);
                 if (transaction.has_receipt) {
                     const button = document.createElement('button');
                     button.type = 'button'; button.className = 'btn btn-secondary'; button.textContent = 'Receipt';
@@ -889,7 +864,25 @@
                         openCorrectionDialog(transaction);
                     });
                     actions.append(button);
-                } else { actions.textContent = 'Reviewed'; }
+                } else {
+                    const reviewedBadge = document.createElement('span');
+                    reviewedBadge.className = 'gcash-status gcash-status-verified';
+                    reviewedBadge.textContent = 'Reviewed';
+                    actions.append(reviewedBadge);
+                }
+
+                const detailsBtn = document.createElement('button');
+                detailsBtn.type = 'button';
+                detailsBtn.className = 'btn btn-secondary';
+                detailsBtn.textContent = 'Details';
+                detailsBtn.addEventListener('click', () => {
+                    if (typeof openDetailsDrawer === 'function') {
+                        openDetailsDrawer(transaction);
+                    }
+                });
+                actions.append(detailsBtn);
+
+                actionCell.append(actions);
                 el('history-body').append(row);
             }
             el('history-status').textContent = rows.length ? '' : 'No transactions on this page.';
@@ -904,6 +897,102 @@
     }
     el('prev').addEventListener('click', () => { page--; loadHistory(); });
     el('next').addEventListener('click', () => { page++; loadHistory(); });
+
+    function openDetailsDrawer(tx) {
+        const drawer = el('details-drawer');
+        if (!drawer) return;
+
+        el('drawer-id').textContent = '#' + tx.transaction_id;
+        const status = el('drawer-status');
+        const statusKey = String(tx.verification_status).toLowerCase().replace(/\s+/g, '-');
+        status.className = 'gcash-status gcash-status-' + statusKey;
+        status.textContent = tx.verification_status;
+
+        const principal = tx.is_legacy ? tx.amount : (tx.principal_amount || tx.amount);
+        el('drawer-principal').textContent = formatPhp(principal);
+        const fee = tx.is_legacy ? 0 : (tx.gross_fee || tx.fee_amount || 0);
+        el('drawer-fee').textContent = formatPhp(fee);
+
+        el('drawer-ref').textContent = tx.reference_number || '—';
+        el('drawer-type').textContent = tx.transaction_type || '—';
+        el('drawer-time').textContent = tx.time_formatted || tx.created_at || '—';
+        el('drawer-cashier').textContent = tx.cashier_name || ('Cashier #' + tx.cashier_id);
+        el('drawer-shift').textContent = (tx.shift_id ? 'Shift #' + tx.shift_id : 'No shift') + (tx.session_id ? ' · Session #' + tx.session_id : '');
+        el('drawer-fee-method').textContent = tx.fee_method ? (tx.fee_method.toLowerCase().includes('gcash') ? 'Fee via GCash' : 'Fee in cash') : 'Cash';
+
+        const cashDelta = Number(tx.service_cash_delta || 0);
+        const walletDelta = Number(tx.wallet_delta || 0);
+        el('drawer-cash-delta').textContent = formatPhp(cashDelta, true);
+        el('drawer-cash-delta').style.color = cashDelta > 0 ? 'var(--theme-success, #16a34a)' : (cashDelta < 0 ? 'var(--theme-danger, #dc2626)' : 'inherit');
+        el('drawer-wallet-delta').textContent = formatPhp(walletDelta, true);
+        el('drawer-wallet-delta').style.color = walletDelta > 0 ? 'var(--theme-success, #16a34a)' : (walletDelta < 0 ? 'var(--theme-danger, #dc2626)' : 'inherit');
+
+        const adjCard = el('drawer-adjustments-card');
+        const adjList = el('drawer-adjustments');
+        adjList.replaceChildren();
+        if (tx.adjustments && tx.adjustments.length > 0) {
+            adjCard.hidden = false;
+            for (const adj of tx.adjustments) {
+                const item = document.createElement('div');
+                item.className = 'gcash-drawer-adjustment-item';
+                item.textContent = `Adj #${adj.adjustment_id}: Cash ${formatPhp(adj.service_cash_delta, true)} · Wallet ${formatPhp(adj.wallet_delta, true)} (${adj.reason})`;
+                adjList.append(item);
+            }
+        } else {
+            adjCard.hidden = true;
+        }
+
+        const notesCard = el('drawer-notes-card');
+        const notesBox = el('drawer-notes');
+        notesBox.replaceChildren();
+        if (tx.notes || tx.verification_note) {
+            notesCard.hidden = false;
+            if (tx.notes) {
+                const p = document.createElement('p');
+                const strong = document.createElement('strong');
+                strong.textContent = 'Note: ';
+                p.append(strong, document.createTextNode(tx.notes));
+                notesBox.append(p);
+            }
+            if (tx.verification_note) {
+                const p = document.createElement('p');
+                const strong = document.createElement('strong');
+                strong.textContent = 'Verification: ';
+                p.append(strong, document.createTextNode(tx.verification_note));
+                if (tx.reviewed_at_formatted) {
+                    const time = document.createElement('span');
+                    time.className = 'text-muted';
+                    time.textContent = ' (' + tx.reviewed_at_formatted + ')';
+                    p.append(time);
+                }
+                notesBox.append(p);
+            }
+        } else {
+            notesCard.hidden = true;
+        }
+
+        const receiptBtn = el('drawer-receipt-btn');
+        receiptBtn.hidden = !tx.has_receipt;
+        receiptBtn.onclick = () => {
+            drawer.close();
+            window.viewReceipt(tx.transaction_id, receiptBtn);
+        };
+
+        const correctBtn = el('drawer-correct-btn');
+        correctBtn.hidden = tx.verification_status !== 'Completed';
+        correctBtn.onclick = () => {
+            drawer.close();
+            openCorrectionDialog(tx);
+        };
+
+        drawer.showModal();
+    }
+
+    el('drawer-close')?.addEventListener('click', () => el('details-drawer')?.close());
+    el('drawer-close-footer')?.addEventListener('click', () => el('details-drawer')?.close());
+    el('details-drawer')?.addEventListener('click', (event) => {
+        if (event.target === el('details-drawer')) el('details-drawer').close();
+    });
     el('review-cancel').addEventListener('click', () => el('review-dialog').close());
     el('review-dialog').addEventListener('cancel', event => { if (reviewing) event.preventDefault(); });
     async function review(status) {

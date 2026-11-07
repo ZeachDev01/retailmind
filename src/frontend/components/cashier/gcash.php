@@ -34,15 +34,15 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </div>
             <div class="gcash-session-content">
-                <div id="gcash-session-banner" class="gcash-session-banner" role="status" aria-live="polite">
-                    <p id="gcash-session-message">Loading status…</p>
-                </div>
                 <section class="pos-panel gcash-follow-up-panel" aria-labelledby="gcash-follow-up-title">
                     <div class="gcash-follow-up-header">
                         <span class="gcash-follow-up-label" id="gcash-follow-up-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Unfinished exchanges</span>
                     </div>
                     <div id="gcash-follow-up" class="gcash-follow-up-content" aria-live="polite">Loading follow-up work…</div>
                 </section>
+                <div id="gcash-session-banner" class="gcash-session-banner" role="status" aria-live="polite">
+                    <p id="gcash-session-message">Loading status…</p>
+                </div>
             </div>
         </section>
 
@@ -60,12 +60,29 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <div role="tabpanel" id="panel-new-transaction" aria-labelledby="tab-new-transaction" tabindex="0" class="gcash-tabpanel">
             <section id="gcash-balances" class="gcash-workspace-balances" aria-label="Expected GCash balances">
                 <div class="gcash-overview-grid gcash-balances-grid" aria-live="polite">
-                    <div class="gcash-card gcash-card-balance">
-                        <span class="gcash-card-label">Physical Service Cash</span>
+                    <div class="gcash-card gcash-card-balance gcash-balance-card gcash-balance-card-cash">
+                        <div class="gcash-balance-header">
+                            <span class="gcash-balance-icon-wrap gcash-icon-cash" aria-hidden="true">
+                                <svg class="gcash-balance-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="20" height="12" rx="2.5"></rect>
+                                    <circle cx="12" cy="12" r="2.5"></circle>
+                                    <path d="M6 12h.01M18 12h.01"></path>
+                                </svg>
+                            </span>
+                            <span class="gcash-card-label">Physical Service Cash</span>
+                        </div>
                         <strong class="gcash-card-value" id="gcash-expected-cash">—</strong>
                     </div>
-                    <div class="gcash-card gcash-card-balance">
-                        <span class="gcash-card-label">GCash App Wallet</span>
+                    <div class="gcash-card gcash-card-balance gcash-balance-card gcash-balance-card-wallet">
+                        <div class="gcash-balance-header">
+                            <span class="gcash-balance-icon-wrap gcash-icon-wallet" aria-hidden="true">
+                                <svg class="gcash-balance-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+                                    <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                                </svg>
+                            </span>
+                            <span class="gcash-card-label">GCash App Wallet</span>
+                        </div>
                         <strong class="gcash-card-value" id="gcash-expected-wallet">—</strong>
                     </div>
                 </div>
@@ -260,6 +277,113 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
             </section>
         </div>
+
+        <dialog id="gcash-details-drawer" class="gcash-details-drawer" aria-labelledby="gcash-drawer-title">
+            <div class="gcash-drawer-container">
+                <header class="gcash-drawer-header">
+                    <div class="gcash-drawer-header-info">
+                        <div class="gcash-drawer-tags">
+                            <span class="gcash-drawer-id" id="gcash-drawer-id">#—</span>
+                            <span class="gcash-status" id="gcash-drawer-status">—</span>
+                        </div>
+                        <h2 id="gcash-drawer-title" class="gcash-drawer-title">Transaction details</h2>
+                    </div>
+                    <button type="button" class="gcash-drawer-close" id="gcash-drawer-close" aria-label="Close details">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                </header>
+
+                <div class="gcash-drawer-body">
+                    <div class="gcash-drawer-card gcash-drawer-hero-card">
+                        <div class="gcash-drawer-hero-item">
+                            <span class="gcash-drawer-hero-label">Principal amount</span>
+                            <strong class="gcash-drawer-hero-val" id="gcash-drawer-principal">₱0.00</strong>
+                        </div>
+                        <div class="gcash-drawer-hero-item">
+                            <span class="gcash-drawer-hero-label">Service fee</span>
+                            <strong class="gcash-drawer-hero-val gcash-drawer-fee-val" id="gcash-drawer-fee">₱0.00</strong>
+                        </div>
+                    </div>
+
+                    <div class="gcash-drawer-card">
+                        <h3 class="gcash-drawer-card-title"><i class="bi bi-info-circle" aria-hidden="true"></i> Overview</h3>
+                        <dl class="gcash-drawer-meta-list">
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Reference</dt>
+                                <dd><code class="gcash-drawer-code" id="gcash-drawer-ref">—</code></dd>
+                            </div>
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Type</dt>
+                                <dd id="gcash-drawer-type">—</dd>
+                            </div>
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Date &amp; Time</dt>
+                                <dd id="gcash-drawer-time">—</dd>
+                            </div>
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Cashier</dt>
+                                <dd id="gcash-drawer-cashier">—</dd>
+                            </div>
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Shift &amp; Session</dt>
+                                <dd id="gcash-drawer-shift">—</dd>
+                            </div>
+                            <div class="gcash-drawer-meta-row">
+                                <dt>Fee method</dt>
+                                <dd id="gcash-drawer-fee-method">—</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <div class="gcash-drawer-card">
+                        <h3 class="gcash-drawer-card-title"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Balance movement</h3>
+                        <div class="gcash-drawer-deltas">
+                            <div class="gcash-drawer-delta-box">
+                                <div class="gcash-drawer-delta-label">
+                                    <span class="gcash-balance-icon-wrap gcash-icon-cash" aria-hidden="true">
+                                        <svg class="gcash-balance-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="6" width="20" height="12" rx="2.5"></rect>
+                                            <circle cx="12" cy="12" r="2.5"></circle>
+                                            <path d="M6 12h.01M18 12h.01"></path>
+                                        </svg>
+                                    </span>
+                                    <span>Physical Service Cash</span>
+                                </div>
+                                <strong class="gcash-drawer-delta-amount" id="gcash-drawer-cash-delta">—</strong>
+                            </div>
+                            <div class="gcash-drawer-delta-box">
+                                <div class="gcash-drawer-delta-label">
+                                    <span class="gcash-balance-icon-wrap gcash-icon-wallet" aria-hidden="true">
+                                        <svg class="gcash-balance-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+                                            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                                        </svg>
+                                    </span>
+                                    <span>GCash App Wallet</span>
+                                </div>
+                                <strong class="gcash-drawer-delta-amount" id="gcash-drawer-wallet-delta">—</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="gcash-drawer-card" id="gcash-drawer-adjustments-card" hidden>
+                        <h3 class="gcash-drawer-card-title"><i class="bi bi-clock-history" aria-hidden="true"></i> Adjustments</h3>
+                        <div class="gcash-drawer-adjustments" id="gcash-drawer-adjustments"></div>
+                    </div>
+
+                    <div class="gcash-drawer-card" id="gcash-drawer-notes-card" hidden>
+                        <h3 class="gcash-drawer-card-title"><i class="bi bi-chat-square-text" aria-hidden="true"></i> Notes &amp; findings</h3>
+                        <div class="gcash-drawer-notes-content" id="gcash-drawer-notes"></div>
+                    </div>
+                </div>
+
+                <footer class="gcash-drawer-footer">
+                    <button type="button" class="btn btn-primary" id="gcash-drawer-receipt-btn" hidden><i class="bi bi-receipt" aria-hidden="true"></i> View receipt</button>
+                    <button type="button" class="btn btn-secondary" id="gcash-drawer-correct-btn" hidden><i class="bi bi-pencil-square" aria-hidden="true"></i> Correct</button>
+                    <button type="button" class="btn btn-secondary" id="gcash-drawer-close-footer">Close</button>
+                </footer>
+            </div>
+        </dialog>
 
         <dialog id="gcash-photo-dialog" aria-labelledby="gcash-photo-dialog-title">
             <div class="gcash-photo-dialog-header">
