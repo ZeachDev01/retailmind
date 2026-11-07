@@ -12,15 +12,13 @@ require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Services/SystemHealthService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/ForecastingSchedulerService.php';
 
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\ForecastingSchedulerService;
 
@@ -212,8 +210,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, product_name, unit_price, cos
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 50)");
 
 $evalService = new CandidateEvaluationService($pdo);
-$promotionService = new ModelPromotionService($pdo, $evalService);
-$activationService = new StoreActivationService($pdo, $evalService, $promotionService);
+$activationService = new StoreModelGovernanceService($pdo, $evalService);
 require_once __DIR__ . '/support/governance_fixture.php';
 governance_fixture($pdo, $activationService, ['store_rf_candidate_20261010', 'store_rf_candidate_20261101', 'store_rf_promo_v1']);
 
@@ -231,7 +228,7 @@ try {
 } catch (InvalidArgumentException $e) {
     $demoBlocked = true;
 }
-assert_check($demoBlocked, 'StoreActivationService::activateStoreModel must throw on demo models');
+assert_check($demoBlocked, 'StoreModelGovernanceService::activateStoreModel must throw on demo models');
 
 // =========================================================================
 echo "\n--- Test 2: Activation Gating Matrix (Missing Evidence Refusal) ---\n";
@@ -247,7 +244,7 @@ assert_check($readiness['checks']['operational_review_accepted'] === false, 'Ope
 assert_check($readiness['checks']['observation_period_completed'] === false, 'Observation period check is false');
 
 // Seed evaluations with passing WAPE (0.15, 0.18, 0.22) vs baseline (0.25, 0.28, 0.32)
-$evalService->setThresholds(['ml_max_wape_7d' => 0.20, 'ml_max_wape_14d' => 0.25, 'ml_max_wape_28d' => 0.30], 1);
+$activationService->setThresholds(['ml_max_wape_7d' => 0.20, 'ml_max_wape_14d' => 0.25, 'ml_max_wape_28d' => 0.30], 1);
 foreach ([7 => [0.15, 0.25], 14 => [0.18, 0.28], 28 => [0.22, 0.32]] as $h => [$w, $bw]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape, candidate_gate_outcome, created_at)
@@ -261,13 +258,13 @@ assert_check($readiness['checks']['quality_gates_passed'] === true, 'Quality gat
 assert_check($readiness['ready'] === false, 'Activation still blocked without reviews and observation');
 
 // Record Super Admin technical review
-$promotionService->recordTechnicalReview($candidateVersion, 'accepted', 'Technical validation passed across all 3 horizons.', 1);
+$activationService->recordTechnicalReview($candidateVersion, 'accepted', 'Technical validation passed across all 3 horizons.', 1);
 $readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-10-10');
 assert_check($readiness['checks']['technical_review_accepted'] === true, 'Super Admin technical approval verified');
 assert_check($readiness['ready'] === false, 'Activation still blocked without operational review');
 
 // Record Admin operational review
-$promotionService->recordOperationalReview($candidateVersion, 'accepted', 'Forecast patterns match Store promotions and weekly seasonality.', 2);
+$activationService->recordOperationalReview($candidateVersion, 'accepted', 'Forecast patterns match Store promotions and weekly seasonality.', 2);
 $readiness = $activationService->validateActivationReadiness($candidateVersion, '2026-10-10');
 assert_check($readiness['checks']['operational_review_accepted'] === true, 'Admin operational review verified');
 assert_check($readiness['ready'] === false, 'Activation still blocked without 28 observation days');
@@ -369,8 +366,8 @@ assert_check(!$readiness['ready'] && !$readiness['checks']['observation_period_c
 $pdo->rollBack();
 
 // Execute Activation
-$evalService->setObservationMode(true, 1);
-$evalService->setRecommendationsSuspended(true, 1);
+$activationService->setObservationMode(true, 1);
+$activationService->setRecommendationsSuspended(true, 1);
 $record = $activationService->activateStoreModel($candidateVersion, '2026-09-28', 1, 'Routine activation following 28-day observation');
 
 assert_check($record['model_version'] === $candidateVersion, 'Activation record contains model version');
@@ -393,8 +390,8 @@ foreach ([7 => [0.12, 0.25], 14 => [0.15, 0.28], 28 => [0.19, 0.32]] as $h => [$
         VALUES (?, ?, ?, ?, 'passed', '2026-10-31 23:00:00')
     ")->execute([$nextCandidate, $h, $w, $bw]);
 }
-$promotionService->recordTechnicalReview($nextCandidate, 'accepted', 'Candidate 2 technically sound.', 1);
-$promotionService->recordOperationalReview($nextCandidate, 'accepted', 'Candidate 2 operationally accepted.', 2);
+$activationService->recordTechnicalReview($nextCandidate, 'accepted', 'Candidate 2 technically sound.', 1);
+$activationService->recordOperationalReview($nextCandidate, 'accepted', 'Candidate 2 operationally accepted.', 2);
 for ($i = 1; $i <= 28; $i++) {
     $tDate = sprintf('2026-10-%02d', $i);
     $pdo->prepare("

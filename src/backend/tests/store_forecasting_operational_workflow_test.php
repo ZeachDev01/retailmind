@@ -31,8 +31,7 @@ require_once __DIR__ . '/../app/Store/ScheduledDemandDriverService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreTrainingEligibilityService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/ModelPromotionService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/ForecastingSchedulerService.php';
@@ -48,8 +47,7 @@ use App\Store\ScheduledDemandDriverService;
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\StoreTrainingEligibilityService;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\ModelPromotionService;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\ReplenishmentQueueService;
 use App\Forecasting\ForecastingSchedulerService;
@@ -787,7 +785,7 @@ assert_same($candidateVersion1, $latestObsJob['model_version'], 'Candidate 1 sur
 echo "\n--- Section 7: Automated Qualification & Local Administrator Approval ---\n";
 
 $evalService = new CandidateEvaluationService($pdo);
-$activationService = new StoreActivationService($pdo, $evalService);
+$activationService = new StoreModelGovernanceService($pdo, $evalService);
 require_once __DIR__ . '/support/governance_fixture.php';
 governance_fixture($pdo, $activationService, [$candidateVersion1, $candidateVersion2]);
 
@@ -1139,7 +1137,7 @@ assert_same('Stock-rule suggestion', $p1Stale['basis'], 'Stale forecast falls ba
 assert_true(str_contains((string)$p1Stale['forecast_status'], 'Stale forecast'), 'Stale forecast labeled with origin date');
 
 // 12.5 Observation-only output restriction
-$evalService->setObservationMode(true, 1);
+$activationService->setObservationMode(true, 1);
 $recsObs = $queueService->getRecommendations($opJobId, '2026-11-02');
 $p1Obs = null;
 foreach ($recsObs as $r) {
@@ -1147,7 +1145,7 @@ foreach ($recsObs as $r) {
 }
 assert_same('Stock-rule suggestion', $p1Obs['basis'], 'Observation mode restricts guidance to Stock-rule suggestion');
 assert_same(false, $p1Obs['is_forecast_backed'], 'Observation mode products are not forecast backed');
-$evalService->setObservationMode(false, 1);
+$activationService->setObservationMode(false, 1);
 
 // =============================================================================
 // Section 13: Separation of Workflow Evidence from Genuine Store Prediction Usefulness

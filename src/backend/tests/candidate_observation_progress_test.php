@@ -15,11 +15,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreActivationService.php';
+require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
 
 use App\Forecasting\DemandHistoryService;
 use App\Forecasting\CandidateEvaluationService;
-use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {

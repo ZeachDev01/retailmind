@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace App\Forecasting;
 
+require_once __DIR__ . '/ForecastAggregateReader.php';
+require_once __DIR__ . '/ForecastUsability.php';
+
 use PDO;
 use Throwable;
 use DateTimeImmutable;
@@ -28,7 +31,7 @@ class ReplenishmentQueueService
     public function getRecommendations(?int $jobId = null, ?string $asOfDate = null): array
     {
         $forecasts = $jobId ? array_column($this->getQueue($jobId, $asOfDate), null, 'product_id') : [];
-        $settings = new CandidateEvaluationService($this->pdo);
+        $settings = new StoreModelGovernanceService($this->pdo);
         $observation = $settings->isObservationMode();
         $suspended = $settings->isRecommendationsSuspended();
 
@@ -48,15 +51,10 @@ class ReplenishmentQueueService
                 $jobInfo = $stmt->fetch(PDO::FETCH_ASSOC);
             } catch (Throwable $e) {}
         }
-        $isOperationalSuccess = $jobInfo && $jobInfo['trigger_type'] === 'forecast_generation' && $jobInfo['status'] === 'succeeded';
-        $isJobFailed = $jobInfo && $jobInfo['status'] === 'failed';
-        $isJobObservation = $jobInfo && $jobInfo['trigger_type'] === 'forecast_observation';
-
         $latestJobId = null;
         try {
             $latestJobId = (new DemandForecastService($this->pdo))->getLatestUsableJobId($asOfDate);
         } catch (Throwable $e) {}
-        $isSuperseded = ($jobId !== null && $latestJobId !== null && $jobId !== $latestJobId);
 
         $jobMeta = null;
         if ($jobId) {
@@ -70,20 +68,16 @@ class ReplenishmentQueueService
             $isDemoDb = (bool)($this->pdo->query("SELECT 1 FROM platform_settings WHERE setting_key = 'demo_import_metadata'")->fetchColumn() ?: false);
         } catch (Throwable $e) {}
 
-        $isIncompatibleModel = false;
-        $incompatibilityReason = '';
-        if ($jobMeta) {
-            if (!$isDemoDb && !empty($jobMeta['is_demo'])) {
-                $isIncompatibleModel = true;
-                $incompatibilityReason = 'Demo model cannot be used in Store database';
-            } elseif ($isDemoDb && empty($jobMeta['is_demo']) && ($jobMeta['dataset_kind'] ?? null) === 'store') {
-                $isIncompatibleModel = true;
-                $incompatibilityReason = 'Store model cannot be used in Demo database';
-            } elseif (!empty($jobMeta['feature_version']) && $jobMeta['feature_version'] !== '2.0.0') {
-                $isIncompatibleModel = true;
-                $incompatibilityReason = 'Obsolete feature schema ' . $jobMeta['feature_version'];
-            }
-        }
+        $usabilityContext = [
+            'observation' => $observation,
+            'suspended' => $suspended,
+            'approved_model_version' => $approvedVersion,
+            'is_demo_db' => $isDemoDb,
+            'expected_origin' => $origin,
+            'latest_usable_job_id' => $latestJobId,
+            'job_id' => $jobId,
+            'job_meta' => $jobMeta,
+        ];
 
         // If forecasts are empty because job was observation/failed/superseded, but historical forecast rows exist, load them for metadata display
         if ($jobId && empty($forecasts)) {
@@ -109,20 +103,11 @@ class ReplenishmentQueueService
             $product['stock_rule_quantity'] = self::roundQuantity($stockRuleQuantity,
                 (int)$product['minimum_order_quantity'], (int)$product['units_per_package']);
 
-            // One unified eligibility rule for displayed expected sales and purchase calculation:
-            // operational success, complete current period, approved compatible Store model/Product/schema,
-            // supported readiness/inputs, no observation-only status, no suspension, not superseded.
-            $usableForecast = $hasForecast
-                && $isOperationalSuccess
-                && !$observation
-                && !$suspended
-                && !$isSuperseded
-                && !$isIncompatibleModel
-                && !empty($forecast['complete_forecast'])
-                && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)
-                && $forecast['forecast_origin'] === $origin
-                && $approvedVersion !== ''
-                && $forecast['model_version'] === $approvedVersion;
+            // One unified buying-usability rule owned by ForecastUsability: the
+            // aggregate, the displayed run, and the governance context decide
+            // whether the forecast backs expected sales and purchase suggestions.
+            $assessment = ForecastUsability::assess($forecast, $jobInfo, $usabilityContext);
+            $usableForecast = $assessment['usable'];
 
             if ($usableForecast) {
                 $product += $forecast;
@@ -131,7 +116,7 @@ class ReplenishmentQueueService
                 $product['expected_sales_28_day'] = $forecast['forecast_28_day'];
                 $product['expected_sales_period'] = $today->format('Y-m-d') . ' – ' . $today->modify('+27 days')->format('Y-m-d');
                 $product['basis'] = 'Demand Forecast';
-                $product['forecast_status'] = $forecast['readiness_level'] . ' readiness forecast';
+                $product['forecast_status'] = $assessment['status'];
                 $product['job_id'] = $forecast['job_id'] ?? $jobId;
                 $product['limitation_marker'] = $forecast['limitation_marker'] ?? null;
                 $product['is_forecast_backed'] = true;
@@ -161,64 +146,12 @@ class ReplenishmentQueueService
                         $stock, $reorder, (int)$product['safety_stock']);
                 }
 
-                $exclusionReason = 'Forecast unavailable';
-                $exclusionCategory = 'evidence';
-                $exclusionAction = 'Replenishment continues on stock rules';
-
-                if ($observation || $isJobObservation) {
-                    $exclusionReason = 'Observation Mode: forecast is observation telemetry only';
-                    $exclusionCategory = 'restriction';
-                    $exclusionAction = 'Administrator: Complete candidate observation';
-                } elseif ($suspended) {
-                    $exclusionReason = 'Recommendations Suspended by Administrator';
-                    $exclusionCategory = 'restriction';
-                    $exclusionAction = 'Administrator: Resume forecast recommendations';
-                } elseif ($isJobFailed) {
-                    $exclusionReason = 'Failed forecast: run #' . $jobId;
-                    $exclusionCategory = 'recovery';
-                    $exclusionAction = ForecastingSchedulerService::canAutomaticallyRetry($jobInfo)
-                        ? 'Automatic retry scheduled; no action needed'
-                        : 'Super Administrator: Inspect blocked or exhausted recovery before retrying';
-                } elseif ($approvedVersion === '') {
-                    $exclusionReason = 'Unapproved model: no approved Store model';
-                    $exclusionCategory = 'approval';
-                    $exclusionAction = 'Administrator: Review and approve candidate model in Model Review';
-                } elseif ($isIncompatibleModel) {
-                    $exclusionReason = 'Incompatible model: ' . $incompatibilityReason;
-                    $exclusionCategory = 'recovery';
-                    $exclusionAction = 'Super Administrator: Verify model schema and database environment';
-                } elseif ($isSuperseded) {
-                    $exclusionReason = 'Superseded forecast: run #' . $jobId;
-                    $exclusionCategory = 'freshness';
-                    $exclusionAction = 'Use latest forecast run';
-                } elseif (!$hasForecast) {
-                    $exclusionReason = 'Forecast unavailable: no forecast generated for this product';
-                    $exclusionCategory = 'evidence';
-                    $exclusionAction = 'Accumulate sales history or wait for next scheduled forecast run';
-                } elseif ($forecast['forecast_origin'] !== $origin) {
-                    $exclusionReason = 'Stale forecast: ' . $forecast['forecast_origin'] . ' (expected ' . $origin . ')';
-                    $exclusionCategory = 'freshness';
-                    $exclusionAction = 'Wait for next scheduled forecast run at 01:00 Asia/Manila';
-                } elseif ($forecast['model_version'] !== $approvedVersion) {
-                    $exclusionReason = 'Unapproved model: model ' . ($forecast['model_version'] ?: 'none') . ' is not approved';
-                    $exclusionCategory = 'approval';
-                    $exclusionAction = 'Administrator: Review and approve candidate model in Model Review';
-                } elseif (empty($forecast['complete_forecast'])) {
-                    $exclusionReason = 'Incomplete forecast: missing full 28-day predictions';
-                    $exclusionCategory = 'evidence';
-                    $exclusionAction = 'Wait for next scheduled forecast run';
-                } elseif (!in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)) {
-                    $exclusionReason = 'Insufficient history: readiness level is ' . ($forecast['readiness_level'] ?? 'Insufficient');
-                    $exclusionCategory = 'evidence';
-                    $exclusionAction = 'Accumulate more sales history; replenishment continues on stock rules';
-                }
-
-                $product['exclusion_reason'] = $exclusionReason;
-                $product['exclusion_category'] = $exclusionCategory;
-                $product['exclusion_action'] = $exclusionAction;
+                $product['exclusion_reason'] = $assessment['exclusion_reason'];
+                $product['exclusion_category'] = $assessment['exclusion_category'];
+                $product['exclusion_action'] = $assessment['exclusion_action'];
 
                 if (!$hasForecast) {
-                    $product['forecast_status'] = 'Forecast unavailable';
+                    $product['forecast_status'] = $assessment['status'];
                     $product['forecast_origin'] = null;
                     $product['model_version'] = null;
                     $product['readiness_level'] = null;
@@ -230,34 +163,7 @@ class ReplenishmentQueueService
                     $product['readiness_level'] = $forecast['readiness_level'] ?? null;
                     $product['limitation_marker'] = $forecast['limitation_marker'] ?? null;
                     $product['job_id'] = $forecast['job_id'] ?? $jobId;
-
-                    $statusParts = [];
-                    if ($observation || $isJobObservation) {
-                        $statusParts[] = 'Observation Mode: forecast is observation telemetry only';
-                    }
-                    if ($suspended) {
-                        $statusParts[] = 'Recommendations Suspended by Administrator';
-                    }
-                    if (!$observation && !$suspended && !$isJobObservation) {
-                        if ($isJobFailed) {
-                            $statusParts[] = 'Failed forecast: run #' . $jobId;
-                        } elseif ($isSuperseded) {
-                            $statusParts[] = 'Superseded forecast: run #' . $jobId;
-                        } elseif ($forecast['forecast_origin'] !== $origin) {
-                            $statusParts[] = 'Stale forecast: ' . $forecast['forecast_origin'];
-                        } elseif ($approvedVersion === '' || $forecast['model_version'] !== $approvedVersion) {
-                            $statusParts[] = 'Unapproved model: ' . ($forecast['model_version'] ?: 'none');
-                        } elseif ($isIncompatibleModel) {
-                            $statusParts[] = 'Incompatible model: ' . $incompatibilityReason;
-                        } elseif (empty($forecast['complete_forecast'])) {
-                            $statusParts[] = 'Incomplete forecast';
-                        } elseif (!in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true)) {
-                            $statusParts[] = $forecast['readiness_level'] . ' readiness forecast';
-                        } else {
-                            $statusParts[] = $forecast['readiness_level'] . ' readiness forecast';
-                        }
-                    }
-                    $product['forecast_status'] = implode('; ', $statusParts);
+                    $product['forecast_status'] = $assessment['status'];
                 }
             }
 
@@ -307,27 +213,18 @@ class ReplenishmentQueueService
         $isObservationMode = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservationMode = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $governance = new StoreModelGovernanceService($this->pdo);
+            $isObservationMode = $governance->isObservationMode();
+            $isSuspended = $governance->isRecommendationsSuspended();
         } catch (Throwable $e) {
             // Degrade gracefully
         }
 
-        $hasTargetDate = false;
-        $hasLimitationMarker = false;
-        try {
-            $this->pdo->query("SELECT target_date, limitation_marker FROM demand_forecasts LIMIT 0");
-            $hasTargetDate = true;
-            $hasLimitationMarker = true;
-        } catch (Throwable $e) {
-            // Column may not exist in lightweight test fixtures
-        }
+        $reader = new ForecastAggregateReader($this->pdo);
+        $aggregates = $reader->read($jobId, false);
+        $leadTimeDemands = $reader->readLeadTimeDemand($jobId);
 
-        $targetDateCheck = $hasTargetDate ? 'AND COUNT(DISTINCT df.target_date) = 28' : '';
-        $limitationSelect = $hasLimitationMarker ? 'MAX(df.limitation_marker) as limitation_marker,' : 'NULL as limitation_marker,';
-
-        // 1. Fetch products and forecasts (goods count only when received; no supplier joins or open POs)
+        // 1. Fetch products (goods count only when received; no supplier joins or open POs)
         $stmt = $this->pdo->prepare("
             SELECT 
                 p.product_id,
@@ -335,55 +232,13 @@ class ReplenishmentQueueService
                 p.product_name,
                 COALESCE(i.quantity_on_hand, 0) AS current_stock,
                 COALESCE(p.supplier_lead_time_days, 7) AS lead_time_days,
-                COALESCE(p.minimum_order_quantity, 1) AS moq,
-                
-                fc.has_forecast,
-                fc.f7 AS forecast_7_day,
-                fc.f14 AS forecast_14_day,
-                fc.f28 AS forecast_28_day,
-                fc.f_lead AS forecast_lead_time,
-                fc.readiness_level,
-                fc.forecast_origin,
-                fc.complete_forecast,
-                fc.model_version,
-                fc.limitation_marker
-                
+                COALESCE(p.minimum_order_quantity, 1) AS moq
             FROM products p
             LEFT JOIN inventory i ON p.product_id = i.product_id
-            
-            LEFT JOIN (
-                SELECT 
-                    df.product_id,
-                    1 AS has_forecast,
-                    MAX(df.readiness_level) as readiness_level,
-                    MAX(df.forecast_origin) as forecast_origin,
-                    MAX(df.model_version) as model_version,
-                    {$limitationSelect}
-                    CASE WHEN COUNT(*) = 28 AND COUNT(DISTINCT df.horizon_day) = 28
-                        {$targetDateCheck}
-                        AND MIN(df.horizon_day) = 1 AND MAX(df.horizon_day) = 28
-                        AND MIN(df.predicted_units) >= 0 AND COUNT(df.predicted_units) = 28
-                        AND COUNT(DISTINCT df.forecast_origin) = 1
-                        AND COUNT(DISTINCT df.model_version) = 1
-                        AND COUNT(df.forecast_origin) = 28 AND COUNT(df.model_version) = 28
-                        AND COUNT(df.readiness_level) = 28
-                        THEN 1 ELSE 0 END as complete_forecast,
-                    SUM(CASE WHEN df.horizon_day <= 7 THEN df.predicted_units ELSE 0 END) as f7,
-                    SUM(CASE WHEN df.horizon_day <= 14 THEN df.predicted_units ELSE 0 END) as f14,
-                    SUM(CASE WHEN df.horizon_day <= 28 THEN df.predicted_units ELSE 0 END) as f28,
-                    SUM(CASE WHEN df.horizon_day <= COALESCE(
-                        (SELECT supplier_lead_time_days FROM products WHERE product_id = df.product_id LIMIT 1),
-                        7
-                    ) THEN df.predicted_units ELSE 0 END) as f_lead
-                FROM demand_forecasts df
-                WHERE df.job_id = :job_id
-                GROUP BY df.product_id
-            ) fc ON fc.product_id = p.product_id
-            
             WHERE p.status = 'active'
         ");
         
-        $stmt->execute(['job_id' => $jobId]);
+        $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         $queue = [];
@@ -394,9 +249,10 @@ class ReplenishmentQueueService
             $leadTimeDays = max(1, (int)($row['lead_time_days'] ?? 7));
             $moq = max(1, (int)($row['moq'] ?? 1));
 
-            $hasForecast = !empty($row['has_forecast']) && $row['readiness_level'] !== null;
-            $isComplete = !empty($row['complete_forecast']);
-            $isSupportedReadiness = in_array($row['readiness_level'], ['Low', 'Medium', 'High'], true);
+            $forecast = $aggregates[$productId] ?? null;
+            $hasForecast = $forecast !== null && $forecast['readiness_level'] !== null;
+            $isComplete = $forecast !== null && !empty($forecast['complete_forecast']);
+            $isSupportedReadiness = $hasForecast && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true);
             $hasUsableForecast = $hasForecast && $isComplete && $isSupportedReadiness;
             
             if (!$hasUsableForecast) {
@@ -414,10 +270,10 @@ class ReplenishmentQueueService
                     !$hasForecast ? 'No forecast available' : (!$isComplete ? 'Incomplete forecast' : 'Insufficient readiness')
                 );
             } else {
-                $f7 = (int)$row['forecast_7_day'];
-                $f14 = (int)$row['forecast_14_day'];
-                $f28 = (int)$row['forecast_28_day'];
-                $leadTimeDemand = (int)$row['forecast_lead_time'];
+                $f7 = (int)$forecast['forecast_7_day'];
+                $f14 = (int)$forecast['forecast_14_day'];
+                $f28 = (int)$forecast['forecast_28_day'];
+                $leadTimeDemand = (int)($leadTimeDemands[$productId] ?? 0);
                 $exposure = $currentStock - $leadTimeDemand;
 
                 // Urgency rule: Urgent/Watch/Covered apply only where supporting forecast evidence exists
@@ -463,11 +319,11 @@ class ReplenishmentQueueService
                 'forecast_14_day' => $f14,
                 'forecast_28_day' => $f28,
                 'forecast_lead_time' => $leadTimeDemand,
-                'readiness_level' => $row['readiness_level'],
-                'forecast_origin' => $row['forecast_origin'],
-                'complete_forecast' => (bool)$row['complete_forecast'],
-                'model_version' => $row['model_version'],
-                'limitation_marker' => $row['limitation_marker'],
+                'readiness_level' => $forecast['readiness_level'] ?? null,
+                'forecast_origin' => $forecast['forecast_origin'] ?? null,
+                'complete_forecast' => $forecast !== null && (bool)$forecast['complete_forecast'],
+                'model_version' => $forecast['model_version'] ?? null,
+                'limitation_marker' => $forecast['limitation_marker'] ?? null,
                 'stock_exposure' => $exposure,
                 'urgency_label' => $urgency,
                 'recommended_quantity' => $recommendedQty,

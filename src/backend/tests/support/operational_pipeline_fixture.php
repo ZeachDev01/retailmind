@@ -106,10 +106,10 @@ switch ($action) {
         (new NotificationService($pdo))->checkAndNotifyForecasts();
         echo json_encode($result); break;
     case 'summary':
-        $activation = new App\Forecasting\StoreActivationService($pdo, null, null, $argv[3]);
+        $activation = new App\Forecasting\StoreModelGovernanceService($pdo, null, $argv[3]);
         echo json_encode($activation->getApprovalSummary($argv[2], $yesterday)); break;
     case 'approve':
-        $activation = new App\Forecasting\StoreActivationService($pdo, null, null, $argv[3]);
+        $activation = new App\Forecasting\StoreModelGovernanceService($pdo, null, $argv[3]);
         echo json_encode($activation->activateStoreModel($argv[2], $yesterday, 2, 'Isolated synthetic workflow evidence only', 'admin')); break;
     case 'guidance':
         $forecasts = new App\Forecasting\DemandForecastService($pdo);

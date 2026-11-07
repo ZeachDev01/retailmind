@@ -35,6 +35,33 @@ if RUNNER_CONFIG_PATH.exists():
     except Exception:
         pass
 
+# One shared ADR-0005 band definition for PHP and this worker.
+READINESS_BANDS_PATH = Path(__file__).resolve().parent.parent / "config" / "forecast_readiness_bands.json"
+
+
+def load_readiness_bands(path=None):
+    with open(path or READINESS_BANDS_PATH, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def resolve_readiness(days, qualified=True, bands=None):
+    """Return (level, limitation_marker) for a usable-history day count."""
+    bands = bands if bands is not None else load_readiness_bands()
+    thresholds = bands["thresholds"]
+    if days < thresholds["low"]:
+        key = "insufficient"
+    elif days < thresholds["medium"]:
+        key = "low"
+    elif days < thresholds["high"]:
+        key = "medium"
+    elif qualified or not bands.get("high_requires_qualification", False):
+        key = "high"
+    else:
+        key = "medium"
+    band = bands["bands"][key]
+    return band["level"], band["limitation_marker"]
+
+
 def get_connection():
     db_host = os.getenv("DB_HOST", "127.0.0.1")
     if db_host.lower() not in ("127.0.0.1", "localhost", "::1"):
@@ -354,12 +381,12 @@ def run_forecast_generation(conn, cursor, job_id, observation_version=None, evid
     if not np.isfinite(predictions).all():
         raise ValueError("Model produced non-finite forecasts")
     counts = history_at(data, origin).groupby('product_id').date.nunique()
+    readiness_bands = load_readiness_bands()
     for row, predicted in zip(features.itertuples(), predictions):
         days = int(counts[row.product_id])
-        readiness = 'Insufficient' if days < 56 else 'Low' if days < 180 else 'Medium'
+        qualified = days >= readiness_bands['thresholds']['high'] and meta.get('outcome') == 'passed'
+        readiness = resolve_readiness(days, qualified, readiness_bands)[0]
         limitation = 'Observed history only; calendar/stockout limitations apply'
-        if days >= 365 and meta.get('outcome') == 'passed':
-            readiness = 'High'
         if is_demo:
             limitation = 'Demo evidence; source authenticity unverified; not Store accuracy'
             if context['source'].get('source_kind') == 'uci_online_retail':
