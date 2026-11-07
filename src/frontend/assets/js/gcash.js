@@ -885,6 +885,21 @@
                 actionCell.append(actions);
                 el('history-body').append(row);
             }
+            if (rows.length > 0) {
+                const targetRows = 6;
+                const ghostNeeded = Math.max(0, targetRows - rows.length);
+                for (let i = 0; i < ghostNeeded; i++) {
+                    const ghostRow = document.createElement('tr');
+                    ghostRow.className = 'table-ghost-row';
+                    ghostRow.setAttribute('aria-hidden', 'true');
+                    for (let c = 0; c < 7; c++) {
+                        const ghostCell = document.createElement('td');
+                        if (c === 0) ghostCell.innerHTML = '&nbsp;';
+                        ghostRow.appendChild(ghostCell);
+                    }
+                    el('history-body').append(ghostRow);
+                }
+            }
             el('history-status').textContent = rows.length ? '' : 'No transactions on this page.';
             el('page').textContent = 'Page ' + requestedPage;
             el('prev').disabled = requestedPage <= 1;

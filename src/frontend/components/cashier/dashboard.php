@@ -21,6 +21,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard Overview</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/gcash.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/gcash.css')) ?>">
@@ -100,7 +101,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                         <a class="btn btn-small btn-secondary cashier-view-all-btn" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions')) ?>">View all <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
                     </div>
                     <div class="table-wrap cashier-transactions-wrap" role="region" aria-labelledby="recent-transactions-title" tabindex="0">
-                        <table class="cashier-recent-table" role="table" aria-labelledby="recent-transactions-title">
+                        <table class="cashier-recent-table" data-no-smart-table role="table" aria-labelledby="recent-transactions-title">
                             <thead role="rowgroup">
                                 <tr role="row">
                                     <th scope="col" role="columnheader">Receipt</th>
@@ -108,7 +109,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                     <th scope="col" role="columnheader">Items</th>
                                     <th scope="col" role="columnheader">Payment</th>
                                     <th scope="col" role="columnheader">Time</th>
-                                    <th scope="col" role="columnheader"><span class="sr-only">Action</span></th>
+                                    <th scope="col" role="columnheader" class="text-end">Action</th>
                                 </tr>
                             </thead>
                             <tbody role="rowgroup">
@@ -120,8 +121,8 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                                         <td role="cell" data-label="Payment"><span class="transaction-payment payment-<?= strtolower(htmlspecialchars($sale['payment_method'])) ?>"><?= htmlspecialchars(ucwords(str_replace('_', ' ', $sale['payment_method']))) ?></span></td>
                                         <td role="cell" data-label="Time"><?= htmlspecialchars(format_display_datetime($sale['sale_date'])) ?></td>
                                         <td role="cell" data-label="Action">
-                                            <a class="receipt-link" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id'])) ?>" data-sale-id="<?= (int)$sale['sale_id'] ?>" role="link" onclick="event.preventDefault(); window.viewReceipt(<?= (int)$sale['sale_id'] ?>, this);" aria-haspopup="dialog" aria-label="View receipt #<?= (int)$sale['sale_id'] ?>">
-                                                View receipt <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                                            <a class="btn btn-primary btn-sm receipt-link" href="<?= htmlspecialchars(app_url('components/invoice/sales.php?tab=transactions&sale_id=' . (int)$sale['sale_id'])) ?>" data-sale-id="<?= (int)$sale['sale_id'] ?>" role="link" onclick="event.preventDefault(); window.viewReceipt(<?= (int)$sale['sale_id'] ?>, this);" aria-haspopup="dialog" aria-label="View receipt #<?= (int)$sale['sale_id'] ?>">
+                                                <i class="bi bi-eye" aria-hidden="true"></i> <span>Details</span>
                                             </a>
                                         </td>
                                     </tr>

@@ -276,7 +276,7 @@ if ($receiptId > 0 && $receipt === null) {
                             <?php endif; ?>
                             <h3 id="return-items-heading">Items to return</h3>
                             <div class="table-wrap" role="region" aria-labelledby="return-items-heading" tabindex="0">
-                                <table class="refund-items-table">
+                                <table class="refund-items-table" data-no-smart-table>
                                     <thead><tr>
                                         <th>Product</th>
                                         <th>Form</th>
@@ -435,7 +435,7 @@ if ($receiptId > 0 && $receipt === null) {
                     </div>
                 <?php else: ?>
                     <div class="table-wrap" role="region" aria-labelledby="refund-history-heading" tabindex="0">
-                        <table class="refund-history-table">
+                        <table class="refund-history-table" data-no-smart-table>
                             <thead><tr>
                                 <th>Refund</th>
                                 <th>Sale</th>
@@ -465,7 +465,24 @@ if ($receiptId > 0 && $receipt === null) {
                                         </div>
                                     </td>
                                 </tr>
-                            <?php endforeach; ?></tbody>
+                            <?php endforeach; ?>
+                            <?php
+                            $targetRows = 6;
+                            $ghostCount = max(0, $targetRows - count($refunds));
+                            for ($i = 0; $i < $ghostCount; $i++):
+                            ?>
+                                <tr class="table-ghost-row" aria-hidden="true">
+                                    <td>&nbsp;</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            <?php endfor; ?>
+                            </tbody>
                         </table>
                     </div>
                 <?php endif; ?>

@@ -255,7 +255,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
                 <p id="gcash-history-status" class="gcash-history-status" role="status" aria-live="polite">Loading transactions…</p>
                 <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash transaction history">
-                    <table>
+                    <table data-no-smart-table>
                         <thead>
                             <tr>
                                 <th scope="col">Date</th>

@@ -216,7 +216,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <label>Count by batch</label>
                             <p class="section-description">Count each batch. Leave unknown expiration dates blank.</p>
                             <div class="table-wrap" style="margin-bottom: 12px;">
-                                <table id="batch_counts_table">
+                                <table id="batch_counts_table" data-no-smart-table>
                                     <thead>
                                         <tr>
                                             <th>Batch</th>

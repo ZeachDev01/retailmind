@@ -33,6 +33,27 @@ $display = static function (string $column, mixed $value) use ($moneyColumns): s
     }
     return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 };
+$paymentFormat = static function (?string $method): string {
+    if ($method === null || $method === '') return '—';
+    $normalized = strtolower(trim($method));
+    return match ($normalized) {
+        'cash' => 'Cash',
+        'gcash' => 'GCash',
+        'ewallet', 'e-wallet' => 'E-Wallet',
+        'card' => 'Card',
+        default => ucwords(str_replace(['_', '-'], ' ', $normalized)),
+    };
+};
+$renderPayment = static function (mixed $value) use ($paymentFormat): string {
+    if ($value === null || $value === '') {
+        return '—';
+    }
+    $raw = (string)$value;
+    $norm = strtolower(trim($raw));
+    $key = preg_replace('/[^a-z0-9]+/i', '-', $norm);
+    $label = $paymentFormat($raw);
+    return '<span class="transaction-payment payment-' . htmlspecialchars($key, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>';
+};
 $url = static fn(array $params): string => app_url('components/cashier/history.php?' . http_build_query($params + ['type' => $type, 'date_from' => $fromDay, 'date_to' => $throughDay, 'length' => $pageSize]));
 ?>
 <!DOCTYPE html>
@@ -124,7 +145,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
             <?php else: ?>
                 <div class="card history-details"><h2><?= htmlspecialchars($tabs[$type]) ?> #<?= (int)$record[$idColumn] ?></h2>
                     <dl><?php foreach ($columns as $column => $label): ?>
-                        <dt><?= htmlspecialchars($label) ?></dt><dd><?= $display($column, $record[$column] ?? null) ?></dd>
+                        <dt><?= htmlspecialchars($label) ?></dt><dd><?= $column === 'payment_method' ? $renderPayment($record[$column] ?? null) : $display($column, $record[$column] ?? null) ?></dd>
                     <?php endforeach; ?></dl>
                     <?php 
                     $saleId = $record['sale_id'] ?? ($type === 'sales' ? $record[$idColumn] : null);
@@ -146,7 +167,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                 <span class="history-results-hint">Select Details button for audit breakdown</span>
             </div>
             <?php $moneyCols = $moneyColumns ?? ['total_amount', 'cash_received', 'change_due', 'refund_amount', 'amount', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_variance']; ?>
-            <div class="table-wrap history-table-wrap" role="region" aria-label="Operational history records" tabindex="0"><table><thead><tr>
+            <div class="table-wrap history-table-wrap" role="region" aria-label="Operational history records" tabindex="0"><table data-no-smart-table><thead><tr>
                 <?php foreach ($columns as $column => $label): 
                     $isMoneyCol = in_array($column, $moneyCols, true);
                     $isDateCol = in_array($column, ['sale_date', 'created_at', 'opened_at', 'closed_at'], true);
@@ -162,14 +183,17 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                         $isMoney = in_array($column, $moneyCols, true);
                         $isDate = in_array($column, ['sale_date', 'created_at', 'opened_at', 'closed_at'], true);
                         $isStatus = ($column === 'status');
+                        $isPayment = ($column === 'payment_method');
                         $isNote = in_array($column, ['note', 'closing_notes', 'reason', 'intervention_reason'], true);
-                    ?><td data-label="<?= htmlspecialchars($label) ?>" class="<?= $isId ? 'history-id-cell' : '' ?><?= $isMoney ? ' history-money-cell' : '' ?><?= $isDate ? ' history-date-cell' : '' ?><?= $isStatus ? ' history-status-cell' : '' ?><?= $isNote ? ' history-note-cell' : '' ?>">
+                    ?><td data-label="<?= htmlspecialchars($label) ?>" class="<?= $isId ? 'history-id-cell' : '' ?><?= $isMoney ? ' history-money-cell' : '' ?><?= $isDate ? ' history-date-cell' : '' ?><?= $isStatus ? ' history-status-cell' : '' ?><?= $isPayment ? ' history-payment-cell' : '' ?><?= $isNote ? ' history-note-cell' : '' ?>">
                         <?php if ($isId): ?>
                             <span class="history-id-plain">#<?= (int)$row[$idColumn] ?></span>
                         <?php elseif ($isStatus && $val !== null && $val !== ''): 
                             $statusKey = strtolower(str_replace(' ', '-', (string)$val));
                         ?>
                             <span class="history-status-pill status-<?= htmlspecialchars($statusKey) ?>"><?= $display($column, $val) ?></span>
+                        <?php elseif ($isPayment): ?>
+                            <?= $renderPayment($val) ?>
                         <?php else: ?><?= $display($column, $val) ?><?php endif; ?>
                     </td><?php endforeach; ?>
                     <td class="history-action-cell text-end">
@@ -180,6 +204,20 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                         </div>
                     </td>
                 </tr><?php endforeach; ?>
+                <?php 
+                if (!empty($rows)) {
+                    $targetRows = 6;
+                    $ghostCount = max(0, $targetRows - count($rows));
+                    $totalCols = count($columns) + 1;
+                    for ($i = 0; $i < $ghostCount; $i++): ?>
+                        <tr class="table-ghost-row" aria-hidden="true">
+                            <?php for ($c = 0; $c < $totalCols; $c++): ?>
+                                <td><?= $c === 0 ? '&nbsp;' : '' ?></td>
+                            <?php endfor; ?>
+                        </tr>
+                    <?php endfor;
+                }
+                ?>
                 <?php if (!$rows): 
                     $activeMeta = $tabMeta[$type] ?? [
                         'icon' => 'bi-inbox',
@@ -412,6 +450,16 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                 } else if (moneyColumns.includes(col)) {
                     const num = Number(rawVal);
                     dd.textContent = isNaN(num) ? String(rawVal) : '₱' + num.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else if (col === 'payment_method') {
+                    const span = document.createElement('span');
+                    const norm = String(rawVal).toLowerCase().trim();
+                    const cleanKey = norm.replace(/[^a-z0-9]+/g, '-');
+                    span.className = `transaction-payment payment-${cleanKey}`;
+                    let label = norm.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    if (norm === 'gcash') label = 'GCash';
+                    else if (norm === 'ewallet' || norm === 'e-wallet') label = 'E-Wallet';
+                    span.textContent = label;
+                    dd.appendChild(span);
                 } else {
                     dd.textContent = String(rawVal);
                 }

@@ -335,7 +335,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <?php if ($openShift && $movements && $countPreview): ?><section class="dashboard-section">
                     <h2>Current shift movements</h2>
                     <div class="table-wrap">
-                        <table class="shift-movement-table">
+                        <table class="shift-movement-table" data-no-smart-table>
                             <thead><tr>
                                 <th>Time</th>
                                 <th>Type</th>
@@ -355,7 +355,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
             <section class="dashboard-section shift-history">
                 <div class="shift-section-heading"><h2 id="recent-shifts-heading">Recent shifts</h2><span class="shift-history-count"><?= count($recent) ?> shift<?= count($recent) === 1 ? '' : 's' ?></span></div>
                 <?php if ($recent): ?><div class="table-wrap" role="region" aria-labelledby="recent-shifts-heading" tabindex="0">
-                    <table class="shift-history-table">
+                    <table class="shift-history-table" data-no-smart-table>
                         <thead><tr>
                             <th>Cashier / register</th>
                             <th>Opened</th>

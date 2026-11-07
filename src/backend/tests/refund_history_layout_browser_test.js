@@ -37,10 +37,12 @@ const {chromium} = require('playwright');
                     <link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css"></head>
                     <body class="cashier-refunds-page"><main class="main-content"><h1>Refunds</h1>
                     <section class="dashboard-section refund-search"><h2>Find a sale to refund</h2>
-                    <label for="sale_id">Receipt number</label><input id="sale_id" type="number" min="1"></section>${html}</main></body></html>`
+                    <label for="sale_id">Receipt number</label><input id="sale_id" type="number" min="1"></section>${html}</main>
+                    <script src="/assets/js/ui.js"></script></body></html>`
                 });
             });
             await page.goto('http://refunds.test/');
+            assert.equal(await page.locator('.auto-table-pagination').count(), 0, 'No redundant auto smart table pagination on refunds');
             assert.equal(await page.locator('.history-pagination').count(), state === 'empty' ? 0 : 1);
             if (state === 'empty') {
                 assert(await page.getByRole('heading', {name: 'No refunds yet'}).isVisible());

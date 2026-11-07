@@ -291,7 +291,7 @@ function build_query(array $params): string {
             </form>
 
             <div class="table-wrap" role="region" aria-label="Product readiness catalog" tabindex="0">
-                <table class="data-table readiness-catalog">
+                <table class="data-table readiness-catalog" data-no-smart-table>
                     <thead>
                         <tr>
                             <th scope="col">Product</th>

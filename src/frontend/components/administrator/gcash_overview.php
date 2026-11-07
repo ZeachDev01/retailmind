@@ -17,6 +17,9 @@ $period = (string)($_GET['period'] ?? (isset($_GET['start_date']) || isset($_GET
 $activeTab = in_array($_GET['tab'] ?? '', ['overview', 'transactions', 'reconciliation', 'unresolved', 'money'], true) ? $_GET['tab'] : 'overview';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
 
+$isFilteredActivity = (isset($_GET['period']) && $_GET['period'] !== 'today') || isset($_GET['start_date']) || isset($_GET['end_date']) || (isset($_GET['face']) && $_GET['face'] === 'activity');
+$overviewFace = $isFilteredActivity ? 'activity' : 'balances';
+
 $filterError = null;
 $overview = null;
 $canMutate = current_role() === 'admin' && !(function_exists('is_remote_request') && is_remote_request());
@@ -129,7 +132,7 @@ function gcash_admin_money(mixed $val): string {
     <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/cashier.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/gcash.css')) ?>">
-    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/gcash-admin.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/gcash-admin.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/gcash-admin.css')) ?>">
     <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/sale-receipt.css')) ?>">
 </head>
 <body class="admin-page">
@@ -187,6 +190,35 @@ function gcash_admin_money(mixed $val): string {
         <?php endif; ?>
 
         <div id="tab-overview" role="tabpanel" aria-labelledby="gcash-tab-overview" tabindex="0" <?= $activeTab !== 'overview' ? 'hidden' : '' ?>>
+        <!-- Coin Switcher Toolbar: Toggle between Services Balance and Activity & Report Range -->
+        <div class="gcash-coin-toolbar" role="region" aria-label="Overview view toggle">
+            <div class="gcash-coin-segmented" role="group" aria-label="Overview views">
+                <button type="button" id="coin-tab-balances" class="gcash-coin-pill <?= $overviewFace === 'balances' ? 'active' : '' ?>" aria-pressed="<?= $overviewFace === 'balances' ? 'true' : 'false' ?>" data-coin-face="balances">
+                    <span class="gcash-coin-pill-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
+                    <span class="gcash-coin-pill-label">
+                        <strong>Services balance</strong>
+                        <span class="gcash-coin-pill-sub">Drawer &amp; GCash funds</span>
+                    </span>
+                </button>
+                <button type="button" id="coin-tab-activity" class="gcash-coin-pill <?= $overviewFace === 'activity' ? 'active' : '' ?>" aria-pressed="<?= $overviewFace === 'activity' ? 'true' : 'false' ?>" data-coin-face="activity">
+                    <span class="gcash-coin-pill-icon"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></span>
+                    <span class="gcash-coin-pill-label">
+                        <strong>Activity &amp; Completed</strong>
+                        <span class="gcash-coin-pill-sub">Report range &amp; metrics</span>
+                    </span>
+                </button>
+            </div>
+            <button type="button" class="btn btn-secondary gcash-coin-flip-trigger" id="gcash-coin-flip-trigger" aria-label="Flip between Services balance and Activity report" title="Flip view (Press F or click)">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                <span class="gcash-flip-label"><?= $overviewFace === 'balances' ? 'Flip to Activity' : 'Flip to Balances' ?></span>
+                <kbd class="gcash-coin-key-hint" aria-hidden="true">F</kbd>
+            </button>
+        </div>
+
+        <div class="gcash-coin-deck" id="gcash-coin-deck" data-active-face="<?= gcash_admin_e($overviewFace) ?>">
+            <!-- FACE 1: Services Balance & Custody (Default) -->
+            <div class="gcash-coin-face gcash-face-balances" id="gcash-face-balances" <?= $overviewFace !== 'balances' ? 'hidden' : '' ?>>
+                <div class="gcash-balances-row">
         <?php $funds = $overview['recorded_balances'] ?? null; ?>
         <section class="pos-panel gcash-overview-section gcash-funds-panel" aria-labelledby="gcash-admin-balances-title">
             <div class="pos-panel-header">
@@ -303,7 +335,21 @@ function gcash_admin_money(mixed $val): string {
                 </div>
             <?php endif; ?>
         </section>
+                </div>
+                <div class="gcash-coin-shortcut-bar">
+                    <button type="button" class="gcash-coin-shortcut-btn" data-coin-switch="activity">
+                        <span class="gcash-coin-shortcut-left">
+                            <span class="gcash-coin-shortcut-icon"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
+                            <span>Want to check activity report range &amp; completed metrics?</span>
+                        </span>
+                        <span class="gcash-coin-shortcut-action">Switch to Activity <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+                    </button>
+                </div>
+            </div>
 
+            <!-- FACE 2: Activity Report Range & Completed Activity -->
+            <div class="gcash-coin-face gcash-face-activity" id="gcash-face-activity" <?= $overviewFace !== 'activity' ? 'hidden' : '' ?>>
+                <div class="gcash-activity-row">
         <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-labelledby="gcash-reporting-title" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
@@ -432,6 +478,18 @@ function gcash_admin_money(mixed $val): string {
                 <button type="button" class="btn btn-secondary gcash-view-tx-btn" data-review-tab="transactions">View transactions<i class="bi bi-arrow-right" aria-hidden="true"></i></button>
             </div>
         </section>
+                </div>
+                <div class="gcash-coin-shortcut-bar">
+                    <button type="button" class="gcash-coin-shortcut-btn" data-coin-switch="balances">
+                        <span class="gcash-coin-shortcut-left">
+                            <span class="gcash-coin-shortcut-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
+                            <span>Done reviewing activity?</span>
+                        </span>
+                        <span class="gcash-coin-shortcut-action"><i class="bi bi-arrow-left" aria-hidden="true"></i> Return to Services balance</span>
+                    </button>
+                </div>
+            </div>
+        </div>
 
         </div>
 
@@ -469,7 +527,7 @@ function gcash_admin_money(mixed $val): string {
                 </div>
             </div>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Store-wide transaction history">
-                <table class="table" id="gcash-admin-history-table">
+                <table class="table" id="gcash-admin-history-table" data-no-smart-table>
                     <thead>
                         <tr>
                             <th scope="col">Date / time</th>

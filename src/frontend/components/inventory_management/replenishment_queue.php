@@ -96,6 +96,10 @@ usort($queue, static fn (array $a, array $b): int =>
     ?: ($a['current_stock'] <=> $b['current_stock'])
     ?: ($a['product_id'] <=> $b['product_id']));
 $stockCounts = array_count_values(array_column($queue, 'stock_status'));
+$outOfStockCount = (int)($stockCounts['Out of stock'] ?? 0);
+$lowStockCount = (int)($stockCounts['Low stock'] ?? 0);
+$inStockCount = (int)($stockCounts['In stock'] ?? 0);
+$totalSuggestedUnits = (int)array_sum(array_column($queue, 'stock_rule_quantity'));
 $replenishCount = count(array_filter($queue, static fn (array $item): bool => $item['stock_rule_quantity'] > 0));
 ?>
 <!DOCTYPE html>
@@ -116,25 +120,67 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="page-heading"><div><h1>Replenishment Recommendations</h1><p class="page-subtitle">Review stock and suggested buying quantities.</p></div><a class="btn btn-secondary" href="../report/predictions.php">Demand Forecast</a></header>
+        <header class="page-heading">
+            <div>
+                <h1>Replenishment Recommendations</h1>
+                <p class="page-subtitle">Review stock and suggested buying quantities.</p>
+            </div>
+            <div class="page-heading-actions">
+                <a class="btn btn-secondary" href="../report/predictions.php">Demand Forecast</a>
+            </div>
+        </header>
 
-            <?php forecast_workflow('buy'); ?>
-            <?php if ($coverage): ?>
-                <?php forecast_status_summary(
-                    $coverage['is_guidance_usable'] ? 'Buying suggestions include forecast evidence' : 'Buying suggestions use stock rules',
-                    $coverage['is_guidance_usable'] ? 'Some products may still have missing forecasts. Check each row’s basis.' : 'Usable current forecasts are not available for buying guidance.',
-                    $canReceive ? 'Review suggested quantities before buying. Record bought goods in Stock Receiving.' : 'Review stock and suggested quantities. The Inventory Manager records bought goods.'
-                ); ?>
-            <?php endif; ?>
+        <section class="queue-summary" role="region" aria-label="Stock health overview">
+            <div class="queue-stat queue-out-of-stock">
+                <div class="queue-stat-icon-wrap" aria-hidden="true"><i class="bi bi-exclamation-octagon-fill"></i></div>
+                <div class="queue-stat-content">
+                    <div class="queue-stat-label">Out of Stock</div>
+                    <strong class="queue-stat-number"><?= $outOfStockCount ?></strong>
+                    <span class="queue-stat-desc">0 units on hand</span>
+                </div>
+            </div>
+            <div class="queue-stat queue-low-stock">
+                <div class="queue-stat-icon-wrap" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <div class="queue-stat-content">
+                    <div class="queue-stat-label">Low Stock</div>
+                    <strong class="queue-stat-number"><?= $lowStockCount ?></strong>
+                    <span class="queue-stat-desc">At or below reorder level</span>
+                </div>
+            </div>
+            <div class="queue-stat queue-in-stock">
+                <div class="queue-stat-icon-wrap" aria-hidden="true"><i class="bi bi-check-circle-fill"></i></div>
+                <div class="queue-stat-content">
+                    <div class="queue-stat-label">In Stock</div>
+                    <strong class="queue-stat-number"><?= $inStockCount ?></strong>
+                    <span class="queue-stat-desc">Healthy inventory level</span>
+                </div>
+            </div>
+            <div class="queue-stat queue-suggested-total">
+                <div class="queue-stat-icon-wrap" aria-hidden="true"><i class="bi bi-cart-check-fill"></i></div>
+                <div class="queue-stat-content">
+                    <div class="queue-stat-label">Suggested Buy</div>
+                    <strong class="queue-stat-number"><?= number_format($totalSuggestedUnits) ?> <small>units</small></strong>
+                    <span class="queue-stat-desc"><?= $replenishCount ?> products to reorder</span>
+                </div>
+            </div>
+        </section>
+
+        <?php if ($coverage): ?>
+            <?php forecast_status_summary(
+                $coverage['is_guidance_usable'] ? 'Buying suggestions include forecast evidence' : 'Buying suggestions use stock rules',
+                $coverage['is_guidance_usable'] ? 'Some products may still have missing forecasts. Check each row’s basis.' : 'Usable current forecasts are not available for buying guidance.',
+                $canReceive ? 'Review suggested quantities before buying. Record bought goods in Stock Receiving.' : 'Review stock and suggested quantities. The Inventory Manager records bought goods.'
+            ); ?>
+        <?php endif; ?>
             <?php if ($error): ?>
-                <div class="alert tag-warning" role="status">
+                <div class="alert tag-warning" role="note" data-rm-alert-processed="1">
                     <span><?= htmlspecialchars($error) ?></span>
                     <a class="btn btn-secondary no-print" href="replenishment_queue.php">Reload</a>
                 </div>
             <?php endif; ?>
 
             <?php if ($coverage && $coverage['latest_attempt_status'] === 'failed'): ?>
-                <div class="alert tag-warning" role="alert">
+                <div class="alert tag-warning queue-temp-notice" role="note" data-rm-alert-processed="1">
                     <strong>Notice:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
                 </div>
             <?php elseif ($coverage && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>

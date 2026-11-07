@@ -117,6 +117,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
             <div class="topbar">
                 <div>
                     <h1>Stock Issue Reviews</h1>
+                    <p class="page-subheading">Review cashier incident reports (damaged, expired, lost, or other stock issues). Approve to deduct inventory, or return with guidance.</p>
                 </div>
             </div>
 
@@ -128,7 +129,46 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                 <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <div class="history-section">
+            <!-- Overview KPI Cards -->
+            <div class="stock-kpi-grid">
+                <div class="stock-kpi-card <?= $pendingCount > 0 ? 'stock-kpi-card--warning' : '' ?>">
+                    <span class="stock-kpi-label">Pending Review</span>
+                    <span class="stock-kpi-value"><?= (int)$pendingCount ?></span>
+                    <span class="stock-kpi-meta"><?= $pendingCount > 0 ? 'Requires immediate review' : 'All caught up' ?></span>
+                </div>
+                <div class="stock-kpi-card">
+                    <span class="stock-kpi-label">Returned to Cashier</span>
+                    <span class="stock-kpi-value"><?= count($returned) ?></span>
+                    <span class="stock-kpi-meta">Awaiting cashier corrections</span>
+                </div>
+                <div class="stock-kpi-card stock-kpi-card--success">
+                    <span class="stock-kpi-label">Recent Decisions</span>
+                    <span class="stock-kpi-value"><?= count($reviews) ?></span>
+                    <span class="stock-kpi-meta">Approved, rejected, or completed</span>
+                </div>
+            </div>
+
+            <!-- Quick Navigation Pills -->
+            <nav class="stock-status-pills" aria-label="Review queues">
+                <a href="#pending-section" class="stock-status-pill is-active">
+                    <span>Pending Review</span>
+                    <span class="pill-badge"><?= (int)$pendingCount ?></span>
+                </a>
+                <?php if (!empty($returned)): ?>
+                    <a href="#returned-section" class="stock-status-pill">
+                        <span>Returned to Cashier</span>
+                        <span class="pill-badge"><?= count($returned) ?></span>
+                    </a>
+                <?php endif; ?>
+                <?php if (!empty($reviews)): ?>
+                    <a href="#reviews-section" class="stock-status-pill">
+                        <span>Recent Decisions</span>
+                        <span class="pill-badge"><?= count($reviews) ?></span>
+                    </a>
+                <?php endif; ?>
+            </nav>
+
+            <div class="history-section" id="pending-section">
                 <h2>Pending review <span class="issue-count"><?= (int)$pendingCount ?></span></h2>
                 <?php if (empty($pending)): ?>
                     <div class="issue-empty">
@@ -137,7 +177,8 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                             <rect x="9" y="2" width="6" height="5" rx="1" />
                             <path d="m8 14 3 3 5-6" />
                         </svg>
-                        <h3>No reports to review</h3>
+                        <h3>No reports waiting for review</h3>
+                        <p>All cashier stock issue reports have been reviewed. New submissions will appear here automatically.</p>
                     </div>
                 <?php else: ?>
                     <?php foreach ($pending as $report): ?>
@@ -161,63 +202,76 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                             }
                         }
                         ?>
-                        <div class="adjustment-card pending">
-                            <div class="adjustment-header">
-                                <div>
-                                    <div class="adjustment-product"><?= htmlspecialchars($report['product_name']) ?></div>
-                                    <div class="adjustment-sku"><?= htmlspecialchars($report['sku']) ?></div>
-                                    <span class="adjustment-type <?= htmlspecialchars($report['adjustment_type']) ?>">
+                        <div class="adjustment-card pending" id="report-<?= (int)$report['adjustment_id'] ?>">
+                            <!-- Topbar: Badges & Timestamp -->
+                            <div class="adjustment-card-topbar">
+                                <div class="adjustment-badges">
+                                    <span class="report-id-badge">Report #<?= (int)$report['adjustment_id'] ?></span>
+                                    <span class="category-tag <?= htmlspecialchars($report['adjustment_type']) ?>">
                                         <?= htmlspecialchars(ucfirst($report['adjustment_type'])) ?>
                                     </span>
+                                    <span class="adjustment-status pending">Pending Review</span>
                                 </div>
-                                <div class="u-text-right">
-                                    <span class="issue-quantity-label">To deduct</span>
-                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
+                                <div class="adjustment-time">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    <span><?= htmlspecialchars(format_display_datetime($report['reported_at'])) ?></span>
                                 </div>
                             </div>
-                            <div class="adjustment-details">
-                                <span>Report #<?= (int)$report['adjustment_id'] ?></span>
-                                <span><strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?></span>
-                                <span><strong>Shift:</strong> #<?= (int)$report['shift_id'] ?></span>
-                                <span><strong>Reported:</strong> <?= htmlspecialchars(format_display_datetime($report['reported_at'])) ?></span>
+
+                            <!-- Product Info -->
+                            <div class="adjustment-product-info">
+                                <div class="adjustment-product-name"><?= htmlspecialchars($report['product_name']) ?></div>
+                                <span class="sku-code">SKU: <?= htmlspecialchars($report['sku']) ?></span>
                             </div>
-                            <div class="issue-stock">
-                                <span><strong>Available stock:</strong> <?= (int)$report['quantity_on_hand'] ?> pcs<?= $hasPackConfig && !empty($productBatches) ? " ({$availSealedSum} sealed pk, {$availLooseSum} loose pcs)" : '' ?></span>
-                                <?php if ($short): ?>
-                                    <strong class="issue-warning">Not enough stock to approve. Reject or return this report.</strong>
-                                <?php endif; ?>
+
+                            <!-- Metrics Comparison Grid -->
+                            <div class="detail-hero-grid">
+                                <div class="detail-metric-card">
+                                    <span class="detail-metric-label">Quantity to Deduct</span>
+                                    <span class="detail-metric-value cell-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></span>
+                                    <small class="muted">Form: <?= htmlspecialchars(ucfirst($reportForm)) ?></small>
+                                </div>
+                                <div class="detail-metric-card">
+                                    <span class="detail-metric-label">Available in Stock</span>
+                                    <span class="detail-metric-value"><?= (int)$report['quantity_on_hand'] ?> pcs</span>
+                                    <?php if ($hasPackConfig && !empty($productBatches)): ?>
+                                        <small class="muted"><?= $availSealedSum ?> sealed pk, <?= $availLooseSum ?> loose pcs</small>
+                                    <?php endif; ?>
+                                    <?php if ($short): ?>
+                                        <div class="issue-warning">⚠ Insufficient stock to approve</div>
+                                    <?php else: ?>
+                                        <div class="issue-ok">✓ Sufficient stock available</div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="detail-metric-card">
+                                    <span class="detail-metric-label">Reported By</span>
+                                    <span class="detail-metric-value"><?= htmlspecialchars($report['cashier_name']) ?></span>
+                                    <small class="muted">Cashier Shift #<?= (int)$report['shift_id'] ?></small>
+                                </div>
                             </div>
-                            <?php if ($report['reason']): ?>
-                                <div class="adjustment-reason">
-                                    <strong>Cashier explanation:</strong> <?= htmlspecialchars($report['reason']) ?>
+
+                            <!-- Cashier Explanation -->
+                            <?php if (!empty($report['reason'])): ?>
+                                <div class="detail-reason-box">
+                                    <div class="reason-box-header">
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                        <span>Cashier Explanation</span>
+                                    </div>
+                                    <p class="reason-box-text"><?= htmlspecialchars($report['reason']) ?></p>
                                 </div>
                             <?php endif; ?>
+
+                            <!-- Batch Deductions if batches exist -->
                             <form method="POST" class="review-form">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                 <input type="hidden" name="adjustment_id" value="<?= (int)$report['adjustment_id'] ?>">
-                                <div class="form-group">
-                                    <label for="review-notes-<?= (int)$report['adjustment_id'] ?>">Review note</label>
-                                    <small id="note-help-<?= (int)$report['adjustment_id'] ?>">Required to reject or return. Optional when approving.</small>
-                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" rows="2" aria-describedby="note-help-<?= (int)$report['adjustment_id'] ?>"></textarea>
-                                </div>
-                                <?php if ($report['adjustment_type'] === 'other'): ?>
-                                    <div class="form-group">
-                                        <label for="recat-<?= (int)$report['adjustment_id'] ?>">Category when returning (optional)</label>
-                                        <select name="new_category" id="recat-<?= (int)$report['adjustment_id'] ?>" aria-describedby="category-help-<?= (int)$report['adjustment_id'] ?>">
-                                            <option value="">Keep as Other</option>
-                                            <option value="damaged">Damaged</option>
-                                            <option value="missing">Missing / Lost</option>
-                                            <option value="expired">Expired</option>
-                                        </select>
-                                        <small id="category-help-<?= (int)$report['adjustment_id'] ?>">Changes the category only when you return this report.</small>
-                                    </div>
-                                <?php endif; ?>
+                                
                                 <?php
                                 if (!empty($productBatches)):
                                     $fefoAllocations = $stockIssueService->recommendBatchAllocation((int)$report['product_id'], $repQty, $reportForm);
                                 ?>
                                     <details class="issue-batches">
-                                        <summary>Review batch deductions</summary>
+                                        <summary><strong>Review batch deductions (FEFO)</strong></summary>
                                         <p>Earliest expiry first. Quantities must total <?= $repQty ?> <?= $reportForm === 'pack' ? 'sealed packs' : 'loose pieces' ?> to approve.</p>
                                         <div class="table-wrap u-mt-1">
                                             <table>
@@ -261,19 +315,72 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                         </div>
                                     </details>
                                 <?php endif; ?>
+
+                                <!-- Review Notes & Form Inputs -->
+                                <div class="form-group">
+                                    <label for="review-notes-<?= (int)$report['adjustment_id'] ?>">Reviewer note</label>
+                                    <small id="note-help-<?= (int)$report['adjustment_id'] ?>">Optional when approving. <strong>Required</strong> when rejecting or returning to cashier.</small>
+                                    <textarea name="review_notes" id="review-notes-<?= (int)$report['adjustment_id'] ?>" rows="2" placeholder="Write feedback or guidance for the cashier..." aria-describedby="note-help-<?= (int)$report['adjustment_id'] ?>"></textarea>
+                                </div>
+                                <?php if ($report['adjustment_type'] === 'other'): ?>
+                                    <div class="form-group">
+                                        <label for="recat-<?= (int)$report['adjustment_id'] ?>">Recategorize when returning (optional)</label>
+                                        <select name="new_category" id="recat-<?= (int)$report['adjustment_id'] ?>" aria-describedby="category-help-<?= (int)$report['adjustment_id'] ?>">
+                                            <option value="">Keep as Other</option>
+                                            <option value="damaged">Damaged</option>
+                                            <option value="missing">Missing / Lost</option>
+                                            <option value="expired">Expired</option>
+                                        </select>
+                                        <small id="category-help-<?= (int)$report['adjustment_id'] ?>">Allows you to assign a specific category when sending back to the cashier.</small>
+                                    </div>
+                                <?php endif; ?>
+
                                 <div class="review-actions">
-                                    <button type="submit" name="action" value="approve" class="btn-submit" <?= $short ? 'disabled title="Insufficient available stock"' : '' ?>>Approve &amp; deduct <?= abs((int)$report['adjustment_qty']) ?></button>
-                                    <button type="submit" name="action" value="reject" class="btn btn-secondary">Reject</button>
-                                    <button type="submit" name="action" value="return" class="btn btn-secondary">Return for correction</button>
+                                    <button type="submit" name="action" value="approve" class="btn btn-action-approve" <?= $short ? 'disabled title="Insufficient available stock"' : '' ?>>
+                                        ✓ Approve &amp; deduct <?= abs((int)$report['adjustment_qty']) ?>
+                                    </button>
+                                    <button type="submit" name="action" value="return" class="btn btn-action-return">
+                                        ↩ Return for correction
+                                    </button>
+                                    <button type="submit" name="action" value="reject" class="btn btn-action-reject">
+                                        ✕ Reject
+                                    </button>
+                                </div>
+                                <div class="action-hints">
+                                    <span><strong>Approve:</strong> Confirms the issue and permanently deducts <?= abs((int)$report['adjustment_qty']) ?> item(s) from inventory.</span>
+                                    <span><strong>Return:</strong> Sends report back to cashier to correct quantity or explanation.</span>
+                                    <span><strong>Reject:</strong> Declines report permanently. Stock remains completely unchanged.</span>
                                 </div>
                             </form>
+
+                            <!-- Revision Timeline -->
                             <?php $pendingRevisions = $revisionsFor((int)$report['adjustment_id']); ?>
                             <?php if (!empty($pendingRevisions)): ?>
-                                <details class="adjustment-reason">
-                                    <summary>Revision history (<?= count($pendingRevisions) ?>)</summary>
-                                    <?php foreach ($pendingRevisions as $revision): ?>
-                                        <div>#<?= (int)$revision['revision_id'] ?> <?= htmlspecialchars($revision['action']) ?> by #<?= (int)$revision['actor_id'] ?> at <?= htmlspecialchars($revision['created_at']) ?> (<?= htmlspecialchars((string)($revision['old_status'] ?? '')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '')) ?>)</div>
-                                    <?php endforeach; ?>
+                                <details class="revision-history-accordion">
+                                    <summary><strong>Activity Trail</strong> (<?= count($pendingRevisions) ?> <?= count($pendingRevisions) === 1 ? 'event' : 'events' ?>)</summary>
+                                    <div class="revision-timeline">
+                                        <?php foreach ($pendingRevisions as $revision): ?>
+                                            <div class="timeline-entry">
+                                                <div class="timeline-dot"></div>
+                                                <div class="timeline-content">
+                                                    <div class="timeline-title">
+                                                        <strong><?= htmlspecialchars(ucfirst($revision['action'])) ?></strong>
+                                                        <span>by <?= htmlspecialchars($revision['actor_name'] ?: ('User #' . $revision['actor_id'])) ?></span>
+                                                    </div>
+                                                    <div class="timeline-meta">
+                                                        <span><?= htmlspecialchars(format_display_datetime($revision['created_at'])) ?></span>
+                                                        <?php if (!empty($revision['old_status']) || !empty($revision['new_status'])): ?>
+                                                            <span class="timeline-transition">
+                                                                <span class="adjustment-status <?= htmlspecialchars((string)$revision['old_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['old_status'])) ?></span>
+                                                                →
+                                                                <span class="adjustment-status <?= htmlspecialchars((string)$revision['new_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['new_status'])) ?></span>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
                                 </details>
                             <?php endif; ?>
                         </div>
@@ -282,107 +389,200 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
             </div>
 
             <?php if (!empty($returned)): ?>
-                <details class="history-section issue-history u-mt-2">
-                    <summary><h2>Returned for correction <span class="issue-count"><?= count($returned) ?></span></h2></summary>
-                    <?php foreach ($returned as $report): ?>
-                        <div class="adjustment-card returned">
-                            <div class="adjustment-header">
-                                <div>
-                                    <div class="adjustment-product"><?= htmlspecialchars($report['product_name']) ?></div>
-                                    <div class="adjustment-sku"><?= htmlspecialchars($report['sku']) ?></div>
-                                    <span class="adjustment-type <?= htmlspecialchars($report['adjustment_type']) ?>">
-                                        <?= htmlspecialchars(ucfirst($report['adjustment_type'])) ?>
-                                    </span>
+                <div class="history-section issue-history u-mt-2" id="returned-section">
+                    <details open>
+                        <summary><h2>Returned for correction <span class="issue-count"><?= count($returned) ?></span></h2></summary>
+                        <?php foreach ($returned as $report): ?>
+                            <div class="adjustment-card returned">
+                                <div class="adjustment-card-topbar">
+                                    <div class="adjustment-badges">
+                                        <span class="report-id-badge">Report #<?= (int)$report['adjustment_id'] ?></span>
+                                        <span class="category-tag <?= htmlspecialchars($report['adjustment_type']) ?>">
+                                            <?= htmlspecialchars(ucfirst($report['adjustment_type'])) ?>
+                                        </span>
+                                        <span class="adjustment-status returned">Returned to Cashier</span>
+                                    </div>
+                                    <div class="adjustment-time">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        <span><?= htmlspecialchars(format_display_datetime($report['reported_at'])) ?></span>
+                                    </div>
                                 </div>
-                                <div class="u-text-right">
-                                    <span class="issue-quantity-label">Reported</span>
-                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
+
+                                <div class="adjustment-product-info">
+                                    <div class="adjustment-product-name"><?= htmlspecialchars($report['product_name']) ?></div>
+                                    <span class="sku-code">SKU: <?= htmlspecialchars($report['sku']) ?></span>
                                 </div>
+
+                                <div class="detail-hero-grid">
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label">Reported Quantity</span>
+                                        <span class="detail-metric-value cell-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></span>
+                                    </div>
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label">Cashier</span>
+                                        <span class="detail-metric-value"><?= htmlspecialchars($report['cashier_name']) ?></span>
+                                    </div>
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label">Returned By</span>
+                                        <span class="detail-metric-value"><?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?></span>
+                                        <small class="muted"><?= htmlspecialchars(format_display_datetime($report['approved_at'])) ?></small>
+                                    </div>
+                                </div>
+
+                                <?php if (!empty($report['review_notes'])): ?>
+                                    <div class="detail-reason-box detail-reason-box--decision">
+                                        <div class="reason-box-header">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                            <span>Manager Return Guidance</span>
+                                        </div>
+                                        <p class="reason-box-text"><?= htmlspecialchars($report['review_notes']) ?></p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php $returnedRevisions = $revisionsFor((int)$report['adjustment_id']); ?>
+                                <?php if (!empty($returnedRevisions)): ?>
+                                    <details class="revision-history-accordion">
+                                        <summary><strong>Activity Trail</strong> (<?= count($returnedRevisions) ?> <?= count($returnedRevisions) === 1 ? 'event' : 'events' ?>)</summary>
+                                        <div class="revision-timeline">
+                                            <?php foreach ($returnedRevisions as $revision): ?>
+                                                <div class="timeline-entry">
+                                                    <div class="timeline-dot"></div>
+                                                    <div class="timeline-content">
+                                                        <div class="timeline-title">
+                                                            <strong><?= htmlspecialchars(ucfirst($revision['action'])) ?></strong>
+                                                            <span>by <?= htmlspecialchars($revision['actor_name'] ?: ('User #' . $revision['actor_id'])) ?></span>
+                                                        </div>
+                                                        <div class="timeline-meta">
+                                                            <span><?= htmlspecialchars(format_display_datetime($revision['created_at'])) ?></span>
+                                                            <?php if (!empty($revision['old_status']) || !empty($revision['new_status'])): ?>
+                                                                <span class="timeline-transition">
+                                                                    <span class="adjustment-status <?= htmlspecialchars((string)$revision['old_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['old_status'])) ?></span>
+                                                                    →
+                                                                    <span class="adjustment-status <?= htmlspecialchars((string)$revision['new_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['new_status'])) ?></span>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
                             </div>
-                            <div class="adjustment-details">
-                                <span>Report #<?= (int)$report['adjustment_id'] ?></span>
-                                <span><strong>Cashier:</strong> <?= htmlspecialchars($report['cashier_name']) ?></span>
-                                <span><strong>Returned by:</strong> <?= htmlspecialchars($report['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($report['approved_at'])) ?></span>
-                            </div>
-                            <?php if (!empty($report['review_notes'])): ?>
-                                <div class="adjustment-reason">
-                                    <strong>Return reason:</strong> <?= htmlspecialchars($report['review_notes']) ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php $returnedRevisions = $revisionsFor((int)$report['adjustment_id']); ?>
-                            <?php if (!empty($returnedRevisions)): ?>
-                                <details class="adjustment-reason">
-                                    <summary>Revision history (<?= count($returnedRevisions) ?>)</summary>
-                                    <?php foreach ($returnedRevisions as $revision): ?>
-                                        <div>#<?= (int)$revision['revision_id'] ?> <?= htmlspecialchars($revision['action']) ?> by #<?= (int)$revision['actor_id'] ?> at <?= htmlspecialchars($revision['created_at']) ?> (<?= htmlspecialchars((string)($revision['old_status'] ?? '')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '')) ?>)</div>
-                                    <?php endforeach; ?>
-                                </details>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </details>
+                        <?php endforeach; ?>
+                    </details>
+                </div>
             <?php endif; ?>
 
             <?php if (!empty($reviews)): ?>
-                <details class="history-section issue-history u-mt-2">
-                    <summary><h2>Recent decisions <span class="issue-count"><?= count($reviews) ?></span></h2></summary>
-                    <?php foreach ($reviews as $review): ?>
-                        <div class="adjustment-card <?= htmlspecialchars($review['status']) ?>">
-                            <div class="adjustment-header">
-                                <div>
-                                    <div class="adjustment-product"><?= htmlspecialchars($review['product_name']) ?></div>
-                                    <div class="adjustment-sku"><?= htmlspecialchars($review['sku']) ?></div>
-                                    <span class="adjustment-type <?= htmlspecialchars($review['adjustment_type']) ?>">
-                                        <?= htmlspecialchars(ucfirst($review['adjustment_type'])) ?>
-                                    </span>
+                <div class="history-section issue-history u-mt-2" id="reviews-section">
+                    <details open>
+                        <summary><h2>Recent decisions <span class="issue-count"><?= count($reviews) ?></span></h2></summary>
+                        <?php foreach ($reviews as $review): ?>
+                            <div class="adjustment-card <?= htmlspecialchars($review['status']) ?>">
+                                <div class="adjustment-card-topbar">
+                                    <div class="adjustment-badges">
+                                        <span class="report-id-badge">Report #<?= (int)$review['adjustment_id'] ?></span>
+                                        <span class="category-tag <?= htmlspecialchars($review['adjustment_type']) ?>">
+                                            <?= htmlspecialchars(ucfirst($review['adjustment_type'])) ?>
+                                        </span>
+                                        <span class="adjustment-status <?= htmlspecialchars($review['status']) ?>">
+                                            <?= htmlspecialchars(ucfirst($review['status'])) ?>
+                                        </span>
+                                    </div>
+                                    <div class="adjustment-time">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        <span><?= htmlspecialchars(format_display_datetime($review['reported_at'])) ?></span>
+                                    </div>
                                 </div>
-                                <div class="u-text-right">
-                                    <span class="issue-quantity-label"><?= $review['status'] === 'approved' ? 'Deducted' : 'Reported' ?></span>
-                                    <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($review)) ?></div>
-                                    <span class="adjustment-status <?= htmlspecialchars($review['status']) ?>">
-                                        <?= htmlspecialchars(ucfirst($review['status'])) ?>
-                                    </span>
+
+                                <div class="adjustment-product-info">
+                                    <div class="adjustment-product-name"><?= htmlspecialchars($review['product_name']) ?></div>
+                                    <span class="sku-code">SKU: <?= htmlspecialchars($review['sku']) ?></span>
                                 </div>
-                            </div>
-                            <div class="adjustment-details">
-                                <span>Report #<?= (int)$review['adjustment_id'] ?></span>
-                                <span><strong>Cashier:</strong> <?= htmlspecialchars($review['cashier_name']) ?></span>
-                                <span><strong>Reviewed by:</strong> <?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?></span>
-                            </div>
-                            <?php if ($review['status'] === 'approved'): ?>
-                                <?php $reviewBatches = $stockIssueService->getReportBatches((int)$review['adjustment_id']); ?>
-                                <?php if (!empty($reviewBatches)): ?>
-                                    <div class="adjustment-reason">
-                                        <strong>Deducted batches:</strong>
-                                        <ul class="u-mt-1" style="margin-left: 1.25rem;">
-                                            <?php foreach ($reviewBatches as $rb): ?>
-                                                <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: <?= ($rb['form'] ?? 'piece') === 'pack' && (int)($rb['reported_qty'] ?? 0) > 0 ? '-' . (int)$rb['reported_qty'] . ' pack(s) (' . (int)$rb['quantity'] . ' pcs)' : '-' . (int)$rb['quantity'] . ' pc(s)' ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
+
+                                <div class="detail-hero-grid">
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label"><?= $review['status'] === 'approved' ? 'Quantity Deducted' : 'Reported Quantity' ?></span>
+                                        <span class="detail-metric-value cell-qty"><?= htmlspecialchars($formatIssueQty($review)) ?></span>
+                                    </div>
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label">Cashier</span>
+                                        <span class="detail-metric-value"><?= htmlspecialchars($review['cashier_name']) ?></span>
+                                    </div>
+                                    <div class="detail-metric-card">
+                                        <span class="detail-metric-label">Reviewed By</span>
+                                        <span class="detail-metric-value"><?= htmlspecialchars($review['reviewer_name'] ?? 'Unknown') ?></span>
+                                        <small class="muted"><?= htmlspecialchars(format_display_datetime($review['approved_at'])) ?></small>
+                                    </div>
+                                </div>
+
+                                <?php if ($review['status'] === 'approved'): ?>
+                                    <?php $reviewBatches = $stockIssueService->getReportBatches((int)$review['adjustment_id']); ?>
+                                    <?php if (!empty($reviewBatches)): ?>
+                                        <div class="detail-reason-box">
+                                            <div class="reason-box-header">
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                                                <span>Deducted Batches</span>
+                                            </div>
+                                            <ul class="u-mt-1" style="margin-left: 1.25rem; font-size: .875rem;">
+                                                <?php foreach ($reviewBatches as $rb): ?>
+                                                    <li>Batch <?= htmlspecialchars($rb['batch_number'] ?? ('#' . $rb['batch_id'])) ?><?= !empty($rb['expiration_date']) ? ' (Exp: ' . htmlspecialchars($rb['expiration_date']) . ')' : '' ?>: <?= ($rb['form'] ?? 'piece') === 'pack' && (int)($rb['reported_qty'] ?? 0) > 0 ? '-' . (int)$rb['reported_qty'] . ' pack(s) (' . (int)$rb['quantity'] . ' pcs)' : '-' . (int)$rb['quantity'] . ' pc(s)' ?></li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="action-hints u-mt-1">
+                                        <span><strong>Approved reports are locked.</strong> Need to rectify a mistake? Correct it with a linked inventory count.</span>
+                                        <div class="u-mt-1">
+                                            <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php?correct=' . (int)$review['adjustment_id'])) ?>">Correct via inventory count</a>
+                                        </div>
                                     </div>
                                 <?php endif; ?>
-                                <div class="adjustment-reason">
-                                    <strong>Approved reports are locked.</strong> Correct mistakes with a linked inventory count.
-                                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/inventory_management/inventory_counts.php?correct=' . (int)$review['adjustment_id'])) ?>">Correct via inventory count</a>
-                                </div>
-                            <?php endif; ?>
-                            <?php if (!empty($review['review_notes'])): ?>
-                                <div class="adjustment-reason">
-                                    <strong>Reviewer note:</strong> <?= htmlspecialchars($review['review_notes']) ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php $reviewRevisions = $revisionsFor((int)$review['adjustment_id']); ?>
-                            <?php if (!empty($reviewRevisions)): ?>
-                                <details class="adjustment-reason">
-                                    <summary>Revision history (<?= count($reviewRevisions) ?>)</summary>
-                                    <?php foreach ($reviewRevisions as $revision): ?>
-                                        <div>#<?= (int)$revision['revision_id'] ?> <?= htmlspecialchars($revision['action']) ?> by #<?= (int)$revision['actor_id'] ?> at <?= htmlspecialchars($revision['created_at']) ?> (<?= htmlspecialchars((string)($revision['old_status'] ?? '')) ?> → <?= htmlspecialchars((string)($revision['new_status'] ?? '')) ?>)</div>
-                                    <?php endforeach; ?>
-                                </details>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </details>
+
+                                <?php if (!empty($review['review_notes'])): ?>
+                                    <div class="detail-reason-box detail-reason-box--decision">
+                                        <div class="reason-box-header">
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                            <span>Reviewer Note</span>
+                                        </div>
+                                        <p class="reason-box-text"><?= htmlspecialchars($review['review_notes']) ?></p>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php $reviewRevisions = $revisionsFor((int)$review['adjustment_id']); ?>
+                                <?php if (!empty($reviewRevisions)): ?>
+                                    <details class="revision-history-accordion">
+                                        <summary><strong>Activity Trail</strong> (<?= count($reviewRevisions) ?> <?= count($reviewRevisions) === 1 ? 'event' : 'events' ?>)</summary>
+                                        <div class="revision-timeline">
+                                            <?php foreach ($reviewRevisions as $revision): ?>
+                                                <div class="timeline-entry">
+                                                    <div class="timeline-dot"></div>
+                                                    <div class="timeline-content">
+                                                        <div class="timeline-title">
+                                                            <strong><?= htmlspecialchars(ucfirst($revision['action'])) ?></strong>
+                                                            <span>by <?= htmlspecialchars($revision['actor_name'] ?: ('User #' . $revision['actor_id'])) ?></span>
+                                                        </div>
+                                                        <div class="timeline-meta">
+                                                            <span><?= htmlspecialchars(format_display_datetime($revision['created_at'])) ?></span>
+                                                            <?php if (!empty($revision['old_status']) || !empty($revision['new_status'])): ?>
+                                                                <span class="timeline-transition">
+                                                                    <span class="adjustment-status <?= htmlspecialchars((string)$revision['old_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['old_status'])) ?></span>
+                                                                    →
+                                                                    <span class="adjustment-status <?= htmlspecialchars((string)$revision['new_status']) ?>"><?= htmlspecialchars(ucfirst((string)$revision['new_status'])) ?></span>
+                                                                </span>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </details>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </details>
+                </div>
             <?php endif; ?>
         </main>
     </div>

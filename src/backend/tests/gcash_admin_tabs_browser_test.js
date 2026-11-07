@@ -61,6 +61,9 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         });
         await page.goto(origin + '/components/administrator/gcash_overview.php');
         assert.equal(await page.evaluate(() => window.scrollY), 0, 'Opening overview keeps the page title visible');
+        if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#gcash-completed-activity').isVisible()) {
+            await page.locator('#coin-tab-activity').click();
+        }
         await page.getByRole('button', {name: 'View transactions', exact: true}).click();
         assert.equal(await page.locator('#tab-transactions').isVisible(), true, 'Activity report links to its transaction history');
         await page.getByRole('tab', {name: 'Overview', exact: true}).click();
@@ -68,6 +71,9 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         assert.equal(await page.locator('#tab-transactions').isVisible(), true, 'Transactions tab opens with an older GCash script cached');
         assert.equal(await page.evaluate(() => window.legacyGCashScript), undefined, 'Stale unversioned script is bypassed');
         await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#gcash-reporting-scope').isVisible()) {
+            await page.locator('#coin-tab-activity').click();
+        }
         await page.getByLabel('Reporting period', {exact: true}).selectOption('month_to_date');
         await page.locator('#btn-apply-filters').click();
         await page.waitForURL(url => url.searchParams.get('period') === 'month_to_date');
@@ -89,6 +95,9 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             await page.locator('#tab-money').waitFor({state: 'visible'});
             assert.equal(await page.locator('#tab-money').isVisible(), true);
             await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+            if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#gcash-reporting-scope').isVisible()) {
+                await page.locator('#coin-tab-activity').click();
+            }
             assert.equal(new URL(await page.locator('#btn-reset-filters').getAttribute('href'), origin).searchParams.get('tab'), 'overview', 'Reset preserves the current report tab');
             const reportGap = await page.evaluate(() => document.getElementById('gcash-completed-activity').getBoundingClientRect().top - document.getElementById('gcash-reporting-scope').getBoundingClientRect().bottom);
             assert.ok(Math.abs(reportGap) < 1, 'Filters and completed activity form one panel at ' + width + 'px');

@@ -69,40 +69,6 @@ function forecast_workflow(string $current): void
         <?php
         return;
     }
-    $role = current_role() === 'super_admin'
-        ? ['Super Administrator', 'Prepare sales data and train models.']
-        : (current_role() === 'admin'
-            ? ['Administrator', 'Review models and monitor Store forecasts.']
-            : ['Inventory Manager', 'Check expected sales and plan what to buy.']);
-    $steps = [
-        ['data', 'Check sales data', 'report/data_readiness.php', \App\Authorization\RoleCapabilityPolicy::VIEW_FORECASTS, 'Super Administrator'],
-        ['train', 'Train model', 'system_administrator/ml_settings.php', \App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS, 'Super Administrator'],
-        ['review', 'Review & approve', 'administrator/model_review.php', \App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS, 'Administrator'],
-        ['forecast', 'See expected sales', 'report/predictions.php', \App\Authorization\RoleCapabilityPolicy::VIEW_FORECASTS, 'Store staff'],
-        ['buy', 'Plan buying', 'inventory_management/replenishment_queue.php', null, 'Inventory Manager'],
-    ];
-    ?>
-    <div class="forecast-role-context">
-        <p><strong><?= htmlspecialchars($role[0]) ?></strong><span><?= htmlspecialchars($role[1]) ?></span></p>
-        <details class="forecast-workflow">
-        <summary>View workflow</summary>
-        <nav aria-label="Forecasting steps">
-        <p class="forecast-workflow-note">Model setup and approval happen when needed. Scheduled jobs update forecasts; staff review the results.</p>
-        <ol>
-            <?php foreach ($steps as $index => [$key, $label, $path, $capability, $owner]): ?>
-                <li>
-                    <?php if ($capability === null || has_capability($capability)): ?>
-                        <a href="<?= htmlspecialchars(app_url('components/' . $path)) ?>" <?= $key === $current ? 'aria-current="location"' : '' ?>><span class="forecast-step-number" aria-hidden="true"><?= $index + 1 ?></span><span><?= htmlspecialchars($label) ?><small><?= htmlspecialchars($owner) ?></small></span></a>
-                    <?php else: ?>
-                        <span class="forecast-workflow-owner"><span class="forecast-step-number" aria-hidden="true"><?= $index + 1 ?></span><span><?= htmlspecialchars($label) ?><small><?= htmlspecialchars($owner) ?></small></span></span>
-                    <?php endif; ?>
-                </li>
-            <?php endforeach; ?>
-        </ol>
-        </nav>
-        </details>
-    </div>
-    <?php
 }
 
 function forecast_status_summary(string $title, string $blocker, string $next, ?string $url = null, string $linkLabel = 'Continue'): void

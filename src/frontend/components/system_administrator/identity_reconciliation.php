@@ -267,7 +267,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             <span class="history-total"><?= count($review['destination_users']) ?> <?= count($review['destination_users']) === 1 ? 'account' : 'accounts' ?></span>
                         </div>
                         <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Accounts on this server">
-                            <table>
+                            <table data-no-smart-table>
                                 <thead>
                                     <tr>
                                         <th scope="col">Person</th>
@@ -327,7 +327,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <details class="dashboard-section reconcile-details" aria-labelledby="preservation-heading">
                             <summary id="preservation-heading">Security and settings preserved on this server</summary>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Preservation categories">
-                                <table>
+                                <table data-no-smart-table>
                                     <thead>
                                         <tr>
                                             <th scope="col">Preserved category</th>
@@ -351,7 +351,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             </div>
                             <p class="backup-hint">Privileged-only source identities and unlinked destination accounts gain no imported login access.</p>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Resulting access">
-                                <table>
+                                <table data-no-smart-table>
                                     <thead>
                                         <tr>
                                             <th scope="col">User</th>

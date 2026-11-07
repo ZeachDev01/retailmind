@@ -1380,7 +1380,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                         </div>
                     <?php else: ?>
                     <div class="table-wrap" tabindex="0" role="region" aria-label="Report records">
-                        <table class="report-records-table">
+                        <table class="report-records-table" data-no-smart-table>
                             <thead>
                                 <tr>
                                     <?php foreach ($reportData['headers'] as $header): ?>

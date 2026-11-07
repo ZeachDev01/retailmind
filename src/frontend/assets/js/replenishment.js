@@ -186,3 +186,18 @@
     syncFromSnapshot();
     update();
 })();
+
+// Auto-dismiss temporary replenishment notices after 2.5 seconds
+(() => {
+    const notices = document.querySelectorAll('.queue-temp-notice');
+    if (!notices.length) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.setTimeout(() => {
+        notices.forEach(notice => {
+            notice.classList.add('is-fading');
+            window.setTimeout(() => {
+                if (notice.isConnected) notice.remove();
+            }, reducedMotion ? 0 : 300);
+        });
+    }, 2500);
+})();

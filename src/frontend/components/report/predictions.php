@@ -206,7 +206,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <?php if ($coverage['is_observation_mode'] || $coverage['is_recommendations_suspended']): ?>
             <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
         <?php endif; ?>
-        <details class="forecast-details forecast-actions" <?= array_filter($operationalIssues, static fn(array $issue): bool => ($issue['severity'] ?? '') === 'critical') ? 'open' : '' ?>>
+        <details class="forecast-details forecast-actions">
             <summary id="heading-actions"><span>Forecast checks <span class="forecast-check-count"><?= count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true))) ?> to review</span></span></summary>
             <div role="list">
             <?php foreach ($operationalIssues as $issueIndex => $issue):
@@ -279,7 +279,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </div>
             <?php else: ?>
                 <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">
-                    <table class="data-table forecast-table">
+                    <table class="data-table forecast-table" data-no-smart-table>
                         <thead>
                             <tr>
                                 <th scope="col">Product</th>
@@ -390,7 +390,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                     <p class="forecast-evaluated-model"><strong>Evaluated model:</strong> <code><?= htmlspecialchars($performanceSummary['model_version'] ?? 'Approved') ?></code></p>
                     <p class="muted"><?= htmlspecialchars(ucfirst($performanceSummary['model_association'])) ?> model · <?= (int)$performanceSummary['product_count'] ?> Products · <?= (int)$performanceSummary['usable_comparison_count'] ?> usable Product/date comparisons · <?= htmlspecialchars($performanceSummary['date_range']['start'] ?? 'Unavailable') ?> to <?= htmlspecialchars($performanceSummary['date_range']['end'] ?? 'Unavailable') ?>.</p>
                     <div class="table-wrap" role="region" aria-label="Performance metrics table" tabindex="0">
-                        <table class="data-table">
+                        <table class="data-table" data-no-smart-table>
                             <thead>
                                 <tr>
                                     <th scope="col">Forecast Lead Time</th>

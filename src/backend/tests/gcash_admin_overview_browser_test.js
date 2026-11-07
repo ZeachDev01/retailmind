@@ -85,6 +85,9 @@ const csvRows = bytes => {
         assert.equal(await receiptAction.evaluate(button => button === document.activeElement), true, 'Closing returns to originating Overview receipt action');
         assert.deepEqual(await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json(), beforeReprint, 'Receipt retrieval and printing leave Store-wide financial state unchanged');
         await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#filter-start-date').isVisible()) {
+            await page.locator('#coin-tab-activity').click();
+        }
         assert.equal(await page.locator('#filter-start-date').isVisible(), true, 'Shared reporting controls are available beside headline activity');
         await page.getByLabel('Reporting period', {exact: true}).selectOption('month_to_date');
         await page.locator('#btn-apply-filters').click();

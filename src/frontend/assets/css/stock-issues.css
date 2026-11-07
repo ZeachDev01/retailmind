@@ -53,7 +53,7 @@
 /* Stock Issue KPI Overview Strip */
 .stock-issues-page .stock-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
     margin-bottom: 1.25rem;
 }
@@ -249,6 +249,175 @@
 .stock-issues-page .detail-reason-box--decision {
     border-left-color: var(--theme-action, #2563eb);
     background: color-mix(in srgb, var(--primary) 5%, var(--card-bg));
+}
+
+/* Card Header Strip & Badges */
+.stock-issues-page .adjustment-card-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-bottom: .875rem;
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--border);
+}
+.stock-issues-page .adjustment-badges {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+.stock-issues-page .report-id-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .55rem;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: .8125rem;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.stock-issues-page .adjustment-time {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    font-size: .8125rem;
+    color: var(--muted);
+}
+.stock-issues-page .adjustment-product-info {
+    margin-bottom: .875rem;
+}
+.stock-issues-page .adjustment-product-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.35;
+    margin-bottom: .35rem;
+}
+.stock-issues-page .reason-box-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .025em;
+    color: var(--muted);
+    margin-bottom: .375rem;
+}
+.stock-issues-page .reason-box-text {
+    margin: 0;
+    color: var(--text);
+    font-size: .95rem;
+    line-height: 1.5;
+}
+.stock-issues-page .issue-ok {
+    color: var(--theme-success-text, #16a34a);
+    font-weight: 600;
+    font-size: .8125rem;
+}
+.stock-issues-page .issue-warning {
+    color: var(--theme-danger-text, #dc2626);
+    font-weight: 600;
+    font-size: .8125rem;
+}
+.stock-issues-page .btn-action-approve {
+    background: #16a34a;
+    color: #ffffff;
+    border: 1px solid #15803d;
+    font-weight: 600;
+}
+.stock-issues-page .btn-action-approve:hover:not(:disabled) {
+    background: #15803d;
+    color: #ffffff;
+}
+.stock-issues-page .btn-action-return {
+    background: #d97706;
+    color: #ffffff;
+    border: 1px solid #b45309;
+    font-weight: 600;
+}
+.stock-issues-page .btn-action-return:hover {
+    background: #b45309;
+    color: #ffffff;
+}
+.stock-issues-page .btn-action-reject {
+    background: #dc2626;
+    color: #ffffff;
+    border: 1px solid #b91c1c;
+    font-weight: 600;
+}
+.stock-issues-page .btn-action-reject:hover {
+    background: #b91c1c;
+    color: #ffffff;
+}
+.stock-issues-page .action-hints {
+    display: grid;
+    gap: .25rem;
+    margin-top: .75rem;
+    padding: .75rem 1rem;
+    background: var(--surface-soft);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: .8125rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+.stock-issues-page .action-hints strong {
+    color: var(--text);
+}
+.stock-issues-page .revision-history-accordion {
+    margin-top: 1rem;
+    border-top: 1px dashed var(--border);
+    padding-top: .5rem;
+}
+.stock-issues-page .revision-timeline {
+    margin-top: .75rem;
+    margin-left: .5rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+.stock-issues-page .timeline-entry {
+    position: relative;
+}
+.stock-issues-page .timeline-dot {
+    position: absolute;
+    left: -1.35rem;
+    top: .3rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+.stock-issues-page .timeline-content {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+}
+.stock-issues-page .timeline-title {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    font-size: .875rem;
+}
+.stock-issues-page .timeline-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    font-size: .8125rem;
+    color: var(--muted);
+}
+.stock-issues-page .timeline-transition {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
 }
 
 @media(max-width:900px) {

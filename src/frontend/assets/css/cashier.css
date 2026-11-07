@@ -1401,7 +1401,7 @@
 .cashier-dashboard-page .transaction-payment.payment-cash { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
 .cashier-dashboard-page .transaction-payment.payment-gcash { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
 .cashier-dashboard-page .transaction-payment.payment-card { background: #faf5ff; color: #6b21a8; border-color: #e9d5ff; }
-.cashier-dashboard-page .cashier-recent-table .receipt-link { min-height: 44px; justify-content: flex-end; font-size: .875rem; font-weight: 600; text-underline-offset: .2em; }
+.cashier-dashboard-page .cashier-recent-table .receipt-link { min-height: 32px; justify-content: center; }
 .cashier-dashboard-page .cashier-recent-table tbody td.transaction-empty { width: auto; padding: 2rem 1rem; text-align: center; color: var(--muted); }
 .cashier-dashboard-page .transaction-empty :is(i, strong, span) { display: block; }
 .cashier-dashboard-page .transaction-empty i { margin-bottom: .5rem; font-size: 1.5rem; }
@@ -1591,39 +1591,54 @@
 
 .cashier-recent-table .receipt-link {
     display: inline-flex;
-    min-height: 44px;
     align-items: center;
+    justify-content: center;
     gap: 0.35rem;
-    color: var(--theme-info-text, #1d4ed8);
-    font-size: 0.875rem;
+    min-height: 32px;
+    padding: 0.32rem 0.8rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    text-decoration: none;
-    background: transparent;
-    border: none;
-    padding: 0;
+    line-height: 1.2;
+    background: var(--primary, #2563eb);
+    border: 1px solid var(--primary, #2563eb);
+    border-radius: 8px;
+    color: #ffffff !important;
+    text-decoration: none !important;
+    white-space: nowrap;
     cursor: pointer;
-    font-family: inherit;
-    text-underline-offset: .2em;
-    transition: color 0.15s ease;
+    user-select: none;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 .cashier-recent-table .receipt-link:hover {
-    text-decoration: underline;
-    color: var(--primary, #2563eb);
+    background: var(--primary-dark, #1d4ed8);
+    border-color: var(--primary-dark, #1d4ed8);
+    color: #ffffff !important;
+    text-decoration: none !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+}
+
+.cashier-recent-table .receipt-link:active {
+    transform: translateY(1px);
+    background: #1e40af;
+    border-color: #1e40af;
 }
 
 .cashier-recent-table .receipt-link:focus-visible {
-    outline: 2px solid var(--theme-primary, #2563eb);
+    outline: 2px solid var(--primary, #2563eb);
     outline-offset: 2px;
-    border-radius: 4px;
 }
 
 .cashier-recent-table .receipt-link i {
-    transition: transform 0.15s ease;
+    color: #ffffff;
+    font-size: 0.85rem;
+    line-height: 1;
+    transition: none;
 }
 
 .cashier-recent-table .receipt-link:hover i {
-    transform: scale(1.12);
+    transform: none;
 }
 
 .stock-alert-list {

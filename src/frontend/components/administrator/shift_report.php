@@ -413,7 +413,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         </div>
 
         <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0">
-            <table class="shift-summary-table">
+            <table class="shift-summary-table" data-no-smart-table>
                 <thead>
                     <tr>
                         <th scope="col">Shift / Date</th>

@@ -946,29 +946,37 @@
 
   function initSmartTables() {
     qsa(".main-content .table-wrap table").forEach((table, tableIndex) => {
+      const wrap = table.closest(".table-wrap");
+      if (!wrap) return;
+
       if (
         table.matches(
-          ".data-table, .cart-table, .receipt-table, [data-no-smart-table]",
+          ".data-table, .cart-table, .receipt-table, .refund-history-table, .refund-items-table, .cashier-recent-table, .net-sales-table, .report-records-table, .format-table, [data-no-smart-table]",
         ) ||
-        table.closest("#product-table") ||
-        table.closest("#overview-product-view, #overview-panel-movements, #overview-panel-fefo, .product-overview-modal") ||
-        table.closest(".overview-panel") ||
-        (table.closest(".table-wrap") && (
-          table.closest(".table-wrap").nextElementSibling?.classList.contains("overview-pagination") ||
-          table.closest(".table-wrap").nextElementSibling?.classList.contains("table-pagination")
-        ))
-      )
+        table.closest("[data-no-smart-table], details, #product-table, #overview-product-view, #overview-panel-movements, #overview-panel-fefo, .product-overview-modal, .overview-panel, .reconcile-table") ||
+        wrap.previousElementSibling?.classList.contains("auto-table-toolbar")
+      ) {
         return;
+      }
+
+      const container = table.closest("section, .dashboard-section, .pos-panel, .card, main") || wrap.parentElement;
+      const hasExistingPagination = Boolean(
+        container?.querySelector(".history-pagination, .backup-pagination, .table-pagination-nav, .forecast-pagination, .queue-pagination, .gcash-pagination, .overview-pagination, .table-pagination:not(.auto-table-pagination)") ||
+        wrap.nextElementSibling?.matches(".history-pagination, .backup-pagination, .table-pagination-nav, .forecast-pagination, .queue-pagination, .gcash-pagination, .overview-pagination, [class*='pagination']")
+      );
+
+      if (hasExistingPagination) return;
+
       const body = table.tBodies[0];
       if (!body) return;
-      const rows = qsa("tr", body).filter((row) => row.querySelector("td"));
+      const rows = qsa("tr", body).filter(
+        (row) =>
+          row.querySelector("td") &&
+          !row.classList.contains("table-ghost-row") &&
+          !row.classList.contains("history-empty") &&
+          !row.querySelector(".u-empty-cell, .transaction-empty, .shift-empty, .backup-empty, .table-empty-row"),
+      );
       if (rows.length < 8) return;
-      const wrap = table.closest(".table-wrap");
-      if (
-        !wrap ||
-        wrap.previousElementSibling?.classList.contains("auto-table-toolbar")
-      )
-        return;
 
       const toolbar = document.createElement("div");
       toolbar.className = "table-toolbar auto-table-toolbar";
@@ -1240,11 +1248,50 @@
     });
   }
 
+  function initTableGhostRows(root) {
+    qsa(".table-wrap table, .history-table-wrap table, .correction-table-wrap table, .gcash-table-wrap table", root || document).forEach((table) => {
+      if (
+        table.matches(".cart-table, .receipt-table, .refund-items-table, [data-no-ghost-rows]") ||
+        table.querySelector(".table-ghost-row, .history-empty, .cart-empty-cell")
+      ) {
+        return;
+      }
+      const tbody = table.tBodies[0];
+      if (!tbody) return;
+      const realRows = qsa("tr", tbody).filter((r) => !r.classList.contains("table-ghost-row") && r.querySelector("td"));
+      if (realRows.length === 0) return;
+
+      const headerThs = qsa("thead th", table);
+      const firstRowTds = realRows[0] ? qsa("td", realRows[0]) : [];
+      const colCount = headerThs.length || firstRowTds.length || 1;
+
+      const targetRows = 6;
+      const ghostNeeded = Math.max(0, targetRows - realRows.length);
+      if (ghostNeeded <= 0) return;
+
+      const fragment = document.createDocumentFragment();
+      for (let i = 0; i < ghostNeeded; i++) {
+        const tr = document.createElement("tr");
+        tr.className = "table-ghost-row";
+        tr.setAttribute("aria-hidden", "true");
+        for (let c = 0; c < colCount; c++) {
+          const td = document.createElement("td");
+          if (c === 0) td.innerHTML = "&nbsp;";
+          tr.appendChild(td);
+        }
+        fragment.appendChild(tr);
+      }
+      tbody.appendChild(fragment);
+    });
+  }
+  RM.fillTableGhostRows = initTableGhostRows;
+
   RM.initPageContent = function () {
     initQueryToasts();
     initServerNotifications();
     initForms();
     initSmartTables();
+    initTableGhostRows();
     initSearchDropdowns();
   };
 

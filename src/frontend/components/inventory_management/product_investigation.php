@@ -126,7 +126,6 @@ $isDemoProduct = isset($product['sku']) && str_starts_with($product['sku'], 'DEM
             </div>
         </div>
 
-        <?php forecast_workflow('forecast'); ?>
         <?php if (isset($errorState)): ?>
             <div class="empty-state">
                 <i class="bi bi-exclamation-triangle empty-icon"></i>

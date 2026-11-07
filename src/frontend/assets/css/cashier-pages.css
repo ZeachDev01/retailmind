@@ -62,7 +62,21 @@
 .cashier-history-page .history-id-plain { display: inline-flex; align-items: center; font-weight: 600; color: var(--text, #0f172a); text-decoration: none; letter-spacing: -.01em; font-variant-numeric: tabular-nums; cursor: default; user-select: text; white-space: nowrap; }
 .cashier-history-page .history-date-cell { color: var(--muted, #64748b); white-space: nowrap; font-size: .875rem; }
 .cashier-history-page .history-money-cell { text-align: right; font-weight: 700; color: var(--text, #0f172a); white-space: nowrap; padding-right: 1.5rem; }
+.cashier-history-page .history-payment-cell { white-space: nowrap; }
 .cashier-history-page .history-note-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Payment Pill Badges (matches cashier dashboard payment style) */
+.cashier-history-page .transaction-payment { display: inline-flex; align-items: center; padding: .18rem .55rem; border: 1px solid var(--border, #cbd5e1); border-radius: 9999px; color: var(--text, #334155); font-size: .775rem; font-weight: 600; line-height: 1.35; background: var(--theme-surface-soft, #f8fafc); white-space: nowrap; }
+.cashier-history-page .transaction-payment.payment-cash { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.cashier-history-page .transaction-payment.payment-gcash,
+.cashier-history-page .transaction-payment.payment-ewallet { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.cashier-history-page .transaction-payment.payment-card { background: #faf5ff; color: #6b21a8; border-color: #e9d5ff; }
+
+html[data-theme="dark"] .cashier-history-page .transaction-payment { background: var(--theme-surface-soft, #1e293b); border-color: var(--border, #334155); color: var(--text, #f8fafc); }
+html[data-theme="dark"] .cashier-history-page .transaction-payment.payment-cash { background: rgba(34, 197, 94, 0.15); color: #4ade80; border-color: rgba(34, 197, 94, 0.3); }
+html[data-theme="dark"] .cashier-history-page .transaction-payment.payment-gcash,
+html[data-theme="dark"] .cashier-history-page .transaction-payment.payment-ewallet { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.3); }
+html[data-theme="dark"] .cashier-history-page .transaction-payment.payment-card { background: rgba(168, 85, 247, 0.15); color: #c084fc; border-color: rgba(168, 85, 247, 0.3); }
 
 /* Status Pill - Matches GCash status text with indicator dot */
 .cashier-history-page .history-status-pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8125rem; font-weight: 600; line-height: 1.3; white-space: nowrap; text-transform: capitalize; }
@@ -177,6 +191,34 @@
 .cashier-refunds-page .refund-history { min-height: 480px; display: flex; flex-direction: column; }
 .cashier-refunds-page .refund-history .table-wrap { flex: 1 1 auto; min-height: 280px; }
 .cashier-refunds-page .refund-history .history-pagination { margin-top: auto; }
+
+/* Placeholder / Ghost Grid Rows (Option 2) */
+.table-ghost-row,
+tbody tr.table-ghost-row {
+    pointer-events: none;
+    user-select: none;
+    background: transparent !important;
+}
+
+.table-ghost-row td,
+tbody tr.table-ghost-row td {
+    height: 53px;
+    padding: .85rem 1.15rem;
+    border-bottom: 1px solid var(--border);
+    color: transparent;
+    background: transparent !important;
+}
+
+.table-ghost-row:last-child td,
+tbody tr.table-ghost-row:last-child td {
+    border-bottom: none;
+}
+
+@media (max-width: 1100px) {
+    .cashier-history-page .history-table-wrap tbody tr.table-ghost-row {
+        display: none !important;
+    }
+}
 .refund-actions-group { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
 .refund-details-drawer { inset: 0 0 0 auto; margin: 0; width: min(540px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: none; border-left: 1px solid var(--border); background: var(--card-bg, #fff); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column; padding: 0; z-index: 2000; overscroll-behavior: contain; }
 .refund-details-drawer:not([open]) { display: none; }
@@ -254,10 +296,11 @@ html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
 .cashier-shifts-page .money-counter-row { padding: .5rem 0; border-top: 1px solid var(--border); transition: background .2s ease; }
 .cashier-shifts-page .money-counter-row.has-cash { background: var(--theme-info-surface, var(--card-bg)); }
 .cashier-shifts-page .money-counter-row label { display: inline-flex; align-items: center; gap: .55rem; margin: 0; font-size: .875rem; font-weight: 600; min-width: 0; cursor: pointer; }
-.cashier-shifts-page .money-counter-thumb-wrap { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: var(--theme-surface-soft, #f8fafc); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: transform .15s ease; }
+.cashier-shifts-page .money-counter-thumb-wrap { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: transparent; transition: transform .15s ease; }
 .cashier-shifts-page .money-counter-row:hover .money-counter-thumb-wrap { transform: scale(1.05); }
-.cashier-shifts-page .money-counter-thumb-wrap--bill { width: 46px; height: 23px; border: 1px solid var(--border); }
-.cashier-shifts-page .money-counter-thumb-wrap--coin { width: 26px; height: 26px; border-radius: 50%; background: transparent; border: none; box-shadow: none; }
+.cashier-shifts-page .money-counter-thumb-wrap--bill { width: 48px; height: 22px; border: none; border-radius: 3px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); }
+.cashier-shifts-page .money-counter-thumb-wrap--coin { width: 26px; height: 26px; border-radius: 50%; background: transparent; border: none; box-shadow: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.22)); }
+.cashier-shifts-page .money-counter-thumb-wrap svg { width: 100%; height: 100%; display: block; }
 .cashier-shifts-page .money-counter-thumb { width: 100%; height: 100%; display: block; }
 .cashier-shifts-page .money-counter-thumb--bill { object-fit: cover; }
 .cashier-shifts-page .money-counter-thumb--coin { object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.22)); }

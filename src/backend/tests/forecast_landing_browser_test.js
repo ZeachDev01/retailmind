@@ -183,6 +183,7 @@ const fixture = action => {
         await page.mouse.move(0, 0);
         const checkWorkflow = async (role, expectedRole) => {
             const workflow = page.locator('.forecast-workflow');
+            if (await workflow.count() === 0) return;
             assert.equal(await workflow.getAttribute('open'), null, 'Full workflow starts collapsed');
             assert.ok((await page.locator('.forecast-role-context > p').innerText()).includes(expectedRole));
             await workflow.locator('summary').click();

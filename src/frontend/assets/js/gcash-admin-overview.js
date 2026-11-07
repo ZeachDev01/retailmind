@@ -3,7 +3,7 @@
     const workspace = document.getElementById('gcash-admin-workspace');
     if (!workspace) return;
 
-    const tabs = [...workspace.querySelectorAll('[role="tab"]')];
+    const tabs = [...workspace.querySelectorAll('.gcash-section-nav [role="tab"]')];
     function selectTab(tab, focus = false) {
         const target = tab.getAttribute('aria-controls');
         tabs.forEach(item => {
@@ -50,6 +50,97 @@
         const review = event.target.closest('[data-review-tab]');
         if (review) selectTab(document.getElementById('gcash-tab-' + review.dataset.reviewTab), true);
     });
+
+    // Overview Coin View Controller (Balances <-> Activity & Completed)
+    const coinDeck = document.getElementById('gcash-coin-deck');
+    const coinPills = [...workspace.querySelectorAll('[data-coin-face]')];
+    const coinFlipTrigger = document.getElementById('gcash-coin-flip-trigger');
+    const flipLabel = coinFlipTrigger?.querySelector('.gcash-flip-label');
+
+    function switchCoinFace(targetFace, animate = true) {
+        if (!coinDeck) return;
+        const currentFace = coinDeck.dataset.activeFace;
+        const nextFace = targetFace === 'toggle'
+            ? (currentFace === 'balances' ? 'activity' : 'balances')
+            : targetFace;
+
+        if (nextFace !== 'balances' && nextFace !== 'activity') return;
+
+        coinDeck.dataset.activeFace = nextFace;
+
+        coinPills.forEach(pill => {
+            const isMatch = pill.dataset.coinFace === nextFace;
+            pill.classList.toggle('active', isMatch);
+            pill.setAttribute('aria-pressed', String(isMatch));
+        });
+
+        const balancesFace = document.getElementById('gcash-face-balances');
+        const activityFace = document.getElementById('gcash-face-activity');
+
+        if (balancesFace && activityFace) {
+            balancesFace.hidden = (nextFace !== 'balances');
+            activityFace.hidden = (nextFace !== 'activity');
+
+            const activeFaceEl = nextFace === 'balances' ? balancesFace : activityFace;
+            if (animate) {
+                activeFaceEl.classList.remove('gcash-face-entering');
+                void activeFaceEl.offsetWidth;
+                activeFaceEl.classList.add('gcash-face-entering');
+            }
+        }
+
+        if (flipLabel) {
+            flipLabel.textContent = nextFace === 'balances' ? 'Flip to Activity' : 'Flip to Balances';
+        }
+
+        if (coinFlipTrigger && animate) {
+            coinFlipTrigger.classList.add('gcash-flip-spinning');
+            setTimeout(() => coinFlipTrigger.classList.remove('gcash-flip-spinning'), 300);
+        }
+
+        try {
+            sessionStorage.setItem('gcash_overview_face', nextFace);
+        } catch (_) {}
+    }
+
+    coinPills.forEach(pill => {
+        pill.addEventListener('click', () => switchCoinFace(pill.dataset.coinFace, true));
+    });
+
+    coinFlipTrigger?.addEventListener('click', () => {
+        switchCoinFace('toggle', true);
+    });
+
+    workspace.addEventListener('click', event => {
+        const shortcut = event.target.closest('[data-coin-switch]');
+        if (shortcut) {
+            switchCoinFace(shortcut.dataset.coinSwitch, true);
+        }
+    });
+
+    window.addEventListener('keydown', event => {
+        if (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+            const tag = (document.activeElement?.tagName || '').toLowerCase();
+            const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
+            const overviewTabSelected = workspace.querySelector('#gcash-tab-overview')?.getAttribute('aria-selected') === 'true';
+            if (!isInput && overviewTabSelected && coinDeck) {
+                event.preventDefault();
+                switchCoinFace('toggle', true);
+            }
+        }
+    });
+
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasCustomPeriod = urlParams.has('period') && urlParams.get('period') !== 'today';
+        const hasDateFilters = urlParams.has('start_date') || urlParams.has('end_date') || urlParams.get('face') === 'activity';
+        if (!hasCustomPeriod && !hasDateFilters) {
+            const savedFace = sessionStorage.getItem('gcash_overview_face');
+            if (savedFace && (savedFace === 'balances' || savedFace === 'activity') && coinDeck.dataset.activeFace !== savedFace) {
+                switchCoinFace(savedFace, false);
+            }
+        }
+    } catch (_) {}
 
     function refreshReviews(html) {
         document.getElementById('gcash-outstanding-reviews').replaceWith(html.getElementById('gcash-outstanding-reviews').cloneNode(true));
