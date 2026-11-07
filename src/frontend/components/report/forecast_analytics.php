@@ -1,9 +1,12 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 
+require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastMetrics.php';
+
 use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\ForecastMetrics;
 
 require_role(['super_admin']);
 require_capability(RoleCapabilityPolicy::CONFIGURE_MODELS);
@@ -136,7 +139,9 @@ foreach ($actualVsForecast as $row) {
             'predicted' => 0,
             'actual' => 0,
             'abs_err' => 0,
-            'count' => 0
+            'count' => 0,
+            'actuals' => [],
+            'predictions' => [],
         ];
     }
     $p = (float)($row['predicted_units'] ?? 0);
@@ -145,12 +150,15 @@ foreach ($actualVsForecast as $row) {
     $productPerf[$pName]['actual'] += $a;
     $productPerf[$pName]['abs_err'] += abs($a - $p);
     $productPerf[$pName]['count']++;
+    $productPerf[$pName]['actuals'][] = $a;
+    $productPerf[$pName]['predictions'][] = $p;
 }
 foreach ($productPerf as &$perf) {
     $perf['mean_err'] = $perf['count'] > 0 ? $perf['abs_err'] / $perf['count'] : 0;
-    // Deliberately not ForecastMetrics::wape: this display stores a percentage
-    // (x100) and shows 0 rather than null when a Product has no actual demand.
-    $perf['wape'] = $perf['actual'] > 0 ? ($perf['abs_err'] / $perf['actual']) * 100 : 0;
+    // Display stores a percentage (x100) and shows 0 rather than null when a
+    // Product has no actual demand; ForecastMetrics::wape is fraction/null.
+    $wape = ForecastMetrics::wape($perf['actuals'], $perf['predictions']);
+    $perf['wape'] = $wape === null ? 0 : $wape * 100;
 }
 unset($perf);
 

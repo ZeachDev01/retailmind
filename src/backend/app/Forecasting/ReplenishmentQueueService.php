@@ -252,7 +252,7 @@ class ReplenishmentQueueService
             $forecast = $aggregates[$productId] ?? null;
             $hasForecast = $forecast !== null && $forecast['readiness_level'] !== null;
             $isComplete = $forecast !== null && !empty($forecast['complete_forecast']);
-            $isSupportedReadiness = $hasForecast && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true);
+            $isSupportedReadiness = $hasForecast && in_array($forecast['readiness_level'], ForecastUsability::SUPPORTED_READINESS, true);
             $hasUsableForecast = $hasForecast && $isComplete && $isSupportedReadiness;
             
             if (!$hasUsableForecast) {

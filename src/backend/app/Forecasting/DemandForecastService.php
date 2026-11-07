@@ -7,6 +7,7 @@ require_once __DIR__ . '/StoreModelGovernanceService.php';
 require_once __DIR__ . '/CandidateEvaluationService.php';
 require_once __DIR__ . '/ForecastingSchedulerService.php';
 require_once __DIR__ . '/ForecastAggregateReader.php';
+require_once __DIR__ . '/ForecastUsability.php';
 
 use PDO;
 use InvalidArgumentException;
@@ -320,7 +321,7 @@ class DemandForecastService
                 if (!empty($product['complete_forecast'])
                     && $product['forecast_origin'] === $acceptedOrigin
                     && $product['model_version'] === $approvedVersion
-                    && in_array($product['readiness_level'], ['Low', 'Medium', 'High'], true)) {
+                    && in_array($product['readiness_level'], ForecastUsability::SUPPORTED_READINESS, true)) {
                     return $jid;
                 }
             }

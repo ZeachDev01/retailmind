@@ -6,7 +6,6 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
-require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastAggregateReader.php';
 require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastMetrics.php';
 
 use App\Authorization\RoleCapabilityPolicy;
@@ -614,7 +613,6 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'forecast_actual':
-            $aggregateReader = new \App\Forecasting\ForecastAggregateReader($pdo);
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
@@ -622,6 +620,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         28 AS forecast_period_days,
                         df.forecast_origin AS generated_at,
                         DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) AS forecast_completed_at,
+                        SUM(df.predicted_units) AS forecast_quantity,
                         (
                             SELECT COALESCE(SUM({$saleUnitsSql}), 0)
                             FROM sale_items si
@@ -643,16 +642,10 @@ function run_report(PDO $pdo, string $report, array $filters): array
             );
             $stmt->execute(array_merge([$filters['from'], $filters['to']], $productParams));
 
+            // Summed per (job_id, product_id, forecast_origin) above; the shared
+            // ForecastAggregateReader keys by product only, so it cannot express
+            // this report's per-origin grouping.
             $rawRows = $stmt->fetchAll();
-            $jobAggregates = [];
-            foreach ($rawRows as &$rawRow) {
-                $jobId = (int)$rawRow['job_id'];
-                if (!array_key_exists($jobId, $jobAggregates)) {
-                    $jobAggregates[$jobId] = $aggregateReader->read($jobId);
-                }
-                $rawRow['forecast_quantity'] = $jobAggregates[$jobId][(int)$rawRow['product_id']]['forecast_28_day'] ?? 0;
-            }
-            unset($rawRow);
 
             usort($rawRows, static function (array $a, array $b): int {
                 $byCompleted = strcmp((string)$b['forecast_completed_at'], (string)$a['forecast_completed_at']);
