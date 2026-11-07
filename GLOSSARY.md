@@ -68,6 +68,14 @@ _Avoid_: Product-sale cash, wallet balance
 The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
 _Avoid_: Personal wallet, product-payment account
 
+**GCash Live Custody**:
+The physical cash in the service cash box and digital balance in the GCash merchant app for the active shift session. It reflects real-time operational money currently held by the store and is unaffected by historical date range filters.
+_Avoid_: Filtered balance, historical balance, period balance
+
+**GCash Activity Scope**:
+The administrator-selected reporting period (such as today, month-to-date, or custom dates) and optional cashier filter applied to completed exchanges, gross fees, and transaction history. It governs aggregate performance metrics, distinct from current live custody funds.
+_Avoid_: Session balance, drawer count
+
 **GCash Closing Difference Review**:
 The Administrator's recorded check and explanation of a GCash session's cash and wallet shortages or excesses. Both differences must be checked before the review finishes; original amounts remain in history, and review does not mean missing money was returned.
 _Avoid_: Waive (in user-facing actions), cash adjustment, recovered shortage

@@ -187,55 +187,6 @@ function gcash_admin_money(mixed $val): string {
         <?php endif; ?>
 
         <div id="tab-overview" role="tabpanel" aria-labelledby="gcash-tab-overview" tabindex="0" <?= $activeTab !== 'overview' ? 'hidden' : '' ?>>
-        <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-labelledby="gcash-reporting-title" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
-            <div class="pos-panel-header">
-                <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
-                    <div>
-                        <h2 id="gcash-reporting-title">Report range</h2>
-                    </div>
-                </div>
-            </div>
-            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
-                <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
-                <div class="gcash-field">
-                    <label for="gcash-reporting-period" class="gcash-filter-label"><i class="bi bi-clock-history" aria-hidden="true"></i> Reporting period</label>
-                    <select id="gcash-reporting-period" name="period" class="form-control">
-                        <?php foreach (['today' => 'Today', 'month_to_date' => 'Month-to-date', 'custom' => 'Custom dates'] as $value => $label): ?>
-                            <option value="<?= $value ?>" <?= $period === $value ? 'selected' : '' ?>><?= $label ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-start-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> Start date</label>
-                    <input type="date" id="filter-start-date" required name="start_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($startDate) ?>">
-                </div>
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-end-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> End date</label>
-                    <input type="date" id="filter-end-date" required name="end_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($endDate) ?>">
-                </div>
-                <div class="gcash-field gcash-filter-cashier">
-                    <label for="filter-cashier-id" class="gcash-filter-label"><i class="bi bi-person-badge" aria-hidden="true"></i> Cashier</label>
-                    <select id="filter-cashier-id" name="cashier_id" class="form-control">
-                        <option value="">All Cashiers</option>
-                        <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
-                            <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
-                                <?= gcash_admin_e($c['display_name'] ?: $c['username']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="gcash-actions gcash-filter-actions">
-                    <button type="submit" class="btn btn-primary" id="btn-apply-filters">
-                        <i class="bi bi-funnel-fill" aria-hidden="true"></i>Apply filters
-                    </button>
-                    <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=' . $activeTab)) ?>" class="btn btn-secondary" id="btn-reset-filters">
-                        Reset filters
-                    </a>
-                </div>
-            </form>
-            <p id="gcash-filter-status" role="status" aria-live="polite"></p>
-        </section>
         <?php $funds = $overview['recorded_balances'] ?? null; ?>
         <section class="pos-panel gcash-overview-section gcash-funds-panel" aria-labelledby="gcash-admin-balances-title">
             <div class="pos-panel-header">
@@ -353,6 +304,56 @@ function gcash_admin_money(mixed $val): string {
             <?php endif; ?>
         </section>
 
+        <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-labelledby="gcash-reporting-title" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
+            <div class="pos-panel-header">
+                <div class="pos-panel-title">
+                    <div class="pos-panel-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
+                    <div>
+                        <h2 id="gcash-reporting-title">Activity report range</h2>
+                    </div>
+                </div>
+                <span class="gcash-badge gcash-badge-neutral"><i class="bi bi-funnel" aria-hidden="true"></i> Scope for activity &amp; transactions below</span>
+            </div>
+            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
+                <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
+                <div class="gcash-field">
+                    <label for="gcash-reporting-period" class="gcash-filter-label"><i class="bi bi-clock-history" aria-hidden="true"></i> Reporting period</label>
+                    <select id="gcash-reporting-period" name="period" class="form-control">
+                        <?php foreach (['today' => 'Today', 'month_to_date' => 'Month-to-date', 'custom' => 'Custom dates'] as $value => $label): ?>
+                            <option value="<?= $value ?>" <?= $period === $value ? 'selected' : '' ?>><?= $label ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-start-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> Start date</label>
+                    <input type="date" id="filter-start-date" required name="start_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($startDate) ?>">
+                </div>
+                <div class="gcash-field gcash-filter-date">
+                    <label for="filter-end-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> End date</label>
+                    <input type="date" id="filter-end-date" required name="end_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($endDate) ?>">
+                </div>
+                <div class="gcash-field gcash-filter-cashier">
+                    <label for="filter-cashier-id" class="gcash-filter-label"><i class="bi bi-person-badge" aria-hidden="true"></i> Cashier</label>
+                    <select id="filter-cashier-id" name="cashier_id" class="form-control">
+                        <option value="">All Cashiers</option>
+                        <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
+                            <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
+                                <?= gcash_admin_e($c['display_name'] ?: $c['username']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="gcash-actions gcash-filter-actions">
+                    <button type="submit" class="btn btn-primary" id="btn-apply-filters">
+                        <i class="bi bi-funnel-fill" aria-hidden="true"></i>Apply filters
+                    </button>
+                    <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=' . $activeTab)) ?>" class="btn btn-secondary" id="btn-reset-filters">
+                        Reset filters
+                    </a>
+                </div>
+            </form>
+            <p id="gcash-filter-status" role="status" aria-live="polite"></p>
+        </section>
         <section class="pos-panel gcash-overview-section" id="gcash-completed-activity" aria-labelledby="gcash-admin-metrics-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
