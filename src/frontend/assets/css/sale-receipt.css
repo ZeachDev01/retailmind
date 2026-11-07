@@ -57,8 +57,8 @@
 .checkout-complete-change strong { font-size:1.45rem; }
 .receipt-actions .btn { display:inline-flex;align-items:center;gap:.4rem; }
 @media(max-width:640px){.checkout-complete-banner{grid-template-columns:auto 1fr}.checkout-complete-change{grid-column:1/-1;text-align:left;padding-top:.65rem;border-top:1px solid #bbf7d0}.receipt-actions{align-items:stretch;flex-direction:column}.receipt-actions .btn{justify-content:center}}
-.sale-receipt-dialog { width: min(600px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 0; border-radius: 18px; color: var(--theme-ink, #1f2937); background: var(--theme-surface, #fff); box-shadow: 0 24px 64px rgba(15, 23, 42, .24); overflow-y: auto; }
-.sale-receipt-dialog::backdrop { background: rgba(15, 23, 42, .55); }
+.sale-receipt-dialog { width: min(600px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100dvh - 24px); margin: auto; padding: 0; border: 0; border-radius: 18px; color: var(--theme-ink, #1f2937); background: var(--theme-surface, #fff); box-shadow: 0 24px 64px rgba(15, 23, 42, .24); overflow-y: auto; overscroll-behavior: contain; }
+.sale-receipt-dialog::backdrop { background: rgba(15, 23, 42, .55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .sale-receipt-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; position: sticky; top: 0; z-index: 1; background: var(--theme-surface, #fff); border-bottom: 1px solid var(--theme-border, #e5e7eb); }
 .sale-receipt-dialog-header h2 { margin: 0; font-size: 1.25rem; overflow-wrap: anywhere; }
 .sale-receipt-dialog-header { flex-wrap: wrap; }

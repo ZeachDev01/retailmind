@@ -146,11 +146,21 @@ if ($receiptId > 0 && $receipt === null) {
 </head>
 
 <body class="cashier-refunds-page">
-    <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-            <div class="topbar">
-                <div>
-                    <h1>Refunds</h1>
-                </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content" id="main-content">
+            <div class="topbar refund-topbar">
+                <div class="refund-topbar-title">
+                    <div class="refund-title-row">
+                        <h1>Refunds</h1>
+                        <span class="refund-badge <?= $canRefund ? 'badge-active' : 'badge-inactive' ?>">
+                            <i class="bi <?= $canRefund ? 'bi-check-circle-fill' : 'bi-lock-fill' ?>" aria-hidden="true"></i>
+                            <?= $canRefund ? 'Register Ready' : ($registerLocked ? 'Register Locked' : 'No Open Shift') ?>
+                        </span>
+                    </div>
+                </div>
+                <div class="refund-topbar-actions">
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
+                </div>
             </div>
             <?php if ($error): ?><div class="message error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php if ($registerLocked): ?>
@@ -178,32 +188,59 @@ if ($receiptId > 0 && $receipt === null) {
                             <div class="checkout-complete-change"><span>Amount refunded</span><strong><?= htmlspecialchars($receipt['store']['currency_symbol']) . number_format((float)$receipt['refund']['refund_amount'], 2) ?></strong></div>
                         </div>
                         <div class="receipt-actions no-print">
-                            <button class="btn btn-secondary" type="button" onclick="printReceiptSection(this)"><i class="bi bi-printer" aria-hidden="true"></i> Print Refund Receipt</button>
+                            <button class="btn btn-secondary" type="button" onclick="printReceiptSection(this)" data-print-receipt><i class="bi bi-printer" aria-hidden="true"></i> Print Refund Receipt</button>
                         </div>
                         <?php \App\Receipts\ReceiptEngine::renderRefund($receipt, $paperWidthMm); ?>
                     </section>
                 </div>
             </dialog>
             <?php elseif ($receiptId > 0): ?>
-            <div class="message warning">Refund Receipt not found or unavailable for your account.</div>
+            <div class="message warning" role="status" aria-live="polite">Refund Receipt not found or unavailable for your account.</div>
             <?php endif; ?>
 
             <section class="dashboard-section refund-search">
-                <h2>Find a sale to refund</h2>
+                <div class="refund-section-header">
+                    <div class="refund-section-icon">
+                        <i class="bi bi-receipt" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h2>Find a sale to refund</h2>
+                    </div>
+                </div>
                 <form method="GET" class="refund-search-form">
-                    <div><label for="sale_id">Receipt number</label><input type="number" min="1" name="sale_id" id="sale_id" value="<?= $saleId ?: '' ?>" required></div>
-                    <button class="btn" type="submit">Load sale</button>
+                    <div class="refund-input-wrap">
+                        <label for="sale_id">Receipt number</label>
+                        <div class="refund-input-group">
+                            <i class="bi bi-search refund-input-icon" aria-hidden="true"></i>
+                            <input type="number" min="1" inputmode="numeric" autocomplete="off" name="sale_id" id="sale_id" value="<?= $saleId ?: '' ?>" placeholder="e.g. 1042…" required>
+                        </div>
+                    </div>
+                    <button class="btn refund-submit-btn" type="submit"><i class="bi bi-arrow-right" aria-hidden="true"></i> Load sale</button>
                 </form>
-                <details>
-                    <summary>Refund another Cashier’s sale</summary>
-                    <form method="POST" class="refund-form" autocomplete="off">
+                <details class="refund-supervisor-details">
+                    <summary><i class="bi bi-shield-lock" aria-hidden="true"></i> Refund another Cashier’s sale <span class="refund-override-pill">Supervisor override</span></summary>
+                    <form method="POST" class="refund-form refund-supervisor-form" autocomplete="off">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                         <input type="hidden" name="action" value="exception_lookup">
-                        <label for="exception-sale">Receipt number</label><input id="exception-sale" name="sale_id" type="number" min="1" required>
-                        <label for="exception-reason">Why is the original Cashier absent or disabled?</label><input id="exception-reason" name="exception_reason" maxlength="255" required>
-                        <label for="lookup-approver">Administrator username or email</label><input id="lookup-approver" name="approver_username" autocomplete="off" required>
-                        <label for="lookup-password">Administrator password</label><input id="lookup-password" name="approver_password" type="password" autocomplete="new-password" required>
-                        <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Open sale with Administrator approval</button>
+                        <div class="refund-supervisor-grid">
+                            <div>
+                                <label for="exception-sale">Receipt number</label>
+                                <input id="exception-sale" name="sale_id" type="number" min="1" inputmode="numeric" autocomplete="off" placeholder="e.g. 1042…" required>
+                            </div>
+                            <div>
+                                <label for="exception-reason">Override reason</label>
+                                <input id="exception-reason" name="exception_reason" maxlength="255" autocomplete="off" placeholder="e.g. Shift ended, absent…" required>
+                            </div>
+                            <div>
+                                <label for="lookup-approver">Administrator username or email</label>
+                                <input id="lookup-approver" name="approver_username" autocomplete="off" spellcheck="false" placeholder="e.g. admin@example.com…" required>
+                            </div>
+                            <div>
+                                <label for="lookup-password">Administrator password</label>
+                                <input id="lookup-password" name="approver_password" type="password" autocomplete="current-password" placeholder="Password…" required>
+                            </div>
+                        </div>
+                        <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>><i class="bi bi-unlock" aria-hidden="true"></i> Authorize and open sale</button>
                     </form>
                 </details>
             </section>
@@ -212,20 +249,23 @@ if ($receiptId > 0 && $receipt === null) {
                 <section class="dashboard-section refund-sale">
                     <div class="refund-sale-heading">
                         <div>
-                            <h2>Refund sale #<?= (int)$sale['sale_id'] ?></h2>
-                            <p class="refund-help"><?= htmlspecialchars(format_display_datetime((string)$sale['sale_date'])) ?> &middot; <?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?></p>
+                            <div class="refund-sale-title-row">
+                                <h2>Refund sale #<?= (int)$sale['sale_id'] ?></h2>
+                                <span class="refund-method-badge method-<?= strtolower((string)$sale['payment_method']) ?>"><?= htmlspecialchars(strtoupper((string)$sale['payment_method'])) ?></span>
+                            </div>
+                            <span class="refund-timestamp"><i class="bi bi-clock-history" aria-hidden="true"></i> <?= htmlspecialchars(format_display_datetime((string)$sale['sale_date'])) ?></span>
                         </div>
                     </div>
                     <dl class="refund-sale-details">
-                        <div><dt>Original charge</dt><dd>&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></dd></div>
-                        <div><dt>Already refunded</dt><dd>&#8369;<?= number_format((float)$sale['refunded_amount'], 2) ?></dd></div>
-                        <div><dt>Still refundable</dt><dd>&#8369;<?= number_format((float)$sale['refundable_amount'], 2) ?></dd></div>
+                        <div class="refund-stat-card"><dt><i class="bi bi-cart-check" aria-hidden="true"></i> Original total</dt><dd>&#8369;<?= number_format((float)$sale['total_amount'], 2) ?></dd></div>
+                        <div class="refund-stat-card"><dt><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Refunded</dt><dd>&#8369;<?= number_format((float)$sale['refunded_amount'], 2) ?></dd></div>
+                        <div class="refund-stat-card stat-refundable"><dt><i class="bi bi-wallet2" aria-hidden="true"></i> Available to refund</dt><dd>&#8369;<?= number_format((float)$sale['refundable_amount'], 2) ?></dd></div>
                     </dl>
 
                     <?php if (!array_filter($sale['items'], static fn(array $item): bool => $item['refundable_quantity'] > 0)): ?>
-                        <div class="message warning">This sale has already been fully refunded.</div>
+                        <div class="message warning" role="status">This sale has already been fully refunded.</div>
                     <?php elseif (!in_array((string)$sale['payment_method'], CashRefundService::SUPPORTED_PAYMENT_METHODS, true)): ?>
-                        <div class="message warning">This payment method cannot be refunded here. Ask your Administrator for help.</div>
+                        <div class="message warning" role="status">This payment method cannot be refunded here. Ask your Administrator for help.</div>
                     <?php else: ?>
                         <form method="POST" class="refund-form" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory. Do not report damaged returns as Stock Issues. An exchange needs a separate paid sale." data-confirm-title="Record refund" data-confirm-button="Record refund">
                             <input type="hidden" name="auto_print_receipt" value="0">
@@ -261,11 +301,11 @@ if ($receiptId > 0 && $receipt === null) {
                                                 <small><?= htmlspecialchars($line['sku']) ?> &middot; &#8369;<?= number_format((float)$line['unit_price'], 2) ?> <?= htmlspecialchars($unitLabel) ?></small>
                                             </td>
                                             <td><?= htmlspecialchars($formLabel) ?></td>
-                                            <td><?= (int)$line['quantity'] ?> <?= htmlspecialchars($qtyUnit) ?></td>
-                                            <td><?= $remaining ?> <?= htmlspecialchars($remUnit) ?></td>
+                                            <td class="refund-qty-cell"><?= (int)$line['quantity'] ?>&nbsp;<?= htmlspecialchars($qtyUnit) ?></td>
+                                            <td class="refund-qty-cell"><?= $remaining ?>&nbsp;<?= htmlspecialchars($remUnit) ?></td>
                                             <td>
                                                 <label class="refund-sr-only" for="return-quantity-<?= (int)$line['sale_item_id'] ?>">Returning quantity for <?= htmlspecialchars($line['product_name']) ?> (<?= htmlspecialchars($formLabel) ?>)</label>
-                                                <input id="return-quantity-<?= (int)$line['sale_item_id'] ?>" type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" step="1" value="0" <?= $remaining <= 0 ? 'disabled' : '' ?>>
+                                                <input id="return-quantity-<?= (int)$line['sale_item_id'] ?>" type="number" name="quantity[<?= (int)$line['sale_item_id'] ?>]" min="0" max="<?= $remaining ?>" step="1" value="0" inputmode="numeric" autocomplete="off" <?= $remaining <= 0 ? 'disabled' : '' ?>>
                                             </td>
                                             <td>
                                                 <label class="refund-sr-only" for="return-condition-<?= (int)$line['sale_item_id'] ?>">Condition for <?= htmlspecialchars($line['product_name']) ?> (<?= htmlspecialchars($formLabel) ?>)</label>
@@ -294,40 +334,103 @@ if ($receiptId > 0 && $receipt === null) {
                                 </div>
                                 <div>
                                     <label for="note">Note (required for Other)</label>
-                                    <input type="text" name="note" id="note" maxlength="255">
+                                    <input type="text" name="note" id="note" maxlength="255" placeholder="e.g. Customer changed mind, incorrect item size…">
                                 </div>
                             </div>
 
                             <?php if ($sale['payment_method'] !== 'cash'): ?>
                             <fieldset><legend>External refund settlement</legend>
-                                <label for="refund-reference">Payment Reference</label><input id="refund-reference" name="payment_reference" maxlength="100" required>
+                                <label for="refund-reference">Payment Reference</label><input id="refund-reference" name="payment_reference" maxlength="100" autocomplete="off" spellcheck="false" placeholder="e.g. REF-2026-0891…" required>
                                 <label><input type="checkbox" name="external_completed" value="1" required> I completed and verified this refund outside RetailMind.</label>
                             </fieldset>
                             <?php endif; ?>
                             <?php if ($exceptionToken !== ''): ?>
                             <fieldset><legend>Administrator refund approval</legend>
-                                <label for="refund-approver">Administrator username or email</label><input id="refund-approver" name="approver_username" autocomplete="off" required>
-                                <label for="refund-password">Administrator password</label><input id="refund-password" name="approver_password" type="password" autocomplete="new-password" required>
+                                <label for="refund-approver">Administrator username or email</label><input id="refund-approver" name="approver_username" autocomplete="off" spellcheck="false" placeholder="e.g. admin@example.com…" required>
+                                <label for="refund-password">Administrator password</label><input id="refund-password" name="approver_password" type="password" autocomplete="current-password" placeholder="Password…" required>
                             </fieldset>
                             <?php endif; ?>
 
-                            <button class="btn" type="submit" <?= $canRefund ? '' : 'disabled' ?>>Record refund</button>
+                            <button class="btn btn-primary" type="submit" <?= $canRefund ? '' : 'disabled' ?>><i class="bi bi-check2-circle" aria-hidden="true"></i> Record refund</button>
                         </form>
                     <?php endif; ?>
                 </section>
             <?php elseif ($saleId > 0): ?>
-                <section class="dashboard-section"><p>Sale #<?= (int)$saleId ?> was not found, or it was not one of your sales.</p></section>
+                <section class="dashboard-section refund-not-found">
+                    <div class="refund-not-found-inner">
+                        <div class="refund-not-found-icon"><i class="bi bi-search" aria-hidden="true"></i></div>
+                        <div>
+                            <h3>Sale #<?= (int)$saleId ?> was not found</h3>
+                            <p>Sale not found in your completed transactions. Use Supervisor Override if completed by another cashier.</p>
+                            <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php')) ?>" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Clear search</a>
+                        </div>
+                    </div>
+                </section>
             <?php endif; ?>
 
             <section class="dashboard-section refund-history" id="refund-history">
-                <div class="refund-history-heading"><h2 id="refund-history-heading">My refunds</h2><?php if ($totalRows > 0): ?><span><?= $totalRows ?> refund<?= $totalRows === 1 ? '' : 's' ?></span><?php endif; ?></div>
+                <div class="refund-history-heading">
+                    <div>
+                        <h2 id="refund-history-heading">My refunds</h2>
+                    </div>
+                    <?php if ($totalRows > 0): ?><span><?= $totalRows ?>&nbsp;refund<?= $totalRows === 1 ? '' : 's' ?></span><?php endif; ?>
+                </div>
                 <?php if (!$refunds): ?>
                     <div class="refund-empty">
-                        <h3><?= $totalRows === 0 ? 'No refunds yet' : 'No refunds on this page' ?></h3>
                         <?php if ($totalRows === 0): ?>
-                            <a href="#sale_id">Find a sale to refund</a>
+                            <svg class="refund-empty-illustration" width="220" height="170" viewBox="0 0 220 170" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id="rm-receipt-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="var(--card-bg, #ffffff)" />
+                                        <stop offset="100%" stop-color="var(--theme-surface-soft, #f1f5f9)" />
+                                    </linearGradient>
+                                    <linearGradient id="rm-badge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#3b82f6" />
+                                        <stop offset="100%" stop-color="#1d4ed8" />
+                                    </linearGradient>
+                                    <filter id="rm-empty-shadow" x="-20%" y="-15%" width="140%" height="140%" filterUnits="userSpaceOnUse">
+                                        <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="rgba(15, 23, 42, 0.12)" />
+                                    </filter>
+                                </defs>
+                                <ellipse cx="110" cy="148" rx="76" ry="12" fill="var(--theme-surface-soft, rgba(37, 99, 235, 0.08))" />
+                                <circle cx="110" cy="80" r="54" fill="var(--primary, #2563eb)" opacity="0.06" />
+                                <g filter="url(#rm-empty-shadow)">
+                                    <path d="M68 26 C68 21 72 17 78 17 L142 17 C148 17 152 21 152 26 L152 134 L144 128 L136 134 L128 128 L120 134 L112 128 L104 134 L96 128 L88 134 L80 128 L72 134 L68 130 Z"
+                                          fill="url(#rm-receipt-bg)" stroke="var(--border, #cbd5e1)" stroke-width="1.5" stroke-linejoin="round" />
+                                </g>
+                                <rect x="82" y="28" width="3" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="88" y="28" width="5" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="96" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="101" y="28" width="4" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="108" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="113" y="28" width="6" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="122" y="28" width="3" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="128" y="28" width="5" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="136" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
+                                <rect x="80" y="50" width="60" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.4" />
+                                <rect x="80" y="60" width="44" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.3" />
+                                <rect x="80" y="70" width="52" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.3" />
+                                <line x1="80" y1="82" x2="140" y2="82" stroke="var(--border, #cbd5e1)" stroke-width="1.5" stroke-dasharray="3 3" />
+                                <rect x="80" y="92" width="28" height="5" rx="2" fill="var(--primary, #2563eb)" opacity="0.8" />
+                                <rect x="118" y="92" width="22" height="5" rx="2" fill="var(--primary, #2563eb)" opacity="0.9" />
+                                <g transform="translate(132, 90)">
+                                    <circle cx="16" cy="16" r="22" fill="url(#rm-badge-grad)" filter="url(#rm-empty-shadow)" />
+                                    <circle cx="16" cy="16" r="20" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" />
+                                    <path d="M16 8 C11.6 8 8 11.6 8 16 C8 18.2 8.9 20.2 10.3 21.7 L8 24 L15 24 L15 17 L12.8 19.2 C11.7 18.1 11 16.6 11 15 C11 12.2 13.2 10 16 10 C18.8 10 21 12.2 21 15 C21 16.4 20.4 17.7 19.5 18.5 L21 20 C22.2 18.8 23 17 23 15 C23 11.1 19.9 8 16 8 Z" fill="#ffffff" />
+                                </g>
+                                <path d="M52 48 L54 42 L60 40 L54 38 L52 32 L50 38 L44 40 L50 42 Z" fill="var(--primary, #2563eb)" opacity="0.75" />
+                                <path d="M168 36 L169.5 31 L174.5 29.5 L169.5 28 L168 23 L166.5 28 L161.5 29.5 L166.5 31 Z" fill="#f59e0b" opacity="0.85" />
+                                <circle cx="48" cy="78" r="3" fill="#10b981" opacity="0.7" />
+                                <circle cx="172" cy="70" r="2.5" fill="var(--primary, #2563eb)" opacity="0.6" />
+                            </svg>
+                            <h3>No refunds yet</h3>
+                            <p class="refund-empty-desc">No refunds recorded during this register session.</p>
+                            <a href="#sale_id" class="refund-empty-btn"><i class="bi bi-search" aria-hidden="true"></i> Find a sale to refund</a>
                         <?php else: ?>
-                            <a href="<?= htmlspecialchars($url(['page' => 1])) ?>">View first page</a>
+                            <div class="refund-empty-past-icon"><i class="bi bi-compass" aria-hidden="true"></i></div>
+                            <h3>No refunds on this page</h3>
+                            <p class="refund-empty-desc">You have browsed past the last available page of your refund history.</p>
+                            <a href="<?= htmlspecialchars($url(['page' => 1])) ?>" class="btn btn-secondary refund-empty-btn"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> View first page</a>
                         <?php endif; ?>
                     </div>
                 <?php else: ?>
@@ -345,7 +448,7 @@ if ($receiptId > 0 && $receipt === null) {
                             </tr></thead><tbody>
                             <?php foreach ($refunds as $refund): ?>
                                 <tr>
-                                    <td>#<?= (int)$refund['refund_id'] ?></td>
+                                    <td><span class="refund-id-tag">#<?= (int)$refund['refund_id'] ?></span></td>
                                     <td>#<?= (int)$refund['sale_id'] ?></td>
                                     <td>#<?= (int)$refund['shift_id'] ?></td>
                                     <td><?= htmlspecialchars(format_display_datetime((string)$refund['created_at'])) ?></td>
@@ -355,7 +458,12 @@ if ($receiptId > 0 && $receipt === null) {
                                     </td>
                                     <td><span class="refund-method"><?= htmlspecialchars(strtoupper((string)$refund['payment_method'])) ?></span></td>
                                     <td class="refund-money">&#8369;<?= number_format((float)$refund['refund_amount'], 2) ?></td>
-                                    <td><a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php?refund_id=' . (int)$refund['refund_id'])) ?>" aria-label="Preview Refund Receipt #<?= (int)$refund['refund_id'] ?>">Preview receipt</a></td>
+                                    <td>
+                                        <div class="refund-actions-group">
+                                            <a href="<?= htmlspecialchars(app_url('components/cashier/refunds.php?refund_id=' . (int)$refund['refund_id'])) ?>" class="btn btn-secondary btn-sm" aria-label="Preview Refund Receipt #<?= (int)$refund['refund_id'] ?>">Receipt</a>
+                                            <button type="button" class="btn btn-secondary btn-sm refund-open-drawer" data-refund="<?= htmlspecialchars(json_encode($refund), ENT_QUOTES, 'UTF-8') ?>" aria-label="Details for refund #<?= (int)$refund['refund_id'] ?>">Details</button>
+                                        </div>
+                                    </td>
                                 </tr>
                             <?php endforeach; ?></tbody>
                         </table>
@@ -364,6 +472,51 @@ if ($receiptId > 0 && $receipt === null) {
                 <?php if ($totalRows > 0): ?>
                     <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
                 <?php endif; ?>
+                <dialog id="refund-details-drawer" class="refund-details-drawer" aria-labelledby="refund-drawer-title">
+                    <div class="history-drawer-header">
+                        <div class="history-drawer-header-left">
+                            <button type="button" class="history-drawer-back-btn" id="refund-drawer-back-btn" aria-label="Back to details" hidden>
+                                <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                            </button>
+                            <div>
+                                <span class="history-drawer-badge" id="refund-drawer-badge">Cash Refund</span>
+                                <h2 id="refund-drawer-title">Refund Details</h2>
+                            </div>
+                        </div>
+                        <button type="button" class="history-drawer-close" id="refund-drawer-close" aria-label="Close details">&times;</button>
+                    </div>
+                    <div class="drawer-view-stage" id="refund-drawer-stage">
+                        <!-- View 1: Details -->
+                        <div class="drawer-view drawer-view-details is-active" id="refund-drawer-view-details">
+                            <div class="history-drawer-body">
+                                <dl class="history-drawer-kv" id="refund-drawer-fields"></dl>
+                            </div>
+                            <div class="history-drawer-footer">
+                                <button type="button" class="btn btn-primary" id="refund-drawer-receipt-btn" hidden><i class="bi bi-receipt" aria-hidden="true"></i> View receipt</button>
+                                <button type="button" class="btn btn-secondary" id="refund-drawer-dismiss">Close</button>
+                            </div>
+                        </div>
+                        <!-- View 2: Receipt -->
+                        <div class="drawer-view drawer-view-receipt" id="refund-drawer-view-receipt" hidden>
+                            <div class="history-drawer-body history-drawer-receipt-body" id="refund-drawer-receipt-body">
+                                <div class="history-drawer-receipt-loading" id="refund-drawer-receipt-loading" hidden>
+                                    <div class="drawer-spinner" aria-hidden="true"></div>
+                                    <span>Loading receipt…</span>
+                                </div>
+                                <div class="history-drawer-receipt-error" id="refund-drawer-receipt-error" role="alert" hidden>
+                                    <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+                                    <p id="refund-drawer-error-msg">The receipt could not be loaded.</p>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="refund-drawer-retry-btn">Retry</button>
+                                </div>
+                                <div class="history-drawer-receipt-content" id="refund-drawer-receipt-content"></div>
+                            </div>
+                            <div class="history-drawer-footer">
+                                <button type="button" class="btn btn-secondary" id="refund-drawer-return-btn"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to details</button>
+                                <button type="button" class="btn btn-secondary" id="refund-drawer-receipt-dismiss">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </dialog>
             </section>
         </main>
     </div>
@@ -377,6 +530,215 @@ if ($receiptId > 0 && $receipt === null) {
             refundReason.addEventListener('change', syncNoteRequirement);
             syncNoteRequirement();
         }
+
+        document.querySelectorAll('[data-print-receipt]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (typeof window.printReceiptSection === 'function') {
+                    window.printReceiptSection(btn);
+                }
+            });
+        });
+
+        const refundForm = document.querySelector('.refund-sale form.refund-form');
+        if (refundForm) {
+            let isSubmitting = false;
+            refundForm.addEventListener('submit', () => {
+                isSubmitting = true;
+            });
+            window.addEventListener('beforeunload', (e) => {
+                if (isSubmitting) return;
+                const qtyInputs = refundForm.querySelectorAll('input[name^="quantity["]');
+                const hasDirty = Array.from(qtyInputs).some(input => parseInt(input.value || '0', 10) > 0);
+                if (hasDirty) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+        }
+
+        (() => {
+            const drawer = document.getElementById('refund-details-drawer');
+            if (!drawer) return;
+            const titleEl = document.getElementById('refund-drawer-title');
+            const badgeEl = document.getElementById('refund-drawer-badge');
+            const fieldsEl = document.getElementById('refund-drawer-fields');
+            const closeBtn = document.getElementById('refund-drawer-close');
+            const dismissBtn = document.getElementById('refund-drawer-dismiss');
+            const receiptDismissBtn = document.getElementById('refund-drawer-receipt-dismiss');
+            const receiptBtn = document.getElementById('refund-drawer-receipt-btn');
+            const backBtn = document.getElementById('refund-drawer-back-btn');
+            const returnBtn = document.getElementById('refund-drawer-return-btn');
+            const retryBtn = document.getElementById('refund-drawer-retry-btn');
+            const viewDetails = document.getElementById('refund-drawer-view-details');
+            const viewReceipt = document.getElementById('refund-drawer-view-receipt');
+            const receiptContent = document.getElementById('refund-drawer-receipt-content');
+            const receiptLoading = document.getElementById('refund-drawer-receipt-loading');
+            const receiptError = document.getElementById('refund-drawer-receipt-error');
+            const receiptErrorMsg = document.getElementById('refund-drawer-error-msg');
+            const receiptEndpoint = <?= json_encode(app_url('components/invoice/sales.php?action=view&ajax=1')) ?>;
+
+            let currentRefund = null;
+            let activeSaleId = null;
+            let currentView = 'details';
+            let isAnimating = false;
+            let pendingFetch = null;
+
+            const switchView = (targetView, animated = true) => {
+                if (currentView === targetView) return;
+                const outgoing = currentView === 'details' ? viewDetails : viewReceipt;
+                const incoming = targetView === 'details' ? viewDetails : viewReceipt;
+                const isForward = targetView === 'receipt';
+                const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+                if (!animated || prefersReducedMotion) {
+                    outgoing.classList.remove('is-active', 'anim-slide-out-left', 'anim-slide-out-right');
+                    outgoing.hidden = true;
+                    incoming.hidden = false;
+                    incoming.classList.remove('anim-slide-in-left', 'anim-slide-in-right');
+                    incoming.classList.add('is-active');
+                    currentView = targetView;
+                    return;
+                }
+
+                if (isAnimating) return;
+                isAnimating = true;
+
+                const outClass = isForward ? 'anim-slide-out-left' : 'anim-slide-out-right';
+                const inClass = isForward ? 'anim-slide-in-right' : 'anim-slide-in-left';
+
+                incoming.hidden = false;
+                incoming.classList.add(inClass);
+                outgoing.classList.add(outClass);
+
+                setTimeout(() => {
+                    outgoing.classList.remove('is-active', outClass);
+                    outgoing.hidden = true;
+                    incoming.classList.remove(inClass);
+                    incoming.classList.add('is-active');
+                    isAnimating = false;
+                    currentView = targetView;
+                }, 240);
+            };
+
+            const loadReceipt = async (saleId) => {
+                if (pendingFetch) {
+                    pendingFetch.abort();
+                    pendingFetch = null;
+                }
+                const controller = new AbortController();
+                pendingFetch = controller;
+
+                receiptLoading.hidden = false;
+                receiptError.hidden = true;
+                receiptContent.replaceChildren();
+
+                try {
+                    const url = new URL(receiptEndpoint, window.location.href);
+                    url.searchParams.set('sale_id', Number(saleId));
+                    const res = await fetch(url.toString(), {
+                        signal: controller.signal,
+                        headers: { 'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    if (!res.ok) throw new Error('Receipt unavailable: HTTP ' + res.status);
+                    const html = await res.text();
+                    if (pendingFetch !== controller) return;
+                    receiptLoading.hidden = true;
+                    receiptContent.innerHTML = html;
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    receiptLoading.hidden = true;
+                    receiptError.hidden = false;
+                    if (receiptErrorMsg) receiptErrorMsg.textContent = 'Unable to load receipt for sale #' + saleId + '.';
+                } finally {
+                    if (pendingFetch === controller) pendingFetch = null;
+                }
+            };
+
+            const openDrawer = refund => {
+                if (!refund) return;
+                currentRefund = refund;
+                switchView('details', false);
+                if (backBtn) backBtn.hidden = true;
+                if (badgeEl) badgeEl.textContent = 'Cash Refund';
+                if (titleEl) titleEl.textContent = `Refund #${refund.refund_id ?? ''}`;
+                if (fieldsEl) {
+                    fieldsEl.replaceChildren();
+                    const map = {
+                        'Refund ID': '#' + (refund.refund_id ?? '—'),
+                        'Sale ID': '#' + (refund.sale_id ?? '—'),
+                        'Shift ID': '#' + (refund.shift_id ?? '—'),
+                        'Recorded At': refund.created_at ?? '—',
+                        'Payment Method': (refund.payment_method || '—').toUpperCase(),
+                        'Refund Amount': '₱' + Number(refund.refund_amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+                        'Reason': refund.reason ?? '—',
+                        'Note': refund.note || 'None'
+                    };
+                    for (const [label, val] of Object.entries(map)) {
+                        const dt = document.createElement('dt');
+                        dt.textContent = label;
+                        const dd = document.createElement('dd');
+                        dd.textContent = val;
+                        fieldsEl.append(dt, dd);
+                    }
+                }
+
+                activeSaleId = refund.sale_id ? Number(refund.sale_id) : null;
+                if (receiptBtn) {
+                    if (activeSaleId) {
+                        receiptBtn.hidden = false;
+                        receiptBtn.onclick = () => {
+                            if (badgeEl) badgeEl.textContent = 'Sale Receipt';
+                            if (titleEl) titleEl.textContent = `Sale Receipt #${activeSaleId}`;
+                            if (backBtn) backBtn.hidden = false;
+                            switchView('receipt', true);
+                            loadReceipt(activeSaleId);
+                        };
+                    } else {
+                        receiptBtn.hidden = true;
+                        receiptBtn.onclick = null;
+                    }
+                }
+                drawer.showModal();
+            };
+
+            const returnToDetails = () => {
+                if (!currentRefund) { drawer.close(); return; }
+                if (badgeEl) badgeEl.textContent = 'Cash Refund';
+                if (titleEl) titleEl.textContent = `Refund #${currentRefund.refund_id ?? ''}`;
+                if (backBtn) backBtn.hidden = true;
+                switchView('details', true);
+                receiptBtn?.focus();
+            };
+
+            backBtn?.addEventListener('click', returnToDetails);
+            returnBtn?.addEventListener('click', returnToDetails);
+            retryBtn?.addEventListener('click', () => {
+                if (activeSaleId) loadReceipt(activeSaleId);
+            });
+
+            document.querySelectorAll('.refund-open-drawer').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const raw = btn.getAttribute('data-refund');
+                    if (raw) {
+                        try { openDrawer(JSON.parse(raw)); } catch (_) {}
+                    }
+                });
+            });
+
+            const closeDrawer = () => {
+                if (pendingFetch) {
+                    pendingFetch.abort();
+                    pendingFetch = null;
+                }
+                drawer.close();
+            };
+            closeBtn?.addEventListener('click', closeDrawer);
+            dismissBtn?.addEventListener('click', closeDrawer);
+            receiptDismissBtn?.addEventListener('click', closeDrawer);
+            drawer.addEventListener('click', e => {
+                if (e.target === drawer) closeDrawer();
+            });
+        })();
     </script>
 </body>
 

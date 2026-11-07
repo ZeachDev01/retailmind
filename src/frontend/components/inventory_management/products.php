@@ -1978,8 +1978,12 @@ foreach ($products as $product) {
             return text || fallback;
         }
 
+        let activeProductTabIndex = 0;
         function setProductDrawerTab(tabName, focusTab = false) {
-            document.querySelectorAll('[data-product-tab]').forEach(tab => {
+            const tabs = Array.from(document.querySelectorAll('[data-product-tab]'));
+            const nextIndex = tabs.findIndex(tab => tab.dataset.productTab === tabName);
+            const isForward = nextIndex >= activeProductTabIndex;
+            tabs.forEach(tab => {
                 const isActive = tab.dataset.productTab === tabName;
                 tab.classList.toggle('is-active', isActive);
                 tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -1987,8 +1991,17 @@ foreach ($products as $product) {
                 if (isActive && focusTab) tab.focus();
             });
             document.querySelectorAll('[data-product-panel]').forEach(panel => {
-                panel.hidden = panel.dataset.productPanel !== tabName;
+                const isTarget = panel.dataset.productPanel === tabName;
+                if (isTarget && panel.hidden) {
+                    panel.hidden = false;
+                    panel.classList.remove('anim-panel-in-right', 'anim-panel-in-left');
+                    panel.classList.add(isForward ? 'anim-panel-in-right' : 'anim-panel-in-left');
+                } else if (!isTarget) {
+                    panel.hidden = true;
+                    panel.classList.remove('anim-panel-in-right', 'anim-panel-in-left');
+                }
             });
+            if (nextIndex >= 0) activeProductTabIndex = nextIndex;
             document.getElementById('product-drawer-footer').hidden = tabName !== 'actions';
             const editBtn = document.getElementById('product-edit-btn');
             if (editBtn) editBtn.hidden = tabName !== 'info' || !canEditProduct || isEditingProduct;

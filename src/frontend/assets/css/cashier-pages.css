@@ -1,44 +1,267 @@
 /* cashier-pages.css - extracted view-specific styles. */
 
-.cashier-history-page .history-workspace { min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--card-bg); overflow: hidden; }
-.cashier-history-page .history-tabs { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; padding: .5rem 1.25rem 0; border-bottom: 1px solid var(--border); }
-.cashier-history-page .history-tab { display: inline-flex; align-items: center; min-height: 48px; padding: .75rem .25rem; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; text-decoration: none; }
-.cashier-history-page .history-tab[aria-current="page"] { color: var(--primary); border-bottom-color: var(--primary); }
-.cashier-history-page .history-tab:hover { color: var(--primary); }
-.cashier-history-page .history-filters { display: flex; align-items: end; flex-wrap: wrap; gap: .75rem; padding: 1.25rem; margin: 0; background: var(--theme-surface-soft, #f8fafc); border-bottom: 1px solid var(--border); }
-.cashier-history-page .history-filters label { color: var(--muted); font-size: .8rem; font-weight: 600; }
-.cashier-history-page .history-timezone { flex: 1 0 100%; margin: .25rem 0 0; color: var(--muted); font-size: .8rem; }
-.cashier-history-page .history-results-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; padding: 1.25rem; }
-.cashier-history-page .history-results-heading h2 { margin: 0; font-size: 1.1rem; }
-.cashier-history-page .history-results-heading span { color: var(--muted); font-size: .8rem; }
-.cashier-history-page .history-table-wrap { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
-.cashier-history-page .history-table-wrap table { width: 100%; min-width: 0; table-layout: fixed; border: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
-.cashier-history-page .history-table-wrap :is(th, td) { padding: .85rem .65rem; white-space: normal; overflow-wrap: anywhere; }
-.cashier-history-page .history-table-wrap th { background: var(--theme-surface-soft, #f8fafc); color: var(--muted); font-size: .75rem; }
-.cashier-history-page .history-table-wrap td:first-child a { font-weight: 700; }
-.cashier-history-page .history-table-wrap .history-empty { padding: 3rem 1rem; text-align: center; color: var(--muted); }
-.cashier-history-page .history-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; padding: 1rem 1.25rem; border-top: 1px solid var(--border); }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-number { margin-right: auto; color: var(--muted); font-size: .85rem; }
+.cashier-history-page .history-workspace { min-width: 0; border: 1px solid var(--border); border-radius: 16px; background: var(--card-bg, #ffffff); box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03); overflow: hidden; min-height: 480px; display: flex; flex-direction: column; }
+.cashier-history-page .history-tabs { display: flex; flex-wrap: wrap; gap: .5rem; padding: .85rem 1.25rem; border-bottom: 1px solid var(--border); background: var(--card-bg, #ffffff); overflow-x: auto; scrollbar-width: thin; }
+.cashier-history-page .history-tab { display: inline-flex; align-items: center; gap: .65rem; min-height: 42px; padding: .45rem .95rem; border-radius: 10px; border: 1px solid transparent; color: var(--muted, #64748b); font-size: .88rem; font-weight: 600; text-decoration: none; background: transparent; transition: all .15s ease-in-out; white-space: nowrap; }
+.cashier-history-page .history-tab:hover { color: var(--text, #0f172a); background: var(--theme-surface-soft, #f8fafc); border-color: var(--border); }
+.cashier-history-page .history-tab-icon-wrap { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; font-size: .95rem; line-height: 1; transition: transform .15s ease; }
+.cashier-history-page .history-tab:hover .history-tab-icon-wrap { transform: scale(1.06); }
+
+/* Identifiable tab personalities */
+.cashier-history-page .history-tab.tab-sales .history-tab-icon-wrap { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.cashier-history-page .history-tab.tab-sales[aria-current="page"] { color: #1d4ed8; background: rgba(37, 99, 235, 0.08); border-color: rgba(37, 99, 235, 0.3); font-weight: 700; }
+.cashier-history-page .history-tab.tab-sales[aria-current="page"] .history-tab-icon-wrap { background: #2563eb; color: #fff; }
+
+.cashier-history-page .history-tab.tab-refunds .history-tab-icon-wrap { background: rgba(225, 29, 72, 0.1); color: #e11d48; }
+.cashier-history-page .history-tab.tab-refunds[aria-current="page"] { color: #be123c; background: rgba(225, 29, 72, 0.08); border-color: rgba(225, 29, 72, 0.3); font-weight: 700; }
+.cashier-history-page .history-tab.tab-refunds[aria-current="page"] .history-tab-icon-wrap { background: #e11d48; color: #fff; }
+
+.cashier-history-page .history-tab.tab-movements .history-tab-icon-wrap { background: rgba(124, 58, 237, 0.1); color: #7c3aed; }
+.cashier-history-page .history-tab.tab-movements[aria-current="page"] { color: #6d28d9; background: rgba(124, 58, 237, 0.08); border-color: rgba(124, 58, 237, 0.3); font-weight: 700; }
+.cashier-history-page .history-tab.tab-movements[aria-current="page"] .history-tab-icon-wrap { background: #7c3aed; color: #fff; }
+
+.cashier-history-page .history-tab.tab-shifts .history-tab-icon-wrap { background: rgba(13, 148, 136, 0.1); color: #0d9488; }
+.cashier-history-page .history-tab.tab-shifts[aria-current="page"] { color: #0f766e; background: rgba(13, 148, 136, 0.08); border-color: rgba(13, 148, 136, 0.3); font-weight: 700; }
+.cashier-history-page .history-tab.tab-shifts[aria-current="page"] .history-tab-icon-wrap { background: #0d9488; color: #fff; }
+
+.cashier-history-page .history-filters { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .75rem; padding: 1rem 1.25rem; margin: 0; background: var(--theme-surface-soft, #f8fafc); border-bottom: 1px solid var(--border); }
+.cashier-history-page .history-filters label { display: inline-flex; flex-direction: column; gap: .3rem; color: var(--muted, #64748b); font-size: .78rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.cashier-history-page .history-filters input[type="date"] { min-height: 38px; padding: .4rem .75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg, #ffffff); color: var(--text); font-size: .875rem; font-weight: 500; }
+.cashier-history-page .history-filters input[type="date"]:focus { outline: 2px solid var(--primary, #2563eb); outline-offset: 1px; }
+.cashier-history-page .history-filters .btn { min-height: 38px; padding: .4rem 1rem; border-radius: 8px; font-size: .85rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; cursor: pointer; transition: all .15s ease; }
+.cashier-history-page .history-filters button[type="submit"] { background: var(--primary, #2563eb); color: #ffffff; border: 1px solid var(--primary, #2563eb); box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15); }
+.cashier-history-page .history-filters button[type="submit"]:hover { background: var(--primary-dark, #1d4ed8); border-color: var(--primary-dark, #1d4ed8); }
+.cashier-history-page .history-filters a.btn-secondary { background: var(--card-bg, #ffffff); color: var(--text, #334155); border: 1px solid var(--border); }
+.cashier-history-page .history-filters a.btn-secondary:hover { background: var(--theme-surface-soft, #f8fafc); border-color: #cbd5e1; color: var(--text); }
+.cashier-history-page .history-timezone { flex: 1 0 100%; margin: .15rem 0 0; color: var(--muted, #64748b); font-size: .78rem; display: flex; align-items: center; gap: .35rem; }
+
+/* Results Heading - Matches GCash "Transaction history" header */
+.cashier-history-page .history-results-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; padding: 1.15rem 1.35rem; background: var(--card-bg, #ffffff); border-bottom: 1px solid var(--border); }
+.cashier-history-page .history-results-heading h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text, #0f172a); letter-spacing: -.015em; line-height: 1.3; }
+.cashier-history-page .history-results-meta { display: block; margin-top: .2rem; color: var(--muted, #64748b); font-size: .8125rem; font-weight: 500; }
+.cashier-history-page .history-results-hint { color: var(--muted, #64748b); font-size: .8125rem; }
+
+/* Table Container & Base Table - GCash Styling */
+.cashier-history-page .history-table-wrap { margin: 0; border: 0; border-radius: 0; box-shadow: none; flex: 1 1 auto; min-height: 280px; overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch; }
+.cashier-history-page .history-table-wrap table { width: 100%; min-width: 100%; table-layout: auto; border-collapse: collapse; border: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
+
+/* Table Header - Exact GCash uppercase tracking style */
+.cashier-history-page .history-table-wrap th { background: var(--theme-surface-soft, #f8fafc); color: var(--muted, #64748b); font-size: .72rem; font-weight: 700; line-height: 1.2; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; padding: .85rem 1.15rem; border-top: none; border-bottom: 1px solid var(--border); vertical-align: middle; text-align: left; }
+.cashier-history-page .history-table-wrap th:first-child { min-width: 90px; }
+.cashier-history-page .history-table-wrap th.th-date { min-width: 175px; white-space: nowrap; }
+.cashier-history-page .history-table-wrap th.th-money { text-align: right; padding-right: 1.5rem; min-width: 110px; white-space: nowrap; }
+
+/* Table Body Cells - Generous, airy padding and crisp typography */
+.cashier-history-page .history-table-wrap td { padding: .95rem 1.15rem; vertical-align: middle; border-bottom: 1px solid var(--border); font-size: .875rem; line-height: 1.45; color: var(--text, #1e293b); white-space: nowrap; }
+.cashier-history-page .history-table-wrap tbody tr { transition: background-color .12s ease; }
+.cashier-history-page .history-table-wrap tbody tr:hover { background: var(--theme-surface-soft, #f8fafc); }
+.cashier-history-page .history-table-wrap tbody tr:last-child td { border-bottom: none; }
+
+/* Column Specializations matching GCash */
+.cashier-history-page .history-id-cell,
+.cashier-history-page .history-id-plain { display: inline-flex; align-items: center; font-weight: 600; color: var(--text, #0f172a); text-decoration: none; letter-spacing: -.01em; font-variant-numeric: tabular-nums; cursor: default; user-select: text; white-space: nowrap; }
+.cashier-history-page .history-date-cell { color: var(--muted, #64748b); white-space: nowrap; font-size: .875rem; }
+.cashier-history-page .history-money-cell { text-align: right; font-weight: 700; color: var(--text, #0f172a); white-space: nowrap; padding-right: 1.5rem; }
+.cashier-history-page .history-note-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Status Pill - Matches GCash status text with indicator dot */
+.cashier-history-page .history-status-pill { display: inline-flex; align-items: center; gap: .4rem; font-size: .8125rem; font-weight: 600; line-height: 1.3; white-space: nowrap; text-transform: capitalize; }
+.cashier-history-page .history-status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: currentColor; flex-shrink: 0; }
+.cashier-history-page .history-status-pill.status-completed,
+.cashier-history-page .history-status-pill.status-closed { color: #16a34a; }
+.cashier-history-page .history-status-pill.status-open,
+.cashier-history-page .history-status-pill.status-pending { color: #d97706; }
+.cashier-history-page .history-status-pill.status-discrepancy,
+.cashier-history-page .history-status-pill.status-variance,
+.cashier-history-page .history-status-pill.status-failed { color: #dc2626; }
+
+/* Dedicated Action column & GCash outlined buttons */
+.cashier-history-page .history-action-th { width: 110px; min-width: 100px; text-align: right; }
+.cashier-history-page .history-action-cell { text-align: right; white-space: nowrap; }
+.cashier-history-page .history-row-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: .35rem; white-space: nowrap; }
+.cashier-history-page .history-row-actions .btn { min-height: 32px; padding: .3rem .75rem; font-size: .8125rem; font-weight: 500; line-height: 1.2; background: var(--card-bg, #ffffff); border: 1px solid var(--border); border-radius: 8px; color: var(--text, #334155); display: inline-flex; align-items: center; justify-content: center; gap: .25rem; white-space: nowrap; cursor: pointer; user-select: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03); transition: all .15s ease; text-decoration: none; }
+.cashier-history-page .history-row-actions .btn:hover { border-color: #cbd5e1; background: var(--theme-surface-soft, #f8fafc); color: var(--text, #0f172a); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); }
+.cashier-history-page .history-row-actions .btn:active { transform: translateY(1px); }
+.cashier-history-page .history-row-actions .btn:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 1px; }
+
+/* Themed Details action buttons */
+.cashier-history-page .history-row-actions .btn.history-open-drawer {
+    background: var(--primary, #2563eb);
+    border-color: var(--primary, #2563eb);
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+}
+.cashier-history-page .history-row-actions .btn.history-open-drawer i {
+    color: #ffffff;
+    font-size: .85rem;
+}
+.cashier-history-page .history-row-actions .btn.history-open-drawer:hover {
+    background: var(--primary-dark, #1d4ed8);
+    border-color: var(--primary-dark, #1d4ed8);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+}
+.cashier-history-page .history-row-actions .btn.history-open-drawer:active {
+    transform: translateY(1px);
+    background: #1e40af;
+    border-color: #1e40af;
+}
+.cashier-history-page .history-row-actions .btn.history-open-drawer:focus-visible {
+    outline: 2px solid var(--primary, #2563eb);
+    outline-offset: 2px;
+}
+
+.cashier-history-page .history-workspace.tab-refunds .history-row-actions .btn.history-open-drawer {
+    background: #e11d48;
+    border-color: #e11d48;
+    box-shadow: 0 1px 2px rgba(225, 29, 72, 0.2);
+}
+.cashier-history-page .history-workspace.tab-refunds .history-row-actions .btn.history-open-drawer:hover {
+    background: #be123c;
+    border-color: #be123c;
+    box-shadow: 0 2px 6px rgba(225, 29, 72, 0.35);
+}
+.cashier-history-page .history-workspace.tab-refunds .history-row-actions .btn.history-open-drawer:focus-visible {
+    outline-color: #e11d48;
+}
+
+.cashier-history-page .history-workspace.tab-movements .history-row-actions .btn.history-open-drawer {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    box-shadow: 0 1px 2px rgba(124, 58, 237, 0.2);
+}
+.cashier-history-page .history-workspace.tab-movements .history-row-actions .btn.history-open-drawer:hover {
+    background: #6d28d9;
+    border-color: #6d28d9;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35);
+}
+.cashier-history-page .history-workspace.tab-movements .history-row-actions .btn.history-open-drawer:focus-visible {
+    outline-color: #7c3aed;
+}
+
+.cashier-history-page .history-workspace.tab-shifts .history-row-actions .btn.history-open-drawer {
+    background: #0d9488;
+    border-color: #0d9488;
+    box-shadow: 0 1px 2px rgba(13, 148, 136, 0.2);
+}
+.cashier-history-page .history-workspace.tab-shifts .history-row-actions .btn.history-open-drawer:hover {
+    background: #0f766e;
+    border-color: #0f766e;
+    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.35);
+}
+.cashier-history-page .history-workspace.tab-shifts .history-row-actions .btn.history-open-drawer:focus-visible {
+    outline-color: #0d9488;
+}
+
+/* Themed Empty State Cards */
+.cashier-history-page .history-table-wrap table:has(.history-empty) thead { display: none; }
+.cashier-history-page .history-table-wrap .history-empty { padding: 4rem 1.5rem; text-align: center; background: transparent; border: 0; }
+.cashier-history-page .history-empty-card { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.cashier-history-page .history-empty-icon-wrap { display: inline-flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 50%; margin-bottom: 1.15rem; font-size: 2rem; line-height: 1; border: 1px solid rgba(0, 0, 0, 0.06); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03); }
+.cashier-history-page .history-empty-card.tab-sales .history-empty-icon-wrap { background: rgba(37, 99, 235, 0.08); color: #2563eb; border-color: rgba(37, 99, 235, 0.2); }
+.cashier-history-page .history-empty-card.tab-refunds .history-empty-icon-wrap { background: rgba(225, 29, 72, 0.08); color: #e11d48; border-color: rgba(225, 29, 72, 0.2); }
+.cashier-history-page .history-empty-card.tab-movements .history-empty-icon-wrap { background: rgba(124, 58, 237, 0.08); color: #7c3aed; border-color: rgba(124, 58, 237, 0.2); }
+.cashier-history-page .history-empty-card.tab-shifts .history-empty-icon-wrap { background: rgba(13, 148, 136, 0.08); color: #0d9488; border-color: rgba(13, 148, 136, 0.2); }
+.cashier-history-page .history-empty-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; background: var(--theme-surface-soft, #f1f5f9); color: var(--muted, #64748b); margin-bottom: 0.75rem; }
+.cashier-history-page .history-empty-title { margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700; color: var(--text, #0f172a); letter-spacing: -0.01em; }
+.cashier-history-page .history-empty-desc { margin: 0 0 1.5rem; font-size: 0.92rem; line-height: 1.6; color: var(--muted, #64748b); max-width: 440px; }
+.cashier-history-page .history-empty-actions { display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+.cashier-history-page .history-empty-actions .btn { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 40px; padding: 0.5rem 1.15rem; font-size: 0.88rem; font-weight: 600; border-radius: 9px; }
+
+:is(.cashier-history-page, .cashier-refunds-page) .history-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 1.25rem; padding: .85rem 1.25rem; border-top: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); margin-top: auto; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-number { margin: 0; color: var(--muted, #64748b); font-size: .84rem; font-variant-numeric: tabular-nums; }
 .cashier-history-page .history-error { margin: 1rem 1.25rem; color: var(--theme-danger-text, #991b1b); }
 .cashier-history-page .history-workspace > p { margin: 1rem 1.25rem; }
 .cashier-history-page .history-details { margin: 1.25rem; }
+.cashier-refunds-page .refund-history { min-height: 480px; display: flex; flex-direction: column; }
+.cashier-refunds-page .refund-history .table-wrap { flex: 1 1 auto; min-height: 280px; }
+.cashier-refunds-page .refund-history .history-pagination { margin-top: auto; }
+.refund-actions-group { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+.refund-details-drawer { inset: 0 0 0 auto; margin: 0; width: min(540px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: none; border-left: 1px solid var(--border); background: var(--card-bg, #fff); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column; padding: 0; z-index: 2000; overscroll-behavior: contain; }
+.refund-details-drawer:not([open]) { display: none; }
+.refund-details-drawer::backdrop { background: rgba(15, 23, 42, 0.45); }
+.history-details-drawer { inset: 0 0 0 auto; margin: 0; width: min(500px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; border: none; border-left: 1px solid var(--border); background: var(--card-bg, #fff); box-shadow: -12px 0 36px rgba(15, 23, 42, 0.16); display: flex; flex-direction: column; padding: 0; z-index: 2000; overscroll-behavior: contain; }
+.history-details-drawer:not([open]) { display: none; }
+.history-details-drawer::backdrop { background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px); }
+.history-drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 1.15rem 1.35rem; border-bottom: 1px solid var(--border); background: var(--card-bg, #fff); gap: 0.75rem; flex-shrink: 0; }
+.history-drawer-header-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.history-drawer-back-btn { background: var(--theme-surface-soft, #f1f5f9); border: 1px solid var(--border); color: var(--text, #0f172a); width: 36px; height: 36px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; flex-shrink: 0; transition: background 0.15s ease, transform 0.15s ease; padding: 0; }
+.history-drawer-back-btn:hover { background: var(--theme-surface-hover, #e2e8f0); transform: translateX(-2px); }
+.history-drawer-back-btn:active { transform: translateX(-3px) scale(0.96); }
+.history-drawer-back-btn[hidden] { display: none !important; }
+.history-drawer-badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; background: var(--theme-info-surface, #e0f2fe); color: var(--theme-info-text, #0369a1); margin-bottom: 0.25rem; transition: background 0.2s ease, color 0.2s ease; }
+.history-drawer-header h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text, #0f172a); }
+.history-drawer-close { background: transparent; border: none; font-size: 1.75rem; line-height: 1; color: var(--muted); cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 6px; }
+.history-drawer-close:hover { color: var(--text); background: var(--theme-surface-soft, #f8fafc); }
+.drawer-view-stage { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; overflow: hidden; width: 100%; }
+.drawer-view { position: absolute; inset: 0; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; background: var(--card-bg, #fff); opacity: 0; visibility: hidden; pointer-events: none; }
+.drawer-view.is-active { position: relative; opacity: 1; visibility: visible; pointer-events: auto; z-index: 1; }
+.drawer-view.anim-slide-out-left { position: absolute; inset: 0; z-index: 2; pointer-events: none; visibility: visible; animation: drawerSlideOutLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.drawer-view.anim-slide-in-right { position: absolute; inset: 0; z-index: 3; pointer-events: none; visibility: visible; animation: drawerSlideInRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.drawer-view.anim-slide-out-right { position: absolute; inset: 0; z-index: 2; pointer-events: none; visibility: visible; animation: drawerSlideOutRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.drawer-view.anim-slide-in-left { position: absolute; inset: 0; z-index: 3; pointer-events: none; visibility: visible; animation: drawerSlideInLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes drawerSlideOutLeft { 0% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-24px); } }
+@keyframes drawerSlideInRight { 0% { opacity: 0; transform: translateX(24px); } 100% { opacity: 1; transform: translateX(0); } }
+@keyframes drawerSlideOutRight { 0% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(24px); } }
+@keyframes drawerSlideInLeft { 0% { opacity: 0; transform: translateX(-24px); } 100% { opacity: 1; transform: translateX(0); } }
+.history-drawer-receipt-body { padding: 1.25rem 1.5rem; background: var(--theme-surface-soft, #f8fafc); }
+.history-drawer-receipt-body .receipt-container { padding: 0; }
+.history-drawer-receipt-body .receipt-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; }
+.history-drawer-receipt-body .sale-receipt { margin: 0 auto; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08); border-radius: 4px; }
+.history-drawer-receipt-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 3rem 1rem; color: var(--muted, #64748b); font-size: 0.9rem; }
+.history-drawer-receipt-error { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 0.65rem; padding: 2rem 1.25rem; color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); border: 1px solid var(--theme-danger-border, #fecaca); border-radius: 12px; margin: 1.5rem auto; max-width: 360px; }
+.history-drawer-receipt-error i { font-size: 2rem; }
+.drawer-spinner { width: 28px; height: 28px; border: 2.5px solid var(--border, #e2e8f0); border-top-color: var(--primary, #2563eb); border-radius: 50%; animation: drawerSpin 0.7s linear infinite; }
+@keyframes drawerSpin { to { transform: rotate(360deg); } }
+html[data-theme="dark"] .history-drawer-receipt-body { background: var(--card-bg, #152238); }
+html[data-theme="dark"] .history-drawer-back-btn { background: var(--theme-surface-soft, #1e293b); color: var(--text, #f8fafc); border-color: var(--border, #334155); }
+html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
+@media (prefers-reduced-motion: reduce) {
+    .drawer-view.anim-slide-out-left, .drawer-view.anim-slide-in-right, .drawer-view.anim-slide-out-right, .drawer-view.anim-slide-in-left { animation: none !important; transform: none !important; }
+    .history-drawer-back-btn { transition: none !important; }
+}
+.history-drawer-body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+.history-drawer-kv { display: grid; grid-template-columns: minmax(110px, 140px) 1fr; gap: 0.65rem 1rem; margin: 0; font-size: 0.88rem; line-height: 1.45; }
+.history-drawer-kv dt { color: var(--muted, #64748b); font-weight: 500; }
+.history-drawer-kv dd { margin: 0; font-weight: 600; color: var(--text, #0f172a); word-break: break-word; font-variant-numeric: tabular-nums; }
+.history-drawer-footer { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border); background: var(--theme-surface-soft, #f8fafc); flex-shrink: 0; }
+.history-row-id-cell { display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap; }
 @media (max-width: 1100px) {
     .cashier-history-page .history-table-wrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-    .cashier-history-page .history-table-wrap :is(table, tbody) { display: block; }
-    .cashier-history-page .history-table-wrap tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: 0 1rem 1rem; padding: .75rem; border: 1px solid var(--border); border-radius: 12px; }
-    .cashier-history-page .history-table-wrap tbody td { display: block; min-width: 0; padding: .35rem; border: 0; text-align: left; }
-    .cashier-history-page .history-table-wrap td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted); font-size: .75rem; }
+    .cashier-history-page .history-table-wrap :is(table, tbody) { display: block; width: 100%; min-width: 0; }
+    .cashier-history-page .history-table-wrap tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin: 0 1rem 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg, #ffffff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03); }
+    .cashier-history-page .history-table-wrap tbody td { display: block; min-width: 0; padding: .35rem; border: 0; text-align: left; white-space: normal; overflow-wrap: break-word; }
+    .cashier-history-page .history-table-wrap td[data-label]::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: var(--muted, #64748b); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .cashier-history-page .history-table-wrap td.history-action-cell { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: .65rem; margin-top: .25rem; border-top: 1px dashed var(--border); }
+    .cashier-history-page .history-table-wrap td.history-action-cell .history-row-actions { width: 100%; display: flex; gap: .5rem; }
+    .cashier-history-page .history-table-wrap td.history-action-cell .history-row-actions .btn,
+    .cashier-history-page .history-table-wrap td.history-action-cell .history-open-drawer { width: 100%; justify-content: center; min-height: 40px; }
+    .cashier-history-page .history-table-wrap td.history-note-cell { max-width: none; white-space: normal; }
     .cashier-history-page .history-table-wrap .history-empty { grid-column: 1 / -1; text-align: center; }
 }
 
+.cashier-shifts-page .shift-reconciliation-header { display: flex; align-items: center; gap: .85rem; margin-bottom: 1.25rem; }
+.cashier-shifts-page .shift-reconciliation-title-group { min-width: 0; }
+.cashier-shifts-page .shift-reconciliation-title-group h2 { margin: 0 0 .2rem; }
+.cashier-shifts-page .shift-money-header-badge { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; background: var(--theme-info-surface, rgba(14, 165, 233, 0.12)); color: var(--primary, #0284c7); font-size: 1.35rem; flex-shrink: 0; border: 1px solid var(--border); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+.cashier-shifts-page .shift-count-instruction { margin: 0; color: var(--muted); font-size: .875rem; line-height: 1.4; }
 .cashier-shifts-page .money-counter-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 1rem; }
 .cashier-shifts-page .money-counter-group { min-width: 0; margin: 0; padding: 0; border: 0; }
 .cashier-shifts-page .money-counter-group legend { padding: 0 0 .75rem; font-size: 1rem; font-weight: 700; }
-.cashier-shifts-page :is(.money-counter-row, .money-counter-head) { display: grid; grid-template-columns: minmax(3.5rem, 1fr) 144px minmax(4.5rem, 1fr); align-items: center; gap: .4rem; }
+.cashier-shifts-page :is(.money-counter-row, .money-counter-head) { display: grid; grid-template-columns: minmax(5.5rem, 1.25fr) 144px minmax(3.5rem, 1fr); align-items: center; gap: .45rem; }
 .cashier-shifts-page .money-counter-head { color: var(--muted); font-size: .875rem; line-height: 1.4; padding-bottom: .5rem; }
 .cashier-shifts-page .money-counter-row { padding: .5rem 0; border-top: 1px solid var(--border); transition: background .2s ease; }
 .cashier-shifts-page .money-counter-row.has-cash { background: var(--theme-info-surface, var(--card-bg)); }
-.cashier-shifts-page .money-counter-row label { margin: 0; font-size: .875rem; }
+.cashier-shifts-page .money-counter-row label { display: inline-flex; align-items: center; gap: .55rem; margin: 0; font-size: .875rem; font-weight: 600; min-width: 0; cursor: pointer; }
+.cashier-shifts-page .money-counter-thumb-wrap { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: var(--theme-surface-soft, #f8fafc); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: transform .15s ease; }
+.cashier-shifts-page .money-counter-row:hover .money-counter-thumb-wrap { transform: scale(1.05); }
+.cashier-shifts-page .money-counter-thumb-wrap--bill { width: 46px; height: 23px; border: 1px solid var(--border); }
+.cashier-shifts-page .money-counter-thumb-wrap--coin { width: 26px; height: 26px; border-radius: 50%; background: transparent; border: none; box-shadow: none; }
+.cashier-shifts-page .money-counter-thumb { width: 100%; height: 100%; display: block; }
+.cashier-shifts-page .money-counter-thumb--bill { object-fit: cover; }
+.cashier-shifts-page .money-counter-thumb--coin { object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.22)); }
+.cashier-shifts-page .money-denomination-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .cashier-shifts-page .money-counter-stepper { display: grid; grid-template-columns: 44px 56px 44px; }
 .cashier-shifts-page #cash-drawer-counter .money-counter-stepper :is(button, input) { width: 100%; min-width: 0; min-height: 44px; padding: .3rem; margin: 0; border: 1px solid var(--border); border-radius: 0; background: var(--card-bg); color: var(--text); font: inherit; text-align: center; }
 .cashier-shifts-page .money-counter-stepper button { cursor: pointer; }
@@ -64,8 +287,11 @@
 .cashier-shifts-page .rm-toast { background: var(--card-bg); color: var(--text); pointer-events: auto; }
 .cashier-shifts-page .rm-toast-close { min-height: 44px; min-width: 44px; }
 @media (max-width: 380px) {
-    .cashier-shifts-page :is(.money-counter-row, .money-counter-head) { grid-template-columns: minmax(0, 1fr) 136px minmax(0, 1fr); gap: .2rem; }
+    .cashier-shifts-page :is(.money-counter-row, .money-counter-head) { grid-template-columns: minmax(0, 1fr) 136px minmax(0, 1fr); gap: .25rem; }
     .cashier-shifts-page .money-counter-stepper { grid-template-columns: 44px 48px 44px; }
+    .cashier-shifts-page .money-counter-thumb-wrap--bill { width: 36px; height: 18px; }
+    .cashier-shifts-page .money-counter-thumb-wrap--coin { width: 22px; height: 22px; }
+    .cashier-shifts-page .money-counter-row label { gap: .35rem; font-size: .8125rem; }
 }
 @media (prefers-reduced-motion: reduce) {
     .cashier-shifts-page :is(.money-counter-row, .rm-toast) { transition: none; }
@@ -103,58 +329,899 @@
     text-underline-offset: 3px;
 }
 .cashier-stock-issues-page .topbar { display: block; }
-.cashier-stock-issues-page .form-section h3 { font-size: 1rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
-.cashier-stock-issues-page .tabs { flex-wrap: wrap; }
-.cashier-stock-issues-page .btn-submit { background: #2563eb; color: #fff; border-radius: 10px; }
-.cashier-stock-issues-page .btn-submit:hover { background: #1d4ed8; }
-.cashier-stock-issues-page .tab-link.active { color: var(--theme-info-text, #1d4ed8); border-bottom-color: var(--primary); }
-.cashier-stock-issues-page :is(.report-form, .adjustment-card) {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    color: var(--text);
+.cashier-stock-issues-page :is(button, input:not([type="hidden"]), select, textarea) {
+    min-height: 44px;
+    min-width: 44px;
+    max-width: 100%;
 }
-.cashier-stock-issues-page :is(.adjustment-product, .adjustment-reason, .adjustment-details) { overflow-wrap: anywhere; }
-.cashier-stock-issues-page .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
-.cashier-stock-issues-page #selected-product {
-    margin: 0;
-    padding: 1rem;
-    border-radius: 10px;
+.cashier-stock-issues-page :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
 }
-.cashier-stock-issues-page #selected-product .adjustment-header {
-    align-items: center;
+
+/* Stock Issues Topbar */
+.cashier-stock-issues-page .stock-issues-topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
     flex-wrap: wrap;
     gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.cashier-stock-issues-page .stock-issues-header-info {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+.cashier-stock-issues-page .stock-issues-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+}
+.cashier-stock-issues-page .stock-issues-title-row h1 {
+    font-size: clamp(1.4rem, 2vw, 1.8rem);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 700;
     margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--text);
+}
+.cashier-stock-issues-page .stock-issues-topbar .page-subtitle {
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0;
+    max-width: 68ch;
+}
+.cashier-stock-issues-page .stock-issues-topbar-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-radius: 9px;
+    white-space: nowrap;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.cashier-stock-issues-page .stock-issues-topbar-actions .btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Shift Badges & Notices */
+.cashier-stock-issues-page .stock-shift-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.cashier-stock-issues-page .stock-shift-badge--active {
+    background: var(--theme-success-surface, #dcfce7);
+    color: var(--theme-success-text, #15803d);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.cashier-stock-issues-page .stock-shift-badge--inactive {
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #b45309);
+    border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.cashier-stock-issues-page .stock-shift-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.25);
+    animation: stockPulseDot 2s infinite ease-in-out;
+}
+@keyframes stockPulseDot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.25); opacity: 0.75; }
+}
+
+.cashier-stock-issues-page .stock-shift-notice {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+    background: var(--theme-warning-surface, #fffbeb);
+    border: 1px solid rgba(217, 119, 6, 0.3);
+    border-radius: 14px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.cashier-stock-issues-page .stock-shift-notice-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(217, 119, 6, 0.15);
+    color: #d97706;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+.cashier-stock-issues-page .stock-shift-notice-content {
+    flex: 1 1 300px;
+    min-width: 0;
+}
+.cashier-stock-issues-page .stock-shift-notice-content h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #92400e;
+}
+.cashier-stock-issues-page .stock-shift-notice-content p {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #b45309;
+}
+.cashier-stock-issues-page .stock-shift-notice .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.15rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border-radius: 9px;
+    background: #d97706;
+    color: #fff;
+    border: none;
+    text-decoration: none;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.cashier-stock-issues-page .stock-shift-notice .btn:hover {
+    background: #b45309;
+    transform: translateY(-1px);
+}
+
+/* New Stock Issue Form Card */
+.cashier-stock-issues-page .stock-issue-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.cashier-stock-issues-page .stock-card-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+}
+.cashier-stock-issues-page .stock-card-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text);
+}
+.cashier-stock-issues-page .stock-step-section {
+    margin-bottom: 1.5rem;
+}
+.cashier-stock-issues-page .stock-step-header {
+    margin-bottom: 0.85rem;
+}
+.cashier-stock-issues-page .stock-step-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text);
+    border: 0;
+    padding: 0;
+}
+
+/* Inputs & Input Groups */
+.cashier-stock-issues-page .stock-inputs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+.cashier-stock-issues-page .input-with-icon {
+    position: relative;
+    width: 100%;
+}
+.cashier-stock-issues-page .input-with-icon .input-icon {
+    position: absolute;
+    left: 0.95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 1rem;
+    pointer-events: none;
+    z-index: 2;
+}
+.cashier-stock-issues-page .input-with-icon input {
+    width: 100%;
+    padding-left: 2.65rem !important;
+}
+.cashier-stock-issues-page :is(input, select, textarea) {
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 0.65rem 0.9rem;
+    font-size: 0.92rem;
+    background: var(--card-bg);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cashier-stock-issues-page :is(input, select, textarea):focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+    outline: none;
+}
+.cashier-stock-issues-page .form-group label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.45rem;
+    color: var(--text);
+}
+.cashier-stock-issues-page .required::after {
+    content: " *";
+    color: var(--danger, #dc2626);
+}
+
+/* Selected Product Box */
+.cashier-stock-issues-page #selected-product.selected-product-box {
+    margin-top: 1rem;
+    padding: 1.15rem 1.35rem;
+    border-radius: 12px;
+    background: var(--theme-surface-soft, #f8fafc);
+    border: 1px solid rgba(37, 99, 235, 0.28);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+}
+.cashier-stock-issues-page .selected-product-main {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    flex-wrap: wrap;
+}
+.cashier-stock-issues-page .selected-product-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+.cashier-stock-issues-page .selected-product-meta {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+.cashier-stock-issues-page .selected-product-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary);
+    margin-bottom: 0.15rem;
+}
+.cashier-stock-issues-page .selected-product-meta .adjustment-product {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.cashier-stock-issues-page .adjustment-sku-row {
+    margin-top: 0.25rem;
+}
+.cashier-stock-issues-page .adjustment-sku-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: monospace;
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: var(--card-bg);
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
 }
 .cashier-stock-issues-page .selected-product-actions {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: .75rem;
+    gap: 0.75rem;
     margin-left: auto;
+    flex-wrap: wrap;
 }
-.cashier-stock-issues-page #selected-product-stock {
-    margin: 0;
-    padding: .35rem .65rem;
-    border-radius: 6px;
-    background: var(--theme-surface-soft, var(--card-bg));
+.cashier-stock-issues-page .stock-level-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e3a8a;
+    background: #dbeafe;
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    font-variant-numeric: tabular-nums;
+}
+.cashier-stock-issues-page #clear-product {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.cashier-stock-issues-page #clear-product:hover {
+    transform: translateY(-1px);
+}
+
+/* Step 2 Grid & Form Footer */
+.cashier-stock-issues-page .stock-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.cashier-stock-issues-page .stock-explanation-group {
+    margin-top: 0.75rem;
+}
+.cashier-stock-issues-page .stock-explanation-group textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+.cashier-stock-issues-page .stock-form-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+.cashier-stock-issues-page .stock-submit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.65rem 1.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-radius: 10px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.cashier-stock-issues-page .stock-submit-btn:hover:not(:disabled) {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+.cashier-stock-issues-page .stock-submit-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+.cashier-stock-issues-page .stock-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+.cashier-stock-issues-page .stock-form-note {
+    color: var(--muted);
+    font-size: 0.84rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* History Workspace */
+.cashier-stock-issues-page .stock-history-workspace {
+    margin-top: 2rem;
+}
+.cashier-stock-issues-page .stock-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.cashier-stock-issues-page .stock-history-header h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 0.2rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     color: var(--text);
-    font-size: .875rem;
+}
+.cashier-stock-issues-page .stock-history-sub {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+}
+
+/* Metrics Strip */
+.cashier-stock-issues-page .stock-metrics-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+.cashier-stock-issues-page .stock-metric-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.cashier-stock-issues-page .stock-metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.cashier-stock-issues-page .stock-metric-card--alert {
+    border-color: rgba(2, 132, 199, 0.35);
+    background: rgba(2, 132, 199, 0.03);
+}
+.cashier-stock-issues-page .stock-metric-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+.cashier-stock-issues-page .stock-metric-icon--total { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.cashier-stock-issues-page .stock-metric-icon--pending { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+.cashier-stock-issues-page .stock-metric-icon--returned { background: rgba(2, 132, 199, 0.12); color: #0284c7; }
+.cashier-stock-issues-page .stock-metric-icon--resolved { background: rgba(16, 185, 129, 0.12); color: #059669; }
+
+.cashier-stock-issues-page .stock-metric-info {
+    display: flex;
+    flex-direction: column;
+}
+.cashier-stock-issues-page .stock-metric-val {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.cashier-stock-issues-page .stock-metric-lbl {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Filter Tabs */
+.cashier-stock-issues-page .stock-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.45rem;
+    background: var(--theme-surface-soft, #f1f5f9);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 1.25rem;
+}
+.cashier-stock-issues-page .stock-tab-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.95rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.cashier-stock-issues-page .stock-tab-pill:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.7);
+}
+.cashier-stock-issues-page .stock-tab-pill.active {
+    background: var(--card-bg);
+    color: var(--primary);
+    border-color: rgba(37, 99, 235, 0.25);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    font-weight: 700;
+}
+.cashier-stock-issues-page .stock-tab-count {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 9999px;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.cashier-stock-issues-page .stock-tab-pill.active .stock-tab-count {
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+}
+
+/* Empty Filter Status Box */
+.cashier-stock-issues-page .stock-empty-filter {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    background: var(--card-bg);
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    margin-bottom: 1rem;
+}
+.cashier-stock-issues-page .stock-empty-icon {
+    font-size: 2.5rem;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    line-height: 1;
+}
+.cashier-stock-issues-page .stock-empty-filter p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+/* Report Cards */
+.cashier-stock-issues-page .stock-cards-list {
+    display: grid;
+    gap: 1rem;
+}
+.cashier-stock-issues-page .stock-report-card {
+    position: relative;
+    padding: 1.25rem 1.4rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    margin-bottom: 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.cashier-stock-issues-page .stock-report-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.cashier-stock-issues-page .stock-report-card.status-returned {
+    border-color: rgba(2, 132, 199, 0.35);
+    background: linear-gradient(to right, rgba(2, 132, 199, 0.02), var(--card-bg) 40%);
+}
+
+.cashier-stock-issues-page .stock-report-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+}
+.cashier-stock-issues-page .stock-report-primary {
+    flex: 1 1 280px;
+    min-width: 0;
+}
+.cashier-stock-issues-page .stock-report-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.45rem;
+}
+.cashier-stock-issues-page .stock-report-title-row .adjustment-product {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.cashier-stock-issues-page .stock-sku-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: var(--theme-surface-soft, #f8fafc);
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+.cashier-stock-issues-page .stock-type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
     font-weight: 600;
 }
-.cashier-stock-issues-page #clear-product { font: inherit; }
-.cashier-stock-issues-page #selected-product-code { margin-top: .25rem; overflow-wrap: anywhere; }
-.cashier-stock-issues-page :is(input, select, textarea) { color: var(--text); background: var(--card-bg); border-color: var(--border); }
-:is(.cashier-history-page, .cashier-stock-issues-page) :is(button, a, input, select, textarea, [tabindex]):focus-visible {
-    outline: 2px solid var(--primary);
-    outline-offset: 3px;
+.cashier-stock-issues-page .stock-type-tag.stock-type-damaged {
+    background: var(--theme-danger-surface, #fee2e2);
+    color: var(--theme-danger-text, #991b1b);
+}
+.cashier-stock-issues-page .stock-type-tag.stock-type-missing {
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+}
+.cashier-stock-issues-page .stock-type-tag.stock-type-expired {
+    background: #ffe4e6;
+    color: #9f1239;
+}
+.cashier-stock-issues-page .stock-type-tag.stock-type-other {
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--text);
+}
+
+.cashier-stock-issues-page .stock-report-aside {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+}
+.cashier-stock-issues-page .stock-qty-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+}
+.cashier-stock-issues-page .stock-qty-num {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--danger, #dc2626);
+    font-variant-numeric: tabular-nums;
+}
+.cashier-stock-issues-page .stock-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: capitalize;
+}
+.cashier-stock-issues-page .stock-status-badge.status-badge-pending {
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #b45309);
+    border: 1px solid rgba(217, 119, 6, 0.25);
+}
+.cashier-stock-issues-page .stock-status-badge.status-badge-returned {
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid rgba(2, 132, 199, 0.25);
+}
+.cashier-stock-issues-page .stock-status-badge.status-badge-approved {
+    background: var(--theme-success-surface, #dcfce7);
+    color: var(--theme-success-text, #15803d);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.cashier-stock-issues-page .stock-status-badge.status-badge-rejected {
+    background: var(--theme-danger-surface, #fee2e2);
+    color: var(--theme-danger-text, #b91c1c);
+    border: 1px solid rgba(185, 28, 28, 0.25);
+}
+.cashier-stock-issues-page .stock-status-badge.status-badge-cancelled {
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+/* Report Meta Details Row */
+.cashier-stock-issues-page .stock-report-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+    padding: 0.65rem 0;
+    border-top: 1px dashed var(--border);
+    margin-bottom: 0.65rem;
+}
+.cashier-stock-issues-page .stock-report-meta-row .meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.cashier-stock-issues-page .stock-report-meta-row .meta-reviewer {
+    color: var(--text);
+    font-weight: 500;
+}
+
+/* Report Reason & Reviewer Notes */
+.cashier-stock-issues-page .stock-report-reason {
+    margin-top: 0.5rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    background: var(--theme-surface-soft, #f8fafc);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.cashier-stock-issues-page .stock-reason-label {
+    font-weight: 700;
+    color: var(--text);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 0.35rem;
+}
+.cashier-stock-issues-page .stock-reason-text {
+    display: inline;
+    color: var(--text);
+    margin: 0;
+}
+
+.cashier-stock-issues-page .stock-reviewer-note {
+    margin-top: 0.65rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    background: var(--theme-surface-soft, #f8fafc);
+    border: 1px solid var(--border);
+}
+.cashier-stock-issues-page .stock-reviewer-note.is-returned-note {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+.cashier-stock-issues-page .stock-reviewer-label {
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 0.35rem;
+}
+.cashier-stock-issues-page .stock-reviewer-text {
+    display: inline;
+    margin: 0;
+}
+
+/* Expandable Inline Edit for Pending & Returned */
+.cashier-stock-issues-page .stock-edit-details {
+    margin-top: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-bg);
+}
+.cashier-stock-issues-page .stock-edit-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--theme-surface-soft, #f8fafc);
+    border-bottom: 1px solid transparent;
+}
+.cashier-stock-issues-page .stock-edit-details[open] .stock-edit-summary {
+    border-bottom-color: var(--border);
+}
+.cashier-stock-issues-page .stock-edit-summary:hover {
+    background: rgba(0, 0, 0, 0.03);
+}
+.cashier-stock-issues-page .stock-edit-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+}
+.cashier-stock-issues-page .stock-report-card.status-returned .stock-edit-badge {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+.cashier-stock-issues-page .stock-inline-edit-form {
+    padding: 1.15rem;
+}
+.cashier-stock-issues-page .stock-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 0.85rem;
+    margin-bottom: 0.85rem;
+}
+.cashier-stock-issues-page .stock-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-submit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-submit:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-resubmit {
+    background: #0284c7;
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-resubmit:hover {
+    background: #0369a1;
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+.cashier-stock-issues-page .stock-edit-actions .btn-secondary:hover {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+    .cashier-stock-issues-page .selected-product-actions {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+    .cashier-stock-issues-page .stock-report-aside {
+        width: 100%;
+        justify-content: flex-start;
+        margin-top: 0.35rem;
+    }
+    .cashier-stock-issues-page .stock-filter-tabs {
+        gap: 0.35rem;
+    }
+    .cashier-stock-issues-page .stock-tab-pill {
+        flex: 1 1 calc(33.333% - 0.35rem);
+        justify-content: center;
+        text-align: center;
+        padding: 0.45rem 0.6rem;
+        font-size: 0.8rem;
+    }
 }
 @media (max-width: 480px) {
     .cashier-history-page .actions-row > label { flex: 1 1 100%; }
     .cashier-history-page input[type="date"] { width: 100%; }
     .cashier-history-page .history-details dl { grid-template-columns: minmax(0, 1fr); gap: 0.25rem; }
     .cashier-history-page .history-details dd { margin-bottom: 0.75rem; }
-    .cashier-stock-issues-page .report-form { padding: 1rem; }
+    .cashier-stock-issues-page .stock-issue-card { padding: 1rem; }
+    .cashier-stock-issues-page .stock-submit-btn { width: 100%; }
+    .cashier-stock-issues-page .stock-issues-topbar-actions .btn { width: 100%; justify-content: center; }
 }
 @media (max-width: 900px), (pointer: coarse) {
     :is(.cashier-history-page, .cashier-stock-issues-page, .cashier-shifts-page, .cashier-refunds-page) :is(input, select, textarea) { font-size: 1rem; }
@@ -384,6 +1451,41 @@
     margin-bottom: 0;
 }
 
+.cashier-shifts-page .shift-heading-group { display: inline-flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; }
+.cashier-shifts-page .shift-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2); }
+.cashier-shifts-page .shift-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.65rem; border: 1px solid var(--border); border-radius: 9999px; background: var(--card-bg); color: var(--text); font-size: 0.8rem; font-weight: 600; }
+.cashier-shifts-page .shift-target-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.6rem; border-radius: 6px; background: var(--theme-info-surface, #e0f2fe); color: var(--theme-info-text, #0369a1); font-size: 0.8rem; font-weight: 600; }
+.cashier-shifts-page .shift-section-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.cashier-shifts-page .shift-section-header h2 { margin: 0; }
+.cashier-shifts-page .shift-held-alert { padding: 1rem 1.25rem; margin-bottom: 1.25rem; border-radius: 12px; }
+.cashier-shifts-page .shift-held-alert-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.cashier-shifts-page .shift-held-alert-head .btn-sm { min-height: 32px; padding: 0.25rem 0.75rem; font-size: 0.8rem; border-radius: 6px; }
+.cashier-shifts-page .shift-variance-card { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1rem 1.25rem; margin-bottom: 1.25rem; border-radius: 12px; border: 1px solid transparent; }
+.cashier-shifts-page .shift-variance-card .variance-badge { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; }
+.cashier-shifts-page .shift-variance-card .variance-amount { font-size: 1.45rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.cashier-shifts-page .shift-variance-card.is-balanced { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #15803d); border-color: rgba(22, 163, 74, 0.25); }
+.cashier-shifts-page .shift-variance-card.is-shortage { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); border-color: rgba(185, 28, 28, 0.25); }
+.cashier-shifts-page .shift-variance-card.is-overage { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #b45309); border-color: rgba(217, 119, 6, 0.25); }
+.cashier-shifts-page .shift-preview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; padding: 1rem; background: var(--theme-surface-soft, #f8fafc); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 1.25rem; }
+.cashier-shifts-page .shift-preview-grid .stat-card { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.cashier-shifts-page .shift-preview-grid .stat-card .value { font-size: 1.25rem; font-weight: 700; }
+.cashier-shifts-page .shift-preview-grid .stat-card .label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cashier-shifts-page .money-count-breakdown { margin: 1.25rem 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card-bg); }
+.cashier-shifts-page .money-count-breakdown summary { padding: 0.75rem 1rem; font-weight: 600; font-size: 0.875rem; cursor: pointer; user-select: none; background: var(--theme-surface-soft, #f8fafc); border-bottom: 1px solid transparent; }
+.cashier-shifts-page .money-count-breakdown[open] summary { border-bottom-color: var(--border); }
+.cashier-shifts-page .breakdown-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 1.25rem; padding: 1rem; }
+.cashier-shifts-page .breakdown-group h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 0.5rem; }
+.cashier-shifts-page .breakdown-group dl { margin: 0; display: grid; gap: 0.35rem; font-size: 0.85rem; }
+.cashier-shifts-page .breakdown-group dl > div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.cashier-shifts-page .shift-reconciled-banner { background: var(--theme-surface-soft, #f8fafc); }
+.cashier-shifts-page .shift-reconciled-grid { display: flex; flex-wrap: wrap; gap: 1.5rem 3rem; margin: 0.75rem 0; }
+.cashier-shifts-page .shift-reconciled-grid > div { display: grid; gap: 0.2rem; }
+.cashier-shifts-page .shift-reconciled-grid .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+.cashier-shifts-page .shift-reconciled-grid .value { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cashier-shifts-page .variance-badge-cell { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 6px; font-weight: 700; font-size: 0.825rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.cashier-shifts-page .variance-badge-cell.is-balanced { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted); }
+.cashier-shifts-page .variance-badge-cell.is-shortage { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); }
+.cashier-shifts-page .variance-badge-cell.is-overage { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #b45309); }
 .cashier-shifts-page .shift-status {
     display: inline-flex;
     align-items: center;
@@ -517,16 +1619,18 @@
     .cashier-shifts-page .shift-overview-content { display: grid; gap: 1rem; }
 }
 
-.cashier-history-page .history-pagination [aria-disabled="true"] { opacity: .5; cursor: default; }
-.cashier-history-page .history-pagination { justify-content: space-between; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-number { margin: 0; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-length { margin: 0; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-length label { display: flex; align-items: center; gap: .5rem; white-space: nowrap; color: var(--muted); }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-length select { min-height: 44px; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font: inherit; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons .history-page-button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: .4rem; border-radius: 8px; color: var(--text); text-decoration: none; }
-:is(.cashier-history-page, .cashier-refunds-page) .history-page-button[aria-current="page"] { background: var(--theme-info-surface, #dbeafe); color: var(--primary); }
-:is(.cashier-history-page, .cashier-refunds-page) a.history-page-button:hover { background: var(--theme-surface-soft, #f8fafc); }
+:is(.cashier-history-page, .cashier-refunds-page) .history-pagination [aria-disabled="true"] { opacity: .45; cursor: default; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-pagination { justify-content: space-between; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-number { margin: 0; color: var(--muted, #64748b); font-size: .84rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-length { margin: 0; display: inline-flex; align-items: center; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-length label { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; color: var(--muted, #64748b); font-size: .84rem; margin: 0; cursor: pointer; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-length select { min-height: 34px; height: 34px; padding: .15rem .6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg, #ffffff); color: var(--text); font-size: .84rem; font-weight: 600; cursor: pointer; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .3rem; margin-left: auto; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons .history-page-button { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; padding: .25rem .6rem; border-radius: 8px; font-size: .84rem; font-weight: 500; color: var(--text, #334155); text-decoration: none; border: 1px solid var(--border); background: var(--card-bg, #ffffff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03); transition: all .15s ease; }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-button[aria-current="page"] { background: var(--primary, #2563eb); color: #ffffff; border-color: var(--primary, #2563eb); font-weight: 600; }
+:is(.cashier-history-page, .cashier-refunds-page) a.history-page-button:hover:not([aria-current="page"]) { background: var(--theme-surface-soft, #f8fafc); border-color: #cbd5e1; color: var(--text, #0f172a); }
+:is(.cashier-history-page, .cashier-refunds-page) .history-page-button[aria-disabled="true"] { opacity: .35; border-color: transparent; background: transparent; box-shadow: none; }
 @media (max-width: 768px) {
-    .cashier-history-page .history-pagination { flex-direction: column; }
+    :is(.cashier-history-page, .cashier-refunds-page) .history-pagination { flex-direction: column; align-items: center; gap: .75rem; }
+    :is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons { margin-left: 0; }
 }

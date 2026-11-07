@@ -33,6 +33,23 @@
         cash.value = Math.floor(cents / 100) + '.' + String(cents % 100).padStart(2, '0');
     };
     form.addEventListener('input', update);
+    form.addEventListener('focusin', event => {
+        if (event.target.matches('.money-counter-stepper input')) {
+            event.target.select();
+        }
+    });
+    form.addEventListener('keydown', event => {
+        if (event.key === 'Enter' && event.target.matches('.money-counter-stepper input')) {
+            event.preventDefault();
+            const inputs = rows.map(r => r.querySelector('input'));
+            const idx = inputs.indexOf(event.target);
+            if (idx >= 0 && idx < inputs.length - 1) {
+                inputs[idx + 1].focus();
+            } else {
+                form.querySelector('[type="submit"]:not(:disabled)')?.focus();
+            }
+        }
+    });
     form.addEventListener('change', event => {
         if (event.target.matches('.money-counter-stepper input') && !event.target.checkValidity()) {
             RetailMindUI.toast(event.target.validationMessage, 'error', undefined, 4300);

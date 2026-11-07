@@ -352,7 +352,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const drawerTabs = Array.from(document.querySelectorAll('[data-user-drawer-tab]'));
     const drawerPanels = Array.from(document.querySelectorAll('[data-user-drawer-panel]'));
+    let activeUserTabIndex = 0;
     function selectDrawerTab(name, focusTab = false) {
+        const nextIndex = drawerTabs.findIndex(tab => tab.dataset.userDrawerTab === name);
+        const isForward = nextIndex >= activeUserTabIndex;
         drawerTabs.forEach(tab => {
             const selected = tab.dataset.userDrawerTab === name;
             tab.classList.toggle('is-active', selected);
@@ -361,9 +364,18 @@ document.addEventListener('DOMContentLoaded', function () {
             if (selected && focusTab) tab.focus();
         });
         drawerPanels.forEach(panel => {
-            panel.hidden = panel.dataset.userDrawerPanel !== name;
-            panel.classList.toggle('is-active', !panel.hidden);
+            const isTarget = panel.dataset.userDrawerPanel === name;
+            if (isTarget && panel.hidden) {
+                panel.hidden = false;
+                panel.classList.toggle('is-active', true);
+                panel.classList.remove('anim-panel-in-right', 'anim-panel-in-left');
+                panel.classList.add(isForward ? 'anim-panel-in-right' : 'anim-panel-in-left');
+            } else if (!isTarget) {
+                panel.hidden = true;
+                panel.classList.remove('is-active', 'anim-panel-in-right', 'anim-panel-in-left');
+            }
         });
+        if (nextIndex >= 0) activeUserTabIndex = nextIndex;
     }
     drawerTabs.forEach((tab, index) => {
         tab.addEventListener('click', () => selectDrawerTab(tab.dataset.userDrawerTab));

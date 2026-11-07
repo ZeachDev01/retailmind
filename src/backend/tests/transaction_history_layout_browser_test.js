@@ -47,7 +47,9 @@ const {chromium} = require('playwright');
             await page.setViewportSize({width, height: 900});
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Page fits at ' + width);
             assert(await page.locator('.history-table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), 'Records fit at ' + width);
-            assert(await page.getByRole('link', {name: '#42', exact: true}).isVisible());
+            assert(await page.locator('.history-id-cell').filter({hasText: '#42'}).isVisible());
+            assert.equal(await page.getByRole('link', {name: '#42'}).count(), 0, 'Sales ID is non-functional and not a link');
+            assert(await page.getByRole('button', {name: 'Details'}).first().isVisible(), 'Details button is the functioning control');
             assert(await page.locator('.history-pagination').evaluate(el => el.scrollWidth <= el.clientWidth), 'Pagination fits at ' + width);
         }
         const refundSetup = setup.replace("eval('?>", `

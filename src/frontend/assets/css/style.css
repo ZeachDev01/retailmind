@@ -2634,6 +2634,27 @@ span.tag-success, span.tag-warning, span.tag-danger { display: inline-flex; alig
 .user-drawer-panel [hidden] {
   display: none;
 }
+@keyframes drawerPanelSlideInRight {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes drawerPanelSlideInLeft {
+  from { opacity: 0; transform: translateX(-18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.anim-panel-in-right {
+  animation: drawerPanelSlideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.anim-panel-in-left {
+  animation: drawerPanelSlideInLeft 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-panel-in-right,
+  .anim-panel-in-left {
+    animation: none !important;
+    transform: none !important;
+  }
+}
 .user-drawer-form {
   padding: 0;
 }

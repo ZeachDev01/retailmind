@@ -402,12 +402,23 @@ document.addEventListener('DOMContentLoaded', function() {
     receiptPanel.after(otherPanel);
     const tabs = Array.from(drawerTabs.querySelectorAll('[role="tab"]'));
     const panels = [receiptPanel, otherPanel];
+    let currentReceiptTabIndex = 0;
     function selectDrawerTab(index) {
+        const isForward = index >= currentReceiptTabIndex;
         tabs.forEach(function(tab, position) {
             tab.setAttribute('aria-selected', String(position === index));
             tab.tabIndex = position === index ? 0 : -1;
-            panels[position].hidden = position !== index;
+            const panel = panels[position];
+            if (position === index) {
+                panel.hidden = false;
+                panel.classList.remove('anim-panel-in-right', 'anim-panel-in-left');
+                panel.classList.add(isForward ? 'anim-panel-in-right' : 'anim-panel-in-left');
+            } else {
+                panel.hidden = true;
+                panel.classList.remove('anim-panel-in-right', 'anim-panel-in-left');
+            }
         });
+        currentReceiptTabIndex = index;
     }
     tabs.forEach(function(tab, index) {
         panels[index].setAttribute('role', 'tabpanel');

@@ -126,11 +126,11 @@ function gcash_admin_money(mixed $val): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administrator GCash Overview</title>
-    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/cashier.css')) ?>">
-    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash.css')) ?>">
-    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/gcash-admin.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/gcash-admin.css')) ?>">
-    <link rel="stylesheet" href="<?= gcash_admin_e(app_url('assets/css/sale-receipt.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/cashier.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/gcash.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/gcash-admin.css')) ?>">
+    <link rel="stylesheet" href="<?= gcash_admin_e(theme_url('assets/css/sale-receipt.css')) ?>">
 </head>
 <body class="admin-page">
 <div class="app-shell">

@@ -21,6 +21,9 @@
             dialog.close();
         }
         dialog.querySelector('[data-close-receipt]').addEventListener('click', close);
+        dialog.addEventListener('click', event => {
+            if (event.target === dialog) close();
+        });
         dialog.addEventListener('keydown', event => {
             if (event.key !== 'Tab') return;
             const controls = Array.from(dialog.querySelectorAll('summary, button, a[href], input, select, textarea, [tabindex="0"]'))

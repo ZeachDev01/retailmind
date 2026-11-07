@@ -65,16 +65,25 @@
             const ncCount = document.getElementById('gcash-overview-nc-count');
             const ncList = document.getElementById('gcash-overview-nc-list');
 
-            if (ncCount) ncCount.textContent = (data.needs_checking_count || 0) + ' open';
+            if (ncCount) {
+                const count = data.needs_checking_count || 0;
+                ncCount.textContent = count > 0 ? (count + ' open') : 'All clear';
+                ncCount.classList.toggle('gcash-status-all-clear', count === 0);
+            }
 
             if (ncList) {
                 ncList.replaceChildren();
                 const items = data.needs_checking || [];
                 if (items.length === 0) {
-                    const empty = document.createElement('p');
-                    empty.className = 'gcash-empty-msg';
-                    empty.textContent = 'No transactions need checking.';
-                    ncList.append(empty);
+                    const tmpl = document.getElementById('gcash-overview-empty-template');
+                    if (tmpl) {
+                        ncList.append(tmpl.content.cloneNode(true));
+                    } else {
+                        const empty = document.createElement('p');
+                        empty.className = 'gcash-empty-msg';
+                        empty.textContent = 'No transactions need checking.';
+                        ncList.append(empty);
+                    }
                 } else {
                     for (const item of items) {
                         const card = document.createElement('div');

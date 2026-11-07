@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'form' => $_POST['form'] ?? 'piece',
                 'explanation' => $_POST['explanation'] ?? '',
             ]);
-            $message = "Report #{$adjustmentId} updated. It keeps its current state until reviewed or resubmitted.";
+            $message = "Report #{$adjustmentId} updated.";
             log_activity($pdo, $cashierId, 'Stock issue edited', 'Inventory Adjustments', $adjustmentId, ['status' => 'pending/returned'], ['status' => 'pending/returned']);
         } elseif ($correctionAction === 'cancel') {
             $adjustmentId = (int)($_POST['adjustment_id'] ?? 0);
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($correctionAction === 'resubmit') {
             $adjustmentId = (int)($_POST['adjustment_id'] ?? 0);
             $stockIssueService->resubmitReport($adjustmentId, $cashierId);
-            $message = "Report #{$adjustmentId} resubmitted for review. Inventory Managers were notified.";
+            $message = "Report #{$adjustmentId} resubmitted for review.";
             log_activity($pdo, $cashierId, 'Stock issue resubmitted', 'Inventory Adjustments', $adjustmentId, ['status' => 'returned'], ['status' => 'pending']);
         } else {
             if (!$stockIssueService->getOpenShift($cashierId)) {
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'explanation' => $_POST['explanation'] ?? '',
             ], $cashierId);
 
-            $message = "Stock issue report #{$adjustmentId} submitted for review. Inventory is unchanged until an Inventory Manager approves it.";
+            $message = "Report #{$adjustmentId} submitted for review.";
             log_activity(
                 $pdo,
                 $cashierId,
@@ -75,6 +75,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $history = $stockIssueService->getReportsByCashier((int)$_SESSION['user_id']);
 $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
+
+$counts = [
+    'all' => count($history),
+    'pending' => 0,
+    'returned' => 0,
+    'approved' => 0,
+    'rejected' => 0,
+    'cancelled' => 0,
+];
+foreach ($history as $hItem) {
+    $st = $hItem['status'] ?? '';
+    if (isset($counts[$st])) {
+        $counts[$st]++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,6 +98,7 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Report Stock Issue</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
@@ -92,65 +108,118 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
+            <div class="topbar stock-issues-topbar">
+                <div class="stock-issues-header-info">
+                    <div class="stock-issues-title-row">
+                        <h1><i class="bi bi-clipboard2-x" aria-hidden="true"></i> Report Stock Issue</h1>
+                        <?php if ($openShift): ?>
+                            <span class="stock-shift-badge stock-shift-badge--active" title="Open shift #<?= (int)$openShift['shift_id'] ?>">
+                                <span class="stock-shift-dot" aria-hidden="true"></span> Shift #<?= (int)$openShift['shift_id'] ?> Active
+                            </span>
+                        <?php else: ?>
+                            <span class="stock-shift-badge stock-shift-badge--inactive">
+                                <i class="bi bi-exclamation-circle" aria-hidden="true"></i> Shift Required
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <p class="page-subtitle">Record damaged, missing, or expired stock for manager review.</p>
+                </div>
+                <div class="stock-issues-topbar-actions">
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">
+                        <i class="bi bi-arrow-left" aria-hidden="true"></i> Return to POS
+                    </a>
+                </div>
+            </div>
+
             <?php if ($message): ?>
-                <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
+                <div class="message success" role="status"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> <?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
 
             <?php if ($error): ?>
-                <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
+                <div class="message error" role="alert"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> <?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
+            <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
+                <?php if ($notice !== ''): ?>
+                    <script>document.addEventListener('DOMContentLoaded', () => RetailMindUI.toast(<?= json_encode($notice, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($noticeType) ?>, undefined, 4300));</script>
+                <?php endif; ?>
+            <?php endforeach; ?>
+
             <?php if (!$openShift): ?>
-                <div class="workflow-notice" role="note" data-rm-alert-processed="1">
-                    <div>
-                        <h2>Cashier Shift required</h2>
-                        <p>You do not have an active cashier shift. Open a shift before reporting stock issues.</p>
+                <div class="workflow-notice stock-shift-notice" role="note" data-rm-alert-processed="1">
+                    <div class="stock-shift-notice-icon" aria-hidden="true">
+                        <i class="bi bi-shield-lock-fill"></i>
                     </div>
-                    <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">Go to Cashier Shift</a>
+                    <div class="stock-shift-notice-content">
+                        <h2>Shift Required</h2>
+                        <p>Start a shift to submit new reports. Existing reports remain viewable below.</p>
+                    </div>
+                    <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i> Open Shift
+                    </a>
                 </div>
             <?php endif; ?>
 
-            <div class="report-form">
-                <h2>New Stock Issue Report</h2>
+            <div class="report-form stock-issue-card">
+                <div class="stock-card-header">
+                    <h2>New Report</h2>
+                </div>
                 <form method="POST" id="stock-issue-form" <?= $openShift ? '' : 'aria-disabled="true"' ?>>
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                     <input type="hidden" name="product_id" id="product_id" value="">
 
-                    <div class="form-section">
-                        <h3>1. Identify the product</h3>
-                        <div class="form-grid">
+                    <div class="form-section stock-step-section">
+                        <div class="stock-step-header">
+                            <h3>Product</h3>
+                        </div>
+                        <div class="form-grid stock-inputs-grid">
                             <div class="form-group">
-                                <label for="barcode-input">Barcode scan</label>
-                                <input type="text" id="barcode-input" placeholder="Scan or type a barcode, then press Enter" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                <label for="barcode-input"><i class="bi bi-upc-scan" aria-hidden="true"></i> Barcode</label>
+                                <div class="input-with-icon">
+                                    <i class="bi bi-upc-scan input-icon" aria-hidden="true"></i>
+                                    <input type="text" id="barcode-input" placeholder="Scan or enter barcode" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label for="product-search">Search products</label>
-                                <input type="search" id="product-search" list="stock-issue-products" placeholder="Type at least one letter or number" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                <label for="product-search"><i class="bi bi-search" aria-hidden="true"></i> Search</label>
+                                <div class="input-with-icon">
+                                    <i class="bi bi-search input-icon" aria-hidden="true"></i>
+                                    <input type="search" id="product-search" list="stock-issue-products" placeholder="Name, barcode, or SKU" autocomplete="off" <?= $openShift ? '' : 'disabled' ?>>
+                                </div>
                                 <datalist id="stock-issue-products"></datalist>
                             </div>
                         </div>
                         <div id="product-results" class="search-results" aria-live="polite"></div>
-                        <div id="selected-product" class="adjustment-card" role="status" hidden>
-                            <div class="adjustment-header">
-                                <div>
+                        <div id="selected-product" class="adjustment-card selected-product-box" role="status" hidden>
+                            <div class="selected-product-main">
+                                <div class="selected-product-avatar" aria-hidden="true">
+                                    <i class="bi bi-box-seam-fill"></i>
+                                </div>
+                                <div class="selected-product-meta">
                                     <div class="adjustment-product" id="selected-product-name"></div>
-                                    <div class="adjustment-sku" id="selected-product-code"></div>
+                                    <div class="adjustment-sku-row">
+                                        <span class="adjustment-sku-chip"><i class="bi bi-upc" aria-hidden="true"></i> <span id="selected-product-code"></span></span>
+                                    </div>
                                 </div>
                                 <div class="selected-product-actions">
-                                    <div class="adjustment-qty" id="selected-product-stock"></div>
-                                    <button type="button" class="btn btn-secondary" id="clear-product">Change product</button>
+                                    <div class="stock-level-chip" id="selected-product-stock"></div>
+                                    <button type="button" class="btn btn-secondary" id="clear-product">
+                                        <i class="bi bi-x-circle" aria-hidden="true"></i> Change
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="form-section">
-                        <h3>2. Describe the issue</h3>
-                        <div class="form-grid">
+                    <div class="form-section stock-step-section">
+                        <div class="stock-step-header">
+                            <h3>Issue Details</h3>
+                        </div>
+                        <div class="form-grid stock-details-grid">
                             <div class="form-group">
                                 <label for="category" class="required">Issue type</label>
                                 <select name="category" id="category" required <?= $openShift ? '' : 'disabled' ?>>
-                                    <option value="">-- Select Type --</option>
+                                    <option value="">Select type</option>
                                     <option value="damaged">Damaged</option>
                                     <option value="missing">Missing / Lost</option>
                                     <option value="expired">Expired</option>
@@ -160,116 +229,175 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                             <div class="form-group">
                                 <label for="form" class="required">Stock form</label>
                                 <select name="form" id="form" required <?= $openShift ? '' : 'disabled' ?>>
-                                    <option value="piece">Loose Piece(s)</option>
-                                    <option value="pack" id="form-option-pack" disabled>Sealed Pack(s)</option>
+                                    <option value="piece">Loose pieces</option>
+                                    <option value="pack" id="form-option-pack" disabled>Sealed packs</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="quantity" class="required">Quantity affected</label>
-                                <input type="number" name="quantity" id="quantity" min="1" step="1" required <?= $openShift ? '' : 'disabled' ?>>
+                                <label for="quantity" class="required">Quantity</label>
+                                <input type="number" name="quantity" id="quantity" min="1" step="1" placeholder="1" required <?= $openShift ? '' : 'disabled' ?>>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label for="explanation" class="required">Explanation</label>
-                            <textarea name="explanation" id="explanation" placeholder="Describe what happened, when discovered, any relevant details..." required <?= $openShift ? '' : 'disabled' ?>></textarea>
+                        <div class="form-group stock-explanation-group">
+                            <label for="explanation" class="required">Reason</label>
+                            <textarea name="explanation" id="explanation" placeholder="Reason for discrepancy..." required <?= $openShift ? '' : 'disabled' ?>></textarea>
                         </div>
                     </div>
 
-                    <button type="submit" class="btn-submit" <?= $openShift ? '' : 'disabled' ?>>Submit Report</button>
+                    <div class="stock-form-footer">
+                        <button type="submit" class="btn-submit stock-submit-btn" <?= $openShift ? '' : 'disabled' ?>>
+                            <i class="bi bi-send-fill" aria-hidden="true"></i> Submit Report
+                        </button>
+                    </div>
                 </form>
             </div>
 
             <?php if (!empty($history)): ?>
-                <div class="history-section u-mt-2">
-                    <h2>My Report History</h2>
-
-                    <div class="tabs" role="group" aria-label="Filter report status">
-                        <button type="button" class="tab-link active" aria-pressed="true" onclick="filterByStatus('all', event)">All</button>
-                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('pending', event)">Pending</button>
-                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('returned', event)">Returned</button>
-                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('approved', event)">Approved</button>
-                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('rejected', event)">Rejected</button>
-                        <button type="button" class="tab-link" aria-pressed="false" onclick="filterByStatus('cancelled', event)">Cancelled</button>
+                <div class="history-section u-mt-2 stock-history-workspace">
+                    <div class="stock-history-header">
+                        <h2><i class="bi bi-journal-text" aria-hidden="true"></i> Report History</h2>
                     </div>
 
-                    <p id="report-filter-status" role="status" hidden>No reports match this status. Choose All to see your reports.</p>
-                    <div id="adjustments-list">
+                    <div class="tabs stock-filter-tabs" role="group" aria-label="Filter report status">
+                        <button type="button" class="tab-link stock-tab-pill active" aria-pressed="true" onclick="filterByStatus('all', event)">
+                            All <span class="stock-tab-count"><?= (int)$counts['all'] ?></span>
+                        </button>
+                        <button type="button" class="tab-link stock-tab-pill" aria-pressed="false" onclick="filterByStatus('pending', event)">
+                            Pending <span class="stock-tab-count"><?= (int)$counts['pending'] ?></span>
+                        </button>
+                        <button type="button" class="tab-link stock-tab-pill" aria-pressed="false" onclick="filterByStatus('returned', event)">
+                            Returned <span class="stock-tab-count"><?= (int)$counts['returned'] ?></span>
+                        </button>
+                        <button type="button" class="tab-link stock-tab-pill" aria-pressed="false" onclick="filterByStatus('approved', event)">
+                            Approved <span class="stock-tab-count"><?= (int)$counts['approved'] ?></span>
+                        </button>
+                        <button type="button" class="tab-link stock-tab-pill" aria-pressed="false" onclick="filterByStatus('rejected', event)">
+                            Rejected <span class="stock-tab-count"><?= (int)$counts['rejected'] ?></span>
+                        </button>
+                        <button type="button" class="tab-link stock-tab-pill" aria-pressed="false" onclick="filterByStatus('cancelled', event)">
+                            Cancelled <span class="stock-tab-count"><?= (int)$counts['cancelled'] ?></span>
+                        </button>
+                    </div>
+
+                    <div id="report-filter-status" class="stock-empty-filter" role="status" hidden>
+                        <div class="stock-empty-icon"><i class="bi bi-inbox" aria-hidden="true"></i></div>
+                        <p>No reports in this status.</p>
+                    </div>
+                    <div id="adjustments-list" class="stock-cards-list">
                         <?php foreach ($history as $adj): ?>
-                            <div class="adjustment-card <?= htmlspecialchars($adj['status']) ?>" data-status="<?= htmlspecialchars($adj['status']) ?>">
-                                <div class="adjustment-header">
-                                    <div>
-                                        <div class="adjustment-product"><?= htmlspecialchars($adj['product_name']) ?></div>
-                                        <div class="adjustment-sku"><?= htmlspecialchars($adj['sku']) ?></div>
-                                        <span class="adjustment-type <?= htmlspecialchars($adj['adjustment_type']) ?>">
+                            <div class="adjustment-card stock-report-card status-<?= htmlspecialchars($adj['status']) ?>" data-status="<?= htmlspecialchars($adj['status']) ?>">
+                                <div class="stock-report-top">
+                                    <div class="stock-report-primary">
+                                        <div class="stock-report-title-row">
+                                            <span class="adjustment-product"><?= htmlspecialchars($adj['product_name']) ?></span>
+                                            <span class="stock-sku-badge"><i class="bi bi-upc" aria-hidden="true"></i> <?= htmlspecialchars($adj['sku']) ?></span>
+                                        </div>
+                                        <div class="stock-type-tag stock-type-<?= htmlspecialchars($adj['adjustment_type']) ?>">
+                                            <?php
+                                            $typeIcons = [
+                                                'damaged' => 'bi-exclamation-octagon',
+                                                'missing' => 'bi-search',
+                                                'expired' => 'bi-calendar-x',
+                                                'other' => 'bi-question-circle',
+                                            ];
+                                            $iconClass = $typeIcons[$adj['adjustment_type']] ?? 'bi-tag';
+                                            ?>
+                                            <i class="bi <?= $iconClass ?>" aria-hidden="true"></i>
                                             <?= htmlspecialchars(ucfirst($adj['adjustment_type'])) ?>
-                                        </span>
+                                        </div>
                                     </div>
-                                    <div class="u-text-right">
-                                        <div class="adjustment-qty"><?= htmlspecialchars(StockIssueService::formatIssueQuantity($adj)) ?></div>
-                                        <span class="adjustment-status <?= htmlspecialchars($adj['status']) ?>">
+                                    <div class="stock-report-aside">
+                                        <div class="stock-qty-chip">
+                                            <span class="stock-qty-num"><?= htmlspecialchars(StockIssueService::formatIssueQuantity($adj)) ?></span>
+                                        </div>
+                                        <span class="stock-status-badge status-badge-<?= htmlspecialchars($adj['status']) ?>">
+                                            <?php
+                                            $statusIcons = [
+                                                'pending' => 'bi-clock-fill',
+                                                'returned' => 'bi-arrow-return-left',
+                                                'approved' => 'bi-check-circle-fill',
+                                                'rejected' => 'bi-x-circle-fill',
+                                                'cancelled' => 'bi-slash-circle',
+                                            ];
+                                            $sIcon = $statusIcons[$adj['status']] ?? 'bi-circle';
+                                            ?>
+                                            <i class="bi <?= $sIcon ?>" aria-hidden="true"></i>
                                             <?= htmlspecialchars(ucfirst($adj['status'])) ?>
                                         </span>
                                     </div>
                                 </div>
-                                <div class="adjustment-details">
-                                    <strong>Reported:</strong> <?= htmlspecialchars($adj['reported_at']) ?> |
-                                    <strong>Report ID:</strong> #<?= (int)$adj['adjustment_id'] ?> |
-                                    <strong>Shift:</strong> #<?= (int)$adj['shift_id'] ?>
-                                    <?php if ($adj['status'] !== 'pending'): ?>
-                                        <br><strong>Reviewed by:</strong> <?= htmlspecialchars($adj['reviewer_name'] ?? 'Unknown') ?> at <?= htmlspecialchars(format_display_datetime($adj['approved_at'])) ?>
+                                <div class="stock-report-meta-row">
+                                    <span class="meta-item"><i class="bi bi-calendar3" aria-hidden="true"></i> <?= htmlspecialchars(format_display_datetime($adj['reported_at'])) ?></span>
+                                    <span class="meta-item"><i class="bi bi-hash" aria-hidden="true"></i> Report #<?= (int)$adj['adjustment_id'] ?></span>
+                                    <span class="meta-item"><i class="bi bi-person-badge" aria-hidden="true"></i> Shift #<?= (int)$adj['shift_id'] ?></span>
+                                    <?php if ($adj['status'] !== 'pending' && !empty($adj['approved_at'])): ?>
+                                        <span class="meta-item meta-reviewer"><i class="bi bi-person-check" aria-hidden="true"></i> Reviewed by <?= htmlspecialchars($adj['reviewer_name'] ?? 'Manager') ?> at <?= htmlspecialchars(format_display_datetime($adj['approved_at'])) ?></span>
                                     <?php endif; ?>
                                 </div>
                                 <?php if ($adj['reason']): ?>
-                                    <div class="adjustment-reason">
-                                        <strong>Details:</strong> <?= htmlspecialchars($adj['reason']) ?>
+                                    <div class="stock-report-reason">
+                                        <p class="stock-reason-text"><?= htmlspecialchars($adj['reason']) ?></p>
                                     </div>
                                 <?php endif; ?>
                                 <?php if (!empty($adj['review_notes'])): ?>
-                                    <div class="adjustment-reason">
-                                        <strong>Reviewer note:</strong> <?= htmlspecialchars($adj['review_notes']) ?>
+                                    <div class="stock-reviewer-note <?= $adj['status'] === 'returned' ? 'is-returned-note' : '' ?>">
+                                        <span class="stock-reviewer-label"><i class="bi bi-reply-fill" aria-hidden="true"></i> Reviewer note:</span>
+                                        <p class="stock-reviewer-text"><?= htmlspecialchars($adj['review_notes']) ?></p>
                                     </div>
                                 <?php endif; ?>
                                 <?php if (in_array($adj['status'], ['pending', 'returned'], true)): ?>
-                                    <form method="POST" class="review-form">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-                                        <input type="hidden" name="adjustment_id" value="<?= (int)$adj['adjustment_id'] ?>">
-                                        <div class="form-grid">
-                                            <div class="form-group">
-                                                <label for="edit-category-<?= (int)$adj['adjustment_id'] ?>">Issue type</label>
-                                                <select name="category" id="edit-category-<?= (int)$adj['adjustment_id'] ?>">
-                                                    <?php foreach (['damaged' => 'Damaged', 'missing' => 'Missing / Lost', 'expired' => 'Expired', 'other' => 'Other'] as $value => $label): ?>
-                                                        <option value="<?= $value ?>" <?= $adj['adjustment_type'] === $value ? 'selected' : '' ?>><?= $label ?></option>
-                                                    <?php endforeach; ?>
-                                                </select>
+                                    <details class="stock-edit-details" <?= $adj['status'] === 'returned' ? 'open' : '' ?>>
+                                        <summary class="stock-edit-summary">
+                                            <span><i class="bi bi-pencil-square" aria-hidden="true"></i> <?= $adj['status'] === 'returned' ? 'Edit & Resubmit' : 'Edit Report' ?></span>
+                                            <span class="stock-edit-badge"><?= $adj['status'] === 'returned' ? 'Action Required' : 'Editable' ?></span>
+                                        </summary>
+                                        <form method="POST" class="review-form stock-inline-edit-form">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                            <input type="hidden" name="adjustment_id" value="<?= (int)$adj['adjustment_id'] ?>">
+                                            <div class="form-grid stock-edit-grid">
+                                                <div class="form-group">
+                                                    <label for="edit-category-<?= (int)$adj['adjustment_id'] ?>">Issue type</label>
+                                                    <select name="category" id="edit-category-<?= (int)$adj['adjustment_id'] ?>">
+                                                        <?php foreach (['damaged' => 'Damaged', 'missing' => 'Missing / Lost', 'expired' => 'Expired', 'other' => 'Other'] as $value => $label): ?>
+                                                            <option value="<?= $value ?>" <?= $adj['adjustment_type'] === $value ? 'selected' : '' ?>><?= $label ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="edit-form-<?= (int)$adj['adjustment_id'] ?>">Stock form</label>
+                                                    <select name="form" id="edit-form-<?= (int)$adj['adjustment_id'] ?>">
+                                                        <option value="piece" <?= ($adj['form'] ?? 'piece') === 'piece' ? 'selected' : '' ?>>Loose pieces</option>
+                                                        <?php if (!empty($adj['pack_size']) && (int)$adj['pack_size'] > 1): ?>
+                                                            <option value="pack" <?= ($adj['form'] ?? '') === 'pack' ? 'selected' : '' ?>>Sealed packs (Pack of <?= (int)$adj['pack_size'] ?>)</option>
+                                                        <?php endif; ?>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label for="edit-qty-<?= (int)$adj['adjustment_id'] ?>">Quantity</label>
+                                                    <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= (int)($adj['reported_qty'] ?: abs((int)$adj['adjustment_qty'])) ?>" required>
+                                                </div>
                                             </div>
                                             <div class="form-group">
-                                                <label for="edit-form-<?= (int)$adj['adjustment_id'] ?>">Stock form</label>
-                                                <select name="form" id="edit-form-<?= (int)$adj['adjustment_id'] ?>">
-                                                    <option value="piece" <?= ($adj['form'] ?? 'piece') === 'piece' ? 'selected' : '' ?>>Loose Piece(s)</option>
-                                                    <?php if (!empty($adj['pack_size']) && (int)$adj['pack_size'] > 1): ?>
-                                                        <option value="pack" <?= ($adj['form'] ?? '') === 'pack' ? 'selected' : '' ?>>Sealed Pack(s) (Pack of <?= (int)$adj['pack_size'] ?>)</option>
-                                                    <?php endif; ?>
-                                                </select>
+                                                <label for="edit-expl-<?= (int)$adj['adjustment_id'] ?>">Reason</label>
+                                                <textarea name="explanation" id="edit-expl-<?= (int)$adj['adjustment_id'] ?>" required><?= htmlspecialchars($adj['reason'] ?? '') ?></textarea>
                                             </div>
-                                            <div class="form-group">
-                                                <label for="edit-qty-<?= (int)$adj['adjustment_id'] ?>">Quantity</label>
-                                                <input type="number" name="quantity" id="edit-qty-<?= (int)$adj['adjustment_id'] ?>" min="1" step="1" value="<?= (int)($adj['reported_qty'] ?: abs((int)$adj['adjustment_qty'])) ?>" required>
+                                            <div class="review-actions stock-edit-actions">
+                                                <button type="submit" name="correction_action" value="edit" class="btn-submit">
+                                                    <i class="bi bi-check-lg" aria-hidden="true"></i> Save Changes
+                                                </button>
+                                                <?php if ($adj['status'] === 'pending'): ?>
+                                                    <button type="submit" name="correction_action" value="cancel" class="btn btn-secondary" onclick="return confirm('Cancel this report?')">
+                                                        <i class="bi bi-trash" aria-hidden="true"></i> Cancel
+                                                    </button>
+                                                <?php endif; ?>
+                                                <?php if ($adj['status'] === 'returned'): ?>
+                                                    <button type="submit" name="correction_action" value="resubmit" class="btn-submit btn-resubmit">
+                                                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Resubmit for Review
+                                                    </button>
+                                                <?php endif; ?>
                                             </div>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="edit-expl-<?= (int)$adj['adjustment_id'] ?>">Explanation</label>
-                                            <textarea name="explanation" id="edit-expl-<?= (int)$adj['adjustment_id'] ?>" required><?= htmlspecialchars($adj['reason'] ?? '') ?></textarea>
-                                        </div>
-                                        <div class="review-actions">
-                                            <button type="submit" name="correction_action" value="edit" class="btn-submit">Save Changes</button>
-                                            <?php if ($adj['status'] === 'pending'): ?>
-                                                <button type="submit" name="correction_action" value="cancel" class="btn btn-secondary" onclick="return confirm('Cancel this pending report?')">Cancel Report</button>
-                                            <?php endif; ?>
-                                            <?php if ($adj['status'] === 'returned'): ?>
-                                                <button type="submit" name="correction_action" value="resubmit" class="btn-submit">Resubmit for Review</button>
-                                            <?php endif; ?>
-                                        </div>
-                                    </form>
+                                        </form>
+                                    </details>
                                 <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
@@ -296,10 +424,10 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
             if (!formSelect || !packOpt) return;
             if (packSize && packSize > 1) {
                 packOpt.disabled = false;
-                packOpt.textContent = 'Sealed Pack(s) (Pack of ' + packSize + ')';
+                packOpt.textContent = 'Sealed packs (Pack of ' + packSize + ')';
             } else {
                 packOpt.disabled = true;
-                packOpt.textContent = 'Sealed Pack(s) (N/A)';
+                packOpt.textContent = 'Sealed packs';
                 formSelect.value = 'piece';
             }
         }
@@ -448,8 +576,9 @@ $productsApiUrl = app_url('components/barcodeScanner/apiScanner/products.php');
                 btn.setAttribute('aria-pressed', 'false');
             });
             if (event && event.target) {
-                event.target.classList.add('active');
-                event.target.setAttribute('aria-pressed', 'true');
+                const activeBtn = event.target.closest('.tab-link') || event.target;
+                activeBtn.classList.add('active');
+                activeBtn.setAttribute('aria-pressed', 'true');
             }
             const cards = [...document.querySelectorAll('[data-status]')];
             cards.forEach(card => {
