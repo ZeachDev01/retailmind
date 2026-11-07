@@ -143,11 +143,7 @@ class SalesWorkflowService
             $netTotal = $quote['total'];
             $payment = $this->resolvePayment($paymentMethod, $paymentDetails, $netTotal);
             $saleId = $this->insertSale($userId, $attribution, $sale['total'], $netTotal, $paymentMethod, $payment, $discount);
-            $this->ledger->applyPackOpenings($sale['plans'] ?? [], $saleId, $userId);
-
-            foreach ($sale['items'] as $item) {
-                $this->recordSaleItem($saleId, $item, $userId);
-            }
+            $this->ledger->fulfillSaleInventory($saleId, $sale, $userId);
 
             // The customer copy is committed with the sale and inventory work.
             (new ReceiptEngine($this->pdo))->preserveSale($saleId);

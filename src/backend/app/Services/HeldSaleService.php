@@ -107,6 +107,23 @@ class HeldSaleService
     }
 
     /**
+     * Unresolved held sales belonging to one shift, in order of creation.
+     */
+    public function getUnresolvedForShift(int $shiftId): array
+    {
+        $placeholders = implode(',', array_fill(0, count(self::UNRESOLVED_STATUSES), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT held_sale_id, reference_no, customer_label, status, item_count, total_amount, created_at, expires_at
+             FROM held_sales
+             WHERE shift_id = ? AND status IN ({$placeholders})
+             ORDER BY created_at, held_sale_id"
+        );
+        $stmt->execute(array_merge([$shiftId], self::UNRESOLVED_STATUSES));
+
+        return array_map([$this, 'shapeRow'], $stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
      * Holds a cart under the authenticated Cashier's own open Cashier Shift.
      *
      * Requested lines remain intact, alongside a current availability review.

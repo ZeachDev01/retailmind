@@ -646,29 +646,7 @@ class CashierShiftService
      */
     public function unresolvedHeldSales(int $shiftId): array
     {
-        $placeholders = implode(',', array_fill(0, count(HeldSaleService::UNRESOLVED_STATUSES), '?'));
-        $stmt = $this->pdo->prepare(
-            "SELECT held_sale_id, reference_no, customer_label, status, item_count, total_amount, created_at, expires_at
-             FROM held_sales
-             WHERE shift_id = ? AND status IN ({$placeholders})
-             ORDER BY created_at, held_sale_id"
-        );
-        $stmt->execute(array_merge([$shiftId], HeldSaleService::UNRESOLVED_STATUSES));
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        return array_map(static function (array $row): array {
-            return [
-                'id' => (int)$row['held_sale_id'],
-                'held_sale_id' => (int)$row['held_sale_id'],
-                'reference_no' => (string)$row['reference_no'],
-                'customer_label' => $row['customer_label'],
-                'status' => (string)$row['status'],
-                'item_count' => (int)$row['item_count'],
-                'total_amount' => (float)$row['total_amount'],
-                'created_at' => $row['created_at'],
-                'expires_at' => $row['expires_at'],
-            ];
-        }, $rows);
+        return (new HeldSaleService($this->pdo, $this, $this->policy))->getUnresolvedForShift($shiftId);
     }
 
     /** The owning Cashier closes their own unlocked shift. */

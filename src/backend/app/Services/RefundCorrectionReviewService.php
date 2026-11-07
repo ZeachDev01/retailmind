@@ -11,6 +11,8 @@ use RuntimeException;
 use Throwable;
 use App\Store\StoreWriteGate;
 
+require_once __DIR__ . '/BatchInventoryLedger.php';
+
 class RefundCorrectionReviewService
 {
     public const STATUS_REVIEWED_OUTSTANDING = 'Reviewed—correction outstanding';
@@ -362,22 +364,10 @@ class RefundCorrectionReviewService
                 throw new DomainException('The stock correction must match the approved Product and quantity.');
             }
 
-            // Execute inventory adjustment via ProductService
-            $productService = new \ProductService($this->pdo);
-            $productService->adjustStock([
-                'product_id' => $productId,
-                'qty_change' => $qtyChange,
-                'adjustment_reason' => $reason,
-            ], $actorId);
-
-            // Find created stock movement id
-            $smStmt = $this->pdo->prepare("
-                SELECT movement_id FROM stock_movements
-                WHERE moved_by = ? AND product_id = ?
-                ORDER BY movement_id DESC LIMIT 1
-            ");
-            $smStmt->execute([$actorId, $productId]);
-            $movementId = (int)$smStmt->fetchColumn();
+            // Execute inventory adjustment via BatchInventoryLedger (deterministic movement ID, no race-prone SELECT)
+            $ledger = new BatchInventoryLedger($this->pdo);
+            $mutation = $ledger->recordAdjustment($productId, $qtyChange, $reason, $actorId);
+            $movementId = (int)$mutation['movement_id'];
 
             // Record accountable inventory_adjustment record
             $this->pdo->prepare("

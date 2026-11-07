@@ -886,6 +886,51 @@ class BatchInventoryLedger
     }
 
     /**
+     * Fulfills all sale items and inventory depletion for a sale in one cohesive transaction step.
+     */
+    public function fulfillSaleInventory(int $saleId, array $sale, int $userId): void
+    {
+        $this->applyPackOpenings($sale['plans'] ?? [], $saleId, $userId);
+
+        $hasSellingForm = $this->hasColumn('sale_items', 'selling_form');
+        $hasPackSize = $this->hasColumn('sale_items', 'pack_size');
+
+        foreach ($sale['items'] as $item) {
+            $columns = ['sale_id', 'product_id', 'quantity', 'unit_price', 'subtotal'];
+            $placeholders = ['?', '?', '?', '?', '?'];
+            $values = [
+                $saleId,
+                $item['product_id'],
+                $item['quantity'],
+                $item['unit_price'],
+                $item['subtotal'],
+            ];
+
+            $sellingForm = $item['selling_form'] ?? 'piece';
+            $packSize = isset($item['pack_size']) && (int)$item['pack_size'] > 0 ? (int)$item['pack_size'] : null;
+
+            if ($hasSellingForm) {
+                $columns[] = 'selling_form';
+                $placeholders[] = '?';
+                $values[] = $sellingForm;
+            }
+            if ($hasPackSize) {
+                $columns[] = 'pack_size';
+                $placeholders[] = '?';
+                $values[] = $packSize;
+            }
+
+            $stmt = $this->pdo->prepare(
+                "INSERT INTO sale_items (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")"
+            );
+            $stmt->execute($values);
+            $saleItemId = (int)$this->pdo->lastInsertId();
+
+            $this->depleteSaleItem($saleId, $saleItemId, $item, $userId);
+        }
+    }
+
+    /**
      * Depletes batch allocations, records sale item batch link, and decrements inventory for a sale item line.
      */
     public function depleteSaleItem(int $saleId, int $saleItemId, array $item, int $userId): void
@@ -1116,8 +1161,163 @@ class BatchInventoryLedger
             $remainingToRestore -= $restore;
         }
 
-        if ($remainingToRestore > 0) {
-            throw new DomainException('Returned quantity exceeds recorded sale item batch allocations.');
+        if ($hasBatchForms && $sellingForm === 'pack' && $remainingToRestore > 0) {
+            throw new DomainException('Sales Pack batch allocation is incomplete and cannot be restocked.');
+        }
+    }
+
+    /**
+     * Records a direct stock adjustment (positive or negative) with strict FEFO batch allocation.
+     *
+     * @param int $productId
+     * @param int $qtyChange Positive (addition) or negative (deduction)
+     * @param string $reason Reason for adjustment
+     * @param int $userId Actor applying the adjustment
+     * @return array Mutation summary including previous and updated stock, and movement ID
+     */
+    public function recordAdjustment(int $productId, int $qtyChange, string $reason, int $userId): array
+    {
+        if ($productId <= 0) {
+            throw new RuntimeException('Invalid product selected.');
+        }
+        if ($qtyChange === 0) {
+            throw new RuntimeException('Quantity change cannot be zero.');
+        }
+
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
+        $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+
+        $started = !$this->pdo->inTransaction();
+        if ($started) {
+            \App\Store\StoreWriteGate::begin($this->pdo);
+        }
+
+        try {
+            $invStmt = $this->pdo->prepare(
+                "SELECT quantity_on_hand FROM inventory WHERE product_id = ?{$this->forUpdate()}"
+            );
+            $invStmt->execute([$productId]);
+            $inventory = $invStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$inventory) {
+                throw new RuntimeException('Inventory record not found for selected product.');
+            }
+
+            $currentStock = (int)$inventory['quantity_on_hand'];
+            if ($currentStock + $qtyChange < 0) {
+                throw new RuntimeException('Adjustment would take stock below zero.');
+            }
+
+            $stmt = $this->pdo->prepare(
+                "UPDATE inventory SET quantity_on_hand = quantity_on_hand + ?
+                 WHERE product_id = ? AND quantity_on_hand + ? >= 0"
+            );
+            $stmt->execute([$qtyChange, $productId, $qtyChange]);
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('Adjustment would take stock below zero.');
+            }
+
+            $hasFormCols = $this->hasColumn('product_batches', 'sealed_quantity') && $this->hasColumn('product_batches', 'loose_quantity');
+
+            if ($qtyChange > 0) {
+                $nowManila = (new \DateTimeImmutable('now', new \DateTimeZone(\App\Services\PhilippineTime::ZONE)))->format('Y-m-d H:i:s');
+                if ($hasFormCols) {
+                    $this->pdo->prepare(
+                        "INSERT INTO product_batches (product_id, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date, date_received)
+                         VALUES (?, ?, ?, 0, ?, NULL, ?)"
+                    )->execute([$productId, $qtyChange, $qtyChange, $qtyChange, $nowManila]);
+                } else {
+                    $this->pdo->prepare(
+                        "INSERT INTO product_batches (product_id, quantity, remaining_quantity, expiration_date, date_received)
+                         VALUES (?, ?, ?, NULL, ?)"
+                    )->execute([$productId, $qtyChange, $qtyChange, $nowManila]);
+                }
+            } elseif ($qtyChange < 0) {
+                $deductRemaining = abs($qtyChange);
+                $looseSelect = $hasFormCols ? ', loose_quantity' : '';
+                $batchStmt = $this->pdo->prepare(
+                    "SELECT batch_id, remaining_quantity{$looseSelect}
+                     FROM product_batches
+                     WHERE product_id = ? AND remaining_quantity > 0
+                     ORDER BY
+                         CASE WHEN expiration_date IS NULL THEN 1 ELSE 0 END,
+                         expiration_date ASC,
+                         date_received ASC,
+                         batch_id ASC" . $this->forUpdate()
+                );
+                $batchStmt->execute([$productId]);
+                $batches = $batchStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                if ($hasFormCols) {
+                    $availableLoose = 0;
+                    foreach ($batches as $batch) {
+                        $availableLoose += max(0, (int)$batch['loose_quantity']);
+                    }
+                    if ($availableLoose < $deductRemaining) {
+                        throw new RuntimeException(
+                            'This deduction needs ' . $deductRemaining . ' loose pieces but only ' . $availableLoose
+                            . ' are counted as loose. Sealed packs are never opened automatically; record a physical count or a Stock Issue instead.'
+                        );
+                    }
+                }
+
+                foreach ($batches as $batch) {
+                    if ($deductRemaining <= 0) {
+                        break;
+                    }
+                    if ($hasFormCols) {
+                        $take = min($deductRemaining, max(0, (int)$batch['loose_quantity']));
+                        if ($take > 0) {
+                            $batchUpd = $this->pdo->prepare(
+                                "UPDATE product_batches
+                                 SET remaining_quantity = remaining_quantity - ?, loose_quantity = loose_quantity - ?
+                                 WHERE batch_id = ? AND remaining_quantity >= ? AND loose_quantity >= ?"
+                            );
+                            $batchUpd->execute([$take, $take, (int)$batch['batch_id'], $take, $take]);
+                            if ($batchUpd->rowCount() === 0) {
+                                throw new RuntimeException("Concurrent change detected while adjusting batch #{$batch['batch_id']}.");
+                            }
+                            $deductRemaining -= $take;
+                        }
+                        continue;
+                    }
+                    $take = min($deductRemaining, (int)$batch['remaining_quantity']);
+                    if ($take > 0) {
+                        $batchUpd = $this->pdo->prepare(
+                            "UPDATE product_batches SET remaining_quantity = remaining_quantity - ? WHERE batch_id = ? AND remaining_quantity >= ?"
+                        );
+                        $batchUpd->execute([$take, (int)$batch['batch_id'], $take]);
+                        if ($batchUpd->rowCount() === 0) {
+                            throw new RuntimeException("Concurrent change detected while adjusting batch #{$batch['batch_id']}.");
+                        }
+                        $deductRemaining -= $take;
+                    }
+                }
+
+                if (!empty($batches) && $deductRemaining > 0) {
+                    throw new RuntimeException('Insufficient batch stock to satisfy adjustment deduction.');
+                }
+            }
+
+            $this->pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_by) VALUES (?, ?, 'adjustment', ?)")
+                ->execute([$productId, $qtyChange, $userId]);
+            $movementId = (int)$this->pdo->lastInsertId();
+
+            if ($started) {
+                $this->pdo->commit();
+            }
+
+            return [
+                'product_id' => $productId,
+                'qty_change' => $qtyChange,
+                'previous_quantity' => $currentStock,
+                'updated_quantity' => $currentStock + $qtyChange,
+                'movement_id' => $movementId,
+            ];
+        } catch (\Throwable $e) {
+            if ($started && $this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
     }
 

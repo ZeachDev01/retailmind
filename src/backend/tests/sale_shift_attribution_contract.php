@@ -56,6 +56,7 @@ try {
     $pdo->exec('CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         full_name TEXT NOT NULL,
+        display_name TEXT NULL,
         username TEXT NULL,
         password_hash TEXT NULL,
         role_id INTEGER NULL,
@@ -196,6 +197,7 @@ try {
         ends_at TEXT NULL
     )");
     $pdo->exec("CREATE TABLE fiscal_periods (period_id INTEGER PRIMARY KEY AUTOINCREMENT, period_name TEXT NOT NULL, start_date TEXT, end_date TEXT, status TEXT NOT NULL DEFAULT 'open')");
+    $pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES ('FY2026', '2026-01-01', '2026-12-31', 'open')");
     $pdo->exec('CREATE TABLE fiscal_period_locks (lock_id INTEGER PRIMARY KEY AUTOINCREMENT, period_id INTEGER NOT NULL, table_name TEXT NULL)');
     $pdo->exec("CREATE TABLE activity_log (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,7 +228,7 @@ try {
     // which only runs for oversight roles, out of this Store population.
     $insertUser = static function (string $name) use ($pdo): int {
         $roleId = (int)$pdo->query("SELECT role_id FROM roles WHERE role_name = 'cashier'")->fetchColumn();
-        $pdo->prepare("INSERT INTO users (full_name, role_id, status) VALUES (?, ?, 'active')")->execute([$name, $roleId]);
+        $pdo->prepare("INSERT INTO users (full_name, display_name, role_id, status) VALUES (?, ?, ?, 'active')")->execute([$name, $name, $roleId]);
         return (int)$pdo->lastInsertId();
     };
 
