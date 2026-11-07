@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Forecasting;
 
+require_once __DIR__ . '/ForecastAggregateReader.php';
+
 use PDO;
 use Throwable;
 use DateTimeImmutable;
@@ -314,20 +316,11 @@ class ReplenishmentQueueService
             // Degrade gracefully
         }
 
-        $hasTargetDate = false;
-        $hasLimitationMarker = false;
-        try {
-            $this->pdo->query("SELECT target_date, limitation_marker FROM demand_forecasts LIMIT 0");
-            $hasTargetDate = true;
-            $hasLimitationMarker = true;
-        } catch (Throwable $e) {
-            // Column may not exist in lightweight test fixtures
-        }
+        $reader = new ForecastAggregateReader($this->pdo);
+        $aggregates = $reader->read($jobId, false);
+        $leadTimeDemands = $reader->readLeadTimeDemand($jobId);
 
-        $targetDateCheck = $hasTargetDate ? 'AND COUNT(DISTINCT df.target_date) = 28' : '';
-        $limitationSelect = $hasLimitationMarker ? 'MAX(df.limitation_marker) as limitation_marker,' : 'NULL as limitation_marker,';
-
-        // 1. Fetch products and forecasts (goods count only when received; no supplier joins or open POs)
+        // 1. Fetch products (goods count only when received; no supplier joins or open POs)
         $stmt = $this->pdo->prepare("
             SELECT 
                 p.product_id,
@@ -335,55 +328,13 @@ class ReplenishmentQueueService
                 p.product_name,
                 COALESCE(i.quantity_on_hand, 0) AS current_stock,
                 COALESCE(p.supplier_lead_time_days, 7) AS lead_time_days,
-                COALESCE(p.minimum_order_quantity, 1) AS moq,
-                
-                fc.has_forecast,
-                fc.f7 AS forecast_7_day,
-                fc.f14 AS forecast_14_day,
-                fc.f28 AS forecast_28_day,
-                fc.f_lead AS forecast_lead_time,
-                fc.readiness_level,
-                fc.forecast_origin,
-                fc.complete_forecast,
-                fc.model_version,
-                fc.limitation_marker
-                
+                COALESCE(p.minimum_order_quantity, 1) AS moq
             FROM products p
             LEFT JOIN inventory i ON p.product_id = i.product_id
-            
-            LEFT JOIN (
-                SELECT 
-                    df.product_id,
-                    1 AS has_forecast,
-                    MAX(df.readiness_level) as readiness_level,
-                    MAX(df.forecast_origin) as forecast_origin,
-                    MAX(df.model_version) as model_version,
-                    {$limitationSelect}
-                    CASE WHEN COUNT(*) = 28 AND COUNT(DISTINCT df.horizon_day) = 28
-                        {$targetDateCheck}
-                        AND MIN(df.horizon_day) = 1 AND MAX(df.horizon_day) = 28
-                        AND MIN(df.predicted_units) >= 0 AND COUNT(df.predicted_units) = 28
-                        AND COUNT(DISTINCT df.forecast_origin) = 1
-                        AND COUNT(DISTINCT df.model_version) = 1
-                        AND COUNT(df.forecast_origin) = 28 AND COUNT(df.model_version) = 28
-                        AND COUNT(df.readiness_level) = 28
-                        THEN 1 ELSE 0 END as complete_forecast,
-                    SUM(CASE WHEN df.horizon_day <= 7 THEN df.predicted_units ELSE 0 END) as f7,
-                    SUM(CASE WHEN df.horizon_day <= 14 THEN df.predicted_units ELSE 0 END) as f14,
-                    SUM(CASE WHEN df.horizon_day <= 28 THEN df.predicted_units ELSE 0 END) as f28,
-                    SUM(CASE WHEN df.horizon_day <= COALESCE(
-                        (SELECT supplier_lead_time_days FROM products WHERE product_id = df.product_id LIMIT 1),
-                        7
-                    ) THEN df.predicted_units ELSE 0 END) as f_lead
-                FROM demand_forecasts df
-                WHERE df.job_id = :job_id
-                GROUP BY df.product_id
-            ) fc ON fc.product_id = p.product_id
-            
             WHERE p.status = 'active'
         ");
         
-        $stmt->execute(['job_id' => $jobId]);
+        $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         $queue = [];
@@ -394,9 +345,10 @@ class ReplenishmentQueueService
             $leadTimeDays = max(1, (int)($row['lead_time_days'] ?? 7));
             $moq = max(1, (int)($row['moq'] ?? 1));
 
-            $hasForecast = !empty($row['has_forecast']) && $row['readiness_level'] !== null;
-            $isComplete = !empty($row['complete_forecast']);
-            $isSupportedReadiness = in_array($row['readiness_level'], ['Low', 'Medium', 'High'], true);
+            $forecast = $aggregates[$productId] ?? null;
+            $hasForecast = $forecast !== null && $forecast['readiness_level'] !== null;
+            $isComplete = $forecast !== null && !empty($forecast['complete_forecast']);
+            $isSupportedReadiness = $hasForecast && in_array($forecast['readiness_level'], ['Low', 'Medium', 'High'], true);
             $hasUsableForecast = $hasForecast && $isComplete && $isSupportedReadiness;
             
             if (!$hasUsableForecast) {
@@ -414,10 +366,10 @@ class ReplenishmentQueueService
                     !$hasForecast ? 'No forecast available' : (!$isComplete ? 'Incomplete forecast' : 'Insufficient readiness')
                 );
             } else {
-                $f7 = (int)$row['forecast_7_day'];
-                $f14 = (int)$row['forecast_14_day'];
-                $f28 = (int)$row['forecast_28_day'];
-                $leadTimeDemand = (int)$row['forecast_lead_time'];
+                $f7 = (int)$forecast['forecast_7_day'];
+                $f14 = (int)$forecast['forecast_14_day'];
+                $f28 = (int)$forecast['forecast_28_day'];
+                $leadTimeDemand = (int)($leadTimeDemands[$productId] ?? 0);
                 $exposure = $currentStock - $leadTimeDemand;
 
                 // Urgency rule: Urgent/Watch/Covered apply only where supporting forecast evidence exists
@@ -463,11 +415,11 @@ class ReplenishmentQueueService
                 'forecast_14_day' => $f14,
                 'forecast_28_day' => $f28,
                 'forecast_lead_time' => $leadTimeDemand,
-                'readiness_level' => $row['readiness_level'],
-                'forecast_origin' => $row['forecast_origin'],
-                'complete_forecast' => (bool)$row['complete_forecast'],
-                'model_version' => $row['model_version'],
-                'limitation_marker' => $row['limitation_marker'],
+                'readiness_level' => $forecast['readiness_level'] ?? null,
+                'forecast_origin' => $forecast['forecast_origin'] ?? null,
+                'complete_forecast' => $forecast !== null && (bool)$forecast['complete_forecast'],
+                'model_version' => $forecast['model_version'] ?? null,
+                'limitation_marker' => $forecast['limitation_marker'] ?? null,
                 'stock_exposure' => $exposure,
                 'urgency_label' => $urgency,
                 'recommended_quantity' => $recommendedQty,

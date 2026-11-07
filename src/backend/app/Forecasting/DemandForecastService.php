@@ -6,6 +6,7 @@ namespace App\Forecasting;
 require_once __DIR__ . '/StoreModelGovernanceService.php';
 require_once __DIR__ . '/CandidateEvaluationService.php';
 require_once __DIR__ . '/ForecastingSchedulerService.php';
+require_once __DIR__ . '/ForecastAggregateReader.php';
 
 use PDO;
 use InvalidArgumentException;
@@ -142,8 +143,9 @@ class DemandForecastService
         }
 
         try {
-            $hasTargetDate = $this->hasColumn('demand_forecasts', 'target_date');
-            $hasLimitation = $this->hasColumn('demand_forecasts', 'limitation_marker');
+            $reader = $this->aggregateReader();
+            $hasTargetDate = $reader->hasTargetDate();
+            $hasLimitation = $reader->hasLimitationMarker();
 
             if ($hasTargetDate && $hasLimitation) {
                 $stmt = $this->pdo->prepare("
@@ -196,63 +198,29 @@ class DemandForecastService
 
     public function getForecastAggregates(int $jobId): array
     {
-        $hasTargetDate = $this->hasColumn('demand_forecasts', 'target_date');
-        $targetDateCheck = $hasTargetDate ? 'AND COUNT(DISTINCT target_date) = 28' : '';
-        $limitationSelect = $this->hasColumn('demand_forecasts', 'limitation_marker') ? 'MAX(limitation_marker) as limitation_marker,' : 'NULL as limitation_marker,';
-
-        $stmt = $this->pdo->prepare("
-            SELECT 
-                product_id,
-                MAX(forecast_origin) as forecast_origin,
-                MAX(model_version) as model_version,
-                MAX(readiness_level) as readiness_level,
-                {$limitationSelect}
-                SUM(CASE WHEN horizon_day <= 7 THEN predicted_units ELSE 0 END) as forecast_7_day,
-                SUM(CASE WHEN horizon_day <= 14 THEN predicted_units ELSE 0 END) as forecast_14_day,
-                SUM(CASE WHEN horizon_day <= 28 THEN predicted_units ELSE 0 END) as forecast_28_day
-            FROM demand_forecasts
-            WHERE job_id = :job_id
-              AND EXISTS (SELECT 1 FROM ml_jobs j WHERE j.job_id = demand_forecasts.job_id
-                          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded')
-            GROUP BY product_id
-            HAVING COUNT(*) = 28
-               AND COUNT(DISTINCT horizon_day) = 28
-               {$targetDateCheck}
-               AND MIN(horizon_day) = 1
-               AND MAX(horizon_day) = 28
-               AND MIN(predicted_units) >= 0
-               AND COUNT(predicted_units) = 28
-               AND COUNT(DISTINCT forecast_origin) = 1
-               AND COUNT(DISTINCT model_version) = 1
-               AND COUNT(forecast_origin) = 28
-               AND COUNT(model_version) = 28
-               AND COUNT(readiness_level) = 28
-        ");
-        $stmt->execute(['job_id' => $jobId]);
-        
         $results = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $row['product_id'] = (int)$row['product_id'];
-            $row['forecast_7_day'] = (int)$row['forecast_7_day'];
-            $row['forecast_14_day'] = (int)$row['forecast_14_day'];
-            $row['forecast_28_day'] = (int)$row['forecast_28_day'];
-            $results[] = $row;
+        foreach ($this->aggregateReader()->read($jobId) as $row) {
+            if (empty($row['complete_forecast'])) {
+                continue;
+            }
+            $results[] = [
+                'product_id' => $row['product_id'],
+                'forecast_origin' => $row['forecast_origin'],
+                'model_version' => $row['model_version'],
+                'readiness_level' => $row['readiness_level'],
+                'limitation_marker' => $row['limitation_marker'],
+                'forecast_7_day' => $row['forecast_7_day'],
+                'forecast_14_day' => $row['forecast_14_day'],
+                'forecast_28_day' => $row['forecast_28_day'],
+            ];
         }
-        
+
         return $results;
     }
     
     public function getLatestSuccessfulJobId(): ?int
     {
-        $stmt = $this->pdo->query("
-            SELECT job_id 
-            FROM ml_jobs 
-            WHERE trigger_type = 'forecast_generation' AND status = 'succeeded' 
-            ORDER BY completed_at DESC, job_id DESC 
-            LIMIT 1
-        ");
-        $jobId = $stmt->fetchColumn();
-        return $jobId !== false ? (int)$jobId : null;
+        return $this->aggregateReader()->latestSuccessfulJobId();
     }
 
     public function getLatestJob(): ?array
@@ -934,56 +902,29 @@ class DemandForecastService
 
     public function getProductForecast(int $jobId, int $productId): array
     {
-        $hasTargetDate = $this->hasColumn('demand_forecasts', 'target_date');
-        $targetDateCheck = $hasTargetDate ? 'AND COUNT(DISTINCT target_date) = 28' : '';
-        $limitationSelect = $this->hasColumn('demand_forecasts', 'limitation_marker') ? 'MAX(limitation_marker) as limitation_marker,' : 'NULL as limitation_marker,';
+        $reader = $this->aggregateReader();
+        $record = $reader->read($jobId)[$productId] ?? null;
 
-        $stmt = $this->pdo->prepare("
-            SELECT 
-                product_id,
-                MAX(forecast_origin) as forecast_origin,
-                MAX(model_version) as model_version,
-                MAX(readiness_level) as readiness_level,
-                {$limitationSelect}
-                SUM(CASE WHEN horizon_day <= 7 THEN predicted_units ELSE 0 END) as forecast_7_day,
-                SUM(CASE WHEN horizon_day <= 14 THEN predicted_units ELSE 0 END) as forecast_14_day,
-                SUM(CASE WHEN horizon_day <= 28 THEN predicted_units ELSE 0 END) as forecast_28_day
-            FROM demand_forecasts
-            WHERE job_id = :job_id AND product_id = :product_id
-              AND EXISTS (SELECT 1 FROM ml_jobs j WHERE j.job_id = demand_forecasts.job_id
-                          AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded')
-            GROUP BY product_id
-            HAVING COUNT(*) = 28
-               AND COUNT(DISTINCT horizon_day) = 28
-               {$targetDateCheck}
-               AND MIN(horizon_day) = 1
-               AND MAX(horizon_day) = 28
-               AND MIN(predicted_units) >= 0
-               AND COUNT(predicted_units) = 28
-               AND COUNT(DISTINCT forecast_origin) = 1
-               AND COUNT(DISTINCT model_version) = 1
-               AND COUNT(forecast_origin) = 28
-               AND COUNT(model_version) = 28
-               AND COUNT(readiness_level) = 28
-        ");
-        $stmt->execute(['job_id' => $jobId, 'product_id' => $productId]);
-        
-        $aggregates = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if ($aggregates) {
-            $aggregates['product_id'] = (int)$aggregates['product_id'];
-            $aggregates['forecast_7_day'] = (int)$aggregates['forecast_7_day'];
-            $aggregates['forecast_14_day'] = (int)$aggregates['forecast_14_day'];
-            $aggregates['forecast_28_day'] = (int)$aggregates['forecast_28_day'];
-        } else {
+        if ($record === null || empty($record['complete_forecast'])) {
             return [
                 'aggregates' => null,
                 'daily' => []
             ];
         }
 
-        $dailyTarget = $hasTargetDate ? 'target_date,' : '';
-        $dailyLimit = $this->hasColumn('demand_forecasts', 'limitation_marker') ? 'limitation_marker' : 'NULL as limitation_marker';
+        $aggregates = [
+            'product_id' => $record['product_id'],
+            'forecast_origin' => $record['forecast_origin'],
+            'model_version' => $record['model_version'],
+            'readiness_level' => $record['readiness_level'],
+            'limitation_marker' => $record['limitation_marker'],
+            'forecast_7_day' => $record['forecast_7_day'],
+            'forecast_14_day' => $record['forecast_14_day'],
+            'forecast_28_day' => $record['forecast_28_day'],
+        ];
+
+        $dailyTarget = $reader->hasTargetDate() ? 'target_date,' : '';
+        $dailyLimit = $reader->hasLimitationMarker() ? 'limitation_marker' : 'NULL as limitation_marker';
 
         $dailyStmt = $this->pdo->prepare("
             SELECT 
@@ -1013,14 +954,9 @@ class DemandForecastService
         ];
     }
 
-    private function hasColumn(string $table, string $column): bool
+    private function aggregateReader(): ForecastAggregateReader
     {
-        try {
-            $this->pdo->query("SELECT {$column} FROM {$table} LIMIT 0");
-            return true;
-        } catch (Throwable $e) {
-            return false;
-        }
+        return new ForecastAggregateReader($this->pdo);
     }
 
     public function getPredictionPerformanceEvidence(?string $asOfDate = null, ?string $modelVersion = null): array

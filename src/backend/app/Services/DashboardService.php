@@ -2,6 +2,9 @@
 // app/Services/DashboardService.php
 
 require_once __DIR__ . '/InventoryService.php';
+require_once __DIR__ . '/../Forecasting/ForecastAggregateReader.php';
+
+use App\Forecasting\ForecastAggregateReader;
 
 class DashboardService
 {
@@ -70,17 +73,10 @@ class DashboardService
                  WHERE p.status = 'active' AND i.quantity_on_hand <= 0"
             )->fetchColumn(),
             'expiring_count' => count((new InventoryService($this->pdo))->getExpiringSoonBatches(30)),
-            'forecasted_demand' => (int)$this->pdo->query(
-                "SELECT COALESCE(SUM(predicted_units), 0)
-                 FROM demand_forecasts df
-                 WHERE df.job_id = (
-                    SELECT job_id
-                    FROM ml_jobs
-                    WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
-                    ORDER BY completed_at DESC, job_id DESC
-                    LIMIT 1
-                 ) AND df.horizon_day <= 28"
-            )->fetchColumn(),
+            'forecasted_demand' => (int)array_sum(array_column(
+                $this->forecastAggregateReader()->readLatestSuccessful(),
+                'forecast_28_day'
+            )),
             'inventory_value' => (float)$this->pdo->query(
                 "SELECT COALESCE(SUM(i.quantity_on_hand * p.cost_price), 0)
                  FROM inventory i
@@ -133,25 +129,28 @@ class DashboardService
 
     public function getLatestForecasts(int $limit = 5): array
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT p.sku, p.product_name, SUM(df.predicted_units) as predicted_demand_next_28_days,
-                    0 as reorder_suggested, 0 as suggested_reorder_qty, 1.0 as confidence_score
-             FROM demand_forecasts df
-             JOIN products p ON p.product_id = df.product_id
-             WHERE df.job_id = (
-                SELECT job_id
-                FROM ml_jobs
-                WHERE trigger_type = 'forecast_generation' AND status = 'succeeded'
-                ORDER BY completed_at DESC, job_id DESC
-                LIMIT 1
-             ) AND df.horizon_day <= 28
-             GROUP BY p.product_id, p.sku, p.product_name
-             ORDER BY predicted_demand_next_28_days DESC
-             LIMIT ?"
-        );
-        $stmt->bindValue(1, $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        return $stmt->fetchAll();
+        $aggregates = $this->forecastAggregateReader()->readLatestSuccessful();
+        $products = $this->productIndex(array_keys($aggregates));
+
+        $rows = [];
+        foreach ($aggregates as $productId => $aggregate) {
+            if (!isset($products[$productId])) {
+                continue;
+            }
+            $rows[] = [
+                'sku' => $products[$productId]['sku'],
+                'product_name' => $products[$productId]['product_name'],
+                'predicted_demand_next_28_days' => $aggregate['forecast_28_day'],
+                'reorder_suggested' => 0,
+                'suggested_reorder_qty' => 0,
+                'confidence_score' => 1.0,
+            ];
+        }
+
+        usort($rows, static fn(array $a, array $b): int =>
+            $b['predicted_demand_next_28_days'] <=> $a['predicted_demand_next_28_days']);
+
+        return $limit > 0 ? array_slice($rows, 0, $limit) : $rows;
     }
 
     public function getSalesTrend(int $days = 28, ?DateTimeImmutable $asOf = null): array
@@ -223,33 +222,42 @@ class DashboardService
 
     public function getForecastVsActual(int $limit = 8): array
     {
+        $forecasts = $this->forecastAggregateReader()->readLatestSuccessful();
+
         $unitsExpr = $this->salesUnitsExpression('si');
         $stmt = $this->pdo->prepare(
-            "SELECT p.sku, p.product_name,
-                    COALESCE(df_agg.forecast_demand, 0) AS forecast_demand,
-                    COALESCE(actual.units_sold, 0) AS actual_units
-             FROM products p
-             LEFT JOIN (
-                SELECT product_id, SUM(predicted_units) as forecast_demand
-                FROM demand_forecasts
-                WHERE job_id = (
-                    SELECT job_id FROM ml_jobs WHERE trigger_type = 'forecast_generation' AND status = 'succeeded' ORDER BY completed_at DESC, job_id DESC LIMIT 1
-                ) AND horizon_day <= 28
-                GROUP BY product_id
-             ) df_agg ON df_agg.product_id = p.product_id
-             LEFT JOIN (
-                SELECT si.product_id, SUM({$unitsExpr}) AS units_sold
-                FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
-                WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
-                GROUP BY si.product_id
-             ) actual ON actual.product_id = p.product_id
-             WHERE df_agg.forecast_demand IS NOT NULL OR actual.units_sold IS NOT NULL
-             ORDER BY GREATEST(COALESCE(df_agg.forecast_demand, 0), COALESCE(actual.units_sold, 0)) DESC
-             LIMIT ?"
+            "SELECT si.product_id, SUM({$unitsExpr}) AS units_sold
+             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+             WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL 28 DAY)
+             GROUP BY si.product_id"
         );
-        $stmt->bindValue(1, max(1, min(20, $limit)), PDO::PARAM_INT);
         $stmt->execute();
-        return $stmt->fetchAll();
+        $actuals = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $actuals[(int)$row['product_id']] = $row['units_sold'];
+        }
+
+        $productIds = array_values(array_unique(array_merge(array_keys($forecasts), array_keys($actuals))));
+        $products = $this->productIndex($productIds);
+
+        $rows = [];
+        foreach ($productIds as $productId) {
+            if (!isset($products[$productId])) {
+                continue;
+            }
+            $rows[] = [
+                'sku' => $products[$productId]['sku'],
+                'product_name' => $products[$productId]['product_name'],
+                'forecast_demand' => $forecasts[$productId]['forecast_28_day'] ?? 0,
+                'actual_units' => $actuals[$productId] ?? 0,
+            ];
+        }
+
+        usort($rows, static fn(array $a, array $b): int =>
+            max((float)$b['forecast_demand'], (float)$b['actual_units'])
+            <=> max((float)$a['forecast_demand'], (float)$a['actual_units']));
+
+        return $limit > 0 ? array_slice($rows, 0, max(1, min(20, $limit))) : $rows;
     }
 
     public function getCashierMetrics(int $cashierId): array
@@ -315,6 +323,32 @@ class DashboardService
         $stmt->bindValue(2, $limit, PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    private function forecastAggregateReader(): ForecastAggregateReader
+    {
+        return new ForecastAggregateReader($this->pdo);
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @return array<int, array<string, mixed>> keyed by product_id
+     */
+    private function productIndex(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT product_id, sku, product_name FROM products WHERE product_id IN ({$placeholders})"
+        );
+        $stmt->execute(array_values($productIds));
+        $index = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $index[(int)$row['product_id']] = $row;
+        }
+        return $index;
     }
 
     /** Sale quantities in Base Units; a Sales Pack line contributes its contents. */

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 require_once __DIR__ . '/../../../backend/app/Services/GrossProfitService.php';
+require_once __DIR__ . '/../../../backend/app/Forecasting/ForecastAggregateReader.php';
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Services\GrossProfitService;
@@ -611,14 +612,14 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'forecast_actual':
+            $aggregateReader = new \App\Forecasting\ForecastAggregateReader($pdo);
             $stmt = $pdo->prepare(
                 "SELECT COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
-                        'DemandForecaster' AS model_name, df.model_version,
+                        'DemandForecaster' AS model_name, df.job_id, df.product_id, df.model_version,
                         28 AS forecast_period_days,
                         df.forecast_origin AS generated_at,
                         DATE_ADD(df.forecast_origin, INTERVAL 28 DAY) AS forecast_completed_at,
-                        SUM(df.predicted_units) AS forecast_quantity,
                         (
                             SELECT COALESCE(SUM({$saleUnitsSql}), 0)
                             FROM sale_items si
@@ -636,11 +637,29 @@ function run_report(PDO $pdo, string $report, array $filters): array
                    AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
                    AND DATE(DATE_ADD(df.forecast_origin, INTERVAL 28 DAY)) BETWEEN ? AND ?
                    {$productSql}
-                 GROUP BY df.job_id, df.product_id, df.forecast_origin, p.barcode, p.sku, p.product_name, c.category_name, df.model_version
-                 ORDER BY forecast_completed_at DESC,
-                          ABS(actual_quantity - forecast_quantity) DESC"
+                 GROUP BY df.job_id, df.product_id, df.forecast_origin, p.barcode, p.sku, p.product_name, c.category_name, df.model_version"
             );
             $stmt->execute(array_merge([$filters['from'], $filters['to']], $productParams));
+
+            $rawRows = $stmt->fetchAll();
+            $jobAggregates = [];
+            foreach ($rawRows as &$rawRow) {
+                $jobId = (int)$rawRow['job_id'];
+                if (!array_key_exists($jobId, $jobAggregates)) {
+                    $jobAggregates[$jobId] = $aggregateReader->read($jobId);
+                }
+                $rawRow['forecast_quantity'] = $jobAggregates[$jobId][(int)$rawRow['product_id']]['forecast_28_day'] ?? 0;
+            }
+            unset($rawRow);
+
+            usort($rawRows, static function (array $a, array $b): int {
+                $byCompleted = strcmp((string)$b['forecast_completed_at'], (string)$a['forecast_completed_at']);
+                if ($byCompleted !== 0) {
+                    return $byCompleted;
+                }
+                return abs((int)$b['actual_quantity'] - (int)$b['forecast_quantity'])
+                    <=> abs((int)$a['actual_quantity'] - (int)$a['forecast_quantity']);
+            });
 
             $rows = [];
             $sumAbsoluteError = 0.0;
@@ -649,7 +668,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             $actualTotal = 0;
             $forecastTotal = 0;
 
-            foreach ($stmt->fetchAll() as $row) {
+            foreach ($rawRows as $row) {
                 $forecast = (int)$row['forecast_quantity'];
                 $actual = (int)$row['actual_quantity'];
                 $difference = $actual - $forecast;
