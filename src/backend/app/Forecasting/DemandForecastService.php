@@ -256,9 +256,9 @@ class DemandForecastService
         $isObservation = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservation = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $governance = new StoreModelGovernanceService($this->pdo);
+            $isObservation = $governance->isObservationMode();
+            $isSuspended = $governance->isRecommendationsSuspended();
         } catch (Throwable $e) {}
 
         if ($isObservation || $isSuspended) {
@@ -367,9 +367,9 @@ class DemandForecastService
         $isObservation = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservation = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $governance = new StoreModelGovernanceService($this->pdo);
+            $isObservation = $governance->isObservationMode();
+            $isSuspended = $governance->isRecommendationsSuspended();
             $approvedVersion = (string)($this->pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key = 'ml_approved_model_version'")->fetchColumn() ?: '');
         } catch (Throwable $e) {}
 

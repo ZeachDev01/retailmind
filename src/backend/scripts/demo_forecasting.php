@@ -64,8 +64,9 @@ if ($action === 'approve') {
     if (!str_starts_with($version, 'demo_')) throw new RuntimeException('Explicit Demo model version required.');
     $evaluation = new App\Forecasting\CandidateEvaluationService($pdo);
     (new App\Forecasting\ModelPromotionService($pdo, $evaluation))->promote($version, 1);
-    $evaluation->setObservationMode(false, 1);
-    $evaluation->setRecommendationsSuspended(false, 1);
+    $governance = new App\Forecasting\StoreModelGovernanceService($pdo, $evaluation);
+    $governance->setObservationMode(false, 1);
+    $governance->setRecommendationsSuspended(false, 1);
     echo "Explicitly approved Demo candidate {$version}; Store activation is separate.\n";
 } else {
     $id = (new App\Services\MlJobService($pdo))->enqueue($action === 'train' ? 'model_retraining' : 'forecast_generation', 1, 'super_admin');

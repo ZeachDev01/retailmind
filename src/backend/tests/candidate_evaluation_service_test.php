@@ -5,6 +5,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 
 use App\Forecasting\CandidateEvaluationService;
+use App\Forecasting\StoreModelGovernanceService;
 
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {
@@ -41,9 +42,10 @@ try {
     ");
 
     $service = new CandidateEvaluationService($pdo);
+    $governance = new StoreModelGovernanceService($pdo, $service);
 
     // Test inserting thresholds
-    $service->setThresholds([
+    $governance->setThresholds([
         'ml_max_wape_7d' => '0.2',
         'ml_max_wape_14d' => '0.25',
         'ml_max_wape_28d' => '0.3'
@@ -58,16 +60,16 @@ try {
 
     foreach ([INF, NAN, -0.1, 2.01, 'not-a-number'] as $invalid) {
         try {
-            $service->setThresholds(['ml_max_wape_7d' => $invalid], 1);
+            $governance->setThresholds(['ml_max_wape_7d' => $invalid], 1);
             $assert(false, 'Unsupported thresholds must be rejected');
         } catch (InvalidArgumentException $expected) {}
     }
     $pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape) VALUES
         ('quality', 7, 0.15, 0.20), ('quality', 14, 0.20, 0.25), ('quality', 28, 0.25, 0.30)");
     $assert($service->evaluateCandidateQuality('quality')['passed'], 'Complete evidence beats weekly baseline');
-    $service->setThresholds(['ml_max_wape_7d' => 0.10], 1);
+    $governance->setThresholds(['ml_max_wape_7d' => 0.10], 1);
     $assert(!$service->evaluateCandidateQuality('quality')['passed'], 'Saved limit changes qualification');
-    $service->setThresholds(['ml_max_wape_7d' => 0.20], 1);
+    $governance->setThresholds(['ml_max_wape_7d' => 0.20], 1);
     $pdo->exec("UPDATE ml_model_evaluations SET baseline_wape=NULL WHERE model_version='quality' AND horizon_days=7");
     $assert(!$service->evaluateCandidateQuality('quality')['passed'], 'Missing baseline blocks qualification');
     $pdo->exec("UPDATE ml_model_evaluations SET baseline_wape=0.15 WHERE model_version='quality' AND horizon_days=7");

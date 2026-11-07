@@ -676,7 +676,7 @@ class StoreModelGovernanceService
                 throw new \InvalidArgumentException("Candidate $modelVersion failed evaluation gate at horizon " . $eval['horizon_days']);
             }
         }
-        $thresholds = $this->evaluationService->getThresholds();
+        $thresholds = $this->getThresholds();
         $hasThresholds = ($thresholds['7'] !== null || $thresholds['14'] !== null || $thresholds['28'] !== null);
         if ($hasThresholds) {
             $gateResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
@@ -908,7 +908,7 @@ class StoreModelGovernanceService
         // 1. Candidate Quality Evaluation
         $qualityResult = $this->evaluationService->evaluateCandidateQuality($modelVersion);
         $candidateEvals = $qualityResult['horizons'];
-        $thresholds = $this->evaluationService->getThresholds();
+        $thresholds = $this->getThresholds();
 
         $horizonsData = [];
         $dataWindowStart = null;

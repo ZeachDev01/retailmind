@@ -1141,7 +1141,7 @@ assert_same('Stock-rule suggestion', $p1Stale['basis'], 'Stale forecast falls ba
 assert_true(str_contains((string)$p1Stale['forecast_status'], 'Stale forecast'), 'Stale forecast labeled with origin date');
 
 // 12.5 Observation-only output restriction
-$evalService->setObservationMode(true, 1);
+$activationService->setObservationMode(true, 1);
 $recsObs = $queueService->getRecommendations($opJobId, '2026-11-02');
 $p1Obs = null;
 foreach ($recsObs as $r) {
@@ -1149,7 +1149,7 @@ foreach ($recsObs as $r) {
 }
 assert_same('Stock-rule suggestion', $p1Obs['basis'], 'Observation mode restricts guidance to Stock-rule suggestion');
 assert_same(false, $p1Obs['is_forecast_backed'], 'Observation mode products are not forecast backed');
-$evalService->setObservationMode(false, 1);
+$activationService->setObservationMode(false, 1);
 
 // =============================================================================
 // Section 13: Separation of Workflow Evidence from Genuine Store Prediction Usefulness

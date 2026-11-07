@@ -294,7 +294,7 @@ try {
 assert_true($remoteActivationThrown, 'Server-side activation rejects remote mutation');
 
 // Configure quality thresholds: 7d <= 0.25, 14d <= 0.30, 28d <= 0.35
-$evalService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
+$activationService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
 
 // Seed evaluations for candidateV1: WAPE passes thresholds AND outperforms baseline
 foreach ([7 => [0.18, 0.28, 5.2, 7.1], 14 => [0.21, 0.32, 6.8, 9.4], 28 => [0.24, 0.36, 8.5, 12.0]] as $h => [$w, $bw, $mae, $bmae]) {

@@ -171,8 +171,8 @@ try {
         'ml_max_wape_14d' => 0.25,
         'ml_max_wape_28d' => 0.30
     ];
-    $evalService->setThresholds($thresholds, $superAdminId);
-    $activeThresholds = $evalService->getThresholds();
+    $promotionService->setThresholds($thresholds, $superAdminId);
+    $activeThresholds = $promotionService->getThresholds();
     $assert($activeThresholds['7'] === 0.20, "7-day WAPE threshold set to 0.20");
     $assert($activeThresholds['14'] === 0.25, "14-day WAPE threshold set to 0.25");
     $assert($activeThresholds['28'] === 0.30, "28-day WAPE threshold set to 0.30");
@@ -199,11 +199,11 @@ try {
     // Test 3: Observation Mode & Recommendation Suspension
     // -------------------------------------------------------------
     echo "\n--- Test 3: Observation Mode & Recommendation Suspension ---\n";
-    $assert(!$evalService->isObservationMode(), "Observation mode initially inactive");
+    $assert(!$promotionService->isObservationMode(), "Observation mode initially inactive");
 
     // Enable observation mode
-    $evalService->setObservationMode(true, $superAdminId);
-    $assert($evalService->isObservationMode(), "Observation mode successfully enabled by Super Administrator");
+    $promotionService->setObservationMode(true, $superAdminId);
+    $assert($promotionService->isObservationMode(), "Observation mode successfully enabled by Super Administrator");
 
     // Seed product and forecast
     $pdo->exec("INSERT INTO products (product_id, sku, product_name, supplier_lead_time_days, minimum_order_quantity) VALUES (1, 'SKU-01', 'Store Item 1', 7, 5)");
@@ -220,8 +220,8 @@ try {
     $assert(str_contains($queue[0]['explanation'], 'Observation Mode'), "Item explanation states observation telemetry notice");
 
     // Verify recommendations suspension toggle
-    $evalService->setRecommendationsSuspended(true, $superAdminId);
-    $assert($evalService->isRecommendationsSuspended(), "Recommendations suspension toggle successfully enabled");
+    $promotionService->setRecommendationsSuspended(true, $superAdminId);
+    $assert($promotionService->isRecommendationsSuspended(), "Recommendations suspension toggle successfully enabled");
 
     // -------------------------------------------------------------
     // Test 4: Completed Target Dates Holdout Comparison

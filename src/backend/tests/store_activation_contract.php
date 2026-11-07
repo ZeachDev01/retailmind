@@ -247,7 +247,7 @@ assert_check($readiness['checks']['operational_review_accepted'] === false, 'Ope
 assert_check($readiness['checks']['observation_period_completed'] === false, 'Observation period check is false');
 
 // Seed evaluations with passing WAPE (0.15, 0.18, 0.22) vs baseline (0.25, 0.28, 0.32)
-$evalService->setThresholds(['ml_max_wape_7d' => 0.20, 'ml_max_wape_14d' => 0.25, 'ml_max_wape_28d' => 0.30], 1);
+$activationService->setThresholds(['ml_max_wape_7d' => 0.20, 'ml_max_wape_14d' => 0.25, 'ml_max_wape_28d' => 0.30], 1);
 foreach ([7 => [0.15, 0.25], 14 => [0.18, 0.28], 28 => [0.22, 0.32]] as $h => [$w, $bw]) {
     $pdo->prepare("
         INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape, candidate_gate_outcome, created_at)
@@ -369,8 +369,8 @@ assert_check(!$readiness['ready'] && !$readiness['checks']['observation_period_c
 $pdo->rollBack();
 
 // Execute Activation
-$evalService->setObservationMode(true, 1);
-$evalService->setRecommendationsSuspended(true, 1);
+$activationService->setObservationMode(true, 1);
+$activationService->setRecommendationsSuspended(true, 1);
 $record = $activationService->activateStoreModel($candidateVersion, '2026-09-28', 1, 'Routine activation following 28-day observation');
 
 assert_check($record['model_version'] === $candidateVersion, 'Activation record contains model version');

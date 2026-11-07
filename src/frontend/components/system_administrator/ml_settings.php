@@ -82,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             }
             $evaluation = new \App\Forecasting\CandidateEvaluationService($pdo);
             (new \App\Forecasting\ModelPromotionService($pdo, $evaluation))->promote($version, (int)$_SESSION['user_id']);
-            $evaluation->setObservationMode(false, (int)$_SESSION['user_id']);
-            $evaluation->setRecommendationsSuspended(false, (int)$_SESSION['user_id']);
+            $governance->setObservationMode(false, (int)$_SESSION['user_id']);
+            $governance->setRecommendationsSuspended(false, (int)$_SESSION['user_id']);
             $message = 'Demo model approved. Open forecasts and select Generate Now. Store forecasting was not activated.';
         }
         $messageClass = 'tag-success';

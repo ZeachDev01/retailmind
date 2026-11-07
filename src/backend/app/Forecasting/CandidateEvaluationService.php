@@ -23,7 +23,9 @@ class CandidateEvaluationService
     private function governance(): StoreModelGovernanceService
     {
         if ($this->governance === null) {
-            $this->governance = new StoreModelGovernanceService($this->pdo, $this);
+            // Deliberately forward-only: governance owns this service, so the
+            // fallback constructs governance without a back-reference.
+            $this->governance = new StoreModelGovernanceService($this->pdo);
         }
         return $this->governance;
     }
@@ -48,23 +50,6 @@ class CandidateEvaluationService
     }
 
     /**
-     * Set approved error/quality thresholds as Platform Settings.
-     * Only Super Administrator should call this.
-     */
-    public function setThresholds(array $thresholds, int $updatedBy): void
-    {
-        $this->governance()->setThresholds($thresholds, $updatedBy);
-    }
-
-    /**
-     * Get approved error/quality thresholds from Platform Settings.
-     */
-    public function getThresholds(): array
-    {
-        return $this->governance()->getThresholds();
-    }
-
-    /**
      * Evaluates a candidate model version against Super Administrator quality gates.
      */
     public function evaluateCandidateQuality(string $modelVersion): array
@@ -78,7 +63,7 @@ class CandidateEvaluationService
             ];
         }
 
-        $thresholds = $this->getThresholds();
+        $thresholds = $this->governance()->getThresholds();
         $passedAll = true;
         $reasons = [];
 
@@ -310,26 +295,6 @@ class CandidateEvaluationService
             'missing_excluded' => $eval['missing_excluded'] ?? 0,
             'metrics_by_horizon' => $eval['metrics_by_horizon'],
         ];
-    }
-
-    public function isObservationMode(): bool
-    {
-        return $this->governance()->isObservationMode();
-    }
-
-    public function setObservationMode(bool $enabled, int $updatedBy): void
-    {
-        $this->governance()->setObservationMode($enabled, $updatedBy);
-    }
-
-    public function isRecommendationsSuspended(): bool
-    {
-        return $this->governance()->isRecommendationsSuspended();
-    }
-
-    public function setRecommendationsSuspended(bool $suspended, int $updatedBy): void
-    {
-        $this->governance()->setRecommendationsSuspended($suspended, $updatedBy);
     }
 
     public function getPredictionPerformanceEvidence(PDO $pdo, string $modelVersion, string $asOfDate, ?string $association = null): array

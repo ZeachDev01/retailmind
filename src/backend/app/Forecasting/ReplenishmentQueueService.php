@@ -30,7 +30,7 @@ class ReplenishmentQueueService
     public function getRecommendations(?int $jobId = null, ?string $asOfDate = null): array
     {
         $forecasts = $jobId ? array_column($this->getQueue($jobId, $asOfDate), null, 'product_id') : [];
-        $settings = new CandidateEvaluationService($this->pdo);
+        $settings = new StoreModelGovernanceService($this->pdo);
         $observation = $settings->isObservationMode();
         $suspended = $settings->isRecommendationsSuspended();
 
@@ -309,9 +309,9 @@ class ReplenishmentQueueService
         $isObservationMode = false;
         $isSuspended = false;
         try {
-            $evalService = new CandidateEvaluationService($this->pdo);
-            $isObservationMode = $evalService->isObservationMode();
-            $isSuspended = $evalService->isRecommendationsSuspended();
+            $governance = new StoreModelGovernanceService($this->pdo);
+            $isObservationMode = $governance->isObservationMode();
+            $isSuspended = $governance->isRecommendationsSuspended();
         } catch (Throwable $e) {
             // Degrade gracefully
         }

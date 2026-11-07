@@ -422,12 +422,12 @@ assert_test($promotionShim instanceof StoreModelGovernanceService, 'ModelPromoti
 $reviewStatus = $promotionShim->getReviewStatus($candidateVersion);
 assert_test($reviewStatus['operational_review']['decision'] === 'accepted', 'ModelPromotionService shim returns review status');
 
-// CandidateEvaluationService delegates settings to governance
-$evalService = new CandidateEvaluationService($pdo);
-$evalService->setObservationMode(true, $adminId);
-assert_test($governance->isObservationMode() === true, 'CandidateEvaluationService delegates setObservationMode to governance');
-$evalService->setObservationMode(false, $adminId);
-assert_test($governance->isObservationMode() === false, 'CandidateEvaluationService delegates observation mode reset to governance');
+// Governance owns lifecycle settings; CandidateEvaluationService no longer proxies them
+assert_test(!method_exists(CandidateEvaluationService::class, 'setObservationMode'), 'CandidateEvaluationService no longer proxies observation mode');
+$governance->setObservationMode(true, $adminId);
+assert_test($governance->isObservationMode() === true, 'Governance setObservationMode persists observation mode');
+$governance->setObservationMode(false, $adminId);
+assert_test($governance->isObservationMode() === false, 'Governance setObservationMode resets observation mode');
 
 // =========================================================================
 echo "\n--- Test 6: Transactional Failure & Promotion Mechanics ---\n";

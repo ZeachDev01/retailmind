@@ -20,6 +20,7 @@ use App\Authorization\RoleCapabilityPolicy;
 use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ModelPromotionService;
 use App\Forecasting\StoreActivationService;
+use App\Forecasting\StoreModelGovernanceService;
 
 function assert_test(bool $condition, string $message): void {
     if (!$condition) {
@@ -190,8 +191,8 @@ $pdo->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES 
 $pdo->exec("INSERT INTO products (product_id, sku, product_name, status) VALUES (2, 'SNK-CHIP', 'Store Potato Chips 150g', 'active')");
 
 // Configure quality thresholds
-$evalService = new CandidateEvaluationService($pdo);
-$evalService->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
+$governance = new StoreModelGovernanceService($pdo);
+$governance->setThresholds(['ml_max_wape_7d' => 0.25, 'ml_max_wape_14d' => 0.30, 'ml_max_wape_28d' => 0.35], 1);
 
 // Render helper function
 function render_model_review(PDO $pdo, string $role = 'admin', array $post = []): string {
