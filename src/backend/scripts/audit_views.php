@@ -110,6 +110,60 @@ foreach ($iterator as $fileInfo) {
             }
         }
     }
+
+    // 4. Check for broken relative PHP links in href
+    if (preg_match_all('/\bhref=["\']([^"\'>]+)["\']/i', $content, $hrefMatches, PREG_OFFSET_CAPTURE)) {
+        foreach ($hrefMatches[1] as $hm) {
+            $rawHref = $hm[0];
+            $offset = $hm[1];
+            if (str_starts_with(trim($rawHref), '<?')) {
+                continue;
+            }
+            $urlPath = preg_split('/[?#]/', $rawHref)[0];
+            if (!str_ends_with($urlPath, '.php') || str_starts_with($urlPath, 'http://') || str_starts_with($urlPath, 'https://') || str_starts_with($urlPath, '//')) {
+                continue;
+            }
+            $lineNum = substr_count(substr($content, 0, $offset), "\n") + 1;
+            if (str_starts_with($urlPath, '/')) {
+                $trimmed = preg_replace('#^/retailmind/#', '', $urlPath);
+                $resolved = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $trimmed);
+            } else {
+                $dir = dirname($filePath);
+                $resolved = realpath($dir . DIRECTORY_SEPARATOR . $urlPath);
+                if (!$resolved) {
+                    $resolved = $dir . DIRECTORY_SEPARATOR . $urlPath;
+                }
+            }
+            if (!file_exists($resolved)) {
+                $issues[] = [
+                    'severity' => 'error',
+                    'file' => $relPath,
+                    'line' => $lineNum,
+                    'message' => "Dead relative link href=\"{$rawHref}\" -> Target file not found: {$urlPath}",
+                ];
+            }
+        }
+    }
+
+    // 5. Check for nested role="tab" inside role="tabpanel" (component selector collision hazard)
+    if (preg_match_all('/<[^>]*\brole=["\']tabpanel["\'][^>]*>(.*?)<\/[^>]*>/is', $content, $panelMatches, PREG_OFFSET_CAPTURE)) {
+        foreach ($panelMatches[1] as $panelContent) {
+            $inner = $panelContent[0];
+            $panelOffset = $panelContent[1];
+            if (preg_match_all('/<[^>]*\brole=["\']tab["\'][^>]*>/i', $inner, $nestedTabs, PREG_OFFSET_CAPTURE)) {
+                foreach ($nestedTabs[0] as $nt) {
+                    $tabOffset = $panelOffset + $nt[1];
+                    $lineNum = substr_count(substr($content, 0, $tabOffset), "\n") + 1;
+                    $issues[] = [
+                        'severity' => 'warning',
+                        'file' => $relPath,
+                        'line' => $lineNum,
+                        'message' => "Nested role=\"tab\" found inside tabpanel; will collide with parent workspace tab controller. Use role=\"group\" with aria-pressed instead.",
+                    ];
+                }
+            }
+        }
+    }
 }
 
 // Print results

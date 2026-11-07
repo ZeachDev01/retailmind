@@ -247,7 +247,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                             <td>
                                                 <div class="queue-product-cell">
                                                 <div class="queue-product-identity">
-                                                <a class="queue-product" href="../products/product_detail.php?id=<?= (int)$item['product_id'] ?>"><?= htmlspecialchars($item['product_name']) ?></a>
+                                                <a class="queue-product" href="products.php?q=<?= urlencode((string)$item['sku']) ?>"><?= htmlspecialchars($item['product_name']) ?></a>
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
                                                 </div>
                                                 <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
