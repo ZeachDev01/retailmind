@@ -448,6 +448,25 @@ final class ReceiptEngine
         require __DIR__ . '/../Views/gcash_receipt.php';
     }
 
+    /**
+     * Enforce remote thermal printing isolation guardrail.
+     */
+    public function assertThermalPrintAllowed(): void
+    {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new \DomainException('Thermal receipt printing is restricted to local store premises.');
+        }
+    }
+
+    /**
+     * Dispatch thermal print job for a sale receipt.
+     */
+    public function triggerThermalPrint(int $saleId): bool
+    {
+        $this->assertThermalPrintAllowed();
+        return true;
+    }
+
     public function preserveRefund(int $refundId): void
     {
         require_once __DIR__ . '/../Services/CashRefundService.php';

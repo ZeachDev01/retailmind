@@ -50,4 +50,24 @@ final class Request
             || strpos($_SERVER['REQUEST_URI'] ?? '', '/barcodeScanner/apiScanner/') !== false
             || strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false;
     }
+
+    public function isSecure(): bool
+    {
+        return function_exists('app_is_secure') ? app_is_secure() : false;
+    }
+
+    public function scheme(): string
+    {
+        return function_exists('app_scheme') ? app_scheme() : 'http';
+    }
+
+    public function host(): string
+    {
+        return function_exists('app_host') ? app_host() : 'localhost';
+    }
+
+    public function origin(): string
+    {
+        return function_exists('app_origin') ? app_origin() : ($this->scheme() . '://' . $this->host());
+    }
 }

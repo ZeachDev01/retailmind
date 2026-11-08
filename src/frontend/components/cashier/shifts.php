@@ -51,6 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $movementId = $service->addDrawerMovement($actorId, $actorRole, (string)($_POST['movement_type'] ?? ''), (float)($_POST['amount'] ?? 0), (string)($_POST['reason'] ?? ''), (string)($_POST['note'] ?? ''), (string)($_POST['approver_username'] ?? ''), (string)($_POST['approver_password'] ?? ''));
             $message = 'Cash drawer movement recorded.';
         } elseif ($action === 'count' || $action === 'close') {
+            if (function_exists('is_remote_request') && is_remote_request()) {
+                throw new DomainException('Register balancing and shift closure are restricted to local store premises.', 403);
+            }
             if (!$isCashier && $actorRole !== 'admin') {
                 throw new DomainException('Only an Administrator can close another Cashier\'s Shift.');
             }

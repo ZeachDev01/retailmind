@@ -1,7 +1,17 @@
 Options -Indexes
 
+<FilesMatch "^(\.env.*|\.git.*|\.user\.ini|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|.*\.(joblib|pyc|log|sql|sqlite|db|rmpkg|bak|dump))$">
+    Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    RewriteRule (^|/)\.(?:git|svn|hg|env)(?:/|$) - [F,L]
+    RewriteRule ^(?:backend|vendor|storage|tests|config)(?:/|$) - [F,L]
+    RewriteRule (?:^|/)(?:storage/backups|backups|database/backups)(?:/|$) - [F,L]
+    RewriteRule (?:^|/)(?:tests?|phpunit|.*_test\.php|.*Test\.php)(?:/|$|\?) - [F,NC,L]
+    RewriteRule \.(?:sql|env|log|bak|dump|sqlite|db|joblib|pyc|rmpkg)(?:$|\?) - [F,NC,L]
+
     RewriteRule ^frontend/ - [L]
     RewriteRule ^components/(.*)$ frontend/components/$1 [L,QSA]
     RewriteRule ^assets/(.*)$ frontend/assets/$1 [L,QSA]

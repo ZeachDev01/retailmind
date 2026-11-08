@@ -2,6 +2,8 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin']);
 require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptLogo.php';
+require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+require_once __DIR__ . '/../../../backend/app/Services/QrCodeService.php';
 
 $receiptFields = [
     'store_name' => 'Store name',
@@ -186,6 +188,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Store attention thresholds updated', 'Store Settings', null, null, $updates);
             $message = 'Store attention thresholds saved. Platform safety limits are applied automatically.';
+        } elseif ($action === 'save_tunnel_token') {
+            $tunnelToken = trim((string)($_POST['tunnel_token'] ?? ''));
+            $tunnelHostname = trim((string)($_POST['tunnel_hostname'] ?? ''));
+            $ts = new \App\Services\CloudflareTunnelService();
+            if ($tunnelToken === '') {
+                $ts->clearToken();
+                $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
+            } else {
+                $ts->setToken($tunnelToken, $tunnelHostname !== '' ? $tunnelHostname : null);
+                log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token updated', 'Store Settings', null, null, [
+                    'hostname' => $tunnelHostname,
+                ]);
+                $message = 'Permanent Cloudflare Tunnel token configured.';
+            }
+        } elseif ($action === 'clear_tunnel_token') {
+            $ts = new \App\Services\CloudflareTunnelService();
+            $ts->clearToken();
+            log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token cleared', 'Store Settings');
+            $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
         } else {
             throw new InvalidArgumentException('Choose a Store Settings section to save.');
         }
@@ -200,6 +221,10 @@ $settings = get_store_settings($pdo);
 $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? '');
 $requested = $service->storeSettings();
 $effective = $service->thresholdsFor('admin');
+$tunnelService = new \App\Services\CloudflareTunnelService();
+$tunnelStatus = $tunnelService->getStatus();
+$qrService = new \App\Services\QrCodeService();
+$initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? $qrService->generateSvg($tunnelStatus['url'], 220) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -353,7 +378,420 @@ $effective = $service->thresholdsFor('admin');
                 <span class="field-help" role="status"><?= !empty($settings['store_email_alerts_enabled']) ? 'Store email alerts are enabled.' : 'Store alerts are disabled until a test email succeeds.' ?></span>
             </form>
         </section>
+
+        <section class="dashboard-section" id="remote-access-card" aria-labelledby="remote-access-heading">
+            <div class="section-header">
+                <div class="remote-access-header-wrap">
+                    <div>
+                        <h2 id="remote-access-heading">Remote Access</h2>
+                        <p class="section-description">Secure Cloudflare tunnel for supervisor and back-office remote monitoring without port forwarding.</p>
+                    </div>
+                    <div class="remote-badges-group">
+                        <span id="remote-mode-badge" class="<?= !empty($tunnelStatus['token_configured']) ? 'tag-primary' : 'tag-secondary' ?>">
+                            <?= !empty($tunnelStatus['token_configured']) ? 'Permanent Named Tunnel' : 'Quick Tunnel (Ephemeral)' ?>
+                        </span>
+                        <span id="remote-status-badge" class="<?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'tag-success' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'tag-warning' : 'tag-danger') ?>" role="status">
+                            <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'Online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'Connecting...' : 'Offline') ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="remote-access-content">
+                <div class="remote-toggle-row">
+                    <div>
+                        <label for="remote-access-toggle" class="remote-toggle-title">Enable Cloudflare Tunnel</label>
+                        <p class="field-help">Activate the portable background tunnel daemon to expose an encrypted connection.</p>
+                    </div>
+                    <div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="remote-access-toggle" role="switch" <?= !empty($tunnelStatus['online']) ? 'checked' : '' ?> aria-checked="<?= !empty($tunnelStatus['online']) ? 'true' : 'false' ?>" aria-label="Toggle Remote Access Tunnel">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
+                    <label for="remote-public-url" class="remote-url-label">Active Remote URL</label>
+                    <div class="remote-url-group">
+                        <input type="text" id="remote-public-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        <button type="button" id="copy-remote-url-btn" class="btn btn-secondary" title="Copy public URL to clipboard">
+                            <span id="copy-btn-text">Copy URL</span>
+                        </button>
+                        <button type="button" id="show-qr-code-btn" class="btn btn-secondary" title="Display mobile QR code">
+                            <span>📱 Show QR</span>
+                        </button>
+                    </div>
+                    <small class="field-help">Share this URL only with authorized supervisors. Physical cashier operations remain locked to local store registers.</small>
+                </div>
+                <div id="remote-access-feedback" class="field-help u-mt-1" role="status" aria-live="polite"></div>
+
+                <hr class="u-my-2">
+
+                <form method="post" class="remote-token-config-form">
+                    <?= csrf_field() ?>
+                    <h3 class="subsection-title">Permanent Tunnel Token Configuration</h3>
+                    <p class="field-help">Configure a Cloudflare Zero Trust permanent tunnel token (<code>cloudflared run --token &lt;token&gt;</code>) to route through your custom fixed domain instead of ephemeral quick tunnels.</p>
+                    <div class="form-grid u-mt-1">
+                        <div>
+                            <label for="tunnel_token" class="field-label">Permanent Tunnel Token</label>
+                            <input type="password" id="tunnel_token" name="tunnel_token" class="input-text" autocomplete="off"
+                                   value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
+                                   placeholder="Paste eyJh... token from Cloudflare Zero Trust">
+                            <small class="field-help">Stored securely in configuration. Paste a new token to update, or clear to revert to ephemeral quick tunnels.</small>
+                        </div>
+                        <div>
+                            <label for="tunnel_hostname" class="field-label">Public Domain / Hostname (Optional)</label>
+                            <input type="text" id="tunnel_hostname" name="tunnel_hostname" class="input-text" autocomplete="off"
+                                   value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
+                                   placeholder="e.g. supervisor.mystore.com">
+                            <small class="field-help">Custom domain mapped in your Cloudflare Zero Trust dashboard.</small>
+                        </div>
+                    </div>
+                    <div class="form-actions u-mt-1">
+                        <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Tunnel Token</button>
+                        <?php if (!empty($tunnelStatus['token_configured'])): ?>
+                            <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
+                        <?php endif; ?>
+                    </div>
+                </form>
+
+                <div class="remote-service-hint u-mt-2">
+                    <p class="field-help">
+                        <strong>Dedicated Store PC Service:</strong> For 24/7 supervisor access with automatic startup at boot and crash recovery, install the Windows Service:
+                        <code>powershell -ExecutionPolicy Bypass -File .\src\backend\scripts\tunnel\service_install.ps1</code>
+                        &bull; <a href="<?= htmlspecialchars(app_url('components/auth/help.php#tunnel-deployment')) ?>" target="_blank">5-Minute Dedicated Store PC Setup Guide</a>
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dedicated Mobile QR Code Modal -->
+        <div id="qr-code-modal" class="qr-modal-backdrop u-hidden" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" tabindex="-1">
+            <div class="qr-modal-dialog">
+                <div class="qr-modal-header">
+                    <h3 id="qr-modal-title">Mobile Access QR Code</h3>
+                    <button type="button" id="close-qr-modal-btn" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+                </div>
+                <div class="qr-modal-body">
+                    <p class="qr-modal-description">Scan this QR code with your smartphone camera to connect to RetailMind remotely without typing.</p>
+                    <div id="qr-code-display" class="qr-code-display" aria-label="Scannable QR code of active remote URL">
+                        <?= !empty($initialQrSvg) ? $initialQrSvg : '' ?>
+                    </div>
+                    <div class="qr-modal-url-wrap">
+                        <input type="text" id="modal-remote-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        <button type="button" id="modal-copy-url-btn" class="btn btn-secondary" title="Copy active URL to clipboard">
+                            <span id="modal-copy-btn-text">Copy URL</span>
+                        </button>
+                    </div>
+                    <small class="field-help u-text-center">Only share this URL with authorized store supervisors.</small>
+                </div>
+                <div class="qr-modal-footer">
+                    <button type="button" id="close-qr-modal-footer-btn" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
+
+<script src="<?= htmlspecialchars(theme_url('assets/vendor/qrcode/qrcode.min.js')) ?>"></script>
+<script>
+(function() {
+    const toggle = document.getElementById('remote-access-toggle');
+    const badge = document.getElementById('remote-status-badge');
+    const urlContainer = document.getElementById('remote-url-container');
+    const urlInput = document.getElementById('remote-public-url');
+    const copyBtn = document.getElementById('copy-remote-url-btn');
+    const copyText = document.getElementById('copy-btn-text');
+    const showQrBtn = document.getElementById('show-qr-code-btn');
+    const modal = document.getElementById('qr-code-modal');
+    const modalCloseBtn = document.getElementById('close-qr-modal-btn');
+    const modalFooterCloseBtn = document.getElementById('close-qr-modal-footer-btn');
+    const modalUrlInput = document.getElementById('modal-remote-url');
+    const modalCopyBtn = document.getElementById('modal-copy-url-btn');
+    const modalCopyText = document.getElementById('modal-copy-btn-text');
+    const qrDisplay = document.getElementById('qr-code-display');
+    const feedback = document.getElementById('remote-access-feedback');
+    const csrfToken = <?= json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+    const apiUrl = 'remote_access_api.php';
+
+    let pollTimer = null;
+    let pollCount = 0;
+
+    function renderQrCode(url) {
+        if (!qrDisplay || !url) return;
+        qrDisplay.innerHTML = '';
+        if (window.QRCode) {
+            new QRCode(qrDisplay, {
+                text: url,
+                width: 220,
+                height: 220,
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } else {
+            // Fallback: request SVG from backend API
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({ action: 'qrcode', url: url }),
+                credentials: 'same-origin'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.success && data.qr_svg) {
+                    qrDisplay.innerHTML = data.qr_svg;
+                }
+            })
+            .catch(function() {});
+        }
+    }
+
+    function handleModalEscape(e) {
+        if (e.key === 'Escape') {
+            closeQrModal();
+        }
+    }
+
+    function openQrModal() {
+        const url = (urlInput ? urlInput.value.trim() : '');
+        if (!url) return;
+        if (modalUrlInput) modalUrlInput.value = url;
+        if (qrDisplay && (!qrDisplay.innerHTML.trim() || qrDisplay.innerHTML.indexOf('<svg') === -1)) {
+            renderQrCode(url);
+        }
+        if (modal) {
+            modal.classList.remove('u-hidden');
+            if (modalCloseBtn) modalCloseBtn.focus();
+            document.addEventListener('keydown', handleModalEscape);
+        }
+    }
+
+    function closeQrModal() {
+        if (modal) {
+            modal.classList.add('u-hidden');
+            document.removeEventListener('keydown', handleModalEscape);
+            if (showQrBtn) showQrBtn.focus();
+        }
+    }
+
+    if (showQrBtn) {
+        showQrBtn.addEventListener('click', openQrModal);
+    }
+    if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', closeQrModal);
+    }
+    if (modalFooterCloseBtn) {
+        modalFooterCloseBtn.addEventListener('click', closeQrModal);
+    }
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeQrModal();
+            }
+        });
+    }
+
+    function setBadge(state, text) {
+        badge.className = '';
+        if (state === 'online') {
+            badge.className = 'tag-success';
+            badge.textContent = text || 'Online';
+        } else if (state === 'starting') {
+            badge.className = 'tag-warning';
+            badge.textContent = text || 'Connecting...';
+        } else {
+            badge.className = 'tag-danger';
+            badge.textContent = text || 'Offline';
+        }
+    }
+
+    function setFeedback(msg, isError) {
+        if (!feedback) return;
+        feedback.textContent = msg || '';
+        feedback.style.color = isError ? 'var(--danger, #dc2626)' : 'var(--muted, #64748b)';
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+        pollCount = 0;
+    }
+
+    function handleOnlinePayload(data) {
+        setBadge('online');
+        if (urlInput) urlInput.value = data.url;
+        if (modalUrlInput) modalUrlInput.value = data.url;
+        if (urlContainer) urlContainer.classList.remove('u-hidden');
+        if (toggle) {
+            toggle.checked = true;
+            toggle.disabled = false;
+        }
+        if (data.qr_svg && qrDisplay) {
+            qrDisplay.innerHTML = data.qr_svg;
+        } else if (data.url) {
+            renderQrCode(data.url);
+        }
+        setFeedback('Remote access tunnel is active and ready.');
+    }
+
+    function pollStatus() {
+        stopPolling();
+        pollCount = 0;
+        pollTimer = setInterval(function() {
+            pollCount++;
+            if (pollCount > 15) {
+                stopPolling();
+                setFeedback('Connecting is taking longer than expected. Check the tunnel log.', true);
+                return;
+            }
+            fetch(apiUrl, { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data || !data.success) return;
+                    if (data.status === 'online' && data.url) {
+                        stopPolling();
+                        handleOnlinePayload(data);
+                    } else if (!data.online) {
+                        stopPolling();
+                        setBadge('offline');
+                        if (toggle) {
+                            toggle.checked = false;
+                            toggle.disabled = false;
+                        }
+                        if (urlContainer) urlContainer.classList.add('u-hidden');
+                        closeQrModal();
+                        setFeedback('Tunnel terminated unexpectedly.', true);
+                    }
+                })
+                .catch(function() {
+                    // Ignore transient network errors during poll
+                });
+        }, 1500);
+    }
+
+    if (toggle) {
+        toggle.addEventListener('change', function() {
+            const shouldStart = toggle.checked;
+            toggle.disabled = true;
+            stopPolling();
+
+            if (shouldStart) {
+                setBadge('starting');
+                setFeedback('Starting portable tunnel daemon...');
+                urlContainer.classList.remove('u-hidden');
+                urlInput.value = '';
+                urlInput.placeholder = 'Extracting dynamic public URL...';
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ action: 'start' }),
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    toggle.disabled = false;
+                    if (data && data.success) {
+                        if (data.status === 'online' && data.url) {
+                            handleOnlinePayload(data);
+                        } else {
+                            setBadge('starting');
+                            pollStatus();
+                        }
+                    } else {
+                        toggle.checked = false;
+                        setBadge('offline');
+                        urlContainer.classList.add('u-hidden');
+                        closeQrModal();
+                        setFeedback(data && data.error ? data.error : 'Failed to start tunnel daemon.', true);
+                    }
+                })
+                .catch(function(err) {
+                    toggle.disabled = false;
+                    toggle.checked = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    closeQrModal();
+                    setFeedback('Network error while connecting to remote access service.', true);
+                });
+            } else {
+                setBadge('starting', 'Stopping...');
+                setFeedback('Stopping tunnel daemon...');
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ action: 'stop' }),
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    toggle.disabled = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    urlInput.value = '';
+                    closeQrModal();
+                    setFeedback('Remote access tunnel stopped.');
+                })
+                .catch(function() {
+                    toggle.disabled = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    closeQrModal();
+                    setFeedback('Remote access tunnel stopped.');
+                });
+            }
+        });
+    }
+
+    function bindClipboardCopy(buttonEl, labelEl, sourceInput) {
+        if (!buttonEl) return;
+        buttonEl.addEventListener('click', function() {
+            const url = sourceInput ? sourceInput.value.trim() : '';
+            if (!url) return;
+
+            function onCopied() {
+                const prev = labelEl ? labelEl.textContent : 'Copy URL';
+                if (labelEl) labelEl.textContent = '✓ Copied!';
+                buttonEl.classList.add('btn-primary');
+                buttonEl.classList.remove('btn-secondary');
+                setTimeout(function() {
+                    if (labelEl) labelEl.textContent = prev;
+                    buttonEl.classList.remove('btn-primary');
+                    buttonEl.classList.add('btn-secondary');
+                }, 2000);
+            }
+
+            function fallbackCopy() {
+                if (sourceInput) sourceInput.select();
+                try {
+                    document.execCommand('copy');
+                    onCopied();
+                } catch (e) {
+                    setFeedback('Unable to copy automatically. Please copy the URL manually.', true);
+                }
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(onCopied).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+        });
+    }
+
+    bindClipboardCopy(copyBtn, copyText, urlInput);
+    bindClipboardCopy(modalCopyBtn, modalCopyText, modalUrlInput);
+})();
+</script>
 </body>
 </html>

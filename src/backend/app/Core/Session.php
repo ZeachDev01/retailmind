@@ -144,13 +144,33 @@ final class Session
         }
     }
 
-    private static function shouldUseSecureCookie(): bool
+    public static function shouldUseSecureCookie(): bool
     {
         $configured = Environment::get('SESSION_SECURE_COOKIE', null);
         if ($configured !== null) {
             return filter_var($configured, FILTER_VALIDATE_BOOLEAN);
         }
 
-        return !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        if (function_exists('app_is_secure')) {
+            return app_is_secure();
+        }
+
+        if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') {
+            return true;
+        }
+        if (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $protos = array_map('trim', explode(',', (string)$_SERVER['HTTP_X_FORWARDED_PROTO']));
+            if (in_array('https', array_map('strtolower', $protos), true)) {
+                return true;
+            }
+        }
+        if (!empty($_SERVER['HTTP_CF_VISITOR']) && str_contains(strtolower((string)$_SERVER['HTTP_CF_VISITOR']), '"scheme":"https"')) {
+            return true;
+        }
+
+        return false;
     }
 }

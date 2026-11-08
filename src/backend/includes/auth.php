@@ -22,7 +22,18 @@ function app_base_url(): string
     }
     if (strpos($projectRoot, $documentRoot) === 0) {
         $basePath = substr($projectRoot, strlen($documentRoot));
-        return $basePath === '' ? '' : '/' . trim($basePath, '/');
+        $normalizedBasePath = $basePath === '' ? '' : '/' . trim($basePath, '/');
+        // If accessed through a reverse proxy or vhost where projectRoot is mapped to '/',
+        // REQUEST_URI will not contain $normalizedBasePath. Respect the actual entry point.
+        if ($normalizedBasePath !== '' && isset($_SERVER['REQUEST_URI'])) {
+            $requestPath = explode('?', (string)$_SERVER['REQUEST_URI'])[0];
+            if (!str_starts_with($requestPath, $normalizedBasePath)) {
+                return !empty($_SERVER['HTTP_X_FORWARDED_PREFIX'])
+                    ? '/' . trim((string)$_SERVER['HTTP_X_FORWARDED_PREFIX'], '/')
+                    : '';
+            }
+        }
+        return $normalizedBasePath;
     }
     return '';
 }
@@ -395,18 +406,59 @@ function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
     return $policy ??= new App\Authorization\RoleCapabilityPolicy();
 }
 
-function is_remote_request(): bool
-{
-    if (!empty($_SESSION['is_remote'])) {
-        return true;
+if (!function_exists('is_remote_request')) {
+    function is_remote_request(): bool
+    {
+        if (!empty($_SESSION['is_remote'])) {
+            return true;
+        }
+        if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_CF_RAY'])
+            || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
+            || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])
+            || !empty($_SERVER['HTTP_CF_VISITOR'])) {
+            return true;
+        }
+
+        $isLocalAddress = static function (string $raw): bool {
+            $target = strtolower(trim(explode(':', trim($raw))[0]));
+            if ($target === '' || $target === 'localhost' || $target === '127.0.0.1' || $target === '::1' || $target === '[::1]') {
+                return true;
+            }
+            if (str_ends_with($target, '.local') || str_ends_with($target, '.localhost')) {
+                return true;
+            }
+            if (filter_var($target, FILTER_VALIDATE_IP)) {
+                return filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+            }
+            return false;
+        };
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ips = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+            $clientIp = trim($ips[0]);
+            if (!$isLocalAddress($clientIp)) {
+                return true;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $host = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
+            if (!$isLocalAddress($host)) {
+                return true;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            if (!$isLocalAddress($_SERVER['HTTP_HOST'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
-    if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
-        return true;
-    }
-    if (!empty($_SERVER['HTTP_CF_RAY']) || !empty($_SERVER['HTTP_CF_CONNECTING_IP']) || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])) {
-        return true;
-    }
-    return false;
 }
 
 function require_local_request(string $message = 'This action is not available during remote monitoring.'): void

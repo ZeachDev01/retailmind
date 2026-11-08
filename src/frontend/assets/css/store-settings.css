@@ -52,6 +52,258 @@
 .store-settings-page .receipt-logo-form { margin-top: 1.5rem; }
 .store-settings-page .receipt-logo-preview { display: block; max-width: 100%; width: auto; max-height: 192px; margin-top: .75rem; background: #fff; }
 
+/* Remote Access Management Card Styles */
+.remote-access-header-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.remote-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.75rem 0;
+}
+
+.remote-toggle-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border, #cbd5e1);
+    transition: .25s ease;
+    border-radius: 999px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .25s ease;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--primary, #0284c7);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--primary, #0284c7);
+    outline-offset: 2px;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.remote-url-container {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-surface-secondary, rgba(0,0,0,0.02));
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+}
+
+.remote-url-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+}
+
+.remote-url-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.remote-url-input {
+    flex: 1;
+    min-width: 200px;
+    font-family: monospace;
+    font-size: 0.88rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-surface, #ffffff);
+    border: 1px solid var(--border, #cbd5e1);
+    border-radius: 6px;
+}
+
+/* Dedicated Mobile QR Code Modal & Popover Styles */
+.qr-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.qr-modal-backdrop.u-hidden {
+    display: none !important;
+}
+
+.qr-modal-dialog {
+    background: var(--bg-surface, #ffffff);
+    color: var(--text-color, #1e293b);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border, #e2e8f0);
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: qrModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes qrModalPop {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.qr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.qr-modal-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus-visible {
+    color: var(--text-color, #0f172a);
+    background-color: var(--bg-surface-secondary, rgba(0, 0, 0, 0.05));
+    outline: none;
+}
+
+.qr-modal-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+}
+
+.qr-modal-description {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--muted, #64748b);
+    line-height: 1.45;
+}
+
+.qr-code-display {
+    background: #ffffff;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, #cbd5e1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    min-height: 220px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.qr-code-display svg,
+.qr-code-display canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.qr-modal-url-wrap {
+    display: flex;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.qr-modal-footer {
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-surface-secondary, #f8fafc);
+    border-top: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.u-hidden {
+    display: none !important;
+}
+
 @media (max-width: 600px) {
     .store-settings-page .form-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -59,5 +311,45 @@
 
     .store-settings-page .form-actions .btn {
         width: 100%;
+    }
+
+    .remote-url-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .remote-url-group .btn {
+        width: 100%;
+    }
+
+    .qr-modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .qr-modal-dialog {
+        max-width: 100%;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .qr-modal-url-wrap {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .qr-code-display {
+        width: 100%;
+        max-width: 240px;
+        min-width: 180px;
+        min-height: 180px;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+    .qr-modal-dialog {
+        max-width: 420px;
     }
 }

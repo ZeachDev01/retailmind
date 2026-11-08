@@ -238,6 +238,9 @@ class CashierShiftService
      */
     public function lockRegister(int $actorId, string $actorRole): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Physical register lock operations are restricted to local store premises.', 403);
+        }
         $this->requireCashierWorkspace(
             $actorRole,
             'Only the Cashier workspace can lock a Register. Switch to your Cashier workspace to secure your register.'
@@ -272,6 +275,9 @@ class CashierShiftService
      */
     public function unlockRegister(int $actorId, string $actorRole, string $password): int
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Physical register lock operations are restricted to local store premises.', 403);
+        }
         $this->requireCashierWorkspace(
             $actorRole,
             'Only the Cashier workspace can unlock a Register. Switch to your Cashier workspace to resume your shift.'
@@ -523,6 +529,26 @@ class CashierShiftService
         }
     }
 
+    /** Pulse/kick physical cash drawer on counter premises. */
+    public function openCashDrawer(int $actorId, string $actorRole): bool
+    {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Cash drawer operations are restricted to local store premises.', 403);
+        }
+        $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can operate the cash drawer.');
+        return true;
+    }
+
+    /** Trigger physical thermal receipt printer on counter premises. */
+    public function triggerThermalPrint(int $saleId, int $actorId, string $actorRole): bool
+    {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Thermal receipt printing is restricted to local store premises.', 403);
+        }
+        $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can print receipts.');
+        return true;
+    }
+
     /** Record an accountable movement in the signed-in Cashier's open drawer. */
     public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null, string $approverUsername = '', string $approverPassword = ''): int
     {
@@ -670,6 +696,9 @@ class CashierShiftService
 
     private function reconcileShift(int $cashierId, int $closingActorId, float $actualCash, string $notes, ?string $interventionReason, ?array $denominations, ?int $countedShiftId, ?string $cancelHeldSalesReason = null): array
     {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Register balancing and shift closure are restricted to local store premises.', 403);
+        }
         $this->validateCountedCash($actualCash);
         $breakdown = $denominations === null ? null : CashDenominationCounter::count($denominations);
         if ($breakdown !== null && (int)round($actualCash * 100) !== $breakdown['total_cents']) {

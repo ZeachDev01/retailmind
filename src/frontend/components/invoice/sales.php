@@ -66,6 +66,19 @@ if ($can_manage_all) {
 
 // Handle receipt view / reprint request
 if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
+    if (in_array($action, ['thermal'], true) && function_exists('is_remote_request') && is_remote_request()) {
+        http_response_code(403);
+        if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'))) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'success' => false,
+                'error' => 'Thermal receipt printing is restricted to local store premises.',
+            ]);
+        } else {
+            echo '<div class="receipt-container"><p>Thermal receipt printing is restricted to local store premises.</p></div>';
+        }
+        exit;
+    }
     $receiptEngine = new \App\Receipts\ReceiptEngine($pdo);
     if ($receiptEngine->checkConditionalHit($sale_id, $can_manage_all, (int)($_SESSION['user_id'] ?? 0), $storeId)) {
         exit;
