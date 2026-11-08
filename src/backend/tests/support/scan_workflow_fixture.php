@@ -310,9 +310,21 @@ $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByN
     $deleteReferencing('users', $userIds);
 
     if ($productIds !== []) {
+        $productKeys = [];
+        foreach ($productIds as $id) {
+            $productKeys[] = "'inventory.stock.{$id}'";
+            $productKeys[] = "'oversight.stock.{$id}'";
+        }
+        $productKeyList = implode(',', $productKeys);
+        $pdo->exec("DELETE FROM attention_states WHERE attention_key IN ({$productKeyList})");
+        $pdo->exec("DELETE FROM notifications WHERE attention_key IN ({$productKeyList})");
+        $pdo->exec("DELETE FROM notifications WHERE reference_type = 'product' AND reference_id IN (" . $in($productIds) . ")");
         $pdo->exec('DELETE FROM products WHERE product_id IN (' . $in($productIds) . ')');
     }
     if ($userIds !== []) {
+        $pdo->exec("DELETE FROM inventory_submissions WHERE user_id IN ({$userList})");
+        $pdo->exec("DELETE FROM attention_states WHERE user_id IN ({$userList})");
+        $pdo->exec("DELETE FROM notifications WHERE user_id IN ({$userList})");
         $pdo->exec("DELETE FROM users WHERE user_id IN ({$userList})");
     }
     $pdo->exec("DELETE FROM stock_receiving_groups WHERE supplier LIKE '%{$token}%' OR invoice_number LIKE '%{$token}%' OR notes LIKE '%{$token}%'");

@@ -99,13 +99,13 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             assert.equal(state().users[1].status, status);
         }
         await reopen();
-        await page.locator('#drawerRoles input[data-role="admin"]').uncheck();
+        await page.locator('#drawerRoles label').filter({has: page.locator('input[data-role="admin"]')}).click();
         const beforeDemotion = state().users[1];
         await save();
         assert.deepEqual(state().users[1].roles, ['cashier']);
         assert.equal(Number(state().users[1].session_version), Number(beforeDemotion.session_version) + 1);
         await reopen();
-        await page.locator('#drawerRoles input[data-role="admin"]').check();
+        await page.locator('#drawerRoles label').filter({has: page.locator('input[data-role="admin"]')}).click();
         await save();
         assert(state().users[1].roles.includes('admin'), 'Staff promotion through Users');
         const token = await page.locator('#userDrawerForm input[name="csrf_token"]').inputValue();
@@ -150,7 +150,9 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             assert(await admin.isChecked(), 'Own Admin role stays assigned');
             assert(await admin.isDisabled(), 'Own Admin role cannot be removed');
             assert(await cashier.isEnabled(), 'Own optional roles remain editable');
-            await cashier.setChecked(assigned);
+            if ((await cashier.isChecked()) !== assigned) {
+                await page.locator('#drawerRoles label').filter({has: page.locator('input[data-role="cashier"]')}).click();
+            }
             await save();
             // Role changes revoke sessions; sign in again to verify persisted access.
             await page.goto('/?login=1');

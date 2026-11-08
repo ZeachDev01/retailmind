@@ -81,6 +81,7 @@ try {
         CREATE TABLE users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '',
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE,
             password_hash TEXT NOT NULL,

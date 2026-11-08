@@ -11,8 +11,8 @@
 .replenishment-page .queue-print, .replenishment-page .queue-recalculate, .replenishment-page .alert .btn { min-height: 44px; background: var(--card-bg); border: 1px solid var(--border); gap: .5rem; }
 
 /* Summary KPI Cards */
-.queue-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-.queue-stat { display: flex; align-items: flex-start; gap: 1rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); transition: transform 180ms ease, box-shadow 180ms ease; }
+.queue-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.queue-stat { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 1rem; min-width: 0; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card-bg); transition: transform 180ms ease, box-shadow 180ms ease; }
 .queue-stat:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05); }
 .queue-stat-icon-wrap { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; font-size: 1.25rem; flex-shrink: 0; }
 .queue-out-of-stock .queue-stat-icon-wrap { background: rgba(220, 38, 38, 0.1); color: var(--queue-danger); }
@@ -61,7 +61,7 @@
 .queue-panel-heading > div { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .queue-panel-heading h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .queue-count { background: var(--surface-soft); color: var(--muted); border-radius: 6px; padding: .2rem .5rem; font-size: .75rem; }
-.queue-filters { display: grid; grid-template-columns: minmax(12rem, 2fr) minmax(12rem, 1fr) minmax(12rem, 1fr) auto; gap: .75rem; padding: 1rem 1.5rem; align-items: end; }
+.queue-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: .75rem; padding: 1rem 1.5rem; align-items: end; }
 .queue-filters label { display: flex; flex-direction: column; gap: .4rem; color: var(--muted); font-size: .75rem; font-weight: 600; min-width: 0; }
 .queue-actions { position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; }
 .queue-actions > .btn { min-height: 46px; padding: .65rem 1rem; gap: .75rem; white-space: nowrap; background: var(--card-bg); color: var(--text); }

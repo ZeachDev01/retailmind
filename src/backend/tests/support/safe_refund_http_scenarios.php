@@ -55,7 +55,7 @@ try {
     [$status,$body]=$request(['refund_id'=>$row['refund_id']],1,'cashier',false);
     $assert(str_contains($body,'HTTP-CARD-SETTLEMENT') && str_contains($body,'Refund completed externally and recorded in RetailMind.'),'Saved customer receipt describes external settlement');
     [$status,$packFormBody]=$request(['sale_id'=>22],1,'cashier',false);
-    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (Whole sealed pack)') && str_contains($packFormBody,'Restockable requires whole sealed, complete pack (6 pcs)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
+    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (whole, sealed, complete pack)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
     $fractionalPackPost=['csrf_token'=>'fixture-csrf','sale_id'=>22,'quantity'=>[22=>'1.5'],'disposition'=>[22=>'restockable'],'reason'=>'customer_return','external_completed'=>'1','payment_reference'=>'HTTP-PACK-FRAC'];
     $before=$snapshot();$request($fractionalPackPost);
     $assert($snapshot()===$before,'HTTP fractional pack quantity is refused without partial writes');

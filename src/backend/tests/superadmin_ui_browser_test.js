@@ -486,5 +486,8 @@ const fixture = action => {
         if (browser) await browser.close();
         if (server) server.kill();
         fixture('cleanup');
+        if (!process.argv.includes('--inspect')) {
+            try { fs.rmSync(output, {recursive: true, force: true}); } catch {}
+        }
     }
 })().catch(error => { console.error(error); process.exitCode = 1; });

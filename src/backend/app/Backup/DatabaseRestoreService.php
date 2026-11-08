@@ -177,7 +177,7 @@ final class DatabaseRestoreService
             }
             $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package);
             $approval = $reconciliation->latestApproval();
-            $safety = new SafetyCopyService($this->pdo, $this->policy, null, $this->uploadDirectory);
+            $safety = new SafetyCopyService($this->pdo, $this->policy, $this->pdo, $this->uploadDirectory);
             $metadata = $safety->create(bin2hex(random_bytes(16)), $actorUserId, $actorRole, $loginPassword, $lock);
             $reconciliation->recheck($actorUserId, $actorRole, $loginPassword, $package, $approval);
             RecoveryAuthService::preparePreRestoreState($this->pdo, bin2hex(random_bytes(16)), $actorUserId,

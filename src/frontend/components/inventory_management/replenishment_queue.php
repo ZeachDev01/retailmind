@@ -170,7 +170,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             <?php endif; ?>
 
             <?php if ($coverage && $coverage['latest_attempt_status'] !== 'failed' && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
-                <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> products use forecasts · <?= (int)$coverage['stock_rule_count'] ?> use stock rules. <a href="../report/forecast_exceptions.php">Review exclusions</a> <?php forecast_help('queue-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
+                <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> products use forecasts · <?= (int)$coverage['stock_rule_count'] ?> use stock rules. <a href="../report/forecast_exceptions.php" style="display:inline-flex;align-items:center;min-height:44px;padding:0 .35rem;">Review exclusions</a> <?php forecast_help('queue-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
             <?php endif; ?>
 
             <?php if ($isDemo): ?>
@@ -242,12 +242,13 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                 <small class="muted queue-sku"><?= htmlspecialchars($item['sku']) ?></small>
                                                 </div>
                                                 <span class="queue-priority <?= $stockClass ?>"><?= htmlspecialchars($item['stock_status']) ?></span>
-                                                <?php if ($item['basis'] === 'Demand Forecast'): ?>
                                                 <details class="queue-details">
-                                                    <summary>Forecast details</summary>
+                                                    <summary><?= $item['basis'] === 'Demand Forecast' ? 'Forecast details' : 'Stock-rule details' ?></summary>
                                                     <strong class="queue-basis"><?= htmlspecialchars($item['basis']) ?></strong>
                                                     <p class="queue-reason"><?= htmlspecialchars($item['explanation']) ?></p>
+                                                    <?php if ($item['basis'] === 'Demand Forecast'): ?>
                                                         <p class="queue-recommended">Recommended buying quantity: <strong><?= (int)$item['recommended_quantity'] ?> units</strong></p>
+                                                    <?php endif; ?>
                                                     <p class="queue-forecast-status"><?= htmlspecialchars($item['forecast_status']) ?></p>
                                                     <?php if (!empty($item['model_version'])): ?>
                                                         <small class="queue-model muted" style="display:block;">Model: <?= htmlspecialchars((string)$item['model_version']) ?><?= !empty($item['job_id']) ? ' (run #' . (int)$item['job_id'] . ')' : '' ?></small>
@@ -259,7 +260,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                         <span class="<?= $isDemo ? 'muted' : 'tag-warning' ?>"><?= $isDemo ? 'Demo origin: ' : 'Stale forecast: ' ?><?= htmlspecialchars((string)$item['forecast_origin']) ?></span>
                                                     <?php endif; ?>
                                                 </details>
-                                                <?php endif; ?>
                                                 </div>
                                             </td>
                                             <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
