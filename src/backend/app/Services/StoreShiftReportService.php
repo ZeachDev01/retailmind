@@ -148,7 +148,161 @@ final class StoreShiftReportService
             }
         }
         usort($rows, static fn(array $a, array $b): int => strcmp($b['Date'], $a['Date']) ?: strcmp((string)$b['Shift ID'], (string)$a['Shift ID']));
-        return ['headers' => self::HEADERS, 'rows' => $rows, 'totals' => self::totals($rows)];
+        return [
+            'headers' => self::HEADERS,
+            'rows' => $rows,
+            'totals' => self::totals($rows),
+            'over_short' => self::summarizeOverShort($rows),
+            'cashier_performance' => self::summarizeCashierPerformance($rows),
+            'register_performance' => self::summarizeRegisterPerformance($rows),
+        ];
+    }
+
+    /**
+     * Summarizes cash over/short tallies across report rows.
+     */
+    public static function summarizeOverShort(array $rows): array
+    {
+        $totalOver = 0.0;
+        $totalShort = 0.0;
+        $netVariance = 0.0;
+        $closedCount = 0;
+        $balancedCount = 0;
+        $overCount = 0;
+        $shortCount = 0;
+
+        foreach ($rows as $row) {
+            $variance = $row['Variance'] ?? '';
+            if ($variance !== '' && $variance !== null) {
+                $v = (float)$variance;
+                $netVariance += $v;
+                $closedCount++;
+                if ($v < -0.005) {
+                    $totalShort += abs($v);
+                    $shortCount++;
+                } elseif ($v > 0.005) {
+                    $totalOver += $v;
+                    $overCount++;
+                } else {
+                    $balancedCount++;
+                }
+            }
+        }
+
+        return [
+            'total_over' => round($totalOver, 2),
+            'total_short' => round($totalShort, 2),
+            'net_variance' => round($netVariance, 2),
+            'closed_shifts_count' => $closedCount,
+            'balanced_count' => $balancedCount,
+            'over_count' => $overCount,
+            'short_count' => $shortCount,
+        ];
+    }
+
+    /**
+     * Summarizes cashier performance across report rows.
+     */
+    public static function summarizeCashierPerformance(array $rows): array
+    {
+        $performance = [];
+        foreach ($rows as $row) {
+            $cashierId = (string)($row['Cashier ID'] ?? '');
+            $cashierName = (string)($row['Cashier'] ?? self::UNASSIGNED);
+            $key = $cashierId !== '' ? $cashierId : $cashierName;
+
+            if (!isset($performance[$key])) {
+                $performance[$key] = [
+                    'cashier_id' => $cashierId,
+                    'cashier_name' => $cashierName,
+                    'shifts_count' => 0,
+                    'sale_count' => 0,
+                    'total_sales' => 0.0,
+                    'cash_sales' => 0.0,
+                    'card_sales' => 0.0,
+                    'ewallet_sales' => 0.0,
+                    'total_refunds' => 0.0,
+                    'net_variance' => 0.0,
+                    'closed_shifts' => 0,
+                    'short_count' => 0,
+                    'over_count' => 0,
+                    'balanced_count' => 0,
+                ];
+            }
+
+            if (!empty($row['Shift ID'])) {
+                $performance[$key]['shifts_count']++;
+            }
+            $performance[$key]['sale_count'] += (int)($row['Sale Count'] ?? 0);
+            $performance[$key]['total_sales'] += (float)($row['Total Sales'] ?? 0);
+            $performance[$key]['cash_sales'] += (float)($row['Cash Sales'] ?? 0);
+            $performance[$key]['card_sales'] += (float)($row['Card Sales'] ?? 0);
+            $performance[$key]['ewallet_sales'] += (float)($row['E-Wallet Sales'] ?? 0);
+            $performance[$key]['total_refunds'] += (float)($row['Total Refunds'] ?? 0);
+
+            $variance = $row['Variance'] ?? '';
+            if ($variance !== '' && $variance !== null) {
+                $v = (float)$variance;
+                $performance[$key]['net_variance'] += $v;
+                $performance[$key]['closed_shifts']++;
+                if ($v < -0.005) {
+                    $performance[$key]['short_count']++;
+                } elseif ($v > 0.005) {
+                    $performance[$key]['over_count']++;
+                } else {
+                    $performance[$key]['balanced_count']++;
+                }
+            }
+        }
+
+        uasort($performance, static fn(array $a, array $b): int => $b['total_sales'] <=> $a['total_sales']);
+
+        return array_values($performance);
+    }
+
+    /**
+     * Summarizes register performance across report rows.
+     */
+    public static function summarizeRegisterPerformance(array $rows): array
+    {
+        $registers = [];
+        foreach ($rows as $row) {
+            $regId = (string)($row['Register ID'] ?? '');
+            $regName = (string)($row['Register'] ?? self::UNASSIGNED);
+            $key = $regId !== '' ? $regId : $regName;
+
+            if (!isset($registers[$key])) {
+                $registers[$key] = [
+                    'register_id' => $regId,
+                    'register_name' => $regName,
+                    'shifts_count' => 0,
+                    'sale_count' => 0,
+                    'total_sales' => 0.0,
+                    'cash_sales' => 0.0,
+                    'card_sales' => 0.0,
+                    'ewallet_sales' => 0.0,
+                    'net_variance' => 0.0,
+                ];
+            }
+
+            if (!empty($row['Shift ID'])) {
+                $registers[$key]['shifts_count']++;
+            }
+            $registers[$key]['sale_count'] += (int)($row['Sale Count'] ?? 0);
+            $registers[$key]['total_sales'] += (float)($row['Total Sales'] ?? 0);
+            $registers[$key]['cash_sales'] += (float)($row['Cash Sales'] ?? 0);
+            $registers[$key]['card_sales'] += (float)($row['Card Sales'] ?? 0);
+            $registers[$key]['ewallet_sales'] += (float)($row['E-Wallet Sales'] ?? 0);
+
+            $variance = $row['Variance'] ?? '';
+            if ($variance !== '' && $variance !== null) {
+                $registers[$key]['net_variance'] += (float)$variance;
+            }
+        }
+
+        uasort($registers, static fn(array $a, array $b): int => $b['total_sales'] <=> $a['total_sales']);
+
+        return array_values($registers);
     }
 
     public static function csv($stream, array $report): void

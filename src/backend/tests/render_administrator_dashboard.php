@@ -11,6 +11,7 @@ $dashboard = json_decode(stream_get_contents(STDIN), true, 512, JSON_THROW_ON_ER
 $selectedRange = 30;
 $selectedPeriod = $argv[1] ?? 'today';
 $source = file_get_contents(__DIR__ . '/../../frontend/components/administrator/dashboard.php');
+$source = str_replace("__DIR__ . '/../../assets", "__DIR__ . '/../../frontend/assets", $source);
 $source = substr($source, strpos($source, '$escape ='));
 $source = preg_replace('/<\?php include __DIR__ .*?\?>/', '', $source);
 eval($source);
