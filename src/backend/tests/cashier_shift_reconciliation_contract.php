@@ -8,8 +8,8 @@ $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->sqliteCreateFunction('NOW', static fn(): string => date('Y-m-d H:i:s'), 0);
 $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT);
     INSERT INTO users VALUES (1, 'Casey'),(2, 'Morgan');
-    CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT);
-    INSERT INTO registers VALUES (10, 'Front');
+    CREATE TABLE registers (register_id INTEGER PRIMARY KEY, name TEXT, status TEXT DEFAULT 'active');
+    INSERT INTO registers VALUES (10, 'Front', 'active');
     CREATE TABLE cashier_shift_payment_totals (shift_id INTEGER, payment_type TEXT, amount REAL, PRIMARY KEY (shift_id, payment_type));
     CREATE TABLE cashier_shifts (shift_id INTEGER PRIMARY KEY, cashier_id INTEGER, register_id INTEGER,
         status TEXT, locked_at TEXT, opening_cash REAL, opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -52,6 +52,12 @@ $refused(fn() => $service->closeShift(1, 319, 'Count', $denominations, 20), 'tam
 $summary = $service->closeShift(1, 320, 'Drawer was short after count', $denominations, 20);
 $check((float)$summary['expected_cash'] === $expected && (float)$summary['cash_variance'] === -100.00,
     'Cashier receives expected cash and variance after submission');
+$check(!empty($summary['closed_at']) && !empty($summary['opened_at']), 'closure records immutable timestamps');
+$check($summary['closing_notes'] === 'Drawer was short after count', 'closure persists closing notes in shift summary');
+$check((float)$summary['actual_cash'] === 320.00 && (float)$summary['opening_cash'] === 200.00, 'closure persists cash drawer reconciliation record');
+$check(\App\Services\ShiftReconciliationCalculator::calculateVariance(500, 420) === 80.00, 'surplus variance calculates positive');
+$check(\App\Services\ShiftReconciliationCalculator::calculateVariance(350, 420) === -70.00, 'deficit variance calculates negative');
+$check(\App\Services\ShiftReconciliationCalculator::calculateVariance(420, 420) === 0.00, 'exact match calculates zero variance');
 $check((int)$summary['variance_review_required'] === 1, 'exactly PHP 100 needs review');
 $totals = $pdo->query('SELECT payment_type, amount FROM cashier_shift_payment_totals WHERE shift_id=20 ORDER BY payment_type')->fetchAll(PDO::FETCH_KEY_PAIR);
 $check($totals === ['card' => 75.0, 'cash' => 250.0, 'ewallet' => 50.0], 'closure stores atomic payment-method totals');
@@ -123,6 +129,17 @@ try {
 } catch (PDOException $expected) {}
 $check((int)$pdo->query("SELECT COUNT(*) FROM cashier_shifts WHERE shift_id=22 AND status='open'")->fetchColumn() === 1,
     'audit failure rolls back closure');
+
+$pdo->exec("DROP TRIGGER fail_closing_audit;
+    UPDATE cashier_shifts SET status='closed' WHERE status='open';
+    INSERT INTO registers (register_id, name) VALUES (11, 'Lane 2');");
+$openDenoms = ['bill_500' => 1, 'bill_100' => 2];
+$refused(fn() => $service->openShift(1, 'cashier', 11, 650.00, $openDenoms), 'mismatched opening denominations is refused');
+$openedShiftId = $service->openShift(1, 'cashier', 11, 700.00, $openDenoms);
+$openAudit = $pdo->query("SELECT * FROM activity_log WHERE record_id={$openedShiftId} AND action='Cashier Shift opened'")->fetch(PDO::FETCH_ASSOC);
+$openAuditDetails = $openAudit ? json_decode((string)$openAudit['new_value'], true) : [];
+$check(($openAuditDetails['opening_denominations']['total_cents'] ?? 0) === 70000,
+    'openShift records opening denominations in protected audit record');
 
 if ($failures) {
     fwrite(STDERR, "Cashier Shift reconciliation contract failed:\n- " . implode("\n- ", $failures) . "\n");
