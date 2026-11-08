@@ -499,7 +499,17 @@ $pdo->exec("
         reference_id INTEGER NULL,
         reference_type TEXT NULL,
         is_read INTEGER NOT NULL DEFAULT 0,
+        resolved_at TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE scheduled_demand_drivers (
+        driver_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        driver_type TEXT,
+        effective_date TEXT,
+        scheduled_at TEXT,
+        details_json TEXT
     );
 ");
 
