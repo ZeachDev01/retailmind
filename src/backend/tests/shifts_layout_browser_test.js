@@ -10,7 +10,7 @@ const {chromium} = require('playwright');
     const template = source.slice(source.indexOf('<!DOCTYPE html>')).replace(/<\?php include __DIR__ .*?\?>/, '');
     const browser = await chromium.launch();
     try {
-        for (const variant of ['opening', 'open', 'preview', 'admin', 'locked']) {
+        for (const variant of ['opening', 'open', 'preview', 'admin', 'locked', 'closed']) {
             const setup = `
                 require '../../../backend/app/Services/CashierShiftService.php';
                 require_once '../../../backend/app/Services/CashDenominationCounter.php';
@@ -20,15 +20,22 @@ const {chromium} = require('playwright');
                 function format_display_datetime($value) { return $value; }
                 $variant=$argv[1]; $isCashier=$variant!=='admin'; $actorRole=$isCashier?'cashier':'admin';
                 $message=''; $error=''; $ownRegisterLocked=$variant==='locked'; $targetCashierId=1;
-                $cashiers=[['user_id'=>1,'full_name'=>'Saved Cashier']]; $closedSummary=null;
+                $cashiers=[['user_id'=>1,'full_name'=>'Saved Cashier']];
+                $closedSummary=$variant==='closed'?[
+                    'shift_id'=>42,'register_name'=>'Front Register','full_name'=>'Saved Cashier',
+                    'opened_at'=>'Oct 16, 2026 08:00 AM','closed_at'=>'Oct 16, 2026 05:00 PM',
+                    'opening_cash'=>1000,'cash_sales'=>500,'expected_cash'=>1500,'actual_cash'=>1450,
+                    'cash_variance'=>-50,'closing_notes'=>'Short by 50 pesos on recount.',
+                    'intervention_reason'=>null,'variance_threshold'=>100,'variance_review_required'=>false
+                ]:null;
                 $availableRegisters=[['register_id'=>1,'name'=>'Front Register']]; $unresolvedHeldSales=[];
                 $shift=['shift_id'=>42,'register_name'=>'Front Register','full_name'=>'Saved Cashier',
                     'opened_at'=>'Oct 16, 2026 08:00 AM','closed_at'=>null,'closing_actor_name'=>null,
                     'intervention_reason'=>str_repeat('Long shift explanation ',10),'status'=>'open',
                     'expected_cash'=>null,'actual_cash'=>null,'cash_variance'=>null];
-                $openShift=$variant==='opening'?null:$shift; $recent=[$shift];
+                $openShift=($variant==='opening'||$variant==='closed')?null:$shift; $recent=[$shift];
                 $summary=['opening_cash'=>1000,'cash_sales'=>500,'calculated_expected_cash'=>1500,'sale_count'=>15];
-                $countPreview=$variant==='preview'?['cash_variance'=>0,'counted_cash'=>1500,'expected_cash'=>1500,'variance_review_required'=>false]:null;
+                $countPreview=$variant==='preview'?['cash_variance'=>-50,'counted_cash'=>1450,'expected_cash'=>1500,'variance_threshold'=>100,'variance_review_required'=>false]:null;
                 $pendingCount=['denominations'=>[]];
                 $movements=[['created_at'=>'Oct 16, 2026','movement_type'=>'cash_in','amount'=>100,
                     'reason'=>'float_addition','note'=>str_repeat('Saved movement note ',12),'full_name'=>'Saved Cashier']];
@@ -49,16 +56,28 @@ const {chromium} = require('playwright');
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${variant}: page fits at ${width}`);
                 assert(await page.locator('.shift-grid').evaluate(el => el.scrollWidth <= el.clientWidth), `${variant}: grid fits at ${width}`);
                 assert(await page.locator('.shift-history .table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), `${variant}: history fits at ${width}`);
-                if (variant === 'open') {
+                if (variant === 'open' || variant === 'opening') {
                     assert(await page.locator('.money-counter-stepper button').evaluateAll(buttons => buttons.every(button => {
                         const rect = button.getBoundingClientRect();
                         return rect.width >= 44 && rect.height >= 44;
-                    })), `Cash counter touch targets are at least 44px at ${width}`);
-                    const movement = await page.locator('.shift-movement').boundingBox();
-                    const reconciliation = await page.locator('.shift-reconciliation').boundingBox();
-                    assert(width > 1200 ? Math.abs(movement.y - reconciliation.y) < 2 : reconciliation.y >= movement.y + movement.height,
-                        `Panels use the expected grid at ${width}`);
+                    })), `Cash counter touch targets are at least 44px at ${width} (${variant})`);
+                    if (variant === 'open') {
+                        const movement = await page.locator('.shift-movement').boundingBox();
+                        const reconciliation = await page.locator('.shift-reconciliation').boundingBox();
+                        assert(width > 1200 ? Math.abs(movement.y - reconciliation.y) < 2 : reconciliation.y >= movement.y + movement.height,
+                            `Panels use the expected grid at ${width}`);
+                    }
                 }
+            }
+            if (variant === 'preview') {
+                assert.ok(await page.locator('.shift-deviation-warning-prompt').isVisible(), 'distinct discrepancy warning prompt visible on cash deviation');
+                assert.match(await page.locator('form[data-confirm]').getAttribute('data-confirm'), /WARNING: Physical cash deviates/, 'distinct confirmation warning prompt');
+                assert.equal(await page.locator('form[data-confirm]').getAttribute('data-confirm-title'), 'Warning: Cash Discrepancy Detected');
+            }
+            if (variant === 'closed') {
+                assert.ok(await page.locator('.shift-reconciled-banner').isVisible(), 'completed shift summary visible');
+                assert.ok(await page.locator('.shift-immutable-timestamp').count() >= 2, 'immutable timestamps visible');
+                assert.match(await page.locator('.shift-summary-notes').innerText(), /Short by 50 pesos/, 'persisted closing notes visible');
             }
             assert.equal(await page.locator('.shift-history td[data-label]').count(), 7);
             if (variant === 'open') {

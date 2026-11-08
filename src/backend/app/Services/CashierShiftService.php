@@ -166,7 +166,7 @@ class CashierShiftService
      * workspace may open a shift, and only for the Cashier who is signed in:
      * a shared shift is exactly what the glossary rules out.
      */
-    public function openShift(int $actorId, string $actorRole, int $registerId, float $openingFloat): int
+    public function openShift(int $actorId, string $actorRole, int $registerId, float $openingFloat, ?array $denominations = null): int
     {
         if (function_exists('is_remote_request') && is_remote_request()) {
             throw new DomainException('Shift operations are not permitted during remote monitoring.', 403);
@@ -175,12 +175,19 @@ class CashierShiftService
         if ($openingFloat < 0) {
             throw new InvalidArgumentException('The opening float cannot be negative.');
         }
+        $breakdown = null;
+        if ($denominations !== null) {
+            $breakdown = CashDenominationCounter::count($denominations);
+            if ((int)round($openingFloat * 100) !== $breakdown['total_cents']) {
+                throw new InvalidArgumentException('Opening float must match the bill and coin total.');
+            }
+        }
         if ($this->getOpenShift($actorId) !== null) {
             throw new DomainException('You already have an open Cashier Shift. Close it before opening another.');
         }
         $register = $this->requireAvailableRegister($registerId);
 
-        return $this->transaction(function () use ($actorId, $actorRole, $register, $openingFloat): int {
+        return $this->transaction(function () use ($actorId, $actorRole, $register, $openingFloat, $breakdown): int {
             try {
                 $stmt = $this->pdo->prepare(
                     'INSERT INTO cashier_shifts (cashier_id, register_id, opening_cash) VALUES (?, ?, ?)'
@@ -193,7 +200,7 @@ class CashierShiftService
                 throw $this->lostRace($exception) ?? $exception;
             }
             $shiftId = (int)$this->pdo->lastInsertId();
-            $this->auditShiftOpened($actorId, $actorRole, $shiftId, $register, $openingFloat);
+            $this->auditShiftOpened($actorId, $actorRole, $shiftId, $register, $openingFloat, $breakdown);
 
             return $shiftId;
         });
@@ -452,8 +459,16 @@ class CashierShiftService
         string $actorRole,
         int $shiftId,
         array $register,
-        float $openingFloat
+        float $openingFloat,
+        ?array $breakdown = null
     ): void {
+        $extra = [
+            'opening_float' => round($openingFloat, 2),
+            'actor_role' => $actorRole,
+        ];
+        if ($breakdown !== null) {
+            $extra['opening_denominations'] = $breakdown;
+        }
         $this->auditShiftEvent(
             $actorId,
             self::AUDIT_ACTION,
@@ -462,10 +477,7 @@ class CashierShiftService
                 'register_id' => (int)$register['register_id'],
                 'register_name' => (string)$register['name'],
             ],
-            [
-                'opening_float' => round($openingFloat, 2),
-                'actor_role' => $actorRole,
-            ]
+            $extra
         );
     }
 
