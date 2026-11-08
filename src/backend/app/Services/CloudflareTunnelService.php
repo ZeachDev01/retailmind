@@ -113,7 +113,16 @@ class CloudflareTunnelService
             }
         }
 
-        $envToken = \App\Core\Environment::get('CLOUDFLARE_TUNNEL_TOKEN') ?: getenv('CLOUDFLARE_TUNNEL_TOKEN');
+        if (!class_exists(\App\Core\Environment::class)) {
+            $envFile = dirname(__DIR__) . '/Core/Environment.php';
+            if (file_exists($envFile)) {
+                require_once $envFile;
+            }
+        }
+
+        $envToken = class_exists(\App\Core\Environment::class)
+            ? (\App\Core\Environment::get('CLOUDFLARE_TUNNEL_TOKEN') ?: getenv('CLOUDFLARE_TUNNEL_TOKEN'))
+            : getenv('CLOUDFLARE_TUNNEL_TOKEN');
         if (is_string($envToken) && trim($envToken) !== '') {
             return trim($envToken);
         }
@@ -136,7 +145,16 @@ class CloudflareTunnelService
             }
         }
 
-        $envHost = \App\Core\Environment::get('CLOUDFLARE_TUNNEL_HOSTNAME') ?: getenv('CLOUDFLARE_TUNNEL_HOSTNAME');
+        if (!class_exists(\App\Core\Environment::class)) {
+            $envFile = dirname(__DIR__) . '/Core/Environment.php';
+            if (file_exists($envFile)) {
+                require_once $envFile;
+            }
+        }
+
+        $envHost = class_exists(\App\Core\Environment::class)
+            ? (\App\Core\Environment::get('CLOUDFLARE_TUNNEL_HOSTNAME') ?: getenv('CLOUDFLARE_TUNNEL_HOSTNAME'))
+            : getenv('CLOUDFLARE_TUNNEL_HOSTNAME');
         if (is_string($envHost) && trim($envHost) !== '') {
             return trim($envHost);
         }
