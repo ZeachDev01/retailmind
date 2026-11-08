@@ -52,6 +52,31 @@ $checkout_error = '';
 $checkout_notice = '';
 $lock_error = '';
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['open_drawer', 'drawer_kick', 'kick_drawer'], true)) {
+    csrf_verify();
+    if (function_exists('is_remote_request') && is_remote_request()) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'error' => 'Physical cash drawer operations are restricted to local store premises.',
+        ]);
+        exit;
+    }
+    try {
+        $shiftService->openCashDrawer($cashierId, $actorRole);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true, 'message' => 'Cash drawer pulse sent.']);
+        exit;
+    } catch (Throwable $e) {
+        http_response_code($e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
 // Ticket #90: locking and unlocking are a break, never an ending. Neither one
 // touches the shift's status, opening float, or closing figures — only
 // cashier_shifts.locked_at — so a Cashier who walks away mid-shift comes back to
@@ -60,6 +85,16 @@ $lock_error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && in_array($_POST['action'] ?? '', ['lock_register', 'unlock_register'], true)) {
     csrf_verify();
+    if (function_exists('is_remote_request') && is_remote_request()) {
+        http_response_code(403);
+        if (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'Physical register lock operations are restricted to local store premises.']);
+        } else {
+            echo 'Physical register lock operations are restricted to local store premises.';
+        }
+        exit;
+    }
     try {
         if (($_POST['action'] ?? '') === 'lock_register') {
             $shiftService->lockRegister($cashierId, $actorRole);

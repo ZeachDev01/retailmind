@@ -139,14 +139,132 @@ $scriptFile = realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? ''));
 $requestUri = str_replace('\\', '/', (string)($_SERVER['REQUEST_URI'] ?? ''));
 
+if (!function_exists('app_is_secure')) {
+    function app_is_secure(): bool
+    {
+        if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') {
+            return true;
+        }
+        if (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+            return true;
+        }
+        if (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower((string)$_SERVER['HTTP_X_FORWARDED_SSL']) === 'on') {
+            return true;
+        }
+        if (isset($_SERVER['HTTP_FRONT_END_HTTPS']) && strtolower((string)$_SERVER['HTTP_FRONT_END_HTTPS']) === 'on') {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+            $protos = array_map('trim', explode(',', (string)$_SERVER['HTTP_X_FORWARDED_PROTO']));
+            if (in_array('https', array_map('strtolower', $protos), true)) {
+                return true;
+            }
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PORT']) && (int)trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_PORT'])[0]) === 443) {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_CF_VISITOR'])) {
+            $visitor = (string)$_SERVER['HTTP_CF_VISITOR'];
+            if (str_contains(strtolower($visitor), '"scheme":"https"')) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('app_scheme')) {
+    function app_scheme(): string
+    {
+        return app_is_secure() ? 'https' : 'http';
+    }
+}
+
+if (!function_exists('app_host')) {
+    function app_host(): string
+    {
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $host = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
+            if ($host !== '') {
+                return $host;
+            }
+        }
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            return trim((string)$_SERVER['HTTP_HOST']);
+        }
+        if (!empty($_SERVER['SERVER_NAME'])) {
+            return trim((string)$_SERVER['SERVER_NAME']);
+        }
+        return 'localhost';
+    }
+}
+
+if (!function_exists('app_origin')) {
+    function app_origin(): string
+    {
+        return app_scheme() . '://' . app_host();
+    }
+}
+
+if (!function_exists('is_remote_request')) {
+    function is_remote_request(): bool
+    {
+        if (!empty($_SESSION['is_remote'])) {
+            return true;
+        }
+        if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_CF_RAY'])
+            || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
+            || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])
+            || !empty($_SERVER['HTTP_CF_VISITOR'])) {
+            return true;
+        }
+
+        $isLocalAddress = static function (string $raw): bool {
+            $target = strtolower(trim(explode(':', trim($raw))[0]));
+            if ($target === '' || $target === 'localhost' || $target === '127.0.0.1' || $target === '::1' || $target === '[::1]') {
+                return true;
+            }
+            if (str_ends_with($target, '.local') || str_ends_with($target, '.localhost')) {
+                return true;
+            }
+            if (filter_var($target, FILTER_VALIDATE_IP)) {
+                return filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+            }
+            return false;
+        };
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ips = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+            $clientIp = trim($ips[0]);
+            if (!$isLocalAddress($clientIp)) {
+                return true;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            $host = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
+            if (!$isLocalAddress($host)) {
+                return true;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_HOST'])) {
+            if (!$isLocalAddress($_SERVER['HTTP_HOST'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 $offlineRecovery = PHP_SAPI === 'cli'
     && $scriptFile === realpath($backendPath . '/scripts/restore_database.php');
 
-$remoteRequest = !empty($_SERVER['RETAILMIND_REMOTE'])
-    || !empty($_ENV['RETAILMIND_REMOTE'])
-    || !empty($_SERVER['HTTP_CF_RAY'])
-    || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
-    || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL']);
+$remoteRequest = is_remote_request();
 
 if (PHP_SAPI !== 'cli' && $remoteRequest) {
     $projectPath = dirname($rootPath);

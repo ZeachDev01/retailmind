@@ -1,6 +1,6 @@
 Options -Indexes
 
-<FilesMatch "^.*\.(joblib|pyc|log|sql)$">
+<FilesMatch "^(\.env.*|\.git.*|\.user\.ini|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|.*\.(joblib|pyc|log|sql|sqlite|db|rmpkg|bak|dump))$">
     Require all denied
 </FilesMatch>
 
