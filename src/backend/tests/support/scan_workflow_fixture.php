@@ -394,17 +394,23 @@ if (!array_key_exists('create', $options)) {
 $cleanup();
 
 try {
-    $insertProduct = $pdo->prepare(
-        'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price,
-                               units_per_package, base_unit, receiving_unit, status)
-         VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
-    );
+    $hasBranchProducts = (bool)$pdo->query("SHOW COLUMNS FROM products LIKE 'branch_id'")->fetch();
+    $insertProduct = $hasBranchProducts
+        ? $pdo->prepare(
+            'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price,
+                                   units_per_package, base_unit, receiving_unit, status)
+             VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
+        )
+        : $pdo->prepare(
+            'INSERT INTO products (sku, barcode, case_barcode, product_name, unit_price, cost_price,
+                                   units_per_package, base_unit, receiving_unit, status)
+             VALUES (?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
+        );
     $insertInventory = $pdo->prepare(
         'INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)'
     );
     foreach ($products as $key => $product) {
-        $insertProduct->execute([
-            $storeId,
+        $productParams = [
             $product['sku'],
             $product['barcode'],
             $product['case_barcode'],
@@ -413,11 +419,23 @@ try {
             $product['base_unit'] ?? 'piece',
             $product['receiving_unit'] ?? 'package',
             $product['status'],
-        ]);
+        ];
+        if ($hasBranchProducts) {
+            array_unshift($productParams, $storeId);
+        }
+        $insertProduct->execute($productParams);
         $productId = (int)$pdo->lastInsertId();
         $pdo->prepare("UPDATE products SET preferred_supplier = 'Original preferred supplier', supplier = 'Original supplier' WHERE product_id = ?")
             ->execute([$productId]);
         $insertInventory->execute([$productId, $product['quantity_on_hand']]);
+        if ($product['quantity_on_hand'] > 0) {
+            $packSize = (int)($product['units_per_package'] ?? 1);
+            $packSize = $packSize > 0 ? $packSize : 1;
+            $sealed = intdiv($product['quantity_on_hand'], $packSize);
+            $loose = $product['quantity_on_hand'] % $packSize;
+            $pdo->prepare('INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, date_received, supplier) VALUES (?, ?, ?, ?, ?, ?, CURRENT_DATE, ?)')
+                ->execute([$productId, 'INIT-' . $token . '-' . $productId, $product['quantity_on_hand'], $product['quantity_on_hand'], $sealed, $loose, 'Init Supplier']);
+        }
         $productByName[$key] = [
             'product_id' => $productId,
             'sku' => $product['sku'],
@@ -432,25 +450,61 @@ try {
         ];
     }
 
-    $insertUser = $pdo->prepare(
-        'INSERT INTO users (full_name, username, email, password_hash, role_id, status, session_version, must_change_password, branch_id)
-         VALUES (?, ?, ?, ?, ?, \'active\', 1, 0, ?)'
-    );
-    foreach ($staff as $key => $member) {
-        $insertUser->execute([
-            $member['full_name'],
-            $member['username'],
-            $member['email'],
-            password_hash('Scanwf-Test-Passw0rd!', PASSWORD_DEFAULT),
-            $roleId($pdo, $member['role']),
-            $storeId,
-        ]);
-        $staffByUsername[$key] = [
-            'user_id' => (int)$pdo->lastInsertId(),
-            'username' => $member['username'],
-            'password' => 'Scanwf-Test-Passw0rd!',
-            'role' => $member['role'],
-        ];
+    $hasFullName = (bool)$pdo->query("SHOW COLUMNS FROM users LIKE 'full_name'")->fetch();
+    $hasBranchUsers = (bool)$pdo->query("SHOW COLUMNS FROM users LIKE 'branch_id'")->fetch();
+    if ($hasFullName) {
+        $insertUserSql = 'INSERT INTO users (full_name, username, email, password_hash, role_id, status, session_version, must_change_password'
+            . ($hasBranchUsers ? ', branch_id)' : ')')
+            . ' VALUES (?, ?, ?, ?, ?, \'active\', 1, 0' . ($hasBranchUsers ? ', ?)' : ')');
+        $insertUser = $pdo->prepare($insertUserSql);
+        foreach ($staff as $key => $member) {
+            $userParams = [
+                $member['full_name'],
+                $member['username'],
+                $member['email'],
+                password_hash('Scanwf-Test-Passw0rd!', PASSWORD_DEFAULT),
+                $roleId($pdo, $member['role']),
+            ];
+            if ($hasBranchUsers) {
+                $userParams[] = $storeId;
+            }
+            $insertUser->execute($userParams);
+            $staffByUsername[$key] = [
+                'user_id' => (int)$pdo->lastInsertId(),
+                'username' => $member['username'],
+                'password' => 'Scanwf-Test-Passw0rd!',
+                'role' => $member['role'],
+            ];
+        }
+    } else {
+        $insertUserSql = 'INSERT INTO users (display_name, first_name, last_name, username, email, password_hash, role_id, status, session_version, must_change_password'
+            . ($hasBranchUsers ? ', branch_id)' : ')')
+            . ' VALUES (?, ?, ?, ?, ?, ?, ?, \'active\', 1, 0' . ($hasBranchUsers ? ', ?)' : ')');
+        $insertUser = $pdo->prepare($insertUserSql);
+        foreach ($staff as $key => $member) {
+            $nameParts = explode(' ', (string)$member['full_name'], 2);
+            $firstName = $nameParts[0] ?? '';
+            $lastName = $nameParts[1] ?? '';
+            $userParams = [
+                $member['full_name'],
+                $firstName,
+                $lastName,
+                $member['username'],
+                $member['email'],
+                password_hash('Scanwf-Test-Passw0rd!', PASSWORD_DEFAULT),
+                $roleId($pdo, $member['role']),
+            ];
+            if ($hasBranchUsers) {
+                $userParams[] = $storeId;
+            }
+            $insertUser->execute($userParams);
+            $staffByUsername[$key] = [
+                'user_id' => (int)$pdo->lastInsertId(),
+                'username' => $member['username'],
+                'password' => 'Scanwf-Test-Passw0rd!',
+                'role' => $member['role'],
+            ];
+        }
     }
 
     $insertApprovedIssue = $pdo->prepare(

@@ -185,7 +185,8 @@ class ReceivingService
         $productCols = $hasProductPackCols
             ? 'product_id, product_name, cost_price, units_per_package, pack_size, pack_barcode, quantity_purchased'
             : 'product_id, product_name, cost_price, units_per_package, quantity_purchased';
-        $productStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+        $rowLock = ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') ? '' : ' FOR UPDATE';
+        $productStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql}{$rowLock}");
         $productStmt->execute(array_merge([$productId], $scopeParams));
         $product = $productStmt->fetch(PDO::FETCH_ASSOC);
         if (!$product) {

@@ -1,8 +1,12 @@
 (() => {
-    const button = document.getElementById('queue-download-pdf');
-    if (!button) return;
-    button.addEventListener('click', async () => {
-        button.disabled = true;
+    const triggerButtons = [
+        document.getElementById('queue-download-pdf'),
+        document.getElementById('btn-generate-po-pdf')
+    ].filter(Boolean);
+    if (!triggerButtons.length) return;
+
+    const generatePdf = async () => {
+        triggerButtons.forEach(btn => btn.disabled = true);
         try {
             await document.fonts.ready;
             const pdf = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
@@ -24,15 +28,15 @@
                 context.fillRect(40, 24, 1110, 6);
                 context.fillStyle = '#111827';
                 context.font = 'bold 30px sans-serif';
-                context.fillText('Replenishment Recommendations', 40, 60);
+                context.fillText('Purchase Order & Replenishment Worksheet', 40, 60);
                 context.font = '20px sans-serif';
-                context.fillText('Inventory Manager decides what to buy. Quantities are in base units.', 40, 96);
+                context.fillText('Official stock reorder recommendations and purchase authorization. Quantities are in base units.', 40, 96);
                 context.fillText(`Page ${page}`, 1040, 96);
                 context.fillStyle = '#111827';
                 context.fillRect(40, 116, 1110, 44);
                 context.fillStyle = '#ffffff';
                 context.font = 'bold 20px sans-serif';
-                ['Product / SKU', 'On hand', 'Stock-rule buy', '28-day sales'].forEach((text, i) => context.fillText(text, columns[i], 144));
+                ['Product / SKU / Status', 'On hand', 'Suggested PO buy', '28-day sales'].forEach((text, i) => context.fillText(text, columns[i], 144));
                 context.font = '20px sans-serif';
                 y = 180;
             };
@@ -77,12 +81,18 @@
                 y += 30;
             });
             writePage();
-            pdf.save('replenishment-recommendations.pdf');
+            pdf.save('purchase-order-replenishment.pdf');
         } catch (error) {
-            console.error('Replenishment PDF download failed', error);
-            window.RetailMindUI.toast('Could not download the PDF. Reload the page and try again.', 'error');
+            console.error('Purchase Order PDF download failed', error);
+            if (window.RetailMindUI && window.RetailMindUI.toast) {
+                window.RetailMindUI.toast('Could not download the PO PDF. Reload the page and try again.', 'error');
+            } else {
+                alert('Could not download the Purchase Order PDF. Reload the page and try again.');
+            }
         } finally {
-            button.disabled = false;
+            triggerButtons.forEach(btn => btn.disabled = false);
         }
-    });
+    };
+
+    triggerButtons.forEach(btn => btn.addEventListener('click', generatePdf));
 })();

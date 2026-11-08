@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
 
 $message = '';
 $error = '';
+$createdPulloutId = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$canMutate) {
@@ -33,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $result = $pulloutService->recordPullout($_POST, (int)$_SESSION['user_id']);
+        $createdPulloutId = (int)($result['pullout_id'] ?? 0);
         $breakdown = SupplierPulloutService::formatFormBreakdown((int)($result['pulled_packs'] ?? 0), (int)($result['pulled_loose'] ?? 0), (int)($result['pack_size_used'] ?? 1));
         $formDetail = $breakdown !== '' ? " ({$breakdown})" : "";
         $message = "Supplier pullout #{$result['pullout_id']} recorded. Deducted {$result['quantity']} units{$formDetail} from batch #{$result['batch_id']}. Remaining batch quantity: {$result['remaining_batch_qty']}.";
@@ -107,7 +109,14 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
         </div>
 
         <?php if ($message): ?>
-            <div class="message success" role="alert" aria-live="polite"><?= htmlspecialchars($message) ?></div>
+            <div class="message success flex flex-wrap items-center justify-between gap-2" role="alert" aria-live="polite">
+                <span><?= htmlspecialchars($message) ?></span>
+                <?php if ($createdPulloutId > 0): ?>
+                    <a href="pullout_manifest.php?pullout_id=<?= $createdPulloutId ?>" target="_blank" class="btn btn-sm btn-secondary">
+                        <i class="bi bi-file-earmark-text" aria-hidden="true"></i> View Transfer Manifest
+                    </a>
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -351,18 +360,21 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <?php if ($canMutate): ?>
-                                                <?php
-                                                $receivingUrl = function_exists('app_url')
-                                                    ? app_url('components/report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'])
-                                                    : '../report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'];
-                                                ?>
-                                                <a href="<?= htmlspecialchars($receivingUrl) ?>" class="btn btn-small btn-secondary" title="Receive replacement goods for this pullout">
-                                                    <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Receive Replacement
+                                            <div class="flex flex-wrap gap-1">
+                                                <a href="pullout_manifest.php?pullout_id=<?= (int)$row['pullout_id'] ?>" target="_blank" class="btn btn-small btn-secondary" title="View &amp; print transfer manifest">
+                                                    <i class="bi bi-file-earmark-text" aria-hidden="true"></i> Manifest
                                                 </a>
-                                            <?php else: ?>
-                                                <span class="text-muted">—</span>
-                                            <?php endif; ?>
+                                                <?php if ($canMutate): ?>
+                                                    <?php
+                                                    $receivingUrl = function_exists('app_url')
+                                                        ? app_url('components/report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'])
+                                                        : '../report/stock_receiving.php?pullout_id=' . (int)$row['pullout_id'] . '&product_id=' . (int)$row['product_id'];
+                                                    ?>
+                                                    <a href="<?= htmlspecialchars($receivingUrl) ?>" class="btn btn-small btn-secondary" title="Receive replacement goods for this pullout">
+                                                        <i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Receive Replacement
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
