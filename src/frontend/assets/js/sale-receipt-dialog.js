@@ -13,7 +13,12 @@
             window.RetailMindUI?.syncScrollLock?.();
             const warning = document.querySelector('.theme-save-alert');
             if (warning) dialog.querySelector('.sale-receipt-dialog-header').append(warning);
-            title.focus();
+            if (dialog.dataset.autofocusAction === '1' || dialog.hasAttribute('data-autofocus-action')) {
+                const action = dialog.querySelector('.receipt-actions button') || dialog.querySelector('[data-close-receipt]');
+                if (action) { action.focus(); } else { title.focus(); }
+            } else {
+                title.focus();
+            }
             dialog.dispatchEvent(new Event('retailmind:receiptopen'));
         }
         function close() {
@@ -42,7 +47,8 @@
             window.RetailMindUI?.syncScrollLock?.();
             const warning = dialog.querySelector('.theme-save-alert');
             if (warning) document.body.append(warning);
-            returnFocus?.focus({preventScroll: true});
+            const target = returnFocus || document.getElementById('sku-input');
+            target?.focus({preventScroll: true});
             // Refreshing a historical view must never repeat a payment announcement.
             const url = new URL(window.location.href);
             url.searchParams.delete('checkout');
@@ -51,6 +57,7 @@
             if (window.location.protocol.startsWith('http')) history.replaceState(null, '', url);
         });
         window.closeReceiptModal = close;
+        window.openReceiptModal = open;
         window.viewReceipt = async function (saleId, trigger, autoPrint = false) {
             pending?.abort();
             pending = new AbortController();

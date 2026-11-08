@@ -621,7 +621,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false" autofocus>
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
@@ -856,6 +856,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
     </div>
 </div>
 
+<?php $receiptAutofocusAction = true; ?>
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <script src="<?= app_url('assets/js/checkout-attempt.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-attempt.js') ?>"></script>
@@ -884,7 +885,7 @@ $catalogEtag = '"' . hash('sha256', json_encode($catalogProducts, JSON_THROW_ON_
 const posCatalogPreload = <?= json_encode($catalogProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
 const skuInput = document.getElementById('sku-input');
-if (skuInput && window.matchMedia('(pointer: fine)').matches) skuInput.focus();
+if (skuInput && !document.getElementById('receiptModal')?.open) skuInput.focus();
 const recentScan = document.getElementById('recent-scan');
 const addCodeBtn = document.getElementById('add-code-btn');
 const checkoutForm = document.getElementById('checkout-form');
@@ -1077,7 +1078,11 @@ function renderQuickProducts() {
 }
 
 function getCartTotal() {
-    return Object.values(cart).reduce((total, item) => total + (Number(item.price) * Number(item.qty)), 0);
+    return Object.values(cart).reduce((total, item) => {
+        const itemPrice = item.custom_price !== undefined ? Number(item.custom_price) : Number(item.price);
+        const itemDiscount = Number(item.discount || item.item_discount || 0);
+        return total + Math.max(0, (itemPrice * Number(item.qty)) - itemDiscount);
+    }, 0);
 }
 
 function getDiscountAmount() {
@@ -1724,7 +1729,9 @@ function renderCart() {
             const item = cart[id];
             const productId = Number(item.product_id || String(id).split(':')[0]);
             const product = (typeof catalogProductMap !== 'undefined' && catalogProductMap.get(productId)) || quickProductById.get(productId) || item;
-            const subtotal = item.price * item.qty;
+            const itemPrice = item.custom_price !== undefined ? Number(item.custom_price) : Number(item.price);
+            const itemDiscount = Number(item.discount || item.item_discount || 0);
+            const subtotal = Math.max(0, (itemPrice * item.qty) - itemDiscount);
             const remaining = item.stock !== undefined ? item.stock - item.qty : null;
             const threshold = getLowStockThreshold(item);
             const stockNote = item.stock !== undefined ? `Stock ${item.stock}` : 'Stock unavailable';
@@ -1735,10 +1742,13 @@ function renderCart() {
             const formBadge = isPack
                 ? `<span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;">Pack of ${item.pack_size || 1}</span>`
                 : `<span class="badge" style="background:#f3f4f6;color:#4b5563;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">Piece</span>`;
+            const discountBadge = itemDiscount > 0
+                ? `<span class="badge" style="background:#fef3c7;color:#92400e;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">-₱${money(itemDiscount)}</span>`
+                : '';
             const escapedId = escapeHtml(String(id));
 
             rows += `<tr role="row">
-                <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
+                <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}${discountBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
                 <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" data-action="cart-dec" data-id="${escapedId}" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" data-action="cart-set" data-id="${escapedId}" aria-label="${escapeHtml(item.name)} quantity" autocomplete="off" inputmode="numeric"><button type="button" class="qty-btn" data-action="cart-inc" data-id="${escapedId}" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
                 <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
                 <td role="cell"><button type="button" class="remove-item-btn" data-action="cart-remove" data-id="${escapedId}" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
@@ -1862,6 +1872,8 @@ async function checkoutNow() {
 
     let quote;
     checkoutButton.disabled = true;
+    const originalCheckoutButtonHtml = checkoutButton.innerHTML;
+    checkoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
         if (window.cartWorkspace && resumedHeldSaleId && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
@@ -1879,6 +1891,7 @@ async function checkoutNow() {
     } finally {
         if (window.cartWorkspace) cartWorkspace.busy = false;
         checkoutButton.disabled = false;
+        checkoutButton.innerHTML = originalCheckoutButtonHtml;
     }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
@@ -1933,42 +1946,53 @@ function closeCheckoutConfirm() {
 
 async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    checkoutSubmitting = true;
+    confirmCheckoutButton.disabled = true;
+    const originalConfirmHtml = confirmCheckoutButton.innerHTML;
+    confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
+
+    const restoreConfirmButton = () => {
+        checkoutSubmitting = false;
+        confirmCheckoutButton.disabled = false;
+        confirmCheckoutButton.innerHTML = originalConfirmHtml;
+    };
+
     if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        restoreConfirmButton();
         showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
         return;
     }
     if (!checkoutAttempt.ready) {
+        restoreConfirmButton();
         showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
         return;
     }
     if (!validateCheckout()) {
+        restoreConfirmButton();
         closeCheckoutConfirm();
         return;
     }
     if (!checkoutQuote.isCurrent()) {
+        restoreConfirmButton();
         showCartMessage('The cart or discount changed. Review the final quote again.', 'error');
         closeCheckoutConfirm();
         return;
     }
     if (paymentMethod.value !== 'cash' && !document.getElementById('review-verified')?.checked) {
+        restoreConfirmButton();
         showCartMessage('Verify the external payment before recording it.', 'error');
         return;
     }
-    checkoutSubmitting = true;
     checkoutForm.elements.auto_print_receipt.value = document.getElementById('review-auto-print')?.checked ? '1' : '0';
     checkoutForm.elements.payment_verified.value = paymentMethod.value === 'cash' || document.getElementById('review-verified')?.checked ? '1' : '0';
     checkoutConfirmed = true;
-    confirmCheckoutButton.disabled = true;
-    confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     try {
         await checkoutQuote.review(true);
         await checkoutAttempt.save(cart);
         checkoutForm.submit();
     } catch (error) {
-        checkoutSubmitting = false;
+        restoreConfirmButton();
         checkoutConfirmed = false;
-        confirmCheckoutButton.disabled = false;
-        confirmCheckoutButton.textContent = 'Confirm payment';
         closeCheckoutConfirm();
         updatePaymentFields();
         if (error.conflicts && error.conflicts.length) {
@@ -2178,6 +2202,16 @@ async function resumeHeldSale(id) {
         renderCart(); renderHeldSales();
         const reviewed = await cartWorkspace.acceptReview(data.review);
         if (reviewed === null) { cartReviewUnresolved = true; persistCart(); showCartMessage('Held sale remains unresolved. Requested lines are preserved; review again before checkout.', 'error'); return; }
+        for (const key in reviewed) {
+            if (data.cart && data.cart[key]) {
+                if (data.cart[key].custom_price !== undefined) reviewed[key].custom_price = data.cart[key].custom_price;
+                if (data.cart[key].discount !== undefined) reviewed[key].discount = data.cart[key].discount;
+                if (data.cart[key].item_discount !== undefined) reviewed[key].item_discount = data.cart[key].item_discount;
+                if (data.cart[key].price !== undefined && data.cart[key].custom_price !== undefined) {
+                    reviewed[key].price = data.cart[key].custom_price;
+                }
+            }
+        }
         cart = reviewed; cartReviewUnresolved = false; renderCart();
         showCartMessage('Held sale resumed. Complete checkout or discard it with a reason to finish it.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); } finally { cartWorkspace.busy = false; }
@@ -2405,7 +2439,13 @@ if (fullscreenToggle) {
 skuInput.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
         event.preventDefault();
-        if (!event.repeat) addCodeFromInput();
+        if (!event.repeat) {
+            if (skuInput.value.trim() !== '') {
+                addCodeFromInput();
+            } else if (typeof cart !== 'undefined' && Object.keys(cart).length > 0 && typeof checkoutNow === 'function') {
+                checkoutNow();
+            }
+        }
     }
 });
 
@@ -2464,6 +2504,17 @@ checkoutForm.addEventListener('submit', event => {
     });
 });
 
+checkoutModal.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.repeat && !event.isComposing) {
+        const target = event.target;
+        if (target && target.tagName === 'BUTTON' && target !== confirmCheckoutButton) {
+            return;
+        }
+        event.preventDefault();
+        submitConfirmedCheckout();
+    }
+});
+
 document.addEventListener('keydown', event => {
     if (event.defaultPrevented) return;
     if (event.key === 'F2') {
@@ -2483,6 +2534,13 @@ document.addEventListener('keydown', event => {
         return;
     }
     if (event.key === 'Escape') {
+        const receipt = document.getElementById('receiptModal');
+        if (receipt && receipt.open) {
+            if (typeof closeReceiptModal === 'function') closeReceiptModal();
+            else receipt.close();
+            skuInput.focus();
+            return;
+        }
         if (checkoutModal.classList.contains('open')) {
             closeCheckoutConfirm();
         } else if (voidModal.classList.contains('open')) {
@@ -2557,6 +2615,9 @@ checkoutAttempt.recover().then(async () => {
     } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
 });
 setTimeout(() => { if (!document.getElementById('receiptModal')?.open) skuInput.focus(); }, 100);
+document.getElementById('receiptModal')?.addEventListener('close', () => {
+    setTimeout(() => skuInput.focus(), 50);
+});
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>
         <?php endif; ?>
