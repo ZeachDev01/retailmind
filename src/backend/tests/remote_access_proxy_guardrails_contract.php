@@ -424,6 +424,25 @@ try {
 }
 $assert($remoteKickRejected, 'Remote cash drawer open/kick is rejected');
 
+// Test 7: Thermal receipt print trigger rejected when remote
+$remotePrintRejected = false;
+try {
+    $shiftService->triggerThermalPrint(1, 1, 'cashier');
+} catch (DomainException $e) {
+    $remotePrintRejected = true;
+}
+$assert($remotePrintRejected, 'Remote thermal receipt print trigger is rejected on CashierShiftService');
+
+$remoteEnginePrintRejected = false;
+try {
+    require_once dirname(__DIR__) . '/app/Receipts/ReceiptEngine.php';
+    $receiptEngine = new \App\Receipts\ReceiptEngine($testPdo);
+    $receiptEngine->triggerThermalPrint(1);
+} catch (DomainException $e) {
+    $remoteEnginePrintRejected = true;
+}
+$assert($remoteEnginePrintRejected, 'Remote thermal receipt print trigger is rejected on ReceiptEngine');
+
 // 4.3 Verify LOCAL operations work again once back in local context
 $resetEnv();
 $_SERVER['HTTP_HOST'] = 'localhost';
@@ -436,6 +455,14 @@ try {
     $localKickSuccess = false;
 }
 $assert($localKickSuccess === true, 'Local cash drawer open/kick succeeds on store premises');
+
+$localPrintSuccess = false;
+try {
+    $localPrintSuccess = $shiftService->triggerThermalPrint(1, 1, 'cashier');
+} catch (Throwable $e) {
+    $localPrintSuccess = false;
+}
+$assert($localPrintSuccess === true, 'Local thermal receipt print trigger succeeds on store premises');
 
 // Local register close succeeds
 $closed = $shiftService->closeShift(1, 1000.00, 'end of day');

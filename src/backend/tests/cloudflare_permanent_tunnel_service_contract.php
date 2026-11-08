@@ -221,6 +221,12 @@ if ($foundDoc !== null) {
     $assert(str_contains($docContent, 'boot') || str_contains($docContent, 'restart') || str_contains($docContent, 'service'), "Documentation explains persistence and automatic boot recovery");
 }
 
+echo "\n=== 7. Windows Service Status Detection ===\n";
+
+$svc = new $serviceClass($tempDir);
+$assert(method_exists($svc, 'isWindowsServiceRunning'), "CloudflareTunnelService has isWindowsServiceRunning method");
+$assert($svc->isWindowsServiceRunning('NonExistentTestService999') === false, "isWindowsServiceRunning returns false for non-existent service");
+
 // Clean up temp directory
 @unlink($tempDir . '/tunnel/tunnel_config.json');
 @unlink($tempDir . '/tunnel/tunnel.pid');

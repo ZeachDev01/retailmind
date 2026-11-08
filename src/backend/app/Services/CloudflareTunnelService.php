@@ -406,16 +406,37 @@ class CloudflareTunnelService
     public function isRunning(): bool
     {
         $pid = $this->getPid();
-        if ($pid === null) {
-            return false;
-        }
-
-        if (!$this->isPidRunning($pid)) {
+        if ($pid !== null) {
+            if ($this->isPidRunning($pid)) {
+                return true;
+            }
             $this->cleanState();
+        }
+
+        if ($this->isWindowsServiceRunning()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isWindowsServiceRunning(string $serviceName = 'RetailMindCloudflareTunnel'): bool
+    {
+        if (PHP_OS_FAMILY !== 'Windows') {
             return false;
         }
 
-        return true;
+        $output = [];
+        $exitCode = 0;
+        @exec('sc.exe query ' . escapeshellarg($serviceName) . ' 2>NUL', $output, $exitCode);
+        if ($exitCode === 0) {
+            $text = implode("\n", $output);
+            if (preg_match('/STATE\s*:\s*\d+\s+RUNNING/i', $text)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function getPid(): ?int

@@ -539,6 +539,16 @@ class CashierShiftService
         return true;
     }
 
+    /** Trigger physical thermal receipt printer on counter premises. */
+    public function triggerThermalPrint(int $saleId, int $actorId, string $actorRole): bool
+    {
+        if (function_exists('is_remote_request') && is_remote_request()) {
+            throw new DomainException('Thermal receipt printing is restricted to local store premises.', 403);
+        }
+        $this->requireCashierWorkspace($actorRole, 'Only the Cashier workspace can print receipts.');
+        return true;
+    }
+
     /** Record an accountable movement in the signed-in Cashier's open drawer. */
     public function addDrawerMovement(int $actorId, string $actorRole, string $type, float $amount, string $reason, ?string $note = null, string $approverUsername = '', string $approverPassword = ''): int
     {

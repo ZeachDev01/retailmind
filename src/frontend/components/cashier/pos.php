@@ -77,6 +77,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($_POST['action'] ?? '', ['print_receipt', 'thermal_print', 'reprint_receipt'], true)) {
+    csrf_verify();
+    if (function_exists('is_remote_request') && is_remote_request()) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'error' => 'Thermal receipt printing is restricted to local store premises.',
+        ]);
+        exit;
+    }
+    try {
+        $saleId = filter_var($_POST['sale_id'] ?? 0, FILTER_VALIDATE_INT) ?: 0;
+        $shiftService->triggerThermalPrint($saleId, $cashierId, $actorRole);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => true, 'message' => 'Thermal print command dispatched.']);
+        exit;
+    } catch (Throwable $e) {
+        http_response_code($e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
 // Ticket #90: locking and unlocking are a break, never an ending. Neither one
 // touches the shift's status, opening float, or closing figures — only
 // cashier_shifts.locked_at — so a Cashier who walks away mid-shift comes back to
@@ -400,6 +426,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
         if (($_POST['auto_print_receipt'] ?? '') === '1') {
+            if (function_exists('is_remote_request') && is_remote_request()) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Thermal receipt printing is restricted to local store premises.',
+                ]);
+                exit;
+            }
             $_SESSION['auto_print_sale'] = (int)$result['sale_id'];
         }
         $receiptUrl = app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete');

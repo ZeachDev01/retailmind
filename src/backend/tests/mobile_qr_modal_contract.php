@@ -131,8 +131,17 @@ if (file_exists($storeSettingsFile)) {
     $assert(str_contains($content, 'navigator.clipboard'), "Script uses modern clipboard API");
     $assert(str_contains($content, 'execCommand'), "Script includes fallback copy mechanism");
 
-    // Modal keyboard accessibility (Escape key to dismiss)
+    // Modal keyboard accessibility (Escape key to dismiss with scoped listener lifecycle)
     $assert(str_contains($content, 'Escape') || str_contains($content, 'keyCode === 27'), "Modal closes on Escape key press");
+    $assert(str_contains($content, "removeEventListener('keydown', handleModalEscape)"), "Modal Escape key listener detaches on close");
+    $assert(!preg_match('/document\.addEventListener\(\s*[\'"]keydown[\'"]\s*,\s*function/', $content), "Store settings does not attach unbounded global Escape key listener");
+
+    // DOM node stacking guardrail
+    $assert(str_contains($content, "qrDisplay.innerHTML = ''"), "renderQrCode clears qrDisplay before rendering to prevent DOM node stacking");
+
+    // Link integrity
+    $assert(!str_contains($content, 'DEPLOYMENT_REMOTE_TUNNEL.md'), "Store settings does not contain dead relative link to markdown file");
+    $assert(str_contains($content, "app_url('components/auth/help.php#tunnel-deployment')"), "Store settings uses compliant in-app app_url link for setup guide");
 }
 
 echo "\n=== 5. Responsive Styling & Viewport Adaptation Contract ===\n";

@@ -281,6 +281,27 @@ if ($onlineUrlInput !== null) {
     $assert($onlineUrlInput->getAttribute('value') === $samplePublicUrl, "Popover URL input displays active public tunnel URL");
 }
 
+// Test Online State with connecting / resolving URL (empty URL string)
+$setTestTunnelState(true, '');
+$connectingHtml = $renderSidebar('admin');
+$connectingDoc = new DOMDocument();
+libxml_use_internal_errors(true);
+$connectingDoc->loadHTML($connectingHtml);
+libxml_clear_errors();
+$connectingXpath = new DOMXPath($connectingDoc);
+
+$connectingTrigger = $connectingXpath->query('//*[@data-remote-pill-trigger]')->item(0);
+$assert($connectingTrigger !== null, "Trigger exists in connecting state");
+if ($connectingTrigger !== null) {
+    $classAttr = $connectingTrigger->getAttribute('class');
+    $assert(str_contains($classAttr, 'is-online'), "Trigger has 'is-online' class when online without URL");
+    $assert(!str_contains($classAttr, 'is-offline'), "Trigger does not have 'is-offline' class when online without URL");
+}
+$connectingBadge = $connectingXpath->query('//*[@data-remote-badge]')->item(0);
+$assert($connectingBadge !== null && str_contains(strtolower($connectingBadge->textContent), 'connecting'), "Popover badge displays 'Connecting' when URL is pending");
+$connectingDesc = $connectingXpath->query('//*[@data-remote-desc]')->item(0);
+$assert($connectingDesc !== null && str_contains(strtolower($connectingDesc->textContent), 'resolving'), "Popover description explains URL is resolving");
+
 echo "\n=== 4. Interactive Dropdown/Popover and 1-Click Copy Markup Contract ===\n";
 
 $popovers = $onlineXpath->query('//*[@data-remote-popover]');
@@ -312,6 +333,8 @@ if (file_exists($pillJsFile)) {
     $assert(str_contains($jsSource, 'navigator.clipboard') || str_contains($jsSource, 'execCommand'), "remote-access-pill.js supports clipboard copy");
     $assert(str_contains($jsSource, 'is-online'), "remote-access-pill.js updates is-online state class");
     $assert(str_contains($jsSource, 'is-offline'), "remote-access-pill.js updates is-offline state class");
+    $assert(str_contains($jsSource, 'attachDismissListeners') && str_contains($jsSource, 'detachDismissListeners'), "remote-access-pill.js attaches and detaches dismiss listeners on popover open/close");
+    $assert(!preg_match('/document\.addEventListener\(\s*[\'"](?:click|keydown)[\'"]\s*,\s*closeAllPopovers\s*\)/', $jsSource), "remote-access-pill.js does not register unbounded global dismiss listeners");
 }
 
 if (file_exists($pillCssFile)) {

@@ -159,10 +159,11 @@ function sidebar_render_section(array $section): void
 
 function sidebar_render_remote_access_pill(string $idSuffix = 'desktop', ?string $role = null, bool $isOnline = false, string $tunnelUrl = ''): string
 {
-    $statusText = $isOnline ? 'Online' : 'Offline';
-    $pillLabel = $isOnline ? 'Remote Online' : 'Remote Offline';
+    $hasUrl = $tunnelUrl !== '';
+    $statusText = $isOnline ? ($hasUrl ? 'Online' : 'Connecting') : 'Offline';
+    $pillLabel = $isOnline ? ($hasUrl ? 'Remote Online' : 'Remote Connecting') : 'Remote Offline';
     $descText = $isOnline
-        ? 'Public access is active through Cloudflare Tunnel.'
+        ? ($hasUrl ? 'Public access is active through Cloudflare Tunnel.' : 'Tunnel is active. Resolving public URL...')
         : 'Remote access is currently offline.';
     $apiUrl = app_url('components/administrator/remote_access_api.php');
     $canManage = in_array($role, ['admin', 'super_admin'], true);
@@ -185,7 +186,7 @@ function sidebar_render_remote_access_pill(string $idSuffix = 'desktop', ?string
     $html .= '<p class="remote-popover-desc" data-remote-desc>' . $descText . '</p>';
 
     $html .= '<div class="remote-popover-url-row ' . ($isOnline ? '' : 'u-hidden') . '" data-remote-url-row>';
-    $html .= '<input type="text" class="remote-popover-url-input" data-remote-url-input readonly value="' . sidebar_e($tunnelUrl) . '" aria-label="Active Remote URL">';
+    $html .= '<input type="text" class="remote-popover-url-input" data-remote-url-input readonly value="' . sidebar_e($tunnelUrl) . '" placeholder="Resolving URL..." aria-label="Active Remote URL">';
     $html .= '<button type="button" class="remote-copy-btn" data-remote-copy-btn aria-label="Copy remote URL">';
     $html .= '<span class="remote-copy-icon" aria-hidden="true">&#128203;</span>';
     $html .= '<span class="remote-copy-text" data-remote-copy-text>Copy</span>';
@@ -376,7 +377,7 @@ try {
     $sidebarTunnelOnline = false;
     $sidebarTunnelUrl = '';
 }
-$isTunnelActive = $sidebarTunnelOnline && $sidebarTunnelUrl !== '';
+$isTunnelActive = $sidebarTunnelOnline;
 ?>
 <link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/remote-access-pill.css') . '?v=' . filemtime(__DIR__ . '/../assets/css/remote-access-pill.css')) ?>">
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">

@@ -15,12 +15,13 @@
         const apiUrl = firstWrapper.getAttribute('data-remote-api') || 'remote_access_api.php';
 
         function updateAllPills(status) {
-            const isOnline = Boolean(status && status.online && status.url);
-            const statusText = isOnline ? 'Online' : 'Offline';
-            const pillLabel = isOnline ? 'Remote Online' : 'Remote Offline';
-            const publicUrl = isOnline ? (status.url || '') : '';
+            const isOnline = Boolean(status && status.online);
+            const hasUrl = Boolean(status && status.url && status.url.trim());
+            const statusText = isOnline ? (hasUrl ? 'Online' : 'Connecting') : 'Offline';
+            const pillLabel = isOnline ? (hasUrl ? 'Remote Online' : 'Remote Connecting') : 'Remote Offline';
+            const publicUrl = isOnline && hasUrl ? status.url.trim() : '';
             const descText = isOnline
-                ? 'Public access is active through Cloudflare Tunnel.'
+                ? (hasUrl ? 'Public access is active through Cloudflare Tunnel.' : 'Tunnel is active. Resolving public URL...')
                 : 'Remote access is currently offline.';
 
             wrappers.forEach(wrapper => {
@@ -53,6 +54,7 @@
                 }
                 if (urlInput) {
                     urlInput.value = publicUrl;
+                    urlInput.placeholder = isOnline && !hasUrl ? 'Resolving URL...' : '';
                 }
             });
         }
@@ -75,13 +77,45 @@
             }
         }
 
+        let activePopover = null;
+
+        function handleOutsideClick(e) {
+            if (activePopover && !activePopover.contains(e.target)) {
+                closeAllPopovers();
+            }
+        }
+
+        function handleKeyDown(e) {
+            if (e.key === 'Escape') {
+                closeAllPopovers();
+            }
+        }
+
+        function attachDismissListeners() {
+            document.addEventListener('click', handleOutsideClick);
+            document.addEventListener('keydown', handleKeyDown);
+        }
+
+        function detachDismissListeners() {
+            document.removeEventListener('click', handleOutsideClick);
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+
         function closeAllPopovers() {
+            let hadOpen = false;
             wrappers.forEach(wrapper => {
                 const popover = wrapper.querySelector('[data-remote-popover]');
                 const trigger = wrapper.querySelector('[data-remote-pill-trigger]');
-                if (popover) popover.classList.add('u-hidden');
+                if (popover && !popover.classList.contains('u-hidden')) {
+                    popover.classList.add('u-hidden');
+                    hadOpen = true;
+                }
                 if (trigger) trigger.setAttribute('aria-expanded', 'false');
             });
+            activePopover = null;
+            if (hadOpen) {
+                detachDismissListeners();
+            }
         }
 
         // Bind interactive triggers and copy actions
@@ -101,6 +135,8 @@
                     if (!wasOpen) {
                         popover.classList.remove('u-hidden');
                         trigger.setAttribute('aria-expanded', 'true');
+                        activePopover = popover;
+                        attachDismissListeners();
                         // Refresh status when opening popover
                         fetchStatus();
                     }
@@ -147,14 +183,6 @@
                         }, 2000);
                     }
                 });
-            }
-        });
-
-        // Global dismiss on click outside or Escape key
-        document.addEventListener('click', closeAllPopovers);
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                closeAllPopovers();
             }
         });
 

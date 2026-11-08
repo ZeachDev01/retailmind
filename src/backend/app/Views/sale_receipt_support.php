@@ -14,7 +14,7 @@ if ($checkoutCompleted) {
 $checkoutCompleted = $checkoutCompleted && $completedAttempt !== null;
 $announcePayment = $checkoutCompleted && (int)($_SESSION['completed_checkout_sale'] ?? 0) === $sale_id;
 if ($announcePayment) unset($_SESSION['completed_checkout_sale']);
-$autoPrintSale = $checkoutCompleted && (int)($_SESSION['auto_print_sale'] ?? 0) === $sale_id;
+$autoPrintSale = $checkoutCompleted && (int)($_SESSION['auto_print_sale'] ?? 0) === $sale_id && !(function_exists('is_remote_request') && is_remote_request());
 if ($autoPrintSale) unset($_SESSION['auto_print_sale']);
 $storeId = store_scope_id($pdo);
 $can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);

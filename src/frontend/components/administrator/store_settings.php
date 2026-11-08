@@ -458,7 +458,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                     <p class="field-help">
                         <strong>Dedicated Store PC Service:</strong> For 24/7 supervisor access with automatic startup at boot and crash recovery, install the Windows Service:
                         <code>powershell -ExecutionPolicy Bypass -File .\src\backend\scripts\tunnel\service_install.ps1</code>
-                        &bull; <a href="../../../docs/DEPLOYMENT_REMOTE_TUNNEL.md" target="_blank">5-Minute Dedicated Store PC Setup Guide</a>
+                        &bull; <a href="<?= htmlspecialchars(app_url('components/auth/help.php#tunnel-deployment')) ?>" target="_blank">5-Minute Dedicated Store PC Setup Guide</a>
                     </p>
                 </div>
             </div>
@@ -518,6 +518,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
 
     function renderQrCode(url) {
         if (!qrDisplay || !url) return;
+        qrDisplay.innerHTML = '';
         if (window.QRCode) {
             new QRCode(qrDisplay, {
                 text: url,
@@ -546,6 +547,12 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         }
     }
 
+    function handleModalEscape(e) {
+        if (e.key === 'Escape') {
+            closeQrModal();
+        }
+    }
+
     function openQrModal() {
         const url = (urlInput ? urlInput.value.trim() : '');
         if (!url) return;
@@ -556,12 +563,14 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         if (modal) {
             modal.classList.remove('u-hidden');
             if (modalCloseBtn) modalCloseBtn.focus();
+            document.addEventListener('keydown', handleModalEscape);
         }
     }
 
     function closeQrModal() {
         if (modal) {
             modal.classList.add('u-hidden');
+            document.removeEventListener('keydown', handleModalEscape);
             if (showQrBtn) showQrBtn.focus();
         }
     }
@@ -582,11 +591,6 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
             }
         });
     }
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && modal && !modal.classList.contains('u-hidden')) {
-            closeQrModal();
-        }
-    });
 
     function setBadge(state, text) {
         badge.className = '';
