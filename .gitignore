@@ -9,6 +9,10 @@
 !/backend/storage/backups/.gitkeep
 /src/backend/storage/sessions/*
 !/src/backend/storage/sessions/.gitkeep
+/src/backend/storage/bin/*
+!/src/backend/storage/bin/.gitkeep
+/src/backend/storage/tunnel/*
+!/src/backend/storage/tunnel/.gitkeep
 /src/backend/storage/profile-images/*
 !/src/backend/storage/profile-images/.gitkeep
 !/src/backend/storage/profile-images/.htaccess

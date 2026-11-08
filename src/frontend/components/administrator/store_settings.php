@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin']);
 require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptLogo.php';
+require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
 
 $receiptFields = [
     'store_name' => 'Store name',
@@ -200,6 +201,8 @@ $settings = get_store_settings($pdo);
 $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? '');
 $requested = $service->storeSettings();
 $effective = $service->thresholdsFor('admin');
+$tunnelService = new \App\Services\CloudflareTunnelService();
+$tunnelStatus = $tunnelService->getStatus();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -353,7 +356,244 @@ $effective = $service->thresholdsFor('admin');
                 <span class="field-help" role="status"><?= !empty($settings['store_email_alerts_enabled']) ? 'Store email alerts are enabled.' : 'Store alerts are disabled until a test email succeeds.' ?></span>
             </form>
         </section>
+
+        <section class="dashboard-section" id="remote-access-card" aria-labelledby="remote-access-heading">
+            <div class="section-header">
+                <div class="remote-access-header-wrap">
+                    <div>
+                        <h2 id="remote-access-heading">Remote Access</h2>
+                        <p class="section-description">Secure Cloudflare tunnel for supervisor and back-office remote monitoring without port forwarding.</p>
+                    </div>
+                    <div>
+                        <span id="remote-status-badge" class="<?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'tag-success' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'tag-warning' : 'tag-danger') ?>" role="status">
+                            <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'Online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'Connecting...' : 'Offline') ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="remote-access-content">
+                <div class="remote-toggle-row">
+                    <div>
+                        <label for="remote-access-toggle" class="remote-toggle-title">Enable Cloudflare Tunnel</label>
+                        <p class="field-help">Activate the portable background tunnel daemon to expose a temporary encrypted public URL.</p>
+                    </div>
+                    <div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="remote-access-toggle" role="switch" <?= !empty($tunnelStatus['online']) ? 'checked' : '' ?> aria-checked="<?= !empty($tunnelStatus['online']) ? 'true' : 'false' ?>" aria-label="Toggle Remote Access Tunnel">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
+                    <label for="remote-public-url" class="remote-url-label">Active Remote URL</label>
+                    <div class="remote-url-group">
+                        <input type="text" id="remote-public-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        <button type="button" id="copy-remote-url-btn" class="btn btn-secondary" title="Copy public URL to clipboard">
+                            <span id="copy-btn-text">Copy URL</span>
+                        </button>
+                    </div>
+                    <small class="field-help">Share this URL only with authorized supervisors. Physical cashier operations remain locked to local store registers.</small>
+                </div>
+                <div id="remote-access-feedback" class="field-help u-mt-1" role="status" aria-live="polite"></div>
+            </div>
+        </section>
     </main>
 </div>
+
+<script>
+(function() {
+    const toggle = document.getElementById('remote-access-toggle');
+    const badge = document.getElementById('remote-status-badge');
+    const urlContainer = document.getElementById('remote-url-container');
+    const urlInput = document.getElementById('remote-public-url');
+    const copyBtn = document.getElementById('copy-remote-url-btn');
+    const copyText = document.getElementById('copy-btn-text');
+    const feedback = document.getElementById('remote-access-feedback');
+    const csrfToken = <?= json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+    const apiUrl = 'remote_access_api.php';
+
+    let pollTimer = null;
+    let pollCount = 0;
+
+    function setBadge(state, text) {
+        badge.className = '';
+        if (state === 'online') {
+            badge.className = 'tag-success';
+            badge.textContent = text || 'Online';
+        } else if (state === 'starting') {
+            badge.className = 'tag-warning';
+            badge.textContent = text || 'Connecting...';
+        } else {
+            badge.className = 'tag-danger';
+            badge.textContent = text || 'Offline';
+        }
+    }
+
+    function setFeedback(msg, isError) {
+        if (!feedback) return;
+        feedback.textContent = msg || '';
+        feedback.style.color = isError ? 'var(--danger, #dc2626)' : 'var(--muted, #64748b)';
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+        pollCount = 0;
+    }
+
+    function pollStatus() {
+        stopPolling();
+        pollCount = 0;
+        pollTimer = setInterval(function() {
+            pollCount++;
+            if (pollCount > 15) {
+                stopPolling();
+                setFeedback('Connecting is taking longer than expected. Check the tunnel log.', true);
+                return;
+            }
+            fetch(apiUrl, { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data || !data.success) return;
+                    if (data.status === 'online' && data.url) {
+                        stopPolling();
+                        setBadge('online');
+                        urlInput.value = data.url;
+                        urlContainer.classList.remove('u-hidden');
+                        toggle.checked = true;
+                        toggle.disabled = false;
+                        setFeedback('Remote access tunnel is active and ready.');
+                    } else if (!data.online) {
+                        stopPolling();
+                        setBadge('offline');
+                        toggle.checked = false;
+                        toggle.disabled = false;
+                        urlContainer.classList.add('u-hidden');
+                        setFeedback('Tunnel terminated unexpectedly.', true);
+                    }
+                })
+                .catch(function() {
+                    // Ignore transient network errors during poll
+                });
+        }, 1500);
+    }
+
+    if (toggle) {
+        toggle.addEventListener('change', function() {
+            const shouldStart = toggle.checked;
+            toggle.disabled = true;
+            stopPolling();
+
+            if (shouldStart) {
+                setBadge('starting');
+                setFeedback('Starting portable tunnel daemon...');
+                urlContainer.classList.remove('u-hidden');
+                urlInput.value = '';
+                urlInput.placeholder = 'Extracting dynamic public URL...';
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ action: 'start' }),
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    toggle.disabled = false;
+                    if (data && data.success) {
+                        if (data.status === 'online' && data.url) {
+                            setBadge('online');
+                            urlInput.value = data.url;
+                            setFeedback('Remote access tunnel is active and ready.');
+                        } else {
+                            setBadge('starting');
+                            pollStatus();
+                        }
+                    } else {
+                        toggle.checked = false;
+                        setBadge('offline');
+                        urlContainer.classList.add('u-hidden');
+                        setFeedback(data && data.error ? data.error : 'Failed to start tunnel daemon.', true);
+                    }
+                })
+                .catch(function(err) {
+                    toggle.disabled = false;
+                    toggle.checked = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    setFeedback('Network error while connecting to remote access service.', true);
+                });
+            } else {
+                setBadge('starting', 'Stopping...');
+                setFeedback('Stopping tunnel daemon...');
+
+                fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({ action: 'stop' }),
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    toggle.disabled = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    urlInput.value = '';
+                    setFeedback('Remote access tunnel stopped.');
+                })
+                .catch(function() {
+                    toggle.disabled = false;
+                    setBadge('offline');
+                    urlContainer.classList.add('u-hidden');
+                    setFeedback('Remote access tunnel stopped.');
+                });
+            }
+        });
+    }
+
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+            const url = urlInput ? urlInput.value.trim() : '';
+            if (!url) return;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(onCopied).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+
+            function fallbackCopy() {
+                urlInput.select();
+                try {
+                    document.execCommand('copy');
+                    onCopied();
+                } catch (e) {
+                    setFeedback('Unable to copy automatically. Please copy the URL manually.', true);
+                }
+            }
+
+            function onCopied() {
+                const prev = copyText.textContent;
+                copyText.textContent = '✓ Copied!';
+                copyBtn.classList.add('btn-primary');
+                copyBtn.classList.remove('btn-secondary');
+                setTimeout(function() {
+                    copyText.textContent = prev;
+                    copyBtn.classList.remove('btn-primary');
+                    copyBtn.classList.add('btn-secondary');
+                }, 2000);
+            }
+        });
+    }
+})();
+</script>
 </body>
 </html>

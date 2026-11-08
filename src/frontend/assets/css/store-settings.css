@@ -52,6 +52,124 @@
 .store-settings-page .receipt-logo-form { margin-top: 1.5rem; }
 .store-settings-page .receipt-logo-preview { display: block; max-width: 100%; width: auto; max-height: 192px; margin-top: .75rem; background: #fff; }
 
+/* Remote Access Management Card Styles */
+.remote-access-header-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.remote-toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.75rem 0;
+}
+
+.remote-toggle-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--border, #cbd5e1);
+    transition: .25s ease;
+    border-radius: 999px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .25s ease;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--primary, #0284c7);
+}
+
+.toggle-switch input:focus-visible + .toggle-slider {
+    outline: 2px solid var(--primary, #0284c7);
+    outline-offset: 2px;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.remote-url-container {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-surface-secondary, rgba(0,0,0,0.02));
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+}
+
+.remote-url-label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+}
+
+.remote-url-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.remote-url-input {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.88rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-surface, #ffffff);
+    border: 1px solid var(--border, #cbd5e1);
+    border-radius: 6px;
+}
+
+.u-hidden {
+    display: none !important;
+}
+
 @media (max-width: 600px) {
     .store-settings-page .form-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -59,5 +177,10 @@
 
     .store-settings-page .form-actions .btn {
         width: 100%;
+    }
+
+    .remote-url-group {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
