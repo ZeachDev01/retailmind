@@ -298,6 +298,10 @@ final class ReceiptEngine
         }
 
         $discount = max((float)($sale['discount_amount'] ?? 0), $itemSubtotal - (float)($sale['total_amount'] ?? 0));
+        $totalAmount = (float)($sale['total_amount'] ?? 0.0);
+        $vatRate = 0.12;
+        $vatableSales = round($totalAmount / (1 + $vatRate), 2);
+        $vatAmount = round($totalAmount - $vatableSales, 2);
 
         return [
             'paper_width_mm' => $paperWidthMm,
@@ -323,6 +327,9 @@ final class ReceiptEngine
                 'subtotal_formatted' => $money($itemSubtotal),
                 'discount_formatted' => $money($discount),
                 'total_amount_formatted' => $money($sale['total_amount'] ?? 0),
+                'vatable_sales_formatted' => $money($vatableSales),
+                'vat_amount_formatted' => $money($vatAmount),
+                'vat_rate_percent' => '12%',
                 'cash_received_formatted' => isset($sale['cash_received']) && $sale['cash_received'] !== null ? $money($sale['cash_received']) : '-',
                 'change_due_formatted' => isset($sale['change_due']) && $sale['change_due'] !== null ? $money($sale['change_due']) : '-',
             ],
