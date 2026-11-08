@@ -8,8 +8,6 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
 
-require_role(['admin', 'super_admin']);
-
 use App\Services\CloudflareTunnelService;
 
 try {
@@ -17,10 +15,13 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     if ($method === 'GET') {
+        require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
         $status = $service->getStatus();
         echo json_encode(['success' => true] + $status, JSON_UNESCAPED_SLASHES);
         exit;
     }
+
+    require_role(['admin', 'super_admin']);
 
     if ($method === 'POST') {
         // Read raw JSON body or fall back to standard POST parameters

@@ -1,0 +1,302 @@
+/* remote-access-pill.css - Ticket #443 */
+/* Global header remote access indicator and popover styling */
+
+.remote-pill-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.remote-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.25;
+    border-radius: 9999px;
+    border: 1px solid var(--border, #cbd5e1);
+    background: var(--theme-surface, #ffffff);
+    color: var(--text-secondary, #475569);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.remote-status-pill:hover,
+.remote-status-pill:focus-visible {
+    border-color: var(--border-hover, #94a3b8);
+    background: var(--bg-hover, #f8fafc);
+}
+
+.remote-status-pill:focus-visible {
+    outline: 2px solid var(--primary, #0284c7);
+    outline-offset: 2px;
+}
+
+/* Status Dot */
+.remote-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Caret */
+.remote-status-caret {
+    font-size: 0.7rem;
+    line-height: 1;
+    opacity: 0.7;
+    margin-left: 0.1rem;
+    transition: transform 0.2s ease;
+}
+
+.remote-status-pill[aria-expanded="true"] .remote-status-caret {
+    transform: rotate(180deg);
+}
+
+/* Active / Online State - Illuminated Green Pill */
+.remote-status-pill.is-online {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #065f46;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+}
+
+.remote-status-pill.is-online .remote-status-dot {
+    background-color: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    animation: remote-pulse 2s infinite ease-in-out;
+}
+
+@keyframes remote-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.4);
+    }
+}
+
+/* Inactive / Offline State - Muted / Gray / Subtle Pill */
+.remote-status-pill.is-offline {
+    background: var(--bg-surface, #f8fafc);
+    border-color: var(--border, #cbd5e1);
+    color: var(--muted, #64748b);
+}
+
+.remote-status-pill.is-offline .remote-status-dot {
+    background-color: #94a3b8;
+    box-shadow: none;
+}
+
+/* Popover / Dropdown */
+.remote-status-popover {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 1000;
+    width: 320px;
+    max-width: calc(100vw - 2rem);
+    background: var(--theme-surface, #ffffff);
+    border: 1px solid var(--border, #cbd5e1);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    padding: 1rem;
+    font-size: 0.875rem;
+    text-align: left;
+}
+
+.remote-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.remote-popover-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text, #1e293b);
+}
+
+.remote-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.remote-badge.badge-online {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.remote-badge.badge-offline {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.remote-popover-desc {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.8125rem;
+    color: var(--muted, #64748b);
+    line-height: 1.4;
+}
+
+.remote-popover-url-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.remote-popover-url-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    font-family: monospace;
+    border: 1px solid var(--border, #cbd5e1);
+    border-radius: 6px;
+    background: var(--bg-hover, #f8fafc);
+    color: var(--text, #1e293b);
+}
+
+.remote-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    border: 1px solid var(--border, #cbd5e1);
+    background: var(--theme-surface, #ffffff);
+    color: var(--text, #1e293b);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.remote-copy-btn:hover {
+    background: var(--bg-hover, #f1f5f9);
+    border-color: var(--border-hover, #94a3b8);
+}
+
+.remote-copy-btn.btn-copied {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.remote-copy-feedback {
+    margin-top: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    background: #dcfce7;
+    color: #166534;
+    text-align: center;
+    font-weight: 500;
+}
+
+.remote-popover-footer {
+    margin-top: 0.75rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.remote-settings-link {
+    font-size: 0.8rem;
+    color: var(--primary, #0284c7);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.remote-settings-link:hover {
+    text-decoration: underline;
+}
+
+/* Mobile topbar adjustments */
+.admin-mobile-topbar .remote-pill-wrapper {
+    margin-right: 0.25rem;
+}
+
+.admin-mobile-topbar .remote-status-pill {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+@media (max-width: 480px) {
+    .remote-status-pill .remote-status-label {
+        display: none;
+    }
+    .remote-status-pill {
+        padding: 0.35rem 0.45rem;
+    }
+    .remote-status-popover {
+        right: -40px;
+        width: 290px;
+    }
+}
+
+/* Dark mode overrides */
+html[data-theme="dark"] .remote-status-pill.is-online {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #34d399;
+}
+
+html[data-theme="dark"] .remote-status-pill.is-offline {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+}
+
+html[data-theme="dark"] .remote-status-popover {
+    background: #152238 !important;
+    border-color: #41516a !important;
+    color: #e5edf8 !important;
+}
+
+html[data-theme="dark"] .remote-popover-header,
+html[data-theme="dark"] .remote-popover-footer {
+    border-color: #41516a;
+}
+
+html[data-theme="dark"] .remote-popover-title {
+    color: #e5edf8;
+}
+
+html[data-theme="dark"] .remote-popover-url-input {
+    background: #0b1329;
+    border-color: #41516a;
+    color: #e5edf8;
+}
+
+html[data-theme="dark"] .remote-copy-btn {
+    background: #1e293b;
+    border-color: #41516a;
+    color: #e5edf8;
+}
+
+html[data-theme="dark"] .remote-badge.badge-offline {
+    background: #1e293b;
+    color: #94a3b8;
+    border-color: #334155;
+}

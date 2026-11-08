@@ -42,7 +42,7 @@ class CloudflareTunnelService
         int $defaultPort = 80,
         string $defaultHost = '127.0.0.1'
     ) {
-        $this->rootDir = $rootDir ?: (realpath(__DIR__ . '/../../..') ?: dirname(__DIR__, 3));
+        $this->rootDir = $rootDir ?: (realpath(__DIR__ . '/../../../..') ?: dirname(__DIR__, 4));
         $this->binDir = $binDir ?: ($this->rootDir . '/src/backend/storage/bin');
         $this->runDir = $runDir ?: ($this->rootDir . '/src/backend/storage/tunnel');
 
