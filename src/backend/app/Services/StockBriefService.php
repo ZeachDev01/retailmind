@@ -230,18 +230,34 @@ class StockBriefService
     {
         require_once __DIR__ . '/../../includes/functions.php';
         $report = $this->buildReport();
+        $totalItems = ($report['metrics']['out_of_stock'] ?? 0)
+            + ($report['metrics']['low_stock'] ?? 0)
+            + ($report['metrics']['expiring'] ?? 0);
+
+        if ($specificRecipient === null && $totalItems === 0) {
+            return [
+                'report' => $report['metrics'],
+                'deliveries' => [],
+            ];
+        }
+
         $recipients = [];
 
         if ($specificRecipient !== null && filter_var($specificRecipient, FILTER_VALIDATE_EMAIL)) {
             $recipients[] = trim($specificRecipient);
         } else {
-            // Find inventory managers and admins
+            // Find opted-in inventory managers and admins
             $sql = "SELECT DISTINCT u.email FROM users u
-                    JOIN user_roles ur ON ur.user_id = u.user_id
-                    JOIN roles r ON r.role_id = ur.role_id
+                    LEFT JOIN notification_preferences np ON np.user_id = u.user_id
                     WHERE u.status = 'active'
-                      AND r.role_name IN ('inventory_manager', 'admin', 'super_admin')
-                      AND u.email IS NOT NULL AND u.email != ''";
+                      AND u.email IS NOT NULL AND u.email != ''
+                      AND COALESCE(np.notify_email, 1) = 1
+                      AND EXISTS (
+                          SELECT 1 FROM roles r WHERE r.role_name IN ('inventory_manager', 'admin', 'super_admin') AND (
+                              EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id AND ur.role_id = r.role_id)
+                              OR (r.role_id = u.role_id AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id))
+                          )
+                      )";
             $users = $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
             foreach ($users as $u) {
                 $email = trim((string)$u['email']);

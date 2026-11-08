@@ -40,58 +40,56 @@ $notifications->checkAndNotifyForecasts();
 $emailDeliveryDisabled = strtolower((string)env('MAIL_MAILER', '')) === 'disabled';
 $storeSettings = get_store_settings($pdo);
 $storeEmailEnabled = !empty($storeSettings['store_email_alerts_enabled']);
-$storeEmailAddress = trim((string)($storeSettings['store_email'] ?? ''));
 $storeEmailTypes = ['low_stock', 'expiring_stock', 'expired_stock'];
+
+// Individual per-product stock emails are replaced by the consolidated Daily Stock Brief.
+$pdo->exec("UPDATE notifications SET email_pending = 0 WHERE email_pending = 1 AND type IN ('low_stock', 'expiring_stock', 'expired_stock')");
+
 if ($storeEmailEnabled && !$emailDeliveryDisabled) {
-    // Deliver consolidated Daily Stock Brief to Inventory Managers and Store Email
     require_once dirname(__DIR__) . '/app/Services/StockBriefService.php';
     try {
-        $briefService = new App\Services\StockBriefService($pdo);
-        $briefResults = $briefService->dispatch();
-        // Clear pending flags for low_stock and expiring items covered by the brief
-        $pdo->exec("UPDATE notifications SET email_pending = 0 WHERE email_pending = 1 AND type IN ('low_stock', 'expiring_stock', 'expired_stock')");
+        (new App\Services\StockBriefService($pdo))->dispatch();
     } catch (Throwable $briefError) {
         error_log('Daily Stock Brief dispatch failed: ' . $briefError->getMessage());
     }
-} elseif ($storeEmailEnabled) {
-    error_log('Store email alerts are enabled but delivery is disabled or store email address is invalid.');
-}
-foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
-    foreach ($notifications->recipients($role) as $recipient) {
-        $pdo->beginTransaction();
-        try {
-            $pending = $pdo->prepare('SELECT n.notification_id, n.type, n.title, n.message
-                FROM notifications n
-                LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
-                WHERE n.user_id = ? AND n.workspace = ? AND n.email_pending = 1
-                  AND (n.attention_key IS NULL OR s.is_active = 1)
-                ORDER BY n.notification_id FOR UPDATE');
-            $pending->execute([(int)$recipient['user_id'], $role]);
-            $clear = $pdo->prepare('UPDATE notifications SET email_pending = 0 WHERE notification_id = ?');
-            foreach ($pending->fetchAll(PDO::FETCH_ASSOC) as $event) {
-                if ($storeEmailEnabled && in_array($event['type'], $storeEmailTypes, true)) {
-                    continue;
+
+    foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
+        foreach ($notifications->recipients($role) as $recipient) {
+            $pdo->beginTransaction();
+            try {
+                $pending = $pdo->prepare('SELECT n.notification_id, n.type, n.title, n.message
+                    FROM notifications n
+                    LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
+                    WHERE n.user_id = ? AND n.workspace = ? AND n.email_pending = 1
+                      AND (n.attention_key IS NULL OR s.is_active = 1)
+                    ORDER BY n.notification_id FOR UPDATE');
+                $pending->execute([(int)$recipient['user_id'], $role]);
+                $clear = $pdo->prepare('UPDATE notifications SET email_pending = 0 WHERE notification_id = ?');
+                foreach ($pending->fetchAll(PDO::FETCH_ASSOC) as $event) {
+                    if (in_array($event['type'], $storeEmailTypes, true)) {
+                        $clear->execute([(int)$event['notification_id']]);
+                        continue;
+                    }
+                    $address = trim((string)($recipient['email'] ?? ''));
+                    $optedIn = !empty($recipient['notify_email']);
+                    if (!$optedIn || $address === '' || filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
+                        // Nothing deliverable: stop retrying, but a failed attempt below stays queued.
+                        $clear->execute([(int)$event['notification_id']]);
+                        continue;
+                    }
+                    if (send_email_notification($address, $event['title'], $event['message'])) {
+                        $clear->execute([(int)$event['notification_id']]);
+                    }
                 }
-                $optionalLowStock = $event['type'] === 'low_stock';
-                $address = trim((string)($recipient['email'] ?? ''));
-                $optedIn = !empty($recipient['notify_email'])
-                    && (!$optionalLowStock || (bool)($recipient['notify_low_stock'] ?? true));
-                if (!$optedIn || $address === '' || filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
-                    // Nothing deliverable: stop retrying, but a failed attempt below stays queued.
-                    $clear->execute([(int)$event['notification_id']]);
-                    continue;
-                }
-                if (send_email_notification($address, $event['title'], $event['message']) || $emailDeliveryDisabled) {
-                    // Failed Brevo sends stay queued for the next run; disabled delivery has nothing to retry.
-                    $clear->execute([(int)$event['notification_id']]);
-                }
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                $pdo->rollBack();
+                throw $exception;
             }
-            $pdo->commit();
-        } catch (Throwable $exception) {
-            $pdo->rollBack();
-            throw $exception;
         }
     }
+} elseif ($emailDeliveryDisabled) {
+    $pdo->exec('UPDATE notifications SET email_pending = 0 WHERE email_pending = 1');
 }
 
 echo "Notification checks completed.\n";

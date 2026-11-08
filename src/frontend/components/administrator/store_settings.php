@@ -363,7 +363,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                     <div class="form-group">
                         <label for="brevo_sender_email">Verified sender email</label>
                         <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" spellcheck="false" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
-                        <small class="field-help">This sender must be verified in your Brevo account. Emails display the Store name.</small>
+                        <small class="field-help">This sender must be verified in your Brevo account. Emails display the Store name. Test emails are sent to the Store email address above.</small>
                     </div>
                 </div>
                 <div class="form-actions">

@@ -160,6 +160,13 @@ try {
     ] as $needle) {
         $assert(str_contains($ui, $needle), "Platform Settings UI must contain {$needle}");
     }
+    foreach ([
+        "action === 'test_email'",
+        'heading-email-test',
+        'Send Test Email',
+    ] as $forbidden) {
+        $assert(!str_contains($ui, $forbidden), "Platform Settings UI must not expose {$forbidden}");
+    }
 
     $migration = $read('src/backend/database/migrations/202609240002_dormancy_policy_settings.php');
     foreach (['DormancyPolicyService::DISABLE_DAYS_KEY', 'DormancyPolicyService::WARN_DAYS_KEY', 'DormancyPolicyService::DEFAULT_DISABLE_DAYS', 'DormancyPolicyService::DEFAULT_WARN_DAYS'] as $needle) {

@@ -8,19 +8,7 @@ $dormancyPolicyService = new \App\Authorization\DormancyPolicyService($pdo);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = (string)($_POST['action'] ?? 'save');
-    if ($action === 'test_email') {
-        $recipient = trim((string)($_POST['test_email'] ?? ''));
-        if ($recipient === '' || filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
-            $message = 'Enter a valid recipient email address to send a test message.';
-            $messageClass = 'tag-danger';
-        } else {
-            $sent = send_email_notification($recipient, 'RetailMind email test', "This is a RetailMind Brevo API test sent on " . date('Y-m-d H:i:s') . '.');
-            $message = $sent
-                ? 'Test email sent successfully.'
-                : 'Test email could not be delivered. Verify the Brevo API key and sender in Store Settings.';
-            $messageClass = $sent ? 'tag-success' : 'tag-danger';
-        }
-    } elseif ($action === 'save_dormancy') {
+    if ($action === 'save_dormancy') {
         try {
             $updates = [
                 'disable_days' => trim((string)($_POST['disable_days'] ?? '')),
@@ -39,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $messageClass = 'tag-danger';
     }
 }
-$settings = get_store_settings($pdo);
 $dormancyThresholds = $dormancyPolicyService->thresholds();
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 ?>
@@ -118,38 +105,6 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
             </form>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="heading-email-test">
-            <div class="section-header">
-                <div>
-                    <h2 id="heading-email-test"><i class="bi bi-envelope-check" aria-hidden="true"></i> Email delivery test</h2>
-                    <p class="section-description">Test outbound email using the Brevo API settings saved in Store Settings.</p>
-                </div>
-            </div>
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="test_email">
-                <div class="form-group">
-                    <label for="test_email">
-                        Recipient email
-                        <span class="required-mark" aria-hidden="true">*</span>
-                    </label>
-                    <input type="email"
-                           id="test_email"
-                           name="test_email"
-                           value="<?= htmlspecialchars((string)$settings['store_email']) ?>"
-                           autocomplete="email"
-                           spellcheck="false"
-                           placeholder="admin@example.com…"
-                           aria-describedby="test_email_help"
-                           aria-required="true"
-                           required>
-                    <small class="field-help" id="test_email_help">Address to receive a test message from the configured Brevo sender.</small>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-send" aria-hidden="true"></i> Send Test Email</button>
-                </div>
-            </form>
-        </section>
     </main>
 </div>
 </body>

@@ -737,6 +737,110 @@ unset($_SESSION['_login_username']);
                     passwordToggle.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
                 });
             }
+            modal.querySelectorAll('[data-password-toggle]').forEach(function(toggle) {
+                var targetId = toggle.getAttribute('data-password-toggle');
+                var input = document.getElementById(targetId);
+                if (!input) return;
+                var targetName = (toggle.getAttribute('aria-label') || '').replace(/^Show\s+/i, '');
+                toggle.addEventListener('click', function() {
+                    var isVisible = input.type === 'text';
+                    input.type = isVisible ? 'password' : 'text';
+                    toggle.textContent = isVisible ? 'Show' : 'Hide';
+                    toggle.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
+                    toggle.setAttribute('aria-label', (isVisible ? 'Show ' : 'Hide ') + targetName);
+                });
+            });
+
+            var recNewPass = document.getElementById('landing-recovery-newpass');
+            var recConfirmPass = document.getElementById('landing-recovery-confirm');
+            var recReqLen = document.getElementById('recovery-req-len');
+            var recReqUpper = document.getElementById('recovery-req-upper');
+            var recReqLower = document.getElementById('recovery-req-lower');
+            var recReqNum = document.getElementById('recovery-req-num');
+            var recBar1 = document.getElementById('recovery-bar1');
+            var recBar2 = document.getElementById('recovery-bar2');
+            var recBar3 = document.getElementById('recovery-bar3');
+            var recBar4 = document.getElementById('recovery-bar4');
+            var recMatchStatus = document.getElementById('recovery-match-status');
+
+            function updateRecReq(el, valid) {
+                if (!el) return;
+                var icon = el.querySelector('i');
+                if (valid) {
+                    el.classList.add('valid');
+                    if (icon) icon.className = 'bi bi-check-circle-fill';
+                } else {
+                    el.classList.remove('valid');
+                    if (icon) icon.className = 'bi bi-circle';
+                }
+            }
+
+            function updateRecStrength() {
+                var val = (recNewPass && recNewPass.value) || '';
+                var hasLen = val.length >= 8;
+                var hasUpper = /[A-Z]/.test(val);
+                var hasLower = /[a-z]/.test(val);
+                var hasNum = /[0-9]/.test(val);
+
+                updateRecReq(recReqLen, hasLen);
+                updateRecReq(recReqUpper, hasUpper);
+                updateRecReq(recReqLower, hasLower);
+                updateRecReq(recReqNum, hasNum);
+
+                var score = (hasLen ? 1 : 0) + (hasUpper ? 1 : 0) + (hasLower ? 1 : 0) + (hasNum ? 1 : 0);
+                var bars = [recBar1, recBar2, recBar3, recBar4];
+                bars.forEach(function(b) {
+                    if (!b) return;
+                    b.className = 'cp-meter-bar';
+                });
+
+                if (val.length > 0) {
+                    var levelClass = score === 4 ? 'active-strong' : (score === 3 ? 'active-good' : (score === 2 ? 'active-fair' : 'active-weak'));
+                    for (var i = 0; i < score; i++) {
+                        if (bars[i]) bars[i].classList.add(levelClass);
+                    }
+                }
+
+                validateRecMatch();
+            }
+
+            function validateRecMatch() {
+                if (!recConfirmPass || !recNewPass) return;
+                var nVal = recNewPass.value || '';
+                var cVal = recConfirmPass.value || '';
+
+                if (!cVal) {
+                    if (recMatchStatus) {
+                        recMatchStatus.className = 'cp-match-pill';
+                        recMatchStatus.innerHTML = '';
+                    }
+                    recConfirmPass.setCustomValidity('');
+                    return;
+                }
+
+                var matches = (nVal === cVal);
+                if (matches) {
+                    recConfirmPass.setCustomValidity('');
+                    if (recMatchStatus) {
+                        recMatchStatus.className = 'cp-match-pill visible valid';
+                        recMatchStatus.innerHTML = '<i class="bi bi-check2-circle" aria-hidden="true"></i> Passwords match';
+                    }
+                } else {
+                    recConfirmPass.setCustomValidity('Passwords do not match.');
+                    if (recMatchStatus) {
+                        recMatchStatus.className = 'cp-match-pill visible invalid';
+                        recMatchStatus.innerHTML = '<i class="bi bi-x-circle-fill" aria-hidden="true"></i> Passwords do not match';
+                    }
+                }
+            }
+
+            if (recNewPass) {
+                recNewPass.addEventListener('input', updateRecStrength);
+                updateRecStrength();
+            }
+            if (recConfirmPass) {
+                recConfirmPass.addEventListener('input', validateRecMatch);
+            }
             function clearInputError(inputEl) {
                 if (!inputEl) return;
                 inputEl.classList.remove('is-invalid');

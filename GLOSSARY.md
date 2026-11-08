@@ -230,9 +230,9 @@ An actionable store-wide or platform-level condition (such as overdue high-value
 _Avoid_: Notification (when referring to dashboard alerts), Task, To-do
 
 **Store Email Alert**:
-An automated transactional notification sent to designated store email addresses regarding operational events—such as critical low inventory, impending stock expiry, or staff security actions. It delivers actionable operational awareness outside the store without modifying recorded stock or shift custody.
-_Avoid_: Marketing newsletter, promotional email, SMS alert
+An automated transactional notification sent to designated store email addresses regarding operational events—such as critical system health, security actions, or consolidated stock summaries—once verified by a successful test email to the Store's official email address. It delivers actionable operational awareness outside the store without modifying recorded stock or shift custody.
+_Avoid_: Marketing newsletter, promotional email, SMS alert, per-product stock email
 
 **Daily Stock Brief**:
-A consolidated operational inventory report generated and emailed on a schedule (such as morning opening or evening closing) to the Inventory Manager and Store Administrator. It groups out-of-stock items, low-stock reorder thresholds, and expiring batches into a single high-density summary instead of sending separate per-product notifications.
-_Avoid_: Individual stock alert, marketing digest, full catalog export
+A consolidated operational inventory report generated and emailed on a schedule (such as morning opening or evening closing) to the Store's official email address and opted-in Inventory Managers and Administrators when at least one stock or expiry condition requires attention. It groups out-of-stock items, low-stock reorder thresholds, and expiring batches into a single high-density summary instead of sending separate per-product notifications.
+_Avoid_: Individual stock alert, marketing digest, full catalog export, empty status email
