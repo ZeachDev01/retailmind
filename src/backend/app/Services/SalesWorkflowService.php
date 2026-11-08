@@ -132,6 +132,7 @@ class SalesWorkflowService
             // not the one it was held under.
             $resumedHeldSale = $this->resolveResumedHeldSale($userId, $attribution, $paymentDetails);
             $quote = $this->buildQuote($cleanCart, $userId, $attribution, $paymentDetails);
+            $this->assertRegisterTransactionLimit($attribution, (float)$quote['total']);
             // Browser requests always carry the server-held reviewed hash. Legacy
             // internal callers keep their interface, while reviewed callers fail closed.
             if (($attempt !== null || array_key_exists('reviewed_quote', $paymentDetails))
@@ -595,6 +596,35 @@ class SalesWorkflowService
         }
 
         return (int)$shift['shift_id'];
+    }
+
+    private function assertRegisterTransactionLimit(int $shiftId, float $amount): void
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT r.transaction_limit, r.name
+                 FROM cashier_shifts cs
+                 JOIN registers r ON r.register_id = cs.register_id
+                 WHERE cs.shift_id = ?'
+            );
+            $stmt->execute([$shiftId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && $row['transaction_limit'] !== null && (float)$row['transaction_limit'] > 0) {
+                $limit = (float)$row['transaction_limit'];
+                if ($amount > $limit) {
+                    throw new DomainException(sprintf(
+                        'Sale amount (₱%s) exceeds the register transaction limit of ₱%s for %s.',
+                        number_format($amount, 2),
+                        number_format($limit, 2),
+                        $row['name'] ?? 'this register'
+                    ));
+                }
+            }
+        } catch (DomainException $e) {
+            throw $e;
+        } catch (Throwable) {
+            // Register or column not present
+        }
     }
 
     /**

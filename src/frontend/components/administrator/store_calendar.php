@@ -66,6 +66,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $message = "Weekly store schedule recorded effective {$effectiveDate}.";
             $messageClass = 'tag-success';
+        } elseif ($action === 'schedule_staff_shift') {
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $shiftDate = trim((string)($_POST['shift_date'] ?? ''));
+            $startTime = trim((string)($_POST['start_time'] ?? ''));
+            $endTime = trim((string)($_POST['end_time'] ?? ''));
+            $notes = trim((string)($_POST['notes'] ?? ''));
+
+            $newShiftId = $calendar->scheduleStaffShift(
+                $pdo,
+                $userId,
+                $shiftDate,
+                $startTime,
+                $endTime,
+                $notes ?: null,
+                (int)$_SESSION['user_id']
+            );
+
+            log_activity(
+                $pdo,
+                (int)$_SESSION['user_id'],
+                'Scheduled staff shift',
+                'Store Settings',
+                $newShiftId,
+                null,
+                null,
+                null,
+                null,
+                ['user_id' => $userId, 'shift_date' => $shiftDate, 'start_time' => $startTime, 'end_time' => $endTime]
+            );
+
+            $message = "Staff shift scheduled for {$shiftDate}.";
+            $messageClass = 'tag-success';
+        } elseif ($action === 'delete_staff_shift') {
+            $shiftId = (int)($_POST['shift_id'] ?? 0);
+            $calendar->deleteStaffShift($pdo, $shiftId);
+
+            log_activity(
+                $pdo,
+                (int)$_SESSION['user_id'],
+                'Removed staff shift',
+                'Store Settings',
+                $shiftId
+            );
+
+            $message = "Staff shift removed.";
+            $messageClass = 'tag-success';
         } else {
             $date = trim($_POST['calendar_date'] ?? '');
             $throughDate = trim($_POST['through_date'] ?? '');
@@ -197,6 +243,21 @@ foreach ($monthEvidence as $d => $ev) {
     }
 }
 $monthTitle = date('F Y', strtotime($firstOfMonth));
+$monthStaffShifts = $calendar->getStaffShiftsForRange($pdo, $firstOfMonth, $lastOfMonth);
+$shiftsByDate = [];
+foreach ($monthStaffShifts as $sh) {
+    $shiftsByDate[$sh['shift_date']][] = $sh;
+}
+$allStaffMembers = [];
+try {
+    $allStaffMembers = $pdo->query(
+        "SELECT u.user_id, u.full_name, r.role_name
+         FROM users u
+         LEFT JOIN roles r ON r.role_id = u.role_id
+         WHERE u.status = 'active' AND (r.role_name IN ('cashier', 'inventory_manager', 'admin') OR r.role_name IS NULL)
+         ORDER BY u.full_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable) {}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -488,6 +549,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             <h1>Store Calendar</h1>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                 <button type="button" class="btn btn-secondary" id="weekly-schedule-btn"><i class="bi bi-calendar-week" aria-hidden="true"></i> Weekly Schedule</button>
+                <button type="button" class="btn btn-secondary" id="staff-shifts-btn"><i class="bi bi-person-clock" aria-hidden="true"></i> Staff Shifts &amp; Availability</button>
             </div>
         </header>
 
@@ -616,6 +678,11 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                         <span class="day-status">
                             <span class="calendar-status-badge <?= $badgeClass ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
+                        <?php if (!empty($shiftsByDate[$dateStr])): ?>
+                            <span class="calendar-status-badge status-unrecorded" style="margin-top: 0.2rem; font-size: 0.68rem;" title="<?= count($shiftsByDate[$dateStr]) ?> shift(s) scheduled">
+                                <i class="bi bi-person-fill" aria-hidden="true"></i> <?= count($shiftsByDate[$dateStr]) ?> shift<?= count($shiftsByDate[$dateStr]) === 1 ? '' : 's' ?>
+                            </span>
+                        <?php endif; ?>
                     </button>
                 <?php endfor; ?>
             </div>
@@ -721,6 +788,99 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
         </section>
 </div>
 
+<!-- Modal 3: Staff Shifts & Availability -->
+<div class="rm-modal-overlay" id="staff-shifts-modal" aria-hidden="true">
+        <section class="rm-modal" role="dialog" aria-modal="true" aria-labelledby="staff-shifts-title" style="max-width: 650px;">
+            <header class="rm-modal-header">
+                <h2 id="staff-shifts-title">Staff Shifts &amp; Availability</h2>
+                <button type="button" class="rm-close" data-close-modal aria-label="Close staff shifts modal"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </header>
+            <div class="rm-modal-body">
+                <p class="muted" style="margin-bottom: 1rem; font-size: 0.85rem;">
+                    Schedule staff shifts and verify staff availability against store trading days and operating hours (08:00 – 18:00).
+                </p>
+                <form method="post" id="staff-shift-form">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="schedule_staff_shift">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="shift_staff_user">Staff Member</label>
+                            <select id="shift_staff_user" name="user_id" required>
+                                <option value="">Select staff member...</option>
+                                <?php foreach ($allStaffMembers as $staff): ?>
+                                    <option value="<?= (int)$staff['user_id'] ?>"><?= htmlspecialchars($staff['full_name']) ?> (<?= htmlspecialchars($staff['role_name'] ?? 'Staff') ?>)</option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="shift_date_input">Shift Date</label>
+                            <input id="shift_date_input" type="date" name="shift_date" required value="<?= htmlspecialchars($today) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="shift_start_time">Start Time</label>
+                            <input id="shift_start_time" type="time" name="start_time" required value="08:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="shift_end_time">End Time</label>
+                            <input id="shift_end_time" type="time" name="end_time" required value="17:00">
+                        </div>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="shift_notes">Shift Notes / Register Assignment</label>
+                            <input id="shift_notes" type="text" name="notes" maxlength="255" placeholder="e.g. Front Till / Morning Shift">
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+                        <button class="btn btn-primary" type="submit" id="schedule-shift-submit-btn"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Schedule Shift</button>
+                    </div>
+                </form>
+
+                <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid var(--border);">
+
+                <div class="section-title-row" style="margin-bottom: 0.75rem;">
+                    <h3 style="font-size: 1rem; margin: 0;"><i class="bi bi-clock-history" aria-hidden="true"></i> Scheduled Shifts (<?= htmlspecialchars($monthTitle) ?>)</h3>
+                </div>
+                <?php if (empty($monthStaffShifts)): ?>
+                    <p class="section-description" style="margin: 0.5rem 0;">No staff shifts scheduled for this month.</p>
+                <?php else: ?>
+                    <div class="data-table-shell" style="max-height: 240px; overflow-y: auto;">
+                        <table class="data-table" style="font-size: 0.85rem;">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Date</th>
+                                    <th scope="col">Staff</th>
+                                    <th scope="col">Hours</th>
+                                    <th scope="col">Notes</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($monthStaffShifts as $s): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($s['shift_date']) ?></td>
+                                        <td><strong><?= htmlspecialchars($s['full_name']) ?></strong></td>
+                                        <td><?= htmlspecialchars(substr($s['start_time'], 0, 5)) ?> – <?= htmlspecialchars(substr($s['end_time'], 0, 5)) ?></td>
+                                        <td><?= htmlspecialchars($s['notes'] ?? '-') ?></td>
+                                        <td>
+                                            <form method="post" class="inline-form">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="action" value="delete_staff_shift">
+                                                <input type="hidden" name="shift_id" value="<?= (int)$s['shift_id'] ?>">
+                                                <button class="btn btn-quiet" type="submit" aria-label="Remove shift for <?= htmlspecialchars($s['full_name']) ?> on <?= htmlspecialchars($s['shift_date']) ?>"><i class="bi bi-trash" aria-hidden="true"></i></button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <footer class="rm-modal-actions">
+                <button type="button" class="btn btn-secondary" data-close-modal>Close</button>
+            </footer>
+        </section>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('calendar_date');
@@ -732,10 +892,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const editor = document.getElementById('calendar-editor');
     const weeklyBtn = document.getElementById('weekly-schedule-btn');
     const weeklyModal = document.getElementById('weekly-schedule-modal');
+    const staffShiftsBtn = document.getElementById('staff-shifts-btn');
+    const staffShiftsModal = document.getElementById('staff-shifts-modal');
 
     if (weeklyBtn && weeklyModal) {
         weeklyBtn.addEventListener('click', function() {
             RetailMindUI.openOverlay(weeklyModal);
+        });
+    }
+
+    if (staffShiftsBtn && staffShiftsModal) {
+        staffShiftsBtn.addEventListener('click', function() {
+            RetailMindUI.openOverlay(staffShiftsModal);
         });
     }
 
@@ -788,6 +956,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (cellDate) {
             dateInput.value = cellDate;
+            const shiftDateInput = document.getElementById('shift_date_input');
+            if (shiftDateInput) {
+                shiftDateInput.value = cellDate;
+            }
         }
         throughDateInput.value = '';
 

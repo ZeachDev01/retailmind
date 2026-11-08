@@ -551,4 +551,159 @@ final class StoreCalendar
         }
         return $result;
     }
+
+    public function scheduleStaffShift(
+        PDO $pdo,
+        int $userId,
+        string $shiftDate,
+        string $startTime,
+        string $endTime,
+        ?string $notes = null,
+        ?int $createdBy = null
+    ): int {
+        $shiftDate = trim($shiftDate);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $shiftDate)) {
+            throw new InvalidArgumentException("Invalid shift date format: {$shiftDate}");
+        }
+
+        $startTime = trim($startTime);
+        $endTime = trim($endTime);
+        if (strlen($startTime) === 5) {
+            $startTime .= ':00';
+        }
+        if (strlen($endTime) === 5) {
+            $endTime .= ':00';
+        }
+
+        if (!preg_match('/^\d{2}:\d{2}:\d{2}$/', $startTime) || !preg_match('/^\d{2}:\d{2}:\d{2}$/', $endTime)) {
+            throw new InvalidArgumentException('Invalid shift time format.');
+        }
+
+        if ($startTime >= $endTime) {
+            throw new InvalidArgumentException('Shift start time must be before end time.');
+        }
+
+        $stmt = $pdo->prepare('SELECT user_id, status FROM users WHERE user_id = ?');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user) {
+            throw new InvalidArgumentException('Staff user not found.');
+        }
+        if (($user['status'] ?? '') === 'disabled') {
+            throw new InvalidArgumentException('Cannot schedule a shift for a disabled user.');
+        }
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO store_staff_shifts (user_id, shift_date, start_time, end_time, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([$userId, $shiftDate, $startTime, $endTime, $notes, $createdBy]);
+        return (int)$pdo->lastInsertId();
+    }
+
+    public function getStaffShiftsForDate(PDO $pdo, string $shiftDate): array
+    {
+        $shiftDate = trim($shiftDate);
+        if (!$this->tableExists($pdo, 'store_staff_shifts')) {
+            return [];
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT s.*, u.full_name, u.username, r.role_name
+             FROM store_staff_shifts s
+             JOIN users u ON u.user_id = s.user_id
+             LEFT JOIN roles r ON r.role_id = u.role_id
+             WHERE s.shift_date = ?
+             ORDER BY s.start_time, s.shift_id'
+        );
+        $stmt->execute([$shiftDate]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function getStaffShiftsForRange(PDO $pdo, string $startDate, string $endDate): array
+    {
+        if (!$this->tableExists($pdo, 'store_staff_shifts')) {
+            return [];
+        }
+
+        $stmt = $pdo->prepare(
+            'SELECT s.*, u.full_name, u.username, r.role_name
+             FROM store_staff_shifts s
+             JOIN users u ON u.user_id = s.user_id
+             LEFT JOIN roles r ON r.role_id = u.role_id
+             WHERE s.shift_date >= ? AND s.shift_date <= ?
+             ORDER BY s.shift_date, s.start_time, s.shift_id'
+        );
+        $stmt->execute([$startDate, $endDate]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function deleteStaffShift(PDO $pdo, int $shiftId): void
+    {
+        if (!$this->tableExists($pdo, 'store_staff_shifts')) {
+            return;
+        }
+        $stmt = $pdo->prepare('DELETE FROM store_staff_shifts WHERE shift_id = ?');
+        $stmt->execute([$shiftId]);
+    }
+
+    public function getStaffAvailability(PDO $pdo, string $date): array
+    {
+        $date = trim($date);
+        $cutoff = date('Y-m-d H:i:s');
+        $status = $this->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff) ?? 'unrecorded';
+        $storeOpen = in_array($status, ['open', 'sale'], true);
+
+        $stmt = $pdo->query(
+            "SELECT u.user_id, u.full_name, u.username, r.role_name
+             FROM users u
+             LEFT JOIN roles r ON r.role_id = u.role_id
+             WHERE u.status = 'active' AND (r.role_name IN ('cashier', 'inventory_manager', 'admin') OR r.role_name IS NULL)
+             ORDER BY u.full_name, u.user_id"
+        );
+        $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $shifts = $this->getStaffShiftsForDate($pdo, $date);
+        $shiftsByUser = [];
+        foreach ($shifts as $s) {
+            $shiftsByUser[(int)$s['user_id']][] = $s;
+        }
+
+        $staffList = [];
+        foreach ($staffMembers as $m) {
+            $uId = (int)$m['user_id'];
+            $userShifts = $shiftsByUser[$uId] ?? [];
+            $isScheduled = !empty($userShifts);
+
+            $availabilityStatus = 'available';
+            if (!$storeOpen) {
+                $availabilityStatus = 'store_closed';
+            } elseif ($isScheduled) {
+                $availabilityStatus = 'scheduled';
+            }
+
+            $staffList[] = [
+                'user_id' => $uId,
+                'full_name' => (string)$m['full_name'],
+                'username' => (string)($m['username'] ?? ''),
+                'role_name' => (string)($m['role_name'] ?? 'staff'),
+                'is_scheduled' => $isScheduled,
+                'scheduled_shifts' => $userShifts,
+                'available' => $storeOpen && !$isScheduled,
+                'availability_status' => $availabilityStatus,
+            ];
+        }
+
+        return [
+            'date' => $date,
+            'store_open' => $storeOpen,
+            'store_status' => $status,
+            'operating_hours' => [
+                'start' => '08:00',
+                'end' => '18:00',
+            ],
+            'shifts' => $shifts,
+            'staff' => $staffList,
+        ];
+    }
 }

@@ -1,11 +1,12 @@
 <?php
-// components/administrator/registers.php — Register administration (ticket #87).
+// components/administrator/registers.php — Register administration (ticket #87, #452).
 //
 // The Administrator creates and maintains the Store's physical Registers. A
 // rename changes only the display name, so the stable identity held by earlier
 // operational records never moves. Disabling withdraws a Register from new
 // Cashier Shifts while keeping it visible in history, and a Register that any
 // operational record still points at cannot be deleted.
+// Terminals can be assigned, active status monitored, and transaction limits configured.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
@@ -25,6 +26,8 @@ $failedAction = '';
 $failedRegisterId = 0;
 $submittedName = '';
 $submittedPaperWidth = '80';
+$submittedTerminal = '';
+$submittedLimit = '';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     csrf_verify();
@@ -33,12 +36,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     try {
         if ($action === 'create') {
-            $registers->create($actorId, $actorRole, (string)($_POST['name'] ?? ''), (string)($_POST['paper_width_mm'] ?? '80'));
+            $terminal = trim((string)($_POST['terminal_identifier'] ?? ''));
+            $limit = trim((string)($_POST['transaction_limit'] ?? ''));
+            $registers->create(
+                $actorId,
+                $actorRole,
+                (string)($_POST['name'] ?? ''),
+                (string)($_POST['paper_width_mm'] ?? '80'),
+                $terminal === '' ? null : $terminal,
+                $limit === '' ? null : $limit
+            );
             $message = 'Register created. It is now available for new Cashier Shifts.';
             $messageClass = 'tag-success';
         } elseif ($action === 'rename') {
             $registers->rename($actorId, $actorRole, $registerId, (string)($_POST['name'] ?? ''));
             $message = 'Register renamed. Earlier records keep their original Register identity.';
+            $messageClass = 'tag-success';
+        } elseif ($action === 'assign_terminal') {
+            $terminal = trim((string)($_POST['terminal_identifier'] ?? ''));
+            $registers->assignTerminal($actorId, $actorRole, $registerId, $terminal === '' ? null : $terminal);
+            $message = 'Terminal assignment saved for register.';
+            $messageClass = 'tag-success';
+        } elseif ($action === 'set_transaction_limit') {
+            $limit = trim((string)($_POST['transaction_limit'] ?? ''));
+            $registers->setTransactionLimit($actorId, $actorRole, $registerId, $limit === '' ? null : $limit);
+            $message = 'Register transaction limit updated.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_paper_width') {
             $registers->setPaperWidth($actorId, $actorRole, $registerId, (string)($_POST['paper_width_mm'] ?? ''));
@@ -61,15 +83,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $failedRegisterId = $registerId;
         $submittedName = (string)($_POST['name'] ?? '');
         $submittedPaperWidth = (string)($_POST['paper_width_mm'] ?? '80');
+        $submittedTerminal = (string)($_POST['terminal_identifier'] ?? '');
+        $submittedLimit = (string)($_POST['transaction_limit'] ?? '');
         $message = OperatorAlert::message(
             $exception,
-            'The Register could not be saved. Check the name and try again. Tell your Administrator if this keeps happening.'
+            'The Register could not be saved. Check the input and try again. Tell your Administrator if this keeps happening.'
         );
         $messageClass = 'tag-warning';
     }
 }
 
 $allRegisters = $registers->all();
+$drawerSummary = $registers->activeDrawerStatus();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -87,7 +112,7 @@ $allRegisters = $registers->all();
         <header class="page-heading">
             <div>
                 <h1>Registers</h1>
-                <p class="page-subheading">Manage points of sale, receipt widths, and shift availability.</p>
+                <p class="page-subheading">Manage points of sale, assigned terminals, transaction limits, and shift availability.</p>
             </div>
         </header>
 
@@ -96,11 +121,15 @@ $allRegisters = $registers->all();
         <?php
         $activeCount = 0;
         $disabledCount = 0;
+        $inUseCount = 0;
         foreach ($allRegisters as $reg) {
             if (($reg['status'] ?? '') === RegisterService::STATUS_ACTIVE) {
                 $activeCount++;
             } else {
                 $disabledCount++;
+            }
+            if (!empty($reg['is_in_use'])) {
+                $inUseCount++;
             }
         }
         ?>
@@ -116,6 +145,12 @@ $allRegisters = $registers->all();
                 <div class="label">Available Registers</div>
                 <div class="value"><?= $activeCount ?></div>
                 <div class="hint">Open for shifts</div>
+            </article>
+            <article class="stat-card with-icon <?= $inUseCount > 0 ? 'status-healthy' : '' ?>">
+                <span class="stat-icon"><i class="bi bi-person-badge" aria-hidden="true"></i></span>
+                <div class="label">Active Drawers</div>
+                <div class="value"><?= $inUseCount ?></div>
+                <div class="hint"><?= (int)($drawerSummary['open_shifts'] ?? 0) ?> open shift(s)</div>
             </article>
             <article class="stat-card with-icon <?= $disabledCount > 0 ? 'status-warning' : '' ?>">
                 <span class="stat-icon"><i class="bi bi-pause-circle" aria-hidden="true"></i></span>
@@ -135,13 +170,21 @@ $allRegisters = $registers->all();
                     <input id="register-name" type="text" name="name" maxlength="100" autocomplete="off" placeholder="e.g. Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
                 </div>
                 <div class="form-group">
+                    <label for="register-terminal">Assigned terminal</label>
+                    <input id="register-terminal" type="text" name="terminal_identifier" maxlength="64" autocomplete="off" placeholder="e.g. POS-TERM-01 (optional)" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedTerminal : '') ?>">
+                </div>
+                <div class="form-group">
+                    <label for="register-limit">Transaction limit (₱)</label>
+                    <input id="register-limit" type="number" step="0.01" min="0" name="transaction_limit" autocomplete="off" placeholder="e.g. 50000.00 (blank for unlimited)" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedLimit : '') ?>">
+                </div>
+                <div class="form-group">
                     <label for="register-paper-width">Receipt paper width</label>
                     <select id="register-paper-width" name="paper_width_mm" required>
                         <option value="80" <?= $failedAction !== 'create' || $submittedPaperWidth !== '58' ? 'selected' : '' ?>>80 mm (Standard POS roll)</option>
                         <option value="58" <?= $failedAction === 'create' && $submittedPaperWidth === '58' ? 'selected' : '' ?>>58 mm (Compact roll)</option>
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="align-self: flex-end;">
                     <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create Register</button>
                 </div>
             </form>
@@ -163,8 +206,9 @@ $allRegisters = $registers->all();
                         <table class="data-table">
                     <thead>
                         <tr>
-                            <th scope="col">Register</th>
-                            <th scope="col">Availability</th>
+                            <th scope="col">Register &amp; Terminal</th>
+                            <th scope="col">Active Status</th>
+                            <th scope="col">Transaction Limit</th>
                             <th scope="col">Receipt paper width</th>
                             <th scope="col">Actions</th>
                         </tr>
@@ -173,7 +217,10 @@ $allRegisters = $registers->all();
                     <?php foreach ($allRegisters as $register): ?>
                         <?php
                         $isActive = $register['status'] === RegisterService::STATUS_ACTIVE;
+                        $isInUse = !empty($register['is_in_use']);
                         $renameFailed = $failedAction === 'rename' && $failedRegisterId === $register['register_id'];
+                        $terminalFailed = $failedAction === 'assign_terminal' && $failedRegisterId === $register['register_id'];
+                        $limitFailed = $failedAction === 'set_transaction_limit' && $failedRegisterId === $register['register_id'];
                         ?>
                         <tr>
                             <td class="register-name-cell">
@@ -183,6 +230,11 @@ $allRegisters = $registers->all();
                                         <i class="bi bi-pencil" aria-hidden="true"></i>
                                     </button>
                                     <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
+                                    <?php if (!empty($register['terminal_identifier'])): ?>
+                                        <span class="tag-quiet" style="font-size: 0.75rem;"><i class="bi bi-display" aria-hidden="true"></i> <?= htmlspecialchars($register['terminal_identifier']) ?></span>
+                                    <?php else: ?>
+                                        <span class="tag-quiet" style="font-size: 0.75rem; color: var(--muted);"><i class="bi bi-display" aria-hidden="true"></i> No terminal</span>
+                                    <?php endif; ?>
                                 </div>
                                 <form method="post" class="inline-form register-rename-form" id="rename-form-<?= (int)$register['register_id'] ?>" <?= $renameFailed ? '' : 'hidden' ?>>
                                     <?= csrf_field() ?>
@@ -192,13 +244,42 @@ $allRegisters = $registers->all();
                                     <button class="btn btn-secondary" type="submit" aria-label="Rename <?= htmlspecialchars($register['name']) ?>">Rename</button>
                                     <button class="btn btn-quiet register-rename-cancel" type="button" aria-label="Cancel rename" data-cancel-for="rename-form-<?= (int)$register['register_id'] ?>">Cancel</button>
                                 </form>
+                                <form method="post" class="inline-form" style="margin-top: 0.35rem;">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="assign_terminal">
+                                    <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
+                                    <input type="text" name="terminal_identifier" maxlength="64" autocomplete="off" placeholder="Terminal identifier" value="<?= htmlspecialchars($terminalFailed ? $submittedTerminal : ($register['terminal_identifier'] ?? '')) ?>" aria-label="Terminal identifier for <?= htmlspecialchars($register['name']) ?>" style="font-size: 0.8rem; padding: 0.25rem 0.45rem; width: 140px;">
+                                    <button class="btn btn-quiet" type="submit" aria-label="Set terminal for <?= htmlspecialchars($register['name']) ?>"><i class="bi bi-check" aria-hidden="true"></i> Assign</button>
+                                </form>
                             </td>
                             <td>
                                 <?php if ($isActive): ?>
-                                    <span class="tag-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Available for new shifts</span>
+                                    <span class="tag-success"><i class="bi bi-check-circle" aria-hidden="true"></i> Available</span>
                                 <?php else: ?>
                                     <span class="tag-warning"><i class="bi bi-dash-circle" aria-hidden="true"></i> Disabled<?= $register['disabled_at'] !== null ? ' since ' . htmlspecialchars(format_display_date($register['disabled_at'])) : '' ?></span>
                                 <?php endif; ?>
+
+                                <div style="margin-top: 0.35rem; font-size: 0.8rem;">
+                                    <?php if ($isInUse): ?>
+                                        <span class="tag-success"><i class="bi bi-broadcast" aria-hidden="true"></i> Active Shift #<?= (int)$register['open_shift_id'] ?></span>
+                                    <?php else: ?>
+                                        <span class="tag-quiet" style="color: var(--muted);"><i class="bi bi-circle" aria-hidden="true"></i> No active shift</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                            <td>
+                                <form method="post" class="inline-form">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="set_transaction_limit">
+                                    <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
+                                    <div style="display: flex; align-items: center; gap: 0.3rem;">
+                                        <input type="number" step="0.01" min="0" name="transaction_limit" autocomplete="off" placeholder="Unlimited" value="<?= htmlspecialchars($limitFailed ? $submittedLimit : ($register['transaction_limit'] !== null ? number_format((float)$register['transaction_limit'], 2, '.', '') : '')) ?>" aria-label="Transaction limit for <?= htmlspecialchars($register['name']) ?>" style="font-size: 0.85rem; padding: 0.25rem 0.45rem; width: 110px;">
+                                        <button class="btn btn-secondary" type="submit" aria-label="Save limit for <?= htmlspecialchars($register['name']) ?>"><i class="bi bi-check2" aria-hidden="true"></i> Save</button>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem;">
+                                        <?= $register['transaction_limit'] !== null ? 'Max: ₱' . number_format((float)$register['transaction_limit'], 2) : 'No limit set' ?>
+                                    </div>
+                                </form>
                             </td>
                             <td>
                                 <form method="post" class="inline-form">

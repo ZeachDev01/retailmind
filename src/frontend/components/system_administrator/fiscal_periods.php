@@ -2,8 +2,10 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
 
+$guardService = new FiscalPeriodGuardService($pdo);
 $message = '';
 $error = '';
 
@@ -19,14 +21,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         if ($periodName === '' || $startDate === '' || $endDate === '') {
             $error = 'All fields are required';
-        } elseif (strtotime($startDate) > strtotime($endDate)) {
-            $error = 'Start date must be before end date';
         } else {
-            $statement = $pdo->prepare("INSERT INTO fiscal_periods (period_name, start_date, end_date, created_by, status)
-                                        VALUES (?, ?, ?, ?, 'open')");
             try {
-                $statement->execute([$periodName, $startDate, $endDate, $_SESSION['user_id']]);
-                $periodId = (int)$pdo->lastInsertId();
+                $periodId = $guardService->createPeriod(
+                    $periodName,
+                    $startDate,
+                    $endDate,
+                    (int)$_SESSION['user_id']
+                );
                 $message = "Fiscal period \"{$periodName}\" created successfully";
                 log_activity(
                     $pdo,
@@ -43,8 +45,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         'status' => 'open',
                     ]
                 );
-            } catch (PDOException $exception) {
-                $error = 'Error creating period: ' . ($exception->errorInfo[2] ?? $exception->getMessage());
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     } elseif ($action === 'close') {
@@ -54,12 +56,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-            $beforeStatement->execute([$periodId]);
-            $before = $beforeStatement->fetch();
-            $statement = $pdo->prepare("UPDATE fiscal_periods SET status = 'closed', closed_at = NOW(), closed_by = ?
-                                        WHERE period_id = ?");
-            if ($statement->execute([$_SESSION['user_id'], $periodId])) {
+            try {
+                $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
+                $beforeStatement->execute([$periodId]);
+                $before = $beforeStatement->fetch();
+
+                $guardService->closePeriod($periodId, (int)$_SESSION['user_id']);
+
                 $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
                 $afterStatement->execute([$periodId]);
                 $message = 'Fiscal period closed successfully';
@@ -72,8 +75,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $before,
                     $afterStatement->fetch()
                 );
-            } else {
-                $error = 'Error closing period';
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     } elseif ($action === 'lock') {
@@ -83,11 +86,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-            $beforeStatement->execute([$periodId]);
-            $before = $beforeStatement->fetch();
-            $statement = $pdo->prepare("UPDATE fiscal_periods SET status = 'locked' WHERE period_id = ?");
-            if ($statement->execute([$periodId])) {
+            try {
+                $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
+                $beforeStatement->execute([$periodId]);
+                $before = $beforeStatement->fetch();
+
+                $guardService->lockPeriod($periodId);
+
                 $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
                 $afterStatement->execute([$periodId]);
                 $message = 'Fiscal period locked successfully';
@@ -100,8 +105,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $before,
                     $afterStatement->fetch()
                 );
-            } else {
-                $error = 'Error locking period';
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     }

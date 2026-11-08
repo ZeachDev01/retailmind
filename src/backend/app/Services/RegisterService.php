@@ -40,11 +40,18 @@ final class RegisterService
 
     public function get(int $registerId): array
     {
-        $statement = $this->pdo->prepare(
-            'SELECT register_id, name, status, paper_width_mm, disabled_at, created_by, created_at, updated_at
-             FROM registers
-             WHERE register_id = ?'
-        );
+        $hasTerminal = $this->hasColumn('registers', 'terminal_identifier');
+        $hasLimit = $this->hasColumn('registers', 'transaction_limit');
+
+        $cols = 'register_id, name, status, paper_width_mm, disabled_at, created_by, created_at, updated_at';
+        if ($hasTerminal) {
+            $cols .= ', terminal_identifier';
+        }
+        if ($hasLimit) {
+            $cols .= ', transaction_limit';
+        }
+
+        $statement = $this->pdo->prepare("SELECT {$cols} FROM registers WHERE register_id = ?");
         $statement->execute([$registerId]);
         $register = $statement->fetch(PDO::FETCH_ASSOC);
         if (!$register) {
@@ -56,6 +63,8 @@ final class RegisterService
             'name' => (string)$register['name'],
             'status' => (string)$register['status'],
             'paper_width_mm' => (int)$register['paper_width_mm'],
+            'terminal_identifier' => isset($register['terminal_identifier']) && $register['terminal_identifier'] !== null ? (string)$register['terminal_identifier'] : null,
+            'transaction_limit' => isset($register['transaction_limit']) && $register['transaction_limit'] !== null ? (float)$register['transaction_limit'] : null,
             'disabled_at' => $register['disabled_at'] !== null ? (string)$register['disabled_at'] : null,
             'created_by' => $register['created_by'] !== null ? (int)$register['created_by'] : null,
             'created_at' => (string)$register['created_at'],
@@ -66,33 +75,160 @@ final class RegisterService
     /** Every Register, including disabled ones, so history stays visible. */
     public function all(): array
     {
-        return $this->fetch(
-            'SELECT register_id, name, status, paper_width_mm, disabled_at, created_at FROM registers ORDER BY name, register_id'
-        );
+        $hasTerminal = $this->hasColumn('registers', 'terminal_identifier');
+        $hasLimit = $this->hasColumn('registers', 'transaction_limit');
+        $cols = 'register_id, name, status, paper_width_mm, disabled_at, created_at';
+        if ($hasTerminal) {
+            $cols .= ', terminal_identifier';
+        }
+        if ($hasLimit) {
+            $cols .= ', transaction_limit';
+        }
+
+        return $this->fetch("SELECT {$cols} FROM registers ORDER BY name, register_id");
     }
 
     /** Only the Registers that may anchor a new Cashier Shift. */
     public function available(): array
     {
+        $hasTerminal = $this->hasColumn('registers', 'terminal_identifier');
+        $hasLimit = $this->hasColumn('registers', 'transaction_limit');
+        $cols = 'register_id, name, status, paper_width_mm, disabled_at, created_at';
+        if ($hasTerminal) {
+            $cols .= ', terminal_identifier';
+        }
+        if ($hasLimit) {
+            $cols .= ', transaction_limit';
+        }
+
         return $this->fetch(
-            "SELECT register_id, name, status, paper_width_mm, disabled_at, created_at
-             FROM registers WHERE status = 'active' ORDER BY name, register_id"
+            "SELECT {$cols} FROM registers WHERE status = 'active' ORDER BY name, register_id"
         );
     }
 
-    public function create(int $actorId, string $actorRole, string $name, mixed $paperWidthMm = 80): int
-    {
+    public function create(
+        int $actorId,
+        string $actorRole,
+        string $name,
+        mixed $paperWidthMm = 80,
+        ?string $terminalIdentifier = null,
+        mixed $transactionLimit = null
+    ): int {
         $this->requireAuthority($actorRole, 'create Registers');
         $name = $this->requireName($name);
         $paperWidthMm = $this->requirePaperWidth($paperWidthMm);
 
-        return $this->transaction(function () use ($actorId, $actorRole, $name, $paperWidthMm): int {
+        $terminal = null;
+        if ($terminalIdentifier !== null) {
+            $terminal = trim($terminalIdentifier);
+            if ($terminal === '') {
+                $terminal = null;
+            } elseif (mb_strlen($terminal) > 64) {
+                throw new InvalidArgumentException('Terminal identifier must be 64 characters or fewer.');
+            }
+        }
+
+        $limitVal = null;
+        if ($transactionLimit !== null && $transactionLimit !== '') {
+            if (!is_numeric($transactionLimit) || (float)$transactionLimit < 0) {
+                throw new InvalidArgumentException('Transaction limit must be a non-negative number.');
+            }
+            $limitVal = round((float)$transactionLimit, 2);
+        }
+
+        return $this->transaction(function () use ($actorId, $actorRole, $name, $paperWidthMm, $terminal, $limitVal): int {
             $this->requireNameAvailable($name);
-            $statement = $this->pdo->prepare('INSERT INTO registers (name, status, created_by, paper_width_mm) VALUES (?, ?, ?, ?)');
-            $statement->execute([$name, self::STATUS_ACTIVE, $actorId, $paperWidthMm]);
+            if ($terminal !== null) {
+                $this->requireTerminalAvailable($terminal);
+            }
+
+            $hasTerminal = $this->hasColumn('registers', 'terminal_identifier');
+            $hasLimit = $this->hasColumn('registers', 'transaction_limit');
+
+            if ($hasTerminal && $hasLimit) {
+                $statement = $this->pdo->prepare(
+                    'INSERT INTO registers (name, status, created_by, paper_width_mm, terminal_identifier, transaction_limit) VALUES (?, ?, ?, ?, ?, ?)'
+                );
+                $statement->execute([$name, self::STATUS_ACTIVE, $actorId, $paperWidthMm, $terminal, $limitVal]);
+            } else {
+                $statement = $this->pdo->prepare('INSERT INTO registers (name, status, created_by, paper_width_mm) VALUES (?, ?, ?, ?)');
+                $statement->execute([$name, self::STATUS_ACTIVE, $actorId, $paperWidthMm]);
+            }
+
             $registerId = (int)$this->pdo->lastInsertId();
             $this->audit($actorId, $actorRole, 'Register created', $registerId, null, $this->get($registerId));
             return $registerId;
+        });
+    }
+
+    public function assignTerminal(int $actorId, string $actorRole, int $registerId, ?string $terminalIdentifier): array
+    {
+        $this->requireAuthority($actorRole, 'assign Register terminals');
+
+        $terminal = null;
+        if ($terminalIdentifier !== null) {
+            $terminal = trim($terminalIdentifier);
+            if ($terminal === '') {
+                $terminal = null;
+            } elseif (mb_strlen($terminal) > 64) {
+                throw new InvalidArgumentException('Terminal identifier must be 64 characters or fewer.');
+            }
+        }
+
+        return $this->transaction(function () use ($actorId, $actorRole, $registerId, $terminal): array {
+            $before = $this->get($registerId);
+            if ($terminal !== null) {
+                $this->requireTerminalAvailable($terminal, $registerId);
+            }
+
+            if ($this->hasColumn('registers', 'terminal_identifier')) {
+                $stmt = $this->pdo->prepare('UPDATE registers SET terminal_identifier = ? WHERE register_id = ?');
+                $stmt->execute([$terminal, $registerId]);
+            }
+
+            $after = $this->get($registerId);
+            $this->audit(
+                $actorId,
+                $actorRole,
+                'Register terminal assigned',
+                $registerId,
+                $this->snapshot($before),
+                $this->snapshot($after)
+            );
+            return $after;
+        });
+    }
+
+    public function setTransactionLimit(int $actorId, string $actorRole, int $registerId, mixed $limit): array
+    {
+        $this->requireAuthority($actorRole, 'set Register transaction limits');
+
+        $limitVal = null;
+        if ($limit !== null && $limit !== '') {
+            if (!is_numeric($limit) || (float)$limit < 0) {
+                throw new InvalidArgumentException('Transaction limit must be a non-negative number.');
+            }
+            $limitVal = round((float)$limit, 2);
+        }
+
+        return $this->transaction(function () use ($actorId, $actorRole, $registerId, $limitVal): array {
+            $before = $this->get($registerId);
+
+            if ($this->hasColumn('registers', 'transaction_limit')) {
+                $stmt = $this->pdo->prepare('UPDATE registers SET transaction_limit = ? WHERE register_id = ?');
+                $stmt->execute([$limitVal, $registerId]);
+            }
+
+            $after = $this->get($registerId);
+            $this->audit(
+                $actorId,
+                $actorRole,
+                'Register transaction limit updated',
+                $registerId,
+                $this->snapshot($before),
+                $this->snapshot($after)
+            );
+            return $after;
         });
     }
 
@@ -241,6 +377,22 @@ final class RegisterService
         }
     }
 
+    private function requireTerminalAvailable(string $terminal, ?int $ignoreRegisterId = null): void
+    {
+        if (!$this->hasColumn('registers', 'terminal_identifier')) {
+            return;
+        }
+        $statement = $this->pdo->prepare(
+            'SELECT register_id FROM registers WHERE LOWER(terminal_identifier) = LOWER(?)'
+            . ($ignoreRegisterId !== null ? ' AND register_id <> ?' : '')
+            . ' LIMIT 1'
+        );
+        $statement->execute($ignoreRegisterId !== null ? [$terminal, $ignoreRegisterId] : [$terminal]);
+        if ($statement->fetchColumn() !== false) {
+            throw new InvalidArgumentException('Another Register already uses that terminal identifier.');
+        }
+    }
+
     private function requireAuthority(string $actorRole, string $operation): void
     {
         if (!$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_REGISTERS)) {
@@ -252,14 +404,41 @@ final class RegisterService
     {
         $rows = $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
-        return array_map(static fn(array $row): array => [
-            'register_id' => (int)$row['register_id'],
-            'name' => (string)$row['name'],
-            'status' => (string)$row['status'],
-            'paper_width_mm' => (int)$row['paper_width_mm'],
-            'disabled_at' => $row['disabled_at'] !== null ? (string)$row['disabled_at'] : null,
-            'created_at' => (string)$row['created_at'],
-        ], $rows);
+        $openShifts = [];
+        if ($this->hasColumn('cashier_shifts', 'register_id') && $this->hasColumn('cashier_shifts', 'status')) {
+            $hasCashier = $this->hasColumn('cashier_shifts', 'cashier_id');
+            $cashierCol = $hasCashier ? ', cashier_id' : '';
+            try {
+                $shiftRows = $this->pdo->query(
+                    "SELECT register_id, shift_id{$cashierCol} FROM cashier_shifts WHERE status = 'open' AND register_id IS NOT NULL"
+                )->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($shiftRows as $sr) {
+                    $openShifts[(int)$sr['register_id']] = [
+                        'shift_id' => (int)$sr['shift_id'],
+                        'cashier_id' => isset($sr['cashier_id']) ? (int)$sr['cashier_id'] : null,
+                    ];
+                }
+            } catch (Throwable) {}
+        }
+
+        return array_map(static function (array $row) use ($openShifts): array {
+            $regId = (int)$row['register_id'];
+            $activeShift = $openShifts[$regId] ?? null;
+
+            return [
+                'register_id' => $regId,
+                'name' => (string)$row['name'],
+                'status' => (string)$row['status'],
+                'paper_width_mm' => (int)$row['paper_width_mm'],
+                'terminal_identifier' => isset($row['terminal_identifier']) && $row['terminal_identifier'] !== null ? (string)$row['terminal_identifier'] : null,
+                'transaction_limit' => isset($row['transaction_limit']) && $row['transaction_limit'] !== null ? (float)$row['transaction_limit'] : null,
+                'disabled_at' => $row['disabled_at'] !== null ? (string)$row['disabled_at'] : null,
+                'created_at' => (string)$row['created_at'],
+                'is_in_use' => $activeShift !== null,
+                'open_shift_id' => $activeShift['shift_id'] ?? null,
+                'open_shift_cashier_id' => $activeShift['cashier_id'] ?? null,
+            ];
+        }, $rows);
     }
 
     private function snapshot(array $register): array
@@ -269,6 +448,8 @@ final class RegisterService
             'name' => (string)$register['name'],
             'status' => (string)$register['status'],
             'paper_width_mm' => (int)$register['paper_width_mm'],
+            'terminal_identifier' => $register['terminal_identifier'] ?? null,
+            'transaction_limit' => $register['transaction_limit'] ?? null,
         ];
     }
 
