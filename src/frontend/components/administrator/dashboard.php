@@ -215,6 +215,44 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                 </section>
             <?php endif; ?>
 
+            <?php
+            $opSummary = $dashboard['operational_summary'] ?? null;
+            if ($opSummary !== null):
+                $regDrawer = $opSummary['register_drawer_status'] ?? [];
+                $invAlerts = $opSummary['inventory_alerts'] ?? [];
+                $openDrawers = (int)($regDrawer['open_shifts'] ?? 0);
+                $totalAlerts = (int)($invAlerts['total_alerts'] ?? 0);
+            ?>
+                <section class="dashboard-section operational-summary-section" id="operational-summary-section" aria-labelledby="operational-summary-title">
+                    <div class="section-header control-center-section-header">
+                        <div class="section-title-row">
+                            <h2 id="operational-summary-title">Operational Summary</h2>
+                            <span class="priority-label">Store Overview</span>
+                        </div>
+                    </div>
+                    <div class="card-grid operational-summary-grid">
+                        <article class="stat-card with-icon status-healthy">
+                            <span class="stat-icon"><i class="bi bi-cash-stack" aria-hidden="true"></i></span>
+                            <div class="label">Today's Gross Sales</div>
+                            <div class="value" id="op-gross-sales-value"><?= $escape($formatFinancial($opSummary['gross_sales'] ?? ($activePeriodData['total_gross_sales'] ?? null))) ?></div>
+                            <div class="store-status-links"><a href="<?= $escape(app_url('components/report/report_generation.php')) ?>" data-dashboard-action>Store reports</a></div>
+                        </article>
+                        <article class="stat-card with-icon <?= $openDrawers > 0 ? 'status-healthy' : '' ?>">
+                            <span class="stat-icon"><i class="bi bi-hdd-network" aria-hidden="true"></i></span>
+                            <div class="label">Register Drawer Status</div>
+                            <div class="value" id="op-drawer-status-value"><?= $openDrawers ?> Active Drawer<?= $openDrawers === 1 ? '' : 's' ?></div>
+                            <div class="store-status-links"><a href="<?= $escape(app_url('components/administrator/registers.php')) ?>" data-dashboard-action>Manage Registers</a> · <a href="<?= $escape(app_url('components/administrator/shift_report.php')) ?>" data-dashboard-action>Shift reports</a></div>
+                        </article>
+                        <article class="stat-card with-icon <?= $totalAlerts > 0 ? 'status-warning' : 'status-healthy' ?>">
+                            <span class="stat-icon"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></span>
+                            <div class="label">Inventory Alerts</div>
+                            <div class="value" id="op-inventory-alerts-value"><?= $totalAlerts ?> Alert<?= $totalAlerts === 1 ? '' : 's' ?></div>
+                            <div class="store-status-links"><a href="<?= $escape(app_url('components/administrator/stock_issues.php')) ?>" data-dashboard-action>Stock Issues (<?= (int)($invAlerts['pending_issues'] ?? 0) ?>)</a> · <a href="<?= $escape(app_url('components/inventory_management/inventory_overview.php')) ?>" data-dashboard-action>Low Stock (<?= (int)($invAlerts['low_stock'] ?? 0) ?>)</a></div>
+                        </article>
+                    </div>
+                </section>
+            <?php endif; ?>
+
             <section class="dashboard-section net-sales-section <?= !$hasNetSales || !($activePeriodData['has_activity'] ?? false) ? 'is-empty' : '' ?>" id="sales-profit-section" aria-labelledby="financial-title">
                 <div class="section-header">
                     <div class="section-title-row">

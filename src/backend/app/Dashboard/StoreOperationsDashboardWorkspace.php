@@ -187,6 +187,7 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => $this->shifts(),
                 'forecast' => $this->forecast(),
                 'inventory' => $this->inventory(),
+                'operational_summary' => $this->operationalSummary($now),
                 'net_sales' => $netSales,
                 'gross_profit' => $grossProfit,
                 'financial_history' => $financial['history'],
@@ -212,6 +213,11 @@ final class StoreOperationsDashboardWorkspace
                 'shifts' => [],
                 'forecast' => [],
                 'inventory' => [],
+                'operational_summary' => [
+                    'gross_sales' => 0.0,
+                    'register_drawer_status' => ['total_registers' => 0, 'active_registers' => 0, 'open_shifts' => 0, 'locked_registers' => 0, 'drawer_cash_total' => 0.0],
+                    'inventory_alerts' => ['pending_issues' => 0, 'out_of_stock' => 0, 'low_stock' => 0, 'total_alerts' => 0],
+                ],
                 'net_sales' => null,
                 'gross_profit' => null,
                 'financial_history' => null,
@@ -663,6 +669,68 @@ final class StoreOperationsDashboardWorkspace
             'escalated' => $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'"),
             'out_of_stock' => $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand <= 0"),
             'low_stock' => $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand > 0 AND i.quantity_on_hand <= p.reorder_level"),
+        ];
+    }
+
+    private function operationalSummary(DateTimeImmutable $now): array
+    {
+        $tz = new \DateTimeZone('Asia/Manila');
+        $nowPh = $now->setTimezone($tz);
+        $todayStartStr = $nowPh->setTime(0, 0, 0)->format('Y-m-d H:i:s');
+        $asOfStr = $nowPh->format('Y-m-d H:i:s');
+
+        $grossSales = 0.0;
+        try {
+            $grossSalesRow = $this->row(
+                'SELECT COALESCE(SUM(total_amount), 0) AS gross_sales FROM sales WHERE sale_date >= ? AND sale_date <= ?',
+                [$todayStartStr, $asOfStr]
+            );
+            $grossSales = (float)($grossSalesRow['gross_sales'] ?? 0.0);
+        } catch (Throwable) {}
+
+        $totalRegs = 0;
+        $activeRegs = 0;
+        try {
+            $totalRegs = $this->count("SELECT COUNT(*) FROM registers");
+            $activeRegs = $this->count("SELECT COUNT(*) FROM registers WHERE status = 'active'");
+        } catch (Throwable) {}
+
+        $openShifts = 0;
+        $lockedRegs = 0;
+        $drawerCash = 0.0;
+        try {
+            $openShifts = $this->count("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'open'");
+            $lockedRegs = $this->count("SELECT COUNT(*) FROM cashier_shifts WHERE status = 'open' AND locked_at IS NOT NULL");
+            $drawerCashRow = $this->row("SELECT COALESCE(SUM(opening_cash), 0) AS total_cash FROM cashier_shifts WHERE status = 'open'");
+            $drawerCash = (float)($drawerCashRow['total_cash'] ?? 0.0);
+        } catch (Throwable) {}
+
+        $pendingIssues = 0;
+        $oos = 0;
+        $lowStock = 0;
+        try {
+            $pendingIssues = $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'");
+            $oos = $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand <= 0");
+            $lowStock = $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand > 0 AND i.quantity_on_hand <= p.reorder_level");
+        } catch (Throwable) {}
+
+        $totalAlerts = $pendingIssues + $oos + $lowStock;
+
+        return [
+            'gross_sales' => $grossSales,
+            'register_drawer_status' => [
+                'total_registers' => $totalRegs,
+                'active_registers' => $activeRegs,
+                'open_shifts' => $openShifts,
+                'locked_registers' => $lockedRegs,
+                'drawer_cash_total' => $drawerCash,
+            ],
+            'inventory_alerts' => [
+                'pending_issues' => $pendingIssues,
+                'out_of_stock' => $oos,
+                'low_stock' => $lowStock,
+                'total_alerts' => $totalAlerts,
+            ],
         ];
     }
 
