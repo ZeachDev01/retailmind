@@ -196,12 +196,17 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                             <label class="queue-search">Search products<div><i class="bi bi-search" aria-hidden="true"></i><input id="queue-search" type="search" placeholder="Product name or SKU…"></div></label>
                             <label>Stock status<select id="queue-stock"><option value="" selected>All statuses</option><option value="needs_replenishment">🔵 Needs replenishment</option><option value="Out of stock">🔴 Out of stock</option><option value="Low stock">🟡 Low stock</option><option value="In stock">🟢 In stock</option></select></label>
                             <label>Sort by<select id="queue-sort"><option value="priority">Stock priority</option><option value="name">Product name</option><option value="stock">Lowest stock</option><option value="quantity">Stock-rule quantity</option></select></label>
+                            <?php if ($queue): ?>
+                                <button class="btn btn-primary no-print" id="btn-generate-po-pdf" type="button" title="Single-click download of formal Purchase Order PDF">
+                                    <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i> Generate PO (PDF)
+                                </button>
+                            <?php endif; ?>
                             <div class="queue-actions" id="queue-actions">
                                 <button class="btn btn-secondary" id="queue-actions-trigger" type="button" aria-expanded="false" aria-controls="queue-actions-menu" aria-haspopup="menu">Actions</button>
                                 <div class="queue-actions-menu" id="queue-actions-menu" role="menu" hidden>
                                     <a class="queue-actions-item queue-recalculate" id="queue-recalculate" role="menuitem" href="replenishment_queue.php?recalculate=1"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recalculate</a>
                                     <?php if ($queue): ?>
-                                        <button class="queue-actions-item queue-print" id="queue-download-pdf" type="button" role="menuitem"><i class="bi bi-download" aria-hidden="true"></i> Download PDF</button>
+                                        <button class="queue-actions-item queue-print" id="queue-download-pdf" type="button" role="menuitem"><i class="bi bi-download" aria-hidden="true"></i> Download PO (PDF)</button>
                                     <?php endif; ?>
                                 </div>
                             </div>

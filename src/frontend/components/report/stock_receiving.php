@@ -38,6 +38,10 @@ if ($prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
         'supplier' => $linkedPullout['supplier'] ?? '',
     ];
 }
+$prefillPo = isset($_GET['po_number']) ? trim((string)$_GET['po_number']) : (isset($_GET['reference']) ? trim((string)$_GET['reference']) : '');
+if ($prefillPo !== '' && empty($formValues['invoice_number'])) {
+    $formValues['invoice_number'] = $prefillPo;
+}
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -52,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $entry = [
             'operation_token' => $_POST['operation_token'] ?? '',
             'supplier' => $_POST['supplier'] ?? '',
-            'invoice_number' => $_POST['invoice_number'] ?? '',
+            'invoice_number' => $_POST['invoice_number'] ?? ($_POST['po_number'] ?? ''),
         ];
         if (isset($_POST['entry_mode']) || array_key_exists('lines', $_POST)) {
             if (($_POST['receiving_complete'] ?? '') !== '1') {
@@ -234,7 +238,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <div class="receiving-panel-heading"><div><h2 id="delivery_title">Delivery lines</h2></div><div class="receiving-delivery-actions" id="receiving_delivery_actions"><span id="delivery_count" class="receiving-count">0 products</span></div></div>
                 <div id="delivery_empty_state" class="delivery-empty-state">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
-                    <p>No products added yet. Scan a barcode or add a product from the catalog.</p>
+                    <p>No products added. Scan a barcode or add products from the catalog.</p>
                 </div>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div id="receiving_lines"></div>
@@ -358,7 +362,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <section class="receiving-summary" aria-label="Delivery summary">
                 <div class="receiving-panel-heading"><h2>Delivery summary</h2><span id="summary_status" class="receiving-count">Draft</span></div>
                 <div class="receiving-summary-body">
-                    <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products</span></div>
+                    <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products added</span></div>
                     <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted" class="receiving-total-accepted">0</dd></div><div><dt>Received units</dt><dd id="summary_received" class="receiving-total-received">0</dd></div><div><dt>Damaged units</dt><dd id="summary_damaged" class="receiving-total-damaged">0</dd></div><div><dt>Known cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
                     <p class="receiving-summary-note">Damaged units do not increase stock. Blank costs use the saved product cost, when available.</p>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
@@ -366,12 +370,12 @@ $categoryIcon = static function (string $categoryName): string {
                     <h3>Receipt details</h3>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="supplier">Bought from (optional)</label>
-                            <input type="text" name="supplier" id="supplier" maxlength="150" placeholder="Where the goods were bought">
+                            <label for="supplier">Supplier / Bought from (optional)</label>
+                            <input type="text" name="supplier" id="supplier" maxlength="150" placeholder="Supplier or vendor name" value="<?= htmlspecialchars($formValues['supplier'] ?? '') ?>">
                         </div>
                         <div class="form-group">
-                            <label for="invoice_number">Receipt reference (optional)</label>
-                            <input type="text" name="invoice_number" id="invoice_number" maxlength="100" placeholder="Receipt reference">
+                            <label for="invoice_number">Receipt / Purchase Order (PO) Reference (optional)</label>
+                            <input type="text" name="invoice_number" id="invoice_number" maxlength="100" placeholder="Receipt # or PO #" value="<?= htmlspecialchars($formValues['invoice_number'] ?? '') ?>">
                         </div>
                     </div>
                 </div>
@@ -494,7 +498,7 @@ async function identifyReceivingProduct(code) {
                         ? existingRow.querySelector('[data-field="received_loose"]')
                         : existingRow.querySelector('[data-field="received_qty"]')));
             focusField?.focus();
-            scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedPack ? 'pack barcode' : (matchedCase ? 'case barcode' : 'unit barcode')}. Focused entry field.`;
+            scanStatus.textContent = `${product.product_name} (${product.sku}) is already added to delivery lines. Matched by ${matchedPack ? 'pack barcode' : (matchedCase ? 'case barcode' : 'unit barcode')}. Focused entry field.`;
             return;
         }
 
@@ -611,7 +615,11 @@ function updatePackageConversion(row = activeLine) {
         const total = packageMode
             ? Number(field('received_packages')?.value || 0) * Number(prod.units_per_package || 1)
             : Number(field('received_qty')?.value || 0);
-        convEl.textContent = `Accepted: ${Math.max(0, total - damaged)} units.`;
+        if (damaged > 0) {
+            convEl.textContent = `${total} units received − ${damaged} damaged = ${Math.max(0, total - damaged)} accepted units.`;
+        } else {
+            convEl.textContent = `Accepted: ${Math.max(0, total - damaged)} units.`;
+        }
     }
     refreshDelivery();
 }
@@ -855,7 +863,7 @@ function renderCatalog() {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-secondary receiving-card-add';
-        button.textContent = isAdded ? 'Added' : 'Add To Stock';
+        button.textContent = isAdded ? 'Added' : '+ Add to Delivery';
         button.setAttribute('aria-label', 'Add ' + p.product_name);
         button.disabled = isAdded;
         button.addEventListener('click', () => {
@@ -946,11 +954,16 @@ function restoreField(field, value) {
 
 function isLineTouched(row) {
     const field = name => row.querySelector(`[data-field="${name}"]`);
+    const prodId = field('product_id')?.value;
+    const prod = productMap.get(String(prodId));
+    const defaultCost = Number(prod?.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '';
+    const currentCost = field('cost_price')?.value.trim() || '';
+    const hasCustomCost = currentCost !== '' && currentCost !== defaultCost;
     return Boolean(
         field('received_qty')?.value.trim()
         || field('received_packages')?.value.trim()
         || (field('damaged_qty')?.value.trim() && field('damaged_qty')?.value.trim() !== '0')
-        || field('cost_price')?.value.trim()
+        || hasCustomCost
         || field('batch_number')?.value.trim()
         || field('expiration_date')?.value.trim()
         || field('notes')?.value.trim()
@@ -1084,8 +1097,8 @@ function addReceivingLine(values = {}) {
     const row = lineTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.productId = productId;
     row.querySelector('[data-field="product_id"]').value = productId;
-    if (Number(product.cost_price) > 0) {
-        row.querySelector('[data-field="cost_price"]').value = Number(product.cost_price).toFixed(2);
+    if (values.cost_price !== undefined) {
+        row.querySelector('[data-field="cost_price"]').value = values.cost_price;
     }
 
     const hasSalesPack = Number(product.pack_size || 0) > 1;
@@ -1308,7 +1321,7 @@ function renderReview() {
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
     const sharedDetails = [
-        form.elements.supplier.value && 'Bought from: ' + form.elements.supplier.value,
+        form.elements.supplier.value && 'Shopping store: ' + form.elements.supplier.value,
         form.elements.invoice_number.value && 'Receipt: ' + form.elements.invoice_number.value,
     ].filter(Boolean);
     if (sharedDetails.length) {
@@ -1361,7 +1374,7 @@ function renderReview() {
             const term = document.createElement('dt');
             term.textContent = label;
             const detail = document.createElement('dd');
-            detail.textContent = value + ' units';
+            detail.textContent = label === 'Accepted' ? value + ' accepted units' : value + ' units';
             item.append(term, detail);
             quantityList.append(item);
         }
@@ -1372,9 +1385,12 @@ function renderReview() {
             pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
             section.append(pulloutInfo);
         }
-        const price = field('cost_price').value.trim() || (Number(prod?.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '');
+        const enteredCost = field('cost_price').value.trim();
+        const costText = enteredCost
+            ? 'Unit cost: ₱' + (Number(enteredCost) ? Number(enteredCost).toFixed(2) : enteredCost)
+            : 'Unit cost: unknown; product cost unchanged';
         const details = [
-            price ? 'Cost: ₱' + price + ' per unit' : 'Cost: unknown',
+            costText,
             field('batch_number').value && 'Batch: ' + field('batch_number').value,
             field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
             field('notes').value,
