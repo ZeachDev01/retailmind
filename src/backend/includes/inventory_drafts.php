@@ -1,6 +1,6 @@
 <?php
 // Include only after page authorization, and only for a mutating Inventory Manager.
-if (current_role() !== 'inventory_manager' || !has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)) return;
+if (!function_exists('current_role') || current_role() !== 'inventory_manager' || !has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)) return;
 $draftKey = null;
 try {
     $draftKeyStmt = $pdo->prepare('SELECT encryption_key FROM inventory_draft_keys WHERE user_id = ?');

@@ -50,12 +50,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$prefillProductId = (int)($_GET['product_id'] ?? 0);
-$prefillBatchId = (int)($_GET['batch_id'] ?? 0);
+$prefillProductId = $message === '' ? (int)($_GET['product_id'] ?? 0) : 0;
+$prefillBatchId = $message === '' ? (int)($_GET['batch_id'] ?? 0) : 0;
 $prefillBatch = null;
 
 if ($prefillBatchId > 0) {
     $prefillBatch = $pulloutService->getBatchForPullout($prefillBatchId);
+    if ($prefillBatch && (int)($prefillBatch['remaining_quantity'] ?? 0) <= 0) {
+        $prefillBatch = null;
+        $prefillBatchId = 0;
+    }
     if ($prefillBatch && $prefillProductId <= 0) {
         $prefillProductId = (int)$prefillBatch['product_id'];
     }
@@ -141,15 +145,28 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                             <select data-search-dropdown name="batch_id" id="batch_id" aria-describedby="batch-help" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" required>
                                 <option value=""></option>
                                 <?php if ($prefillBatch): ?>
+                                    <?php
+                                    $prefillBatchNum = !empty($prefillBatch['batch_number']) ? 'Batch #' . $prefillBatch['batch_number'] : ('Batch #' . $prefillBatch['batch_id']);
+                                    $prefillBatchCode = !empty($prefillBatch['batch_number']) && (string)$prefillBatch['batch_number'] !== (string)$prefillBatch['batch_id'] ? ' (#' . $prefillBatch['batch_id'] . ')' : '';
+                                    $prefillRem = (int)$prefillBatch['remaining_quantity'];
+                                    $prefillSealed = (int)($prefillBatch['sealed_quantity'] ?? 0);
+                                    $prefillLoose = (int)($prefillBatch['loose_quantity'] ?? $prefillRem);
+                                    $prefillExp = !empty($prefillBatch['expiration_date']) ? 'Exp: ' . $prefillBatch['expiration_date'] : 'No expiry date';
+                                    $prefillPackSize = (int)($prefillBatch['pack_size'] ?? 1);
+                                    $prefillStockLabel = $prefillPackSize > 1
+                                        ? "{$prefillRem} available ({$prefillSealed} pack" . ($prefillSealed === 1 ? '' : 's') . ", {$prefillLoose} loose)"
+                                        : "{$prefillRem} available";
+                                    ?>
                                     <option value="<?= (int)$prefillBatch['batch_id'] ?>"
-                                            data-remaining="<?= (int)$prefillBatch['remaining_quantity'] ?>"
-                                            data-sealed="<?= (int)($prefillBatch['sealed_quantity'] ?? 0) ?>"
-                                            data-loose="<?= (int)($prefillBatch['loose_quantity'] ?? $prefillBatch['remaining_quantity']) ?>"
+                                            data-remaining="<?= $prefillRem ?>"
+                                            data-sealed="<?= $prefillSealed ?>"
+                                            data-loose="<?= $prefillLoose ?>"
                                             data-supplier="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>"
+                                            data-batch-num="<?= htmlspecialchars($prefillBatchNum . $prefillBatchCode) ?>"
+                                            data-batch-id="<?= (int)$prefillBatch['batch_id'] ?>"
+                                            data-expiration="<?= htmlspecialchars($prefillBatch['expiration_date'] ?? '') ?>"
                                             selected>
-                                        <?= htmlspecialchars($prefillBatch['batch_number'] ?? ('#' . $prefillBatch['batch_id'])) ?>
-                                        (Remaining: <?= (int)$prefillBatch['remaining_quantity'] ?>,
-                                        Exp: <?= htmlspecialchars($prefillBatch['expiration_date'] ?? 'None') ?>)
+                                        <?= htmlspecialchars("{$prefillBatchNum}{$prefillBatchCode}  •  {$prefillStockLabel}  •  {$prefillExp}") ?>
                                     </option>
                                 <?php endif; ?>
                             </select>
@@ -165,9 +182,53 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                    value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>">
                         </div>
 
+                        <section id="batch-summary-container" class="min-w-0 md:col-span-2" <?= $prefillBatch ? '' : 'hidden' ?>>
+                            <div class="batch-summary-card">
+                                <div class="batch-summary-header">
+                                    <div class="batch-summary-identity">
+                                        <span class="batch-summary-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
+                                        <div>
+                                            <h4 id="bsc-title" class="batch-summary-heading"><?= $prefillBatch ? htmlspecialchars($prefillBatchNum . $prefillBatchCode) : 'Selected Batch' ?></h4>
+                                            <p id="bsc-sub" class="batch-summary-sub">Tracked batch inventory allocation</p>
+                                        </div>
+                                    </div>
+                                    <div class="batch-summary-header-actions">
+                                        <span id="bsc-status-pill" class="pill-badge pill-badge--neutral">Status</span>
+                                        <button type="button" id="btn-pullout-all" class="btn btn-sm" title="Fill entire batch remaining balance into pullout quantity">
+                                            <i class="bi bi-arrow-bar-right" aria-hidden="true"></i>
+                                            Pull Out All (<span id="bsc-btn-qty"><?= $prefillBatch ? $prefillRem : '0' ?></span>)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="batch-summary-grid">
+                                    <div class="batch-stat-box">
+                                        <span class="batch-stat-label">AVAILABLE TO PULL OUT</span>
+                                        <div class="batch-stat-number-wrap">
+                                            <span id="bsc-remaining-val" class="batch-stat-number"><?= $prefillBatch ? number_format($prefillRem) : '0' ?></span>
+                                            <span class="batch-stat-unit">base units</span>
+                                        </div>
+                                        <span id="bsc-form-breakdown" class="batch-stat-detail"></span>
+                                    </div>
+                                    <div class="batch-stat-box">
+                                        <span class="batch-stat-label">EXPIRATION DATE</span>
+                                        <span id="bsc-expiry-val" class="batch-stat-text"><?= $prefillBatch && !empty($prefillBatch['expiration_date']) ? htmlspecialchars($prefillBatch['expiration_date']) : 'Not recorded' ?></span>
+                                        <span id="bsc-expiry-relative" class="batch-stat-detail text-muted"></span>
+                                    </div>
+                                    <div class="batch-stat-box">
+                                        <span class="batch-stat-label">BATCH SUPPLIER</span>
+                                        <span id="bsc-supplier-val" class="batch-stat-text"><?= $prefillBatch && !empty($prefillBatch['supplier']) ? htmlspecialchars($prefillBatch['supplier']) : 'Not specified' ?></span>
+                                        <span class="batch-stat-detail text-muted">Original delivery source</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
                         <div class="min-w-0">
                             <div id="pullout-piece-group">
-                                <label for="quantity"><strong>Quantity (base units) *</strong></label>
+                                <label for="quantity">
+                                    <strong>Quantity (base units) *</strong>
+                                    <span id="max-qty-pill" class="max-qty-pill" hidden></span>
+                                </label>
                                 <input type="number"
                                        name="quantity"
                                        id="quantity"
@@ -176,6 +237,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                        step="1"
                                        max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
                                        required>
+                                <small id="qty-validation-msg" class="text-danger mt-1 block" hidden></small>
                             </div>
                             <div id="pullout-pack-group" class="mt-3 grid grid-cols-2 gap-3" hidden>
                                 <div>
@@ -324,12 +386,56 @@ document.addEventListener('DOMContentLoaded', function () {
     const pulledLooseInput = document.getElementById('pulled_loose');
     const formSummary = document.getElementById('pullout-form-summary');
 
+    const batchSummaryContainer = document.getElementById('batch-summary-container');
+    const bscTitle = document.getElementById('bsc-title');
+    const bscStatusPill = document.getElementById('bsc-status-pill');
+    const bscBtnQty = document.getElementById('bsc-btn-qty');
+    const bscRemainingVal = document.getElementById('bsc-remaining-val');
+    const bscFormBreakdown = document.getElementById('bsc-form-breakdown');
+    const bscExpiryVal = document.getElementById('bsc-expiry-val');
+    const bscExpiryRelative = document.getElementById('bsc-expiry-relative');
+    const bscSupplierVal = document.getElementById('bsc-supplier-val');
+    const btnPulloutAll = document.getElementById('btn-pullout-all');
+    const maxQtyPill = document.getElementById('max-qty-pill');
+    const qtyValidationMsg = document.getElementById('qty-validation-msg');
+
     if (!productSelect || !batchSelect) return;
 
     function getSelectedPackSize() {
         const prodOpt = productSelect.options[productSelect.selectedIndex];
         const ps = prodOpt && prodOpt.dataset.packSize ? parseInt(prodOpt.dataset.packSize, 10) : 1;
         return ps > 1 ? ps : 1;
+    }
+
+    function computeExpiryBadge(expStr) {
+        if (!expStr) return { label: 'No Expiry', cls: 'pill-badge--neutral', relative: 'Non-perishable / undated batch' };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const parts = expStr.split('-');
+        if (parts.length !== 3) return { label: 'Recorded', cls: 'pill-badge--neutral', relative: expStr };
+        const expDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const diffMs = expDate.getTime() - today.getTime();
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+            const absDays = Math.abs(diffDays);
+            return {
+                label: 'Expired',
+                cls: 'pill-badge--danger',
+                relative: `${absDays} day${absDays === 1 ? '' : 's'} ago`
+            };
+        } else if (diffDays <= 30) {
+            return {
+                label: 'Expiring Soon',
+                cls: 'pill-badge--warning',
+                relative: `${diffDays} day${diffDays === 1 ? '' : 's'} remaining`
+            };
+        } else {
+            return {
+                label: 'Active',
+                cls: 'pill-badge--success',
+                relative: `${diffDays} days remaining`
+            };
+        }
     }
 
     function syncPackQuantities() {
@@ -346,6 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (formSummary) {
             formSummary.textContent = `1 pack = ${packSize} base units. Total deduction: ${total} base units.`;
         }
+        validateQuantity();
     }
 
     function loadBatchesForProduct(productId, preselectedBatchId) {
@@ -375,9 +482,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     opt.dataset.sealed = String(sealed);
                     opt.dataset.loose = String(loose);
                     opt.dataset.supplier = b.supplier || '';
-                    const expLabel = b.expiration_date ? ('Exp: ' + b.expiration_date) : 'No date';
-                    const formLabel = packSize > 1 ? ` [${sealed} pack(s), ${loose} loose]` : '';
-                    opt.textContent = (b.batch_number || ('#' + b.batch_id)) + ' (Remaining: ' + b.remaining_quantity + formLabel + ', ' + expLabel + ')';
+                    opt.dataset.expiration = b.expiration_date || '';
+
+                    const batchNum = b.batch_number ? ('Batch #' + b.batch_number) : ('Batch #' + b.batch_id);
+                    const batchCode = b.batch_number && String(b.batch_number) !== String(b.batch_id) ? ` (#${b.batch_id})` : '';
+                    opt.dataset.batchNum = batchNum + batchCode;
+
+                    const stockLabel = packSize > 1
+                        ? `${b.remaining_quantity} available (${sealed} pack${sealed === 1 ? '' : 's'}, ${loose} loose)`
+                        : `${b.remaining_quantity} available`;
+                    const expLabel = b.expiration_date ? ('Exp: ' + b.expiration_date) : 'No expiry date';
+
+                    opt.textContent = `${batchNum}${batchCode}  •  ${stockLabel}  •  ${expLabel}`;
                     if (preselectedBatchId && String(b.batch_id) === String(preselectedBatchId)) {
                         opt.selected = true;
                     }
@@ -387,6 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(() => {
                 batchSelect.innerHTML = '<option value="">Could not load batches. Select the product again to retry.</option>';
+                updateBatchDetails();
             });
     }
 
@@ -404,23 +521,101 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        if (selectedOpt && selectedOpt.dataset.remaining) {
+        const hasSelectedBatch = Boolean(selectedOpt && selectedOpt.value && selectedOpt.dataset.remaining);
+
+        if (hasSelectedBatch) {
             const maxRemaining = parseInt(selectedOpt.dataset.remaining, 10);
+            const sealed = parseInt(selectedOpt.dataset.sealed || '0', 10);
+            const loose = parseInt(selectedOpt.dataset.loose || selectedOpt.dataset.remaining, 10);
+            const batchNum = selectedOpt.dataset.batchNum || ('Batch #' + selectedOpt.value);
+            const expDate = selectedOpt.dataset.expiration || '';
+            const supplier = selectedOpt.dataset.supplier || '';
+
             quantityInput.max = maxRemaining;
-            if (pulledPacksInput && selectedOpt.dataset.sealed !== undefined) {
-                pulledPacksInput.max = selectedOpt.dataset.sealed;
+            if (pulledPacksInput) pulledPacksInput.max = sealed;
+            if (pulledLooseInput) pulledLooseInput.max = loose;
+
+            if (supplierInput && !supplierInput.value && supplier) {
+                supplierInput.value = supplier;
             }
-            if (pulledLooseInput && selectedOpt.dataset.loose !== undefined) {
-                pulledLooseInput.max = selectedOpt.dataset.loose;
+
+            if (batchSummaryContainer) {
+                batchSummaryContainer.hidden = false;
+                if (bscTitle) bscTitle.textContent = batchNum;
+                if (bscRemainingVal) bscRemainingVal.textContent = maxRemaining.toLocaleString();
+                if (bscBtnQty) bscBtnQty.textContent = maxRemaining.toLocaleString();
+                if (bscFormBreakdown) {
+                    bscFormBreakdown.textContent = isPackMode
+                        ? `${sealed} pack${sealed === 1 ? '' : 's'} (${sealed * packSize} units) + ${loose} loose piece${loose === 1 ? '' : 's'}`
+                        : '';
+                }
+                if (bscExpiryVal) bscExpiryVal.textContent = expDate || 'Not recorded';
+                if (bscSupplierVal) bscSupplierVal.textContent = supplier || 'Not specified';
+
+                const badgeInfo = computeExpiryBadge(expDate);
+                if (bscStatusPill) {
+                    bscStatusPill.textContent = badgeInfo.label;
+                    bscStatusPill.className = 'pill-badge ' + badgeInfo.cls;
+                }
+                if (bscExpiryRelative) {
+                    bscExpiryRelative.textContent = badgeInfo.relative;
+                }
             }
-            if (supplierInput && !supplierInput.value && selectedOpt.dataset.supplier) {
-                supplierInput.value = selectedOpt.dataset.supplier;
+
+            if (maxQtyPill) {
+                maxQtyPill.hidden = false;
+                maxQtyPill.textContent = `Max: ${maxRemaining.toLocaleString()} available`;
             }
+        } else {
+            if (batchSummaryContainer) batchSummaryContainer.hidden = true;
+            if (maxQtyPill) maxQtyPill.hidden = true;
+            quantityInput.removeAttribute('max');
         }
 
         if (isPackMode) {
             syncPackQuantities();
         }
+        validateQuantity();
+    }
+
+    function validateQuantity() {
+        if (!qtyValidationMsg || !quantityInput) return;
+        const selectedOpt = batchSelect.options[batchSelect.selectedIndex];
+        if (!selectedOpt || !selectedOpt.value || !selectedOpt.dataset.remaining) {
+            qtyValidationMsg.hidden = true;
+            return;
+        }
+        const maxRemaining = parseInt(selectedOpt.dataset.remaining, 10);
+        const entered = parseInt(quantityInput.value || '0', 10);
+        if (entered > maxRemaining) {
+            qtyValidationMsg.textContent = `Requested quantity (${entered}) exceeds available batch stock (${maxRemaining} units max).`;
+            qtyValidationMsg.hidden = false;
+        } else {
+            qtyValidationMsg.hidden = true;
+        }
+    }
+
+    if (btnPulloutAll) {
+        btnPulloutAll.addEventListener('click', function () {
+            const selectedOpt = batchSelect.options[batchSelect.selectedIndex];
+            if (!selectedOpt || !selectedOpt.value || !selectedOpt.dataset.remaining) return;
+            const packSize = getSelectedPackSize();
+            const isPackMode = packSize > 1;
+            const maxRemaining = parseInt(selectedOpt.dataset.remaining || '0', 10);
+            const sealed = parseInt(selectedOpt.dataset.sealed || '0', 10);
+            const loose = parseInt(selectedOpt.dataset.loose || selectedOpt.dataset.remaining, 10);
+
+            if (isPackMode) {
+                if (pulledPacksInput) pulledPacksInput.value = sealed;
+                if (pulledLooseInput) pulledLooseInput.value = loose;
+                syncPackQuantities();
+            } else {
+                if (quantityInput) quantityInput.value = maxRemaining;
+            }
+            validateQuantity();
+            const reasonInput = document.getElementById('reason');
+            if (reasonInput) reasonInput.focus();
+        });
     }
 
     document.addEventListener('inventorydraft:prepare', event => {
@@ -434,18 +629,28 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!Array.from(batchSelect.options).some(option => option.value === value('batch_id'))) throw new Error('The selected batch is no longer available. Your draft is still kept.');
         })());
     });
+
     productSelect.addEventListener('change', function () {
         loadBatchesForProduct(this.value, null);
     });
 
     batchSelect.addEventListener('change', updateBatchDetails);
+    if (quantityInput) quantityInput.addEventListener('input', validateQuantity);
     if (pulledPacksInput) pulledPacksInput.addEventListener('input', syncPackQuantities);
     if (pulledLooseInput) pulledLooseInput.addEventListener('input', syncPackQuantities);
 
     // Initial load if product is selected
     if (productSelect.value) {
         loadBatchesForProduct(productSelect.value, <?= json_encode($prefillBatchId > 0 ? $prefillBatchId : null) ?>);
+    } else {
+        updateBatchDetails();
     }
+
+    <?php if ($message): ?>
+    if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    <?php endif; ?>
 });
 </script>
 <script>

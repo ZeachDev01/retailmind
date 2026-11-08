@@ -125,9 +125,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <h1>Replenishment Recommendations</h1>
                 <p class="page-subtitle">Review stock and suggested buying quantities.</p>
             </div>
-            <div class="page-heading-actions">
-                <a class="btn btn-secondary" href="../report/predictions.php">Demand Forecast</a>
-            </div>
         </header>
 
         <section class="queue-summary" role="region" aria-label="Stock health overview">
@@ -165,13 +162,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
             </div>
         </section>
 
-        <?php if ($coverage): ?>
-            <?php forecast_status_summary(
-                $coverage['is_guidance_usable'] ? 'Buying suggestions include forecast evidence' : 'Buying suggestions use stock rules',
-                $coverage['is_guidance_usable'] ? 'Some products may still have missing forecasts. Check each row’s basis.' : 'Usable current forecasts are not available for buying guidance.',
-                $canReceive ? 'Review suggested quantities before buying. Record bought goods in Stock Receiving.' : 'Review stock and suggested quantities. The Inventory Manager records bought goods.'
-            ); ?>
-        <?php endif; ?>
             <?php if ($error): ?>
                 <div class="alert tag-warning" role="note" data-rm-alert-processed="1">
                     <span><?= htmlspecialchars($error) ?></span>
@@ -179,11 +169,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 </div>
             <?php endif; ?>
 
-            <?php if ($coverage && $coverage['latest_attempt_status'] === 'failed'): ?>
-                <div class="alert tag-warning queue-temp-notice" role="note" data-rm-alert-processed="1">
-                    <strong>Notice:</strong> <?= htmlspecialchars($coverage['coverage_summary_text']) ?>
-                </div>
-            <?php elseif ($coverage && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
+            <?php if ($coverage && $coverage['latest_attempt_status'] !== 'failed' && $coverage['forecast_backed_count'] > 0 && $coverage['stock_rule_count'] > 0): ?>
                 <p class="muted"><?= (int)$coverage['forecast_backed_count'] ?> products use forecasts · <?= (int)$coverage['stock_rule_count'] ?> use stock rules. <a href="../report/forecast_exceptions.php">Review exclusions</a> <?php forecast_help('queue-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></p>
             <?php endif; ?>
 
