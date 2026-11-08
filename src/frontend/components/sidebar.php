@@ -156,6 +156,56 @@ function sidebar_render_section(array $section): void
     </div>
 <?php
 }
+
+function sidebar_render_remote_access_pill(string $idSuffix = 'desktop', ?string $role = null, bool $isOnline = false, string $tunnelUrl = ''): string
+{
+    $statusText = $isOnline ? 'Online' : 'Offline';
+    $pillLabel = $isOnline ? 'Remote Online' : 'Remote Offline';
+    $descText = $isOnline
+        ? 'Public access is active through Cloudflare Tunnel.'
+        : 'Remote access is currently offline.';
+    $apiUrl = app_url('components/administrator/remote_access_api.php');
+    $canManage = in_array($role, ['admin', 'super_admin'], true);
+    $settingsUrl = app_url('components/administrator/store_settings.php#remote-access-card');
+
+    $html = '<div class="remote-pill-wrapper" data-remote-access-wrapper data-remote-api="' . sidebar_e($apiUrl) . '">';
+    $html .= '<button type="button" class="remote-status-pill ' . ($isOnline ? 'is-online' : 'is-offline') . '" id="remoteStatusPill-' . sidebar_e($idSuffix) . '" data-remote-pill-trigger aria-expanded="false" aria-haspopup="true" aria-label="Remote Access: ' . $statusText . '" title="Remote Access: ' . $statusText . '">';
+    $html .= '<span class="remote-status-dot" aria-hidden="true"></span>';
+    $html .= '<span class="remote-status-label">' . $pillLabel . '</span>';
+    $html .= '<span class="remote-status-caret" aria-hidden="true">&#9662;</span>';
+    $html .= '</button>';
+
+    $html .= '<div class="remote-status-popover u-hidden" data-remote-popover role="dialog" aria-label="Remote Access Details">';
+    $html .= '<div class="remote-popover-header">';
+    $html .= '<span class="remote-popover-title">Remote Access</span>';
+    $html .= '<span class="remote-badge ' . ($isOnline ? 'badge-online' : 'badge-offline') . '" data-remote-badge>' . $statusText . '</span>';
+    $html .= '</div>';
+
+    $html .= '<div class="remote-popover-body">';
+    $html .= '<p class="remote-popover-desc" data-remote-desc>' . $descText . '</p>';
+
+    $html .= '<div class="remote-popover-url-row ' . ($isOnline ? '' : 'u-hidden') . '" data-remote-url-row>';
+    $html .= '<input type="text" class="remote-popover-url-input" data-remote-url-input readonly value="' . sidebar_e($tunnelUrl) . '" aria-label="Active Remote URL">';
+    $html .= '<button type="button" class="remote-copy-btn" data-remote-copy-btn aria-label="Copy remote URL">';
+    $html .= '<span class="remote-copy-icon" aria-hidden="true">&#128203;</span>';
+    $html .= '<span class="remote-copy-text" data-remote-copy-text>Copy</span>';
+    $html .= '</button>';
+    $html .= '</div>';
+
+    $html .= '<div class="remote-copy-feedback u-hidden" data-remote-feedback role="status" aria-live="polite">URL copied to clipboard!</div>';
+
+    if ($canManage) {
+        $html .= '<div class="remote-popover-footer">';
+        $html .= '<a href="' . sidebar_e($settingsUrl) . '" class="remote-settings-link">Store Settings &rarr;</a>';
+        $html .= '</div>';
+    }
+
+    $html .= '</div>';
+    $html .= '</div>';
+    $html .= '</div>';
+
+    return $html;
+}
 }
 
 $superAdministratorSystemItems = [
@@ -310,6 +360,25 @@ $GLOBALS['rm_navigation_shell'] = [
         if (link) link.removeAttribute('data-rm-page-asset');
     })();
 </script>
+<?php
+require_once __DIR__ . '/../../backend/app/Services/CloudflareTunnelService.php';
+$sidebarTunnelOnline = false;
+$sidebarTunnelUrl = '';
+try {
+    if (class_exists(\App\Services\CloudflareTunnelService::class)) {
+        $sidebarTunnelService = new \App\Services\CloudflareTunnelService();
+        $sidebarTunnelOnline = $sidebarTunnelService->isRunning();
+        if ($sidebarTunnelOnline) {
+            $sidebarTunnelUrl = (string)($sidebarTunnelService->getUrl() ?? '');
+        }
+    }
+} catch (\Throwable) {
+    $sidebarTunnelOnline = false;
+    $sidebarTunnelUrl = '';
+}
+$isTunnelActive = $sidebarTunnelOnline && $sidebarTunnelUrl !== '';
+?>
+<link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/remote-access-pill.css') . '?v=' . filemtime(__DIR__ . '/../assets/css/remote-access-pill.css')) ?>">
 <div class="admin-mobile-topbar" aria-label="Mobile navigation">
     <div class="admin-mobile-brand">
         <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
@@ -321,6 +390,7 @@ $GLOBALS['rm_navigation_shell'] = [
         </a>
     </div>
     <div class="admin-mobile-tools">
+        <?= sidebar_render_remote_access_pill('mobile', $role, $isTunnelActive, $sidebarTunnelUrl) ?>
         <button type="button" class="admin-mobile-search" data-command-open aria-label="Search pages">
             <?= sidebar_icon('search', 'bi-search') ?>
         </button>
@@ -432,6 +502,7 @@ $GLOBALS['rm_navigation_shell'] = [
         <span>Search products, reports, settings, and pages…</span>
         <kbd>Ctrl&nbsp;K</kbd>
     </button>
+    <?= sidebar_render_remote_access_pill('desktop', $role, $isTunnelActive, $sidebarTunnelUrl) ?>
     <a class="global-notification-button" href="<?= sidebar_e(app_url('components/notification/notifications.php')) ?>" aria-label="Notifications<?= $notificationCount > 0 ? ': ' . (int)$notificationCount . ' unread' : '' ?>">
         <?= sidebar_icon('notification') ?>
         <span>Notifications</span>
@@ -488,6 +559,7 @@ cartWorkspace.bindNavigation();
     document.body.setAttribute('data-rm-backup-status', <?= json_encode(app_url('components/backup/backup_status.php'), JSON_UNESCAPED_SLASHES) ?>);
 </script>
 <script src="<?= sidebar_e(app_url('assets/js/backup_status.js')) ?>"></script>
+<script src="<?= sidebar_e(app_url('assets/js/remote-access-pill.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/remote-access-pill.js')) ?>"></script>
 <?php require __DIR__ . '/auth/session_activity_client.php'; ?>
 <script>
     document.addEventListener('DOMContentLoaded', function() {

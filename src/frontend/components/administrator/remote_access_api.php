@@ -9,8 +9,6 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
 require_once __DIR__ . '/../../../backend/app/Services/QrCodeService.php';
 
-require_role(['admin', 'super_admin']);
-
 use App\Services\CloudflareTunnelService;
 use App\Services\QrCodeService;
 
@@ -20,6 +18,7 @@ try {
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     if ($method === 'GET') {
+        require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
         $status = $service->getStatus();
         if (!empty($status['url'])) {
             $status['qr_svg'] = $qrService->generateSvg($status['url']);
@@ -27,6 +26,8 @@ try {
         echo json_encode(['success' => true] + $status, JSON_UNESCAPED_SLASHES);
         exit;
     }
+
+    require_role(['admin', 'super_admin']);
 
     if ($method === 'POST') {
         // Read raw JSON body or fall back to standard POST parameters
