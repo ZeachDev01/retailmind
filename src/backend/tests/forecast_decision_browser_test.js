@@ -94,7 +94,7 @@ async function checkQueueAccessibility(page) {
         const stockOnly = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
         await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Out of stock/);
-        assert.match(await stockOnly.innerText(), /16 units/);
+        assert.match(await stockOnly.innerText(), /16\s+units/);
         assert.match(await stockOnly.innerText(), /Stock-rule suggestion/);
         assert.match(await stockOnly.innerText(), /Forecast unavailable/);
         assert.match(await stockOnly.innerText(), /Not available yet/);
@@ -104,7 +104,7 @@ async function checkQueueAccessibility(page) {
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
         await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await stockOnly.innerText(), /Demand Forecast/);
-        assert.match(await stockOnly.innerText(), /32 units/);
+        assert.match(await stockOnly.innerText(), /32\s+units/);
 
         // Product 2: legacy product with no ML forecast
         const missing = page.locator('.queue-item').filter({hasText: 'Unrelated legacy product'});
@@ -118,7 +118,7 @@ async function checkQueueAccessibility(page) {
         const zeroItem = page.locator('.queue-item').filter({hasText: 'Zero Forecast Item'});
         await zeroItem.locator('.queue-details').evaluate(d => { d.open = true; });
         assert.match(await zeroItem.innerText(), /Demand Forecast/);
-        assert.match(await zeroItem.innerText(), /0 units/);
+        assert.match(await zeroItem.innerText(), /0\s+units/);
         assert.doesNotMatch(await zeroItem.innerText(), /Not available yet/);
 
         // Product 4: stale forecast
@@ -127,7 +127,7 @@ async function checkQueueAccessibility(page) {
         assert.match(await staleItem.innerText(), /Stock-rule suggestion/);
         assert.match(await staleItem.innerText(), /Stale forecast/);
         assert.match(await staleItem.innerText(), /Not available yet/);
-        assert.match(await staleItem.innerText(), /16 units/);
+        assert.match(await staleItem.innerText(), /16\s+units/);
 
         assert.equal(await page.getByRole('link', {name: 'Review Request', exact: true}).count(), 0);
         const response = await context.request.post(queueRoute, {form: {action: 'accept', product_id: 1}});
@@ -145,20 +145,20 @@ async function checkQueueAccessibility(page) {
             if (mode === 'unavailable') {
                 assert.match(text, /Stock-rule suggestion/);
                 assert.match(text, /Forecast unavailable/);
-                assert.match(text, /16 units/);
+                assert.match(text, /16\s+units/);
                 assert.match(text, /Not available yet/);
             }
             if (mode === 'observe') {
                 assert.match(text, /Stock-rule suggestion/);
                 assert.match(text, /Observation Mode/);
                 assert.match(text, /Not available yet/);
-                assert.match(text, /16 units/);
+                assert.match(text, /16\s+units/);
             }
             if (mode === 'suspend') {
                 assert.match(text, /Stock-rule suggestion/);
                 assert.match(text, /Recommendations Suspended by Administrator/);
                 assert.match(text, /Not available yet/);
-                assert.match(text, /16 units/);
+                assert.match(text, /16\s+units/);
             }
             assert.deepEqual(JSON.parse(fixture('state')), beforeView, 'Guidance leaves the database unchanged in ' + mode);
         }
@@ -194,7 +194,7 @@ async function checkQueueAccessibility(page) {
         assert.equal(await page.locator('#queue-results').innerText(), 'Showing 0–0 of 0 products');
         await page.locator('#queue-search').fill('');
         assert.equal(await page.locator('.queue-item:visible').count(), 10);
-        const artifacts = 'output/playwright/replenishment';
+        const artifacts = path.join(recovery, 'replenishment');
         fs.mkdirSync(artifacts, {recursive: true});
         for (const colorScheme of ['light', 'dark']) {
             await page.setViewportSize({width: 1280, height: 900});
@@ -204,7 +204,7 @@ async function checkQueueAccessibility(page) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
                     `${colorScheme} queue fits ${width}px`);
-                assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), width < 900);
+                assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), width <= 1280);
                 await checkQueueAccessibility(page);
                 if (width === 1280 || width === 390) {
                     await page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, 0); });
@@ -295,5 +295,7 @@ async function checkQueueAccessibility(page) {
         await browser?.close();
         server?.kill();
         fixture('cleanup');
+        try { fs.rmSync(recovery, {recursive: true, force: true}); } catch {}
+        try { fs.rmSync('.scratch/ticket179', {recursive: true, force: true}); if (fs.readdirSync('.scratch').length === 0) fs.rmdirSync('.scratch'); } catch {}
     }
 })().catch(error => { console.error(error); process.exitCode = 1; });

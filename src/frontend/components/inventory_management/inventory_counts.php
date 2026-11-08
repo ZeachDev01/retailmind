@@ -939,6 +939,11 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
         });
         productSearch.addEventListener('keydown', function (event) {
+            if (event.key === 'Tab' && !event.shiftKey && !productShowAll.hidden) {
+                event.preventDefault();
+                productShowAll.focus();
+                return;
+            }
             if (event.key === 'Escape') {
                 closeProductResults();
                 return;

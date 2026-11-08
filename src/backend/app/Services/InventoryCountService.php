@@ -181,9 +181,14 @@ class InventoryCountService
                 $bLooseRaw = $b['physical_loose_quantity'] ?? null;
                 $bQtyRaw = $b['physical_quantity'] ?? null;
 
-                if ($bId === null && ($bQtyRaw === null || $bQtyRaw === '' || (int)$bQtyRaw <= 0)
-                    && ($bSealedRaw === null || $bSealedRaw === '' || (int)$bSealedRaw <= 0)
-                    && ($bLooseRaw === null || $bLooseRaw === '' || (int)$bLooseRaw <= 0)) {
+                if (($bQtyRaw === null || $bQtyRaw === '')
+                    && ($bSealedRaw === null || $bSealedRaw === '')
+                    && ($bLooseRaw === null || $bLooseRaw === '')) {
+                    continue;
+                }
+                if ($bId === null && (int)($bQtyRaw ?? 0) <= 0
+                    && (int)($bSealedRaw ?? 0) <= 0
+                    && (int)($bLooseRaw ?? 0) <= 0) {
                     continue;
                 }
 

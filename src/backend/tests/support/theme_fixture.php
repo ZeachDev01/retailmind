@@ -159,7 +159,7 @@ if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_al
         $products = App\Database\ProductSeeder::loadProducts(__DIR__ . '/../../database/seeds/product_seed.csv');
         App\Database\ProductSeeder::run($pdo, $products);
         (new App\Database\DailySalesTrendSeeder($pdo))->run();
-        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (90000,'DELETE-TEST','DELETE-TEST','Unused deletion test',1,1,1)");
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (90000,'DELETE-TEST','DELETE-TEST','Unused deletion test',1,1)");
         $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (90000,0)');
         $pdo->exec("INSERT INTO promotions (promotion_name,discount_type,discount_value,scope,product_id,starts_at,ends_at,created_by) VALUES ('Product reset test','fixed',1,'product',1,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1),('General preserved test','fixed',1,'all',NULL,NOW(),DATE_ADD(NOW(),INTERVAL 1 DAY),1)");
         $pdo->exec("INSERT INTO forecast_sales_imports (product_id,sale_date,quantity,imported_by) VALUES (1,'2026-01-01',5,1)");
@@ -204,7 +204,7 @@ if (in_array($argv[1], ['reset_ready', 'reset_state', 'reset_failure', 'reset_al
 }
 if ($argv[1] === 'reports') {
     $pdo->exec("USE `{$database}`");
-    $product = $pdo->prepare('INSERT IGNORE INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (?,?,?,?,?,?,1)');
+    $product = $pdo->prepare('INSERT IGNORE INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (?,?,?,?,?,?)');
     for ($id = 100; $id < 165; $id++) {
         $product->execute([$id, 'REPORT-' . $id, 'REPORT-' . $id, 'Report pagination item ' . $id, 25, 3]);
         $pdo->exec("INSERT IGNORE INTO inventory (product_id,quantity_on_hand) VALUES ({$id},10)");
@@ -325,8 +325,8 @@ $roles = ['admin','super_admin','inventory_manager','cashier'];
 foreach ($roles as $index => $role) {
     $id = $index + 1;
     $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
-    $pdo->prepare('INSERT INTO users (user_id,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,0)')
-        ->execute([$id,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
+    $pdo->prepare('INSERT INTO users (user_id,first_name,last_name,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,?,?,0)')
+        ->execute([$id,'Theme Test',$role,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
     if ($pdo->query('SELECT theme_preference FROM users WHERE user_id=' . $id)->fetchColumn() !== 'system') {
         throw new RuntimeException('Fresh accounts must default to System.');
     }

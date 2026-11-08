@@ -93,14 +93,13 @@ try {
     $receiptMigration = require __DIR__ . '/../database/migrations/202609300003_refund_receipt_details.php';
     $receiptMigration['up']($pdo);
     $receiptMigration['up']($pdo);
-    $pdo->exec("INSERT INTO branches (branch_id, branch_name, branch_code) VALUES (1, 'Test Store', 'TEST')");
     $pdo->exec("INSERT INTO roles (role_id, role_name) VALUES (1, 'cashier')");
-    $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id)
-        VALUES (1, 'Test Cashier', 'refund-test', 'unused', 1, 1)");
+    $pdo->exec("INSERT INTO users (user_id, display_name, username, password_hash, role_id)
+        VALUES (1, 'Test Cashier', 'refund-test', 'unused', 1)");
     $pdo->prepare("INSERT INTO fiscal_periods(period_id,period_name,start_date,end_date,status,created_by) VALUES (2,'Today',?,?,'open',1)")->execute([date('Y-m-d'),date('Y-m-d')]);
     $pdo->exec("INSERT INTO registers (register_id, name) VALUES (1, 'Test Register')");
     $pdo->exec('INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash) VALUES (1, 1, 1, 100)');
-    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, branch_id) VALUES (1, 'REFUND-TEST', 'REFUND-TEST', 'Test item', 25, 10, 1)");
+    $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price) VALUES (1, 'REFUND-TEST', 'REFUND-TEST', 'Test item', 25, 10)");
     $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 9)');
     $pdo->exec("INSERT INTO sales (sale_id, cashier_id, shift_id, total_amount, payment_method) VALUES (1, 1, 1, 25, 'cash')");
     $pdo->exec('INSERT INTO sale_items (sale_item_id, sale_id, product_id, quantity, unit_price, subtotal) VALUES (1, 1, 1, 1, 25, 25)');
@@ -153,7 +152,7 @@ try {
     $assert($savedReceipt !== null, 'The committed refund returns its customer receipt.');
     $pdo->exec("UPDATE products SET product_name='Edited product', sku='EDITED'");
     $pdo->exec("UPDATE registers SET name='Edited Register', paper_width_mm='58'");
-    $pdo->exec("UPDATE users SET full_name='Edited Cashier'");
+    $pdo->exec("UPDATE users SET display_name='Edited Cashier'");
     $pdo->exec("INSERT INTO store_settings (setting_key, setting_value) VALUES ('store_name', 'Edited Store'), ('receipt_footer', 'Edited footer')
         ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
     $assert($receiptService->fetchRefundForCashier($refundId, 1, 1) === $savedReceipt,

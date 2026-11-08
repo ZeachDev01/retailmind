@@ -56,7 +56,11 @@ $assert(
     'delegated staff lifecycle activity should be categorized as a Store operation'
 );
 $assert(
-    AuditRecordCategory::classify('User Access', 'User created', ['role' => 'admin']) === AuditRecordCategory::SECURITY,
+    AuditRecordCategory::classify('User Access', 'User created', ['role' => 'admin']) === AuditRecordCategory::STORE_OPERATION,
+    'Administrator account lifecycle activity should be categorized as a Store operation'
+);
+$assert(
+    AuditRecordCategory::classify('User Access', 'User created', ['role' => 'super_admin']) === AuditRecordCategory::SECURITY,
     'privileged-account lifecycle activity should be categorized as security'
 );
 $assert(
@@ -64,7 +68,7 @@ $assert(
         'User Access',
         'User updated',
         ['role' => 'cashier'],
-        ['role' => 'admin']
+        ['role' => 'super_admin']
     ) === AuditRecordCategory::SECURITY,
     'privileged-account demotion should remain categorized as security'
 );

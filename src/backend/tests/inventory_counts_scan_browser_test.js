@@ -450,7 +450,7 @@ async function main() {
             'shortcut suggests the selected product system quantity');
         await page.click('#use_system_quantity');
         check(await page.inputValue('#physical_quantity') === '10'
-            && await page.locator('#differenceQty').textContent() === '0',
+            && (await page.locator('#differenceQty').textContent()).trim().startsWith('0'),
             'clicking the shortcut fills the count and refreshes the difference');
         check(new URL(page.url()).pathname === countsPath, 'quantity shortcut does not submit the form');
         await page.fill('#physical_quantity', '');

@@ -27,9 +27,9 @@ $types=array_column($columns,'Type','Field');
 $assert($types['exception_reason']==='varchar(255)' && $types['payment_reference']==='varchar(100)' && isset($types['original_cashier_id'],$types['approved_by']),'Fresh and upgraded refund metadata have the required column shapes');
 $pdo->exec("INSERT INTO roles(role_id,role_name) VALUES (2,'admin'),(3,'super_admin')");
 $hash=password_hash('fixture-password',PASSWORD_DEFAULT);
-$pdo->prepare("INSERT INTO users(user_id,full_name,username,password_hash,role_id,branch_id,status,must_change_password)
- VALUES (2,'Approver','refund-admin',?,2,1,'active',0),(3,'Original seller','refund-seller',?,1,1,'disabled',0),
- (4,'Technical owner','refund-super',?,3,1,'active',0),(5,'Other Cashier','refund-other',?,1,1,'active',0)")->execute([$hash,$hash,$hash,$hash]);
+$pdo->prepare("INSERT INTO users(user_id,display_name,username,password_hash,role_id,status,must_change_password)
+ VALUES (2,'Approver','refund-admin',?,2,'active',0),(3,'Original seller','refund-seller',?,1,'disabled',0),
+ (4,'Technical owner','refund-super',?,3,'active',0),(5,'Other Cashier','refund-other',?,1,'active',0)")->execute([$hash,$hash,$hash,$hash]);
 $pdo->exec('UPDATE users SET must_change_password=0 WHERE user_id=1');
 $pdo->exec("INSERT INTO registers(register_id,name) VALUES (2,'Other Till')");
 $pdo->exec('INSERT INTO cashier_shifts(shift_id,cashier_id,register_id,opening_cash) VALUES (2,5,2,100)');
@@ -137,8 +137,8 @@ $packFormMigration['up']($pdo); $packFormMigration['up']($pdo);
 $criTypes = array_column($pdo->query('SHOW COLUMNS FROM cash_refund_items')->fetchAll(PDO::FETCH_ASSOC), 'Type', 'Field');
 $assert($criTypes['selling_form'] === "enum('piece','pack')" && str_starts_with($criTypes['pack_size'], 'int'), 'Repeatable Sales Pack refund item migration preserves column shapes');
 
-$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, cost_price, quantity_sold, branch_id)
-    VALUES (20, 'PACK-TEST-20', 'PACK-TEST-20', 'Pack Soda', 15, 6, 'PACK-BAR-20', 80, 8, 8, 1)");
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, pack_size, pack_barcode, pack_price, cost_price, quantity_sold)
+    VALUES (20, 'PACK-TEST-20', 'PACK-TEST-20', 'Pack Soda', 15, 6, 'PACK-BAR-20', 80, 8, 8)");
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (20, 10)');
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity)
     VALUES (201, 20, 'B-PACK-201', 18, 10, 1, 4)");
@@ -171,9 +171,9 @@ $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_i
 $assert((int)$pdo->query('SELECT quantity_sold FROM products WHERE product_id = 20')->fetchColumn() === 2, 'Concurrent sealed pack refund decrements quantity_sold by 6 Base Units once');
 $assert($service->refundableQuantity(20) === 0 && $service->refundableQuantity(21) === 2 && $service->refundableAmount(20) === 30.0, 'Pack refund leaves sibling piece line of same Product intact');
 
-$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, quantity_sold, branch_id)
-    VALUES (25, 'OIL-250ML', 'OIL-250ML', 'Cooking Oil Pouch 250 mL', 22, 14, 1, 1),
-           (26, 'OIL-500ML', 'OIL-500ML', 'Cooking Oil Pouch 500 mL', 42, 28, 1, 1)");
+$pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, quantity_sold)
+    VALUES (25, 'OIL-250ML', 'OIL-250ML', 'Cooking Oil Pouch 250 mL', 22, 14, 1),
+           (26, 'OIL-500ML', 'OIL-500ML', 'Cooking Oil Pouch 500 mL', 42, 28, 1)");
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (25, 9), (26, 9)');
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity)
     VALUES (251, 25, 'B-OIL-250', 10, 9, 0, 9), (261, 26, 'B-OIL-500', 10, 9, 0, 9)");
