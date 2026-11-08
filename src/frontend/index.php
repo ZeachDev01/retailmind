@@ -142,9 +142,6 @@ unset($_SESSION['_login_username']);
                         <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
                     </span>
                 </a>
-                <span class="landing-nav__status-pill" title="Operational Store Engine">
-                    <span class="landing-status-dot"></span> Shalom Store Engine
-                </span>
             </div>
             <div class="landing-nav__links">
                 <div class="landing-nav__sections">

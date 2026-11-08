@@ -15,13 +15,13 @@ $pdo->exec("
     CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT);
     INSERT INTO roles VALUES (1, 'admin'), (2, 'cashier'), (3, 'super_admin'), (4, 'inventory_manager');
 
-    CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, role_id INTEGER, status TEXT, must_change_password INTEGER DEFAULT 0);
+    CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, display_name TEXT, username TEXT, role_id INTEGER, status TEXT, must_change_password INTEGER DEFAULT 0);
     INSERT INTO users VALUES
-        (1, 'Admin Bob', 'admin_bob', 1, 'active', 0),
-        (2, 'Super Charlie', 'super_c', 3, 'active', 0),
-        (3, 'Cashier Alice', 'cashier_alice', 2, 'active', 0),
-        (4, 'Cashier Dave', 'cashier_dave', 2, 'active', 0),
-        (5, 'Manager Eve', 'manager_eve', 4, 'active', 0);
+        (1, 'Admin Bob', 'Admin Bob', 'admin_bob', 1, 'active', 0),
+        (2, 'Super Charlie', 'Super Charlie', 'super_c', 3, 'active', 0),
+        (3, 'Cashier Alice', 'Cashier Alice', 'cashier_alice', 2, 'active', 0),
+        (4, 'Cashier Dave', 'Cashier Dave', 'cashier_dave', 2, 'active', 0),
+        (5, 'Manager Eve', 'Manager Eve', 'manager_eve', 4, 'active', 0);
 
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, PRIMARY KEY (user_id, role_id));
 

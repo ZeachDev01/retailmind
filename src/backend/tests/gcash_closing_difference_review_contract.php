@@ -17,11 +17,11 @@ $pdo->exec("
     CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT);
     INSERT INTO roles VALUES (1, 'admin'), (2, 'cashier'), (3, 'super_admin');
 
-    CREATE TABLE users (user_id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, role_id INTEGER, status TEXT, must_change_password INTEGER DEFAULT 0);
+    CREATE TABLE users (user_id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, display_name TEXT, role_id INTEGER, status TEXT, must_change_password INTEGER DEFAULT 0);
     INSERT INTO users VALUES
-        (1, 'alice', 'Alice Cashier', 2, 'active', 0),
-        (2, 'bob', 'Bob Admin', 1, 'active', 0),
-        (3, 'charlie', 'Charlie Super', 3, 'active', 0);
+        (1, 'alice', 'Alice Cashier', 'Alice Cashier', 2, 'active', 0),
+        (2, 'bob', 'Bob Admin', 'Bob Admin', 1, 'active', 0),
+        (3, 'charlie', 'Charlie Super', 'Charlie Super', 3, 'active', 0);
 
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, PRIMARY KEY (user_id, role_id));
 

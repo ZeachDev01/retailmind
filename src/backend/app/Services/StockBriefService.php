@@ -5,6 +5,8 @@ namespace App\Services;
 use PDO;
 use Throwable;
 
+require_once __DIR__ . '/../Inventory/StockConditionReader.php';
+
 class StockBriefService
 {
     private PDO $pdo;
@@ -25,12 +27,7 @@ class StockBriefService
         $dateStr = date('F j, Y, g:i A');
 
         // Query low and out of stock items
-        $stockSql = "SELECT p.product_id, p.product_name, p.sku, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level
-                     FROM products p
-                     LEFT JOIN inventory i ON p.product_id = i.product_id
-                     WHERE COALESCE(i.quantity_on_hand, 0) <= p.reorder_level
-                     ORDER BY (COALESCE(i.quantity_on_hand, 0) <= 0) DESC, i.quantity_on_hand ASC, p.product_name ASC";
-        $stockItems = $this->pdo->query($stockSql)->fetchAll(PDO::FETCH_ASSOC);
+        $stockItems = \App\Inventory\StockConditionReader::reorderBreachProductsForStockBrief($this->pdo);
 
         $outOfStock = [];
         $lowStock = [];
@@ -43,24 +40,7 @@ class StockBriefService
         }
 
         // Query expiring batches (within 30 days or overdue)
-        $today = date('Y-m-d');
-        $todayQuoted = $this->pdo->quote($today);
-        $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday({$todayQuoted})) AS INTEGER)";
-        } else {
-            $diffExpr = "DATEDIFF(pb.expiration_date, {$todayQuoted})";
-        }
-
-        $expSql = "SELECT pb.batch_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                          {$diffExpr} AS days_remaining, p.product_name, p.sku
-                   FROM product_batches pb
-                   JOIN products p ON p.product_id = pb.product_id
-                   WHERE pb.remaining_quantity > 0
-                     AND pb.expiration_date IS NOT NULL
-                     AND ({$diffExpr} <= COALESCE(p.warning_lead_time_days, 30) OR pb.expiration_date < {$todayQuoted})
-                   ORDER BY pb.expiration_date ASC LIMIT 50";
-        $expiringBatches = $this->pdo->query($expSql)->fetchAll(PDO::FETCH_ASSOC);
+        $expiringBatches = \App\Inventory\StockConditionReader::expiryBatchesForStockBrief($this->pdo);
 
         $outCount = count($outOfStock);
         $lowCount = count($lowStock);

@@ -17,6 +17,7 @@ $pdo->exec("
     CREATE TABLE users (
         user_id INTEGER PRIMARY KEY,
         full_name TEXT,
+        display_name TEXT,
         username TEXT,
         role_id INTEGER,
         status TEXT,
@@ -24,9 +25,9 @@ $pdo->exec("
         must_change_password INTEGER DEFAULT 0,
         is_recovery_account INTEGER DEFAULT 0
     );
-    INSERT INTO users (user_id, full_name, username, role_id, status, password_hash) VALUES
-        (1, 'Admin Bob', 'admin_bob', 1, 'active', '" . password_hash('AdminPass@123', PASSWORD_DEFAULT) . "'),
-        (2, 'Cashier Alice', 'cashier_alice', 2, 'active', '" . password_hash('CashierPass@123', PASSWORD_DEFAULT) . "');
+    INSERT INTO users (user_id, full_name, display_name, username, role_id, status, password_hash) VALUES
+        (1, 'Admin Bob', 'Admin Bob', 'admin_bob', 1, 'active', '" . password_hash('AdminPass@123', PASSWORD_DEFAULT) . "'),
+        (2, 'Cashier Alice', 'Cashier Alice', 'cashier_alice', 2, 'active', '" . password_hash('CashierPass@123', PASSWORD_DEFAULT) . "');
 
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, PRIMARY KEY (user_id, role_id));
     INSERT INTO user_roles VALUES (1, 1), (2, 2);

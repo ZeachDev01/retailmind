@@ -13,11 +13,11 @@ $pdo->exec("
     CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT);
     INSERT INTO roles VALUES (1, 'admin'), (2, 'cashier'), (3, 'super_admin');
 
-    CREATE TABLE users (user_id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, role_id INTEGER, status TEXT, password_hash TEXT);
+    CREATE TABLE users (user_id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, display_name TEXT, role_id INTEGER, status TEXT, password_hash TEXT);
     INSERT INTO users VALUES
-        (1, 'store_admin', 'Store Admin', 1, 'active', '" . password_hash('AdminPass@123', PASSWORD_DEFAULT) . "'),
-        (2, 'cashier_alice', 'Alice Cashier', 2, 'active', '" . password_hash('CashierPass@123', PASSWORD_DEFAULT) . "'),
-        (3, 'super_admin', 'Super Admin', 3, 'active', '" . password_hash('SuperPass@123', PASSWORD_DEFAULT) . "');
+        (1, 'store_admin', 'Store Admin', 'Store Admin', 1, 'active', '" . password_hash('AdminPass@123', PASSWORD_DEFAULT) . "'),
+        (2, 'cashier_alice', 'Alice Cashier', 'Alice Cashier', 2, 'active', '" . password_hash('CashierPass@123', PASSWORD_DEFAULT) . "'),
+        (3, 'super_admin', 'Super Admin', 'Super Admin', 3, 'active', '" . password_hash('SuperPass@123', PASSWORD_DEFAULT) . "');
 
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, PRIMARY KEY (user_id, role_id));
     INSERT INTO user_roles VALUES (1, 1), (2, 2), (3, 3);

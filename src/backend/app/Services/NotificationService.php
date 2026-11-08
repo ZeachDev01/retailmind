@@ -300,41 +300,7 @@ class NotificationService
     /** Shared eligibility and wording for transaction checks and scheduled delivery. */
     public function getEligibleExpiryReminders(int $days = 30): array
     {
-        $thresholds = $this->getExpiryAlertThresholds($days);
-        $maxDays = max($thresholds);
-        $reminders = [];
-        foreach ($this->getExpiringBatches($maxDays, false) as $batch) {
-            $daysRemaining = (int)$batch['days_remaining'];
-            $leadTime = $batch['warning_lead_time_days'];
-            if ($leadTime !== null && $leadTime !== '') {
-                if ($daysRemaining > (int)$leadTime) {
-                    continue;
-                }
-                $threshold = (int)$leadTime;
-            } else {
-                $eligible = array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold);
-                if (!$eligible) {
-                    continue;
-                }
-                $threshold = min($eligible);
-            }
-            $reminders[] = $batch + [
-                'type' => 'expiring_stock',
-                'threshold' => $threshold,
-                'reference_type' => 'product_batch_expiry_' . $threshold,
-                'title' => "Expiry {$threshold}-Day Alert: " . $batch['product_name'],
-                'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expires on {$batch['expiration_date']} ({$daysRemaining} day(s) remaining). Stock: {$batch['remaining_quantity']}.",
-            ];
-        }
-        foreach ($this->getExpiringBatches($maxDays, true) as $batch) {
-            $reminders[] = $batch + [
-                'type' => 'expired_stock',
-                'reference_type' => 'product_batch',
-                'title' => 'Expired stock—waiting for supplier collection: ' . $batch['product_name'],
-                'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
-            ];
-        }
-        return $reminders;
+        return \App\Inventory\StockConditionReader::eligibleExpiryReminders($this->pdo, $this->clock, $days);
     }
 
     /** Current batch state for existing alerts, independent of read status or history pagination. */
@@ -372,23 +338,7 @@ class NotificationService
 
     private function getExpiryAlertThresholds(int $fallbackDays): array
     {
-        $value = '';
-        try {
-            $stmt = $this->pdo->prepare("SELECT setting_value FROM store_settings WHERE setting_key='expiry_alert_days'");
-            $stmt->execute();
-            $value = (string)($stmt->fetchColumn() ?: '');
-        } catch (Throwable $e) {
-            $value = '';
-        }
-        $thresholds = array_values(array_unique(array_filter(array_map(
-            static fn(string $part): int => max(0, min(365, (int)trim($part))),
-            explode(',', $value !== '' ? $value : '90,60,30,14,7')
-        ), static fn(int $day): bool => $day > 0)));
-        if (!$thresholds) {
-            $thresholds = [max(1, $fallbackDays)];
-        }
-        rsort($thresholds, SORT_NUMERIC);
-        return $thresholds;
+        return \App\Inventory\StockConditionReader::expiryAlertThresholds($this->pdo, $fallbackDays);
     }
 
     /** Optional-delivery preferences never suppress required-action in-app alerts. */
@@ -414,74 +364,14 @@ class NotificationService
 
     private function getLowStockProducts(): array
     {
-        $sql = "SELECT p.product_id, p.product_name, p.sku, i.quantity_on_hand, p.reorder_level
-                FROM products p
-                JOIN inventory i ON p.product_id = i.product_id
-                WHERE i.quantity_on_hand <= p.reorder_level";
-        return $this->pdo->query($sql)->fetchAll();
+        return \App\Inventory\StockConditionReader::lowStockProductsForAlerts($this->pdo);
     }
 
     private function getExpiringBatches(int $days, bool $expired): array
     {
-        $today = $this->clock->now()->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d');
-        $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-
-        if ($driver === 'sqlite') {
-            $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
-            if ($expired) {
-                $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                               {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
-                        FROM product_batches pb
-                        JOIN products p ON p.product_id = pb.product_id
-                        WHERE pb.remaining_quantity > 0
-                          AND pb.expiration_date IS NOT NULL
-                          AND pb.expiration_date < ?
-                        ORDER BY pb.expiration_date ASC, p.product_name ASC";
-                $stmt = $this->pdo->prepare($sql);
-                $stmt->execute([$today, $today]);
-                return $stmt->fetchAll(PDO::FETCH_ASSOC);
-            }
-
-            $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
-                    FROM product_batches pb
-                    JOIN products p ON p.product_id = pb.product_id
-                    WHERE pb.remaining_quantity > 0
-                      AND pb.expiration_date IS NOT NULL
-                      AND pb.expiration_date >= ?
-                      AND {$diffExpr} <= COALESCE(p.warning_lead_time_days, ?)
-                    ORDER BY pb.expiration_date ASC, p.product_name ASC";
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute([$today, $today, $today, $days]);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        if ($expired) {
-            $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                           DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
-                    FROM product_batches pb
-                    JOIN products p ON p.product_id = pb.product_id
-                    WHERE pb.remaining_quantity > 0
-                      AND pb.expiration_date IS NOT NULL
-                      AND pb.expiration_date < ?
-                    ORDER BY pb.expiration_date ASC, p.product_name ASC";
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute([$today, $today]);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
-                FROM product_batches pb
-                JOIN products p ON p.product_id = pb.product_id
-                WHERE pb.remaining_quantity > 0
-                  AND pb.expiration_date IS NOT NULL
-                  AND pb.expiration_date >= ?
-                  AND DATEDIFF(pb.expiration_date, ?) <= COALESCE(p.warning_lead_time_days, ?)
-                ORDER BY pb.expiration_date ASC, p.product_name ASC";
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$today, $today, $today, $days]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $expired
+            ? \App\Inventory\StockConditionReader::expiredStockBatchesForAlerts($this->pdo, $this->clock)
+            : \App\Inventory\StockConditionReader::expiringStockBatchesForAlerts($this->pdo, $this->clock, $days);
     }
 
 
