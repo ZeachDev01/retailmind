@@ -37,7 +37,10 @@ try {
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        first_name TEXT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NOT NULL,
+        full_name TEXT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         profile_image TEXT NULL,
@@ -104,9 +107,12 @@ try {
     };
 
     $insertUser = static function (string $name, string $role, array $roles = [], int $isRecovery = 0) use ($pdo, $roleId, $storeId): int {
-        $stmt = $pdo->prepare('INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password, branch_id, is_recovery_account) VALUES (?, ?, ?, ?, ?, 0, ?, ?)');
+        $parts = explode(' ', $name, 2);
+        $firstName = $parts[0];
+        $lastName = $parts[1] ?? '';
+        $stmt = $pdo->prepare('INSERT INTO users (first_name, last_name, display_name, full_name, username, email, password_hash, role_id, must_change_password, branch_id, is_recovery_account) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)');
         $username = strtolower(str_replace(' ', '_', $name));
-        $stmt->execute([$name, $username, $username . '@example.test', password_hash('Pass123456!', PASSWORD_DEFAULT), $roleId($role), $storeId, $isRecovery]);
+        $stmt->execute([$firstName, $lastName, $name, $name, $username, $username . '@example.test', password_hash('Pass123456!', PASSWORD_DEFAULT), $roleId($role), $storeId, $isRecovery]);
         $uid = (int)$pdo->lastInsertId();
         $assignRoles = $roles ?: [$role];
         foreach ($assignRoles as $r) {

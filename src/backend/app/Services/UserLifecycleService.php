@@ -39,6 +39,8 @@ final class UserLifecycleService
         if (!$user) {
             throw new InvalidArgumentException('User not found.');
         }
+        $user['full_name'] = (string)($user['display_name'] ?? '');
+        $user['branch_id'] = 1;
         $user['roles'] = $this->roleNamesForUser($userId, (string)$user['role_name'], $lock);
         return $user;
     }
@@ -91,7 +93,18 @@ final class UserLifecycleService
         $targetRole = $targetRoles[0];
         $firstName = trim((string)($account['first_name'] ?? ''));
         $lastName = trim((string)($account['last_name'] ?? ''));
-        $displayName = trim($firstName . ' ' . $lastName);
+        if ($firstName === '' && !empty($account['full_name'])) {
+            $nameParts = explode(' ', trim((string)$account['full_name']), 2);
+            $firstName = $nameParts[0];
+            $lastName = $nameParts[1] ?? '';
+        }
+        $displayName = trim($firstName . ($lastName !== '' ? ' ' . $lastName : ''));
+        if ($displayName === '' && !empty($account['display_name'])) {
+            $displayName = trim((string)$account['display_name']);
+            if ($firstName === '') {
+                $firstName = $displayName;
+            }
+        }
         $username = trim((string)($account['username'] ?? ''));
         $passwordHash = (string)($account['password_hash'] ?? '');
         if (mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
@@ -157,7 +170,18 @@ final class UserLifecycleService
             }
             $firstName = trim((string)($account['first_name'] ?? ''));
             $lastName = trim((string)($account['last_name'] ?? ''));
-            $displayName = trim($firstName . ' ' . $lastName);
+            if (!empty($account['full_name']) && ($firstName === '' || $account['full_name'] !== ($account['display_name'] ?? ''))) {
+                $nameParts = explode(' ', trim((string)$account['full_name']), 2);
+                $firstName = $nameParts[0];
+                $lastName = $nameParts[1] ?? '';
+            }
+            $displayName = trim($firstName . ($lastName !== '' ? ' ' . $lastName : ''));
+            if ($displayName === '' && !empty($account['display_name'])) {
+                $displayName = trim((string)$account['display_name']);
+                if ($firstName === '') {
+                    $firstName = $displayName;
+                }
+            }
             $username = trim((string)($account['username'] ?? ''));
             if (mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
                 throw new InvalidArgumentException('Keep each name part under 51 characters and the full display name under 101 characters.');
