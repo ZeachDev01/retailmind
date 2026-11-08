@@ -152,6 +152,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                                     <button class="btn btn-secondary" type="button" id="gcash-camera-close">Close</button>
                                 </section>
                             </div>
+
+                            <div class="gcash-field">
+                                <label class="pos-field-label" for="gcash-customer-mobile">Customer mobile identifier</label>
+                                <input class="pos-input" id="gcash-customer-mobile" name="customer_mobile" type="tel" inputmode="tel" maxlength="20" placeholder="09XX XXX XXXX (optional)" autocomplete="off">
+                            </div>
                         </div>
                     </div>
                 </section>
