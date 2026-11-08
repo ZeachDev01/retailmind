@@ -23,6 +23,7 @@ class CloudflareTunnelService
     private string $pidPath;
     private string $logPath;
     private string $urlPath;
+    private string $configPath;
     private int $defaultPort;
     private string $defaultHost;
 
@@ -52,6 +53,7 @@ class CloudflareTunnelService
         $this->pidPath = $this->runDir . '/tunnel.pid';
         $this->logPath = $this->runDir . '/tunnel.log';
         $this->urlPath = $this->runDir . '/tunnel.url';
+        $this->configPath = $this->runDir . '/tunnel_config.json';
         $this->defaultPort = $defaultPort;
         $this->defaultHost = $defaultHost;
     }
@@ -89,6 +91,149 @@ class CloudflareTunnelService
     public function getUrlPath(): string
     {
         return $this->urlPath;
+    }
+
+    public function getConfigPath(): string
+    {
+        return $this->configPath;
+    }
+
+    public function getToken(): ?string
+    {
+        if (file_exists($this->configPath)) {
+            $raw = @file_get_contents($this->configPath);
+            if ($raw !== false && $raw !== '') {
+                $data = json_decode($raw, true);
+                if (is_array($data) && !empty($data['token']) && is_string($data['token'])) {
+                    $token = trim($data['token']);
+                    if ($token !== '') {
+                        return $token;
+                    }
+                }
+            }
+        }
+
+        $envToken = \App\Core\Environment::get('CLOUDFLARE_TUNNEL_TOKEN') ?: getenv('CLOUDFLARE_TUNNEL_TOKEN');
+        if (is_string($envToken) && trim($envToken) !== '') {
+            return trim($envToken);
+        }
+
+        return null;
+    }
+
+    public function getHostname(): ?string
+    {
+        if (file_exists($this->configPath)) {
+            $raw = @file_get_contents($this->configPath);
+            if ($raw !== false && $raw !== '') {
+                $data = json_decode($raw, true);
+                if (is_array($data) && !empty($data['hostname']) && is_string($data['hostname'])) {
+                    $host = trim($data['hostname']);
+                    if ($host !== '') {
+                        return $host;
+                    }
+                }
+            }
+        }
+
+        $envHost = \App\Core\Environment::get('CLOUDFLARE_TUNNEL_HOSTNAME') ?: getenv('CLOUDFLARE_TUNNEL_HOSTNAME');
+        if (is_string($envHost) && trim($envHost) !== '') {
+            return trim($envHost);
+        }
+
+        return null;
+    }
+
+    public function isPermanent(): bool
+    {
+        $token = $this->getToken();
+        return $token !== null && $token !== '';
+    }
+
+    public function getMaskedToken(): ?string
+    {
+        $token = $this->getToken();
+        if ($token === null || $token === '') {
+            return null;
+        }
+
+        $len = strlen($token);
+        if ($len <= 8) {
+            return '••••••••';
+        }
+
+        return substr($token, 0, 4) . '••••' . substr($token, -4);
+    }
+
+    public function setToken(?string $token, ?string $hostname = null): bool
+    {
+        $token = $token !== null ? trim($token) : '';
+        if ($token === '') {
+            return $this->clearToken();
+        }
+
+        if (!is_dir($this->runDir)) {
+            if (!@mkdir($this->runDir, 0755, true) && !is_dir($this->runDir)) {
+                return false;
+            }
+        }
+
+        $config = [];
+        if (file_exists($this->configPath)) {
+            $raw = @file_get_contents($this->configPath);
+            if ($raw !== false && $raw !== '') {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $config = $decoded;
+                }
+            }
+        }
+
+        $config['token'] = $token;
+        if ($hostname !== null) {
+            $hostname = trim($hostname);
+            if ($hostname !== '') {
+                $config['hostname'] = $hostname;
+            } else {
+                unset($config['hostname']);
+            }
+        }
+        $config['updated_at'] = date('c');
+
+        $encoded = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return @file_put_contents($this->configPath, $encoded) !== false;
+    }
+
+    public function clearToken(): bool
+    {
+        if (!file_exists($this->configPath)) {
+            return true;
+        }
+
+        $raw = @file_get_contents($this->configPath);
+        if ($raw === false || $raw === '') {
+            @unlink($this->configPath);
+            return true;
+        }
+
+        $config = json_decode($raw, true);
+        if (!is_array($config)) {
+            @unlink($this->configPath);
+            return true;
+        }
+
+        unset($config['token']);
+        $config['updated_at'] = date('c');
+
+        // If only updated_at left or empty, remove file cleanly
+        $keys = array_keys($config);
+        if (empty($keys) || (count($keys) === 1 && isset($config['updated_at']))) {
+            @unlink($this->configPath);
+            return true;
+        }
+
+        $encoded = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return @file_put_contents($this->configPath, $encoded) !== false;
     }
 
     public function setProcessLauncher(?callable $launcher): self
@@ -307,6 +452,15 @@ class CloudflareTunnelService
             return null;
         }
 
+        if ($this->isPermanent()) {
+            $hostname = $this->getHostname();
+            if ($hostname !== null && $hostname !== '') {
+                $fullUrl = str_starts_with($hostname, 'http') ? $hostname : 'https://' . $hostname;
+                @file_put_contents($this->urlPath, $fullUrl);
+                return $fullUrl;
+            }
+        }
+
         $url = $this->extractPublicUrl();
         if ($url !== null) {
             @file_put_contents($this->urlPath, $url);
@@ -334,6 +488,8 @@ class CloudflareTunnelService
             $state = $url !== null ? 'online' : 'starting';
         }
 
+        $isPerm = $this->isPermanent();
+
         return [
             'status' => $state,
             'online' => $running,
@@ -341,6 +497,10 @@ class CloudflareTunnelService
             'pid' => $pid,
             'binary_installed' => $this->isBinaryInstalled(),
             'local_server_available' => $this->isLocalServerAvailable(),
+            'mode' => $isPerm ? 'permanent' : 'quick',
+            'token_configured' => $isPerm,
+            'masked_token' => $this->getMaskedToken(),
+            'hostname' => $this->getHostname(),
         ];
     }
 
@@ -364,6 +524,10 @@ class CloudflareTunnelService
                     'pid' => null,
                     'binary_installed' => false,
                     'local_server_available' => $this->isLocalServerAvailable($port),
+                    'mode' => $this->isPermanent() ? 'permanent' : 'quick',
+                    'token_configured' => $this->isPermanent(),
+                    'masked_token' => $this->getMaskedToken(),
+                    'hostname' => $this->getHostname(),
                     'error' => 'Failed to download portable cloudflared executable.',
                 ];
             }
@@ -374,17 +538,33 @@ class CloudflareTunnelService
         @unlink($this->urlPath);
         @unlink($this->pidPath);
 
-        $port = $port ?? $this->defaultPort;
-        $localUrl = 'http://' . $this->defaultHost . ':' . $port;
+        if ($this->isPermanent()) {
+            $token = (string)$this->getToken();
+            $args = [
+                'run',
+                '--token',
+                $token,
+                '--logfile',
+                $this->logPath,
+            ];
+            $hostname = $this->getHostname();
+            if ($hostname !== null && $hostname !== '') {
+                $hostUrl = str_starts_with($hostname, 'http') ? $hostname : 'https://' . $hostname;
+                @file_put_contents($this->urlPath, $hostUrl);
+            }
+        } else {
+            $port = $port ?? $this->defaultPort;
+            $localUrl = 'http://' . $this->defaultHost . ':' . $port;
 
-        $args = [
-            'tunnel',
-            '--no-autoupdate',
-            '--url',
-            $localUrl,
-            '--logfile',
-            $this->logPath,
-        ];
+            $args = [
+                'tunnel',
+                '--no-autoupdate',
+                '--url',
+                $localUrl,
+                '--logfile',
+                $this->logPath,
+            ];
+        }
 
         $pid = null;
 
@@ -405,6 +585,10 @@ class CloudflareTunnelService
                 'pid' => null,
                 'binary_installed' => $this->isBinaryInstalled(),
                 'local_server_available' => $this->isLocalServerAvailable($port),
+                'mode' => $this->isPermanent() ? 'permanent' : 'quick',
+                'token_configured' => $this->isPermanent(),
+                'masked_token' => $this->getMaskedToken(),
+                'hostname' => $this->getHostname(),
                 'error' => 'Failed to start tunnel daemon process.',
             ];
         }
@@ -416,9 +600,8 @@ class CloudflareTunnelService
                 if (!$this->isPidRunning($pid)) {
                     break;
                 }
-                $url = $this->extractPublicUrl();
+                $url = $this->getUrl();
                 if ($url !== null) {
-                    @file_put_contents($this->urlPath, $url);
                     break;
                 }
                 usleep(250000); // 250ms

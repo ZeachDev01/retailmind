@@ -15,8 +15,9 @@
 #>
 
 param (
-    [ValidateSet("start", "stop", "status", "restart", "fetch")]
+    [ValidateSet("start", "stop", "status", "restart", "fetch", "install-service", "uninstall-service")]
     [string]$Action = "start",
+    [string]$Token = "",
     [int]$Port = 80,
     [string]$HostName = "127.0.0.1",
     [switch]$Foreground
@@ -33,6 +34,7 @@ $BinPath = Join-Path $BinDir "cloudflared.exe"
 $PidPath = Join-Path $RunDir "tunnel.pid"
 $LogPath = Join-Path $RunDir "tunnel.log"
 $UrlPath = Join-Path $RunDir "tunnel.url"
+$ConfigPath = Join-Path $RunDir "tunnel_config.json"
 
 function Ensure-Directories {
     if (-not (Test-Path $BinDir)) { New-Item -ItemType Directory -Path $BinDir -Force | Out-Null }
@@ -148,16 +150,35 @@ function Start-Tunnel {
     Set-Content -Path $LogPath -Value "" -Force
     Remove-Item -Path $UrlPath -Force -ErrorAction SilentlyContinue
 
-    $localUrl = "http://${HostName}:${Port}"
-    $argsList = @("tunnel", "--no-autoupdate", "--url", $localUrl, "--logfile", $LogPath)
+    $activeToken = $Token
+    if (-not $activeToken -and (Test-Path $ConfigPath)) {
+        try {
+            $cfg = Get-Content -Path $ConfigPath -Raw | ConvertFrom-Json
+            if ($cfg.token) {
+                $activeToken = [string]$cfg.token
+            }
+        } catch {}
+    }
+    if (-not $activeToken -and $env:CLOUDFLARE_TUNNEL_TOKEN) {
+        $activeToken = $env:CLOUDFLARE_TUNNEL_TOKEN
+    }
+
+    if ($activeToken) {
+        Write-Host "[INFO] Using permanent Cloudflare Tunnel token." -ForegroundColor Cyan
+        $argsList = @("run", "--token", $activeToken, "--logfile", $LogPath)
+    } else {
+        $localUrl = "http://${HostName}:${Port}"
+        Write-Host "[INFO] No permanent token configured; using ephemeral quick tunnel for $localUrl..." -ForegroundColor Cyan
+        $argsList = @("tunnel", "--no-autoupdate", "--url", $localUrl, "--logfile", $LogPath)
+    }
 
     if ($Foreground) {
-        Write-Host "[INFO] Starting cloudflared tunnel in foreground for $localUrl..." -ForegroundColor Cyan
+        Write-Host "[INFO] Starting cloudflared tunnel in foreground..." -ForegroundColor Cyan
         & $BinPath @argsList
         return
     }
 
-    Write-Host "[INFO] Launching cloudflared tunnel daemon for $localUrl..." -ForegroundColor Cyan
+    Write-Host "[INFO] Launching cloudflared tunnel daemon..." -ForegroundColor Cyan
     $proc = Start-Process -FilePath $BinPath -ArgumentList $argsList -PassThru -WindowStyle Hidden
     if (-not $proc -or -not $proc.Id) {
         Write-Error "Failed to launch cloudflared process."
@@ -236,5 +257,11 @@ switch ($Action) {
     }
     "status" {
         Show-Status
+    }
+    "install-service" {
+        & "$ScriptDir\service_install.ps1" -Token $Token
+    }
+    "uninstall-service" {
+        & "$ScriptDir\service_uninstall.ps1"
     }
 }
