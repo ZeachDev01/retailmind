@@ -188,10 +188,7 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
             <header class="page-heading">
-                <div>
-                    <h1>My profile</h1>
-
-                </div>
+                <h1>My profile</h1>
             </header>
 
             <?php if ($message): ?>
@@ -200,15 +197,17 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
 
             <div class="user-info-layout">
                 <section class="dashboard-section profile-card">
+                    <div class="section-header">
+                        <h2>Personal information</h2>
+                    </div>
+
                     <?php if (can_manage_own_profile_image()): ?>
                         <div class="profile-picture-settings">
                             <?= profile_avatar_html((int)$account['user_id'], (string)$account['display_name'], $account['profile_image'] ?? null, 'profile-picture-avatar') ?>
                             <div class="profile-picture-controls">
                                 <div class="profile-picture-copy">
-                                    <div>
-                                        <h2>Profile picture</h2>
-                                        <p class="field-hint">Optional.</p>
-                                    </div>
+                                    <h3>Profile picture</h3>
+                                    <p class="field-hint">Optional.</p>
                                 </div>
                                 <form method="POST" enctype="multipart/form-data" class="profile-picture-form" id="profile-picture-form"
                                       data-max-bytes="<?= ProfileImageStorage::MAX_BYTES ?>" data-max-dimension="<?= ProfileImageStorage::MAX_DIMENSION ?>" data-max-pixels="<?= ProfileImageStorage::MAX_PIXELS ?>">
@@ -217,26 +216,36 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                                     <div class="profile-picture-picker">
                                         <input type="hidden" name="MAX_FILE_SIZE" value="<?= ProfileImageStorage::MAX_FILE_SIZE ?>">
                                         <input class="profile-picture-input" type="file" id="profile_image" name="profile_image" accept="<?= ProfileImageStorage::ACCEPT ?>" aria-describedby="profile-picture-help profile-crop-error" required>
-                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-image" aria-hidden="true"></i><?= !empty($account['profile_image']) ? 'Choose Replacement' : 'Choose Image' ?></label>
+                                        <label class="btn btn-quiet btn-small profile-picture-choose" for="profile_image"><i class="bi bi-camera" aria-hidden="true"></i><?= !empty($account['profile_image']) ? 'Choose Replacement' : 'Choose Image' ?></label>
                                         <span class="profile-picture-filename" id="profile-picture-filename">No file selected</span>
                                     </div>
                                     <small class="field-help" id="profile-picture-help"><?= ProfileImageStorage::HELP ?></small>
                                     <p id="profile-crop-error" class="field-help" role="alert"></p>
                                     <fieldset id="profile-crop-editor" hidden>
                                         <legend>Adjust square crop</legend>
-                                        <canvas id="profile-crop-preview" width="256" height="256" role="img" aria-label="Selected square picture crop"></canvas>
-                                        <label for="profile-crop-zoom">Zoom</label>
-                                        <input id="profile-crop-zoom" type="range" min="1" max="10" step="0.1" value="1">
-                                        <label for="profile-crop-horizontal">Horizontal position</label>
-                                        <input id="profile-crop-horizontal" type="range" min="0" max="100" value="50">
-                                        <label for="profile-crop-vertical">Vertical position</label>
-                                        <input id="profile-crop-vertical" type="range" min="0" max="100" value="50">
+                                        <div class="crop-preview-wrap">
+                                            <canvas id="profile-crop-preview" width="256" height="256" role="img" aria-label="Selected square picture crop"></canvas>
+                                        </div>
+                                        <div class="crop-slider-group">
+                                            <div class="crop-slider-row">
+                                                <label for="profile-crop-zoom">Zoom</label>
+                                                <input id="profile-crop-zoom" type="range" min="1" max="10" step="0.1" value="1">
+                                            </div>
+                                            <div class="crop-slider-row">
+                                                <label for="profile-crop-horizontal">Horizontal position</label>
+                                                <input id="profile-crop-horizontal" type="range" min="0" max="100" value="50">
+                                            </div>
+                                            <div class="crop-slider-row">
+                                                <label for="profile-crop-vertical">Vertical position</label>
+                                                <input id="profile-crop-vertical" type="range" min="0" max="100" value="50">
+                                            </div>
+                                        </div>
                                         <input id="profile-crop-x" type="hidden" name="crop[x]">
                                         <input id="profile-crop-y" type="hidden" name="crop[y]">
                                         <input id="profile-crop-size" type="hidden" name="crop[size]">
                                     </fieldset>
                                     <div class="profile-picture-actions">
-                                        <button id="profile-picture-save" class="btn btn-small" type="submit" disabled><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>Save picture</button>
+                                        <button id="profile-picture-save" class="btn btn-primary btn-small" type="submit" disabled>Save picture</button>
                                         <button id="profile-picture-cancel" class="btn btn-quiet btn-small" type="button" hidden>Cancel</button>
                                     </div>
                                 </form>
@@ -250,13 +259,11 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                             </div>
                         </div>
                     <?php endif; ?>
-                    <div class="section-header">
-                        <h2>Personal information</h2>
-                    </div>
+
                     <form method="POST" class="form-grid profile-details-form" autocomplete="off">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="update_profile">
-                        <?php if (empty($account['first_name'])): ?><p class="field-help full">Review your saved display name and enter its first and last name. The existing display name stays visible until you save.</p><?php endif; ?>
+                        <?php if (empty($account['first_name'])): ?><p class="field-help full">Enter your first and last name to update your display name.</p><?php endif; ?>
                         <div class="form-group<?= isset($fieldErrors['first_name']) ? ' invalid' : '' ?>">
                             <label for="first_name">First name</label>
                             <input type="text" id="first_name" name="first_name" autocomplete="given-name" maxlength="50" value="<?= htmlspecialchars($profileValues['first_name'] ?? (string)($account['first_name'] ?? '')) ?>" required<?= isset($fieldErrors['first_name']) ? ' aria-invalid="true" aria-describedby="first-name-error"' : '' ?>>
@@ -269,11 +276,11 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         </div>
                         <div class="form-group full<?= isset($fieldErrors['email']) ? ' invalid' : '' ?>">
                             <label for="email">Email address</label>
-                            <input type="email" id="email" name="email" autocomplete="email" spellcheck="false" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com…"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
+                            <input type="email" id="email" name="email" autocomplete="email" spellcheck="false" maxlength="100" value="<?= htmlspecialchars((string)($profileValues['email'] ?? $account['email'] ?? '')) ?>" placeholder="name@example.com"<?= isset($fieldErrors['email']) ? ' aria-invalid="true" aria-describedby="email-error"' : '' ?>>
                             <?php if (isset($fieldErrors['email'])): ?><small class="field-error" id="email-error"><?= htmlspecialchars($fieldErrors['email']) ?></small><?php endif; ?>
                         </div>
                         <div class="full profile-save-row">
-                            <button class="btn" type="submit"><i class="bi bi-check2" aria-hidden="true"></i>Save Details</button>
+                            <button class="btn btn-primary" type="submit">Save Details</button>
                         </div>
                     </form>
                 </section>
@@ -283,20 +290,26 @@ $passwordStatus = (int)$account['must_change_password'] === 1 ? 'Change required
                         <h2>Account details</h2>
                     </div>
                     <dl class="account-detail-list">
-                        <div><dt>Username</dt><dd><?= htmlspecialchars($account['username']) ?></dd></div>
+                        <div><dt>Username</dt><dd><span class="account-detail-highlight">@<?= htmlspecialchars($account['username']) ?></span></dd></div>
                         <div><dt>Role</dt><dd><span class="badge-role"><?= htmlspecialchars($roleLabel) ?></span></dd></div>
-                        <div><dt>Status</dt><dd class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><span class="status-badge <?= $account['status'] === 'active' ? 'good' : 'inactive' ?>"><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></span></dd></div>
-                        <div><dt>User ID</dt><dd>#<?= (int)$account['user_id'] ?></dd></div>
-                        <div><dt>Last sign-in</dt><dd><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></dd></div>
-                        <div><dt>Account created</dt><dd><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></dd></div>
+                        <div><dt>Status</dt><dd class="account-status-value <?= $account['status'] === 'active' ? 'is-active' : 'is-inactive' ?>"><span class="status-badge <?= $account['status'] === 'active' ? 'good' : 'inactive' ?>"><span class="status-dot"></span><?= htmlspecialchars(ucfirst((string)$account['status'])) ?></span></dd></div>
+                        <div><dt>User ID</dt><dd class="tabular-num">#<?= (int)$account['user_id'] ?></dd></div>
+                        <div><dt>Last sign-in</dt><dd class="tabular-num"><?= htmlspecialchars(account_format_datetime($account['last_login_at'] ?? null)) ?></dd></div>
+                        <div><dt>Account created</dt><dd class="tabular-num"><?= htmlspecialchars(account_format_datetime($account['created_at'] ?? null)) ?></dd></div>
                     </dl>
                     <div class="account-security">
-                        <h3>Password security</h3>
-                        <p><?= htmlspecialchars($passwordStatus) ?></p>
-                        <dl class="account-detail-list">
-                            <div><dt>Last changed</dt><dd><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></dd></div>
+                        <div class="security-header">
+                            <div>
+                                <h3>Password security</h3>
+                                <p class="security-status-note <?= (int)$account['must_change_password'] === 1 ? 'is-warning' : 'is-good' ?>">
+                                    <?= htmlspecialchars($passwordStatus) ?>
+                                </p>
+                            </div>
+                        </div>
+                        <dl class="account-detail-list security-detail-list">
+                            <div><dt>Last changed</dt><dd class="tabular-num"><?= htmlspecialchars(account_format_datetime($account['password_changed_at'] ?? null)) ?></dd></div>
                         </dl>
-                        <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">Change Password</a>
+                        <a class="btn btn-quiet change-password-btn" href="<?= htmlspecialchars(app_url('components/auth/change_password.php')) ?>">Change Password</a>
                     </div>
                 </section>
             </div>

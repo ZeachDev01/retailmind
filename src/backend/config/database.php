@@ -33,10 +33,12 @@ $isLocalHost = $host === ''
     || $isPrivateIp
     || $endsWith($host, '.local')
     || $endsWith($host, '.localhost')
-    || $endsWith($host, '.test');
+    || $endsWith($host, '.test')
+    || $endsWith($host, '.trycloudflare.com');
 
-$useHostedDatabase = strtolower((string)env('DATABASE_ENV', '')) === 'hosted';
-$isHosted = !$isLocalHost || $useHostedDatabase;
+$databaseEnv = strtolower((string)env('DATABASE_ENV', ''));
+$useHostedDatabase = $databaseEnv === 'hosted';
+$isHosted = $useHostedDatabase || ($databaseEnv !== 'local' && !$isLocalHost);
 
 if ($isHosted) {
     $config = [

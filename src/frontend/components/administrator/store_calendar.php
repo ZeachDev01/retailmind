@@ -212,35 +212,122 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             justify-content: space-between;
             margin-bottom: 1.25rem;
             flex-wrap: wrap;
-            gap: 0.75rem;
+            gap: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
         }
-        .calendar-nav {
+        .calendar-nav-cluster {
             display: flex;
-            gap: 0.5rem;
             align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
         }
-        .calendar-month-select {
+        .calendar-nav-btn-group {
+            display: inline-flex;
+            align-items: center;
+            background: var(--theme-surface-soft, #f1f5f9);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .calendar-nav-btn-group .btn-nav {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 34px;
+            padding: 0 0.65rem;
+            border: none;
+            background: transparent;
+            color: var(--text);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+        }
+        .calendar-nav-btn-group .btn-nav:hover {
+            background: var(--theme-surface, #ffffff);
+            color: var(--primary-color, #2563eb);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        .calendar-nav-btn-group .btn-nav:focus-visible {
+            outline: 2px solid var(--primary-color, #2563eb);
+            outline-offset: 1px;
+        }
+        .calendar-nav-btn-group .btn-today {
+            font-weight: 600;
+            padding: 0 0.85rem;
+        }
+        .calendar-current-title {
+            margin: 0;
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+        .calendar-jump-form {
             display: flex;
             align-items: center;
             gap: 0.5rem;
             flex-wrap: wrap;
-            max-width: 100%;
         }
-        .calendar-month-select select { min-height: 44px; }
+        .calendar-jump-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .calendar-select-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .calendar-select {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            min-height: 38px;
+            padding: 0.4rem 2.2rem 0.4rem 0.8rem;
+            font-family: inherit;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text);
+            background-color: var(--theme-surface, #ffffff);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+        }
+        .calendar-select:hover {
+            border-color: var(--primary-color, #2563eb);
+        }
+        .calendar-select:focus-visible {
+            outline: 2px solid var(--primary-color, #2563eb);
+            outline-offset: 1px;
+            border-color: var(--primary-color, #2563eb);
+        }
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, minmax(0, 1fr));
-            min-width: 640px;
+            min-width: 680px;
             gap: 0.5rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
         .calendar-header-day {
             text-align: center;
             font-weight: 700;
             padding: 0.5rem 0.25rem;
-            font-size: 0.72rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.08em;
             color: var(--muted);
         }
         .calendar-day-cell {
@@ -248,10 +335,10 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             font: inherit;
             color: var(--text);
             text-align: left;
-            min-height: 85px;
-            padding: 0.35rem;
+            min-height: 88px;
+            padding: 0.45rem 0.5rem;
             border: 1px solid var(--border);
-            border-radius: 6px;
+            border-radius: 8px;
             background: var(--theme-surface, #ffffff);
             display: flex;
             flex-direction: column;
@@ -263,7 +350,8 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             border-color: var(--primary-color, #2563eb);
             outline: 2px solid var(--primary-color, #2563eb);
             outline-offset: 1px;
-            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+            transform: translateY(-1px);
         }
         .calendar-day-cell.selected-day {
             border-color: var(--primary-color, #2563eb);
@@ -271,28 +359,47 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             background: var(--theme-surface-soft, #eff6ff);
         }
         .calendar-day-cell.is-today {
-            font-weight: 700;
+            border-color: var(--primary-color, #2563eb);
+            background: color-mix(in srgb, var(--primary-color, #2563eb) 4%, var(--theme-surface, #ffffff));
         }
         .calendar-day-cell.is-empty {
             background: transparent;
             border: none;
             cursor: default;
         }
+        .day-cell-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
         .day-number {
             font-size: 0.95rem;
             font-weight: 600;
+            line-height: 1;
+        }
+        .day-today-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--primary-color, #2563eb);
+            background: rgba(37, 99, 235, 0.12);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            line-height: 1.2;
         }
         .day-status {
             font-size: 0.75rem;
-            margin-top: 0.25rem;
+            margin-top: 0.35rem;
         }
         .calendar-status-badge {
             display: inline-flex;
             align-items: center;
-            padding: 0.2rem 0.35rem;
-            border-radius: 4px;
+            padding: 0.22rem 0.45rem;
+            border-radius: 6px;
             font-size: 0.72rem;
-            font-weight: 500;
+            font-weight: 600;
             line-height: 1.2;
             white-space: nowrap;
             overflow: hidden;
@@ -314,9 +421,43 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             background: currentColor;
             flex-shrink: 0;
         }
-        .status-unrecorded::before { background: transparent; border: 1px solid currentColor; }
-        .calendar-legend { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+        .status-unrecorded::before { background: transparent; border: 1.5px solid currentColor; }
+        .calendar-legend {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 1.25rem;
+            padding: 0.65rem 0.9rem;
+            background: var(--theme-surface-soft, #f8fafc);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .calendar-legend-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-right: 0.25rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
         .calendar-scroll { overflow-x: auto; max-width: 100%; }
+        .calendar-context-note {
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .calendar-context-note a {
+            color: var(--primary-color, #2563eb);
+            font-weight: 500;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+        }
         .schedule-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -347,8 +488,6 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             <h1>Store Calendar</h1>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                 <button type="button" class="btn btn-secondary" id="weekly-schedule-btn"><i class="bi bi-calendar-week" aria-hidden="true"></i> Weekly Schedule</button>
-                <a href="<?= htmlspecialchars(theme_url('components/report/predictions.php')) ?>" class="btn btn-secondary"><i class="bi bi-graph-up" aria-hidden="true"></i> Forecasting</a>
-                <button type="button" class="btn btn-primary" id="record-date-btn"><i class="bi bi-calendar-event" aria-hidden="true"></i> Record Status</button>
             </div>
         </header>
 
@@ -358,30 +497,48 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
 
         <section class="dashboard-section">
             <div class="calendar-controls">
-                <div class="calendar-nav">
-                    <a class="btn btn-secondary" href="?year=<?= $prevYear ?>&month=<?= $prevMonth ?>" aria-label="Previous month">&laquo; Previous</a>
-                    <a class="btn btn-secondary" href="?year=<?= substr($today, 0, 4) ?>&month=<?= (int)substr($today, 5, 2) ?>">Today</a>
-                    <a class="btn btn-secondary" href="?year=<?= $nextYear ?>&month=<?= $nextMonth ?>" aria-label="Next month">Next &raquo;</a>
+                <div class="calendar-nav-cluster">
+                    <div class="calendar-nav-btn-group" role="group" aria-label="Month navigation">
+                        <a class="btn-nav" href="?year=<?= $prevYear ?>&month=<?= $prevMonth ?>" aria-label="Previous month" title="Previous month">
+                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        </a>
+                        <a class="btn-nav btn-today" href="?year=<?= substr($today, 0, 4) ?>&month=<?= (int)substr($today, 5, 2) ?>" title="Go to current month">Today</a>
+                        <a class="btn-nav" href="?year=<?= $nextYear ?>&month=<?= $nextMonth ?>" aria-label="Next month" title="Next month">
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                    <h2 class="calendar-current-title"><?= htmlspecialchars($monthTitle) ?></h2>
                 </div>
-                <form class="calendar-month-select" method="get">
-                    <label class="sr-only" for="calendar-month">Month</label>
-                    <select id="calendar-month" name="month" aria-label="Select month">
-                        <?php for ($month = 1; $month <= 12; $month++): ?>
-                            <option value="<?= $month ?>" <?= $month === $viewMonth ? 'selected' : '' ?>><?= htmlspecialchars(date('F', mktime(0, 0, 0, $month, 1))) ?></option>
-                        <?php endfor; ?>
-                    </select>
-                    <label class="sr-only" for="calendar-year">Year</label>
-                    <select id="calendar-year" name="year" aria-label="Select year">
-                        <?php for ($year = $viewYear - 5; $year <= $viewYear + 5; $year++): ?>
-                            <option value="<?= $year ?>" <?= $year === $viewYear ? 'selected' : '' ?>><?= $year ?></option>
-                        <?php endfor; ?>
-                    </select>
-                    <button type="submit" class="btn btn-secondary">Go</button>
+
+                <form class="calendar-jump-form" method="get" aria-label="Jump to specific month and year">
+                    <span class="calendar-jump-label">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                        <span>Jump to</span>
+                    </span>
+                    <div class="calendar-select-wrapper">
+                        <label class="sr-only" for="calendar-month">Month</label>
+                        <select id="calendar-month" name="month" class="calendar-select" aria-label="Select month" onchange="this.form.submit()">
+                            <?php for ($month = 1; $month <= 12; $month++): ?>
+                                <option value="<?= $month ?>" <?= $month === $viewMonth ? 'selected' : '' ?>><?= htmlspecialchars(date('F', mktime(0, 0, 0, $month, 1))) ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <div class="calendar-select-wrapper">
+                        <label class="sr-only" for="calendar-year">Year</label>
+                        <select id="calendar-year" name="year" class="calendar-select" aria-label="Select year" onchange="this.form.submit()">
+                            <?php for ($year = $viewYear - 5; $year <= $viewYear + 5; $year++): ?>
+                                <option value="<?= $year ?>" <?= $year === $viewYear ? 'selected' : '' ?>><?= $year ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                    <noscript>
+                        <button type="submit" class="btn btn-secondary btn-small">Go</button>
+                    </noscript>
                 </form>
-                <h2><?= htmlspecialchars($monthTitle) ?></h2>
             </div>
 
             <div class="calendar-legend" aria-label="Calendar status legend">
+                <span class="calendar-legend-title"><i class="bi bi-info-circle" aria-hidden="true"></i> Legend:</span>
                 <span class="calendar-status-badge status-open">Open</span>
                 <span class="calendar-status-badge status-closed">Closed</span>
                 <span class="calendar-status-badge status-holiday">Holiday</span>
@@ -450,7 +607,12 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                          aria-haspopup="dialog" aria-controls="calendar-editor"
                          aria-pressed="<?= $isSelected ? 'true' : 'false' ?>"
                          aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($fullLabel) ?>">
-                        <span class="day-number"><?= $day ?></span>
+                        <div class="day-cell-top">
+                            <span class="day-number"><?= $day ?></span>
+                            <?php if ($isToday): ?>
+                                <span class="day-today-tag">Today</span>
+                            <?php endif; ?>
+                        </div>
                         <span class="day-status">
                             <span class="calendar-status-badge <?= $badgeClass ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
@@ -458,6 +620,9 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                 <?php endfor; ?>
             </div>
             </div>
+            <p class="calendar-context-note muted">
+                <i class="bi bi-info-circle" aria-hidden="true"></i> Calendar dates and weekly operating schedules provide trading availability context for store operations and <a href="<?= htmlspecialchars(theme_url('components/report/predictions.php')) ?>">Demand Forecast</a>.
+            </p>
         </section>
 
     </main>
@@ -595,7 +760,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const d2 = new Date(end);
 
         if (d2 < d1) {
-            hint.textContent = "End date must be on or after start date.";
+            hint.textContent = "End date cannot be before start date.";
             hint.style.color = "var(--theme-danger-text, #991b1b)";
             return;
         }
@@ -656,9 +821,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    document.getElementById('record-date-btn').addEventListener('click', function() {
-        RetailMindUI.openOverlay(editor);
-    });
     dateInput.addEventListener('change', updateRangeHint);
     throughDateInput.addEventListener('change', updateRangeHint);
     statusSelect.addEventListener('change', updateRangeHint);

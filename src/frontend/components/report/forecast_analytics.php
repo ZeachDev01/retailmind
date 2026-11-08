@@ -378,7 +378,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 <?php if (empty($actualChartData)): ?>
                     <?php analytics_empty_state('bar-chart', 'Ready for your first comparison', 'Compare saved forecasts once their target dates have recorded sales.', 'components/report/data_readiness.php', 'Check data readiness'); ?>
                 <?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
-                <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Product &amp; date</th><th>Forecast units</th><th>Recorded sales</th></tr></thead><tbody>
+                <details class="forecast-details"><summary>Comparison values</summary><div class="table-wrap"><table class="data-table" aria-label="Forecast and recorded sales comparison"><thead><tr><th scope="col">Product &amp; date</th><th scope="col">Forecast units</th><th scope="col">Recorded sales</th></tr></thead><tbody>
                 <?php foreach ($actualChartData as $point): ?><tr><td><?= htmlspecialchars($point['product_name']) ?></td><td><?= htmlspecialchars((string)$point['forecast_value']) ?></td><td><?= htmlspecialchars((string)$point['actual_demand']) ?></td></tr><?php endforeach; ?>
                 </tbody></table></div></details><?php endif; ?>
             </div>
@@ -389,7 +389,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                     <?php analytics_empty_state('trophy', 'No product rankings yet', 'Rankings appear when forecasts can be matched with sales.', 'components/report/predictions.php', 'View demand forecasts'); ?>
                 <?php else: ?>
                     <div class="table-wrap">
-                        <table class="data-table">
+                        <table class="data-table" aria-label="Lowest recorded forecast errors">
                             <thead>
                                 <tr>
                                     <th scope="col">Product</th>
@@ -423,7 +423,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                     <?php analytics_empty_state('exclamation-triangle', 'No error comparisons yet', 'Sales comparisons are needed to identify the highest errors.', 'components/report/predictions.php', 'View demand forecasts'); ?>
                 <?php else: ?>
                     <div class="table-wrap">
-                        <table class="data-table">
+                        <table class="data-table" aria-label="Forecasts needing attention">
                             <thead>
                                 <tr>
                                     <th scope="col">Product</th>
@@ -506,7 +506,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </p>
 
             <div class="table-wrap">
-                <table class="data-table">
+                <table class="data-table" aria-label="Forecast accuracy by lead time">
                     <caption>Daily Errors by Forecast Lead Time</caption>
                     <thead>
                         <tr>
@@ -610,7 +610,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
                 <?php analytics_empty_state('clock-history', 'No prediction history yet', 'Saved predictions appear once their target dates are reached.', 'components/report/predictions.php', 'View demand forecasts'); ?>
             <?php else: ?>
                 <div class="table-wrap">
-                    <table class="data-table">
+                    <table class="data-table" aria-label="Predictions compared with actual sales">
                         <thead>
                             <tr>
                                 <th scope="col">Product</th>

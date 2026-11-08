@@ -228,7 +228,7 @@
 .correction-form .pos-input:focus {
     border-color: var(--primary);
     background: var(--card-bg, #fff);
-    outline: none;
+    outline: 2px solid transparent;
 }
 
 /* Fieldset Section Cards */
@@ -604,6 +604,7 @@
    Details Drawer Modal
    ========================================================================== */
 .correction-details-drawer {
+    overscroll-behavior: contain;
     inset: 0 0 0 auto;
     margin: 0;
     width: min(540px, 100vw);
@@ -805,6 +806,7 @@
 html[data-theme="dark"] .refund-corrections-page .pos-panel,
 html[data-theme="dark"] .stat-card,
 html[data-theme="dark"] .correction-details-drawer {
+    overscroll-behavior: contain;
     background: #0f172a;
     border-color: #1e293b;
 }
@@ -927,5 +929,12 @@ html[data-theme="dark"] .btn-table-action:hover {
     .empty-graphic-wrap {
         width: 120px;
         height: 105px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
     }
 }

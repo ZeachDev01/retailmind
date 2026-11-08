@@ -22,13 +22,11 @@ catch (Throwable $exception) { $safetyError = \App\Support\OperatorAlert::messag
 ?>
 <section class="dashboard-section" aria-labelledby="safety-copy-title" data-safety-copy>
     <h2 id="safety-copy-title">Safety copy</h2>
-    <p class="recovery-tool-description">Save this server’s records and images before restoring.</p>
     <?php if ($safetyError !== ''): ?><p class="alert tag-warning" role="alert"><?= $escape($safetyError) ?></p><?php endif; ?>
     <?php if ($safetyDownload): ?>
         <div class="safety-copy-ready">
             <div role="status">
                 <h3><i class="bi bi-check-circle" aria-hidden="true"></i> Safety copy verified</h3>
-                <p>Download and store off this server.</p>
             </div>
             <a class="btn btn-primary" download data-safety-download href="<?= $escape(app_url('components/backup/backup_download.php?safety=' . rawurlencode($safetyOperation))) ?>"><i class="bi bi-download" aria-hidden="true"></i> Download safety copy</a>
         </div>

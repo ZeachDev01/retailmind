@@ -75,7 +75,7 @@ $denominationSvgKeys = [
             </fieldset>
         <?php endforeach; ?>
     </div>
-    <div class="money-counter-totals">
+    <div class="money-counter-totals" aria-live="polite">
         <div><span>Total bills</span><strong id="count-bills">₱0.00</strong></div>
         <div><span>Total coins</span><strong id="count-coins">₱0.00</strong></div>
         <div class="money-counter-total"><label for="actual-cash">Cash counted (₱)</label><input id="actual-cash" type="number" name="actual_cash" min="0" step="0.01" value="0.00" readonly aria-describedby="count-help"></div>

@@ -86,8 +86,9 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
   - Backend Services: `App\Dashboard\DashboardWorkspace`, `PlatformHealthSource`
 - **Users & Access**: `components/user_manager/user_manager.php`
   - Modals: `components/user_manager/modals/add_user_modal.php`, `manage_user_modal.php`
-  - Backing JS: `profile-picture-crop.js`, `password-feedback.js`
+  - Backing JS: `profile-picture-crop.js`, `password-feedback.js`, `store-staff-availability.js`
   - Backend Services: `App\Services\UserLifecycleService`, `UserAccountNotifier`, `App\Authorization\DormancyPolicyService`
+  - Contract Tests: `src/backend/tests/dormancy_status_tab_contract.php`, `password_policy_contract.php`, `recovery_exclusion_reset_audit_contract.php`, `store_staff_username_notice_contract.php`, `store_staff_email_notice_contract.php`, `smoke_checks.php`
 - **Protected Audit Records**: `components/system_administrator/audit_logs.php`
   - Modals: `components/modals/audit_log.php`
   - Backing JS: `audit-log-drawer.js`
@@ -109,16 +110,22 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
 
 ---
 
-## 3. Shared Shell, Layout & Assets
+## 3. Shared Shell, Auth, Layout & Assets
 
+- **Public Landing & Auth Views**:
+  - Landing & Login Modal: `src/frontend/index.php` (CSS: `landing.css`, Hero Asset: `assets/img/retailmind-landing-hero.jpg`)
+  - Change Password (Mandatory/Voluntary Dual-Mode): `src/frontend/components/auth/change_password.php` (Contracts: `src/backend/tests/password_change_modes_contract.php`, `password_policy_contract.php`)
+  - Profile & Account Info: `src/frontend/components/auth/user_info.php` (CSS: `user-info.css`)
 - **Navigation & Layout**:
   - Shell view: `src/frontend/components/sidebar.php` (sidebar navigation, breadcrumbs, session context)
   - Layout JS: `src/frontend/assets/js/sidebar-loader.js` (DOM shell loader), `ui.js` (smart tables `initSmartTables()`, modals, alerts)
   - Common JS: `session-activity.js`, `theme.js`, `info-tooltip.js`, `sw-register.js`
-- **Global CSS**:
-  - Layout & UI: `global.css`, `style.css`, `responsive.css`, `sidebar.css`, `forms.css`, `tables.css`, `modals.css`, `utilities.css`
-- **Domain CSS Modules**:
+- **Compiled Stylesheet Bundle (`style.css`)**:
+  - **Build Script**: `php src/backend/scripts/build_styles.php` (`npm run build:styles`, verify via `npm run check:styles`). Never edit `style.css` directly.
+  - **9 Bundle Sources** (`src/frontend/assets/css/`): `global.css`, `forms.css`, `utilities.css`, `sidebar.css`, `dashboard.css`, `tables.css`, `modals.css`, `products.css`, `responsive.css`
+- **Standalone Domain CSS Modules**:
+  - Landing & Auth: `landing.css`, `user-info.css`, `workspace-guidance.css`, `remote-access-pill.css`
   - Cashier: `cashier.css`, `cashier-pages.css`, `refunds.css`, `refund-corrections.css`, `sale-receipt.css`
-  - Inventory: `inventory.css`, `products.css`, `replenishment.css`, `stock-issues.css`, `supplier_pullouts.css`
-  - Admin: `admin.css`, `gcash-admin.css`, `registers.css`, `store-settings.css`, `fiscal-periods.css`
-  - System: `audit-logs.css`, `backup_restore.css`, `system-health.css`, `ml-settings.css`
+  - Inventory: `inventory.css`, `replenishment.css`, `stock-issues.css`, `supplier_pullouts.css`
+  - Admin: `admin.css`, `gcash-admin.css`, `registers.css`, `store-settings.css`, `fiscal-periods.css`, `reset-data.css`
+  - System: `audit-logs.css`, `backup.css`, `backup_restore.css`, `system-health.css`, `ml-settings.css`

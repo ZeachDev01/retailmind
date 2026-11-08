@@ -11,13 +11,6 @@
             <span class="gcash-badge gcash-badge-attention"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> <?= $diffCount ?> pending review</span>
         <?php endif; ?>
     </div>
-    <div class="gcash-tab-guide">
-        <div class="gcash-tab-guide-icon gcash-guide-alert"><i class="bi bi-shield-check" aria-hidden="true"></i></div>
-        <div class="gcash-tab-guide-content">
-            <strong class="gcash-tab-guide-title">Shift Closing Discrepancies &amp; Balance Verification</strong>
-            <span class="gcash-tab-guide-desc">Compares counted drawer cash and GCash wallet balances against system expectations upon shift closure. Review any shortage (negative difference) or overage with the cashier, then click <strong>Mark reviewed</strong> to log your findings.</span>
-        </div>
-    </div>
     <p class="gcash-section-description">Mark reviewed once you have investigated. The difference stays on record.</p>
     <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Reconciliation differences">
         <table class="table" id="gcash-admin-diff-table">

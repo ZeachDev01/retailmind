@@ -271,7 +271,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                             <?php if ($key === 'receipt_footer'): ?>
                                 <textarea id="<?= htmlspecialchars($key) ?>"
                                           name="<?= htmlspecialchars($key) ?>"
-                                          rows="3"
+                                          rows="3" autocomplete="off"
                                           <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
                                           <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>><?= htmlspecialchars((string)($settings[$key] ?? '')) ?></textarea>
                             <?php else: ?>
@@ -384,23 +384,36 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 <div class="remote-access-header-wrap">
                     <div>
                         <h2 id="remote-access-heading">Remote Access</h2>
-                        <p class="section-description">Secure Cloudflare tunnel for supervisor and back-office remote monitoring without port forwarding.</p>
+                        <p class="section-description">Encrypted external access for supervisors without port forwarding.</p>
                     </div>
                     <div class="remote-badges-group">
-                        <span id="remote-mode-badge" class="<?= !empty($tunnelStatus['token_configured']) ? 'tag-primary' : 'tag-secondary' ?>">
-                            <?= !empty($tunnelStatus['token_configured']) ? 'Permanent Named Tunnel' : 'Quick Tunnel (Ephemeral)' ?>
+                        <span id="remote-mode-badge" class="remote-pill <?= !empty($tunnelStatus['token_configured']) ? 'pill-primary' : 'pill-muted' ?>">
+                            <?= !empty($tunnelStatus['token_configured']) ? 'Custom Domain' : 'Quick Tunnel' ?>
                         </span>
-                        <span id="remote-status-badge" class="<?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'tag-success' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'tag-warning' : 'tag-danger') ?>" role="status">
+                        <span id="remote-status-badge" class="remote-status-pill <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'status-online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'status-starting' : 'status-offline') ?>" role="status">
                             <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'Online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'Connecting...' : 'Offline') ?>
                         </span>
                     </div>
                 </div>
             </div>
+
             <div class="remote-access-content">
-                <div class="remote-toggle-row">
-                    <div>
-                        <label for="remote-access-toggle" class="remote-toggle-title">Enable Cloudflare Tunnel</label>
-                        <p class="field-help">Activate the portable background tunnel daemon to expose an encrypted connection.</p>
+                <!-- Master Toggle Panel -->
+                <div class="remote-switch-panel">
+                    <div class="remote-switch-info">
+                        <div class="remote-icon-badge" aria-hidden="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <label for="remote-access-toggle" class="remote-toggle-title">Cloudflare Tunnel</label>
+                            <span id="remote-toggle-status-text" class="remote-toggle-sub">
+                                <?= !empty($tunnelStatus['online']) ? 'Active &amp; encrypted' : 'Disabled' ?>
+                            </span>
+                        </div>
                     </div>
                     <div>
                         <label class="toggle-switch">
@@ -409,57 +422,92 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                         </label>
                     </div>
                 </div>
+
+                <!-- Active URL Output Box -->
                 <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
-                    <label for="remote-public-url" class="remote-url-label">Active Remote URL</label>
+                    <div class="remote-url-top">
+                        <span class="remote-url-label">Public Tunnel URL</span>
+                        <span class="remote-url-security-note">Supervisors only &bull; Cashiers stay local</span>
+                    </div>
                     <div class="remote-url-group">
-                        <input type="text" id="remote-public-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
-                        <button type="button" id="copy-remote-url-btn" class="btn btn-secondary" title="Copy public URL to clipboard">
-                            <span id="copy-btn-text">Copy URL</span>
-                        </button>
-                        <button type="button" id="show-qr-code-btn" class="btn btn-secondary" title="Display mobile QR code">
-                            <span>📱 Show QR</span>
-                        </button>
+                        <div class="remote-input-wrapper">
+                            <svg class="remote-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            <input type="text" id="remote-public-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        </div>
+                        <div class="remote-btn-group">
+                            <button type="button" id="copy-remote-url-btn" class="btn btn-secondary" title="Copy URL">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                <span id="copy-btn-text">Copy</span>
+                            </button>
+                            <button type="button" id="show-qr-code-btn" class="btn btn-secondary" title="Display mobile QR code">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                                <span>QR</span>
+                            </button>
+                            <a id="open-remote-url-btn" href="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '#')) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" title="Open URL in new tab">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                <span>Open</span>
+                            </a>
+                        </div>
                     </div>
-                    <small class="field-help">Share this URL only with authorized supervisors. Physical cashier operations remain locked to local store registers.</small>
                 </div>
-                <div id="remote-access-feedback" class="field-help u-mt-1" role="status" aria-live="polite"></div>
 
-                <hr class="u-my-2">
+                <div id="remote-access-feedback" class="remote-feedback" role="status" aria-live="polite"></div>
 
-                <form method="post" class="remote-token-config-form">
-                    <?= csrf_field() ?>
-                    <h3 class="subsection-title">Permanent Tunnel Token Configuration</h3>
-                    <p class="field-help">Configure a Cloudflare Zero Trust permanent tunnel token (<code>cloudflared run --token &lt;token&gt;</code>) to route through your custom fixed domain instead of ephemeral quick tunnels.</p>
-                    <div class="form-grid u-mt-1">
-                        <div>
-                            <label for="tunnel_token" class="field-label">Permanent Tunnel Token</label>
-                            <input type="password" id="tunnel_token" name="tunnel_token" class="input-text" autocomplete="off"
-                                   value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
-                                   placeholder="Paste eyJh... token from Cloudflare Zero Trust">
-                            <small class="field-help">Stored securely in configuration. Paste a new token to update, or clear to revert to ephemeral quick tunnels.</small>
+                <!-- Sleek Accordion: Advanced Custom Domain & Token -->
+                <details class="remote-advanced-card" <?= !empty($tunnelStatus['token_configured']) ? 'open' : '' ?>>
+                    <summary class="remote-advanced-summary">
+                        <div class="remote-summary-content">
+                            <span class="remote-summary-title">Custom Domain &amp; Token</span>
+                            <span class="remote-summary-pill <?= !empty($tunnelStatus['token_configured']) ? 'is-configured' : '' ?>">
+                                <?= !empty($tunnelStatus['token_configured']) ? 'Configured' : 'Optional' ?>
+                            </span>
                         </div>
-                        <div>
-                            <label for="tunnel_hostname" class="field-label">Public Domain / Hostname (Optional)</label>
-                            <input type="text" id="tunnel_hostname" name="tunnel_hostname" class="input-text" autocomplete="off"
-                                   value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
-                                   placeholder="e.g. supervisor.mystore.com">
-                            <small class="field-help">Custom domain mapped in your Cloudflare Zero Trust dashboard.</small>
-                        </div>
+                        <svg class="remote-chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </summary>
+                    <div class="remote-advanced-body">
+                        <form method="post" class="remote-token-config-form">
+                            <?= csrf_field() ?>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="tunnel_token" class="field-label">Permanent Token</label>
+                                    <input type="password" id="tunnel_token" name="tunnel_token" class="input-text" autocomplete="off"
+                                           value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
+                                           placeholder="eyJh… from Cloudflare Zero Trust">
+                                </div>
+                                <div class="form-group">
+                                    <label for="tunnel_hostname" class="field-label">Custom Hostname (Optional)</label>
+                                    <input type="text" id="tunnel_hostname" name="tunnel_hostname" class="input-text" autocomplete="off"
+                                           value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
+                                           placeholder="supervisor.mystore.com">
+                                </div>
+                            </div>
+                            <div class="form-actions u-mt-1">
+                                <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Token</button>
+                                <?php if (!empty($tunnelStatus['token_configured'])): ?>
+                                    <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
+                                <?php endif; ?>
+                            </div>
+                        </form>
                     </div>
-                    <div class="form-actions u-mt-1">
-                        <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Tunnel Token</button>
-                        <?php if (!empty($tunnelStatus['token_configured'])): ?>
-                            <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
-                        <?php endif; ?>
-                    </div>
-                </form>
+                </details>
 
-                <div class="remote-service-hint u-mt-2">
-                    <p class="field-help">
-                        <strong>Dedicated Store PC Service:</strong> For 24/7 supervisor access with automatic startup at boot and crash recovery, install the Windows Service:
-                        <code>powershell -ExecutionPolicy Bypass -File .\src\backend\scripts\tunnel\service_install.ps1</code>
-                        &bull; <a href="<?= htmlspecialchars(app_url('components/auth/help.php#tunnel-deployment')) ?>" target="_blank">5-Minute Dedicated Store PC Setup Guide</a>
-                    </p>
+                <!-- Dedicated Store PC 24/7 Strip -->
+                <div class="remote-service-strip">
+                    <div class="remote-service-left">
+                        <span class="remote-service-badge">24/7 Service</span>
+                        <span class="remote-service-text">Auto-start on Windows boot with crash recovery.</span>
+                    </div>
+                    <div class="remote-service-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="copy-service-cmd-btn" data-cmd="powershell -ExecutionPolicy Bypass -File .\src\backend\scripts\tunnel\service_install.ps1" title="Copy PowerShell installation command">
+                            <span id="service-cmd-text">Copy PowerShell command</span>
+                        </button>
+                        <a href="<?= htmlspecialchars(app_url('components/auth/help.php#tunnel-deployment')) ?>" target="_blank" class="remote-guide-link">Guide &rarr;</a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -468,24 +516,24 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         <div id="qr-code-modal" class="qr-modal-backdrop u-hidden" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" tabindex="-1">
             <div class="qr-modal-dialog">
                 <div class="qr-modal-header">
-                    <h3 id="qr-modal-title">Mobile Access QR Code</h3>
+                    <h3 id="qr-modal-title">Mobile Access</h3>
                     <button type="button" id="close-qr-modal-btn" class="modal-close-btn" aria-label="Close dialog">&times;</button>
                 </div>
                 <div class="qr-modal-body">
-                    <p class="qr-modal-description">Scan this QR code with your smartphone camera to connect to RetailMind remotely without typing.</p>
+                    <p class="qr-modal-description">Scan with your smartphone camera to connect instantly.</p>
                     <div id="qr-code-display" class="qr-code-display" aria-label="Scannable QR code of active remote URL">
                         <?= !empty($initialQrSvg) ? $initialQrSvg : '' ?>
                     </div>
                     <div class="qr-modal-url-wrap">
                         <input type="text" id="modal-remote-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
-                        <button type="button" id="modal-copy-url-btn" class="btn btn-secondary" title="Copy active URL to clipboard">
+                        <button type="button" id="modal-copy-url-btn" class="btn btn-secondary" title="Copy active URL">
                             <span id="modal-copy-btn-text">Copy URL</span>
                         </button>
                     </div>
-                    <small class="field-help u-text-center">Only share this URL with authorized store supervisors.</small>
+                    <small class="field-help u-text-center">Authorized store supervisors only.</small>
                 </div>
                 <div class="qr-modal-footer">
-                    <button type="button" id="close-qr-modal-footer-btn" class="btn btn-secondary">Close</button>
+                    <button type="button" id="close-qr-modal-footer-btn" class="btn btn-secondary">Done</button>
                 </div>
             </div>
         </div>
@@ -592,24 +640,33 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         });
     }
 
+    const toggleSub = document.getElementById('remote-toggle-status-text');
+    const openBtn = document.getElementById('open-remote-url-btn');
+    const serviceCmdBtn = document.getElementById('copy-service-cmd-btn');
+    const serviceCmdText = document.getElementById('service-cmd-text');
+
     function setBadge(state, text) {
-        badge.className = '';
+        if (!badge) return;
+        badge.className = 'remote-status-pill';
         if (state === 'online') {
-            badge.className = 'tag-success';
+            badge.classList.add('status-online');
             badge.textContent = text || 'Online';
+            if (toggleSub) toggleSub.textContent = 'Active & encrypted';
         } else if (state === 'starting') {
-            badge.className = 'tag-warning';
+            badge.classList.add('status-starting');
             badge.textContent = text || 'Connecting...';
+            if (toggleSub) toggleSub.textContent = 'Connecting...';
         } else {
-            badge.className = 'tag-danger';
+            badge.classList.add('status-offline');
             badge.textContent = text || 'Offline';
+            if (toggleSub) toggleSub.textContent = 'Disabled';
         }
     }
 
     function setFeedback(msg, isError) {
         if (!feedback) return;
         feedback.textContent = msg || '';
-        feedback.style.color = isError ? 'var(--danger, #dc2626)' : 'var(--muted, #64748b)';
+        feedback.className = 'remote-feedback' + (isError ? ' is-error' : (msg ? ' is-success' : ''));
     }
 
     function stopPolling() {
@@ -624,6 +681,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         setBadge('online');
         if (urlInput) urlInput.value = data.url;
         if (modalUrlInput) modalUrlInput.value = data.url;
+        if (openBtn) openBtn.href = data.url;
         if (urlContainer) urlContainer.classList.remove('u-hidden');
         if (toggle) {
             toggle.checked = true;
@@ -791,6 +849,29 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
 
     bindClipboardCopy(copyBtn, copyText, urlInput);
     bindClipboardCopy(modalCopyBtn, modalCopyText, modalUrlInput);
+
+    if (serviceCmdBtn) {
+        serviceCmdBtn.addEventListener('click', function() {
+            const cmd = serviceCmdBtn.getAttribute('data-cmd');
+            if (!cmd) return;
+            const originalText = serviceCmdText ? serviceCmdText.textContent : 'Copy PowerShell command';
+            function onCmdCopied() {
+                if (serviceCmdText) serviceCmdText.textContent = '✓ Copied!';
+                serviceCmdBtn.classList.add('btn-primary');
+                serviceCmdBtn.classList.remove('btn-secondary');
+                setTimeout(function() {
+                    if (serviceCmdText) serviceCmdText.textContent = originalText;
+                    serviceCmdBtn.classList.remove('btn-primary');
+                    serviceCmdBtn.classList.add('btn-secondary');
+                }, 2000);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(cmd).then(onCmdCopied).catch(function() {
+                    setFeedback('Failed to copy command to clipboard.', true);
+                });
+            }
+        });
+    }
 })();
 </script>
 </body>

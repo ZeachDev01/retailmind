@@ -3,6 +3,7 @@
     const workspace = document.getElementById('gcash-workspace');
     if (!workspace) return;
     const el = id => document.getElementById('gcash-' + id);
+    const phpFormatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
     const assetBase = (workspace.dataset.assets || '/assets/').replace(/\/?$/, '/');
     const rules = {min: Number(workspace.dataset.minLength), max: Number(workspace.dataset.maxLength)};
     const parser = window.GCashReference;
@@ -1154,10 +1155,10 @@
 
         const cashEl = el('close-cash-variance');
         if (cashVar > 0) {
-            cashEl.textContent = `+₱${cashVar.toFixed(2)} (Excess)`;
+            cashEl.textContent = `+${phpFormatter.format(cashVar)} (Excess)`;
             cashEl.className = 'gcash-variance-positive';
         } else if (cashVar < 0) {
-            cashEl.textContent = `-₱${Math.abs(cashVar).toFixed(2)} (Shortage)`;
+            cashEl.textContent = `-${phpFormatter.format(Math.abs(cashVar))} (Shortage)`;
             cashEl.className = 'gcash-variance-negative';
         } else {
             cashEl.textContent = '₱0.00 (Balanced)';
@@ -1166,10 +1167,10 @@
 
         const walletEl = el('close-wallet-variance');
         if (walletVar > 0) {
-            walletEl.textContent = `+₱${walletVar.toFixed(2)} (Excess)`;
+            walletEl.textContent = `+${phpFormatter.format(walletVar)} (Excess)`;
             walletEl.className = 'gcash-variance-positive';
         } else if (walletVar < 0) {
-            walletEl.textContent = `-₱${Math.abs(walletVar).toFixed(2)} (Shortage)`;
+            walletEl.textContent = `-${phpFormatter.format(Math.abs(walletVar))} (Shortage)`;
             walletEl.className = 'gcash-variance-negative';
         } else {
             walletEl.textContent = '₱0.00 (Balanced)';

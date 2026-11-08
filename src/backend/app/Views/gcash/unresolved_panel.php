@@ -12,13 +12,6 @@
             </span>
         </div>
     </div>
-    <div class="gcash-tab-guide">
-        <div class="gcash-tab-guide-icon gcash-guide-warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i></div>
-        <div class="gcash-tab-guide-content">
-            <strong class="gcash-tab-guide-title">Interrupted or Unverified Customer Exchanges</strong>
-            <span class="gcash-tab-guide-desc">Exchanges flagged during cashier shifts where network or cash transfers were incomplete. Check customer GCash SMS/Reference and physical drawer cash, then click <strong>Verify &amp; Clear</strong>.</span>
-        </div>
-    </div>
     <p class="gcash-section-description">Clear an exchange once its cash and wallet movements check out. Cancel failed exchanges in the Cashier workspace.</p>
     <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Unresolved activity">
         <table class="table" id="gcash-admin-nc-table">

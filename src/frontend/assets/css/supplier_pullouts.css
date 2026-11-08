@@ -79,7 +79,7 @@
     border-color: var(--primary);
 }
 
-#supplier-pullouts #pullout-form .form-control:focus {
+#supplier-pullouts #pullout-form .form-control:focus-visible {
     border-color: var(--primary);
     outline: 2px solid var(--primary);
     outline-offset: 2px;
@@ -94,7 +94,7 @@ html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control {
     border-color: #8295b1 !important;
 }
 
-html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control:is(:hover, :focus):not(:disabled) {
+html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control:is(:hover, :focus-visible):not(:disabled) {
     border-color: var(--primary) !important;
 }
 
@@ -271,7 +271,7 @@ html[data-theme="dark"] #supplier-pullouts #pullout-form .form-control:is(:hover
     background: transparent;
     color: var(--primary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 #supplier-pullouts #btn-pullout-all:hover {

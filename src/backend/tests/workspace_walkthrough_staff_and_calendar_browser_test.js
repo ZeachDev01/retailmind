@@ -267,7 +267,7 @@ const fixture = (action, extra) => {
         await calDock.getByRole('button', {name: 'Next', exact: true}).click();
         await page.waitForFunction(() => document.querySelector('.guidance-step-count')?.textContent.includes('Step 3 of 3'));
         assert.match(await calDock.locator('.guidance-step-title').innerText(), /Record planned closures and holidays/i);
-        assert.ok(await page.locator('#record-date-btn').evaluate(el => el.classList.contains('guidance-spotlight-target')), 'record-date-btn has spotlight');
+        assert.ok(await calGrid.evaluate(el => el.classList.contains('guidance-spotlight-target')), 'calendar-grid has spotlight');
 
         // Step 3 Learn more reiterates actual customer transactions vs calendar entries
         await calLearnMore.locator('summary').click();

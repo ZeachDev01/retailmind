@@ -685,7 +685,20 @@ body.products-page .products-quick-action strong {
     }
 
     .user-drawer-tabs {
-        margin-inline: -.9rem;
+        margin-inline: 0;
+        padding-inline: .9rem;
+    }
+
+    .drawer-form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .drawer-activity-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .user-drawer-footer {
+        padding: .85rem .9rem;
     }
 }
 

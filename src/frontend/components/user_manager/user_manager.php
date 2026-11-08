@@ -241,7 +241,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                 <button type="button" class="btn manage-users-primary manage-users-section-action" id="openUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Add Staff User</button>
             </div>
             <div class="table-wrap" role="region" aria-labelledby="usersHeading" tabindex="0">
-                <table class="users-table">
+                <table class="users-table" aria-label="User accounts">
                     <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Password</th><th scope="col">Action</th></tr></thead>
                     <tbody>
                     <?php if ($users === []): ?>
@@ -400,6 +400,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }, true);
 
+    function syncDrawerStatusUI(statusValue) {
+        const chip = document.getElementById('drawerHeaderStatusChip');
+        const text = document.getElementById('drawerHeaderStatusText');
+        const isActive = statusValue === 'active';
+        if (chip) {
+            chip.classList.toggle('is-active', isActive);
+            chip.classList.toggle('is-disabled', !isActive);
+        }
+        if (text) {
+            text.textContent = isActive ? 'Active' : 'Disabled';
+        }
+    }
+    document.getElementById('drawerStatus')?.addEventListener('change', function () {
+        syncDrawerStatusUI(this.value);
+    });
+
+    const drawerProfileImageInput = document.getElementById('drawerProfileImage');
+    const drawerFileNameDisplay = document.getElementById('drawerFileNameDisplay');
+    drawerProfileImageInput?.addEventListener('change', function () {
+        if (this.files && this.files.length > 0) {
+            if (drawerFileNameDisplay) {
+                drawerFileNameDisplay.textContent = this.files[0].name;
+                drawerFileNameDisplay.hidden = false;
+            }
+        } else if (drawerFileNameDisplay) {
+            drawerFileNameDisplay.textContent = '';
+            drawerFileNameDisplay.hidden = true;
+        }
+    });
+
+    document.getElementById('drawerRoles')?.addEventListener('change', function (event) {
+        const input = event.target;
+        if (input && input.name === 'role_ids[]') {
+            const tile = input.closest('.drawer-role-tile');
+            if (tile) tile.classList.toggle('is-checked', input.checked);
+        }
+    });
+
     document.querySelectorAll('.open-user-drawer').forEach(button => button.addEventListener('click', function () {
         document.getElementById('drawerUserId').value = button.dataset.userId || '';
         document.getElementById('drawerRevokeUserId').value = button.dataset.userId || '';
@@ -421,6 +459,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         const drawerProfileImage = document.getElementById('drawerProfileImage');
         if (drawerProfileImage) drawerProfileImage.value = '';
+        if (drawerFileNameDisplay) {
+            drawerFileNameDisplay.textContent = '';
+            drawerFileNameDisplay.hidden = true;
+        }
         resetPasswordToggles(drawerOverlay);
         const avatar = document.getElementById('drawerProfileAvatar');
         if (avatar) {
@@ -442,8 +484,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectedRoleIds = (button.dataset.roleIds || button.dataset.roleId || '').split(',').filter(Boolean);
         document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
             input.checked = selectedRoleIds.includes(input.value);
+            const tile = input.closest('.drawer-role-tile');
+            if (tile) tile.classList.toggle('is-checked', input.checked);
         });
-        document.getElementById('drawerStatus').value = button.dataset.status || 'active';
+        const currentStatus = button.dataset.status || 'active';
+        document.getElementById('drawerStatus').value = currentStatus;
+        syncDrawerStatusUI(currentStatus);
         document.getElementById('drawerLastLogin').textContent = button.dataset.lastLogin || 'Never';
         const autoDisableDate = button.dataset.autoDisableDate || '';
         document.getElementById('drawerAutoDisableDate').textContent = autoDisableDate;

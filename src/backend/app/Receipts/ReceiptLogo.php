@@ -7,6 +7,13 @@ use RuntimeException;
 
 final class ReceiptLogo
 {
+    public const DEFAULT_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIwAAABqAQMAAABUEyviAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACTUlEQVQ4y9XUP4/TMBgG8FQduiCF8QakfI0iAe73YbodndkYAztSxAdgYmBC3E0ZO7EhkSpDBgYaMlyi+Pzwvn7t1E0ESOgWokZqfnLsPK//JEmyQmt0jx5dievEXRt0BgPRWOIolKJmorsJlKEZhGr0gUqhuw5GSGEvZNoT5a3QACukkXegBrA9IARknl5EVHvSeMmyAlQDGkwj0Bo20DMtiYh0SWSJFCqJaPRe6POJ4KnIJGRKNcg9FRIyIyqEvuWBWqKaaZ9LSBVRKSE1vaSYFH5MVBM1TE0jIUGPgepAJXUj1IFDUuq9I2rateCQayCfaJjIwBOVteKIyIhKplEojWigmh0dqcFR5qjniHaiOxtIBzL0bYZTG90Fov4sRzSUm+pKZPlm6j0V1EXBIZnqcwKtkGaiXKhnyh2pQByK/qfUdSp9HTn6q9/Shj+C55zKSCuDpj0mu+afSfimjFRH2BXMmgZaceyU50T3CXXJ5eN6rXkys2OiqkRTe+V30b9d+iJ6eHTlaDtBmr7VQg92G7/n8kBPb25l6KwIpA8LwsFvcxXoMU1H5emrpy8fvs+JXpzR9uO757vzvk7d09cLKcCfD7QYTmT8ll7Q1OpJXAk9q0REK9732kTUHt6QaZs8fB0+9fKGd87uiioRaKw5ELU6FWe8XdLPT7s5dZxxRu8X1MqB5J5mlTgjw6sUZ5XoaelFtPWn61+ordyZFdNltBg9DdWCxsqdkvGL4/HeSLnQM7L/C2VuWZ6R1O7PpDG7qmQufITcIy1H/AXcBgWXtImq9QAAAABJRU5ErkJggg==';
+
+    public static function defaultLogo(): string
+    {
+        return self::DEFAULT_LOGO;
+    }
+
     public static function fromUpload(mixed $file): string
     {
         $invalid = 'Choose a valid JPG or PNG logo, no larger than 2 MB.';

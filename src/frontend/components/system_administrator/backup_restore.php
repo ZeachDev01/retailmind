@@ -157,15 +157,15 @@ $storePaused = RecoveryStore::isPaused();
             <dl class="backup-summary" aria-label="Backup overview">
                 <div>
                     <dt>Latest backup</dt>
-                    <dd><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></dd>
+                    <dd><i class="bi bi-clock-history" aria-hidden="true"></i> <?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></dd>
                 </div>
                 <div>
                     <dt>Backups created</dt>
-                    <dd><?= $totalSnapshots ?></dd>
+                    <dd><i class="bi bi-archive" aria-hidden="true"></i> <?= $totalSnapshots ?></dd>
                 </div>
                 <div>
                     <dt>Store status</dt>
-                    <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
+                    <dd><span class="status-indicator <?= $storePaused ? 'is-paused' : 'is-operational' ?>" aria-hidden="true"></span> <?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
                 </div>
             </dl>
 
@@ -183,24 +183,15 @@ $storePaused = RecoveryStore::isPaused();
                 </section>
             <?php endif; ?>
 
+            <!-- Note: Creation of a backup it does not confirm local retention -->
             <section class="dashboard-section backup-create" aria-labelledby="backup-create-title">
                 <div class="backup-create-main">
                     <div class="backup-create-copy">
-                        <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
+                        <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock-fill" aria-hidden="true"></i> Encrypted</span></h2>
                     </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
-                </div>
-                <div class="backup-create-footer">
-                    <p><i class="bi bi-download" aria-hidden="true"></i> Download and store off this server.</p>
-                    <details class="backup-tips">
-                        <summary>What to keep</summary>
-                        <ul class="backup-guidance-list">
-                            <li>Backups include Store records and images. Download each file after creation.</li>
-                            <li>Download the recovery key from the Recovery key tab and keep it separate.</li>
-                        </ul>
-                    </details>
                 </div>
             </section>
 
@@ -222,44 +213,42 @@ $storePaused = RecoveryStore::isPaused();
                 </div>
                 <div id="restore-panel" role="tabpanel" aria-labelledby="restore-tab" tabindex="0">
                     <?php require __DIR__ . '/../backup/restore_form.php'; ?>
-                <details class="backup-tips"<?= in_array($_POST['action'] ?? '', ['preflight', 'restore'], true) ? ' open' : '' ?>><summary>Advanced: validate without restoring</summary>
-                <section aria-labelledby="restore-title">
-                    <div class="recovery-panel-heading">
-                        <h2 id="restore-title"><i class="bi bi-patch-check" aria-hidden="true"></i> Validate backup</h2>
-                    </div>
-                    <div class="restore-introduction" id="restore-warning">
-                        <strong><i class="bi bi-shield-check" aria-hidden="true"></i> Read-only validation</strong>
-                        <p>Checks integrity and identity conflicts without replacing records or files.</p>
-                    </div>
-                    <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
-                        <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>">
-                            <label for="backup-file">Encrypted RetailMind package</label>
-                            <p class="backup-hint" id="backup-file-hint">.rmpkg only &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?>&nbsp;MB</p>
-                            <div class="restore-file-field">
-                                <input id="backup-file" type="file" name="backup_file" accept=".rmpkg" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required>
+                    <details class="backup-tips"<?= in_array($_POST['action'] ?? '', ['preflight', 'restore'], true) ? ' open' : '' ?>>
+                        <summary>Advanced: validate without restoring</summary>
+                        <section aria-labelledby="restore-title">
+                            <div class="recovery-panel-heading">
+                                <h2 id="restore-title"><i class="bi bi-patch-check" aria-hidden="true"></i> Validate backup</h2>
+                                <span class="tag tag-soft" id="restore-warning"><i class="bi bi-shield-check" aria-hidden="true"></i> Dry run</span>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="restore-password">Administrator password</label>
-                            <input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required>
-                        </div>
-                        <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
-                    </form>
-                    <?php if ($preflight): ?>
-                        <div class="preflight-result" role="status">
-                            <p><i class="bi bi-file-earmark-check" aria-hidden="true"></i> <strong><?= (int)$preflight['files'] ?></strong> files &bull; <strong><?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB</strong> &bull; Snapshot <?= $escape($preflight['snapshot_at']) ?></p>
-                            <?php if ($preflight['conflicts']): ?>
-                                <h3>Identity conflicts to resolve</h3>
-                                <ul>
-                                    <?php foreach ($preflight['conflicts'] as $conflict): ?>
-                                        <li><?= $escape($conflict['kind']) ?>: user <?= (int)$conflict['source_id'] ?> &rarr; <?= (int)$conflict['destination_id'] ?> &mdash; <?= $escape($conflict['message']) ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
+                            <form method="post" enctype="multipart/form-data" data-restore-form><?= csrf_field() ?><input type="hidden" name="action" value="preflight">
+                                <div class="form-group<?= $invalidField === 'file' ? ' invalid' : '' ?>">
+                                    <label for="backup-file">Encrypted RetailMind package</label>
+                                    <div class="restore-file-field">
+                                        <input id="backup-file" type="file" name="backup_file" accept=".rmpkg" aria-describedby="backup-file-hint<?= $invalidField === 'file' ? ' recovery-feedback' : '' ?>"<?= $invalidField === 'file' ? ' aria-invalid="true"' : '' ?> required>
+                                    </div>
+                                    <span class="backup-hint" id="backup-file-hint">.rmpkg &bull; Max <?= number_format($maxUploadBytes / 1048576, 1) ?>&nbsp;MB</span>
+                                </div>
+                                <div class="form-group">
+                                    <label for="restore-password">Administrator password</label>
+                                    <input id="restore-password" type="password" name="restore_password" autocomplete="current-password"<?= $invalidField === 'restore' ? ' aria-describedby="recovery-feedback" aria-invalid="true"' : '' ?> required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
+                            </form>
+                            <?php if ($preflight): ?>
+                                <div class="preflight-result" role="status">
+                                    <p><i class="bi bi-file-earmark-check" aria-hidden="true"></i> <strong><?= (int)$preflight['files'] ?></strong> files &bull; <strong><?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB</strong> &bull; Snapshot <?= $escape($preflight['snapshot_at']) ?></p>
+                                    <?php if ($preflight['conflicts']): ?>
+                                        <h3>Identity conflicts to resolve</h3>
+                                        <ul>
+                                            <?php foreach ($preflight['conflicts'] as $conflict): ?>
+                                                <li><?= $escape($conflict['kind']) ?>: user <?= (int)$conflict['source_id'] ?> &rarr; <?= (int)$conflict['destination_id'] ?> &mdash; <?= $escape($conflict['message']) ?></li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                </div>
                             <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                </section>
-                </details>
+                        </section>
+                    </details>
                 </div>
                 <div id="safety-panel" role="tabpanel" aria-labelledby="safety-tab" tabindex="0">
                     <?php require __DIR__ . '/../backup/safety_copy.php'; ?>
@@ -277,7 +266,7 @@ $storePaused = RecoveryStore::isPaused();
                     <span class="backup-record-count"><?= $historyTotal ?> <?= $historyTotal === 1 ? 'record' : 'records' ?></span>
                 </div>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
-                    <table data-no-smart-table>
+                    <table data-no-smart-table aria-label="Backup history">
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Backup date</th>
@@ -287,7 +276,7 @@ $storePaused = RecoveryStore::isPaused();
                             <th scope="col">Requested by</th>
                         </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
                                 <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
-                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>Note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
                                 <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
                                 <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>

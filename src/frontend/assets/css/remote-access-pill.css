@@ -7,34 +7,128 @@
     align-items: center;
 }
 
+.global-topbar .remote-pill-wrapper {
+    margin-left: auto;
+}
+
+/* Sidebar Footer Remote Access Pill */
+.sidebar-footer .remote-pill-wrapper {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-footer .remote-status-pill {
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #94a3b8;
+    justify-content: flex-start;
+    box-shadow: none;
+}
+
+.sidebar-footer .remote-status-pill:hover,
+.sidebar-footer .remote-status-pill:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #f1f5f9;
+}
+
+.sidebar-footer .remote-status-pill.is-offline {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+}
+
+.sidebar-footer .remote-status-pill.is-offline:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #f1f5f9;
+}
+
+.sidebar-footer .remote-status-pill.is-online {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #34d399;
+}
+
+.sidebar-footer .remote-status-pill.is-online:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #6ee7b7;
+}
+
+.sidebar-footer .remote-status-caret {
+    margin-left: auto;
+}
+
+/* Sidebar Popover Positioning */
+.sidebar .remote-status-popover {
+    position: fixed;
+    z-index: 1500;
+    left: 18px;
+    bottom: 92px;
+    width: 320px;
+    max-width: calc(100vw - 36px);
+}
+
+/* Collapsed Sidebar adjustments */
+body.sidebar-collapsed .sidebar-footer .remote-status-pill {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+    margin: 0 auto;
+    justify-content: center;
+}
+
+body.sidebar-collapsed .sidebar-footer .remote-status-label,
+body.sidebar-collapsed .sidebar-footer .remote-status-caret {
+    display: none !important;
+}
+
+body.sidebar-collapsed .sidebar .remote-status-popover {
+    left: calc(var(--sidebar-collapsed-width, 70px) + 12px);
+    bottom: 24px;
+}
+
 .remote-status-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    line-height: 1.25;
-    border-radius: 9999px;
+    gap: 0.55rem;
+    height: 40px;
+    min-height: 40px;
+    padding: 0 0.85rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1;
+    border-radius: 8px;
     border: 1px solid var(--border, #cbd5e1);
     background: var(--theme-surface, #ffffff);
-    color: var(--text-secondary, #475569);
+    color: var(--text, #1e293b);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.16s ease;
     user-select: none;
     white-space: nowrap;
     text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .remote-status-pill:hover,
 .remote-status-pill:focus-visible {
-    border-color: var(--border-hover, #94a3b8);
-    background: var(--bg-hover, #f8fafc);
+    border-color: #bfdbfe;
+    background: var(--theme-surface-soft, #eff6ff);
+    color: var(--primary, #0284c7);
+    outline: none;
 }
 
 .remote-status-pill:focus-visible {
-    outline: 2px solid var(--primary, #0284c7);
-    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.2);
 }
 
 /* Status Dot */
@@ -48,15 +142,16 @@
 
 /* Caret */
 .remote-status-caret {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     line-height: 1;
-    opacity: 0.7;
-    margin-left: 0.1rem;
-    transition: transform 0.2s ease;
+    opacity: 0.6;
+    margin-left: 0.15rem;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .remote-status-pill[aria-expanded="true"] .remote-status-caret {
     transform: rotate(180deg);
+    opacity: 1;
 }
 
 /* Active / Online State - Illuminated Green Pill */
@@ -64,7 +159,13 @@
     background: rgba(16, 185, 129, 0.08);
     border-color: rgba(16, 185, 129, 0.4);
     color: #065f46;
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.12);
+}
+
+.remote-status-pill.is-online:hover {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.6);
+    color: #047857;
 }
 
 .remote-status-pill.is-online .remote-status-dot {
@@ -82,16 +183,16 @@
     }
 }
 
-/* Inactive / Offline State - Muted / Gray / Subtle Pill */
+/* Inactive / Offline State - Muted / Subtle Pill */
 .remote-status-pill.is-offline {
-    background: var(--bg-surface, #f8fafc);
+    background: var(--theme-surface, #ffffff);
     border-color: var(--border, #cbd5e1);
-    color: var(--muted, #64748b);
+    color: var(--text-secondary, #475569);
 }
 
 .remote-status-pill.is-offline .remote-status-dot {
     background-color: #94a3b8;
-    box-shadow: none;
+    box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.25);
 }
 
 /* Popover / Dropdown */
@@ -99,66 +200,91 @@
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    z-index: 1000;
-    width: 320px;
-    max-width: calc(100vw - 2rem);
+    z-index: 1050;
+    width: 340px;
+    max-width: calc(100vw - 24px);
     background: var(--theme-surface, #ffffff);
     border: 1px solid var(--border, #cbd5e1);
-    border-radius: 8px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    padding: 1rem;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.12), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+    padding: 1rem 1.1rem;
     font-size: 0.875rem;
     text-align: left;
+    animation: remote-popover-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes remote-popover-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .remote-popover-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 0.6rem;
-    margin-bottom: 0.6rem;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
     border-bottom: 1px solid var(--border, #e2e8f0);
 }
 
+.remote-popover-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.remote-popover-heading .navigation-icon {
+    width: 18px;
+    height: 18px;
+    color: #64748b;
+}
+
 .remote-popover-title {
-    font-weight: 600;
-    font-size: 0.9rem;
+    font-weight: 700;
+    font-size: 0.92rem;
     color: var(--text, #1e293b);
 }
 
 .remote-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.15rem 0.5rem;
-    font-size: 0.72rem;
-    font-weight: 600;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.7rem;
+    font-weight: 700;
     border-radius: 9999px;
     text-transform: uppercase;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
 }
 
 .remote-badge.badge-online {
     background: #dcfce7;
-    color: #166534;
+    color: #15803d;
     border: 1px solid #bbf7d0;
 }
 
 .remote-badge.badge-offline {
     background: #f1f5f9;
-    color: #475569;
+    color: #64748b;
     border: 1px solid #e2e8f0;
 }
 
 .remote-popover-desc {
-    margin: 0 0 0.75rem 0;
+    margin: 0 0 0.85rem 0;
     font-size: 0.8125rem;
     color: var(--muted, #64748b);
-    line-height: 1.4;
+    line-height: 1.45;
 }
 
 .remote-popover-url-row {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.45rem;
     align-items: center;
     margin-bottom: 0.5rem;
 }
@@ -166,69 +292,78 @@
 .remote-popover-url-input {
     flex: 1;
     min-width: 0;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
-    font-family: monospace;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     border: 1px solid var(--border, #cbd5e1);
     border-radius: 6px;
-    background: var(--bg-hover, #f8fafc);
-    color: var(--text, #1e293b);
+    background: #0f172a;
+    color: #38bdf8;
+    text-overflow: ellipsis;
+}
+
+.remote-popover-url-input:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 .remote-copy-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.4rem 0.65rem;
-    font-size: 0.8rem;
-    font-weight: 500;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 600;
     border-radius: 6px;
-    border: 1px solid var(--border, #cbd5e1);
-    background: var(--theme-surface, #ffffff);
-    color: var(--text, #1e293b);
+    border: 1px solid #2563eb;
+    background: #2563eb;
+    color: #ffffff;
     cursor: pointer;
     white-space: nowrap;
     transition: all 0.15s ease;
 }
 
 .remote-copy-btn:hover {
-    background: var(--bg-hover, #f1f5f9);
-    border-color: var(--border-hover, #94a3b8);
+    background: #1d4ed8;
+    border-color: #1d4ed8;
 }
 
 .remote-copy-btn.btn-copied {
-    background: #dcfce7;
-    border-color: #86efac;
-    color: #166534;
+    background: #10b981;
+    border-color: #10b981;
+    color: #ffffff;
 }
 
 .remote-copy-feedback {
     margin-top: 0.4rem;
     padding: 0.35rem 0.5rem;
     font-size: 0.75rem;
-    border-radius: 4px;
+    border-radius: 5px;
     background: #dcfce7;
-    color: #166534;
+    color: #15803d;
     text-align: center;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .remote-popover-footer {
-    margin-top: 0.75rem;
-    padding-top: 0.5rem;
+    margin-top: 0.85rem;
+    padding-top: 0.65rem;
     border-top: 1px solid var(--border, #e2e8f0);
     display: flex;
     justify-content: flex-end;
 }
 
 .remote-settings-link {
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     color: var(--primary, #0284c7);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 600;
+    transition: color 0.15s ease;
 }
 
 .remote-settings-link:hover {
+    color: #0369a1;
     text-decoration: underline;
 }
 
@@ -238,8 +373,10 @@
 }
 
 .admin-mobile-topbar .remote-status-pill {
-    padding: 0.3rem 0.5rem;
-    font-size: 0.75rem;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 0.55rem;
+    font-size: 0.78rem;
 }
 
 @media (max-width: 480px) {
@@ -247,56 +384,75 @@
         display: none;
     }
     .remote-status-pill {
-        padding: 0.35rem 0.45rem;
+        padding: 0 0.5rem;
     }
     .remote-status-popover {
-        right: -40px;
+        right: -20px;
         width: 290px;
     }
 }
 
 /* Dark mode overrides */
+html[data-theme="dark"] .remote-status-pill.is-offline {
+    background: #1c2c43;
+    border-color: #526580;
+    color: #cbd5e1;
+}
+
+html[data-theme="dark"] .remote-status-pill.is-offline:hover {
+    background: #253852;
+    border-color: #60a5fa;
+    color: #93c5fd;
+}
+
 html[data-theme="dark"] .remote-status-pill.is-online {
-    background: rgba(16, 185, 129, 0.15);
+    background: rgba(16, 185, 129, 0.16);
     border-color: rgba(16, 185, 129, 0.5);
     color: #34d399;
 }
 
-html[data-theme="dark"] .remote-status-pill.is-offline {
-    background: #1e293b;
-    border-color: #334155;
-    color: #94a3b8;
-}
-
 html[data-theme="dark"] .remote-status-popover {
     background: #152238 !important;
-    border-color: #41516a !important;
+    border-color: #334155 !important;
     color: #e5edf8 !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
 }
 
 html[data-theme="dark"] .remote-popover-header,
 html[data-theme="dark"] .remote-popover-footer {
-    border-color: #41516a;
+    border-color: #24354c;
 }
 
 html[data-theme="dark"] .remote-popover-title {
-    color: #e5edf8;
+    color: #f1f5f9;
+}
+
+html[data-theme="dark"] .remote-popover-desc {
+    color: #94a3b8;
 }
 
 html[data-theme="dark"] .remote-popover-url-input {
     background: #0b1329;
-    border-color: #41516a;
-    color: #e5edf8;
-}
-
-html[data-theme="dark"] .remote-copy-btn {
-    background: #1e293b;
-    border-color: #41516a;
-    color: #e5edf8;
+    border-color: #334155;
+    color: #93c5fd;
 }
 
 html[data-theme="dark"] .remote-badge.badge-offline {
-    background: #1e293b;
+    background: #1c2c43;
     color: #94a3b8;
     border-color: #334155;
+}
+
+html[data-theme="dark"] .remote-badge.badge-online {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+html[data-theme="dark"] .remote-settings-link {
+    color: #60a5fa;
+}
+
+html[data-theme="dark"] .remote-settings-link:hover {
+    color: #93c5fd;
 }

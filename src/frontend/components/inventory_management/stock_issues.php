@@ -300,7 +300,7 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
                                                                 <?php endif; ?>
                                                             </td>
                                                             <td>
-                                                                <input type="number"
+                                                                <input type="number" inputmode="numeric"
                                                                        name="batches[<?= (int)$pb['batch_id'] ?>]"
                                                                        value="<?= (int)($fefoAllocations[$pb['batch_id']] ?? 0) ?>"
                                                                        min="0"

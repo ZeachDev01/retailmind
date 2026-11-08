@@ -145,9 +145,9 @@ class WorkspaceWalkthroughService
                                     'learn_more' => 'Date exceptions and recorded sales override weekly baselines. Calendar configuration reflects operating hours and does not qualify forecasting models or generate customer sales history.',
                                 ],
                                 [
-                                    'target' => '#record-date-btn',
+                                    'target' => '.calendar-grid',
                                     'action' => 'Record planned closures and holidays',
-                                    'description' => 'Use Record Status to set planned closures, holidays, or date-specific trading exceptions.',
+                                    'description' => 'Select any date on the calendar grid to set planned closures, holidays, or date-specific trading exceptions.',
                                     'learn_more' => 'Recording holidays and exceptional closures helps operational planning. Forecasting models qualify over time as genuine customer demand accumulates through actual transactions, not calendar entries.',
                                 ],
                             ],

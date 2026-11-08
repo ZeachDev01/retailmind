@@ -76,9 +76,12 @@
 .queue-search > div { position: relative; }
 .queue-search i { position: absolute; left: .85rem; top: 50%; transform: translateY(-50%); font-size: 1rem; pointer-events: none; }
 .queue-search input { padding-left: 2.75rem; }
-.replenishment-page .queue-list { min-height: 260px; max-height: 70vh; overflow: auto; border: 0; border-radius: 0; scrollbar-color: var(--border) var(--card-bg); }
+.replenishment-page .queue-list { display: block; min-height: 260px; max-height: 70vh; overflow: auto; border: 0; border-radius: 0; scrollbar-color: var(--border) var(--card-bg); }
 .replenishment-page .queue-list:focus-visible { outline-offset: -3px; }
-.replenishment-page .queue-list table { width: 100%; min-width: 900px; table-layout: fixed; }
+.replenishment-page .queue-list table { display: table; width: 100%; min-width: 900px; table-layout: fixed; border-collapse: collapse; }
+.replenishment-page .queue-list thead { display: table-header-group; }
+.replenishment-page .queue-list tbody { display: table-row-group; }
+.replenishment-page tr.queue-item { display: table-row; padding: 0; }
 .queue-list th:nth-child(1) { width: 40%; }
 .queue-list th:nth-child(2) { width: 15%; }
 .queue-list th:nth-child(3), .queue-list th:nth-child(4) { width: 22.5%; white-space: normal; }
@@ -90,8 +93,8 @@
 .queue-product-cell > .queue-details { grid-column: 2; justify-self: end; margin-left: 0; }
 .queue-product-cell:has(> .queue-details) > .queue-product-identity { grid-row: span 2; }
 .queue-product-cell > .queue-details[open] { grid-column: 1 / -1; justify-self: stretch; }
-.replenishment-page .queue-list th { position: sticky; top: 0; z-index: 2; background: var(--surface-soft, var(--card-bg)); padding: .65rem .85rem; font-size: .8rem; }
-.replenishment-page .queue-list td { padding: .6rem .85rem; vertical-align: middle; }
+.replenishment-page .queue-list th { display: table-cell; position: sticky; top: 0; z-index: 2; background: var(--surface-soft, var(--card-bg)); padding: .65rem .85rem; font-size: .8rem; }
+.replenishment-page .queue-list td { display: table-cell; padding: .6rem .85rem; vertical-align: middle; border-bottom: 1px solid var(--border); }
 .replenishment-page .queue-list td:first-child { white-space: normal; }
 .queue-item:hover, .queue-item:focus-within { background: var(--surface-soft); }
 .replenishment-page .queue-list td:not(:first-child) { white-space: nowrap; }

@@ -30,7 +30,7 @@
 .sale-receipt *, .sale-receipt *::before, .sale-receipt *::after { box-sizing: border-box; }
 .sale-receipt .receipt-header { display: block; margin: 0; padding: 0 0 1mm; border-bottom: 1px dashed #555; }
 .sale-receipt .receipt-brand { text-align: center; }
-.sale-receipt .receipt-logo { display: block; width: auto; height: auto; max-width: 48mm; max-height: 24mm; margin: 0 auto 1mm; background: #fff; }
+.sale-receipt .receipt-logo { display: block; width: auto; height: auto; max-width: 32mm; max-height: 14mm; margin: 0 auto 1.5mm; background: #fff; object-fit: contain; }
 .sale-receipt .receipt-brand :is(h1, h3) { margin: 0 0 1mm; font-size: 16px; line-height: 1.2; }
 .sale-receipt .receipt-store-line, .sale-receipt .receipt-brand div { color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
 .sale-receipt .receipt-meta { margin-top: 1mm; text-align: left; color: var(--theme-ink, #111); font-size: inherit; line-height: inherit; }
@@ -84,7 +84,15 @@
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-line,
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-totals > div { flex-wrap: wrap; }
 .sale-receipt[data-paper-width-mm="58"] .sale-receipt-money { max-width: 100%; margin-left: auto; }
+.sale-receipt[data-paper-width-mm="58"] .receipt-logo { max-width: 26mm; max-height: 12mm; }
 
 .gcash-receipt-reference { margin: 3mm auto 1mm; text-align: center; break-inside: avoid; }
 .gcash-receipt-reference .barcode-svg { display: block; width: 100%; height: 16mm; margin: 1mm auto; background: #fff; }
 .gcash-receipt-digits { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}

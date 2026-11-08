@@ -27,6 +27,16 @@ $formatDate = static function (?string $value): string {
         return 'Unavailable';
     }
 };
+$formatShortDate = static function (?string $value): string {
+    if ($value === null || $value === '') {
+        return 'Never';
+    }
+    try {
+        return (new DateTimeImmutable($value))->format('M j · g:i A');
+    } catch (Throwable) {
+        return 'Unavailable';
+    }
+};
 $statusLabel = static fn(string $status): string => [
     'healthy' => 'Healthy',
     'warning' => 'Needs attention',
@@ -37,28 +47,32 @@ $statusLabel = static fn(string $status): string => [
     'unsealed' => 'Unsealed',
     'not_configured' => 'Not configured',
 ][$status] ?? ucfirst(str_replace('_', ' ', $status));
+
 $headlineOrder = [
-    'platform_health' => ['Platform health', 'bi-heart-pulse'],
-    'ml_health' => ['Demand Forecast health', 'bi-cpu'],
+    'platform_health' => ['Platform Services', 'bi-heart-pulse', 'components/system_administrator/system_health.php'],
+    'ml_health' => ['Demand Forecast', 'bi-cpu', 'components/system_administrator/ml_settings.php'],
 ];
+
 $attentionCategoryLabels = [
     'security' => 'Security',
     'access' => 'Access',
-    'backup_recovery' => 'Backup and recovery',
+    'backup_recovery' => 'Backup',
     'system_health' => 'System Health',
     'ml_health' => 'Demand Forecast',
-    'platform_setting' => 'Platform Settings',
+    'platform_setting' => 'Settings',
     'recovery_account' => 'Recovery Account',
 ];
+
 $attentionActionLabels = [
-    'security' => 'Review sign-ins',
-    'access' => 'Review accounts',
-    'backup_recovery' => 'Review backup',
-    'system_health' => 'Review System Health',
-    'ml_health' => 'Review Demand Forecast',
-    'platform_setting' => 'Review Platform Settings',
-    'recovery_account' => 'Review audit records',
+    'security' => 'Review',
+    'access' => 'Manage',
+    'backup_recovery' => 'Inspect',
+    'system_health' => 'Diagnose',
+    'ml_health' => 'Configure',
+    'platform_setting' => 'Settings',
+    'recovery_account' => 'Audit',
 ];
+
 $attentionItems = $dashboard['attention'] ?? [];
 $criticalAttentionCount = count(array_filter(
     $attentionItems,
@@ -72,9 +86,10 @@ $continuityIssueCount = count(array_filter(
     $dashboard['continuity'] ?? [],
     static fn(array $item): bool => !($item['ok'] ?? false)
 ));
-$statusTone = static fn(string $status): string => in_array($status, ['healthy', 'inactive', 'sealed'], true)
-    ? 'is-ready'
-    : (in_array($status, ['critical', 'active', 'not_configured'], true) ? 'is-critical' : 'needs-attention');
+
+$backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available'];
+$backupDate = $backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string)$backup['value']);
+$platformHealth = $dashboard['headline']['platform_health'] ?? ['status' => 'healthy'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -89,113 +104,189 @@ $statusTone = static fn(string $status): string => in_array($status, ['healthy',
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" data-dashboard-refresh data-stale-after="<?= $escape($dashboard['freshness']['stale_after'] ?? '') ?>">
-            <header class="page-heading control-center-heading">
-                <div class="control-center-heading-copy">
-                    <h1>Platform Control Center</h1>
+            
+            <header class="superadmin-header">
+                <div class="superadmin-header-title">
+                    <div class="title-with-pill">
+                        <h1>Platform Control Center</h1>
+                        <span class="role-chip">Super Admin</span>
+                    </div>
                 </div>
-                <div class="control-center-utilities">
-                    <p class="dashboard-freshness">
-                        <i class="bi bi-clock" aria-hidden="true"></i>
-                        <span>Updated <?= $escape($formatDate($dashboard['freshness']['generated_at'] ?? null)) ?></span>
-                    </p>
+                <div class="superadmin-header-meta">
+                    <span class="sync-status">
+                        <span class="pulse-dot" aria-hidden="true"></span>
+                        <span>Synced <?= $escape($formatShortDate($dashboard['freshness']['generated_at'] ?? null)) ?></span>
+                    </span>
+                    <a class="btn-refresh-icon" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>" title="Refresh Dashboard" aria-label="Refresh Dashboard">
+                        <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+                    </a>
                 </div>
             </header>
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden>
-                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-                Refresh paused until you finish.
+                <i class="bi bi-pause-circle" aria-hidden="true"></i>
+                <span>Auto-refresh paused while working</span>
             </p>
 
             <?php if ($dashboard['state'] !== 'error'): ?>
-            <section class="risk-horizon" aria-labelledby="risk-horizon-title">
-                <div class="risk-horizon-heading">
-                    <h2 id="risk-horizon-title">Platform overview</h2>
-                </div>
-                <div class="risk-horizon-grid">
-                    <article class="horizon-signal <?= $criticalAttentionCount > 0 ? 'is-critical' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><span>Critical</span></span><strong><?= $escape((string) $criticalAttentionCount) ?></strong><small><?= $criticalAttentionCount === 0 ? 'All clear' : ($criticalAttentionCount === 1 ? 'Action required' : 'Actions required') ?></small>
-                    </article>
-                    <article class="horizon-signal <?= $warningAttentionCount > 0 ? 'needs-attention' : 'is-ready' ?>">
-                        <span class="horizon-label"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Warnings</span></span><strong><?= $escape((string) $warningAttentionCount) ?></strong><small><?= $warningAttentionCount === 0 ? 'All clear' : ($warningAttentionCount === 1 ? 'Needs review' : 'Need review') ?></small>
-                    </article>
-                    <?php
-                    $backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available'];
-                    $backupSubtext = match (true) {
-                        $backup['value'] === 'Not available' => 'No backup found',
-                        $backup['status'] === 'healthy' => 'Up to date',
-                        default => $backup['detail'] ?? 'Out of date',
-                    };
-                    ?>
-                    <article class="horizon-signal <?= $escape($statusTone((string) $backup['status'])) ?>">
-                        <span class="horizon-label"><i class="bi bi-database-check" aria-hidden="true"></i><span>Latest successful backup</span></span><strong class="horizon-date"><?= $escape($backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string) $backup['value'])) ?></strong><small><?= $escape($backupSubtext) ?></small>
-                    </article>
-                </div>
+            <section class="signals-grid" aria-label="Platform Health Indicators">
+                <article class="signal-card <?= $criticalAttentionCount > 0 ? 'signal-critical' : 'signal-calm' ?>">
+                    <div class="signal-top">
+                        <span class="signal-label">Critical Issues</span>
+                        <i class="bi bi-shield-exclamation signal-icon" aria-hidden="true"></i>
+                    </div>
+                    <div class="signal-body">
+                        <strong class="signal-val"><?= $escape((string) $criticalAttentionCount) ?></strong>
+                        <span class="signal-status-pill"><?= $criticalAttentionCount > 0 ? 'Attention' : 'Clear' ?></span>
+                    </div>
+                </article>
+
+                <article class="signal-card <?= $warningAttentionCount > 0 ? 'signal-warning' : 'signal-calm' ?>">
+                    <div class="signal-top">
+                        <span class="signal-label">Warnings</span>
+                        <i class="bi bi-exclamation-triangle signal-icon" aria-hidden="true"></i>
+                    </div>
+                    <div class="signal-body">
+                        <strong class="signal-val"><?= $escape((string) $warningAttentionCount) ?></strong>
+                        <span class="signal-status-pill"><?= $warningAttentionCount > 0 ? 'Review' : 'Clear' ?></span>
+                    </div>
+                </article>
+
+                <article class="signal-card <?= ($backup['status'] ?? '') === 'healthy' ? 'signal-calm' : 'signal-warning' ?>">
+                    <div class="signal-top">
+                        <span class="signal-label">Database Backup</span>
+                        <i class="bi bi-database-check signal-icon" aria-hidden="true"></i>
+                    </div>
+                    <div class="signal-body">
+                        <strong class="signal-val signal-val-text"><?= $escape($backupDate) ?></strong>
+                        <span class="signal-status-pill"><?= ($backup['status'] ?? '') === 'healthy' ? 'Current' : 'Outdated' ?></span>
+                    </div>
+                </article>
+
+                <article class="signal-card <?= ($platformHealth['status'] ?? '') === 'healthy' ? 'signal-calm' : 'signal-warning' ?>">
+                    <div class="signal-top">
+                        <span class="signal-label">Core Engine</span>
+                        <i class="bi bi-heart-pulse signal-icon" aria-hidden="true"></i>
+                    </div>
+                    <div class="signal-body">
+                        <strong class="signal-val signal-val-text"><?= $escape($statusLabel((string)($platformHealth['status'] ?? 'healthy'))) ?></strong>
+                        <span class="signal-status-pill"><?= ($platformHealth['status'] ?? '') === 'healthy' ? 'Optimal' : 'Check' ?></span>
+                    </div>
+                </article>
             </section>
             <?php endif; ?>
 
-            <section class="issue-queue" aria-labelledby="platform-attention-title">
-                <div class="workspace-section-heading">
-                    <div><h2 id="platform-attention-title">Issue queue</h2></div>
-                    <?php if ($dashboard['state'] !== 'error'): ?>
-                        <span class="priority-label"><?= count($attentionItems) > 0 ? $escape((string) count($attentionItems)) . ' open' : 'All clear' ?></span>
-                    <?php endif; ?>
-                </div>
+            <div class="superadmin-split-grid">
+                
+                <section class="superadmin-panel issue-panel" aria-labelledby="queue-heading">
+                    <div class="panel-header">
+                        <div class="panel-header-title">
+                            <h2 id="queue-heading">Issue Queue</h2>
+                            <span class="count-badge <?= count($attentionItems) > 0 ? 'count-active' : '' ?>">
+                                <?= count($attentionItems) ?>
+                            </span>
+                        </div>
+                    </div>
 
-                <?php if ($dashboard['state'] === 'error'): ?>
-                    <div class="dashboard-state dashboard-state-error" role="alert">
-                        <i class="bi bi-cloud-slash" aria-hidden="true"></i>
-                        <div><strong>Dashboard status unavailable</strong><p><?= $escape($dashboard['message']) ?></p></div>
-                        <a class="btn btn-quiet" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>">Reload dashboard</a>
+                    <?php if ($dashboard['state'] === 'error'): ?>
+                        <div class="state-block state-error" role="alert">
+                            <i class="bi bi-cloud-slash" aria-hidden="true"></i>
+                            <div class="state-copy">
+                                <strong>Platform status unavailable</strong>
+                            </div>
+                            <a class="btn btn-sm btn-quiet" href="<?= $escape(app_url('components/super_administrator/dashboard.php')) ?>">Reload</a>
+                        </div>
+                    <?php elseif ($attentionItems === []): ?>
+                        <div class="state-block state-nominal" role="status">
+                            <i class="bi bi-shield-check" aria-hidden="true"></i>
+                            <div class="state-copy">
+                                <strong>All platform checks nominal</strong>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="queue-list" role="list">
+                            <?php foreach ($attentionItems as $item): ?>
+                                <?php
+                                $categoryLabel = $attentionCategoryLabels[$item['category']] ?? ucfirst(str_replace('_', ' ', $item['category']));
+                                $actionLabel = $attentionActionLabels[$item['category']] ?? 'Review';
+                                $severity = $item['severity'] ?? 'warning';
+                                ?>
+                                <a class="queue-item severity-<?= $escape($severity) ?>"
+                                   href="<?= $escape(app_url($item['destination'])) ?>"
+                                   data-dashboard-action>
+                                    <div class="queue-meta">
+                                        <span class="severity-tag severity-<?= $escape($severity) ?>"><?= $escape(strtoupper($severity)) ?></span>
+                                        <span class="category-tag"><?= $escape($categoryLabel) ?></span>
+                                    </div>
+                                    <div class="queue-title">
+                                        <strong><?= $escape($item['title']) ?></strong>
+                                    </div>
+                                    <div class="queue-action">
+                                        <span class="action-btn-link"><?= $escape($actionLabel) ?> <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+
+                <section class="superadmin-panel status-panel" aria-labelledby="status-heading">
+                    <div class="panel-header">
+                        <div class="panel-header-title">
+                            <h2 id="status-heading">System Status</h2>
+                        </div>
+                        <span class="continuity-chip <?= $continuityIssueCount === 0 ? 'is-good' : 'is-warn' ?>">
+                            <?= $continuityIssueCount === 0 ? 'Continuity Optimal' : $escape((string)$continuityIssueCount) . ' Irregular' ?>
+                        </span>
                     </div>
-                <?php elseif ($attentionItems === []): ?>
-                    <div class="dashboard-state dashboard-state-empty" role="status">
-                        <i class="bi bi-check-circle" aria-hidden="true"></i>
-                        <div><strong>No platform action required</strong><p><?= $escape($dashboard['message']) ?></p></div>
-                    </div>
-                <?php else: ?>
-                    <div class="triage-list" role="list" aria-label="Open platform issues">
-                        <?php foreach ($attentionItems as $item): ?>
+
+                    <div class="services-group">
+                        <?php foreach (['platform_health', 'ml_health'] as $key): ?>
                             <?php
-                            $categoryLabel = $attentionCategoryLabels[$item['category']] ?? ucfirst(str_replace('_', ' ', $item['category']));
-                            $actionLabel = $attentionActionLabels[$item['category']] ?? 'Review';
-                            $severityIcon = match ($item['severity'] ?? '') {
-                                'critical' => 'bi-exclamation-octagon',
-                                'info' => 'bi-info-circle',
-                                default => 'bi-exclamation-triangle',
-                            };
+                            if (!isset($headlineOrder[$key], $dashboard['headline'][$key])) continue;
+                            [$label, $icon, $dest] = $headlineOrder[$key];
+                            $item = $dashboard['headline'][$key];
+                            $status = (string)($item['status'] ?? 'healthy');
+                            $isHealthy = $status === 'healthy';
                             ?>
-                            <a class="triage-item attention-<?= $escape($item['severity']) ?>"
-                                href="<?= $escape(app_url($item['destination'])) ?>" data-dashboard-action>
-                                <span class="triage-severity" aria-hidden="true"><i class="bi <?= $severityIcon ?>" aria-hidden="true"></i></span>
-                                <span class="triage-copy"><span><?= $escape(ucfirst($item['severity'])) ?> · <?= $escape($categoryLabel) ?></span><strong><?= $escape($item['title']) ?></strong></span>
-                                <span class="triage-action"><?= $escape($actionLabel) ?></span>
-                                <i class="bi bi-chevron-right triage-arrow" aria-hidden="true"></i>
+                            <a class="service-row" href="<?= $escape(app_url($dest)) ?>" data-dashboard-action>
+                                <div class="service-left">
+                                    <i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i>
+                                    <span class="service-name"><?= $escape($label) ?></span>
+                                </div>
+                                <div class="service-right">
+                                    <span class="service-badge <?= $isHealthy ? 'badge-healthy' : 'badge-attention' ?>">
+                                        <span class="service-dot" aria-hidden="true"></span>
+                                        <?= $escape($statusLabel($status)) ?>
+                                    </span>
+                                    <i class="bi bi-chevron-right chevron-icon" aria-hidden="true"></i>
+                                </div>
                             </a>
                         <?php endforeach; ?>
                     </div>
-                <?php endif; ?>
-            </section>
 
-            <?php if ($dashboard['headline'] !== []): ?>
-                <section class="readiness-ledger" aria-labelledby="readiness-title">
-                    <div class="workspace-section-heading readiness-heading">
-                        <div><h2 id="readiness-title">System status</h2></div>
-                        <span class="ledger-summary">Store continuity: <?= $continuityIssueCount === 0 ? 'Nominal' : $escape((string) $continuityIssueCount) . ' need review' ?></span>
+                    <?php if (!empty($dashboard['continuity'])): ?>
+                    <div class="continuity-matrix">
+                        <div class="matrix-title">Store Continuity</div>
+                        <div class="matrix-grid">
+                            <?php foreach ($dashboard['continuity'] as $metric): ?>
+                                <div class="matrix-card <?= ($metric['ok'] ?? false) ? 'matrix-ok' : 'matrix-warn' ?>">
+                                    <div class="matrix-header">
+                                        <span class="matrix-label"><?= $escape($metric['label']) ?></span>
+                                        <span class="matrix-indicator" aria-hidden="true"></span>
+                                    </div>
+                                    <div class="matrix-state">
+                                        <strong><?= ($metric['ok'] ?? false) ? 'Nominal' : 'Review' ?></strong>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
-                    <div class="ledger-grid">
-                        <?php foreach (['platform_health', 'ml_health'] as $key): ?>
-                            <?php
-                            [$label, $icon] = $headlineOrder[$key];
-                            $item = $dashboard['headline'][$key];
-                            $detail = ($item['status'] ?? '') === 'healthy' ? 'All checks nominal' : ($item['detail'] ?? 'Attention required');
-                            ?>
-                            <article class="ledger-item <?= $escape($statusTone((string) $item['status'])) ?>">
-                                <i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i><div><span><?= $escape($label) ?></span><strong><?= $escape($statusLabel((string) $item['status'])) ?></strong><small><?= $escape($detail) ?></small></div>
-                            </article>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php endif; ?>
                 </section>
-            <?php endif; ?>
+
+            </div>
+
         </main>
     </div>
     <script>

@@ -598,7 +598,7 @@ html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
 .cashier-stock-issues-page :is(input, select, textarea):focus-visible {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
-    outline: none;
+    outline: 2px solid transparent;
 }
 .cashier-stock-issues-page .form-group label {
     display: inline-flex;

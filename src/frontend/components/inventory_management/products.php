@@ -1309,7 +1309,7 @@ foreach ($products as $product) {
                                         <td class="product-cell">
                                             <div class="product-name-line">
                                                 <span class="product-thumb">
-                                                    <?php if (!empty($product['product_image'])): ?><img alt="" width="34" height="34" loading="lazy" src="<?= htmlspecialchars($product['product_image']) ?>" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'"><?php else: ?><i class="bi bi-box-seam" aria-hidden="true"></i><?php endif; ?>
+                                                    <?php if (!empty($product['product_image'])): ?><img alt="" width="34" height="34" loading="lazy" src="<?= htmlspecialchars($product['product_image']) ?>" data-icon-fallback><?php else: ?><i class="bi bi-box-seam" aria-hidden="true"></i><?php endif; ?>
                                                 </span>
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
@@ -2096,8 +2096,16 @@ foreach ($products as $product) {
             }
         }
 
+        document.addEventListener('error', event => {
+            const img = event.target;
+            if (!(img instanceof HTMLImageElement) || !img.hasAttribute('data-icon-fallback')) return;
+            const icon = img.nextElementSibling?.matches('i.bi') ? img.nextElementSibling : document.createElement('i');
+            icon.className = 'bi bi-box-seam'; icon.setAttribute('aria-hidden', 'true'); icon.hidden = false;
+            if (icon.isConnected) img.hidden = true; else img.replaceWith(icon);
+        }, true);
+
         function productPhotoPreview(product) {
-            return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" onerror="this.hidden=true;this.nextElementSibling.hidden=false">` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>`;
+            return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" width="160" height="160" data-icon-fallback>` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>`;
         }
 
         function renderProductDrawerReadOnly(product) {
@@ -2492,7 +2500,7 @@ foreach ($products as $product) {
             const thumb = row.querySelector('.product-thumb');
             if (thumb) {
                 if (product.product_image) {
-                    thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<i class=&quot;bi bi-box-seam&quot; aria-hidden=&quot;true&quot;></i>'">`;
+                    thumb.innerHTML = `<img src="${escapeHtml(product.product_image)}" alt="" width="40" height="40" loading="lazy" data-icon-fallback>`;
                 } else {
                     thumb.innerHTML = '<i class="bi bi-box-seam" aria-hidden="true"></i>';
                 }

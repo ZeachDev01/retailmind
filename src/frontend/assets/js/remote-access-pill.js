@@ -27,7 +27,8 @@
             wrappers.forEach(wrapper => {
                 const trigger = wrapper.querySelector('[data-remote-pill-trigger]');
                 const label = wrapper.querySelector('.remote-status-label');
-                const badge = wrapper.querySelector('[data-remote-badge]');
+                const badges = wrapper.querySelectorAll('[data-remote-badge]');
+                const dots = wrapper.querySelectorAll('.remote-status-dot');
                 const desc = wrapper.querySelector('[data-remote-desc]');
                 const urlRow = wrapper.querySelector('[data-remote-url-row]');
                 const urlInput = wrapper.querySelector('[data-remote-url-input]');
@@ -41,11 +42,15 @@
                 if (label) {
                     label.textContent = pillLabel;
                 }
-                if (badge) {
+                badges.forEach(badge => {
                     badge.textContent = statusText;
                     badge.classList.toggle('badge-online', isOnline);
                     badge.classList.toggle('badge-offline', !isOnline);
-                }
+                });
+                dots.forEach(dot => {
+                    dot.classList.toggle('is-online', isOnline);
+                    dot.classList.toggle('is-offline', !isOnline);
+                });
                 if (desc) {
                     desc.textContent = descText;
                 }
@@ -127,7 +132,14 @@
             const feedback = wrapper.querySelector('[data-remote-feedback]');
             const urlInput = wrapper.querySelector('[data-remote-url-input]');
 
-            if (trigger && popover) {
+            if (wrapper.tagName && wrapper.tagName.toLowerCase() === 'details') {
+                wrapper.addEventListener('toggle', function () {
+                    if (trigger) trigger.setAttribute('aria-expanded', String(wrapper.open));
+                    if (wrapper.open) {
+                        fetchStatus();
+                    }
+                });
+            } else if (trigger && popover) {
                 trigger.addEventListener('click', function (e) {
                     e.stopPropagation();
                     const wasOpen = !popover.classList.contains('u-hidden');

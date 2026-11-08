@@ -52,7 +52,7 @@ final class MigrationRunner
         return array_values(array_filter($this->available(), static fn(array $migration): bool => !isset($applied[$migration['key']])));
     }
 
-    public function runPending(callable $output = null): int
+    public function runPending(?callable $output = null): int
     {
         $this->ensureRepository();
         $lockName = null;

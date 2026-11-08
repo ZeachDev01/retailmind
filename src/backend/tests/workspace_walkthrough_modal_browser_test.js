@@ -105,7 +105,7 @@ const fixture = (action, extra) => {
                 {path: 'user_manager/user_manager.php', topic: 'user_manager', step: 2, trigger: '#openUserModal', modal: '#userModalOverlay'},
                 {path: 'user_manager/user_manager.php', topic: 'user_manager', step: 3, trigger: '.open-user-drawer', modal: '#userDrawerOverlay'},
                 {path: 'administrator/store_calendar.php', topic: 'store_calendar', step: 2, trigger: '#weekly-schedule-btn', modal: '#weekly-schedule-modal'},
-                {path: 'administrator/store_calendar.php', topic: 'store_calendar', step: 3, trigger: '#record-date-btn', modal: '#calendar-editor'}
+                {path: 'administrator/store_calendar.php', topic: 'store_calendar', step: 3, trigger: '.calendar-day-cell:not(.is-empty)', modal: '#calendar-editor'}
             ]) {
                 await page.goto(origin + '/components/' + entry.path + '?guidance=' + entry.topic + '&replay=1');
                 await page.locator('#guidance-dock').waitFor();

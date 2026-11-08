@@ -283,3 +283,5 @@
 
 /* Source: frontend\modules\system_administrator\system_health.php */
 .health-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin-bottom:1.5rem}.health-check{display:grid;grid-template-columns:auto 1fr;gap:.9rem;align-items:start;padding:1rem 0;border-bottom:1px solid var(--border)}.health-check:last-child{border-bottom:0}.health-icon{font-size:1.25rem;line-height:1}.health-icon.healthy{color: var(--theme-success-text, #15803d)}.health-icon.warning{color: var(--theme-warning-text, #b45309)}.health-icon.critical{color: var(--theme-danger-text, #b91c1c)}.health-detail{margin:.25rem 0 0;color:var(--muted);overflow-wrap:anywhere}.health-category{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}@media(max-width:700px){.health-summary{grid-template-columns:1fr}}
+
+.w-full { width: 100%; }

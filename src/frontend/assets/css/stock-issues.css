@@ -120,7 +120,7 @@
     display: inline-flex;
     align-items: center;
     gap: .5rem;
-    transition: all 150ms ease;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 .stock-issues-page .stock-status-pill:hover {
     border-color: var(--primary);
@@ -430,4 +430,12 @@
     .stock-issues-page .review-actions { display:grid; grid-template-columns:1fr; }
     .stock-issues-page .review-actions :is(button, .btn) { width:100%; }
     .stock-issues-page .issue-history > summary h2 { font-size:1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stock-issues-page *, .stock-issues-page ::before, .stock-issues-page ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }

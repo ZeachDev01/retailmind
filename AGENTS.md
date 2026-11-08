@@ -3,7 +3,7 @@
 This repository uses **Caveman** (high-density, token-efficient voice) and **Ponytail** (minimalist, anti-overengineering engineering) disciplines.
 
 ## Working Tree Guardrail
-- Preserve user WIP in the root working tree (`c:\laragon\www\retailmind`): run multi-ticket integration merges in a dedicated `.worktrees/integration-*` worktree, and never run `git stash`, `git checkout --`, `git restore`, or `git reset` against the root working tree.
+- Preserve user WIP in the root working tree (`c:\xampp\htdocs\retailmind`): run multi-ticket integration merges in a dedicated `.worktrees/integration-*` worktree, and never run `git stash`, `git checkout --`, `git restore`, or `git reset` against the root working tree.
 
 ## Ponytail: The 7-Step Minimalism Ladder
 Before writing any code, walk down this ladder and stop at the first working step:
@@ -24,10 +24,11 @@ Before writing any code, walk down this ladder and stop at the first working ste
 - If critical safety or security risk, warn clearly and directly.
 
 ## Context Pointers
-- Workspace routes, views, modals, scripts, & services: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
-- Coding standards for review: [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
+- Workspace routes, views, modals, CSS bundle sources (`build_styles.php`), & contract test needles: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
+- Review rules, UI/UX density standards, & accessibility gates: [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
+- Fast verification: `npm run check` (runs stylesheet bundle check, view markup audit, and smoke contracts). For layout debugging, query `getBoundingClientRect()` via Playwright instead of scraping screenshots.
 
-## Available Skills & Hooks
+## Available Skills
 - `/ponytail`: Apply 7-step minimalism ladder.
 - `/ponytail-review`: Hunt for over-engineering and dead abstractions.
 - `/ponytail-audit`: Audit repo for premature complexity.
@@ -39,8 +40,3 @@ Before writing any code, walk down this ladder and stop at the first working ste
 - `/ultracave`: Extreme linguistic compression tier.
 - `/megacave`: High-density classical format.
 - `/caveman-stats`: Show token optimization metrics.
-
-Hooks are configured in `.agents/hooks.json` and run automatically on session start and pre-invocation.
-Mode switchers:
-- `node .agents/hooks/caveman-activate.js [caveman|ultracave|megacave|off]`
-- `node .agents/hooks/ponytail-activate.js [full|lite|ultra|off]`

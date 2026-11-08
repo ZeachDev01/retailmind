@@ -150,17 +150,17 @@ function audit_log_table_cells(array $log): array
         $fullName = trim((string)($log['display_name'] ?? ''));
         $username = trim((string)($log['username'] ?? ''));
         if ($fullName !== '' && $fullName !== $username) {
-            $user = '<strong>' . htmlspecialchars($fullName) . '</strong><small>@' . htmlspecialchars($username) . '</small>';
+            $user = '<div class="audit-user-cell"><strong class="audit-user-name">' . htmlspecialchars($fullName) . '</strong><span class="audit-user-handle">@' . htmlspecialchars($username) . '</span></div>';
         } else {
-            $user = '<strong>' . htmlspecialchars($username ?: 'User #' . $log['user_id']) . '</strong>';
+            $user = '<div class="audit-user-cell"><strong class="audit-user-name">' . htmlspecialchars($username ?: 'User #' . $log['user_id']) . '</strong></div>';
         }
     } else {
-        $user = '<em>System / Unknown</em>';
+        $user = '<div class="audit-user-cell"><span class="audit-user-system">System</span></div>';
     }
     ob_start();
     ?>
     <button type="button" class="audit-details-trigger btn btn-quiet btn-small"
-        aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>">View details</button>
+        aria-label="<?= htmlspecialchars('View details for ' . $log['action'] . ' at ' . $formattedTimestamp) ?>"><i class="bi bi-layout-sidebar-reverse" aria-hidden="true"></i> Details</button>
     <template class="audit-details-template">
         <dl class="audit-details-content">
             <div class="audit-detail-field">
@@ -192,14 +192,14 @@ function audit_log_table_cells(array $log): array
     <?php
     $details = (string)ob_get_clean();
     return [
-        htmlspecialchars($formattedTimestamp),
+        '<span class="audit-date-cell">' . htmlspecialchars($formattedTimestamp) . '</span>',
         $user,
         '<span class="audit-action-badge ' . audit_log_action_class((string)$log['action']) . '">' . htmlspecialchars((string)$log['action']) . '</span>',
         '<a class="audit-category-filter" href="' . htmlspecialchars(audit_log_category_filter_url((string)$log['category'])) . '" aria-label="' .
             htmlspecialchars('Select category ' . $log['category']) . '">' .
             htmlspecialchars(ucwords(str_replace('_', ' ', (string)$log['category']))) . '</a>',
-        htmlspecialchars((string)($log['module'] ?? '-')),
-        htmlspecialchars((string)($log['record_id'] ?? '-')),
+        '<span class="audit-module-cell">' . htmlspecialchars((string)($log['module'] ?? '-')) . '</span>',
+        '<span class="audit-code">' . htmlspecialchars((string)($log['record_id'] ?? '-')) . '</span>',
         $details,
     ];
 }
@@ -341,9 +341,8 @@ if ($dateTo !== '') {
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
             <header class="page-heading topbar">
-                <div>
+                <div class="page-heading-title">
                     <h1><?= htmlspecialchars($pageTitle) ?></h1>
-                    <p class="page-subtitle u-text-muted"><?= $canViewPlatformAudit ? 'System security, authentication, and platform configuration audit trail' : 'Store activity, user operations, and inventory event log' ?></p>
                 </div>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
@@ -361,38 +360,44 @@ if ($dateTo !== '') {
 
             <?php if ($activeFilters !== []): ?>
                 <aside class="active-filters-bar" aria-label="Applied filters">
-                    <span class="active-filters-label"><i class="bi bi-funnel-fill" aria-hidden="true"></i> Filtered by:</span>
-                    <?php foreach ($activeFilters as $filter): ?>
-                        <span class="tag tag-warning"><?= htmlspecialchars($filter['label']) ?>: <strong><?= htmlspecialchars($filter['value']) ?></strong></span>
-                    <?php endforeach; ?>
-                    <a href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>" class="btn-clear-filters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</a>
+                    <span class="active-filters-label"><i class="bi bi-funnel" aria-hidden="true"></i> Filters</span>
+                    <div class="active-filters-list">
+                        <?php foreach ($activeFilters as $filter): ?>
+                            <span class="filter-chip"><span class="filter-chip-key"><?= htmlspecialchars($filter['label']) ?></span><strong class="filter-chip-val"><?= htmlspecialchars($filter['value']) ?></strong></span>
+                        <?php endforeach; ?>
+                    </div>
+                    <a href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>" class="btn-clear-filters" aria-label="Clear active filters"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear</a>
                 </aside>
             <?php endif; ?>
 
             <div class="audit-log-stats">
                 <div class="stat-card with-icon">
-                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
-                    <div class="value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= $matchingRecordCount ?></div>
-                    <div class="label">Matching Records</div>
+                    <div class="stat-meta">
+                        <span class="stat-label">Matching Records</span>
+                        <span class="stat-icon" aria-hidden="true"><i class="bi bi-card-checklist"></i></span>
+                    </div>
+                    <div class="stat-value" id="matchingRecordsCount" aria-live="polite" aria-atomic="true"><?= $matchingRecordCount ?></div>
                 </div>
                 <div class="stat-card with-icon success">
-                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-person-check-fill"></i></span>
-                    <div class="value"><?= $activeUserCount ?></div>
-                    <div class="label">Active Users</div>
+                    <div class="stat-meta">
+                        <span class="stat-label">Active Users</span>
+                        <span class="stat-icon" aria-hidden="true"><i class="bi bi-person-check-fill"></i></span>
+                    </div>
+                    <div class="stat-value"><?= $activeUserCount ?></div>
                 </div>
                 <div class="stat-card with-icon">
-                    <span class="stat-icon" aria-hidden="true"><i class="bi bi-boxes"></i></span>
-                    <div class="value"><?= count($modules) ?></div>
-                    <div class="label">Logged Modules</div>
+                    <div class="stat-meta">
+                        <span class="stat-label">Logged Modules</span>
+                        <span class="stat-icon" aria-hidden="true"><i class="bi bi-boxes"></i></span>
+                    </div>
+                    <div class="stat-value"><?= count($modules) ?></div>
                 </div>
             </div>
 
             <?php if ($actorRole === 'super_admin'): ?>
                 <section class="dashboard-section audit-table-card" id="failed-sign-in-review" aria-labelledby="sign-in-review-title">
                     <div class="section-header">
-                        <div>
-                            <h2 id="sign-in-review-title"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Review failed sign-ins</h2>
-                        </div>
+                        <h2 id="sign-in-review-title"><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Failed Sign-ins<?php if ($pendingSignInCount > 0): ?><span class="section-count-badge"><?= $pendingSignInCount ?></span><?php endif; ?></h2>
                     </div>
                     <?php if ($reviewMessage !== ''): ?>
                         <p class="alert tag-success" role="status"><?= htmlspecialchars($reviewMessage) ?></p>
@@ -401,18 +406,18 @@ if ($dateTo !== '') {
                         <p class="alert tag-danger" role="alert"><?= htmlspecialchars($reviewError) ?></p>
                     <?php endif; ?>
                     <?php if ($pendingSignIns === []): ?>
-                        <p class="u-text-muted">No failed sign-ins need review.</p>
+                        <div class="audit-empty-state"><i class="bi bi-shield-check" aria-hidden="true"></i> No failed sign-ins need review</div>
                     <?php else: ?>
                         <div class="table-wrap audit-log-table-wrap">
-                            <table class="audit-log-table" data-no-smart-table>
-                                <caption>Oldest <?= count($pendingSignIns) ?> unreviewed attempts</caption>
-                                <thead><tr><th scope="col">Date &amp; Time</th><th scope="col">Account / Identifier</th><th scope="col">IP Address</th></tr></thead>
+                            <table class="audit-log-table" data-no-smart-table data-no-ghost-rows aria-label="Audit log entries">
+                                <caption class="visually-hidden">Oldest <?= count($pendingSignIns) ?> unreviewed attempts</caption>
+                                <thead><tr><th scope="col">Date &amp; Time</th><th scope="col">Account</th><th scope="col">IP Address</th></tr></thead>
                                 <tbody>
                                     <?php foreach ($pendingSignIns as $attempt): ?>
                                         <tr>
-                                            <td><?= htmlspecialchars(format_display_datetime($attempt['attempted_at'])) ?></td>
+                                            <td class="audit-date-cell"><?= htmlspecialchars(format_display_datetime($attempt['attempted_at'])) ?></td>
                                             <td><?= htmlspecialchars($attempt['username']) ?></td>
-                                            <td><?= htmlspecialchars($attempt['ip_address']) ?></td>
+                                            <td class="audit-code"><?= htmlspecialchars($attempt['ip_address']) ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -426,19 +431,21 @@ if ($dateTo !== '') {
                                 <div class="form-group">
                                     <label for="sign-in-review-result">Review result <span class="required-mark" aria-hidden="true">*</span></label>
                                     <select id="sign-in-review-result" name="review_result" required>
-                                        <option value="">Choose a result</option>
+                                        <option value="">Choose result</option>
                                         <?php foreach (\App\Attention\FailedSignInReviewService::RESULTS as $value => $label): ?>
                                             <option value="<?= htmlspecialchars($value) ?>" <?= ($_POST['review_result'] ?? '') === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="form-group full">
+                                <div class="form-group">
                                     <label for="sign-in-review-note">Review note <span class="required-mark" aria-hidden="true">*</span></label>
-                                    <textarea id="sign-in-review-note" name="review_note" rows="3" maxlength="1000" placeholder="e.g. Verified IP address ownership; no compromised credentials found…" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
+                                    <textarea id="sign-in-review-note" name="review_note" rows="1" maxlength="1000" placeholder="Add review notes…" required><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                                 </div>
                             </div>
-                            <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I confirm I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
-                            <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save Review and Clear Listed Attempts</button>
+                            <div class="sign-in-review-actions">
+                                <label class="sign-in-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required> <span>I confirm I reviewed the listed attempts. <span class="required-mark" aria-hidden="true">*</span></span></label>
+                                <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save Review &amp; Clear</button>
+                            </div>
                         </form>
                     <?php endif; ?>
                 </section>
@@ -446,14 +453,12 @@ if ($dateTo !== '') {
 
             <section class="dashboard-section audit-table-card" aria-labelledby="audit-table-title">
                 <div class="section-header">
-                    <div>
-                        <h2 id="audit-table-title"><i class="bi bi-journal-text" aria-hidden="true"></i> Record history</h2>
-                    </div>
+                    <h2 id="audit-table-title"><i class="bi bi-journal-text" aria-hidden="true"></i> Record History</h2>
                 </div>
                 <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
                 <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
-                    <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table>
+                    <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table aria-label="Audit logs">
                         <caption class="visually-hidden">System audit log history with event details and timestamps</caption>
                         <thead>
                             <tr>
@@ -476,10 +481,10 @@ if ($dateTo !== '') {
         <aside class="rm-drawer" role="dialog" aria-modal="true" aria-labelledby="auditDetailsTitle">
             <header class="rm-drawer-header">
                 <div>
-                    <h2 id="auditDetailsTitle">Audit record details</h2>
+                    <h2 id="auditDetailsTitle">Record Details</h2>
                     <p id="auditDetailsMeta"></p>
                 </div>
-                <button type="button" class="rm-close" data-close-drawer aria-label="Close audit record details"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <button type="button" class="rm-close" data-close-drawer aria-label="Close record details"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
             <div class="rm-drawer-body" id="auditDetailsBody"></div>
         </aside>
@@ -575,7 +580,7 @@ if ($dateTo !== '') {
                     topStart: null,
                     topEnd: {
                         search: {
-                            placeholder: 'Search all audit activity...'
+                            placeholder: 'Search audit records...'
                         }
                     },
                     bottom: [
@@ -596,12 +601,12 @@ if ($dateTo !== '') {
                 },
                 language: {
                     emptyTable: <?= json_encode($emptyTableCopy, JSON_UNESCAPED_UNICODE) ?>,
-                    search: 'Search:',
-                    searchPlaceholder: 'Search records, users, actions...',
-                    lengthMenu: 'Show _MENU_ records',
-                    info: 'Showing _START_ to _END_ of _TOTAL_ records',
-                    infoEmpty: 'Showing 0 records',
-                    infoFiltered: '(filtered from _MAX_ total)'
+                    search: '',
+                    searchPlaceholder: 'Search audit records...',
+                    lengthMenu: '_MENU_ per page',
+                    info: 'Showing _START_–_END_ of _TOTAL_ records',
+                    infoEmpty: '0 records',
+                    infoFiltered: '(filtered from _MAX_)'
                 }
             });
 

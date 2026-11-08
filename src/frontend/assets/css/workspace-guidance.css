@@ -570,17 +570,38 @@ body.has-guidance-dock:has(.rm-modal-overlay.open, .user-modal-overlay.open, .us
 
 
 .workspace-invitation {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
-    padding: 1.25rem;
+    padding: 1.5rem;
     margin-bottom: 1.5rem;
     border: 1px solid var(--border, #e2e8f0);
-    border-radius: 12px;
-    background: var(--card-bg, #ffffff);
+    border-radius: 16px;
+    background: linear-gradient(135deg, #eff6ff 0%, var(--card-bg, #ffffff) 55%);
     color: var(--text, #1e293b);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    animation: wi-in .5s cubic-bezier(.2, .8, .2, 1) both;
 }
+
+.wi-orb {
+    position: absolute;
+    z-index: -1;
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: .45;
+    animation: wi-drift 9s ease-in-out infinite alternate;
+}
+.wi-orb-a { width: 180px; height: 180px; right: -40px; top: -60px; background: #93c5fd; }
+.wi-orb-b { width: 140px; height: 140px; right: 180px; bottom: -70px; background: #c4b5fd; animation-delay: -4s; }
+
+@keyframes wi-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes wi-drift { to { transform: translate(-24px, 16px); } }
+@keyframes wi-float { 50% { transform: translateY(-4px) rotate(6deg); } }
+@keyframes wi-chip { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+@keyframes wi-nudge { 50% { transform: translateX(3px); } }
 
 .workspace-invitation-content {
     display: flex;
@@ -592,12 +613,14 @@ body.has-guidance-dock:has(.rm-modal-overlay.open, .user-modal-overlay.open, .us
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    background: var(--theme-surface-soft, #f1f5f9);
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: #fff;
     color: var(--primary, #2563eb);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, .18);
     flex-shrink: 0;
+    animation: wi-float 3.5s ease-in-out infinite;
 }
 
 .workspace-invitation-text {
@@ -612,18 +635,90 @@ body.has-guidance-dock:has(.rm-modal-overlay.open, .user-modal-overlay.open, .us
     color: var(--text, #1e293b);
 }
 
-.workspace-invitation-desc {
-    margin: 0 0 .5rem;
-    font-size: .95rem;
-    line-height: 1.5;
-    color: var(--text, #334155);
-    max-width: 72ch;
+.wi-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin: .75rem 0 0;
+    padding: 0;
+    list-style: none;
 }
 
-.workspace-invitation-help-note {
-    margin: 0;
-    font-size: .875rem;
-    color: var(--text-muted, #64748b);
+.wi-steps li {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .75rem;
+    border: 1px solid #dbeafe;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .85);
+    font-size: .85rem;
+    font-weight: 500;
+    color: #1e40af;
+    transition: transform .2s, box-shadow .2s;
+    animation: wi-chip .45s cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(.15s + var(--i) * .08s);
+}
+
+.wi-steps li:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(37, 99, 235, .15);
+}
+
+.wi-steps svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.workspace-invitation-actions .btn-primary:hover .wi-arrow {
+    display: inline-block;
+    animation: wi-nudge .8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .workspace-invitation,
+    .workspace-invitation *,
+    .wi-orb {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+html[data-theme="dark"] .workspace-invitation {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, var(--card-bg, #1e293b) 60%);
+    border-color: var(--border, #334155);
+}
+
+html[data-theme="dark"] .workspace-invitation-icon {
+    background: rgba(37, 99, 235, 0.2);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .4);
+    color: #60a5fa;
+}
+
+html[data-theme="dark"] .wi-steps li {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+}
+
+html[data-theme="dark"] .wi-steps li:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+    border-color: #60a5fa;
+}
+
+html[data-theme="dark"] .wi-orb-a {
+    background: #1d4ed8;
+    opacity: .25;
+}
+
+html[data-theme="dark"] .wi-orb-b {
+    background: #6d28d9;
+    opacity: .25;
 }
 
 .workspace-invitation-actions {

@@ -485,8 +485,8 @@ function create_notification(
     string $type,
     string $title,
     string $message,
-    int $reference_id = null,
-    string $reference_type = null
+    ?int $reference_id = null,
+    ?string $reference_type = null
 ): void {
     require_once __DIR__ . '/../app/Services/NotificationService.php';
     (new NotificationService($pdo))->createNotification($user_id, $type, $title, $message, $reference_id, $reference_type);

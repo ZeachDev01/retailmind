@@ -133,8 +133,8 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
         <form method="GET" class="actions-row history-filters" aria-label="Filter operational history by Philippine date">
             <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
             <input type="hidden" name="length" value="<?= (int)$pageSize ?>">
-            <label>From date <input type="date" name="date_from" value="<?= htmlspecialchars($fromDay ?? '') ?>"></label>
-            <label>To date <input type="date" name="date_to" value="<?= htmlspecialchars($throughDay ?? '') ?>"></label>
+            <label>From date <input type="date" name="date_from" autocomplete="off" value="<?= htmlspecialchars($fromDay ?? '') ?>"></label>
+            <label>To date <input type="date" name="date_to" autocomplete="off" value="<?= htmlspecialchars($throughDay ?? '') ?>"></label>
             <button type="submit" class="btn">Apply dates</button>
             <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/history.php?' . http_build_query(['type' => $type]))) ?>">Clear dates</a>
             <p class="history-timezone"><i class="bi bi-clock" aria-hidden="true"></i> Philippine time &middot; Asia/Manila</p>
@@ -153,7 +153,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                     $saleId = $record['sale_id'] ?? ($type === 'sales' ? $record[$idColumn] : null);
                     if ($saleId && ($type === 'sales' || !empty($record['sale_id']))): ?>
                         <div style="margin-top: 1.25rem;">
-                            <button type="button" class="btn btn-primary" onclick="window.viewReceipt ? window.viewReceipt(<?= (int)$saleId ?>, this) : null">
+                            <button type="button" class="btn btn-primary" data-view-receipt="<?= (int)$saleId ?>">
                                 <i class="bi bi-receipt" aria-hidden="true"></i> View receipt
                             </button>
                         </div>
@@ -552,6 +552,10 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
     });
 
     window.viewReceiptInDrawer = openReceiptView;
+    document.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-view-receipt]');
+        if (btn && window.viewReceipt) window.viewReceipt(Number(btn.dataset.viewReceipt), btn);
+    });
     window.viewReceipt = (saleId, trigger, autoPrint = false) => {
         openReceiptView(saleId, trigger, autoPrint);
     };

@@ -177,7 +177,7 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                             <label for="supplier"><strong>Supplier <span class="pullout-optional">(optional)</span></strong></label>
                             <input type="text"
                                    name="supplier"
-                                   id="supplier"
+                                   id="supplier" autocomplete="off"
                                    class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
                                    value="<?= htmlspecialchars($prefillBatch['supplier'] ?? '') ?>">
                         </div>
@@ -231,20 +231,20 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                 </label>
                                 <input type="number"
                                        name="quantity"
-                                       id="quantity"
+                                       id="quantity" inputmode="numeric" autocomplete="off" aria-describedby="qty-validation-msg"
                                        class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
                                        min="1"
                                        step="1"
-                                       max="<?= $prefillBatch ? (int)$prefillBatch['remaining_quantity'] : '' ?>"
+                                       <?= $prefillBatch ? 'max="' . (int)$prefillBatch['remaining_quantity'] . '"' : '' ?>
                                        required>
-                                <small id="qty-validation-msg" class="text-danger mt-1 block" hidden></small>
+                                <small id="qty-validation-msg" class="text-danger mt-1 block" aria-live="polite" hidden></small>
                             </div>
                             <div id="pullout-pack-group" class="mt-3 grid grid-cols-2 gap-3" hidden>
                                 <div>
                                     <label for="pulled_packs"><strong>Sealed Packs</strong></label>
                                     <input type="number"
                                            name="pulled_packs"
-                                           id="pulled_packs"
+                                           id="pulled_packs" inputmode="numeric" autocomplete="off" aria-describedby="pullout-form-summary"
                                            class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
                                            min="0"
                                            step="1"
@@ -254,13 +254,13 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                                     <label for="pulled_loose"><strong>Loose Pieces</strong></label>
                                     <input type="number"
                                            name="pulled_loose"
-                                           id="pulled_loose"
+                                           id="pulled_loose" inputmode="numeric" autocomplete="off" aria-describedby="pullout-form-summary"
                                            class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
                                            min="0"
                                            step="1"
                                            disabled>
                                 </div>
-                                <small id="pullout-form-summary" class="col-span-2 text-muted"></small>
+                                <small id="pullout-form-summary" class="col-span-2 text-muted" aria-live="polite"></small>
                             </div>
                         </div>
 
@@ -268,14 +268,14 @@ $pulloutHistory = $pulloutService->getPullouts(['limit' => 50]);
                             <label for="reason"><strong>Reason *</strong></label>
                             <input type="text"
                                    name="reason"
-                                   id="reason"
+                                   id="reason" autocomplete="off"
                                    class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]"
                                    required>
                         </div>
 
                         <div class="min-w-0 md:col-span-2">
                             <label for="notes"><strong>Notes <span class="pullout-optional">(optional)</span></strong></label>
-                            <textarea name="notes" id="notes" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2"></textarea>
+                            <textarea name="notes" id="notes" autocomplete="off" class="form-control w-full min-w-0 rounded-lg border border-solid border-[var(--border)] px-3 py-2 focus:border-blue-600 focus:[box-shadow:var(--focus-ring)]" rows="2"></textarea>
                         </div>
 
                         <div class="form-actions md:col-span-2">

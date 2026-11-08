@@ -601,7 +601,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                 <div>
                                     <label style="font-size:10px; display:block;">Packs</label>
                                     <input type="number" class="batch-count-input batch-count-sealed"
-                                           name="batches[${idx}][physical_sealed_quantity]"
+                                           name="batches[${idx}][physical_sealed_quantity]" inputmode="numeric" aria-label="Packs counted, batch ${escapeHtml(bNum)}"
                                            min="0" style="width: 65px;" data-pack-size="${coverage.pack_size}"
                                            data-system-qty="${b.sealed_quantity ?? 0}"
                                            value="${b.sealed_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
@@ -609,7 +609,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                 <div>
                                     <label style="font-size:10px; display:block;">Loose</label>
                                     <input type="number" class="batch-count-input batch-count-loose"
-                                           name="batches[${idx}][physical_loose_quantity]"
+                                           name="batches[${idx}][physical_loose_quantity]" inputmode="numeric" aria-label="Loose pieces counted, batch ${escapeHtml(bNum)}"
                                            min="0" style="width: 65px;"
                                            data-system-qty="${b.loose_quantity ?? 0}"
                                            value="${b.loose_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
@@ -620,7 +620,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     } else {
                         countedCell = `
                             <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
-                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${idx}][physical_quantity]"
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${idx}][physical_quantity]" inputmode="numeric" aria-label="Counted quantity, batch ${escapeHtml(bNum)}"
                                    min="0" style="width: 80px;" data-system-qty="${b.remaining_quantity}"
                                    placeholder="0" <?= $canMutateInventory ? '' : 'readonly' ?>>
                         `;
@@ -694,19 +694,19 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     batchFields = `
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Sealed Packs (x ${activeCoverage.pack_size})</label>
-                            <input type="number" class="batch-count-input batch-count-sealed" name="batches[${key}][physical_sealed_quantity]" min="0" value="0" data-pack-size="${activeCoverage.pack_size}" style="width:100%;">
+                            <input type="number" class="batch-count-input batch-count-sealed" name="batches[${key}][physical_sealed_quantity]" inputmode="numeric" aria-label="Found batch sealed packs" min="0" value="0" data-pack-size="${activeCoverage.pack_size}" style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Loose Pieces</label>
-                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_loose_quantity]" min="0" value="0" style="width:100%;">
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_loose_quantity]" inputmode="numeric" aria-label="Found batch loose pieces" min="0" value="0" style="width:100%;">
                         </div>
-                        <input type="hidden" class="batch-base-qty" name="batches[${key}][physical_quantity]" value="0">
+                        <input type="hidden" class="batch-base-qty" name="batches[${key}][physical_quantity]" inputmode="numeric" aria-label="Found batch counted quantity" value="0">
                     `;
                 } else {
                     batchFields = `
                         <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
                             <label style="font-size:12px;">Counted Quantity *</label>
-                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_quantity]" min="1" required style="width:100%;">
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_quantity]" inputmode="numeric" aria-label="Found batch counted quantity" min="1" required style="width:100%;">
                         </div>
                     `;
                 }
@@ -719,15 +719,15 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         ${batchFields}
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Expiration date (optional)</label>
-                            <input type="date" name="batches[${key}][expiration_date]" style="width:100%;">
+                            <input type="date" name="batches[${key}][expiration_date]" aria-label="Found batch expiration date" style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Batch number / label (optional)</label>
-                            <input type="text" name="batches[${key}][batch_number]" placeholder="e.g. FOUND-01" style="width:100%;">
+                            <input type="text" name="batches[${key}][batch_number]" autocomplete="off" aria-label="Found batch number or label" placeholder="e.g. FOUND-01" style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
                             <label style="font-size:12px;">Notes (optional)</label>
-                            <input type="text" name="batches[${key}][notes]" placeholder="e.g. Unbatched shelf stock" style="width:100%;">
+                            <input type="text" name="batches[${key}][notes]" autocomplete="off" aria-label="Found batch notes" placeholder="e.g. Unbatched shelf stock" style="width:100%;">
                         </div>
                     </div>
                 `;

@@ -18,7 +18,7 @@ window.RetailMindInventoryDrafts = (() => {
         }
         status.textContent = message;
         const close = document.createElement('button'); close.type = 'button'; close.className = 'inventory-draft-dismiss'; close.setAttribute('aria-label', 'Dismiss notice'); close.innerHTML = '&times;'; close.onclick = () => { clearTimeout(noticeTimer); status.remove(); }; status.append(close);
-        status.setAttribute('role', error ? 'alert' : 'status');
+        status.setAttribute('role', error ? 'alert' : 'status'); status.setAttribute('aria-live', error ? 'assertive' : 'polite');
         if (duration > 0) noticeTimer = setTimeout(() => status.remove(), duration);
     }
     function token() { return Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join(''); }
@@ -82,7 +82,7 @@ window.RetailMindInventoryDrafts = (() => {
         try {
             const noticeKey = form.id === 'receiving_form' ? 'retailmind:inventory-notice:v1:' + config.user + ':' + location.pathname : null;
             const showNotice = form.id !== 'add-product-form' && (!noticeKey || !localStorage.getItem(noticeKey));
-            if (showNotice) notice('Keeping unsaved values...');
+            if (showNotice) notice('Keeping unsaved values…');
             const prior = snapshots.get(id) || Promise.resolve();
             const next = prior.catch(() => {}).then(async () => {
                 const draft = await capture(form);

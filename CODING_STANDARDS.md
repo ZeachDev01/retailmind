@@ -17,6 +17,10 @@ These standards govern code review and architecture consistency across the Retai
 - **Tier 2 (Accessibility & Semantics)**: Missing button types, mismatched label `for`/`id`, missing `aria-label` on icon buttons. Enforced via `npm run check:views`.
 - **Tier 3 (Cosmetic Micro-lint)**: Spacing, attribute ordering. Do not block PRs or bundle into unrelated fixes.
 
-## 4. Engineering Minimalism (Ponytail Discipline)
+## 4. UI Redesigns, Stylesheet Bundle & Contract Seams
+- **Stylesheet Bundle**: `src/frontend/assets/css/style.css` is a generated bundle. Edit the 9 source files (`global.css`, `forms.css`, `utilities.css`, `sidebar.css`, `dashboard.css`, `tables.css`, `modals.css`, `products.css`, `responsive.css`) and run `npm run build:styles` (`php src/backend/scripts/build_styles.php`). Verify with `npm run check:styles`.
+- **Glanceable UI Copy**: Keep forms, drawers, and modals self-explanatory at a glance. Avoid verbose helper subtext or redundant descriptions unless required by a contract test.
+- **Contract Needles**: Before restructuring markup in views/modals, check mapped contract tests in [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md) and run `npm run check` after changes to ensure required DOM IDs, `data-*` attributes, and required copy needles remain intact.
+
+## 5. Engineering Minimalism (Ponytail Discipline)
 - Before creating a new helper, class, or service, check [`src/backend/includes/`](src/backend/includes/) and [`src/backend/app/Services/`](src/backend/app/Services/).
-- Preserve user WIP in the root working tree; never run destructive git commands against it.

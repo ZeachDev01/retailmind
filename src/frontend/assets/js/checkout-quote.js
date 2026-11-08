@@ -1,3 +1,4 @@
+const phpFormatter = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 /* A reviewed server quote is separate from the durable checkout attempt. */
 class CheckoutQuote {
     constructor(form) {
@@ -42,7 +43,7 @@ class CheckoutQuote {
         const selected = select.value;
         select.replaceChildren(new Option('No promotion', ''));
         for (const promotion of promotions) {
-            const option = new Option(`${promotion.promotion_name} · ₱${Number(promotion.applied_amount).toFixed(2)}`, String(promotion.promotion_id));
+            const option = new Option(`${promotion.promotion_name} · ${phpFormatter.format(Number(promotion.applied_amount))}`, String(promotion.promotion_id));
             option.dataset.amount = promotion.applied_amount;
             select.add(option);
         }

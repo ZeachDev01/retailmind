@@ -161,8 +161,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                         <?php
                         $hasFormError = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $logReviewError !== '');
                         $resultErrorAttr = $hasFormError && ($_POST['review_result'] ?? '') === '' ? ' aria-invalid="true" aria-describedby="log-review-error"' : '';
-                        $noteDescribedBy = $hasFormError && trim((string)($_POST['review_note'] ?? '')) === '' ? 'log-review-error log-review-note-help' : 'log-review-note-help';
-                        $noteInvalidAttr = $hasFormError && trim((string)($_POST['review_note'] ?? '')) === '' ? ' aria-invalid="true"' : '';
+                        $noteDescribedBy = $hasFormError && trim((string)($_POST['review_note'] ?? '')) === '' ? ' aria-invalid="true" aria-describedby="log-review-error"' : '';
                         $confirmErrorAttr = $hasFormError && ($_POST['review_confirmed'] ?? '') !== '1' ? ' aria-invalid="true" aria-describedby="log-review-error"' : '';
                         ?>
                         <form method="POST" class="application-log-review-form">
@@ -180,8 +179,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                             </div>
                             <div class="form-group">
                                 <label for="log-review-note">Review note <span class="required-indicator" aria-hidden="true">*</span></label>
-                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" placeholder="e.g. Investigated stack trace; verified database migration resolved the warning…" required aria-describedby="<?= $noteDescribedBy ?>"<?= $noteInvalidAttr ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
-                                <p id="log-review-note-help" class="section-description">Describe root cause, resolution, or verification details. Max 1,000 characters.</p>
+                                <textarea id="log-review-note" name="review_note" rows="3" maxlength="1000" placeholder="Root cause, resolution, or verification details (max 1,000 chars)..." required<?= $noteDescribedBy ?>><?= htmlspecialchars((string)($_POST['review_note'] ?? '')) ?></textarea>
                             </div>
                             <label class="application-log-review-confirm"><input type="checkbox" name="review_confirmed" value="1" required<?= ($_POST['review_confirmed'] ?? '') === '1' ? ' checked' : '' ?><?= $confirmErrorAttr ?>> <span>I investigated these entries and verified the result. <span class="required-indicator" aria-hidden="true">*</span></span></label>
                             <button type="submit" class="btn btn-primary">Save Review and Acknowledge Log</button>

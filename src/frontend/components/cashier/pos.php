@@ -621,7 +621,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" autofocus inputmode="search" spellcheck="false">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false">
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
@@ -860,6 +860,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
 
 <script src="<?= app_url('assets/js/checkout-attempt.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-attempt.js') ?>"></script>
 <script src="<?= app_url('assets/js/checkout-quote.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-quote.js') ?>"></script>
+<style>.conflict-qty-input{width:60px;padding:.25rem}</style>
 <script>
 setTimeout(() => document.querySelector('.pos-register-bar')?.remove(), 8000);
 
@@ -883,6 +884,7 @@ $catalogEtag = '"' . hash('sha256', json_encode($catalogProducts, JSON_THROW_ON_
 const posCatalogPreload = <?= json_encode($catalogProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
 const skuInput = document.getElementById('sku-input');
+if (skuInput && window.matchMedia('(pointer: fine)').matches) skuInput.focus();
 const recentScan = document.getElementById('recent-scan');
 const addCodeBtn = document.getElementById('add-code-btn');
 const checkoutForm = document.getElementById('checkout-form');
@@ -1697,6 +1699,19 @@ function schedulePromotionRefresh() {
     }, 150);
 }
 
+document.getElementById('cart-body')?.addEventListener('click', (event) => {
+    const btn = event.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.action === 'cart-dec') changeCartQty(id, -1);
+    else if (btn.dataset.action === 'cart-inc') changeCartQty(id, 1);
+    else if (btn.dataset.action === 'cart-remove') removeFromCart(id);
+});
+document.getElementById('cart-body')?.addEventListener('change', (event) => {
+    const input = event.target.closest('input[data-action="cart-set"]');
+    if (input) updateCartQty(input.dataset.id, Number(input.value));
+});
+
 function renderCart() {
     schedulePromotionRefresh();
     const cartBody = document.getElementById('cart-body');
@@ -1724,9 +1739,9 @@ function renderCart() {
 
             rows += `<tr role="row">
                 <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
-                <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', -1)" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" onchange="updateCartQty('${escapedId}', Number(this.value))" aria-label="${escapeHtml(item.name)} quantity" autocomplete="off" inputmode="numeric"><button type="button" class="qty-btn" onclick="changeCartQty('${escapedId}', 1)" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
+                <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" data-action="cart-dec" data-id="${escapedId}" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" data-action="cart-set" data-id="${escapedId}" aria-label="${escapeHtml(item.name)} quantity" autocomplete="off" inputmode="numeric"><button type="button" class="qty-btn" data-action="cart-inc" data-id="${escapedId}" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
                 <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
-                <td role="cell"><button type="button" class="remove-item-btn" onclick="removeFromCart('${escapedId}')" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
+                <td role="cell"><button type="button" class="remove-item-btn" data-action="cart-remove" data-id="${escapedId}" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
             </tr>`;
         }
     }
@@ -2022,9 +2037,8 @@ function renderStockConflictItems() {
         if (available > 0) {
             html += `<div style="display:inline-flex; align-items:center; gap:0.25rem;">
                 <input type="number" min="1" max="${available}" value="${Math.min(currentInCart || available, available)}"
-                       class="conflict-qty-input" data-conflict-key="${escapedKey}" style="width:60px; padding:0.25rem;"
-                       aria-label="Quantity for ${escapeHtml(name)}" autocomplete="off" inputmode="numeric"
-                       onchange="updateConflictItemQty('${escapedKey}', Number(this.value), ${available})">
+                       class="conflict-qty-input" data-conflict-key="${escapedKey}"
+                       aria-label="Quantity for ${escapeHtml(name)}" autocomplete="off" inputmode="numeric">
                 <button type="button" class="btn btn-sm btn-secondary adjust-conflict-qty-btn" onclick="adjustConflictItemQty('${escapedKey}', ${available})">Set to ${available}</button>
                 <button type="button" class="btn btn-sm btn-danger remove-conflict-btn" onclick="removeConflictItem('${escapedKey}')">Remove</button>
             </div>`;
@@ -2039,6 +2053,11 @@ function renderStockConflictItems() {
     html += `</tbody></table>`;
     container.innerHTML = html;
 }
+
+document.getElementById('stock-conflict-content')?.addEventListener('change', (event) => {
+    const input = event.target.closest('.conflict-qty-input');
+    if (input) updateConflictItemQty(input.dataset.conflictKey, Number(input.value), Number(input.max));
+});
 
 function updateConflictItemQty(lineKey, qty, maxAvailable) {
     const validQty = Math.max(1, Math.min(Number(qty) || 1, maxAvailable));

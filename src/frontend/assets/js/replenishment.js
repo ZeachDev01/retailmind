@@ -69,14 +69,12 @@
                 onHand: Number(row.dataset.onHand),
                 quantity: Number(row.dataset.quantity),
                 expectedSales: row.dataset.expectedSales,
-                forecastPeriod: row.dataset.forecastPeriod,
-                html: row.outerHTML
+                forecastPeriod: row.dataset.forecastPeriod
             }))
         };
     }
 
     function renderRow(item) {
-        if (item.html) return item.html;
         const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const stockStatus = item.stock || 'In stock';
         const stockClass = stockStatus === 'Out of stock' ? 'tag-danger' : (stockStatus === 'Low stock' ? 'tag-warning' : 'tag-success');

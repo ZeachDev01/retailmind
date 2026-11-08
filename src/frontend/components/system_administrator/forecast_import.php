@@ -183,7 +183,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <details class="forecast-details"><summary id="format-heading">CSV columns &amp; import rules</summary>
 
             <div class="table-wrap">
-                <table class="format-table">
+                <table class="format-table" aria-label="Forecast import file format">
                     <thead>
                         <tr>
                             <th scope="col">Column</th>

@@ -219,7 +219,7 @@ $isFilteredActivity = $report->isFilteredActivity;
                 <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
                 <div class="gcash-field">
                     <label for="gcash-reporting-period" class="gcash-filter-label"><i class="bi bi-clock-history" aria-hidden="true"></i> Reporting period</label>
-                    <select id="gcash-reporting-period" name="period" class="form-control">
+                    <select id="gcash-reporting-period" name="period" class="form-control" autocomplete="off">
                         <?php foreach (['today' => 'Today', 'month_to_date' => 'Month-to-date', 'custom' => 'Custom dates'] as $value => $label): ?>
                             <option value="<?= $value ?>" <?= $period === $value ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
@@ -235,7 +235,7 @@ $isFilteredActivity = $report->isFilteredActivity;
                 </div>
                 <div class="gcash-field gcash-filter-cashier">
                     <label for="filter-cashier-id" class="gcash-filter-label"><i class="bi bi-person-badge" aria-hidden="true"></i> Cashier</label>
-                    <select id="filter-cashier-id" name="cashier_id" class="form-control">
+                    <select id="filter-cashier-id" name="cashier_id" class="form-control" autocomplete="off">
                         <option value="">All Cashiers</option>
                         <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
                             <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
@@ -283,13 +283,6 @@ $isFilteredActivity = $report->isFilteredActivity;
                     </div>
                 </div>
                 <?php require __DIR__ . '/../../../backend/app/Views/gcash/transactions_summary.php'; ?>
-            </div>
-            <div class="gcash-tab-guide">
-                <div class="gcash-tab-guide-icon gcash-guide-info"><i class="bi bi-journal-text" aria-hidden="true"></i></div>
-                <div class="gcash-tab-guide-content">
-                    <strong class="gcash-tab-guide-title">Store-Wide GCash Transaction Journal</strong>
-                    <span class="gcash-tab-guide-desc">Every customer cash-in and cash-out processed by cashiers across all shifts. Filter by date or type, or search by reference number to audit funds and reprint customer receipts.</span>
-                </div>
             </div>
             <div class="gcash-transaction-filters" id="gcash-transaction-filters">
                 <div class="gcash-transaction-local-filters">
@@ -375,13 +368,6 @@ $isFilteredActivity = $report->isFilteredActivity;
                     <div>
                         <h2 id="gcash-money-title">Money history</h2>
                     </div>
-                </div>
-            </div>
-            <div class="gcash-tab-guide">
-                <div class="gcash-tab-guide-icon gcash-guide-info"><i class="bi bi-journal-text" aria-hidden="true"></i></div>
-                <div class="gcash-tab-guide-content">
-                    <strong class="gcash-tab-guide-title">Audit Trail &amp; Detailed Movement Ledger</strong>
-                    <span class="gcash-tab-guide-desc">Chronological history of all drawer fundings, customer exchanges, cashier emergency handovers, and manager balance corrections for the store.</span>
                 </div>
             </div>
             <form method="get" class="gcash-money-filters">

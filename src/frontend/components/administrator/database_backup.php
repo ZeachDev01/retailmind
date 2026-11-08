@@ -175,7 +175,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <span class="backup-record-count"><?= $historyTotal ?> <?= $historyTotal === 1 ? 'record' : 'records' ?></span>
                 </div>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
-                    <table data-no-smart-table>
+                    <table data-no-smart-table aria-label="Backup history">
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Backup date</th>

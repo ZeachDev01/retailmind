@@ -60,7 +60,7 @@ const ui = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8');
             assert.ok(box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= 901);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
             await page.locator('#calendar-editor [data-close-modal]').first().click();
-            await page.locator('#record-date-btn').click();
+            await page.locator('[data-date="2026-10-08"]').click();
             await page.locator('#status').selectOption('closed');
             assert.deepEqual(await page.locator('#calendar-form').evaluate(form => {
                 const data = new FormData(form);

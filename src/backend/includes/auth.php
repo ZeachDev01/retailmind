@@ -463,6 +463,12 @@ if (!function_exists('is_remote_request')) {
 
 function require_local_request(string $message = 'This action is not available during remote monitoring.'): void
 {
+    $allowRemote = class_exists(\App\Core\Environment::class)
+        ? (\App\Core\Environment::get('ALLOW_REMOTE_WORKSPACES') ?? env('ALLOW_REMOTE_WORKSPACES'))
+        : getenv('ALLOW_REMOTE_WORKSPACES');
+    if ($allowRemote && filter_var($allowRemote, FILTER_VALIDATE_BOOLEAN)) {
+        return;
+    }
     if (is_remote_request()) {
         http_response_code(403);
         if (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) {
@@ -477,6 +483,12 @@ function require_local_request(string $message = 'This action is not available d
 
 function current_authorization_context(?PDO $pdo = null): bool
 {
+    $allowRemote = class_exists(\App\Core\Environment::class)
+        ? (\App\Core\Environment::get('ALLOW_REMOTE_WORKSPACES') ?? env('ALLOW_REMOTE_WORKSPACES'))
+        : getenv('ALLOW_REMOTE_WORKSPACES');
+    if ($allowRemote && filter_var($allowRemote, FILTER_VALIDATE_BOOLEAN)) {
+        return false;
+    }
     return is_remote_request();
 }
 

@@ -121,7 +121,7 @@ foreach (['inventory_manager', 'cashier'] as $nonAdminRole) {
     );
 }
 
-echo "\n=== 2. Global Header Pill Rendering Across Roles in sidebar.php ===\n";
+echo "\n=== 2. Navbar Absence Contract Across Roles in sidebar.php ===\n";
 
 $sidebarFile = $root . '/src/frontend/components/sidebar.php';
 $assert(file_exists($sidebarFile), "sidebar.php exists at {$sidebarFile}");
@@ -129,21 +129,32 @@ $assert(file_exists($sidebarFile), "sidebar.php exists at {$sidebarFile}");
 $tunnelDir = $root . '/src/backend/storage/tunnel';
 $testPidFile = $tunnelDir . '/tunnel.pid';
 $testUrlFile = $tunnelDir . '/tunnel.url';
+$testLogFile = $tunnelDir . '/tunnel.log';
+$testLogBak = $tunnelDir . '/tunnel.log.bak';
 
-$setTestTunnelState = function (bool $online, ?string $url = null) use ($tunnelDir, $testPidFile, $testUrlFile): void {
+$setTestTunnelState = function (bool $online, ?string $url = null) use ($tunnelDir, $testPidFile, $testUrlFile, $testLogFile, $testLogBak): void {
     if (!is_dir($tunnelDir)) {
         @mkdir($tunnelDir, 0755, true);
     }
     if ($online) {
+        if (file_exists($testLogFile) && !file_exists($testLogBak)) {
+            @rename($testLogFile, $testLogBak);
+        }
         file_put_contents($testPidFile, (string)getmypid());
-        if ($url !== null) {
+        if ($url !== null && $url !== '') {
             file_put_contents($testUrlFile, $url);
+            file_put_contents($testLogFile, "Your quick Tunnel has been created! Visit it at: {$url}\n");
         } else {
             @unlink($testUrlFile);
+            file_put_contents($testLogFile, "Starting tunnel daemon, waiting for connection...\n");
         }
     } else {
         @unlink($testPidFile);
         @unlink($testUrlFile);
+        @unlink($testLogFile);
+        if (file_exists($testLogBak)) {
+            @rename($testLogBak, $testLogFile);
+        }
     }
 };
 
@@ -223,20 +234,72 @@ foreach (array_keys($roleConfigs) as $roleName) {
     libxml_clear_errors();
     $xpath = new DOMXPath($doc);
 
-    // Global desktop topbar
-    $desktopPill = $xpath->query('//div[contains(@class, "global-topbar")]//*[@data-remote-pill-trigger]');
-    $assert($desktopPill->length >= 1, "Role '{$roleName}' has remote access pill in global-topbar");
+    // Desktop sidebar footer: pill must NOT be rendered in navigation
+    $desktopPill = $xpath->query('//div[contains(@class, "sidebar-footer")]//*[@data-remote-pill-trigger]');
+    $assert($desktopPill->length === 0, "Role '{$roleName}' does not have remote access pill in sidebar-footer");
 
-    // Mobile topbar
+    // Mobile topbar: pill must NOT be rendered in navigation
     $mobilePill = $xpath->query('//div[contains(@class, "admin-mobile-topbar")]//*[@data-remote-pill-trigger]');
-    $assert($mobilePill->length >= 1, "Role '{$roleName}' has remote access pill in admin-mobile-topbar");
+    $assert($mobilePill->length === 0, "Role '{$roleName}' does not have remote access pill in admin-mobile-topbar");
+
+    // Global topbar: pill must NOT be rendered in topbar
+    $globalPill = $xpath->query('//div[contains(@class, "global-topbar")]//*[@data-remote-pill-trigger]');
+    $assert($globalPill->length === 0, "Role '{$roleName}' does not have remote access pill in global-topbar");
 }
 
-echo "\n=== 3. Online vs Offline Visual States & Markup Contract ===\n";
+echo "\n=== 3. Online vs Offline Visual States & Markup Contract (Component Helper) ===\n";
+
+$renderPillHelper = function (bool $online, string $url = '', string $role = 'admin') use ($root, $sidebarFile): string {
+    $wrapperFile = sys_get_temp_dir() . '/pill_render_' . uniqid() . '.php';
+    $rootSafe = var_export($root, true);
+    $sidebarSafe = var_export($sidebarFile, true);
+    $roleSafe = var_export($role, true);
+    $onlineSafe = $online ? 'true' : 'false';
+    $urlSafe = var_export($url, true);
+
+    $code = <<<PHP
+<?php
+define('APP_ROOT', {$rootSafe});
+\$_SERVER['DOCUMENT_ROOT'] = {$rootSafe} . '/src/frontend';
+\$_SERVER['REQUEST_METHOD'] = 'GET';
+\$_SERVER['REQUEST_URI'] = '/retailmind/components/administrator/dashboard.php';
+\$_SERVER['HTTP_HOST'] = '127.0.0.1';
+
+function current_role(): ?string { return {$roleSafe}; }
+function current_roles(): array { return [{$roleSafe}]; }
+function current_workspace_roles(?string \$primaryRole = null): array { return [{$roleSafe}]; }
+function is_logged_in(): bool { return true; }
+function app_url(string \$path = ''): string { return '/retailmind/' . ltrim(\$path, '/'); }
+function profile_avatar_html(): string { return ''; }
+function csrf_token(): string { return 'mock-csrf-token'; }
+
+\$_SESSION = [
+    'user_id' => 101,
+    'username' => 'test_' . {$roleSafe},
+    'display_name' => 'Test User',
+    'role' => {$roleSafe},
+    'roles' => [{$roleSafe}],
+];
+
+ob_start();
+require_once {$sidebarSafe};
+ob_end_clean();
+
+echo sidebar_render_remote_access_pill('desktop', {$roleSafe}, {$onlineSafe}, {$urlSafe});
+PHP;
+
+    file_put_contents($wrapperFile, $code);
+    $output = [];
+    $returnCode = 0;
+    exec('php ' . escapeshellarg($wrapperFile), $output, $returnCode);
+    @unlink($wrapperFile);
+
+    return implode("\n", $output);
+};
 
 // Test Offline State
 $setTestTunnelState(false);
-$offlineHtml = $renderSidebar('admin');
+$offlineHtml = $renderPillHelper(false, '', 'admin');
 $offlineDoc = new DOMDocument();
 libxml_use_internal_errors(true);
 $offlineDoc->loadHTML($offlineHtml);
@@ -257,7 +320,7 @@ $assert($offlineBadge !== null && str_contains(strtolower($offlineBadge->textCon
 // Test Online State with active tunnel URL
 $samplePublicUrl = 'https://crystal-frost-beacon.trycloudflare.com';
 $setTestTunnelState(true, $samplePublicUrl);
-$onlineHtml = $renderSidebar('admin');
+$onlineHtml = $renderPillHelper(true, $samplePublicUrl, 'admin');
 $onlineDoc = new DOMDocument();
 libxml_use_internal_errors(true);
 $onlineDoc->loadHTML($onlineHtml);
@@ -283,7 +346,7 @@ if ($onlineUrlInput !== null) {
 
 // Test Online State with connecting / resolving URL (empty URL string)
 $setTestTunnelState(true, '');
-$connectingHtml = $renderSidebar('admin');
+$connectingHtml = $renderPillHelper(true, '', 'admin');
 $connectingDoc = new DOMDocument();
 libxml_use_internal_errors(true);
 $connectingDoc->loadHTML($connectingHtml);

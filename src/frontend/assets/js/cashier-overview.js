@@ -93,7 +93,11 @@
 
                         const title = document.createElement('div');
                         title.className = 'gcash-nc-title';
-                        title.innerHTML = `<strong>#${item.transaction_id}</strong> · <span>${item.transaction_type}</span>`;
+                        const titleId = document.createElement('strong');
+                        titleId.textContent = `#${item.transaction_id}`;
+                        const titleType = document.createElement('span');
+                        titleType.textContent = item.transaction_type;
+                        title.append(titleId, ' · ', titleType);
 
                         const meta = document.createElement('div');
                         meta.className = 'gcash-nc-meta';

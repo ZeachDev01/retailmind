@@ -455,7 +455,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             <details>
                 <summary>Training Eligibility by Product</summary>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Product Training Eligibility">
-                    <table class="data-table">
+                    <table class="data-table" aria-label="Product data collection progress">
                         <thead><tr><th scope="col">Product</th><th scope="col">Usable days collected</th><th scope="col">Evidence and next steps</th></tr></thead>
                         <tbody>
                         <?php foreach (get_forecasting_readiness($pdo) as $readiness): ?>

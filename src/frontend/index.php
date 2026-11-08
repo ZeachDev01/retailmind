@@ -108,13 +108,15 @@ unset($_SESSION['_flash_success']);
 unset($_SESSION['_login_username']);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-type="software">
 
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RetailMind - Store inventory, sales, and forecasting</title>
     <meta name="description" content="RetailMind keeps Shalom Store inventory, barcode sales, purchasing, cashier shifts, and demand forecasting in one operational workspace.">
+    <meta name="page-type" content="software">
+    <meta name="site-kind" content="software">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= $faviconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/favicon-32.png">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
     <link rel="stylesheet" href="<?= $landingStyleUrl ?>">
@@ -124,18 +126,26 @@ unset($_SESSION['_login_username']);
     <a class="landing-skip-link" href="#main-content">Skip to main content</a>
     <header class="landing-header">
         <nav class="landing-nav" aria-label="Primary">
-            <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
-                <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind">
-                <span class="landing-brand__compact" aria-hidden="true">
-                    <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
+            <div class="landing-nav__left">
+                <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
+                    <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind">
+                    <span class="landing-brand__compact" aria-hidden="true">
+                        <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
+                    </span>
+                </a>
+                <span class="landing-nav__status-pill" title="Operational Store Engine">
+                    <span class="landing-status-dot"></span> Shalom Store Engine
                 </span>
-            </a>
+            </div>
             <div class="landing-nav__links">
                 <div class="landing-nav__sections">
-                <a href="#capabilities">Capabilities</a>
-                <a href="#workflow">Workflow</a>
+                    <a href="#capabilities">Capabilities</a>
+                    <a href="#workflow">Workflow</a>
                 </div>
-                <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
+                <a class="landing-nav__login" href="<?= $loginUrl ?>" data-login-modal-open>
+                    <span>Staff login</span>
+                    <svg class="landing-nav__login-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </a>
             </div>
         </nav>
     </header>
@@ -143,16 +153,25 @@ unset($_SESSION['_login_username']);
     <main id="main-content">
         <section class="landing-hero" aria-labelledby="landing-title">
             <div class="landing-hero__content">
-                <h1 id="landing-title">Know what is on the shelf. Reorder before it runs out.</h1>
+                <h1 id="landing-title">
+                    Know what is on the shelf.<br>
+                    <span class="landing-hero__title-gradient">Reorder before it runs out.</span>
+                </h1>
                 <p class="landing-hero__copy">
-                    RetailMind gives Shalom Store one working system for product stock, barcode sales,
-                    purchasing, cashier shifts, reports, and demand forecasts.
+                    Unified store operations for Shalom Store: barcode checkout, real-time inventory, batch receiving, and demand forecasting.
                 </p>
                 <div class="landing-actions">
-                    <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Open staff workspace</a>
-                    <a class="landing-text-link" href="#workflow">View the operating process</a>
+                    <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>
+                        <span>Staff login</span>
+                        <svg class="landing-btn__arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </a>
+                    <a class="landing-btn landing-btn--secondary" href="#capabilities">
+                        <span>Explore capabilities</span>
+                        <svg class="landing-btn__arrow-down" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+                    </a>
                 </div>
             </div>
+
             <figure class="landing-hero__visual">
                 <div class="landing-hero__image">
                     <img <?= $shouldOpenLogin ? 'data-src' : 'src' ?>="<?= $heroImageUrl ?>" alt="Stocked Store shelves beside a barcode scanner and incoming inventory">
@@ -173,70 +192,156 @@ unset($_SESSION['_login_username']);
             </figure>
         </section>
 
+        <!-- Capabilities Section -->
         <section id="capabilities" class="landing-system">
             <header class="landing-section-heading">
                 <h2>The shelf, the till, and the order book agree.</h2>
-                <p>Store teams move through the day without rebuilding the same information in separate tools.</p>
+                <p>Every checkout, receiving, and count updates the same operational record in real time.</p>
             </header>
 
             <div class="landing-capabilities">
                 <article class="landing-capability landing-capability--lead">
-                    <h3>Inventory control</h3>
-                    <p>See low stock, expiry risk, dead stock, excess stock, and ABC cycle-count priorities in the same record used for receiving and sales.</p>
-                    <ul aria-label="Inventory control details">
-                        <li>Stock status</li>
-                        <li>Expiry exposure</li>
-                        <li>Count priorities</li>
-                    </ul>
+                    <div class="capability-lead__header">
+                        <h3>Inventory control</h3>
+                        <p>Track live stock, batch expiries, and reorder levels in the same record used at checkout and receiving.</p>
+                    </div>
                 </article>
+
                 <div class="landing-capability-list">
-                    <article class="landing-capability">
-                        <div><h3>Barcode sales</h3><p>Scan labels, hold sales, control discounts, and print receipts.</p></div>
+                    <!-- Barcode Sales -->
+                    <article class="landing-capability-card landing-capability-card--azure">
+                        <div class="capability-card__icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M21 5v14"/></svg>
+                        </div>
+                        <div class="capability-card__body">
+                            <h3>Barcode checkout</h3>
+                            <p>Fast product scanning, held sales, split tenders, and receipt printing.</p>
+                        </div>
                     </article>
-                    <article class="landing-capability">
-                        <div><h3>Forecast planning</h3><p>Review Random Forest forecasts and Store readiness across 7-, 14-, and 28-day horizons.</p></div>
+
+                    <!-- Forecast Planning -->
+                    <article class="landing-capability-card landing-capability-card--indigo">
+                        <div class="capability-card__icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        </div>
+                        <div class="capability-card__body">
+                            <h3>Demand forecasting</h3>
+                            <p>Projects product sales across 7, 14, and 28 days to prevent stockouts.</p>
+                        </div>
                     </article>
-                    <article class="landing-capability">
-                        <div><h3>Stock Receiving</h3><p>Record bought goods in units or packs, then review receiving history.</p></div>
+
+                    <!-- Stock Receiving -->
+                    <article class="landing-capability-card landing-capability-card--emerald">
+                        <div class="capability-card__icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                        </div>
+                        <div class="capability-card__body">
+                            <h3>Stock receiving</h3>
+                            <p>Receive cases or units with automatic pack conversion and unit cost calculation.</p>
+                        </div>
                     </article>
-                    <article class="landing-capability">
-                        <div><h3>Shift closeout</h3><p>Track pay-ins, pay-outs, expected cash, and end-of-shift variance.</p></div>
+
+                    <!-- Shift Closeout -->
+                    <article class="landing-capability-card landing-capability-card--rose">
+                        <div class="capability-card__icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="16" x2="18" y2="16"/></svg>
+                        </div>
+                        <div class="capability-card__body">
+                            <h3>Cashier shifts</h3>
+                            <p>Track opening floats, cash drawer drops, and end-of-shift reconciliation.</p>
+                        </div>
                     </article>
-                    <article class="landing-capability">
-                        <div><h3>Operational reports</h3><p>Review inventory insights, forecast exceptions, backups, and notifications.</p></div>
+
+                    <!-- Operational Reports -->
+                    <article class="landing-capability-card landing-capability-card--amber">
+                        <div class="capability-card__icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        </div>
+                        <div class="capability-card__body">
+                            <h3>Reports &amp; audit trails</h3>
+                            <p>Sales summaries, gross margins, audit logs, and full database backups.</p>
+                        </div>
                     </article>
                 </div>
             </div>
         </section>
 
+        <!-- Workflow Section -->
         <section id="workflow" class="landing-workflow">
             <header class="landing-workflow__content">
                 <h2>Each sale leaves the next decision better informed.</h2>
-                <p>
-                    Sales activity updates stock movement and forecast history. Managers review uncertain items,
-                    adjust recommendations where needed, and create purchase orders with the right approvals.
-                </p>
+                <p>Sales feed directly into inventory and demand models, keeping shelf stock balanced.</p>
             </header>
+
             <ol class="landing-steps" aria-label="Inventory workflow steps">
-                <li><span>01</span><h3>Sell and scan</h3><p>Cashiers process barcode sales and shift activity.</p></li>
-                <li><span>02</span><h3>Monitor stock</h3><p>Inventory teams catch low, stale, excess, and expiry-risk items.</p></li>
-                <li><span>03</span><h3>Review demand</h3><p>The model compares recent patterns with baseline performance.</p></li>
-                <li><span>04</span><h3>Replenish</h3><p>Reviewed recommendations become controlled purchase orders.</p></li>
+                <li class="landing-step-card">
+                    <div class="landing-step-card__num">01</div>
+                    <div class="landing-step-card__content">
+                        <h3>Scan and checkout</h3>
+                        <p>Cashiers scan barcodes, apply discounts, and tender payments instantly.</p>
+                    </div>
+                </li>
+                <li class="landing-step-card">
+                    <div class="landing-step-card__num">02</div>
+                    <div class="landing-step-card__content">
+                        <h3>Update inventory</h3>
+                        <p>Stock balances decrement in real time with alerts for low stock and expiring batches.</p>
+                    </div>
+                </li>
+                <li class="landing-step-card">
+                    <div class="landing-step-card__num">03</div>
+                    <div class="landing-step-card__content">
+                        <h3>Forecast demand</h3>
+                        <p>Predictive models project sales over 7, 14, and 28 days to prevent stockouts.</p>
+                    </div>
+                </li>
+                <li class="landing-step-card">
+                    <div class="landing-step-card__num">04</div>
+                    <div class="landing-step-card__content">
+                        <h3>Replenish and receive</h3>
+                        <p>Record received goods with automatic pack-to-unit conversion.</p>
+                    </div>
+                </li>
             </ol>
         </section>
 
+        <!-- Access Section -->
         <section class="landing-access" aria-labelledby="access-title">
-              <div><h2 id="access-title">Your tools are ready at the counter.</h2><p>Administrators, Inventory Managers, and Cashiers are sent to the workspace assigned to their role.</p></div>
-              <div class="landing-access__actions">
-                <a class="btn landing-btn landing-btn--primary" href="<?= $loginUrl ?>" data-login-modal-open>Log in to RetailMind</a>
+            <div class="landing-access__info">
+                <h2 id="access-title">Your tools are ready at the counter.</h2>
+                <p>Dedicated workspaces for each store role.</p>
+                <div class="landing-roles-list">
+                    <span class="landing-role-chip"><strong>Administrator</strong> Operations, settings, and backups</span>
+                    <span class="landing-role-chip"><strong>Inventory Manager</strong> Stock receiving and forecasts</span>
+                    <span class="landing-role-chip"><strong>Cashier</strong> Barcode sales and shift closeout</span>
+                </div>
+            </div>
+            <div class="landing-access__actions">
+                <a class="btn landing-btn landing-btn--primary landing-btn--lg" href="<?= $loginUrl ?>" data-login-modal-open>
+                    <span>Log in to RetailMind</span>
+                    <svg class="landing-btn__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </a>
                 <a class="landing-link" href="<?= $forgotPasswordUrl ?>" data-recovery-modal-open>Reset password</a>
-              </div>
-            </section>
+            </div>
+        </section>
 
+        <!-- Footer -->
         <footer class="landing-footer">
-              <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>"><img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind"></a>
-              <p>Inventory, sales, purchasing, shifts, reporting, and Demand Forecasts in one operational workspace.</p>
-            </footer>
+            <div class="landing-footer__brand-block">
+                <a class="landing-brand" href="<?= htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8') ?>">
+                    <img class="landing-brand__logo" src="<?= $brandLogoUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind">
+                </a>
+                <span class="landing-footer__motto">Shalom Store Operations</span>
+            </div>
+            <p class="landing-footer__copy">
+                Operational software for Shalom Store.
+            </p>
+            <div class="landing-footer__links">
+                <a href="#capabilities">Capabilities</a>
+                <a href="#workflow">Workflow</a>
+                <a href="<?= $loginUrl ?>" data-login-modal-open>Staff login</a>
+            </div>
+        </footer>
     </main>
 
     <div class="landing-login-modal<?= $shouldOpenLogin ? ' is-open' : '' ?><?= $shouldOpenRecovery ? ' is-recovery' : '' ?>" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="<?= $shouldOpenRecovery ? 'recovery-modal-title' : 'login-modal-title' ?>" aria-hidden="<?= $shouldOpenLogin ? 'false' : 'true' ?>">
@@ -251,15 +356,12 @@ unset($_SESSION['_login_username']);
                     </span>
                     <div>
                         <h2>Welcome back</h2>
-                        <p>Access inventory, sales, reports, and system tools from one workspace.</p>
+                        <p>Access store inventory, sales, reports, and administrative tools.</p>
                     </div>
                 </aside>
                 <div class="landing-login-modal__body">
                     <div class="landing-login-modal__brand">
-                        <div>
-                            <h3 id="login-modal-title">Log in</h3>
-                            <p>Enter your credentials to continue.</p>
-                        </div>
+                        <h3 id="login-modal-title">Staff login</h3>
                     </div>
                     <?php if ($loginSuccess !== ''): ?><div id="rm-flash-messages" class="alert tag-success" data-success="<?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($loginSuccess, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
 
@@ -267,7 +369,7 @@ unset($_SESSION['_login_username']);
                         <?= csrf_field() ?>
                         <div class="form-group">
                             <label for="landing-login-username">Username or email</label>
-                            <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username or email" required autocomplete="username">
+                            <input type="text" id="landing-login-username" name="username" value="<?= htmlspecialchars($loginUsername, ENT_QUOTES, 'UTF-8') ?>" placeholder="username or email" required autocomplete="username">
                         </div>
                         <div class="form-group<?= $loginError !== '' ? ' invalid' : '' ?>">
                             <label for="landing-login-password">Password</label>
@@ -292,14 +394,13 @@ unset($_SESSION['_login_username']);
                         <img src="<?= $brandIconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/icon-64.png" alt="">
                     </span>
                     <div>
-                        <h2>Find your way back</h2>
-                        <p>Request a link, then choose a new password from your email. Your access stays unchanged until you do.</p>
+                        <h2>Reset password</h2>
+                        <p>Receive a reset link via email.</p>
                     </div>
                 </aside>
                 <div class="landing-login-modal__body landing-login-modal__body--recovery">
                     <div class="landing-login-modal__brand">
-                        <h3 id="recovery-modal-title">Reset your password</h3>
-                        <p>Enter your staff username or email. If the account can receive email, we’ll send a secure link.</p>
+                        <h3 id="recovery-modal-title">Reset password</h3>
                     </div>
 
                     <?php if ($recoveryMessage !== ''): ?>
@@ -310,14 +411,14 @@ unset($_SESSION['_login_username']);
                         <?= csrf_field() ?>
                         <div class="form-group">
                             <label for="landing-recovery-identity">Username or email</label>
-                            <input type="text" id="landing-recovery-identity" name="identity" value="<?= htmlspecialchars($recoveryIdentity, ENT_QUOTES, 'UTF-8') ?>" placeholder="Enter your username or email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                            <input type="text" id="landing-recovery-identity" name="identity" value="<?= htmlspecialchars($recoveryIdentity, ENT_QUOTES, 'UTF-8') ?>" placeholder="username or email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
                         </div>
                         <div class="landing-login-modal__actions">
                             <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Send reset link</button>
                             <a href="<?= $loginUrl ?>" data-recovery-modal-back>Back to login</a>
                         </div>
                     </form>
-                    <p class="landing-login-modal__privacy">For privacy, we show the same confirmation whether or not an account matches. Links expire after 30 minutes.</p>
+                    <p class="landing-login-modal__privacy">Link expires in 30 minutes.</p>
                 </div>
             </div>
             </div>

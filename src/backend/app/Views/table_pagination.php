@@ -2,10 +2,10 @@
                 <span class="history-page-number">Showing <?= $rows ? ($page - 1) * $pageSize + 1 : 0 ?> to <?= $rows ? ($page - 1) * $pageSize + count($rows) : 0 ?> of <?= (int)$totalRows ?> entries</span>
                 <form method="GET" class="history-page-length">
                     <?php foreach ($paginationFilters as $name => $value): ?><input type="hidden" name="<?= htmlspecialchars($name) ?>" value="<?= htmlspecialchars((string)$value) ?>"><?php endforeach; ?>
-                    <label><select name="length" aria-label="Entries per page" onchange="this.form.submit()">
+                    <label><select name="length" aria-label="Entries per page">
                         <?php foreach ([10, 25, 50, 100] as $size): ?><option value="<?= $size ?>" <?= $size === $pageSize ? 'selected' : '' ?>><?= $size ?></option><?php endforeach; ?>
                     </select> entries per page</label>
-                    <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+                    <button type="submit" class="btn btn-secondary">Apply</button>
                 </form>
                 <nav class="history-page-buttons" aria-label="History pages">
                     <?php foreach ([['First page', '&laquo;', 1], ['Previous', '&lsaquo;', $page - 1]] as [$name, $symbol, $target]): ?>
