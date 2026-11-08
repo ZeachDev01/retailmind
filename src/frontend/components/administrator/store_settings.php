@@ -187,6 +187,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Store attention thresholds updated', 'Store Settings', null, null, $updates);
             $message = 'Store attention thresholds saved. Platform safety limits are applied automatically.';
+        } elseif ($action === 'save_tunnel_token') {
+            $tunnelToken = trim((string)($_POST['tunnel_token'] ?? ''));
+            $tunnelHostname = trim((string)($_POST['tunnel_hostname'] ?? ''));
+            $ts = new \App\Services\CloudflareTunnelService();
+            if ($tunnelToken === '') {
+                $ts->clearToken();
+                $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
+            } else {
+                $ts->setToken($tunnelToken, $tunnelHostname !== '' ? $tunnelHostname : null);
+                log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token updated', 'Store Settings', null, null, [
+                    'hostname' => $tunnelHostname,
+                ]);
+                $message = 'Permanent Cloudflare Tunnel token configured.';
+            }
+        } elseif ($action === 'clear_tunnel_token') {
+            $ts = new \App\Services\CloudflareTunnelService();
+            $ts->clearToken();
+            log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token cleared', 'Store Settings');
+            $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
         } else {
             throw new InvalidArgumentException('Choose a Store Settings section to save.');
         }
@@ -364,7 +383,10 @@ $tunnelStatus = $tunnelService->getStatus();
                         <h2 id="remote-access-heading">Remote Access</h2>
                         <p class="section-description">Secure Cloudflare tunnel for supervisor and back-office remote monitoring without port forwarding.</p>
                     </div>
-                    <div>
+                    <div class="remote-badges-group">
+                        <span id="remote-mode-badge" class="<?= !empty($tunnelStatus['token_configured']) ? 'tag-primary' : 'tag-secondary' ?>">
+                            <?= !empty($tunnelStatus['token_configured']) ? 'Permanent Named Tunnel' : 'Quick Tunnel (Ephemeral)' ?>
+                        </span>
                         <span id="remote-status-badge" class="<?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'tag-success' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'tag-warning' : 'tag-danger') ?>" role="status">
                             <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'Online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'Connecting...' : 'Offline') ?>
                         </span>
@@ -375,7 +397,7 @@ $tunnelStatus = $tunnelService->getStatus();
                 <div class="remote-toggle-row">
                     <div>
                         <label for="remote-access-toggle" class="remote-toggle-title">Enable Cloudflare Tunnel</label>
-                        <p class="field-help">Activate the portable background tunnel daemon to expose a temporary encrypted public URL.</p>
+                        <p class="field-help">Activate the portable background tunnel daemon to expose an encrypted connection.</p>
                     </div>
                     <div>
                         <label class="toggle-switch">
@@ -395,6 +417,44 @@ $tunnelStatus = $tunnelService->getStatus();
                     <small class="field-help">Share this URL only with authorized supervisors. Physical cashier operations remain locked to local store registers.</small>
                 </div>
                 <div id="remote-access-feedback" class="field-help u-mt-1" role="status" aria-live="polite"></div>
+
+                <hr class="u-my-2">
+
+                <form method="post" class="remote-token-config-form">
+                    <?= csrf_field() ?>
+                    <h3 class="subsection-title">Permanent Tunnel Token Configuration</h3>
+                    <p class="field-help">Configure a Cloudflare Zero Trust permanent tunnel token (<code>cloudflared run --token &lt;token&gt;</code>) to route through your custom fixed domain instead of ephemeral quick tunnels.</p>
+                    <div class="form-grid u-mt-1">
+                        <div>
+                            <label for="tunnel_token" class="field-label">Permanent Tunnel Token</label>
+                            <input type="password" id="tunnel_token" name="tunnel_token" class="input-text" autocomplete="off"
+                                   value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
+                                   placeholder="Paste eyJh... token from Cloudflare Zero Trust">
+                            <small class="field-help">Stored securely in configuration. Paste a new token to update, or clear to revert to ephemeral quick tunnels.</small>
+                        </div>
+                        <div>
+                            <label for="tunnel_hostname" class="field-label">Public Domain / Hostname (Optional)</label>
+                            <input type="text" id="tunnel_hostname" name="tunnel_hostname" class="input-text" autocomplete="off"
+                                   value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
+                                   placeholder="e.g. supervisor.mystore.com">
+                            <small class="field-help">Custom domain mapped in your Cloudflare Zero Trust dashboard.</small>
+                        </div>
+                    </div>
+                    <div class="form-actions u-mt-1">
+                        <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Tunnel Token</button>
+                        <?php if (!empty($tunnelStatus['token_configured'])): ?>
+                            <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
+                        <?php endif; ?>
+                    </div>
+                </form>
+
+                <div class="remote-service-hint u-mt-2">
+                    <p class="field-help">
+                        <strong>Dedicated Store PC Service:</strong> For 24/7 supervisor access with automatic startup at boot and crash recovery, install the Windows Service:
+                        <code>powershell -ExecutionPolicy Bypass -File .\src\backend\scripts\tunnel\service_install.ps1</code>
+                        &bull; <a href="../../../docs/DEPLOYMENT_REMOTE_TUNNEL.md" target="_blank">5-Minute Dedicated Store PC Setup Guide</a>
+                    </p>
+                </div>
             </div>
         </section>
     </main>

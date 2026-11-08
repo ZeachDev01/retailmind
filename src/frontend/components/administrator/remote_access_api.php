@@ -62,6 +62,26 @@ try {
             exit;
         }
 
+        if ($action === 'save_token') {
+            $token = trim((string)($input['token'] ?? ($_POST['token'] ?? '')));
+            $hostname = trim((string)($input['hostname'] ?? ($_POST['hostname'] ?? '')));
+            if ($token === '') {
+                $service->clearToken();
+            } else {
+                $service->setToken($token, $hostname !== '' ? $hostname : null);
+            }
+            $result = $service->getStatus();
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        if ($action === 'clear_token') {
+            $service->clearToken();
+            $result = $service->getStatus();
+            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
         http_response_code(400);
         echo json_encode([
             'success' => false,
