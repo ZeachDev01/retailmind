@@ -419,6 +419,7 @@ final class ReceiptEngine
             'completed_at_formatted' => $escape(PhilippineTime::format($receipt['completed_at'] ?? '')),
             'cashier_name' => $escape($receipt['cashier_name'] ?? ''),
             'register_name' => $escape($receipt['register_name'] ?? ''),
+            'customer_identifier' => $escape($receipt['customer_identifier'] ?? $receipt['customer_mobile'] ?? $receipt['mobile_number'] ?? '—'),
             'principal_amount_formatted' => $money($receipt['principal_amount'] ?? 0),
             'fee_amount_formatted' => $money($receipt['fee_amount'] ?? 0),
             'fee_method' => $escape($receipt['fee_method'] ?? ''),
@@ -558,12 +559,22 @@ final class ReceiptEngine
         $decimal = static fn(int $centavos): string => number_format($centavos / 100, 2, '.', '');
         $store = $this->storeInfo();
         $store['tagline'] = 'GCash Service Receipt';
+        $customerMobile = '';
+        if (!empty($tx['customer_identifier'])) {
+            $customerMobile = (string)$tx['customer_identifier'];
+        } elseif (!empty($tx['customer_mobile'])) {
+            $customerMobile = (string)$tx['customer_mobile'];
+        } elseif (!empty($tx['notes']) && preg_match('/(?:Customer|Mobile|Phone|Account)?[:\s]*(09\d{9}|\+639\d{9})/i', (string)$tx['notes'], $m)) {
+            $customerMobile = $m[1];
+        }
+
         $details = [
             'store' => $store,
             'transaction_id' => (int)$tx['transaction_id'],
             'cashier_id' => (int)$tx['cashier_id'],
             'cashier_name' => $tx['cashier_name'] ?: $tx['cashier_username'],
             'register_name' => $tx['register_name'] ?: 'Unassigned',
+            'customer_identifier' => $customerMobile ?: '—',
             'completed_at' => $tx['completed_at'],
             'transaction_type' => $tx['transaction_type'],
             'reference_number' => $tx['reference_number'],

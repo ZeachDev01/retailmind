@@ -49,7 +49,7 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome', 'movement_type', 'fund_type', 'direction', 'evidence_reference', 'evidence', 'approver_username', 'approver_password', 'resolve_action', 'waiver_notes'] as $key) {
+        foreach (['action', 'reference', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome', 'movement_type', 'fund_type', 'direction', 'evidence_reference', 'evidence', 'approver_username', 'approver_password', 'resolve_action', 'waiver_notes', 'customer_mobile', 'customer_identifier'] as $key) {
             if (isset($input[$key]) && !is_string($input[$key]) && !($key === 'reference' && $input[$key] === null)) { throw new DomainException('Invalid field: ' . $key); }
         }
         if (isset($input['amount']) && !is_string($input['amount']) && !is_int($input['amount']) && !is_float($input['amount'])) {
