@@ -392,6 +392,12 @@ $formatUnits = static function ($val): string {
                         vs <strong>Candidate 28-day WAPE:</strong>
                         <?= $formatError($summary['candidate_quality']['horizons'][28]['wape'] ?? null) ?>
                     </div>
+                    <div style="margin-top: 0.35rem; font-size: 0.85rem; color: var(--color-text-muted, #4b5563);">
+                        Approved MAE: <?= $formatUnits($summary['incumbent_comparison']['horizons'][28]['mae'] ?? null) ?> &middot;
+                        Approved RMSE: <?= $formatUnits($summary['incumbent_comparison']['horizons'][28]['rmse'] ?? null) ?> |
+                        Candidate MAE: <?= $formatUnits($summary['candidate_quality']['horizons'][28]['mae'] ?? null) ?> &middot;
+                        Candidate RMSE: <?= $formatUnits($summary['candidate_quality']['horizons'][28]['rmse'] ?? null) ?>
+                    </div>
                 <?php endif; ?>
             </div>
         </section>
@@ -412,15 +418,17 @@ $formatUnits = static function ($val): string {
                                 <th scope="col">Forecast Horizon</th>
                                 <th scope="col">Candidate Error (WAPE)</th>
                                 <th scope="col">Candidate MAE</th>
+                                <th scope="col">Candidate RMSE</th>
                                 <th scope="col">Repeat Last Week (WAPE)</th>
                                 <th scope="col">Baseline MAE</th>
+                                <th scope="col">Baseline RMSE</th>
                                 <th scope="col">Quality Gate Limit</th>
                                 <th scope="col">Outcome</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (empty($summary['candidate_quality']['horizons'])): ?>
-                            <tr><td colspan="7" style="text-align: center;">No completed chronological evaluations recorded for this candidate.</td></tr>
+                            <tr><td colspan="9" style="text-align: center;">No completed chronological evaluations recorded for this candidate.</td></tr>
                         <?php else: ?>
                             <?php foreach ([7, 14, 28] as $horizon): ?>
                                 <?php $hData = $summary['candidate_quality']['horizons'][$horizon] ?? null; ?>
@@ -428,8 +436,10 @@ $formatUnits = static function ($val): string {
                                     <td><strong><?= $horizon ?> days ahead</strong></td>
                                     <td><?= $hData ? $formatError($hData['wape']) : 'Not available' ?></td>
                                     <td><?= $hData ? $formatUnits($hData['mae']) : 'Not available' ?></td>
+                                    <td><?= $hData ? $formatUnits($hData['rmse']) : 'Not available' ?></td>
                                     <td><?= $hData ? $formatError($hData['baseline_wape']) : 'Not available' ?></td>
                                     <td><?= $hData ? $formatUnits($hData['baseline_mae']) : 'Not available' ?></td>
+                                    <td><?= $hData ? $formatUnits($hData['baseline_rmse']) : 'Not available' ?></td>
                                     <td><?= $hData && $hData['max_wape_limit'] !== null ? $formatError($hData['max_wape_limit']) : 'Missing threshold' ?></td>
                                     <td>
                                         <?php if (!$hData || ($hData['gate_status'] ?? '') === 'blocked'): ?>

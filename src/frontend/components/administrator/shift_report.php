@@ -124,10 +124,14 @@ if ($targetedShift !== null && !$shifts) {
     $shifts[] = ['shift_id' => $targetedShift['Shift ID'], 'opened_at' => $targetedShift['Opened At']];
 }
 
-function shift_report_e($value): string { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
-function shift_report_money($value): string {
-    if ($value === '' || $value === null) return '—';
-    return '₱' . number_format((float)$value, 2);
+if (!function_exists('shift_report_e')) {
+    function shift_report_e($value): string { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
+}
+if (!function_exists('shift_report_money')) {
+    function shift_report_money($value): string {
+        if ($value === '' || $value === null) return '—';
+        return '₱' . number_format((float)$value, 2);
+    }
 }
 
 $hasActiveFilters = $filters['from'] !== $defaultFrom
@@ -155,6 +159,21 @@ foreach ($report['rows'] as $r) {
 }
 $totalSalesAmount = (float)($report['totals']['Total Sales'] ?? 0);
 $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
+
+$overShort = $report['over_short'] ?? StoreShiftReportService::summarizeOverShort($report['rows']);
+$cashierPerf = $report['cashier_performance'] ?? StoreShiftReportService::summarizeCashierPerformance($report['rows']);
+$registerPerf = $report['register_performance'] ?? StoreShiftReportService::summarizeRegisterPerformance($report['rows']);
+
+$totalRows = count($report['rows']);
+$perPage = max(1, min(100, (int)($input['per_page'] ?? 25)));
+$totalPages = max(1, (int)ceil($totalRows / $perPage));
+$page = max(1, min($totalPages, (int)($input['page'] ?? 1)));
+$offset = ($page - 1) * $perPage;
+$pagedRows = array_slice($report['rows'], $offset, $perPage);
+
+$pageUrl = static function(int $targetPage) use ($filters, $perPage): string {
+    return '?' . http_build_query(array_merge($filters, ['page' => $targetPage, 'per_page' => $perPage]));
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -199,6 +218,138 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
             <strong class="shift-kpi-value"><?= $reportLoaded ? shift_report_money($totalRefundsAmount) : '—' ?></strong>
         </div>
     </section>
+
+    <section class="dashboard-section shift-reconciliation-overview u-mb-15" aria-labelledby="tally-heading">
+        <div class="section-header">
+            <div>
+                <h2 id="tally-heading"><i class="bi bi-cash-stack" aria-hidden="true"></i> Cash Over / Short Tallies &amp; Payment Methods</h2>
+                <p class="section-description">Reconciled drawer cash variance and payment breakdown across <?= shift_report_e($filters['from']) ?> to <?= shift_report_e($filters['to']) ?>.</p>
+            </div>
+        </div>
+        <div class="shift-kpi-grid">
+            <div class="shift-kpi-card <?= !empty($overShort['total_over']) && $overShort['total_over'] > 0 ? 'shift-kpi-card--info' : '' ?>">
+                <span class="shift-kpi-label">Total Cash Overage</span>
+                <strong class="shift-kpi-value <?= !empty($overShort['total_over']) && $overShort['total_over'] > 0 ? 'text-success' : '' ?>"><?= $reportLoaded ? '+₱' . number_format((float)($overShort['total_over'] ?? 0), 2) : '—' ?></strong>
+                <span class="cell-sub"><?= (int)($overShort['over_count'] ?? 0) ?> shift<?= ($overShort['over_count'] ?? 0) === 1 ? '' : 's' ?> with extra cash</span>
+            </div>
+            <div class="shift-kpi-card <?= !empty($overShort['total_short']) && $overShort['total_short'] > 0 ? 'shift-kpi-card--warning' : '' ?>">
+                <span class="shift-kpi-label">Total Cash Shortage</span>
+                <strong class="shift-kpi-value <?= !empty($overShort['total_short']) && $overShort['total_short'] > 0 ? 'text-danger' : '' ?>"><?= $reportLoaded ? '-₱' . number_format((float)($overShort['total_short'] ?? 0), 2) : '—' ?></strong>
+                <span class="cell-sub"><?= (int)($overShort['short_count'] ?? 0) ?> shift<?= ($overShort['short_count'] ?? 0) === 1 ? '' : 's' ?> with shortage</span>
+            </div>
+            <div class="shift-kpi-card">
+                <span class="shift-kpi-label">Net Cash Variance</span>
+                <strong class="shift-kpi-value <?= ($overShort['net_variance'] ?? 0) < -0.005 ? 'text-danger' : (($overShort['net_variance'] ?? 0) > 0.005 ? 'text-success' : '') ?>">
+                    <?= $reportLoaded ? ((($overShort['net_variance'] ?? 0) < 0 ? '-₱' : ((($overShort['net_variance'] ?? 0) > 0 ? '+₱' : '₱'))) . number_format(abs((float)($overShort['net_variance'] ?? 0)), 2)) : '—' ?>
+                </strong>
+                <span class="cell-sub"><?= (int)($overShort['balanced_count'] ?? 0) ?> balanced / <?= (int)($overShort['closed_shifts_count'] ?? 0) ?> closed</span>
+            </div>
+            <div class="shift-kpi-card">
+                <span class="shift-kpi-label">Sales by Payment Method</span>
+                <div class="cell-sub" style="margin-top: 0.35rem; line-height: 1.5;">
+                    <div><strong>Cash:</strong> <?= shift_report_money($report['totals']['Cash Sales'] ?? 0) ?></div>
+                    <div><strong>Card:</strong> <?= shift_report_money($report['totals']['Card Sales'] ?? 0) ?></div>
+                    <div><strong>E-Wallet:</strong> <?= shift_report_money($report['totals']['E-Wallet Sales'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <?php if ($reportLoaded && !empty($cashierPerf)): ?>
+        <section class="dashboard-section shift-cashier-performance u-mb-15" aria-labelledby="cashier-perf-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="cashier-perf-heading"><i class="bi bi-people" aria-hidden="true"></i> Cashier Performance Summary</h2>
+                    <p class="section-description">Transaction volume, sales, and drawer reconciliation tallies by cashier for the selected period.</p>
+                </div>
+            </div>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Cashier performance summary">
+                <table class="shift-summary-table" data-no-smart-table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Cashier</th>
+                            <th scope="col" class="num-col">Shifts</th>
+                            <th scope="col" class="num-col">Transactions</th>
+                            <th scope="col" class="num-col">Cash Sales</th>
+                            <th scope="col" class="num-col">Card Sales</th>
+                            <th scope="col" class="num-col">E-Wallet Sales</th>
+                            <th scope="col" class="num-col">Total Sales</th>
+                            <th scope="col" class="num-col">Net Cash Variance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($cashierPerf as $cp): ?>
+                            <tr>
+                                <td>
+                                    <strong><?= shift_report_e($cp['cashier_name']) ?></strong>
+                                    <?php if ($cp['cashier_id'] !== ''): ?><span class="shift-record-id">#<?= shift_report_e($cp['cashier_id']) ?></span><?php endif; ?>
+                                </td>
+                                <td class="num-col"><?= (int)$cp['shifts_count'] ?></td>
+                                <td class="num-col"><?= (int)$cp['sale_count'] ?></td>
+                                <td class="num-col"><?= shift_report_money($cp['cash_sales']) ?></td>
+                                <td class="num-col"><?= shift_report_money($cp['card_sales']) ?></td>
+                                <td class="num-col"><?= shift_report_money($cp['ewallet_sales']) ?></td>
+                                <td class="num-col"><strong><?= shift_report_money($cp['total_sales']) ?></strong></td>
+                                <td class="num-col">
+                                    <?php if ($cp['closed_shifts'] === 0): ?>
+                                        <span class="u-text-muted">—</span>
+                                    <?php elseif (abs((float)$cp['net_variance']) < 0.005): ?>
+                                        <span class="badge badge-success">Balanced</span>
+                                    <?php elseif ((float)$cp['net_variance'] < 0): ?>
+                                        <span class="variance-amount variance-amount--short">-₱<?= shift_report_e(number_format(abs((float)$cp['net_variance']), 2)) ?></span>
+                                    <?php else: ?>
+                                        <span class="variance-amount variance-amount--over">+₱<?= shift_report_e(number_format((float)$cp['net_variance'], 2)) ?></span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <?php if ($reportLoaded && count($registerPerf) > 1): ?>
+        <section class="dashboard-section shift-register-performance u-mb-15" aria-labelledby="register-perf-heading">
+            <div class="section-header">
+                <div>
+                    <h2 id="register-perf-heading"><i class="bi bi-terminal" aria-hidden="true"></i> Register Sales Summary</h2>
+                    <p class="section-description">Sales distribution across registers.</p>
+                </div>
+            </div>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Register sales summary">
+                <table class="shift-summary-table" data-no-smart-table>
+                    <thead>
+                        <tr>
+                            <th scope="col">Register</th>
+                            <th scope="col" class="num-col">Shifts</th>
+                            <th scope="col" class="num-col">Transactions</th>
+                            <th scope="col" class="num-col">Cash Sales</th>
+                            <th scope="col" class="num-col">Card Sales</th>
+                            <th scope="col" class="num-col">E-Wallet Sales</th>
+                            <th scope="col" class="num-col">Total Sales</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($registerPerf as $rp): ?>
+                            <tr>
+                                <td>
+                                    <strong><?= shift_report_e($rp['register_name']) ?></strong>
+                                    <?php if ($rp['register_id'] !== ''): ?><span class="shift-record-id">#<?= shift_report_e($rp['register_id']) ?></span><?php endif; ?>
+                                </td>
+                                <td class="num-col"><?= (int)$rp['shifts_count'] ?></td>
+                                <td class="num-col"><?= (int)$rp['sale_count'] ?></td>
+                                <td class="num-col"><?= shift_report_money($rp['cash_sales']) ?></td>
+                                <td class="num-col"><?= shift_report_money($rp['card_sales']) ?></td>
+                                <td class="num-col"><?= shift_report_money($rp['ewallet_sales']) ?></td>
+                                <td class="num-col"><strong><?= shift_report_money($rp['total_sales']) ?></strong></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    <?php endif; ?>
 
     <?php if ($targetedShift !== null): ?>
         <?php
@@ -412,7 +563,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
         </form>
         </div>
 
-        <div class="table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0">
+        <div class="table-wrap shift-table-wrap" role="region" aria-label="Cashier Shift report results" tabindex="0" data-no-jumping="true" style="min-height: 280px;">
             <table class="shift-summary-table" data-no-smart-table>
                 <thead>
                     <tr>
@@ -427,7 +578,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($report['rows'] as $rowIndex => $row): ?>
+                    <?php foreach ($pagedRows as $pIndex => $row): $rowIndex = $offset + $pIndex; ?>
                         <?php
                             $rowShiftId = $row['Shift ID'] ?? '';
                             $isShiftRow = $rowShiftId !== '';
@@ -578,5 +729,43 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                     <?php endif; ?>
             </table>
         </div>
+        <?php if ($totalRows > 0): ?>
+            <div class="table-pagination auto-table-pagination" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.75rem 1rem; border:1px solid var(--border-color, #e5e7eb); border-top:none; border-radius:0 0 8px 8px; background:var(--theme-surface-soft, #f8fafc);">
+                <span class="product-pagination-status" aria-live="polite">
+                    Showing <?= $totalRows > 0 ? $offset + 1 : 0 ?> to <?= min($totalRows, $offset + count($pagedRows)) ?> of <?= $totalRows ?> shifts
+                    <?php if ($totalPages > 1): ?>(Page <?= $page ?> of <?= $totalPages ?>)<?php endif; ?>
+                </span>
+                <form method="get" class="pagination-length-form" style="display:inline-flex; align-items:center; gap:0.5rem;">
+                    <?php foreach ($filters as $k => $v): ?>
+                        <input type="hidden" name="<?= shift_report_e($k) ?>" value="<?= shift_report_e($v) ?>">
+                    <?php endforeach; ?>
+                    <label for="shift-per-page" style="font-size:0.85rem;">Per page:</label>
+                    <select id="shift-per-page" name="per_page" onchange="this.form.submit()" style="padding:0.25rem 0.5rem; font-size:0.85rem; border-radius:4px; border:1px solid var(--border-color, #e5e7eb);">
+                        <?php foreach ([10, 25, 50, 100] as $size): ?>
+                            <option value="<?= $size ?>" <?= $perPage === $size ? 'selected' : '' ?>><?= $size ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+                <?php if ($totalPages > 1): ?>
+                    <nav class="pagination-buttons" aria-label="Shift report pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="<?= shift_report_e($pageUrl(1)) ?>" class="btn btn-secondary btn-sm" aria-label="First page">&laquo;</a>
+                            <a href="<?= shift_report_e($pageUrl($page - 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Previous page">&lsaquo;</a>
+                        <?php endif; ?>
+                        <?php
+                            $startP = max(1, $page - 2);
+                            $endP = min($totalPages, $page + 2);
+                            for ($p = $startP; $p <= $endP; $p++):
+                        ?>
+                            <a href="<?= shift_report_e($pageUrl($p)) ?>" class="btn <?= $p === $page ? 'btn-primary' : 'btn-secondary' ?> btn-sm" <?= $p === $page ? 'aria-current="page"' : '' ?>><?= $p ?></a>
+                        <?php endfor; ?>
+                        <?php if ($page < $totalPages): ?>
+                            <a href="<?= shift_report_e($pageUrl($page + 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Next page">&rsaquo;</a>
+                            <a href="<?= shift_report_e($pageUrl($totalPages)) ?>" class="btn btn-secondary btn-sm" aria-label="Last page">&raquo;</a>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </section>
 </main></div></body></html>
