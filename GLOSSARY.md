@@ -160,6 +160,18 @@ _Avoid_: Day with sales, day since installation, active day
 Whether a Product's Store history satisfies the requirements for model training, including sufficient usable history, supported recent observations, and chronological evaluation coverage. Eligibility does not mean a model is approved or a usable Demand Forecast exists.
 _Avoid_: Forecast availability, model approval, history level
 
+**Eligible Product**:
+A Product whose Store history currently satisfies Store Training Eligibility and may be included in model training.
+_Avoid_: Training candidate, approved Product
+
+**Training Candidate**:
+A model produced by a completed training run and awaiting quality review and explicit approval. It is not a forecast and is not the approved Store model.
+_Avoid_: Eligible Product, approved model
+
+**Training Readiness Notice**:
+An operational notice explaining whether Store Products are ready for model training, including when no Product currently satisfies Store Training Eligibility.
+_Avoid_: Training failure, model approval notice
+
 **Stockout Day**:
 A Store trading day when a Product was unavailable for sale during part or all of the day. Recorded sales remain valid, but do not reveal how many additional units customers might have bought.
 _Avoid_: Zero demand, complete demand observation

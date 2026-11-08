@@ -55,6 +55,11 @@ $latestCandidate = $pdo->query("SELECT model_version, metrics_json FROM model_tr
 $trainingJob = $pdo->query("SELECT job_id,status,operator_message FROM ml_jobs
     WHERE trigger_type='model_retraining' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $isTraining = in_array($trainingJob['status'] ?? '', ['queued', 'running'], true);
+$trainingReadiness = get_forecasting_readiness($pdo);
+$eligibleTrainingProducts = array_values(array_filter(
+    $trainingReadiness,
+    static fn(array $item): bool => !empty($item['training_eligible'])
+));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['train', 'approve_demo'], true)) {
     csrf_verify();
@@ -65,6 +70,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             }
             require_capability(\App\Authorization\RoleCapabilityPolicy::RETRAIN_MODELS);
             if ($isTraining) throw new RuntimeException('A training job is already queued or running.');
+            if (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []) {
+                $requiredDays = \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS;
+                throw new RuntimeException("No Product is ready for training. Each Product needs {$requiredDays} consecutive usable history days through yesterday.");
+            }
             $jobId = (new \App\Services\MlJobService($pdo))->enqueue('model_retraining',
                 (int)$_SESSION['user_id'], current_role(), $_SERVER['REMOTE_ADDR'] ?? null);
             $trainingJob = ['job_id' => $jobId, 'status' => 'queued'];
@@ -306,11 +315,24 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             <?php endif; ?>
 
+            <?php if (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []): ?>
+                <div class="ml-banner tag-warning" role="alert">
+                    No Product is ready for training. Each Product needs
+                    <?= (int)\App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS ?>
+                    consecutive usable history days through yesterday. Review the eligibility details below.
+                </div>
+            <?php elseif (!$isLocalDemo && !$isHostedReplay && count($eligibleTrainingProducts) < count($trainingReadiness)): ?>
+                <div class="ml-banner ml-banner-info" role="note">
+                    <?= count($eligibleTrainingProducts) ?> of <?= count($trainingReadiness) ?> Products are ready for training.
+                    Training will use eligible Products only; excluded Product reasons are listed below.
+                </div>
+            <?php endif; ?>
+
             <div class="ml-training-panel">
             <div class="ml-action-bar">
                 <form class="ml-action-form" method="post">
                     <?= csrf_field() ?>
-                    <button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay ? 'disabled' : '' ?>>
+                    <button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay || (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []) ? 'disabled' : '' ?>>
                         <?= $isTraining ? 'Training in progress…' : 'Train candidate model' ?>
                     </button>
                 </form>

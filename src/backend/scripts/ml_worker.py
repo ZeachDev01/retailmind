@@ -106,7 +106,7 @@ def recover_expired_leases(conn):
                 operator_message = 'Job failed: lease expired and maximum retries (3) exceeded.',
                 diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED'
             WHERE status = 'running' 
-              AND lease_expires_at < NOW() 
+              AND lease_expires_at < NOW()
               AND attempts >= 3
         """)
         conn.commit()
@@ -159,12 +159,22 @@ def claim_job(conn):
         job['attempts'] += 1
         return job
 
+def renew_lease(conn, job_id):
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            UPDATE ml_jobs
+            SET lease_expires_at = DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+            WHERE job_id = %s AND status = 'running'
+        """, (job_id,))
+    conn.commit()
+
 def process_job(conn, job):
     job_id = job['job_id']
     trigger = job['trigger_type']
     artifact_file = None
     with conn.cursor() as cursor:
         try:
+            renew_lease(conn, job_id)
             if trigger == 'forecast_generation':
                 run_forecast_generation(conn, cursor, job_id, evidence_cutoff=job.get('evidence_cutoff'))
             elif trigger == 'forecast_observation':
@@ -185,10 +195,12 @@ def process_job(conn, job):
                         pass
                 run_forecast_generation(conn, cursor, job_id, observation_version=obs_ver, evidence_cutoff=evidence_cutoff)
             elif trigger == 'model_retraining':
+                renew_lease(conn, job_id)
                 artifact_file = run_model_retraining(conn, cursor, job_id)
             else:
                 raise ValueError(f"Unknown job trigger type: {trigger}")
 
+            renew_lease(conn, job_id)
             cursor.execute("""
                 UPDATE ml_jobs 
                 SET status = 'succeeded', 

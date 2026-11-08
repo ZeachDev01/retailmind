@@ -170,6 +170,7 @@ class NotificationService
             $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
         }
+        $now = $this->clock->now();
         $failedRun = null;
         try {
             $oneDayAgo = $this->clock->now()->modify('-1 day')->format('Y-m-d H:i:s');
@@ -182,9 +183,54 @@ class NotificationService
             'Random Forest training failure',
             'The latest model training failed on ' . $failedRun['started_at'] . '. '
                 . mb_strimwidth((string)$failedRun['error_message'], 0, 500, '...'),
-            $this->clock->now(), 'components/system_administrator/ml_settings.php', null, true,
+            $now, 'components/system_administrator/ml_settings.php', null, true,
             'system', (int)$failedRun['training_run_id'], 'model_training'
         )] : [];
+        $readiness = [];
+        $eligible = [];
+        try {
+            $readiness = \get_forecasting_readiness($this->pdo);
+            $eligible = array_filter($readiness, static fn(array $item): bool => !empty($item['training_eligible']));
+            if ($readiness !== [] && $eligible === []) {
+                $message = 'No Product is ready for training. Each Product needs '
+                    . \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS
+                    . ' consecutive usable history days through yesterday.';
+                $trainingItems[] = new \App\Attention\AttentionItem(
+                    'platform-training.readiness', 'warning', 'ml_health',
+                    'Store training is not ready', $message, $now,
+                    'components/system_administrator/ml_settings.php', count($readiness), true,
+                    'system', null, 'training_readiness'
+                );
+            }
+        } catch (\Throwable $exception) {
+            error_log('Training readiness notification skipped: ' . $exception->getMessage());
+        }
+        $stalledItem = null;
+        try {
+            $staleBefore = $now->modify('-5 minutes')->format('Y-m-d H:i:s');
+            $statement = $this->pdo->prepare(
+                "SELECT job_id, attempts FROM ml_jobs
+                 WHERE trigger_type IN ('model_retraining', 'forecast_generation')
+                   AND status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
+                 ORDER BY job_id DESC LIMIT 1"
+            );
+            $statement->execute([$staleBefore]);
+            $stalled = $statement->fetch(PDO::FETCH_ASSOC);
+            if ($stalled) {
+                $stalledItem = new \App\Attention\AttentionItem(
+                    'platform-training.stalled', 'critical', 'ml_health',
+                    'Forecasting worker is stalled',
+                    (int)$stalled['attempts'] >= 3
+                        ? 'The forecasting worker lease expired after the retry limit. Review the training job before retrying.'
+                        : 'The forecasting worker lease expired. The job will be retried automatically.',
+                    $now, 'components/system_administrator/ml_settings.php', 1, true,
+                    'system', (int)$stalled['job_id'], 'ml_job'
+                );
+                $trainingItems[] = $stalledItem;
+            }
+        } catch (\Throwable $exception) {
+            error_log('Forecasting stall notification skipped: ' . $exception->getMessage());
+        }
         foreach ($this->recipients('super_admin') as $recipient) {
             $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
@@ -194,6 +240,25 @@ class NotificationService
             $attentionCenter->getAttention(0, 'admin'),
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
         ));
+        if ($readiness !== [] && $eligible === []) {
+            $adminForecastingItems[] = new \App\Attention\AttentionItem(
+                'store.forecasting.readiness', 'warning', 'forecasting',
+                'Store training is not ready',
+                'No Product is ready for training. Each Product needs '
+                    . \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS
+                    . ' consecutive usable history days through yesterday.',
+                $now, 'components/system_administrator/ml_settings.php', count($readiness), true,
+                'attention', null, 'training_readiness'
+            );
+        }
+        if ($stalledItem !== null) {
+            $adminForecastingItems[] = new \App\Attention\AttentionItem(
+                'store.forecasting.stalled', 'critical', 'forecasting',
+                'Forecasting worker is stalled', $stalledItem->explanation, $now,
+                'components/system_administrator/ml_settings.php', 1, true,
+                'attention', $stalledItem->referenceId, 'ml_job'
+            );
+        }
         foreach ($this->recipients('admin') as $recipient) {
             $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $adminForecastingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'store.forecasting.');
