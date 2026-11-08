@@ -21,68 +21,83 @@ require_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
 
 $reportCatalog = ReportAccessService::catalogForRole((string)current_role());
 
-function normalize_date(string $value, string $default): string
-{
-    $date = DateTime::createFromFormat('Y-m-d', $value);
-    return $date ? $date->format('Y-m-d') : $default;
-}
-
-function request_value(string $key, string $default = ''): string
-{
-    return trim((string)($_POST[$key] ?? $_GET[$key] ?? $default));
-}
-
-function money_value($value): string
-{
-    return number_format((float)$value, 2);
-}
-
-function metric_value($value, int $decimals = 2): string
-{
-    return $value === null ? '-' : number_format((float)$value, $decimals);
-}
-
-function percentage_value($value, int $decimals = 2): string
-{
-    return $value === null ? '-' : number_format((float)$value, $decimals) . '%';
-}
-
-function send_csv(string $filename, array $rows, array $headers): void
-{
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
-    $output = fopen('php://output', 'w');
-    fputcsv($output, $headers);
-    foreach ($rows as $row) {
-        fputcsv($output, array_map(static function ($header) use ($row): string {
-            $value = (string)($row[$header] ?? '');
-            return !is_numeric($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value) ? "'" . $value : $value;
-        }, $headers));
+if (!function_exists('normalize_date')) {
+    function normalize_date(string $value, string $default): string
+    {
+        $date = DateTime::createFromFormat('Y-m-d', $value);
+        return $date ? $date->format('Y-m-d') : $default;
     }
-    fclose($output);
-    exit;
 }
 
-function product_filters(array $filters, string $alias = 'p'): array
-{
-    $where = [];
-    $params = [];
-
-    if ($filters['product_id'] > 0) {
-        $where[] = "{$alias}.product_id = ?";
-        $params[] = $filters['product_id'];
+if (!function_exists('request_value')) {
+    function request_value(string $key, string $default = ''): string
+    {
+        return trim((string)($_POST[$key] ?? $_GET[$key] ?? $default));
     }
-
-    if ($filters['category_id'] > 0) {
-        $where[] = "{$alias}.category_id = ?";
-        $params[] = $filters['category_id'];
-    }
-
-    return [$where, $params];
 }
 
-function run_report(PDO $pdo, string $report, array $filters): array
-{
+if (!function_exists('money_value')) {
+    function money_value($value): string
+    {
+        return number_format((float)$value, 2);
+    }
+}
+
+if (!function_exists('metric_value')) {
+    function metric_value($value, int $decimals = 2): string
+    {
+        return $value === null ? '-' : number_format((float)$value, $decimals);
+    }
+}
+
+if (!function_exists('percentage_value')) {
+    function percentage_value($value, int $decimals = 2): string
+    {
+        return $value === null ? '-' : number_format((float)$value, $decimals) . '%';
+    }
+}
+
+if (!function_exists('send_csv')) {
+    function send_csv(string $filename, array $rows, array $headers): void
+    {
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
+        $output = fopen('php://output', 'w');
+        fputcsv($output, $headers);
+        foreach ($rows as $row) {
+            fputcsv($output, array_map(static function ($header) use ($row): string {
+                $value = (string)($row[$header] ?? '');
+                return !is_numeric($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value) ? "'" . $value : $value;
+            }, $headers));
+        }
+        fclose($output);
+        exit;
+    }
+}
+
+if (!function_exists('product_filters')) {
+    function product_filters(array $filters, string $alias = 'p'): array
+    {
+        $where = [];
+        $params = [];
+
+        if ($filters['product_id'] > 0) {
+            $where[] = "{$alias}.product_id = ?";
+            $params[] = $filters['product_id'];
+        }
+
+        if ($filters['category_id'] > 0) {
+            $where[] = "{$alias}.category_id = ?";
+            $params[] = $filters['category_id'];
+        }
+
+        return [$where, $params];
+    }
+}
+
+if (!function_exists('run_report')) {
+    function run_report(PDO $pdo, string $report, array $filters): array
+    {
     if (class_exists(\App\Services\ReportAccessService::class)) {
         \App\Services\ReportAccessService::enforceAccess(function_exists('current_role') ? current_role() : null, $report);
     }
@@ -804,6 +819,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
     return ['headers' => [], 'rows' => []];
 }
+}
 
 $selectedReport = request_value('report', '');
 if ($selectedReport !== '') {
@@ -931,6 +947,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'expor
 }
 
 $totalRows = count($reportData['rows']);
+$reportPage = max(1, (int)($_GET['page'] ?? 1));
+$reportPerPage = max(1, min(100, (int)($_GET['per_page'] ?? 25)));
+$reportTotalPages = max(1, (int)ceil($totalRows / $reportPerPage));
+if ($reportPage > $reportTotalPages) {
+    $reportPage = $reportTotalPages;
+}
+$reportOffset = ($reportPage - 1) * $reportPerPage;
+$pagedReportRows = array_slice($reportData['rows'], $reportOffset, $reportPerPage);
+
+$reportPageUrl = static function(int $targetPage) use ($selectedReport, $filters, $reportPerPage, $activePeriod): string {
+    $params = [
+        'report' => $selectedReport,
+        'from' => $filters['from'],
+        'to' => $filters['to'],
+        'product_id' => $filters['product_id'],
+        'category_id' => $filters['category_id'],
+        'granularity' => $filters['granularity'],
+        'period' => $activePeriod,
+        'page' => $targetPage,
+        'per_page' => $reportPerPage,
+    ];
+    return '?' . http_build_query(array_filter($params, static fn($v) => $v !== '' && $v !== 0 && $v !== '0'));
+};
+
 $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Generate Report';
 ?>
 <!DOCTYPE html>
@@ -945,6 +985,13 @@ $pageTitle = $selectedReport === 'gross_profit' ? 'Gross Profit Report' : 'Gener
 </head>
 <body class="report-generation-page <?= $selectedReport === 'gross_profit' ? 'report-gross-profit' : '' ?>">
 <?php
+$pagedReportRows = $pagedReportRows ?? ($reportData['rows'] ?? []);
+$reportOffset = $reportOffset ?? 0;
+$reportTotalPages = $reportTotalPages ?? 1;
+$reportPage = $reportPage ?? 1;
+$reportPerPage = $reportPerPage ?? 25;
+$reportPageUrl = $reportPageUrl ?? static fn(int $p): string => '?page=' . $p;
+
 // Print-only letterhead details. Every lookup is guarded so the template can be
 // rendered in isolation by the report layout tests.
 $printStoreName = 'Shalom Store';
@@ -1183,7 +1230,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($reportData['rows'] as $row): 
+                                        <?php foreach ($pagedReportRows as $row): 
                                             $raw = $row['raw'] ?? [];
                                             $isInc = !empty($raw['is_incomplete']);
                                             $profitVal = $raw['gross_profit'] ?? null;
@@ -1237,6 +1284,31 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                                         </tfoot>
                                     <?php endif; ?>
                                 </table>
+                                <?php if ($totalRows > $reportPerPage || $reportPage > 1): ?>
+                                    <div class="table-pagination auto-table-pagination" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.6rem 0.85rem; border:1px solid var(--border-color, #e5e7eb); border-top:none; border-radius:0 0 8px 8px; background:var(--theme-surface-soft, #f8fafc);">
+                                        <span class="product-pagination-status" style="font-size:0.85rem;" aria-live="polite">
+                                            Showing <?= $reportOffset + 1 ?> to <?= min($totalRows, $reportOffset + count($pagedReportRows)) ?> of <?= $totalRows ?> products
+                                            <?php if ($reportTotalPages > 1): ?>(Page <?= $reportPage ?> of <?= $reportTotalPages ?>)<?php endif; ?>
+                                        </span>
+                                        <?php if ($reportTotalPages > 1): ?>
+                                            <nav class="pagination-buttons" aria-label="Gross profit pagination">
+                                                <?php if ($reportPage > 1): ?>
+                                                    <a href="<?= htmlspecialchars($reportPageUrl($reportPage - 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Previous page">&lsaquo;</a>
+                                                <?php endif; ?>
+                                                <?php
+                                                    $startP = max(1, $reportPage - 2);
+                                                    $endP = min($reportTotalPages, $reportPage + 2);
+                                                    for ($p = $startP; $p <= $endP; $p++):
+                                                ?>
+                                                    <a href="<?= htmlspecialchars($reportPageUrl($p)) ?>" class="btn <?= $p === $reportPage ? 'btn-primary' : 'btn-secondary' ?> btn-sm" <?= $p === $reportPage ? 'aria-current="page"' : '' ?>><?= $p ?></a>
+                                                <?php endfor; ?>
+                                                <?php if ($reportPage < $reportTotalPages): ?>
+                                                    <a href="<?= htmlspecialchars($reportPageUrl($reportPage + 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Next page">&rsaquo;</a>
+                                                <?php endif; ?>
+                                            </nav>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <p class="net-units-note" id="net-units-explanation">
                                 <strong>Net units:</strong> Units sold minus units refunded in this period. Negative values can be refunds for earlier sales.
@@ -1379,7 +1451,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                             <a href="#report" class="report-adjust-filters no-print">Adjust report filters</a>
                         </div>
                     <?php else: ?>
-                    <div class="table-wrap" tabindex="0" role="region" aria-label="Report records">
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Report records" data-no-jumping="true" style="min-height: 240px;">
                         <table class="report-records-table" data-no-smart-table>
                             <thead>
                                 <tr>
@@ -1389,7 +1461,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($reportData['rows'] as $row): ?>
+                                <?php foreach ($pagedReportRows as $row): ?>
                                     <tr>
                                         <?php foreach ($reportData['headers'] as $header): ?>
                                             <td><?= htmlspecialchars((string)($row[$header] ?? '')) ?></td>
@@ -1398,6 +1470,31 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        <?php if ($totalRows > $reportPerPage || $reportPage > 1): ?>
+                            <div class="table-pagination auto-table-pagination" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.6rem 0.85rem; border:1px solid var(--border-color, #e5e7eb); border-top:none; border-radius:0 0 8px 8px; background:var(--theme-surface-soft, #f8fafc);">
+                                <span class="product-pagination-status" style="font-size:0.85rem;" aria-live="polite">
+                                    Showing <?= $reportOffset + 1 ?> to <?= min($totalRows, $reportOffset + count($pagedReportRows)) ?> of <?= $totalRows ?> records
+                                    <?php if ($reportTotalPages > 1): ?>(Page <?= $reportPage ?> of <?= $reportTotalPages ?>)<?php endif; ?>
+                                </span>
+                                <?php if ($reportTotalPages > 1): ?>
+                                    <nav class="pagination-buttons" aria-label="Report records pagination">
+                                        <?php if ($reportPage > 1): ?>
+                                            <a href="<?= htmlspecialchars($reportPageUrl($reportPage - 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Previous page">&lsaquo;</a>
+                                        <?php endif; ?>
+                                        <?php
+                                            $startP = max(1, $reportPage - 2);
+                                            $endP = min($reportTotalPages, $reportPage + 2);
+                                            for ($p = $startP; $p <= $endP; $p++):
+                                        ?>
+                                            <a href="<?= htmlspecialchars($reportPageUrl($p)) ?>" class="btn <?= $p === $reportPage ? 'btn-primary' : 'btn-secondary' ?> btn-sm" <?= $p === $reportPage ? 'aria-current="page"' : '' ?>><?= $p ?></a>
+                                        <?php endfor; ?>
+                                        <?php if ($reportPage < $reportTotalPages): ?>
+                                            <a href="<?= htmlspecialchars($reportPageUrl($reportPage + 1)) ?>" class="btn btn-secondary btn-sm" aria-label="Next page">&rsaquo;</a>
+                                        <?php endif; ?>
+                                    </nav>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
                 </div>
