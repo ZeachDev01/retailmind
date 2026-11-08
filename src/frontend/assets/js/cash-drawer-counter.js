@@ -10,6 +10,12 @@
     const rows = [...form.querySelectorAll('.money-counter-row')];
     const cash = form.querySelector('#actual-cash');
     const pesos = cents => (cents / 100).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+    const expectedRaw = form.dataset.expected;
+    const expectedCents = expectedRaw !== undefined && expectedRaw !== '' ? Math.round(Number(expectedRaw) * 100) : null;
+    const varianceEl = form.querySelector('#count-variance');
+    const alertEl = form.querySelector('#drawer-variance-alert');
+    const alertText = form.querySelector('#drawer-variance-alert-text');
+
     const update = () => {
         let bills = 0, coins = 0, valid = true;
         for (const row of rows) {
@@ -31,6 +37,32 @@
         form.querySelector('#count-coins').textContent = pesos(coins);
         const cents = valid ? bills + coins : 0;
         cash.value = Math.floor(cents / 100) + '.' + String(cents % 100).padStart(2, '0');
+
+        if (expectedCents !== null && varianceEl) {
+            const diffCents = cents - expectedCents;
+            const diffPesos = Math.abs(diffCents) / 100;
+            const formattedDiff = '₱' + diffPesos.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            varianceEl.classList.remove('is-balanced', 'is-overage', 'is-shortage');
+            if (diffCents === 0) {
+                varianceEl.textContent = '₱0.00 (Balanced)';
+                varianceEl.classList.add('is-balanced');
+                if (alertEl) alertEl.style.display = 'none';
+            } else if (diffCents > 0) {
+                varianceEl.textContent = '+' + formattedDiff + ' (Surplus)';
+                varianceEl.classList.add('is-overage');
+                if (alertEl && alertText) {
+                    alertText.textContent = 'Physical cash exceeds expected register sales by ' + formattedDiff + ' (Surplus). Verify count before closure.';
+                    alertEl.style.display = 'flex';
+                }
+            } else {
+                varianceEl.textContent = '-' + formattedDiff + ' (Deficit)';
+                varianceEl.classList.add('is-shortage');
+                if (alertEl && alertText) {
+                    alertText.textContent = 'Physical cash is short of expected register sales by ' + formattedDiff + ' (Deficit). Verify count before closure.';
+                    alertEl.style.display = 'flex';
+                }
+            }
+        }
     };
     form.addEventListener('input', update);
     form.addEventListener('focusin', event => {

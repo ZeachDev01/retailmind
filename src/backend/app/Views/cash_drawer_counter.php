@@ -41,11 +41,28 @@ $denominationSvgKeys = [
     'coin_005'  => 'coin-5s',
     'coin_001'  => 'coin-1s',
 ];
+
+$counterMode = $counterMode ?? (!empty($openShift) ? 'close' : 'open');
+$isOpening = $counterMode === 'open';
+$expectedCash = $expectedCash ?? null;
 ?>
-<form method="POST" id="cash-drawer-counter">
+<form method="POST" id="cash-drawer-counter"<?= (!$isOpening && $expectedCash !== null) ? ' data-expected="' . number_format((float)$expectedCash, 2, '.', '') . '"' : '' ?>>
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-    <input type="hidden" name="action" value="count">
-    <input type="hidden" name="shift_id" value="<?= (int)$openShift['shift_id'] ?>">
+    <input type="hidden" name="action" value="<?= $isOpening ? 'open' : 'count' ?>">
+    <?php if (!$isOpening): ?>
+        <input type="hidden" name="shift_id" value="<?= (int)($openShift['shift_id'] ?? 0) ?>">
+    <?php else: ?>
+        <div class="form-row shift-opening-register-row">
+            <div>
+                <label for="open-register">Register</label>
+                <select id="open-register" name="register_id" required>
+                    <?php foreach ($availableRegisters ?? [] as $register): ?>
+                        <option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+    <?php endif; ?>
     <div class="money-counter-groups">
         <?php foreach (CashDenominationCounter::DENOMINATIONS as $group => $denominations): ?>
             <fieldset class="money-counter-group">
@@ -78,10 +95,33 @@ $denominationSvgKeys = [
     <div class="money-counter-totals" aria-live="polite">
         <div><span>Total bills</span><strong id="count-bills">₱0.00</strong></div>
         <div><span>Total coins</span><strong id="count-coins">₱0.00</strong></div>
-        <div class="money-counter-total"><label for="actual-cash">Cash counted (₱)</label><input id="actual-cash" type="number" name="actual_cash" min="0" step="0.01" value="0.00" readonly aria-describedby="count-help"></div>
+        <div class="money-counter-total">
+            <label for="actual-cash"><?= $isOpening ? 'Starting cash (₱)' : 'Cash counted (₱)' ?></label>
+            <input id="actual-cash" type="number" name="<?= $isOpening ? 'opening_float' : 'actual_cash' ?>" min="0" step="0.01" value="0.00" readonly aria-describedby="<?= $isOpening ? 'open-count-help' : 'count-help' ?>">
+        </div>
+        <?php if (!$isOpening && $expectedCash !== null): ?>
+            <div class="money-counter-reconciliation-row">
+                <span>Expected cash</span>
+                <strong id="count-expected">₱<?= number_format((float)$expectedCash, 2) ?></strong>
+            </div>
+            <div class="money-counter-reconciliation-row">
+                <span>Drawer variance</span>
+                <strong id="count-variance" class="variance-badge-cell is-balanced">₱0.00 (Balanced)</strong>
+            </div>
+        <?php endif; ?>
     </div>
+    <?php if (!$isOpening && $expectedCash !== null): ?>
+        <div id="drawer-variance-alert" class="message warning shift-variance-warning" role="alert" style="display: none;">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span id="drawer-variance-alert-text"></span>
+        </div>
+    <?php endif; ?>
     <div class="money-counter-actions">
         <button type="button" class="btn btn-secondary" id="reset-cash-count">Start over</button>
-        <button type="submit" class="btn" <?= $unresolvedHeldSales ? 'disabled' : '' ?>>Review cash count</button>
+        <?php if ($isOpening): ?>
+            <button type="submit" class="btn">Open shift</button>
+        <?php else: ?>
+            <button type="submit" class="btn" <?= !empty($unresolvedHeldSales) ? 'disabled' : '' ?>>Review cash count</button>
+        <?php endif; ?>
     </div>
 </form>
