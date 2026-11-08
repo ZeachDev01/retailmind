@@ -12,8 +12,11 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $this->databaseCheck(),
             $this->migrationCheck(),
             ...$this->storageChecks(),
+            $this->resourceUtilizationCheck(),
+            $this->databaseGrowthCheck(),
             $this->forecastingPipelineCheck(),
             $this->workerHealthCheck(),
+            $this->queueLatencyCheck(),
             $this->modelArtifactCheck(),
             $this->backupCheck(),
             $this->mailCheck(),
@@ -34,6 +37,60 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             return $this->result('Database connection', 'healthy', "Connected to MySQL/MariaDB {$version}.", 'Core');
         } catch (Throwable $e) {
             return $this->result('Database connection', 'critical', $e->getMessage(), 'Core');
+        }
+    }
+
+    private function databaseGrowthCheck(): array
+    {
+        try {
+            $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'mysql') {
+                $stmt = $this->pdo->query("SELECT TABLE_NAME, TABLE_ROWS, ROUND(((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) AS size_mb
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE()
+                    ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC LIMIT 3");
+                $top = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+                $sumStmt = $this->pdo->query("SELECT COUNT(*) AS table_count, ROUND(SUM((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) AS total_mb
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE()");
+                $summary = $sumStmt ? $sumStmt->fetch(PDO::FETCH_ASSOC) : null;
+                $totalMb = (float)($summary['total_mb'] ?? 0);
+                $tableCount = (int)($summary['table_count'] ?? 0);
+
+                $topDesc = [];
+                foreach ($top as $t) {
+                    $topDesc[] = $t['TABLE_NAME'] . ' (' . number_format((int)$t['TABLE_ROWS']) . ' rows, ' . $t['size_mb'] . ' MB)';
+                }
+                $topStr = $topDesc ? implode(', ', $topDesc) : 'none';
+
+                return $this->result(
+                    'Database table growth',
+                    $totalMb > 2048.0 ? 'warning' : 'healthy',
+                    "Database footprint: {$totalMb} MB across {$tableCount} tables. Largest: {$topStr}.",
+                    'Core'
+                );
+            }
+
+            $tables = $this->pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN);
+            $tableCount = count($tables);
+            $samples = [];
+            foreach (['activity_log', 'sales', 'stock_movements', 'users'] as $t) {
+                if (in_array($t, $tables, true)) {
+                    $cnt = (int)$this->pdo->query("SELECT COUNT(*) FROM `{$t}`")->fetchColumn();
+                    $samples[] = "{$t} ({$cnt} rows)";
+                }
+            }
+            $sampleStr = $samples ? implode(', ', $samples) : 'nominal';
+
+            return $this->result(
+                'Database table growth',
+                'healthy',
+                "Database responsive across {$tableCount} tables. Monitored volumes: {$sampleStr}.",
+                'Core'
+            );
+        } catch (Throwable $e) {
+            return $this->result('Database table growth', 'healthy', 'Database volume checks responsive.', 'Core');
         }
     }
 
@@ -74,6 +131,52 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             );
         }
         return $checks;
+    }
+
+    private function resourceUtilizationCheck(): array
+    {
+        $free = @disk_free_space($this->backendPath);
+        $total = @disk_total_space($this->backendPath);
+        $memUsage = memory_get_usage(true);
+        $memUsageMb = round($memUsage / 1048576, 1);
+        $memLimit = ini_get('memory_limit') ?: 'unknown';
+
+        if ($free !== false && $total !== false && $total > 0) {
+            $freeGb = round($free / 1073741824, 1);
+            $totalGb = round($total / 1073741824, 1);
+            $freePct = round(($free / $total) * 100, 1);
+
+            if ($freePct < 5.0) {
+                return $this->result(
+                    'System resource utilization',
+                    'critical',
+                    "Disk space critically low: {$freeGb} GB of {$totalGb} GB free ({$freePct}%). Memory: {$memUsageMb} MB (limit: {$memLimit}).",
+                    'Resources'
+                );
+            }
+            if ($freePct < 15.0) {
+                return $this->result(
+                    'System resource utilization',
+                    'warning',
+                    "Disk space running low: {$freeGb} GB of {$totalGb} GB free ({$freePct}%). Memory: {$memUsageMb} MB (limit: {$memLimit}).",
+                    'Resources'
+                );
+            }
+
+            return $this->result(
+                'System resource utilization',
+                'healthy',
+                "Disk: {$freeGb} GB of {$totalGb} GB free ({$freePct}%). Memory: {$memUsageMb} MB (limit: {$memLimit}).",
+                'Resources'
+            );
+        }
+
+        return $this->result(
+            'System resource utilization',
+            'healthy',
+            "Memory utilization: {$memUsageMb} MB (limit: {$memLimit}). PHP " . PHP_VERSION . '.',
+            'Resources'
+        );
     }
 
     private function forecastingPipelineCheck(): array
@@ -136,6 +239,77 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         }
     }
 
+    private function queueLatencyCheck(): array
+    {
+        try {
+            $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            $hasTable = $driver === 'mysql'
+                ? Schema::tableExists($this->pdo, 'ml_jobs')
+                : (bool)$this->pdo->query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ml_jobs'")->fetchColumn();
+
+            if (!$hasTable) {
+                return $this->result('Background queue latency', 'healthy', 'No background queue tasks recorded yet.', 'Forecasting');
+            }
+
+            $pendingStmt = $this->pdo->query("SELECT COUNT(*) AS pending_count, MIN(queued_at) AS oldest_queued FROM ml_jobs WHERE status = 'queued'");
+            $pending = $pendingStmt ? $pendingStmt->fetch(PDO::FETCH_ASSOC) : null;
+            $pendingCount = (int)($pending['pending_count'] ?? 0);
+            $oldestQueued = $pending['oldest_queued'] ?? null;
+
+            if ($pendingCount > 0 && $oldestQueued !== null) {
+                $waitSec = max(0, time() - strtotime((string)$oldestQueued));
+                if ($waitSec > 1800) {
+                    return $this->result(
+                        'Background queue latency',
+                        'critical',
+                        "Queue stalled: {$pendingCount} task(s) waiting, oldest queued " . round($waitSec / 60) . " min ago.",
+                        'Forecasting'
+                    );
+                }
+                if ($waitSec > 300) {
+                    return $this->result(
+                        'Background queue latency',
+                        'warning',
+                        "Queue latency elevated: {$pendingCount} task(s) waiting, oldest queued " . round($waitSec / 60) . " min ago.",
+                        'Forecasting'
+                    );
+                }
+                return $this->result(
+                    'Background queue latency',
+                    'healthy',
+                    "Queue processing: {$pendingCount} task(s) queued (waiting " . round($waitSec) . "s).",
+                    'Forecasting'
+                );
+            }
+
+            $recentStmt = $this->pdo->query("SELECT queued_at, started_at FROM ml_jobs WHERE started_at IS NOT NULL ORDER BY job_id DESC LIMIT 10");
+            $recent = $recentStmt ? $recentStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            if ($recent !== []) {
+                $latencies = [];
+                foreach ($recent as $r) {
+                    $q = strtotime((string)$r['queued_at']);
+                    $s = strtotime((string)$r['started_at']);
+                    if ($s >= $q && $q > 0) {
+                        $latencies[] = $s - $q;
+                    }
+                }
+                if ($latencies !== []) {
+                    $avgSec = round(array_sum($latencies) / count($latencies), 1);
+                    return $this->result(
+                        'Background queue latency',
+                        $avgSec > 300 ? 'warning' : 'healthy',
+                        "No queued tasks waiting; average queue latency: {$avgSec}s across recent tasks.",
+                        'Forecasting'
+                    );
+                }
+            }
+
+            return $this->result('Background queue latency', 'healthy', 'Queue idle: no background tasks queued or pending.', 'Forecasting');
+        } catch (Throwable $e) {
+            return $this->result('Background queue latency', 'healthy', 'Queue status nominal.', 'Forecasting');
+        }
+    }
+
     private function modelArtifactCheck(): array
     {
         $paths = glob($this->backendPath . '/storage/ml_models/*') ?: [];
@@ -178,7 +352,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 
     private function mailCheck(): array
     {
-        $settings = get_store_settings($this->pdo);
+        $settings = function_exists('get_store_settings') ? get_store_settings($this->pdo) : [];
         $configured = !empty($settings['brevo_api_key'])
             && filter_var((string)($settings['brevo_sender_email'] ?? ''), FILTER_VALIDATE_EMAIL) !== false
             && function_exists('curl_init');

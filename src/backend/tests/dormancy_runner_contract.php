@@ -48,6 +48,9 @@ try {
     $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NOT NULL,
         full_name TEXT NOT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
@@ -96,9 +99,9 @@ try {
             ->format('Y-m-d H:i:s');
 
     $insert = $pdo->prepare(
-        'INSERT INTO users (user_id, full_name, username, email, password_hash, role_id, status,
+        'INSERT INTO users (user_id, display_name, full_name, username, email, password_hash, role_id, status,
                             is_recovery_account, last_login_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $fixtures = [
         [1, 'Super Owner', 'super_owner', 'super@example.test', 1, 'active', 0, $at(1), $at(90)],
@@ -115,7 +118,7 @@ try {
         [12, 'Never Warned', 'never_warned', 'neverwarn@example.test', 4, 'active', 0, null, $at(25)],
     ];
     foreach ($fixtures as [$id, $name, $username, $email, $roleId, $status, $recovery, $lastLogin, $created]) {
-        $insert->execute([$id, $name, $username, $email, 'hash-' . $username, $roleId, $status, $recovery, $lastLogin, $created]);
+        $insert->execute([$id, $name, $name, $username, $email, 'hash-' . $username, $roleId, $status, $recovery, $lastLogin, $created]);
     }
 
     $notifier = new class extends UserAccountNotifier {
