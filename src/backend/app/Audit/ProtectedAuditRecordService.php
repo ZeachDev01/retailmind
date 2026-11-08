@@ -225,7 +225,7 @@ final class ProtectedAuditRecordService
             }
         }
         if (($filters['critical_only'] ?? false) === true) {
-            $criticalTerms = ['void', 'delete', 'reversal', 'refund', 'fiscal', 'locked', 'toggled', 'adjustment', 'count'];
+            $criticalTerms = ['void', 'delete', 'reversal', 'refund', 'fiscal', 'locked', 'toggled', 'adjustment', 'count', 'reopened', 'restore', 'recovery'];
             $clauses[] = '(' . implode(' OR ', array_fill(0, count($criticalTerms), 'LOWER(al.action) LIKE ?')) . ')';
             foreach ($criticalTerms as $term) {
                 $params[] = '%' . $term . '%';
