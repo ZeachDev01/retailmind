@@ -1386,6 +1386,10 @@ final class GCashTransactionService
         $confirmedWallet = !empty($data['confirmed_wallet']) || !empty($data['wallet_sent']);
         $confirmedCash = !empty($data['confirmed_cash']) || !empty($data['cash_collected']);
         $notes = isset($data['notes']) ? trim((string)$data['notes']) : (isset($data['note']) ? trim((string)$data['note']) : null);
+        $customerMobile = trim((string)($data['customer_mobile'] ?? $data['customer_identifier'] ?? ''));
+        if ($customerMobile !== '') {
+            $notes = ($notes !== null && $notes !== '') ? ($notes . ' | Customer: ' . $customerMobile) : ('Customer: ' . $customerMobile);
+        }
 
         if ($outcome === 'Completed') {
             if (!$confirmedWallet || !$confirmedCash) {
@@ -1566,6 +1570,10 @@ final class GCashTransactionService
         $confirmedWallet = !empty($data['confirmed_wallet']) || !empty($data['wallet_received']) || !empty($data['wallet_sent']) || !empty($data['wallet_transferred']);
         $confirmedCash = !empty($data['confirmed_cash']) || !empty($data['cash_handed']) || !empty($data['cash_payout_done']) || !empty($data['cash_collected']);
         $notes = isset($data['notes']) ? trim((string)$data['notes']) : (isset($data['note']) ? trim((string)$data['note']) : null);
+        $customerMobile = trim((string)($data['customer_mobile'] ?? $data['customer_identifier'] ?? ''));
+        if ($customerMobile !== '') {
+            $notes = ($notes !== null && $notes !== '') ? ($notes . ' | Customer: ' . $customerMobile) : ('Customer: ' . $customerMobile);
+        }
 
         if ($outcome === 'Completed') {
             if (!$confirmedWallet || !$confirmedCash) {

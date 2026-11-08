@@ -298,6 +298,10 @@ final class ReceiptEngine
         }
 
         $discount = max((float)($sale['discount_amount'] ?? 0), $itemSubtotal - (float)($sale['total_amount'] ?? 0));
+        $totalAmount = (float)($sale['total_amount'] ?? 0.0);
+        $vatRate = 0.12;
+        $vatableSales = round($totalAmount / (1 + $vatRate), 2);
+        $vatAmount = round($totalAmount - $vatableSales, 2);
 
         return [
             'paper_width_mm' => $paperWidthMm,
@@ -323,6 +327,9 @@ final class ReceiptEngine
                 'subtotal_formatted' => $money($itemSubtotal),
                 'discount_formatted' => $money($discount),
                 'total_amount_formatted' => $money($sale['total_amount'] ?? 0),
+                'vatable_sales_formatted' => $money($vatableSales),
+                'vat_amount_formatted' => $money($vatAmount),
+                'vat_rate_percent' => '12%',
                 'cash_received_formatted' => isset($sale['cash_received']) && $sale['cash_received'] !== null ? $money($sale['cash_received']) : '-',
                 'change_due_formatted' => isset($sale['change_due']) && $sale['change_due'] !== null ? $money($sale['change_due']) : '-',
             ],
@@ -412,6 +419,7 @@ final class ReceiptEngine
             'completed_at_formatted' => $escape(PhilippineTime::format($receipt['completed_at'] ?? '')),
             'cashier_name' => $escape($receipt['cashier_name'] ?? ''),
             'register_name' => $escape($receipt['register_name'] ?? ''),
+            'customer_identifier' => $escape($receipt['customer_identifier'] ?? $receipt['customer_mobile'] ?? $receipt['mobile_number'] ?? '—'),
             'principal_amount_formatted' => $money($receipt['principal_amount'] ?? 0),
             'fee_amount_formatted' => $money($receipt['fee_amount'] ?? 0),
             'fee_method' => $escape($receipt['fee_method'] ?? ''),
@@ -551,12 +559,22 @@ final class ReceiptEngine
         $decimal = static fn(int $centavos): string => number_format($centavos / 100, 2, '.', '');
         $store = $this->storeInfo();
         $store['tagline'] = 'GCash Service Receipt';
+        $customerMobile = '';
+        if (!empty($tx['customer_identifier'])) {
+            $customerMobile = (string)$tx['customer_identifier'];
+        } elseif (!empty($tx['customer_mobile'])) {
+            $customerMobile = (string)$tx['customer_mobile'];
+        } elseif (!empty($tx['notes']) && preg_match('/(?:Customer|Mobile|Phone|Account)?[:\s]*(09\d{9}|\+639\d{9})/i', (string)$tx['notes'], $m)) {
+            $customerMobile = $m[1];
+        }
+
         $details = [
             'store' => $store,
             'transaction_id' => (int)$tx['transaction_id'],
             'cashier_id' => (int)$tx['cashier_id'],
             'cashier_name' => $tx['cashier_name'] ?: $tx['cashier_username'],
             'register_name' => $tx['register_name'] ?: 'Unassigned',
+            'customer_identifier' => $customerMobile ?: '—',
             'completed_at' => $tx['completed_at'],
             'transaction_type' => $tx['transaction_type'],
             'reference_number' => $tx['reference_number'],

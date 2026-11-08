@@ -1530,6 +1530,13 @@ html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
 .cashier-shifts-page .variance-badge-cell.is-balanced { background: var(--theme-surface-soft, #f1f5f9); color: var(--muted); }
 .cashier-shifts-page .variance-badge-cell.is-shortage { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #b91c1c); }
 .cashier-shifts-page .variance-badge-cell.is-overage { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #b45309); }
+.cashier-shifts-page .shift-summary-notes { margin-top: 1rem; padding: 0.75rem 1rem; background: var(--theme-surface-soft, var(--card-bg)); border-radius: 8px; border: 1px solid var(--border); }
+.cashier-shifts-page .shift-summary-notes p { margin: 0.35rem 0 0; color: var(--text); }
+.cashier-shifts-page .shift-deviation-warning-prompt { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 1rem; }
+.cashier-shifts-page .shift-deviation-warning-prompt i { font-size: 1.25rem; flex-shrink: 0; color: var(--theme-warning-text, #b45309); }
+.cashier-shifts-page .shift-variance-warning { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+.cashier-shifts-page .shift-immutable-timestamp { display: inline-flex; align-items: center; gap: 0.35rem; font-variant-numeric: tabular-nums; }
+.cashier-shifts-page .money-counter-reconciliation-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .cashier-shifts-page .shift-status {
     display: inline-flex;
     align-items: center;

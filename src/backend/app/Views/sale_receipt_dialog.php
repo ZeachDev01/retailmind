@@ -2,7 +2,8 @@
 <dialog id="receiptModal" class="sale-receipt-dialog" aria-labelledby="saleReceiptTitle"
     data-receipt-endpoint="<?= htmlspecialchars(app_url('components/invoice/sales.php?action=view&ajax=1')) ?>"
     data-initial-receipt="<?= $selected_sale ? '1' : '0' ?>"
-    data-auto-print="<?= $selected_sale && !empty($autoPrintSale) ? '1' : '0' ?>">
+    data-auto-print="<?= $selected_sale && !empty($autoPrintSale) ? '1' : '0' ?>"
+    <?= !empty($receiptAutofocusAction) ? 'data-autofocus-action="1"' : '' ?>>
     <div class="sale-receipt-dialog-header">
         <h2 id="saleReceiptTitle" tabindex="-1">Sale Receipt<?= $selected_sale ? ' #' . (int)$selected_sale['sale_id'] : '' ?></h2>
         <button type="button" class="btn btn-secondary" data-close-receipt aria-label="Close Sale Receipt">Close</button>

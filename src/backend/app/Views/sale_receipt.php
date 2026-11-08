@@ -35,6 +35,10 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareSaleViewData($sale ?? [], $ite
             <div><span>Discount</span><strong class="sale-receipt-money"><?= $v['totals']['discount_formatted'] ?></strong></div>
             <?php if (!empty($v['promotion_name'])): ?><div><span>Promotion</span><strong><?= $v['promotion_name'] ?></strong></div><?php elseif (!empty($v['discount_reason'])): ?><div><span>Discount reason</span><strong><?= $v['discount_reason'] ?></strong></div><?php endif; ?>
             <div class="sale-receipt-grand-total"><span>Total Amount</span><strong class="sale-receipt-money"><?= $v['totals']['total_amount_formatted'] ?></strong></div>
+            <?php if (!empty($v['totals']['vatable_sales_formatted'])): ?>
+            <div><span>VATable Sales</span><strong class="sale-receipt-money"><?= $v['totals']['vatable_sales_formatted'] ?></strong></div>
+            <div><span>VAT (12%)</span><strong class="sale-receipt-money"><?= $v['totals']['vat_amount_formatted'] ?></strong></div>
+            <?php endif; ?>
             <div><span>Cash Received</span><strong class="sale-receipt-money"><?= $v['totals']['cash_received_formatted'] ?></strong></div>
             <div><span>Change</span><strong class="sale-receipt-money"><?= $v['totals']['change_due_formatted'] ?></strong></div>
             <?php if (!empty($v['payment_reference'])): ?>

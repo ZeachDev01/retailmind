@@ -103,6 +103,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'report_stock_issue') {
+    csrf_verify();
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        require_once __DIR__ . '/../../../backend/app/Services/StockIssueService.php';
+        $stockIssueService = new \StockIssueService($pdo, null, $actorRole);
+        if (!$stockIssueService->getOpenShift($cashierId)) {
+            throw new RuntimeException('An active cashier shift is required to submit a stock issue report.');
+        }
+        $adjustmentId = $stockIssueService->submitReport([
+            'product_id' => (int)($_POST['product_id'] ?? 0),
+            'category' => (string)($_POST['category'] ?? 'damaged'),
+            'quantity' => (float)($_POST['quantity'] ?? 1),
+            'form' => (string)($_POST['form'] ?? 'piece'),
+            'explanation' => trim((string)($_POST['explanation'] ?? '')),
+        ], $cashierId);
+
+        log_activity(
+            $pdo,
+            $cashierId,
+            'Stock issue reported',
+            'Inventory Adjustments',
+            (int)$adjustmentId,
+            null,
+            ['adjustment_id' => (int)$adjustmentId, 'status' => 'pending']
+        );
+        echo json_encode(['success' => true, 'adjustment_id' => $adjustmentId, 'message' => "Loss report #{$adjustmentId} submitted for review."]);
+    } catch (Throwable $e) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => \App\Support\OperatorAlert::message($e, 'The loss report could not be saved.')]);
+    }
+    exit;
+}
+
 // Ticket #90: locking and unlocking are a break, never an ending. Neither one
 // touches the shift's status, opening float, or closing figures — only
 // cashier_shifts.locked_at — so a Cashier who walks away mid-shift comes back to
@@ -621,7 +655,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false" autofocus>
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
@@ -710,7 +744,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <select name="payment_method" id="payment-method" class="pos-select">
                             <option value="cash">Cash</option>
                             <option value="card">Card</option>
-                            <option value="ewallet">E-Wallet</option>
+                            <option value="ewallet">E-Wallet (GCash)</option>
                         </select>
                     </div>
 
@@ -753,6 +787,9 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     </button>
                     <button class="btn btn-danger" id="void-sale-btn" type="button" onclick="voidCurrentSale()" disabled>
                         <i class="bi bi-x-circle" aria-hidden="true"></i>Void sale
+                    </button>
+                    <button class="btn btn-secondary" id="report-loss-btn" type="button" title="Report damaged or spoiled stock (F8)" onclick="openStockIssueModal()">
+                        <i class="bi bi-clipboard2-x" aria-hidden="true"></i>Report damage / spoil
                     </button>
                 </div>
 
@@ -856,6 +893,47 @@ $quickCategoryIcon = static function (string $categoryName): string {
     </div>
 </div>
 
+<div id="stock-issue-modal" class="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="stock-issue-title">
+    <div class="checkout-dialog">
+        <div class="checkout-dialog-header">
+            <div>
+                <h3 id="stock-issue-title">Report damaged or spoiled item</h3>
+                <p>Report damaged or spoiled inventory directly from your terminal without interrupting sales.</p>
+            </div>
+            <button type="button" class="modal-close" onclick="closeStockIssueModal()" aria-label="Close loss report dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+        <div class="checkout-dialog-body">
+            <div id="stock-issue-alert" class="pos-cart-msg error hidden" role="alert"></div>
+            <label class="pos-field-label" for="stock-issue-product">Product</label>
+            <select id="stock-issue-product" class="pos-select" required>
+                <option value="">Select product...</option>
+            </select>
+            <div class="payment-grid u-mt-05">
+                <div class="payment-field">
+                    <label class="pos-field-label" for="stock-issue-category">Issue type</label>
+                    <select id="stock-issue-category" class="pos-select">
+                        <option value="damaged">Damaged</option>
+                        <option value="expired">Spoiled / Expired</option>
+                        <option value="missing">Missing / Discrepancy</option>
+                        <option value="other">Other loss</option>
+                    </select>
+                </div>
+                <div class="payment-field">
+                    <label class="pos-field-label" for="stock-issue-qty">Quantity</label>
+                    <input class="pos-input" type="number" id="stock-issue-qty" min="1" step="1" value="1" inputmode="numeric" required>
+                </div>
+            </div>
+            <label class="pos-field-label u-mt-05" for="stock-issue-explanation">Explanation / observations</label>
+            <textarea class="void-reason" id="stock-issue-explanation" placeholder="Example: Dented can found at checkout; broken seal on arrival" required></textarea>
+        </div>
+        <div class="checkout-dialog-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeStockIssueModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="submit-stock-issue-btn" onclick="submitTerminalStockIssue()"><i class="bi bi-send" aria-hidden="true"></i>Submit loss report</button>
+        </div>
+    </div>
+</div>
+
+<?php $receiptAutofocusAction = true; ?>
 <?php require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php'; ?>
 
 <script src="<?= app_url('assets/js/checkout-attempt.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/checkout-attempt.js') ?>"></script>
@@ -884,7 +962,7 @@ $catalogEtag = '"' . hash('sha256', json_encode($catalogProducts, JSON_THROW_ON_
 const posCatalogPreload = <?= json_encode($catalogProducts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const posCatalogEtag = <?= json_encode($catalogEtag) ?>;
 const skuInput = document.getElementById('sku-input');
-if (skuInput && window.matchMedia('(pointer: fine)').matches) skuInput.focus();
+if (skuInput && !document.getElementById('receiptModal')?.open) skuInput.focus();
 const recentScan = document.getElementById('recent-scan');
 const addCodeBtn = document.getElementById('add-code-btn');
 const checkoutForm = document.getElementById('checkout-form');
@@ -904,6 +982,7 @@ const discardModal = document.getElementById('discard-modal');
 const discardReason = document.getElementById('discard-reason');
 const discardNote = document.getElementById('discard-note');
 const stockConflictModal = document.getElementById('stock-conflict-modal');
+const stockIssueModal = document.getElementById('stock-issue-modal');
 let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
 const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
@@ -1077,7 +1156,11 @@ function renderQuickProducts() {
 }
 
 function getCartTotal() {
-    return Object.values(cart).reduce((total, item) => total + (Number(item.price) * Number(item.qty)), 0);
+    return Object.values(cart).reduce((total, item) => {
+        const itemPrice = item.custom_price !== undefined ? Number(item.custom_price) : Number(item.price);
+        const itemDiscount = Number(item.discount || item.item_discount || 0);
+        return total + Math.max(0, (itemPrice * Number(item.qty)) - itemDiscount);
+    }, 0);
 }
 
 function getDiscountAmount() {
@@ -1724,7 +1807,9 @@ function renderCart() {
             const item = cart[id];
             const productId = Number(item.product_id || String(id).split(':')[0]);
             const product = (typeof catalogProductMap !== 'undefined' && catalogProductMap.get(productId)) || quickProductById.get(productId) || item;
-            const subtotal = item.price * item.qty;
+            const itemPrice = item.custom_price !== undefined ? Number(item.custom_price) : Number(item.price);
+            const itemDiscount = Number(item.discount || item.item_discount || 0);
+            const subtotal = Math.max(0, (itemPrice * item.qty) - itemDiscount);
             const remaining = item.stock !== undefined ? item.stock - item.qty : null;
             const threshold = getLowStockThreshold(item);
             const stockNote = item.stock !== undefined ? `Stock ${item.stock}` : 'Stock unavailable';
@@ -1735,10 +1820,13 @@ function renderCart() {
             const formBadge = isPack
                 ? `<span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:600;">Pack of ${item.pack_size || 1}</span>`
                 : `<span class="badge" style="background:#f3f4f6;color:#4b5563;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">Piece</span>`;
+            const discountBadge = itemDiscount > 0
+                ? `<span class="badge" style="background:#fef3c7;color:#92400e;font-size:0.75rem;padding:2px 6px;border-radius:4px;margin-left:6px;font-weight:500;">-₱${money(itemDiscount)}</span>`
+                : '';
             const escapedId = escapeHtml(String(id));
 
             rows += `<tr role="row">
-                <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
+                <td role="cell"><div class="cart-product"><span class="cart-product-image">${quickProductMedia(product)}</span><div class="cart-product-copy"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong class="cart-item-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>${formBadge}${discountBadge}</div><span class="cart-item-meta">${escapeHtml(item.sku || item.barcode || '')} &middot; ${stockNote}</span>${warning}</div></div></td>
                 <td role="cell"><div class="cart-actions"><button type="button" class="qty-btn" data-action="cart-dec" data-id="${escapedId}" aria-label="Decrease ${escapeHtml(item.name)} quantity"><i class="bi bi-dash-lg" aria-hidden="true"></i></button><input class="qty-field" type="number" min="1" value="${Number(item.qty)}" data-action="cart-set" data-id="${escapedId}" aria-label="${escapeHtml(item.name)} quantity" autocomplete="off" inputmode="numeric"><button type="button" class="qty-btn" data-action="cart-inc" data-id="${escapedId}" aria-label="Increase ${escapeHtml(item.name)} quantity"><i class="bi bi-plus-lg" aria-hidden="true"></i></button></div></td>
                 <td role="cell"><strong>&#8369;${money(subtotal)}</strong></td>
                 <td role="cell"><button type="button" class="remove-item-btn" data-action="cart-remove" data-id="${escapedId}" aria-label="Remove ${escapeHtml(item.name)}"><i class="bi bi-x-lg" aria-hidden="true"></i></button></td>
@@ -1838,10 +1926,19 @@ function validateCheckout(requirePayment = true) {
             return false;
         }
     }
-    if (requirePayment && paymentMethod.value !== 'cash' && paymentReference.value.trim() === '') {
-        showCartMessage('Enter the card or e-wallet payment reference.', 'error');
-        paymentReference.focus();
-        return false;
+    if (requirePayment && paymentMethod.value !== 'cash') {
+        const rawRef = paymentReference.value.trim().replace(/[\s-]+/g, '');
+        if (rawRef === '') {
+            showCartMessage('Enter the card or e-wallet payment reference.', 'error');
+            paymentReference.focus();
+            return false;
+        }
+        if (paymentMethod.value === 'ewallet' && !/^[0-9]{13}$/.test(rawRef)) {
+            showCartMessage('Enter a valid 13-digit Philippine GCash reference number.', 'error');
+            paymentReference.focus();
+            return false;
+        }
+        paymentReference.value = rawRef;
     }
 
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before checkout.', 'error'); return false; }
@@ -1862,6 +1959,8 @@ async function checkoutNow() {
 
     let quote;
     checkoutButton.disabled = true;
+    const originalCheckoutButtonHtml = checkoutButton.innerHTML;
+    checkoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     if (window.cartWorkspace) cartWorkspace.busy = true;
     try {
         if (window.cartWorkspace && resumedHeldSaleId && !checkoutAttempt.pending && !await reviewCurrentCart()) return;
@@ -1879,6 +1978,7 @@ async function checkoutNow() {
     } finally {
         if (window.cartWorkspace) cartWorkspace.busy = false;
         checkoutButton.disabled = false;
+        checkoutButton.innerHTML = originalCheckoutButtonHtml;
     }
     const methodLabel = paymentMethod.options[paymentMethod.selectedIndex].text;
     const paymentLine = paymentMethod.value === 'cash'
@@ -1933,42 +2033,62 @@ function closeCheckoutConfirm() {
 
 async function submitConfirmedCheckout() {
     if (checkoutSubmitting) return;
+    checkoutSubmitting = true;
+    confirmCheckoutButton.disabled = true;
+    const originalConfirmHtml = confirmCheckoutButton.innerHTML;
+    confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
+
+    const restoreConfirmButton = () => {
+        checkoutSubmitting = false;
+        confirmCheckoutButton.disabled = false;
+        confirmCheckoutButton.innerHTML = originalConfirmHtml;
+    };
+
     if (typeof navigator !== 'undefined' && 'onLine' in navigator && !navigator.onLine) {
+        restoreConfirmButton();
         showCartMessage('Checkout requires an active internet connection. Please check your network and try again.', 'error');
         return;
     }
     if (!checkoutAttempt.ready) {
+        restoreConfirmButton();
         showCartMessage('Recover the previous checkout before collecting another payment.', 'error');
         return;
     }
     if (!validateCheckout()) {
+        restoreConfirmButton();
         closeCheckoutConfirm();
         return;
     }
     if (!checkoutQuote.isCurrent()) {
+        restoreConfirmButton();
         showCartMessage('The cart or discount changed. Review the final quote again.', 'error');
         closeCheckoutConfirm();
         return;
     }
     if (paymentMethod.value !== 'cash' && !document.getElementById('review-verified')?.checked) {
+        restoreConfirmButton();
         showCartMessage('Verify the external payment before recording it.', 'error');
         return;
     }
-    checkoutSubmitting = true;
+    if (paymentMethod.value === 'ewallet') {
+        const rawRef = paymentReference.value.trim().replace(/[\s-]+/g, '');
+        if (!/^[0-9]{13}$/.test(rawRef)) {
+            restoreConfirmButton();
+            showCartMessage('Enter a valid 13-digit Philippine GCash reference number.', 'error');
+            return;
+        }
+        paymentReference.value = rawRef;
+    }
     checkoutForm.elements.auto_print_receipt.value = document.getElementById('review-auto-print')?.checked ? '1' : '0';
     checkoutForm.elements.payment_verified.value = paymentMethod.value === 'cash' || document.getElementById('review-verified')?.checked ? '1' : '0';
     checkoutConfirmed = true;
-    confirmCheckoutButton.disabled = true;
-    confirmCheckoutButton.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>Processing...';
     try {
         await checkoutQuote.review(true);
         await checkoutAttempt.save(cart);
         checkoutForm.submit();
     } catch (error) {
-        checkoutSubmitting = false;
+        restoreConfirmButton();
         checkoutConfirmed = false;
-        confirmCheckoutButton.disabled = false;
-        confirmCheckoutButton.textContent = 'Confirm payment';
         closeCheckoutConfirm();
         updatePaymentFields();
         if (error.conflicts && error.conflicts.length) {
@@ -2178,6 +2298,16 @@ async function resumeHeldSale(id) {
         renderCart(); renderHeldSales();
         const reviewed = await cartWorkspace.acceptReview(data.review);
         if (reviewed === null) { cartReviewUnresolved = true; persistCart(); showCartMessage('Held sale remains unresolved. Requested lines are preserved; review again before checkout.', 'error'); return; }
+        for (const key in reviewed) {
+            if (data.cart && data.cart[key]) {
+                if (data.cart[key].custom_price !== undefined) reviewed[key].custom_price = data.cart[key].custom_price;
+                if (data.cart[key].discount !== undefined) reviewed[key].discount = data.cart[key].discount;
+                if (data.cart[key].item_discount !== undefined) reviewed[key].item_discount = data.cart[key].item_discount;
+                if (data.cart[key].price !== undefined && data.cart[key].custom_price !== undefined) {
+                    reviewed[key].price = data.cart[key].custom_price;
+                }
+            }
+        }
         cart = reviewed; cartReviewUnresolved = false; renderCart();
         showCartMessage('Held sale resumed. Complete checkout or discard it with a reason to finish it.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); } finally { cartWorkspace.busy = false; }
@@ -2230,6 +2360,120 @@ async function confirmDiscardHeldSale() {
     } catch (error) {
         showCartMessage(error.message, 'error');
     } finally { cartWorkspace.busy = false; }
+}
+
+function openStockIssueModal() {
+    if (!posShiftOpen) {
+        showCartMessage('Open a Cashier Shift before submitting a loss report.', 'error');
+        return;
+    }
+    const select = document.getElementById('stock-issue-product');
+    select.innerHTML = '<option value="">Select product...</option>';
+
+    const cartKeys = Object.keys(cart);
+    if (cartKeys.length > 0) {
+        const cartOptgroup = document.createElement('optgroup');
+        cartOptgroup.label = 'Items in current cart';
+        for (const key of cartKeys) {
+            const item = cart[key];
+            const opt = document.createElement('option');
+            opt.value = item.product_id;
+            opt.textContent = `${item.name} (${item.sku || 'SKU'}) - in cart`;
+            cartOptgroup.appendChild(opt);
+        }
+        select.appendChild(cartOptgroup);
+    }
+
+    if (quickProducts && quickProducts.length > 0) {
+        const catalogOptgroup = document.createElement('optgroup');
+        catalogOptgroup.label = 'Store Catalog Products';
+        for (const prod of quickProducts) {
+            const opt = document.createElement('option');
+            opt.value = prod.product_id;
+            opt.textContent = `${prod.name} (${prod.sku || prod.barcode || 'SKU'})`;
+            catalogOptgroup.appendChild(opt);
+        }
+        select.appendChild(catalogOptgroup);
+    }
+
+    document.getElementById('stock-issue-alert').classList.add('hidden');
+    document.getElementById('stock-issue-qty').value = '1';
+    document.getElementById('stock-issue-explanation').value = '';
+    RetailMindUI.openOverlay(stockIssueModal);
+    select.focus();
+}
+
+function closeStockIssueModal() {
+    RetailMindUI.closeOverlay(stockIssueModal);
+    skuInput.focus();
+}
+
+async function submitTerminalStockIssue() {
+    const productSelect = document.getElementById('stock-issue-product');
+    const categorySelect = document.getElementById('stock-issue-category');
+    const qtyInput = document.getElementById('stock-issue-qty');
+    const explanationInput = document.getElementById('stock-issue-explanation');
+    const alertBox = document.getElementById('stock-issue-alert');
+    const submitBtn = document.getElementById('submit-stock-issue-btn');
+
+    const productId = Number(productSelect.value);
+    const category = categorySelect.value;
+    const quantity = Number(qtyInput.value);
+    const explanation = explanationInput.value.trim();
+
+    if (!productId || productId <= 0) {
+        alertBox.textContent = 'Please choose a product to report.';
+        alertBox.classList.remove('hidden');
+        productSelect.focus();
+        return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        alertBox.textContent = 'Enter a valid quantity (1 or more).';
+        alertBox.classList.remove('hidden');
+        qtyInput.focus();
+        return;
+    }
+    if (explanation.length < 3) {
+        alertBox.textContent = 'Please provide an explanation (at least 3 characters).';
+        alertBox.classList.remove('hidden');
+        explanationInput.focus();
+        return;
+    }
+
+    alertBox.classList.add('hidden');
+    submitBtn.disabled = true;
+    const prevHtml = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+
+    try {
+        const formData = new FormData();
+        formData.append('action', 'report_stock_issue');
+        formData.append('csrf_token', checkoutForm.elements.csrf_token.value);
+        formData.append('product_id', productId);
+        formData.append('category', category);
+        formData.append('quantity', quantity);
+        formData.append('form', 'piece');
+        formData.append('explanation', explanation);
+
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || result.message || 'Loss report failed.');
+        }
+
+        closeStockIssueModal();
+        showCartMessage(result.message || 'Loss report submitted for review.', 'info');
+    } catch (err) {
+        alertBox.textContent = err.message || 'Could not submit loss report.';
+        alertBox.classList.remove('hidden');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = prevHtml;
+    }
 }
 
 function renderHeldSales() {
@@ -2405,7 +2649,13 @@ if (fullscreenToggle) {
 skuInput.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
         event.preventDefault();
-        if (!event.repeat) addCodeFromInput();
+        if (!event.repeat) {
+            if (skuInput.value.trim() !== '') {
+                addCodeFromInput();
+            } else if (typeof cart !== 'undefined' && Object.keys(cart).length > 0 && typeof checkoutNow === 'function') {
+                checkoutNow();
+            }
+        }
     }
 });
 
@@ -2453,15 +2703,27 @@ checkoutForm.addEventListener('submit', event => {
     }
 });
 
-[checkoutModal, voidModal, discardModal, stockConflictModal].filter(Boolean).forEach(modal => {
+[checkoutModal, voidModal, discardModal, stockConflictModal, stockIssueModal].filter(Boolean).forEach(modal => {
     modal.addEventListener('mousedown', event => {
         if (event.target === modal) {
             if (modal === checkoutModal) { closeCheckoutConfirm(); }
             else if (modal === voidModal) { closeVoidModal(); }
             else if (modal === discardModal) { closeDiscardModal(); }
             else if (modal === stockConflictModal) { closeStockConflictModal(); }
+            else if (modal === stockIssueModal) { closeStockIssueModal(); }
         }
     });
+});
+
+checkoutModal.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.repeat && !event.isComposing) {
+        const target = event.target;
+        if (target && target.tagName === 'BUTTON' && target !== confirmCheckoutButton) {
+            return;
+        }
+        event.preventDefault();
+        submitConfirmedCheckout();
+    }
 });
 
 document.addEventListener('keydown', event => {
@@ -2482,7 +2744,19 @@ document.addEventListener('keydown', event => {
         holdCurrentSale();
         return;
     }
+    if (event.key === 'F8') {
+        event.preventDefault();
+        openStockIssueModal();
+        return;
+    }
     if (event.key === 'Escape') {
+        const receipt = document.getElementById('receiptModal');
+        if (receipt && receipt.open) {
+            if (typeof closeReceiptModal === 'function') closeReceiptModal();
+            else receipt.close();
+            skuInput.focus();
+            return;
+        }
         if (checkoutModal.classList.contains('open')) {
             closeCheckoutConfirm();
         } else if (voidModal.classList.contains('open')) {
@@ -2491,6 +2765,8 @@ document.addEventListener('keydown', event => {
             closeDiscardModal();
         } else if (stockConflictModal && stockConflictModal.classList.contains('open')) {
             closeStockConflictModal();
+        } else if (stockIssueModal && stockIssueModal.classList.contains('open')) {
+            closeStockIssueModal();
         }
         return;
     }
@@ -2557,6 +2833,9 @@ checkoutAttempt.recover().then(async () => {
     } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
 });
 setTimeout(() => { if (!document.getElementById('receiptModal')?.open) skuInput.focus(); }, 100);
+document.getElementById('receiptModal')?.addEventListener('close', () => {
+    setTimeout(() => skuInput.focus(), 50);
+});
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>
         <?php endif; ?>

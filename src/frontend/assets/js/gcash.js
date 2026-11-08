@@ -21,7 +21,7 @@
         const type = el('type')?.value || 'Cash-In';
         const isCashIn = type === 'Cash-In';
         const isCashOut = type === 'Cash-Out';
-        const validRef = parser.valid(reference.value, rules);
+        const validRef = parser.valid(parser.normalize(reference.value), rules);
         const validPrincipal = validatePrincipal(el('amount')?.value) !== null;
 
         save.disabled = !canSave || saving || checking || duplicate || !validRef;
@@ -487,12 +487,13 @@
                     action: 'record_cash_in',
                     outcome: 'Completed',
                     principal: validPrincipal,
-                    reference: reference.value,
+                    reference: parser.normalize(reference.value),
                     confirmed_wallet: true,
                     confirmed_cash: true,
                     preview_fee: preview.fee,
                     preview_counter_collect: preview.counterCollect,
                     preview_wallet_transfer: preview.walletTransfer,
+                    customer_mobile: el('customer-mobile')?.value.trim() || '',
                 };
                 const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
@@ -547,7 +548,7 @@
                     outcome: 'Completed',
                     principal: validPrincipal,
                     fee_method: feeMethod,
-                    reference: reference.value,
+                    reference: parser.normalize(reference.value),
                     confirmed_wallet: true,
                     confirmed_cash: true,
                     preview_fee: preview.fee,
@@ -556,6 +557,7 @@
                     preview_cash_payout: preview.cashPayout,
                     net_service_cash: preview.netServiceCash,
                     net_wallet: preview.netWallet,
+                    customer_mobile: el('customer-mobile')?.value.trim() || '',
                 };
                 const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
@@ -703,7 +705,13 @@
         updateSave();
         try {
             if (!await checkReference() || !el('form').reportValidity()) return;
-            const body = {action: 'save', reference: reference.value, amount: el('amount').value, type: el('type').value};
+            const body = {
+                action: 'save',
+                reference: parser.normalize(reference.value),
+                amount: el('amount').value,
+                type: el('type').value,
+                customer_mobile: el('customer-mobile')?.value.trim() || '',
+            };
             for (const input of el('form').elements) input.disabled = true;
             const data = await request(null, body);
             el('form').reset();

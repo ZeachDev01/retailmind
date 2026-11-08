@@ -650,6 +650,15 @@ class HeldSaleService
                 'price' => $price,
                 'server_price' => $currentPrice,
             ]);
+            if (isset($line['custom_price'])) {
+                $requestedLine['custom_price'] = (float)$line['custom_price'];
+            }
+            if (isset($line['discount'])) {
+                $requestedLine['discount'] = (float)$line['discount'];
+            }
+            if (isset($line['item_discount'])) {
+                $requestedLine['item_discount'] = (float)$line['item_discount'];
+            }
             $requested[$id] = $requestedLine;
 
             $parsedLines[] = [
@@ -658,6 +667,9 @@ class HeldSaleService
                 'selling_form' => $sellingForm,
                 'qty' => $qty,
                 'price' => $price,
+                'custom_price' => isset($line['custom_price']) ? (float)$line['custom_price'] : null,
+                'discount' => isset($line['discount']) ? (float)$line['discount'] : null,
+                'item_discount' => isset($line['item_discount']) ? (float)$line['item_discount'] : null,
                 'name' => $name,
                 'product' => $product,
                 'pack_size' => $packSize,
@@ -751,6 +763,15 @@ class HeldSaleService
                 'reorder_level' => (int)$product['reorder_level'],
                 'safety_stock' => (int)$product['safety_stock'],
             ];
+            if (isset($item['custom_price'])) {
+                $proposal[$id]['custom_price'] = (float)$item['custom_price'];
+            }
+            if (isset($item['discount'])) {
+                $proposal[$id]['discount'] = (float)$item['discount'];
+            }
+            if (isset($item['item_discount'])) {
+                $proposal[$id]['item_discount'] = (float)$item['item_discount'];
+            }
 
             if ($currentQty !== $qty) {
                 $changes[] = $name . ': requested quantity ' . $qty . ', available ' . $currentQty . '.';
@@ -822,7 +843,7 @@ class HeldSaleService
                 (held_sale_id, cart_key, line_position, product_id, selling_form, pack_size, product_name, quantity, price, server_price, stock, reorder_level, safety_stock, sku, barcode, product_image)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $allowed = ['product_id', 'selling_form', 'pack_size', 'name', 'qty', 'price', 'server_price', 'stock', 'reorder_level', 'safety_stock', 'sku', 'barcode', 'product_image'];
+        $allowed = ['product_id', 'selling_form', 'pack_size', 'name', 'qty', 'price', 'server_price', 'stock', 'reorder_level', 'safety_stock', 'sku', 'barcode', 'product_image', 'custom_price', 'discount', 'item_discount'];
         $position = 0;
         foreach ($cart as $key => $line) {
             if ((!is_string($key) && !is_int($key)) || !is_array($line) || array_diff(array_keys($line), $allowed) !== []) {
