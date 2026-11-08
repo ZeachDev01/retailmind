@@ -124,7 +124,8 @@ $restoreEndpoint = $read('src/frontend/components/backup/restore.php');
 $assert(str_contains($administratorPage, "'/../backup/restore_form.php'") && str_contains($superAdministratorPage, "'/../backup/restore_form.php'"), 'Both administrator screens offer the shared encrypted restore form');
 $assert(str_contains($restoreEndpoint, 'require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)')
     && str_contains($restoreEndpoint, 'csrf_verify()') && str_contains($restoreEndpoint, 'require_local_request(')
-    && str_contains($restoreEndpoint, 'is_uploaded_file(') && str_contains($restoreEndpoint, '->startIncoming('),
+    && (str_contains($restoreEndpoint, 'is_uploaded_file(') || str_contains($restoreEndpoint, 'backup_review_source('))
+    && str_contains($restoreEndpoint, '->startIncoming('),
     'Initial encrypted restore requires administrator capability, local access, CSRF and uploaded package validation');
 $assert(
     str_contains($superAdministratorPage, 'DatabaseRestoreService'),

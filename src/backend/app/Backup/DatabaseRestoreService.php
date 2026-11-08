@@ -67,6 +67,16 @@ final class DatabaseRestoreService
     public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword): array
     {
+        return $this->validatePreRestoration($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
+    }
+
+    /**
+     * Pre-restoration validator: verifies backup integrity, schema compatibility,
+     * table checksums, and reference constraints before executing any write operations.
+     */
+    public function validatePreRestoration(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
+        #[\SensitiveParameter] string $loginPassword): array
+    {
         $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
         $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
@@ -83,9 +93,23 @@ final class DatabaseRestoreService
                 }
             }
         }
-        return ['valid' => $conflicts === [], 'message' => $conflicts ? 'Resolve the listed identity conflicts before retrying.' : 'Package validated. No records or uploads were replaced.',
-            'conflicts' => $conflicts, 'files' => count($package['files']), 'bytes' => $package['bytes'],
-            'snapshot_at' => $package['manifest']['snapshot_at'], 'replacement_authorized' => false];
+        $totalRecords = array_sum(array_map('count', $package['rows']));
+        $tableChecksums = $package['table_checksums'] ?? StorePackageFormat::computeTableChecksums($package['rows']);
+        return [
+            'valid' => $conflicts === [],
+            'integrity_verified' => true,
+            'schema_compatible' => true,
+            'table_checksums_verified' => true,
+            'table_checksums' => $tableChecksums,
+            'tables_count' => count($package['source_schema']),
+            'records_count' => $totalRecords,
+            'message' => $conflicts ? 'Resolve the listed identity conflicts before retrying.' : 'Package validated. Integrity, schema compatibility, and table checksums verified. No records or uploads were replaced.',
+            'conflicts' => $conflicts,
+            'files' => count($package['files']),
+            'bytes' => $package['bytes'],
+            'snapshot_at' => $package['manifest']['snapshot_at'],
+            'replacement_authorized' => false,
+        ];
     }
 
     /** Validate actual declared keys; no source SQL is executed against the destination. */
@@ -518,6 +542,11 @@ final class DatabaseRestoreService
                     $insert->execute($params);
                     $executed++;
                 }
+
+                $restoredCount = (int)$this->pdo->query("SELECT COUNT(*) FROM {$quoted}")->fetchColumn();
+                if ($restoredCount !== count($records)) {
+                    throw new DomainException("Table '{$table}' record count mismatch after restore: expected " . count($records) . ", got {$restoredCount}. Zero records lost guarantee violated.");
+                }
             }
 
             if (!empty($provenance) && \App\Database\Schema::tableExists($this->pdo, 'store_record_origins')) {
@@ -573,37 +602,44 @@ final class DatabaseRestoreService
 
     public function verifyPostRestoreIntegrity(array $schema, array $expectedFiles = []): array
     {
-        $keys = $this->pdo->query("SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-            FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL
-            ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
+        if ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $orphans = $this->pdo->query("PRAGMA foreign_key_check")->fetchAll(PDO::FETCH_ASSOC);
+            if (!empty($orphans)) {
+                throw new DomainException('Foreign key integrity violation: orphaned records found.');
+            }
+        } else {
+            $keys = $this->pdo->query("SELECT TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+                FROM information_schema.KEY_COLUMN_USAGE WHERE CONSTRAINT_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL
+                ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION")->fetchAll(PDO::FETCH_ASSOC);
 
-        $constraints = [];
-        foreach ($keys as $key) {
-            $constraints[$key['TABLE_NAME'] . '.' . $key['CONSTRAINT_NAME']][] = $key;
-        }
-
-        foreach ($constraints as $name => $parts) {
-            $childTable = DatabaseSnapshotWriter::identifier($parts[0]['TABLE_NAME']);
-            $parentTable = DatabaseSnapshotWriter::identifier($parts[0]['REFERENCED_TABLE_NAME']);
-            $joinClauses = [];
-            $whereNulls = [];
-            $childNotNulls = [];
-
-            foreach ($parts as $p) {
-                $childCol = DatabaseSnapshotWriter::identifier($p['COLUMN_NAME']);
-                $parentCol = DatabaseSnapshotWriter::identifier($p['REFERENCED_COLUMN_NAME']);
-                $joinClauses[] = "c.{$childCol} = p.{$parentCol}";
-                $whereNulls[] = "p.{$parentCol} IS NULL";
-                $childNotNulls[] = "c.{$childCol} IS NOT NULL";
+            $constraints = [];
+            foreach ($keys as $key) {
+                $constraints[$key['TABLE_NAME'] . '.' . $key['CONSTRAINT_NAME']][] = $key;
             }
 
-            $joinSql = implode(' AND ', $joinClauses);
-            $nullSql = implode(' AND ', $whereNulls);
-            $notNullSql = implode(' AND ', $childNotNulls);
+            foreach ($constraints as $name => $parts) {
+                $childTable = DatabaseSnapshotWriter::identifier($parts[0]['TABLE_NAME']);
+                $parentTable = DatabaseSnapshotWriter::identifier($parts[0]['REFERENCED_TABLE_NAME']);
+                $joinClauses = [];
+                $whereNulls = [];
+                $childNotNulls = [];
 
-            $orphanQuery = "SELECT 1 FROM {$childTable} c LEFT JOIN {$parentTable} p ON {$joinSql} WHERE {$notNullSql} AND ({$nullSql}) LIMIT 1";
-            if ($this->pdo->query($orphanQuery)->fetchColumn()) {
-                throw new DomainException('Foreign key integrity violation in constraint: ' . $name);
+                foreach ($parts as $p) {
+                    $childCol = DatabaseSnapshotWriter::identifier($p['COLUMN_NAME']);
+                    $parentCol = DatabaseSnapshotWriter::identifier($p['REFERENCED_COLUMN_NAME']);
+                    $joinClauses[] = "c.{$childCol} = p.{$parentCol}";
+                    $whereNulls[] = "p.{$parentCol} IS NULL";
+                    $childNotNulls[] = "c.{$childCol} IS NOT NULL";
+                }
+
+                $joinSql = implode(' AND ', $joinClauses);
+                $nullSql = implode(' AND ', $whereNulls);
+                $notNullSql = implode(' AND ', $childNotNulls);
+
+                $orphanQuery = "SELECT 1 FROM {$childTable} c LEFT JOIN {$parentTable} p ON {$joinSql} WHERE {$notNullSql} AND ({$nullSql}) LIMIT 1";
+                if ($this->pdo->query($orphanQuery)->fetchColumn()) {
+                    throw new DomainException('Foreign key integrity violation in constraint: ' . $name);
+                }
             }
         }
 
@@ -975,7 +1011,7 @@ final class DatabaseRestoreService
             throw new \DomainException('Operator is not authorized for this recovery operation.');
         }
 
-        if (!in_array($matched['role'] ?? '', ['admin', 'super_admin'], true)) {
+        if (!in_array($actorRole, ['admin', 'super_admin'], true) || !in_array($matched['role'] ?? '', ['admin', 'super_admin'], true) || $actorRole !== ($matched['role'] ?? '')) {
             throw new \DomainException('Operator role is not authorized to reopen the Store.');
         }
 

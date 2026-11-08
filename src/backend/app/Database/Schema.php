@@ -9,6 +9,11 @@ final class Schema
 {
     public static function tableExists(PDO $pdo, string $table): bool
     {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
+            $stmt->execute([$table]);
+            return (int)$stmt->fetchColumn() > 0;
+        }
         $stmt = $pdo->prepare(
             'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?'
         );
@@ -18,6 +23,15 @@ final class Schema
 
     public static function columnExists(PDO $pdo, string $table, string $column): bool
     {
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $cols = $pdo->query("PRAGMA table_info(" . $pdo->quote($table) . ")")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($cols as $col) {
+                if (($col['name'] ?? '') === $column) {
+                    return true;
+                }
+            }
+            return false;
+        }
         $stmt = $pdo->prepare(
             'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?'
         );

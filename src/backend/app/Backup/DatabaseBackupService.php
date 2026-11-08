@@ -138,6 +138,8 @@ final class DatabaseBackupService
             unset($package, $sql, $files);
             $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $schema);
             $snapshotAt = $verified['manifest']['snapshot_at'];
+            $capture['table_checksums'] = $verified['table_checksums'] ?? [];
+            $capture['package_checksum'] = hash_file('sha256', $artifactPath);
             unset($verified);
             $coordinator->discard($sqlPath);
             $coordinator->releaseCapture();
@@ -195,6 +197,8 @@ final class DatabaseBackupService
             'token' => $token,
             'path' => $artifactPath,
             'size' => (int)$capture['size'],
+            'checksum' => (string)($capture['package_checksum'] ?? ''),
+            'table_checksums' => $capture['table_checksums'] ?? [],
             'snapshot_at' => $snapshotAt,
             'tables' => (int)$capture['tables'],
             'rows' => (int)$capture['rows'],

@@ -136,6 +136,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <details class="backup-tips">
                         <summary>What to keep</summary>
                         <ul class="backup-guidance-list">
+                            <li>Creating a backup does not confirm the file is saved locally. Download your copy immediately.</li>
                             <li>No backup passphrase is needed.</li>
                             <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
                         </ul>

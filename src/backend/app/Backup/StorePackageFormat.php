@@ -29,12 +29,24 @@ final class StorePackageFormat
         }
     }
 
+    public static function computeTableChecksums(array $rows): array
+    {
+        $checksums = [];
+        foreach ($rows as $table => $tableRows) {
+            $checksums[$table] = hash('sha256', serialize($tableRows));
+        }
+        ksort($checksums, SORT_STRING);
+        return $checksums;
+    }
+
     public static function encode(#[\SensitiveParameter] string $sql, array $files, array $schema, string $origin = '', string $databaseVersion = ''): string
     {
         self::assertRuntime();
         $secret = BackupKeyStore::current();
         $header = self::KEY_HEADER . hash('sha256', $secret);
         SqlBackupFormat::statements($sql, $schema);
+        $rows = SqlBackupFormat::rows($sql, $schema);
+        $tableChecksums = self::computeTableChecksums($rows);
         $members = [['path' => 'database.sql', 'size' => strlen($sql), 'content' => base64_encode($sql)]];
         foreach ($files as $path => $content) {
             self::assertImage($path, $content);
@@ -42,6 +54,7 @@ final class StorePackageFormat
         }
         $manifest = ['format' => self::VERSION, 'sql_format' => SqlBackupFormat::VERSION,
             'schema' => hash('sha256', json_encode($schema, JSON_THROW_ON_ERROR)),
+            'table_checksums' => $tableChecksums,
             'package_id' => bin2hex(random_bytes(16)), 'origin_id' => $origin ?: bin2hex(random_bytes(16)),
             'snapshot_at' => gmdate('Y-m-d H:i:s'), 'php' => PHP_VERSION, 'openssl' => OPENSSL_VERSION_TEXT, 'database' => $databaseVersion,
             'members' => $members];
@@ -78,6 +91,18 @@ final class StorePackageFormat
             $result = self::validateManifest($manifest, $schema);
             $result['rows'] = SqlBackupFormat::rows($result['sql'], $result['source_schema']);
             self::validateReferences($result['rows'], $result['files']);
+            $computedChecksums = self::computeTableChecksums($result['rows']);
+            if (isset($manifest['table_checksums'])) {
+                if (!is_array($manifest['table_checksums'])) {
+                    throw new RuntimeException('The package declares invalid table checksums.');
+                }
+                foreach ($manifest['table_checksums'] as $table => $expectedChecksum) {
+                    if (!isset($computedChecksums[$table]) || !hash_equals((string)$expectedChecksum, (string)$computedChecksums[$table])) {
+                        throw new RuntimeException("Table checksum verification failed for '{$table}'. Backup data integrity is compromised.");
+                    }
+                }
+            }
+            $result['table_checksums'] = $manifest['table_checksums'] ?? $computedChecksums;
             return $result;
         } finally { unset($key, $plain); }
     }
