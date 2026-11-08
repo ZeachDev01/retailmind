@@ -458,12 +458,37 @@ unset($_SESSION['_login_username']);
                             <input type="hidden" name="action" value="set_password">
                             <div class="form-group">
                                 <label for="landing-recovery-newpass">New password</label>
-                                <input type="password" id="landing-recovery-newpass" name="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" required autofocus>
-                                <small class="field-help" style="display:block;margin-top:4px;color:#64748b;">Uppercase, lowercase, and a number.</small>
+                                <div class="password-input">
+                                    <input type="password" id="landing-recovery-newpass" name="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" required autofocus aria-describedby="landing-recovery-newpass-help">
+                                    <button type="button" class="password-toggle" data-password-toggle="landing-recovery-newpass" aria-controls="landing-recovery-newpass" aria-pressed="false" aria-label="Show new password">Show</button>
+                                </div>
+                                <small id="landing-recovery-newpass-help" class="field-help cp-sr-hint">Use at least 8 characters with uppercase, lowercase, and a number.</small>
+
+                                <!-- Real-time visual strength meter & requirement chips (parihas sa change_password.php) -->
+                                <div class="cp-meter-container" aria-hidden="true">
+                                    <div class="cp-meter-bars">
+                                        <span class="cp-meter-bar" id="recovery-bar1"></span>
+                                        <span class="cp-meter-bar" id="recovery-bar2"></span>
+                                        <span class="cp-meter-bar" id="recovery-bar3"></span>
+                                        <span class="cp-meter-bar" id="recovery-bar4"></span>
+                                    </div>
+                                    <div class="cp-requirements">
+                                        <span class="cp-req-chip" id="recovery-req-len"><i class="bi bi-circle"></i> 8+ chars</span>
+                                        <span class="cp-req-chip" id="recovery-req-upper"><i class="bi bi-circle"></i> Uppercase</span>
+                                        <span class="cp-req-chip" id="recovery-req-lower"><i class="bi bi-circle"></i> Lowercase</span>
+                                        <span class="cp-req-chip" id="recovery-req-num"><i class="bi bi-circle"></i> Number</span>
+                                    </div>
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label for="landing-recovery-confirm">Confirm new password</label>
-                                <input type="password" id="landing-recovery-confirm" name="password_confirm" minlength="8" placeholder="Confirm new password" autocomplete="new-password" required>
+                                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                                    <label for="landing-recovery-confirm" style="margin-bottom:0;">Confirm new password</label>
+                                    <span class="cp-match-pill" id="recovery-match-status" aria-live="polite"></span>
+                                </div>
+                                <div class="password-input" style="margin-top:0.45rem;">
+                                    <input type="password" id="landing-recovery-confirm" name="password_confirm" minlength="8" placeholder="Confirm new password" autocomplete="new-password" required>
+                                    <button type="button" class="password-toggle" data-password-toggle="landing-recovery-confirm" aria-controls="landing-recovery-confirm" aria-pressed="false" aria-label="Show confirmation password">Show</button>
+                                </div>
                             </div>
                             <div class="landing-login-modal__actions">
                                 <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Save password & sign in</button>
