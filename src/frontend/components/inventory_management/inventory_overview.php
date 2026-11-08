@@ -268,11 +268,11 @@ $chartDataJson = json_encode([
                         <select id="overview-filter-select" class="form-select form-select-sm" aria-label="Filter by stock status">
                             <option value="all">All Products</option>
                             <option value="in-stock">🟢 In Stock</option>
-                            <option value="out">🔴 Out of Stock</option>
                             <option value="low">🟡 Low Stock</option>
-                            <option value="expiring">Expiring Soon</option>
-                            <option value="expired">Expired</option>
-                            <option value="missing-exp">Missing Expiration</option>
+                            <option value="expiring">🟠 Expiring Soon</option>
+                            <option value="out">🔴 Out of Stock</option>
+                            <option value="expired">🟣 Expired</option>
+                            <option value="missing-exp">⚪ Missing Expiration</option>
                         </select>
                     </div>
                 </div>
@@ -303,7 +303,7 @@ $chartDataJson = json_encode([
                         $quantity = (int)($product['quantity_on_hand'] ?? 0);
                         $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
                         $stockState = $quantity <= 0 ? 'out' : ($quantity <= $threshold ? 'low' : 'available');
-                        $isLowStock = isset($lowStockProductIds[$productId]);
+                        $isLowStock = isset($lowStockProductIds[$productId]) || ($quantity > 0 && $quantity <= $threshold);
                         $expiredQty = (int)($product['expired_quantity'] ?? 0);
                         $undatedQty = (int)($product['undated_quantity'] ?? 0);
                         $isExpired = $expiredQty > 0 || isset($expiredProductIds[$productId]);

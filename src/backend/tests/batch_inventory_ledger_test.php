@@ -216,7 +216,8 @@ $pdo->exec("CREATE TABLE notifications (
     attention_count INTEGER NULL,
     attention_destination TEXT NULL,
     inapp_enabled INTEGER DEFAULT 1,
-    email_pending INTEGER DEFAULT 0
+    email_pending INTEGER DEFAULT 0,
+    resolved_at TIMESTAMP NULL
 )");
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS attention_states (

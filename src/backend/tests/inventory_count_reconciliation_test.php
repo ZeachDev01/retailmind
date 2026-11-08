@@ -242,6 +242,7 @@ try {
             reference_id INTEGER,
             reference_type TEXT,
             is_read INTEGER DEFAULT 0,
+            resolved_at DATETIME NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 

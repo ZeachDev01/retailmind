@@ -225,6 +225,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                             <th>Status</th>
                                             <th>System</th>
                                             <th>Counted</th>
+                                            <th>Variance</th>
                                         </tr>
                                     </thead>
                                     <tbody id="batch_counts_tbody"></tbody>
@@ -346,6 +347,13 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                                 <strong class="<?= $difference < 0 ? 'diff-negative' : ($difference > 0 ? 'diff-positive' : '') ?>">
                                                     <?= $difference > 0 ? '+' . $difference : $difference ?>
                                                 </strong>
+                                                <?php if ($difference > 0): ?>
+                                                    <span class="variance-tag variance-tag--surplus">Surplus</span>
+                                                <?php elseif ($difference < 0): ?>
+                                                    <span class="variance-tag variance-tag--deficit">Deficit</span>
+                                                <?php else: ?>
+                                                    <span class="variance-tag variance-tag--balanced">Exact</span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?= htmlspecialchars($count['discrepancy_reason']) ?>
@@ -435,11 +443,14 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
 
             const difference = physical - system;
-            differenceQty.textContent = difference > 0 ? '+' + difference : difference;
             if (difference < 0) {
                 differenceQty.classList.add('diff-negative');
+                differenceQty.innerHTML = `${difference} <span class="variance-tag variance-tag--deficit">Deficit</span>`;
             } else if (difference > 0) {
                 differenceQty.classList.add('diff-positive');
+                differenceQty.innerHTML = `+${difference} <span class="variance-tag variance-tag--surplus">Surplus</span>`;
+            } else {
+                differenceQty.innerHTML = `0 <span class="variance-tag variance-tag--balanced">Exact</span>`;
             }
         }
 
@@ -580,7 +591,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             batchTbody.replaceChildren();
             if (hasNoBatches) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = '<td colspan="5" class="muted" style="text-align:center; padding:12px;">No active batches. Use "Add found batch" for unbatched stock.</td>';
+                tr.innerHTML = '<td colspan="6" class="muted" style="text-align:center; padding:12px;">No active batches. Use "Add found batch" for unbatched stock.</td>';
                 batchTbody.appendChild(tr);
             } else {
                 coverage.batches.forEach(function (b, idx) {
@@ -632,6 +643,10 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         <td>${statusBadge}</td>
                         <td>${systemCell}</td>
                         <td>${countedCell}</td>
+                        <td class="batch-variance-cell" data-system-total="${b.remaining_quantity}">
+                            <strong class="batch-variance-val">0</strong>
+                            <span class="variance-tag variance-tag--balanced">Exact</span>
+                        </td>
                     `;
                     batchTbody.appendChild(tr);
                 });
@@ -660,20 +675,49 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 const looseInp = row.querySelector('.batch-count-loose');
                 const baseInp = row.querySelector('.batch-base-qty');
                 const plainInp = row.querySelector('.batch-count-input:not(.batch-count-sealed):not(.batch-count-loose)');
+                const varianceCell = row.querySelector('.batch-variance-cell');
+                const foundVariance = row.querySelector('.found-batch-variance-val');
+                let rowTotal = 0;
+                let hasRowVal = false;
                 if (sealedInp || looseInp) {
                     const sealed = parseInt(sealedInp?.value, 10) || 0;
                     const loose = parseInt(looseInp?.value, 10) || 0;
                     const packSize = parseInt(sealedInp?.dataset.packSize, 10) || (activeCoverage?.pack_size || 1);
-                    const rowTotal = (sealed * packSize) + loose;
+                    rowTotal = (sealed * packSize) + loose;
                     if (sealedInp?.value !== '' || looseInp?.value !== '') {
                         hasAny = true;
+                        hasRowVal = true;
                     }
                     if (baseInp) baseInp.value = rowTotal;
                     sum += rowTotal;
                 } else if (plainInp) {
                     if (plainInp.value !== '') {
                         hasAny = true;
-                        sum += parseInt(plainInp.value, 10) || 0;
+                        hasRowVal = true;
+                        rowTotal = parseInt(plainInp.value, 10) || 0;
+                        sum += rowTotal;
+                    }
+                }
+                if (varianceCell) {
+                    const sysTotal = parseInt(varianceCell.dataset.systemTotal, 10) || 0;
+                    if (!hasRowVal) {
+                        varianceCell.innerHTML = '<strong class="batch-variance-val">-</strong>';
+                    } else {
+                        const diff = rowTotal - sysTotal;
+                        if (diff > 0) {
+                            varianceCell.innerHTML = `<strong class="batch-variance-val diff-positive">+${diff}</strong> <span class="variance-tag variance-tag--surplus">Surplus</span>`;
+                        } else if (diff < 0) {
+                            varianceCell.innerHTML = `<strong class="batch-variance-val diff-negative">${diff}</strong> <span class="variance-tag variance-tag--deficit">Deficit</span>`;
+                        } else {
+                            varianceCell.innerHTML = `<strong class="batch-variance-val">0</strong> <span class="variance-tag variance-tag--balanced">Exact</span>`;
+                        }
+                    }
+                }
+                if (foundVariance) {
+                    if (rowTotal > 0) {
+                        foundVariance.innerHTML = `<strong class="diff-positive">+${rowTotal}</strong> <span class="variance-tag variance-tag--surplus">Surplus</span>`;
+                    } else {
+                        foundVariance.innerHTML = `<strong class="muted">0</strong> <span class="variance-tag variance-tag--balanced">Exact</span>`;
                     }
                 }
             });
@@ -712,7 +756,12 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 }
                 div.innerHTML = `
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <strong>Found batch</strong>
+                        <div>
+                            <strong>Found batch</strong>
+                            <span class="found-batch-variance" style="margin-left:8px; font-size:12px;">
+                                <span class="found-batch-variance-val"><strong class="muted">0</strong> <span class="variance-tag variance-tag--balanced">Exact</span></span>
+                            </span>
+                        </div>
                         <button type="button" class="btn btn-small btn-secondary remove-batch-btn" style="padding:1px 6px;">&times; Remove</button>
                     </div>
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
@@ -758,11 +807,16 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         batchDetailBody.innerHTML = '<p class="muted">No batch breakdown recorded.</p>';
                         return;
                     }
-                    let html = '<div class="table-wrap"><table><thead><tr><th>Batch</th><th>Expiration</th><th>System</th><th>Counted</th><th>Diff</th><th>Notes</th></tr></thead><tbody>';
+                    let html = '<div class="table-wrap"><table><thead><tr><th>Batch</th><th>Expiration</th><th>System</th><th>Counted</th><th>Variance</th><th>Notes</th></tr></thead><tbody>';
                     data.batches.forEach(function (b) {
                         const bNum = b.batch_number ? b.batch_number : (b.original_batch_number ? b.original_batch_number : (b.batch_id ? 'Batch #' + b.batch_id : 'Added / Found'));
                         const bExp = b.expiration_date ? b.expiration_date : (b.original_expiration_date ? b.original_expiration_date : 'Not recorded');
-                        const diff = b.difference_qty > 0 ? '+' + b.difference_qty : b.difference_qty;
+                        const diffVal = Number(b.difference_qty || 0);
+                        const diffTag = diffVal > 0
+                            ? `<strong class="diff-positive">+${diffVal}</strong> <span class="variance-tag variance-tag--surplus">Surplus</span>`
+                            : (diffVal < 0
+                                ? `<strong class="diff-negative">${diffVal}</strong> <span class="variance-tag variance-tag--deficit">Deficit</span>`
+                                : `<strong>0</strong> <span class="variance-tag variance-tag--balanced">Exact</span>`);
                         let sysStr = `${b.system_quantity}`;
                         let countedStr = `${b.physical_quantity}`;
                         const hasPack = Number(b.product_pack_size || 0) > 1 || Number(b.system_sealed_quantity || 0) > 0 || Number(b.physical_sealed_quantity || 0) > 0;
@@ -775,7 +829,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <td>${escapeHtml(bExp)}</td>
                             <td>${sysStr}</td>
                             <td>${countedStr}</td>
-                            <td>${diff}</td>
+                            <td>${diffTag}</td>
                             <td>${escapeHtml(b.notes || '-')}</td>
                         </tr>`;
                     });

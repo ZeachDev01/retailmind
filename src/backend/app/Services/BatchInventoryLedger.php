@@ -706,10 +706,20 @@ class BatchInventoryLedger
         // only matching value in the stock_movements.reason enum.
         if ($differenceQty !== 0 || !empty($hasBatchAdjustments)
             || $diffSealedTotal !== 0 || $diffLooseTotal !== 0) {
+            $adjCol = '';
+            $adjVal = '';
+            $moveParams = [$productId, $differenceQty, $userId];
+            $relatedAdjustmentId = !empty($count['related_adjustment_id']) ? (int)$count['related_adjustment_id'] : null;
+            if ($this->hasColumn('stock_movements', 'adjustment_id') && $relatedAdjustmentId !== null) {
+                $adjCol = ', adjustment_id';
+                $adjVal = ', ?';
+                $moveParams[] = $relatedAdjustmentId;
+            }
+
             $this->pdo->prepare(
-                "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by)
-                 VALUES (?, ?, 'adjustment', ?)"
-            )->execute([$productId, $differenceQty, $userId]);
+                "INSERT INTO stock_movements (product_id, change_qty, reason, moved_by{$adjCol})
+                 VALUES (?, ?, 'adjustment', ?{$adjVal})"
+            )->execute($moveParams);
         }
         $this->assertBalanced($productId, (int)$count['physical_quantity']);
     }
