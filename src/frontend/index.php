@@ -82,6 +82,7 @@ $loginActionUrl = htmlspecialchars(landing_app_url(), ENT_QUOTES, 'UTF-8');
 $forgotPasswordUrl = htmlspecialchars(landing_app_url('components/auth/forgot_password.php'), ENT_QUOTES, 'UTF-8');
 $styleUrl = htmlspecialchars(landing_app_url('assets/css/style.css?v=' . filemtime(__DIR__ . '/assets/css/style.css')), ENT_QUOTES, 'UTF-8');
 $landingStyleUrl = htmlspecialchars(landing_app_url('assets/css/landing.css?v=' . filemtime(__DIR__ . '/assets/css/landing.css')), ENT_QUOTES, 'UTF-8');
+$bootstrapIconsUrl = htmlspecialchars(landing_app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css'), ENT_QUOTES, 'UTF-8');
 $brandBaseUrl = htmlspecialchars(landing_app_url('assets/img/retailmind-web-assets%20dark%20mode/'), ENT_QUOTES, 'UTF-8');
 $faviconUrl = $brandBaseUrl . 'icons/light/favicon-32.png';
 $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
@@ -92,11 +93,18 @@ $loginSuccess = '';
 $flashError = (string)($_SESSION['_flash_error'] ?? '');
 unset($_SESSION['_flash_error']);
 $loginUsername = (string)($_SESSION['_login_username'] ?? '');
+$recoveryStep = (string)($_SESSION['_recovery_step'] ?? 'request');
 $recoveryMessage = (string)($_SESSION['_recovery_message'] ?? '');
 $recoveryMessageClass = ($_SESSION['_recovery_message_class'] ?? '') === 'tag-warning' ? 'tag-warning' : 'tag-success';
 $recoveryIdentity = (string)($_SESSION['_recovery_identity'] ?? '');
-unset($_SESSION['_recovery_message'], $_SESSION['_recovery_message_class'], $_SESSION['_recovery_identity']);
-$shouldOpenRecovery = ($_GET['recovery'] ?? '') === '1';
+$recoveryMaskedEmail = (string)($_SESSION['_recovery_masked_email'] ?? '');
+$resendCooldown = max(0, (int)($_SESSION['_recovery_resend_cooldown'] ?? 0) - time());
+$codeExpiresIn = max(0, (int)($_SESSION['_recovery_code_expires_at'] ?? (time() + 900)) - time());
+$expMinutes = floor($codeExpiresIn / 60);
+$expSeconds = $codeExpiresIn % 60;
+$expFormatted = sprintf('%d:%02d', $expMinutes, $expSeconds);
+unset($_SESSION['_recovery_message'], $_SESSION['_recovery_message_class']);
+$shouldOpenRecovery = ($_GET['recovery'] ?? '') === '1' || $recoveryStep !== 'request';
 $shouldOpenLogin = ($_GET['login'] ?? '') === '1' || $shouldOpenRecovery;
 if ($shouldOpenLogin && isset($_SESSION['_login_error'])) {
     $loginError = (string)$_SESSION['_login_error'];
@@ -120,6 +128,7 @@ unset($_SESSION['_login_username']);
     <link rel="icon" type="image/png" sizes="32x32" href="<?= $faviconUrl ?>" data-brand-base="<?= $brandBaseUrl ?>" data-brand-variant="icons/STYLE/favicon-32.png">
     <link rel="stylesheet" href="<?= $styleUrl ?>">
     <link rel="stylesheet" href="<?= $landingStyleUrl ?>">
+    <link rel="stylesheet" href="<?= $bootstrapIconsUrl ?>">
 </head>
 
 <body class="landing-page">
@@ -395,30 +404,89 @@ unset($_SESSION['_login_username']);
                     </span>
                     <div>
                         <h2>Reset password</h2>
-                        <p>Receive a reset link via email.</p>
+                        <?php if ($recoveryStep === 'verify_code'): ?>
+                            <p>Enter the 6-digit verification code sent to your email.</p>
+                        <?php elseif ($recoveryStep === 'set_password'): ?>
+                            <p>Choose a secure new password for your account.</p>
+                        <?php else: ?>
+                            <p>Receive a 6-digit verification code via email.</p>
+                        <?php endif; ?>
                     </div>
                 </aside>
                 <div class="landing-login-modal__body landing-login-modal__body--recovery">
                     <div class="landing-login-modal__brand">
-                        <h3 id="recovery-modal-title">Reset password</h3>
+                        <h3 id="recovery-modal-title">
+                            <?php if ($recoveryStep === 'verify_code'): ?>
+                                Enter Verification Code
+                            <?php elseif ($recoveryStep === 'set_password'): ?>
+                                Choose New Password
+                            <?php else: ?>
+                                Reset Password
+                            <?php endif; ?>
+                        </h3>
                     </div>
 
                     <?php if ($recoveryMessage !== ''): ?>
                         <div class="landing-login-modal__notice <?= $recoveryMessageClass ?>" role="<?= $recoveryMessageClass === 'tag-warning' ? 'alert' : 'status' ?>" aria-live="<?= $recoveryMessageClass === 'tag-warning' ? 'assertive' : 'polite' ?>"><?= htmlspecialchars($recoveryMessage, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php endif; ?>
 
-                    <form method="POST" action="<?= $forgotPasswordUrl ?>" class="landing-login-form landing-recovery-form">
-                        <?= csrf_field() ?>
-                        <div class="form-group">
-                            <label for="landing-recovery-identity">Username or email</label>
-                            <input type="text" id="landing-recovery-identity" name="identity" value="<?= htmlspecialchars($recoveryIdentity, ENT_QUOTES, 'UTF-8') ?>" placeholder="username or email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-                        </div>
-                        <div class="landing-login-modal__actions">
-                            <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Send reset link</button>
-                            <a href="<?= $loginUrl ?>" data-recovery-modal-back>Back to login</a>
-                        </div>
-                    </form>
-                    <p class="landing-login-modal__privacy">Link expires in 30 minutes.</p>
+                    <?php if ($recoveryStep === 'verify_code'): ?>
+                        <form method="POST" action="<?= $forgotPasswordUrl ?>" class="landing-login-form landing-recovery-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="verify_code">
+                            <div class="form-group" style="text-align:center;">
+                                <label for="landing-recovery-code" style="display:block;margin-bottom:8px;font-weight:600;">6-digit verification code</label>
+                                <input type="text" id="landing-recovery-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autocomplete="one-time-code" style="letter-spacing:8px;font-size:1.6rem;font-weight:700;text-align:center;font-family:monospace;padding:10px 14px;" required autofocus>
+                                <small id="codeExpiresCountdown" data-seconds="<?= $codeExpiresIn ?>" class="field-help" style="display:block;margin-top:6px;color:#64748b;">Code expires in <strong id="codeExpiresTime"><?= $expFormatted ?></strong></small>
+                            </div>
+                            <div class="landing-login-modal__actions">
+                                <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Verify code</button>
+                                <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:14px;font-size:0.875rem;">
+                                    <?php if ($resendCooldown > 0): ?>
+                                        <span id="resendCountdown" data-seconds="<?= $resendCooldown ?>" style="color:#94a3b8;">Resend in <strong id="resendSeconds"><?= $resendCooldown ?></strong>s</span>
+                                        <a href="<?= $forgotPasswordUrl ?>?action=resend" id="resendLink" style="color:var(--primary);text-decoration:none;display:none;">Resend code</a>
+                                    <?php else: ?>
+                                        <a href="<?= $forgotPasswordUrl ?>?action=resend" id="resendLink" style="color:var(--primary);text-decoration:none;">Resend code</a>
+                                    <?php endif; ?>
+                                    <a href="<?= $forgotPasswordUrl ?>?action=cancel" style="color:#64748b;text-decoration:none;">Cancel</a>
+                                </div>
+                            </div>
+                        </form>
+                    <?php elseif ($recoveryStep === 'set_password'): ?>
+                        <form method="POST" action="<?= $forgotPasswordUrl ?>" class="landing-login-form landing-recovery-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="set_password">
+                            <div class="form-group">
+                                <label for="landing-recovery-newpass">New password</label>
+                                <input type="password" id="landing-recovery-newpass" name="password" minlength="8" placeholder="At least 8 characters" autocomplete="new-password" required autofocus>
+                                <small class="field-help" style="display:block;margin-top:4px;color:#64748b;">Uppercase, lowercase, and a number.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="landing-recovery-confirm">Confirm new password</label>
+                                <input type="password" id="landing-recovery-confirm" name="password_confirm" minlength="8" placeholder="Confirm new password" autocomplete="new-password" required>
+                            </div>
+                            <div class="landing-login-modal__actions">
+                                <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Save password & sign in</button>
+                                <div style="display:flex;justify-content:center;width:100%;margin-top:12px;font-size:0.875rem;">
+                                    <a href="<?= $forgotPasswordUrl ?>?action=cancel" style="color:#64748b;text-decoration:none;">Cancel</a>
+                                </div>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <form method="POST" action="<?= $forgotPasswordUrl ?>" class="landing-login-form landing-recovery-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="request_code">
+                            <div class="form-group">
+                                <label for="landing-recovery-identity">Username or email</label>
+                                <input type="text" id="landing-recovery-identity" name="identity" value="<?= htmlspecialchars($recoveryIdentity, ENT_QUOTES, 'UTF-8') ?>" placeholder="username or email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+                            </div>
+                            <div class="landing-login-modal__actions">
+                                <button type="submit" class="btn btn-block landing-btn landing-btn--primary">Send verification code</button>
+                                <a href="<?= $loginUrl ?>" data-recovery-modal-back>Back to login</a>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+                    <p class="landing-login-modal__privacy">No internet link required. Enter the 6-digit PIN on this screen.</p>
                 </div>
             </div>
             </div>
@@ -444,6 +512,7 @@ unset($_SESSION['_login_username']);
             var loginFace = modal.querySelector('.landing-login-modal__shell--login');
             var recoveryFace = modal.querySelector('.landing-login-modal__shell--recovery');
             var loginForm = loginFace.querySelector('.landing-login-form');
+            var recoveryForm = recoveryFace ? recoveryFace.querySelector('.landing-recovery-form') : null;
             var openers = document.querySelectorAll('[data-login-modal-open]');
             var recoveryOpeners = document.querySelectorAll('[data-recovery-modal-open]');
             var recoveryBack = modal.querySelector('[data-recovery-modal-back]');
@@ -580,7 +649,9 @@ unset($_SESSION['_login_username']);
             recoveryOpeners.forEach(function(opener) {
                 opener.addEventListener('click', function(event) { openModal(event, 'recovery'); });
             });
-            recoveryBack.addEventListener('click', function(event) { openModal(event, 'login'); });
+            if (recoveryBack) {
+                recoveryBack.addEventListener('click', function(event) { openModal(event, 'login'); });
+            }
             closers.forEach(function(closer) {
                 closer.addEventListener('click', closeModal);
             });
@@ -654,6 +725,58 @@ unset($_SESSION['_login_username']);
                     err.remove();
                 }
             }
+            if (recoveryForm) {
+                var isRecoverySubmitting = false;
+                recoveryForm.addEventListener('submit', function(event) {
+                    if (isRecoverySubmitting) {
+                        event.preventDefault();
+                        return;
+                    }
+                    var submitBtn = recoveryForm.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        isRecoverySubmitting = true;
+                        submitBtn.disabled = true;
+                        submitBtn.classList.add('btn-loading');
+                        submitBtn.setAttribute('data-original-text', submitBtn.textContent);
+                        submitBtn.textContent = 'Please wait...';
+                    }
+                });
+
+                var expEl = document.getElementById('codeExpiresCountdown');
+                if (expEl) {
+                    var expSec = parseInt(expEl.getAttribute('data-seconds'), 10) || 0;
+                    var expDisplay = document.getElementById('codeExpiresTime');
+                    var expTimer = setInterval(function() {
+                        expSec--;
+                        if (expSec <= 0) {
+                            clearInterval(expTimer);
+                            expEl.innerHTML = '<span style="color:#ef4444;font-weight:600;">Code has expired.</span> Please request a new code.';
+                            return;
+                        }
+                        if (expDisplay) {
+                            var mins = Math.floor(expSec / 60);
+                            var secs = expSec % 60;
+                            expDisplay.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                        }
+                    }, 1000);
+                }
+
+                var countdownEl = document.getElementById('resendCountdown');
+                var resendLink = document.getElementById('resendLink');
+                if (countdownEl && resendLink) {
+                    var sec = parseInt(countdownEl.getAttribute('data-seconds'), 10) || 0;
+                    var timer = setInterval(function() {
+                        sec--;
+                        var secDisplay = document.getElementById('resendSeconds');
+                        if (secDisplay) secDisplay.textContent = sec;
+                        if (sec <= 0) {
+                            clearInterval(timer);
+                            countdownEl.style.display = 'none';
+                            resendLink.style.display = 'inline';
+                        }
+                    }, 1000);
+                }
+            }
             if (password) {
                 password.addEventListener('input', function() { clearInputError(password); });
             }
@@ -698,7 +821,12 @@ unset($_SESSION['_login_username']);
                 setPageInert(true);
                 window.setTimeout(function() {
                     if (modal.classList.contains('is-recovery')) {
-                        if (recoveryIdentity) recoveryIdentity.focus();
+                        var recoveryCodeInput = document.getElementById('landing-recovery-code');
+                        if (recoveryCodeInput) {
+                            recoveryCodeInput.focus();
+                        } else if (recoveryIdentity) {
+                            recoveryIdentity.focus();
+                        }
                     } else if (hasLoginError && password && username && username.value.trim() !== '') {
                         password.focus();
                         if (typeof password.select === 'function') password.select();

@@ -1329,6 +1329,125 @@ html[data-theme="dark"] .landing-footer__links a:hover {
     color: var(--landing-ink);
 }
 
+/* Real-Time Password Strength Meter & Requirement Chips (Matches change_password.php) */
+.landing-login-form .cp-meter-container {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.landing-login-form .cp-meter-bars {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+    height: 4px;
+}
+
+.landing-login-form .cp-meter-bar {
+    flex: 1;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--landing-line);
+    transition: background-color 0.25s ease;
+}
+
+.landing-login-form .cp-meter-bar.active-weak { background: #ef4444; }
+.landing-login-form .cp-meter-bar.active-fair { background: #f59e0b; }
+.landing-login-form .cp-meter-bar.active-good { background: #3b82f6; }
+.landing-login-form .cp-meter-bar.active-strong { background: #10b981; }
+
+.landing-login-form .cp-requirements {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 0.4rem;
+}
+
+.landing-login-form .cp-req-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: var(--landing-muted);
+    background: var(--landing-surface-soft);
+    border: 1px solid var(--landing-line);
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.landing-login-form .cp-req-chip i {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.landing-login-form .cp-req-chip.valid {
+    color: #065f46;
+    background: #d1fae5;
+    border-color: #6ee7b7;
+    font-weight: 700;
+    transform: translateY(-1px);
+}
+
+.landing-login-form .cp-req-chip.valid i {
+    opacity: 1;
+    color: #059669;
+}
+
+html[data-theme="dark"] .landing-login-form .cp-req-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--landing-line);
+    color: var(--landing-muted);
+}
+
+html[data-theme="dark"] .landing-login-form .cp-req-chip.valid {
+    background: rgba(16, 185, 129, 0.22);
+    color: #a7f3d0;
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+html[data-theme="dark"] .landing-login-form .cp-req-chip.valid i {
+    color: #6ee7b7;
+}
+
+.landing-login-form .cp-match-pill {
+    font-size: 0.74rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.landing-login-form .cp-match-pill.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.landing-login-form .cp-match-pill.valid { color: #059669; }
+.landing-login-form .cp-match-pill.invalid { color: #dc2626; }
+
+html[data-theme="dark"] .landing-login-form .cp-match-pill.valid { color: #6ee7b7; }
+html[data-theme="dark"] .landing-login-form .cp-match-pill.invalid { color: #fca5a5; }
+
+.cp-sr-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
 .landing-login-modal__actions {
     display: flex;
     flex-direction: column;

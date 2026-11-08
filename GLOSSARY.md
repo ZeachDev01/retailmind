@@ -228,3 +228,11 @@ _Avoid_: Custom icon component, unstandardized badge color
 **Attention Item**:
 An actionable store-wide or platform-level condition (such as overdue high-value Stock Issues, unreviewed cash variances, or approaching Fiscal Period closures) highlighted on an Administrator or Super Administrator dashboard for review.
 _Avoid_: Notification (when referring to dashboard alerts), Task, To-do
+
+**Store Email Alert**:
+An automated transactional notification sent to designated store email addresses regarding operational events—such as critical low inventory, impending stock expiry, or staff security actions. It delivers actionable operational awareness outside the store without modifying recorded stock or shift custody.
+_Avoid_: Marketing newsletter, promotional email, SMS alert
+
+**Daily Stock Brief**:
+A consolidated operational inventory report generated and emailed on a schedule (such as morning opening or evening closing) to the Inventory Manager and Store Administrator. It groups out-of-stock items, low-stock reorder thresholds, and expiring batches into a single high-density summary instead of sending separate per-product notifications.
+_Avoid_: Individual stock alert, marketing digest, full catalog export

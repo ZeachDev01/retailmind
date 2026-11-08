@@ -181,10 +181,10 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         $settings = get_store_settings($this->pdo);
         $configured = !empty($settings['brevo_api_key'])
             && filter_var((string)($settings['brevo_sender_email'] ?? ''), FILTER_VALIDATE_EMAIL) !== false
-            && function_exists('curl_init');
+            && (function_exists('curl_init') || in_array('https', stream_get_wrappers(), true));
         $message = 'Brevo API key and sender address are configured in Store Settings.';
         return $this->result('Email configuration', $configured ? 'healthy' : 'warning',
-            $configured ? $message : 'Add a Brevo API key and verified sender address in Store Settings, and enable cURL.', 'Integrations');
+            $configured ? $message : 'Add a Brevo API key and verified sender address in Store Settings.', 'Integrations');
     }
 
     private function applicationLogCheck(): array

@@ -582,16 +582,16 @@ function check_and_notify_low_stock(PDO $pdo): void
     (new NotificationService($pdo))->checkAndNotifyLowStock();
 }
 
-function send_brevo_email(string $email, string $subject, string $message): bool
+function send_brevo_email(string $email, string $subject, string $message, ?string $htmlContent = null): bool
 {
     $config = get_store_brevo_settings(App\Core\Database::connection());
     $apiKey = trim((string)$config['brevo_api_key']);
     $from = trim((string)($config['brevo_sender_email'] ?? ''));
-    if ($apiKey === '' || !filter_var($from, FILTER_VALIDATE_EMAIL) || !function_exists('curl_init')) {
-        throw new RuntimeException('Configure a Brevo API key and verified sender address in Store Settings, and enable cURL.');
+    if ($apiKey === '' || !filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Configure a Brevo API key and verified sender address in Store Settings.');
     }
 
-    $payload = json_encode([
+    $payloadData = [
         'sender' => [
             'email' => $from,
             'name' => (string)($config['store_name'] ?? 'RetailMind'),
@@ -599,31 +599,90 @@ function send_brevo_email(string $email, string $subject, string $message): bool
         'to' => [['email' => $email]],
         'subject' => $subject,
         'textContent' => $message,
-    ], JSON_UNESCAPED_SLASHES);
+    ];
+    if ($htmlContent !== null && trim($htmlContent) !== '') {
+        $payloadData['htmlContent'] = $htmlContent;
+    }
+
+    $payload = json_encode($payloadData, JSON_UNESCAPED_SLASHES);
     if ($payload === false) {
         return false;
     }
 
-    $curl = curl_init('https://api.brevo.com/v3/smtp/email');
-    $curlOptions = [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => [
-            'Accept: application/json',
-            'Content-Type: application/json',
-            'api-key: ' . $apiKey,
-        ],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => max(5, (int)env('MAIL_TIMEOUT', 30)),
-    ];
-    curl_setopt_array($curl, $curlOptions);
-    $response = curl_exec($curl);
-    $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($curl);
-    curl_close($curl);
+    $caBundle = ini_get('curl.cainfo') ?: ini_get('openssl.cafile');
+    if (!$caBundle) {
+        $candidatePaths = [
+            'C:\\xampp\\apache\\bin\\curl-ca-bundle.crt',
+            'C:\\xampp\\phpMyAdmin\\vendor\\composer\\ca-bundle\\res\\cacert.pem',
+        ];
+        foreach ($candidatePaths as $candidate) {
+            if (is_file($candidate)) {
+                $caBundle = $candidate;
+                break;
+            }
+        }
+    }
 
-    if ($response === false || $curlError !== '' || $httpCode < 200 || $httpCode >= 300) {
-        throw new RuntimeException($curlError !== '' ? $curlError : "Brevo API returned HTTP {$httpCode}.");
+    if (function_exists('curl_init')) {
+        $curl = curl_init('https://api.brevo.com/v3/smtp/email');
+        $curlOptions = [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'Content-Type: application/json',
+                'api-key: ' . $apiKey,
+            ],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => max(5, (int)env('MAIL_TIMEOUT', 30)),
+        ];
+        if ($caBundle && is_file($caBundle)) {
+            $curlOptions[CURLOPT_CAINFO] = $caBundle;
+        }
+        curl_setopt_array($curl, $curlOptions);
+        $response = curl_exec($curl);
+        $httpCode = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($curl);
+        if (function_exists('curl_close')) {
+            @curl_close($curl);
+        }
+
+        if ($response === false || $curlError !== '' || $httpCode < 200 || $httpCode >= 300) {
+            throw new RuntimeException($curlError !== '' ? $curlError : "Brevo API returned HTTP {$httpCode}.");
+        }
+
+        return true;
+    }
+
+    // Native HTTPS stream fallback when cURL extension is unavailable
+    $contextOptions = [
+        'http' => [
+            'method' => 'POST',
+            'header' => "Accept: application/json\r\nContent-Type: application/json\r\napi-key: " . $apiKey . "\r\n",
+            'content' => $payload,
+            'ignore_errors' => true,
+            'timeout' => max(5, (int)env('MAIL_TIMEOUT', 30)),
+        ],
+    ];
+    if ($caBundle && is_file($caBundle)) {
+        $contextOptions['ssl'] = ['cafile' => $caBundle];
+    }
+    $context = stream_context_create($contextOptions);
+    $response = @file_get_contents('https://api.brevo.com/v3/smtp/email', false, $context);
+    $httpCode = 0;
+    $responseHeaders = function_exists('http_get_last_response_headers')
+        ? (http_get_last_response_headers() ?? [])
+        : ($http_response_header ?? []);
+    if (isset($responseHeaders[0]) && preg_match('#HTTP/\S+\s+(\d{3})#', $responseHeaders[0], $matches)) {
+        $httpCode = (int)$matches[1];
+    }
+    if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+        $detail = '';
+        if ($response !== false) {
+            $json = json_decode($response, true);
+            $detail = (string)($json['message'] ?? '');
+        }
+        throw new RuntimeException($detail !== '' ? $detail : "Brevo API returned HTTP {$httpCode}.");
     }
 
     return true;
@@ -690,7 +749,7 @@ function get_store_brevo_settings(PDO $pdo): array
 }
 
 /** Send all application email through the Brevo API. */
-function send_email_notification(string $email, string $subject, string $message): bool
+function send_email_notification(string $email, string $subject, string $message, ?string $htmlContent = null): bool
 {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
     $success = false;
@@ -700,7 +759,7 @@ function send_email_notification(string $email, string $subject, string $message
         $errorMessage = 'Email delivery disabled by the current environment.';
     } else {
         try {
-            $success = send_brevo_email($email, $subject, $message);
+            $success = send_brevo_email($email, $subject, $message, $htmlContent);
         } catch (Throwable $exception) {
             $errorMessage = $exception->getMessage();
             error_log('Email delivery failed: ' . $errorMessage);

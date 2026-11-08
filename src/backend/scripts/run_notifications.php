@@ -42,30 +42,19 @@ $storeSettings = get_store_settings($pdo);
 $storeEmailEnabled = !empty($storeSettings['store_email_alerts_enabled']);
 $storeEmailAddress = trim((string)($storeSettings['store_email'] ?? ''));
 $storeEmailTypes = ['low_stock', 'expiring_stock', 'expired_stock'];
-if ($storeEmailEnabled && filter_var($storeEmailAddress, FILTER_VALIDATE_EMAIL)) {
-    $pendingStoreEvents = $pdo->query("SELECT n.type, n.title, n.message, n.reference_id, n.reference_type, n.attention_key
-        FROM notifications n
-        LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
-        WHERE n.email_pending = 1 AND n.type IN ('low_stock', 'expiring_stock', 'expired_stock')
-          AND (n.attention_key IS NULL OR s.is_active = 1)
-        ORDER BY n.notification_id")->fetchAll(PDO::FETCH_ASSOC);
-    $clearStoreEvent = $pdo->prepare("UPDATE notifications SET email_pending = 0
-        WHERE email_pending = 1 AND type = ?
-          AND COALESCE(reference_id, -1) = COALESCE(?, -1)
-          AND COALESCE(reference_type, '') = COALESCE(?, '')");
-    $sentStoreEvents = [];
-    foreach ($pendingStoreEvents as $event) {
-        $eventKey = json_encode([$event['type'], $event['reference_id'], $event['reference_type']]);
-        if (isset($sentStoreEvents[$eventKey])) continue;
-        $sentStoreEvents[$eventKey] = true;
-        $subject = (string)$event['title'];
-        $body = (string)($storeSettings['store_name'] ?? 'Store') . " notification\n\n" . $event['message'];
-        if (send_email_notification($storeEmailAddress, $subject, $body)) {
-            $clearStoreEvent->execute([$event['type'], $event['reference_id'], $event['reference_type']]);
-        }
+if ($storeEmailEnabled && !$emailDeliveryDisabled) {
+    // Deliver consolidated Daily Stock Brief to Inventory Managers and Store Email
+    require_once dirname(__DIR__) . '/app/Services/StockBriefService.php';
+    try {
+        $briefService = new App\Services\StockBriefService($pdo);
+        $briefResults = $briefService->dispatch();
+        // Clear pending flags for low_stock and expiring items covered by the brief
+        $pdo->exec("UPDATE notifications SET email_pending = 0 WHERE email_pending = 1 AND type IN ('low_stock', 'expiring_stock', 'expired_stock')");
+    } catch (Throwable $briefError) {
+        error_log('Daily Stock Brief dispatch failed: ' . $briefError->getMessage());
     }
 } elseif ($storeEmailEnabled) {
-    error_log('Store email alerts are enabled but the Store email address is invalid; alerts remain queued.');
+    error_log('Store email alerts are enabled but delivery is disabled or store email address is invalid.');
 }
 foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
     foreach ($notifications->recipients($role) as $recipient) {
