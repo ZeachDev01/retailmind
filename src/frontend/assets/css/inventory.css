@@ -107,9 +107,22 @@ button.overview-metric:focus-visible { border-color: #2563eb; box-shadow: 0 6px 
 .overview-product-thumb { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 8px; background: var(--theme-surface-soft, #e8eef7); color: var(--theme-info-text, #52739f); }
 .overview-stock-status { display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .58rem; border-radius: 999px; font-size: .74rem; font-weight: 800; white-space: nowrap; }
 .overview-stock-status::before { content:""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.overview-stock-status--available { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }
-.overview-stock-status--low,.overview-stock-status--expiring { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
-.overview-stock-status--out,.overview-stock-status--expired { background: var(--theme-surface-soft, #fee2e2); color: var(--theme-danger-text, #991b1b); }
+.overview-stock-status--available { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); border: 1px solid rgba(22, 163, 74, 0.25); }
+.overview-stock-status--low { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); border: 1px solid rgba(217, 119, 6, 0.3); }
+.overview-stock-status--expiring { background: #ffedd5; color: #c2410c; border: 1px solid rgba(234, 88, 12, 0.35); }
+.overview-stock-status--out { background: var(--theme-surface-soft, #fee2e2); color: var(--theme-danger-text, #b91c1c); border: 1px solid rgba(239, 68, 68, 0.3); }
+.overview-stock-status--expired { background: #7f1d1d; color: #fef2f2; border: 1px solid #991b1b; }
+[data-theme="dark"] .overview-stock-status--expiring { background: #431407; color: #fdba74; border-color: rgba(251, 146, 60, 0.3); }
+[data-theme="dark"] .overview-stock-status--out { background: #450a0a; color: #fca5a5; border-color: rgba(248, 113, 113, 0.3); }
+[data-theme="dark"] .overview-stock-status--expired { background: #991b1b; color: #fef2f2; border-color: #ef4444; }
+
+.variance-tag { display: inline-flex; align-items: center; padding: .12rem .45rem; border-radius: 4px; font-size: .7rem; font-weight: 700; margin-left: .35rem; vertical-align: middle; }
+.variance-tag--surplus { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+.variance-tag--deficit { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.variance-tag--balanced { background: #f1f5f9; color: #475569; }
+[data-theme="dark"] .variance-tag--surplus { background: #14532d; color: #bbf7d0; border-color: #166534; }
+[data-theme="dark"] .variance-tag--deficit { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+[data-theme="dark"] .variance-tag--balanced { background: #334155; color: #cbd5e1; }
 .overview-product-empty { padding: 3rem 1rem; color: var(--muted); text-align: center; }
 .overview-product-empty i,.overview-product-empty strong,.overview-product-empty span { display: block; }
 .overview-product-empty i { margin-bottom: .5rem; font-size: 1.5rem; }
