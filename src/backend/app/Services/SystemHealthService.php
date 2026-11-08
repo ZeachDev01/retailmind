@@ -148,32 +148,36 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         return $this->result('Forecast model artifact', 'healthy', basename($latest) . ' — updated ' . date('M d, Y g:i A', filemtime($latest)), 'Forecasting');
     }
 
-    /**
-     * Backup readiness follows the durable backup history rather than a file
-     * left on the server: a completed manual Database Backup is downloaded and
-     * removed, so a missing file is normal and must not read as "no backup".
-     */
     private function backupCheck(): array
     {
         try {
             $row = $this->pdo->query(
                 "SELECT filename, created_at FROM backup_history
                   WHERE status = 'completed' AND backup_type <> 'restore'
-                    AND envelope_version = '" . \App\Backup\SqlBackupFormat::VERSION . "'
+                    AND envelope_version = '" . \App\Backup\StorePackageFormat::KEY_VERSION . "'
                   ORDER BY created_at DESC LIMIT 1"
             )->fetch(PDO::FETCH_ASSOC);
         } catch (Throwable $e) {
-            return $this->result('Database backup', 'warning', 'Backup history is unavailable: ' . $e->getMessage(), 'Recovery');
+            return $this->result('Database backup', 'warning', 'Backup history is unavailable.', 'Recovery');
         }
 
         if (!is_array($row) || $row === []) {
-            return $this->result('Database backup', 'warning', 'No completed current-format SQL backup is recorded.', 'Recovery');
+            return $this->result('Database backup', 'warning', 'No completed verified encrypted database backup is recorded.', 'Recovery');
+        }
+
+        if (!\App\Backup\BackupKeyStore::hasAvailableKey()) {
+            return $this->result('Database backup', 'warning', 'Recovery key unavailable; import the key before relying on this backup.', 'Recovery');
         }
 
         $ageDays = (int)floor((time() - (int)strtotime((string)$row['created_at'])) / 86400);
         $detail = (string)$row['filename'] . " — {$ageDays} day(s) old.";
 
-        return $this->result('Database backup', $ageDays <= 7 ? 'healthy' : 'warning', $detail, 'Recovery');
+        return $this->result(
+            'Database backup',
+            $ageDays <= 7 ? 'healthy' : 'warning',
+            'Encrypted database backup verified at creation: ' . $detail,
+            'Recovery'
+        );
     }
 
     private function mailCheck(): array

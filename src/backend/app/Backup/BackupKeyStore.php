@@ -34,6 +34,21 @@ final class BackupKeyStore
         return $key;
     }
 
+    public static function hasAvailableKey(): bool
+    {
+        if (!RecoveryStore::isAvailable()) return false;
+        $paths = array_merge(
+            [RecoveryStore::path('backup-encryption.key')],
+            glob(RecoveryStore::path('backup-key-*.key')) ?: []
+        );
+        foreach ($paths as $path) {
+            if (is_file($path) && preg_match('/^[a-f0-9]{64}$/D', trim((string)file_get_contents($path))) === 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static function import(#[\SensitiveParameter] string $contents): void
     {
         $key = self::validate($contents);

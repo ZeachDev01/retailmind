@@ -24,6 +24,14 @@ _Avoid_: Synchronization, merging Stores
 The authorized operator's explicit resumption of Store operations after Database Restore, once automated verification and human review are complete. Readiness for Store Reopening does not itself resume operations.
 _Avoid_: Automatic reopening, completed verification (when referring to resumed operations)
 
+**Verified Encrypted Database Backup**:
+A completed encrypted Store package whose contents passed authentication and structural validation at creation time. Its durable completion record remains recovery evidence even after the temporary download is removed.
+_Avoid_: Plain SQL backup, unverified backup
+
+**Recovery Key**:
+The private encryption key required to authenticate and decrypt a Verified Encrypted Database Backup. It is separate from the database and application files.
+_Avoid_: Backup password, database password
+
 **Identity Reconciliation**:
 The restoring Administrator or Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
 _Avoid_: Automatic account matching, general account merging
