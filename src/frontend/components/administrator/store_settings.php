@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_role(['admin']);
 require_once __DIR__ . '/../../../backend/app/Receipts/ReceiptLogo.php';
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+require_once __DIR__ . '/../../../backend/app/Services/QrCodeService.php';
 
 $receiptFields = [
     'store_name' => 'Store name',
@@ -203,6 +204,8 @@ $requested = $service->storeSettings();
 $effective = $service->thresholdsFor('admin');
 $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
+$qrService = new \App\Services\QrCodeService();
+$initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? $qrService->generateSvg($tunnelStatus['url'], 220) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -391,15 +394,45 @@ $tunnelStatus = $tunnelService->getStatus();
                         <button type="button" id="copy-remote-url-btn" class="btn btn-secondary" title="Copy public URL to clipboard">
                             <span id="copy-btn-text">Copy URL</span>
                         </button>
+                        <button type="button" id="show-qr-code-btn" class="btn btn-secondary" title="Display mobile QR code">
+                            <span>📱 Show QR</span>
+                        </button>
                     </div>
                     <small class="field-help">Share this URL only with authorized supervisors. Physical cashier operations remain locked to local store registers.</small>
                 </div>
                 <div id="remote-access-feedback" class="field-help u-mt-1" role="status" aria-live="polite"></div>
             </div>
         </section>
+
+        <!-- Dedicated Mobile QR Code Modal -->
+        <div id="qr-code-modal" class="qr-modal-backdrop u-hidden" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" tabindex="-1">
+            <div class="qr-modal-dialog">
+                <div class="qr-modal-header">
+                    <h3 id="qr-modal-title">Mobile Access QR Code</h3>
+                    <button type="button" id="close-qr-modal-btn" class="modal-close-btn" aria-label="Close dialog">&times;</button>
+                </div>
+                <div class="qr-modal-body">
+                    <p class="qr-modal-description">Scan this QR code with your smartphone camera to connect to RetailMind remotely without typing.</p>
+                    <div id="qr-code-display" class="qr-code-display" aria-label="Scannable QR code of active remote URL">
+                        <?= !empty($initialQrSvg) ? $initialQrSvg : '' ?>
+                    </div>
+                    <div class="qr-modal-url-wrap">
+                        <input type="text" id="modal-remote-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        <button type="button" id="modal-copy-url-btn" class="btn btn-secondary" title="Copy active URL to clipboard">
+                            <span id="modal-copy-btn-text">Copy URL</span>
+                        </button>
+                    </div>
+                    <small class="field-help u-text-center">Only share this URL with authorized store supervisors.</small>
+                </div>
+                <div class="qr-modal-footer">
+                    <button type="button" id="close-qr-modal-footer-btn" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
 
+<script src="<?= htmlspecialchars(theme_url('assets/vendor/qrcode/qrcode.min.js')) ?>"></script>
 <script>
 (function() {
     const toggle = document.getElementById('remote-access-toggle');
@@ -408,12 +441,92 @@ $tunnelStatus = $tunnelService->getStatus();
     const urlInput = document.getElementById('remote-public-url');
     const copyBtn = document.getElementById('copy-remote-url-btn');
     const copyText = document.getElementById('copy-btn-text');
+    const showQrBtn = document.getElementById('show-qr-code-btn');
+    const modal = document.getElementById('qr-code-modal');
+    const modalCloseBtn = document.getElementById('close-qr-modal-btn');
+    const modalFooterCloseBtn = document.getElementById('close-qr-modal-footer-btn');
+    const modalUrlInput = document.getElementById('modal-remote-url');
+    const modalCopyBtn = document.getElementById('modal-copy-url-btn');
+    const modalCopyText = document.getElementById('modal-copy-btn-text');
+    const qrDisplay = document.getElementById('qr-code-display');
     const feedback = document.getElementById('remote-access-feedback');
     const csrfToken = <?= json_encode(csrf_token(), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
     const apiUrl = 'remote_access_api.php';
 
     let pollTimer = null;
     let pollCount = 0;
+
+    function renderQrCode(url) {
+        if (!qrDisplay || !url) return;
+        if (window.QRCode) {
+            new QRCode(qrDisplay, {
+                text: url,
+                width: 220,
+                height: 220,
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        } else {
+            // Fallback: request SVG from backend API
+            fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({ action: 'qrcode', url: url }),
+                credentials: 'same-origin'
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.success && data.qr_svg) {
+                    qrDisplay.innerHTML = data.qr_svg;
+                }
+            })
+            .catch(function() {});
+        }
+    }
+
+    function openQrModal() {
+        const url = (urlInput ? urlInput.value.trim() : '');
+        if (!url) return;
+        if (modalUrlInput) modalUrlInput.value = url;
+        if (qrDisplay && (!qrDisplay.innerHTML.trim() || qrDisplay.innerHTML.indexOf('<svg') === -1)) {
+            renderQrCode(url);
+        }
+        if (modal) {
+            modal.classList.remove('u-hidden');
+            if (modalCloseBtn) modalCloseBtn.focus();
+        }
+    }
+
+    function closeQrModal() {
+        if (modal) {
+            modal.classList.add('u-hidden');
+            if (showQrBtn) showQrBtn.focus();
+        }
+    }
+
+    if (showQrBtn) {
+        showQrBtn.addEventListener('click', openQrModal);
+    }
+    if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', closeQrModal);
+    }
+    if (modalFooterCloseBtn) {
+        modalFooterCloseBtn.addEventListener('click', closeQrModal);
+    }
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeQrModal();
+            }
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('u-hidden')) {
+            closeQrModal();
+        }
+    });
 
     function setBadge(state, text) {
         badge.className = '';
@@ -443,6 +556,23 @@ $tunnelStatus = $tunnelService->getStatus();
         pollCount = 0;
     }
 
+    function handleOnlinePayload(data) {
+        setBadge('online');
+        if (urlInput) urlInput.value = data.url;
+        if (modalUrlInput) modalUrlInput.value = data.url;
+        if (urlContainer) urlContainer.classList.remove('u-hidden');
+        if (toggle) {
+            toggle.checked = true;
+            toggle.disabled = false;
+        }
+        if (data.qr_svg && qrDisplay) {
+            qrDisplay.innerHTML = data.qr_svg;
+        } else if (data.url) {
+            renderQrCode(data.url);
+        }
+        setFeedback('Remote access tunnel is active and ready.');
+    }
+
     function pollStatus() {
         stopPolling();
         pollCount = 0;
@@ -459,18 +589,16 @@ $tunnelStatus = $tunnelService->getStatus();
                     if (!data || !data.success) return;
                     if (data.status === 'online' && data.url) {
                         stopPolling();
-                        setBadge('online');
-                        urlInput.value = data.url;
-                        urlContainer.classList.remove('u-hidden');
-                        toggle.checked = true;
-                        toggle.disabled = false;
-                        setFeedback('Remote access tunnel is active and ready.');
+                        handleOnlinePayload(data);
                     } else if (!data.online) {
                         stopPolling();
                         setBadge('offline');
-                        toggle.checked = false;
-                        toggle.disabled = false;
-                        urlContainer.classList.add('u-hidden');
+                        if (toggle) {
+                            toggle.checked = false;
+                            toggle.disabled = false;
+                        }
+                        if (urlContainer) urlContainer.classList.add('u-hidden');
+                        closeQrModal();
                         setFeedback('Tunnel terminated unexpectedly.', true);
                     }
                 })
@@ -507,9 +635,7 @@ $tunnelStatus = $tunnelService->getStatus();
                     toggle.disabled = false;
                     if (data && data.success) {
                         if (data.status === 'online' && data.url) {
-                            setBadge('online');
-                            urlInput.value = data.url;
-                            setFeedback('Remote access tunnel is active and ready.');
+                            handleOnlinePayload(data);
                         } else {
                             setBadge('starting');
                             pollStatus();
@@ -518,6 +644,7 @@ $tunnelStatus = $tunnelService->getStatus();
                         toggle.checked = false;
                         setBadge('offline');
                         urlContainer.classList.add('u-hidden');
+                        closeQrModal();
                         setFeedback(data && data.error ? data.error : 'Failed to start tunnel daemon.', true);
                     }
                 })
@@ -526,6 +653,7 @@ $tunnelStatus = $tunnelService->getStatus();
                     toggle.checked = false;
                     setBadge('offline');
                     urlContainer.classList.add('u-hidden');
+                    closeQrModal();
                     setFeedback('Network error while connecting to remote access service.', true);
                 });
             } else {
@@ -547,31 +675,40 @@ $tunnelStatus = $tunnelService->getStatus();
                     setBadge('offline');
                     urlContainer.classList.add('u-hidden');
                     urlInput.value = '';
+                    closeQrModal();
                     setFeedback('Remote access tunnel stopped.');
                 })
                 .catch(function() {
                     toggle.disabled = false;
                     setBadge('offline');
                     urlContainer.classList.add('u-hidden');
+                    closeQrModal();
                     setFeedback('Remote access tunnel stopped.');
                 });
             }
         });
     }
 
-    if (copyBtn) {
-        copyBtn.addEventListener('click', function() {
-            const url = urlInput ? urlInput.value.trim() : '';
+    function bindClipboardCopy(buttonEl, labelEl, sourceInput) {
+        if (!buttonEl) return;
+        buttonEl.addEventListener('click', function() {
+            const url = sourceInput ? sourceInput.value.trim() : '';
             if (!url) return;
 
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(onCopied).catch(fallbackCopy);
-            } else {
-                fallbackCopy();
+            function onCopied() {
+                const prev = labelEl ? labelEl.textContent : 'Copy URL';
+                if (labelEl) labelEl.textContent = '✓ Copied!';
+                buttonEl.classList.add('btn-primary');
+                buttonEl.classList.remove('btn-secondary');
+                setTimeout(function() {
+                    if (labelEl) labelEl.textContent = prev;
+                    buttonEl.classList.remove('btn-primary');
+                    buttonEl.classList.add('btn-secondary');
+                }, 2000);
             }
 
             function fallbackCopy() {
-                urlInput.select();
+                if (sourceInput) sourceInput.select();
                 try {
                     document.execCommand('copy');
                     onCopied();
@@ -580,19 +717,16 @@ $tunnelStatus = $tunnelService->getStatus();
                 }
             }
 
-            function onCopied() {
-                const prev = copyText.textContent;
-                copyText.textContent = '✓ Copied!';
-                copyBtn.classList.add('btn-primary');
-                copyBtn.classList.remove('btn-secondary');
-                setTimeout(function() {
-                    copyText.textContent = prev;
-                    copyBtn.classList.remove('btn-primary');
-                    copyBtn.classList.add('btn-secondary');
-                }, 2000);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(onCopied).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
             }
         });
     }
+
+    bindClipboardCopy(copyBtn, copyText, urlInput);
+    bindClipboardCopy(modalCopyBtn, modalCopyText, modalUrlInput);
 })();
 </script>
 </body>

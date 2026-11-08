@@ -7,17 +7,23 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+require_once __DIR__ . '/../../../backend/app/Services/QrCodeService.php';
 
 require_role(['admin', 'super_admin']);
 
 use App\Services\CloudflareTunnelService;
+use App\Services\QrCodeService;
 
 try {
     $service = new CloudflareTunnelService();
+    $qrService = new QrCodeService();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
     if ($method === 'GET') {
         $status = $service->getStatus();
+        if (!empty($status['url'])) {
+            $status['qr_svg'] = $qrService->generateSvg($status['url']);
+        }
         echo json_encode(['success' => true] + $status, JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -46,6 +52,9 @@ try {
 
         if ($action === 'start') {
             $result = $service->start();
+            if (!empty($result['url'])) {
+                $result['qr_svg'] = $qrService->generateSvg($result['url']);
+            }
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
             exit;
         }
@@ -58,7 +67,32 @@ try {
 
         if ($action === 'status') {
             $result = $service->getStatus();
+            if (!empty($result['url'])) {
+                $result['qr_svg'] = $qrService->generateSvg($result['url']);
+            }
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
+        if ($action === 'qrcode') {
+            $targetUrl = trim((string)($input['url'] ?? ''));
+            if ($targetUrl === '') {
+                $status = $service->getStatus();
+                $targetUrl = (string)($status['url'] ?? '');
+            }
+            if ($targetUrl === '') {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'No active remote URL available to generate QR code.',
+                ], JSON_UNESCAPED_SLASHES);
+                exit;
+            }
+            $svg = $qrService->generateSvg($targetUrl);
+            echo json_encode([
+                'success' => true,
+                'url' => $targetUrl,
+                'qr_svg' => $svg,
+            ], JSON_UNESCAPED_SLASHES);
             exit;
         }
 

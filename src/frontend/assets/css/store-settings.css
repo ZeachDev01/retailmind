@@ -154,16 +154,150 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .remote-url-input {
     flex: 1;
+    min-width: 200px;
     font-family: monospace;
     font-size: 0.88rem;
     padding: 0.5rem 0.75rem;
     background: var(--bg-surface, #ffffff);
     border: 1px solid var(--border, #cbd5e1);
     border-radius: 6px;
+}
+
+/* Dedicated Mobile QR Code Modal & Popover Styles */
+.qr-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.qr-modal-backdrop.u-hidden {
+    display: none !important;
+}
+
+.qr-modal-dialog {
+    background: var(--bg-surface, #ffffff);
+    color: var(--text-color, #1e293b);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border, #e2e8f0);
+    width: 100%;
+    max-width: 440px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: qrModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes qrModalPop {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.qr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.qr-modal-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.modal-close-btn:hover,
+.modal-close-btn:focus-visible {
+    color: var(--text-color, #0f172a);
+    background-color: var(--bg-surface-secondary, rgba(0, 0, 0, 0.05));
+    outline: none;
+}
+
+.qr-modal-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+}
+
+.qr-modal-description {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--muted, #64748b);
+    line-height: 1.45;
+}
+
+.qr-code-display {
+    background: #ffffff;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border, #cbd5e1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    min-height: 220px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.qr-code-display svg,
+.qr-code-display canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+.qr-modal-url-wrap {
+    display: flex;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.qr-modal-footer {
+    padding: 0.75rem 1.25rem;
+    background: var(--bg-surface-secondary, #f8fafc);
+    border-top: 1px solid var(--border, #e2e8f0);
+    display: flex;
+    justify-content: flex-end;
 }
 
 .u-hidden {
@@ -182,5 +316,40 @@
     .remote-url-group {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .remote-url-group .btn {
+        width: 100%;
+    }
+
+    .qr-modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .qr-modal-dialog {
+        max-width: 100%;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .qr-modal-url-wrap {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .qr-code-display {
+        width: 100%;
+        max-width: 240px;
+        min-width: 180px;
+        min-height: 180px;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+    .qr-modal-dialog {
+        max-width: 420px;
     }
 }
