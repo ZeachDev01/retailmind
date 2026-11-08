@@ -20,6 +20,9 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareGCashViewData($receipt ?? [], 
                 <div>Completed: <?= $v['completed_at_formatted'] ?></div>
                 <div>Cashier: <?= $v['cashier_name'] ?></div>
                 <div>Register: <?= $v['register_name'] ?></div>
+                <?php if (!empty($v['customer_identifier']) && $v['customer_identifier'] !== '—'): ?>
+                    <div>Customer: <?= $v['customer_identifier'] ?></div>
+                <?php endif; ?>
             </div>
         </div>
         <div class="sale-receipt-totals">
@@ -31,9 +34,10 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareGCashViewData($receipt ?? [], 
             <?php endforeach; ?>
         </div>
         <div class="gcash-receipt-reference">
-            <div>GCash reference</div>
+            <div>Verified GCash reference</div>
             <?= $v['barcode_svg'] ?>
             <div class="gcash-receipt-digits"><?= $v['reference_number'] ?></div>
+            <div class="gcash-receipt-verified-status"><i class="bi bi-patch-check-fill" aria-hidden="true"></i> Verified reference</div>
         </div>
         <div class="sale-receipt-footer"><?= $v['store']['footer'] ?></div>
     </div>

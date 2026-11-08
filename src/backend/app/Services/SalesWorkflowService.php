@@ -741,6 +741,23 @@ class SalesWorkflowService
         if ($paymentMethod !== 'cash' && $paymentReference === '') {
             throw new RuntimeException('Payment reference is required for card or e-wallet payments.');
         }
+        if ($paymentMethod === 'ewallet') {
+            $isGCash = !empty($paymentDetails['is_gcash'])
+                || !empty($paymentDetails['gcash'])
+                || (isset($paymentDetails['ewallet_provider']) && strtolower((string)$paymentDetails['ewallet_provider']) === 'gcash')
+                || preg_match('/^[0-9\s-]+$/', (string)$paymentReference)
+                || (is_string($paymentReference) && strlen($paymentReference) > 0 && !preg_match('/^[A-Za-z]+-[0-9]+$/', $paymentReference));
+            if ($isGCash) {
+                $normalizedRef = preg_replace('/[\s-]+/u', '', (string)$paymentReference);
+                $gcashConfig = is_file(__DIR__ . '/../../config/gcash.php') ? (require __DIR__ . '/../../config/gcash.php') : ['min_length' => 13, 'max_length' => 13];
+                $min = (int)($gcashConfig['min_length'] ?? 13);
+                $max = (int)($gcashConfig['max_length'] ?? 13);
+                if (!preg_match('/\A[0-9]{' . $min . ',' . $max . '}\z/', $normalizedRef)) {
+                    throw new DomainException('Enter a valid ' . ($min === $max ? $min . '-digit' : "{$min}-{$max} digit") . ' Philippine GCash reference number.');
+                }
+                $paymentReference = $normalizedRef;
+            }
+        }
         if ($paymentMethod !== 'cash'
             && (array_key_exists('checkout_attempt', $paymentDetails) || array_key_exists('reviewed_quote', $paymentDetails) || array_key_exists('payment_verified', $paymentDetails))
             && ($paymentDetails['payment_verified'] ?? false) !== true) {
