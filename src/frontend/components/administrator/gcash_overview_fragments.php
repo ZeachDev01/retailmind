@@ -5,7 +5,9 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/gcash_admin.php';
 
 use App\GCash\AdminOverviewReport;
-use App\Services\GCashTransactionService;
+use App\GCash\GCashActivityScopeReport;
+use App\GCash\GCashExchangeReview;
+use App\GCash\GCashLiveCustodySession;
 
 require_role(['admin', 'super_admin']);
 
@@ -15,8 +17,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-$service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
-$report = (new AdminOverviewReport($service))->forRequest($_GET, (string)current_role(), (int)($_SESSION['user_id'] ?? 0));
+$config = require __DIR__ . '/../../../backend/config/gcash.php';
+$custody = new GCashLiveCustodySession($pdo);
+$report = (new AdminOverviewReport($custody, new GCashActivityScopeReport($pdo), new GCashExchangeReview($pdo, $config, $custody)))->forRequest($_GET, (string)current_role(), (int)($_SESSION['user_id'] ?? 0));
 
 $overview = $report->overview;
 $filterError = $report->filterError;

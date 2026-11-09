@@ -21,10 +21,17 @@ echo "Testing StoreTrainingEligibilityService & DemandHistoryService Ticket #365
 try {
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->sqliteCreateFunction('NOW', static fn() => '2026-11-02 01:00:00');
-    $pdo->sqliteCreateFunction('CURDATE', static fn() => '2026-11-02');
-    $pdo->sqliteCreateFunction('DATEDIFF', static fn($d1, $d2) => (int)round((strtotime((string)$d1) - strtotime((string)$d2)) / 86400));
-    $pdo->sqliteCreateFunction('GREATEST', static fn(...$args) => max($args));
+    $sqliteFn = static function (PDO $pdo, string $name, callable $callback, int $numArgs = -1): void {
+        if ($pdo instanceof \Pdo\Sqlite || method_exists($pdo, 'createFunction')) {
+            $pdo->createFunction($name, $callback, $numArgs);
+            return;
+        }
+        @$pdo->sqliteCreateFunction($name, $callback, $numArgs);
+    };
+    $sqliteFn($pdo, 'NOW', static fn() => '2026-11-02 01:00:00');
+    $sqliteFn($pdo, 'CURDATE', static fn() => '2026-11-02');
+    $sqliteFn($pdo, 'DATEDIFF', static fn($d1, $d2) => (int)round((strtotime((string)$d1) - strtotime((string)$d2)) / 86400));
+    $sqliteFn($pdo, 'GREATEST', static fn(...$args) => max($args));
 
     $pdo->exec("
         CREATE TABLE products (

@@ -189,7 +189,8 @@ class NotificationService
         $readiness = [];
         $eligible = [];
         try {
-            $readiness = \get_forecasting_readiness($this->pdo);
+            require_once __DIR__ . '/../Forecasting/ForecastReadinessQuery.php';
+            $readiness = (new \App\Forecasting\ForecastReadinessQuery($this->pdo))->rows();
             $eligible = array_filter($readiness, static fn(array $item): bool => !empty($item['training_eligible']));
             if ($readiness !== [] && $eligible === []) {
                 $message = 'No Product is ready for training. Each Product needs '

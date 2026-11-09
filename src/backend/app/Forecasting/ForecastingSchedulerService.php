@@ -39,7 +39,7 @@ class ForecastingSchedulerService {
     /**
      * Recovers expired worker leases and enforces the 3-attempt ceiling.
      */
-    public function recoverExpiredLeases(DateTime $now = null): int {
+    public function recoverExpiredLeases(?DateTime $now = null): int {
         $nowStr = $now ? $now->format('Y-m-d H:i:s') : (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
         try {
             // Fail jobs with expired lease that reached or exceeded 3 attempts
@@ -74,7 +74,7 @@ class ForecastingSchedulerService {
         }
     }
     
-    public function runScheduler(DateTime $now = null): array {
+    public function runScheduler(?DateTime $now = null): array {
         if ($now === null) {
             $now = new DateTime('now', new DateTimeZone('Asia/Manila'));
         }

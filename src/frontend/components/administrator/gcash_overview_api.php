@@ -11,18 +11,7 @@ try {
     $method = $_SERVER['REQUEST_METHOD'];
 
     if ($method === 'GET') {
-        $filters = [
-            'type' => (string)($_GET['type'] ?? 'all'),
-            'search' => trim((string)($_GET['search'] ?? '')),
-            'actor_role' => (string)current_role(),
-            'actor_id' => (int)($_SESSION['user_id'] ?? 0),
-            'start_date' => isset($_GET['start_date']) ? (string)$_GET['start_date'] : null,
-            'end_date' => isset($_GET['end_date']) ? (string)$_GET['end_date'] : null,
-            'cashier_id' => $_GET['cashier_id'] ?? null,
-            'page' => filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1,
-        ];
-        if (isset($_GET['period'])) $filters['period'] = (string)$_GET['period'];
-        $result = $service->adminOverview($filters);
+        $result = $service->adminOverviewFromQuery($_GET, (string)current_role(), (int)($_SESSION['user_id'] ?? 0));
         echo json_encode(['success' => true] + $result, JSON_UNESCAPED_UNICODE);
     } elseif ($method === 'POST') {
         if (function_exists('is_remote_request') && is_remote_request()) {

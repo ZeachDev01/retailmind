@@ -5,13 +5,18 @@ require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/includes/gcash_admin.php';
 
 use App\GCash\AdminOverviewReport;
+use App\GCash\GCashActivityScopeReport;
+use App\GCash\GCashExchangeReview;
+use App\GCash\GCashLiveCustodySession;
 use App\Services\GCashTransactionService;
 use App\Services\PhilippineTime;
 
 require_role(['admin', 'super_admin']);
 
-$service = new GCashTransactionService($pdo, require __DIR__ . '/../../../backend/config/gcash.php');
-$reportBuilder = new AdminOverviewReport($service);
+$config = require __DIR__ . '/../../../backend/config/gcash.php';
+$service = new GCashTransactionService($pdo, $config);
+$custody = new GCashLiveCustodySession($pdo);
+$reportBuilder = new AdminOverviewReport($custody, new GCashActivityScopeReport($pdo), new GCashExchangeReview($pdo, $config, $custody));
 $filters = $reportBuilder->filters($_GET, (string)current_role(), (int)$_SESSION['user_id']);
 
 $canMutate = current_role() === 'admin' && !(function_exists('is_remote_request') && is_remote_request());

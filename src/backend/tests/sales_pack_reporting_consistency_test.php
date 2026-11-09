@@ -40,15 +40,18 @@ function createReportingPdo(): PDO
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-    $pdo->sqliteCreateFunction('NOW', static fn(): string => '2026-10-20 10:00:00');
-    $pdo->sqliteCreateFunction('CURDATE', static fn(): string => '2026-10-20');
-    $pdo->sqliteCreateFunction('LEAST', static fn(...$values) => min($values));
-    $pdo->sqliteCreateFunction('GREATEST', static fn(...$values) => max($values));
-    $pdo->sqliteCreateFunction(
-        'DATE_ADD',
-        static fn(string $date, string $interval, int $days): string => date('Y-m-d', strtotime($date . ' +' . $days . ' days')),
-        3
-    );
+    $sqliteFn = static function (PDO $pdo, string $name, callable $callback, int $numArgs = -1): void {
+        if ($pdo instanceof \Pdo\Sqlite || method_exists($pdo, 'createFunction')) {
+            $pdo->createFunction($name, $callback, $numArgs);
+            return;
+        }
+        @$pdo->sqliteCreateFunction($name, $callback, $numArgs);
+    };
+    $sqliteFn($pdo, 'NOW', static fn(): string => '2026-10-20 10:00:00');
+    $sqliteFn($pdo, 'CURDATE', static fn(): string => '2026-10-20');
+    $sqliteFn($pdo, 'LEAST', static fn(...$values) => min($values));
+    $sqliteFn($pdo, 'GREATEST', static fn(...$values) => max($values));
+    $sqliteFn($pdo, 'DATE_ADD', static fn(string $date, string $interval, int $days): string => date('Y-m-d', strtotime($date . ' +' . $days . ' days')), 3);
 
     $pdo->exec("
         CREATE TABLE branches (

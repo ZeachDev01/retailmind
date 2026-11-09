@@ -4,29 +4,26 @@ declare(strict_types=1);
 
 namespace App\GCash;
 
-use App\Services\GCashTransactionService;
 use App\Services\PhilippineTime;
 use DomainException;
 use Throwable;
 
 /**
- * One read of the GCash Admin Overview for a request's query string.
- *
- * Interface: filters(array $query) -> filter bag for the service;
- *            forRequest(array $query) -> AdminOverviewModel with the typed
- *            view state. Both the page and the fragment endpoint call
- *            forRequest(), so period inference, defaults and the single
- *            adminOverview() read cannot drift between them.
+ * Admin overview read adapter. Composes GCash Live Custody (M1), Activity Scope (M2),
+ * and exchange review (M4) into the legacy overview contract (ADR-0025 preserved).
  */
 final class AdminOverviewReport
 {
     public const TABS = ['overview', 'transactions', 'reconciliation', 'unresolved', 'money'];
 
-    public function __construct(private GCashTransactionService $service)
-    {
+    public function __construct(
+        private GCashLiveCustodySession $custody,
+        private GCashActivityScopeReport $activity,
+        private GCashExchangeReview $review,
+    ) {
     }
 
-    /** Filter bag for GCashTransactionService and for CSV export. */
+    /** Filter bag for GCash reporting/overview. */
     public function filters(array $query, string $role, int $actorId): array
     {
         return [
@@ -39,6 +36,42 @@ final class AdminOverviewReport
             'end_date' => isset($query['end_date']) ? trim((string)$query['end_date']) : PhilippineTime::today(),
             'cashier_id' => $query['cashier_id'] ?? null,
             'page' => filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1,
+        ];
+    }
+
+    /** Assembled admin overview (legacy shape). Caller enforces authorization. */
+    public function overview(array $filters): array
+    {
+        $custody = $this->custody->custodyOverviewState();
+        $activity = $this->activity->filteredOverview($filters);
+        $unresolved = $this->review->unresolvedExchanges();
+        $differences = $this->review->reconciliationDifferences();
+
+        return $custody + [
+            'type_counts' => $activity['type_counts'],
+            'filtered_activity' => $activity['filtered_activity'],
+            'completed_exchange_count' => $activity['completed_exchange_count'],
+            'matching_record_count' => $activity['matching_record_count'],
+            'cash_in_principal' => $activity['cash_in_principal'],
+            'cash_out_principal' => $activity['cash_out_principal'],
+            'gross_fees_cash' => $activity['gross_fees_cash'],
+            'gross_fees_wallet' => $activity['gross_fees_wallet'],
+            'gross_fees_total' => $activity['gross_fees_total'],
+            'total_transactions' => $activity['total_transactions'],
+            'fees_charged' => $activity['fees_charged'],
+            'fees_returned' => $activity['fees_returned'],
+            'fees_after_returns' => $activity['fees_after_returns'],
+            'unresolved_activity' => $unresolved,
+            'needs_checking' => $unresolved,
+            'unresolved_count' => count($unresolved),
+            'needs_checking_count' => count($unresolved),
+            'reconciliation_differences' => $differences,
+            'differences_count' => count(array_filter($differences, static fn(array $difference): bool => empty($difference['is_reviewed']))),
+            'transactions' => $activity['transactions'],
+            'has_next' => $activity['has_next'],
+            'page' => $activity['page'],
+            'cashiers' => $activity['cashiers'],
+            'filters' => $activity['filters'],
         ];
     }
 
@@ -61,7 +94,7 @@ final class AdminOverviewReport
         $filterError = null;
 
         try {
-            $overview = $this->service->adminOverview($filters);
+            $overview = $this->overview($filters);
             $period = (string)($overview['filters']['period'] ?? $period);
             $startDate = (string)($overview['filters']['start_date'] ?? $startDate);
             $endDate = (string)($overview['filters']['end_date'] ?? $endDate);

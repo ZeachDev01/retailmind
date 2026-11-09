@@ -21,12 +21,7 @@ try {
                 $session['expected_wallet_balance'] = $expected['expected_wallet_balance'];
                 $session['is_controlling_cashier'] = (int)$session['cashier_id'] === (int)$_SESSION['user_id'];
             }
-            $lastClosed = null;
-            $closedStmt = $pdo->query("SELECT * FROM gcash_service_sessions WHERE status = 'closed' ORDER BY session_id DESC LIMIT 1");
-            if ($row = $closedStmt->fetch(PDO::FETCH_ASSOC)) {
-                $lastClosed = $row;
-            }
-            $result = ['session' => $session, 'last_closed_session' => $lastClosed];
+            $result = ['session' => $session, 'last_closed_session' => $service->lastClosedSession()];
         } elseif (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
             $type = (string)($_GET['type'] ?? '');
             $principal = (string)($_GET['principal'] ?? '');
