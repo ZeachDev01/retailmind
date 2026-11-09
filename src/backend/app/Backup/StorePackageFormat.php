@@ -2,6 +2,8 @@
 
 namespace App\Backup;
 
+use App\Backup\Compatibility\RestoreCompatibilityRegistry;
+use App\Backup\Compatibility\UnsupportedPackageStructure;
 use RuntimeException;
 
 /** Bounded, uncompressed authenticated Store package; never extracts archive paths. */
@@ -54,7 +56,7 @@ final class StorePackageFormat
         if ($migrations !== []) {
             $manifest['migrations'] = $migrations;
         }
-        self::validateManifest($manifest, $schema);
+        self::unpackManifest($manifest);
         $plain = json_encode($manifest, JSON_THROW_ON_ERROR);
         if (strlen($plain) > self::MAX_BYTES - 1024) throw new RuntimeException('The Store package exceeds the 48 MB package limit.');
         $salt = random_bytes(16);
@@ -68,7 +70,12 @@ final class StorePackageFormat
         } finally { unset($key, $plain); }
     }
 
-    public static function decode(string $package, array $schema): array
+    /**
+     * @param list<string> $appliedMigrations destination ledger keys; defaults to the
+     *        package's own list when the caller has no destination ledger evidence
+     */
+    public static function decode(string $package, array $schema, ?RestoreCompatibilityRegistry $registry = null,
+        array $appliedMigrations = []): array
     {
         self::assertRuntime();
         $offset = strlen(self::KEY_HEADER) + 64;
@@ -84,10 +91,16 @@ final class StorePackageFormat
             if ($plain === false) throw new RuntimeException('The backup is damaged or its recovery key is incorrect.');
             $manifest = json_decode($plain, true, 16, JSON_THROW_ON_ERROR);
             if (!is_array($manifest)) throw new RuntimeException('Invalid Store package manifest.');
-            $result = self::validateManifest($manifest, $schema);
+            $result = self::unpackManifest($manifest);
             $result['key_fingerprint'] = substr($package, strlen(self::KEY_HEADER), 64);
             $result['migrations'] = $result['manifest']['migrations'] ?? [];
+            $registry ??= new RestoreCompatibilityRegistry();
+            $report = $registry->classify($result['manifest'], $result['source_schema'], $schema,
+                $appliedMigrations !== [] ? $appliedMigrations : $result['migrations']);
+            if (!$report->isSupported()) throw new UnsupportedPackageStructure($report->toArray());
+            $result['compatibility'] = $report->toArray();
             $result['rows'] = SqlBackupFormat::rows($result['sql'], $result['source_schema']);
+            $result['rows'] = $registry->upgrade($result['rows'], $report, $result['source_schema'], $schema);
             self::validateReferences($result['rows'], $result['files']);
             return $result;
         } finally { unset($key, $plain); }
@@ -109,7 +122,7 @@ final class StorePackageFormat
         return $migrations;
     }
 
-    private static function validateManifest(array $manifest, array $schema): array
+    private static function unpackManifest(array $manifest): array
     {
         if (($manifest['format'] ?? '') !== self::VERSION || ($manifest['sql_format'] ?? '') !== SqlBackupFormat::VERSION
             || !preg_match('/^[a-f0-9]{64}$/D', (string)($manifest['schema'] ?? ''))
@@ -145,7 +158,8 @@ final class StorePackageFormat
             else { self::assertImage($member['path'], $content); $files[$member['path']] = $content; }
         }
         if ($sql === null) throw new RuntimeException('The package is missing its database snapshot.');
-        $source = SqlBackupFormat::compatibleSourceSchema($sql, $schema);
+        // Authenticate the producer's own map; destination structure is never patched in.
+        $source = SqlBackupFormat::producerSchema($sql);
         if (!hash_equals($manifest['schema'], hash('sha256', json_encode($source, JSON_THROW_ON_ERROR)))) {
             throw new RuntimeException('The package schema fingerprint does not match its captured SQL.');
         }
