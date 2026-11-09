@@ -80,7 +80,7 @@
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($keyringKeys === []): ?>
-                    <tr><td colspan="5" class="backup-empty"><i class="bi bi-key" aria-hidden="true"></i><strong>No recovery keys yet</strong><span>The first backup creates the Primary Recovery Key.</span></td></tr>
+                    <tr><td colspan="5" class="backup-keyring-empty"><i class="bi bi-key" aria-hidden="true"></i><strong>No recovery keys yet</strong><span>The first backup creates the Primary Recovery Key.</span></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

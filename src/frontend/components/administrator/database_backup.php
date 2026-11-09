@@ -107,38 +107,38 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
 
             <dl class="backup-summary" aria-label="Backup overview">
                 <div>
-                    <dt>Latest backup</dt>
+                    <dt><i class="bi bi-clock-history" aria-hidden="true"></i> Latest backup</dt>
                     <dd><?= $latestBackup ? $escape(format_display_datetime((string)($latestBackup['snapshot_at'] ?? $latestBackup['created_at']))) : 'None yet' ?></dd>
                 </div>
                 <div>
-                    <dt>Backups created</dt>
+                    <dt><i class="bi bi-collection" aria-hidden="true"></i> Backups created</dt>
                     <dd><?= $totalSnapshots ?></dd>
                 </div>
                 <div>
                     <dt>Store status</dt>
-                    <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
+                    <dd><span class="status-indicator <?= $storePaused ? 'is-paused' : 'is-operational' ?>" aria-hidden="true"></span><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
                 </div>
                 <div>
-                    <dt>Next scheduled run</dt>
+                    <dt><i class="bi bi-calendar-week" aria-hidden="true"></i> Next scheduled run</dt>
                     <dd><?= $scheduledSchedule['next_run_at'] !== '' ? $escape(format_display_datetime((string)$scheduledSchedule['next_run_at'])) : '—' ?></dd>
                 </div>
                 <div>
-                    <dt>Last outcome</dt>
+                    <dt><i class="bi bi-activity" aria-hidden="true"></i> Last outcome</dt>
                     <dd><span class="tag <?= $escape(\App\Backup\ScheduledBackupSettings::outcomeClass($scheduledSchedule['last_outcome'])) ?>"><?= $escape(\App\Backup\ScheduledBackupSettings::outcomeLabel($scheduledSchedule['last_outcome'])) ?></span></dd>
                 </div>
             </dl>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">
-                    <h2 id="backup-ready-title"><i class="bi bi-check2-circle" aria-hidden="true"></i> Backup ready for download</h2>
-                    <div class="backup-ready-details">
-                        <p class="backup-filename">
+                    <div class="backup-ready-main">
+                        <h2 id="backup-ready-title"><i class="bi bi-check2-circle" aria-hidden="true"></i> Backup ready</h2>
+                        <p class="backup-filename" title="<?= $escape($download['filename']) ?>">
                             <i class="bi bi-file-earmark-lock2" aria-hidden="true"></i>
                             <span><?= $escape($download['filename']) ?></span>
                             <span class="tag tag-success"><?= number_format($download['size'] / 1024, 1) ?> KB</span>
                         </p>
-                        <p><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a></p>
                     </div>
+                    <a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a>
                 </section>
             <?php endif; ?>
 
@@ -146,22 +146,20 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 <div class="backup-create-main">
                     <div class="backup-create-copy">
                         <h2 id="backup-create-title">Create backup <span class="backup-encrypted"><i class="bi bi-lock" aria-hidden="true"></i> Encrypted</span></h2>
-                        <p>Save a copy of Store records and images.</p>
+                        <p>Store records and images, sealed in one package.</p>
                     </div>
                     <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup">
                         <button type="submit" class="btn btn-primary" data-backup-create><i class="bi bi-plus-lg" aria-hidden="true"></i> Create backup</button>
                     </form>
                 </div>
-                <div class="backup-create-footer">
-                    <p class="backup-hint">Creating a backup does not confirm the file was saved on your device.</p>
-                    <details class="backup-tips">
-                        <summary>What to keep</summary>
-                        <ul class="backup-guidance-list">
-                            <li>No backup passphrase is needed.</li>
-                            <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
-                        </ul>
-                    </details>
-                </div>
+                <details class="backup-tips">
+                    <summary><i class="bi bi-info-circle" aria-hidden="true"></i> What to keep</summary>
+                    <ul class="backup-guidance-list">
+                        <li>Creating a backup does not confirm the file was saved on your device.</li>
+                        <li>No backup passphrase is needed.</li>
+                        <li>Download the recovery key from the Recovery key tab. Keep it separate from backups.</li>
+                    </ul>
+                </details>
             </section>
 
             <section class="dashboard-section backup-recovery" id="backup-recovery" aria-labelledby="backup-recovery-title" data-recovery-tab="<?= ($_POST['action'] ?? '') === 'safety' ? 'safety-panel' : (isset($_SESSION['backup_key_message']) ? 'key-panel' : 'restore-panel') ?>">
@@ -176,9 +174,9 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <?php endif; ?>
                 </div>
                 <div class="backup-recovery-tabs" role="tablist" aria-label="Restore and recovery tools" hidden>
-                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true">Restore</button>
-                    <button type="button" id="safety-tab" role="tab" aria-controls="safety-panel" aria-selected="false" tabindex="-1">Safety copy</button>
-                    <button type="button" id="key-tab" role="tab" aria-controls="key-panel" aria-selected="false" tabindex="-1">Recovery key</button>
+                    <button type="button" id="restore-tab" role="tab" aria-controls="restore-panel" aria-selected="true"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Restore</button>
+                    <button type="button" id="safety-tab" role="tab" aria-controls="safety-panel" aria-selected="false" tabindex="-1"><i class="bi bi-shield-check" aria-hidden="true"></i> Safety copy</button>
+                    <button type="button" id="key-tab" role="tab" aria-controls="key-panel" aria-selected="false" tabindex="-1"><i class="bi bi-key" aria-hidden="true"></i> Recovery key</button>
                 </div>
                 <div id="restore-panel" role="tabpanel" aria-labelledby="restore-tab" tabindex="0">
                     <?php require __DIR__ . '/../backup/restore_form.php'; ?>
@@ -196,7 +194,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <span class="backup-record-count"><?= $historyTotal ?> <?= $historyTotal === 1 ? 'record' : 'records' ?></span>
                 </div>
                 <div class="table-wrap" tabindex="0" role="region" aria-label="Backup history records">
-                    <table data-no-smart-table aria-label="Backup history">
+                    <table data-no-smart-table data-no-ghost-rows aria-label="Backup history">
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Backup date</th>
@@ -209,7 +207,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                         </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
                                 <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
                                 <td><span class="tag tag-soft"><?= $escape($row['backup_type_label'] ?? 'Manual') ?></span></td>
-                                <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td class="backup-file-cell"><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename" title="<?= $escape($row['format']) ?>"><?= $escape($row['filename']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
                                 <?php $artifactState = (string)($row['artifact_state'] ?? 'not_retained'); ?>
                                 <td><span class="tag <?= $escape(\App\Backup\DatabaseBackupService::artifactClass($artifactState)) ?>"><?= $escape(\App\Backup\DatabaseBackupService::artifactLabel($artifactState)) ?></span></td>
                                 <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>

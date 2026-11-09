@@ -314,64 +314,68 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <header class="topbar">
+            <header class="topbar fiscal-topbar">
                 <div>
                     <h1>Fiscal Periods</h1>
+                </div>
+                <div class="fiscal-rollover-control">
+                    <span class="fiscal-rollover-label">Auto rollover</span>
+                    <span class="info-tooltip">
+                        <button class="info-tooltip-trigger" type="button" aria-label="About automatic rollover" aria-describedby="auto-rollover-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                        <span class="tooltip-box" id="auto-rollover-help" role="tooltip">When on, a due period closes by itself and the next scheduled period opens. Blockers still keep a period open.</span>
+                    </span>
+                    <?php if (current_role() === 'admin'): ?>
+                        <form method="POST" class="fiscal-rollover-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="set_rollover">
+                            <input type="hidden" name="auto_rollover" value="<?= $autoRollover ? '0' : '1' ?>">
+                            <button type="submit" class="fiscal-switch" role="switch" aria-checked="<?= $autoRollover ? 'true' : 'false' ?>" aria-label="Automatic rollover, currently <?= $autoRollover ? 'on' : 'off' ?>">
+                                <span class="fiscal-switch-track" aria-hidden="true"><span class="fiscal-switch-thumb"></span></span>
+                                <span class="fiscal-switch-label"><?= $autoRollover ? 'On' : 'Off' ?></span>
+                            </button>
+                        </form>
+                    <?php else: ?>
+                        <span class="fiscal-rollover-state<?= $autoRollover ? ' is-on' : '' ?>"><?= $autoRollover ? 'On' : 'Off' ?></span>
+                        <a class="fiscal-rollover-link" href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>">Settings</a>
+                    <?php endif; ?>
                 </div>
             </header>
 
             <?php if ($message !== ''): ?>
-                <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
+                <div class="message success" role="status"><i class="bi bi-check-circle" aria-hidden="true"></i><span><?= htmlspecialchars($message) ?></span></div>
             <?php endif; ?>
 
             <?php if ($error !== ''): ?>
-                <div class="message error" role="alert"><?= htmlspecialchars($error) ?></div>
+                <div class="message error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i><span><?= htmlspecialchars($error) ?></span></div>
             <?php endif; ?>
 
-            <section class="card-grid fiscal-period-stats" aria-label="Fiscal period summary">
-                <article class="stat-card with-icon success">
-                    <span class="stat-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
-                    <div class="value"><?= $statusCounts['open'] ?></div>
-                    <div class="label">Open</div>
-                </article>
-                <article class="stat-card with-icon fiscal-stat-scheduled">
-                    <span class="stat-icon"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
-                    <div class="value"><?= $statusCounts['scheduled'] ?></div>
-                    <div class="label">Scheduled</div>
-                </article>
-                <article class="stat-card with-icon warning">
-                    <span class="stat-icon"><i class="bi bi-calendar2-minus" aria-hidden="true"></i></span>
-                    <div class="value"><?= $statusCounts['closed'] ?></div>
-                    <div class="label">Closed</div>
-                </article>
-                <article class="stat-card with-icon fiscal-stat-locked">
-                    <span class="stat-icon"><i class="bi bi-lock" aria-hidden="true"></i></span>
-                    <div class="value"><?= $statusCounts['locked'] ?></div>
-                    <div class="label">Locked</div>
-                </article>
+            <section class="fiscal-summary" aria-label="Fiscal period summary">
+                <div class="fiscal-summary-item is-open">
+                    <span class="fiscal-summary-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
+                    <span class="fiscal-summary-copy"><strong><?= $statusCounts['open'] ?></strong><span>Open</span></span>
+                </div>
+                <div class="fiscal-summary-item is-scheduled">
+                    <span class="fiscal-summary-icon"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
+                    <span class="fiscal-summary-copy"><strong><?= $statusCounts['scheduled'] ?></strong><span>Scheduled</span></span>
+                </div>
+                <div class="fiscal-summary-item is-closed">
+                    <span class="fiscal-summary-icon"><i class="bi bi-calendar2-minus" aria-hidden="true"></i></span>
+                    <span class="fiscal-summary-copy"><strong><?= $statusCounts['closed'] ?></strong><span>Closed</span></span>
+                </div>
+                <div class="fiscal-summary-item is-locked">
+                    <span class="fiscal-summary-icon"><i class="bi bi-lock" aria-hidden="true"></i></span>
+                    <span class="fiscal-summary-copy"><strong><?= $statusCounts['locked'] ?></strong><span>Locked</span></span>
+                </div>
             </section>
 
             <section class="dashboard-section fiscal-period-create" aria-labelledby="create-period-title">
-                <div class="section-header">
-                    <div>
-                        <h2 id="create-period-title"><i class="bi bi-plus-circle" aria-hidden="true"></i> Create period</h2>
-                        <p class="section-description">
-                            Add periods ahead of time. A future range stays <strong>scheduled</strong> until its start date, then opens manually or automatically.
-                            Automatic rollover is <strong><?= $autoRollover ? 'on' : 'off' ?></strong>.
-                        </p>
-                        <?php if (current_role() === 'admin'): ?>
-                            <form method="POST" class="fiscal-rollover-form">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="set_rollover">
-                                <input type="hidden" name="auto_rollover" value="<?= $autoRollover ? '0' : '1' ?>">
-                                <button type="submit" class="btn btn-small btn-secondary">Turn automatic rollover <?= $autoRollover ? 'off' : 'on' ?></button>
-                            </form>
-                        <?php else: ?>
-                            <p class="section-description">
-                                <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>">Change automatic rollover in Store Settings</a>.
-                            </p>
-                        <?php endif; ?>
-                    </div>
+                <div class="fiscal-section-header">
+                    <h2 id="create-period-title"><i class="bi bi-plus-circle" aria-hidden="true"></i> New period
+                        <span class="info-tooltip">
+                            <button class="info-tooltip-trigger" type="button" aria-label="About fiscal period dates" aria-describedby="create-period-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                            <span class="tooltip-box" id="create-period-help" role="tooltip">A future range stays scheduled until its start date, then opens manually or automatically. Only one period can be open at a time.</span>
+                        </span>
+                    </h2>
                 </div>
                 <form method="POST" class="fiscal-period-form">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
@@ -393,40 +397,42 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                     </div>
                 </form>
 
-                <h3 class="fiscal-period-subheading">Generate a period schedule</h3>
-                <p class="section-description">
-                    Creates a continuous run of calendar-aligned periods starting the day after the latest period ends.
-                    The whole set is created together, or nothing is created if any name already exists.
-                </p>
-                <form method="POST" class="fiscal-period-form">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-                    <input type="hidden" name="action" value="generate">
-                    <div class="fiscal-period-form-grid">
-                        <div class="form-group">
-                            <label for="cadence">Cadence</label>
-                            <select id="cadence" name="cadence">
-                                <option value="monthly">Monthly</option>
-                                <option value="quarterly">Quarterly</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="count">Periods to generate</label>
-                            <input type="number" id="count" name="count" min="1" max="24" value="12" required aria-required="true">
-                        </div>
-                        <div class="form-group">
-                            <label for="prefix">Name prefix (optional)</label>
-                            <input type="text" id="prefix" name="prefix" maxlength="20" placeholder="e.g. FY" autocomplete="off">
-                        </div>
-                        <button type="submit" class="btn btn-secondary fiscal-create-button"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate periods</button>
+                <div class="fiscal-generate">
+                    <div class="fiscal-subheading">
+                        <h3><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate a schedule</h3>
+                        <span class="info-tooltip">
+                            <button class="info-tooltip-trigger" type="button" aria-label="About schedule generation" aria-describedby="generate-period-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                            <span class="tooltip-box" id="generate-period-help" role="tooltip">Creates a continuous run of calendar-aligned periods starting the day after the latest period ends. The whole set is created together, or nothing is created if a name already exists.</span>
+                        </span>
                     </div>
-                </form>
+                    <form method="POST" class="fiscal-period-form fiscal-generate-form">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                        <input type="hidden" name="action" value="generate">
+                        <div class="fiscal-period-form-grid">
+                            <div class="form-group">
+                                <label for="cadence">Cadence</label>
+                                <select id="cadence" name="cadence">
+                                    <option value="monthly">Monthly</option>
+                                    <option value="quarterly">Quarterly</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="count">Periods to generate</label>
+                                <input type="number" id="count" name="count" min="1" max="24" value="12" required aria-required="true">
+                            </div>
+                            <div class="form-group">
+                                <label for="prefix">Name prefix (optional)</label>
+                                <input type="text" id="prefix" name="prefix" maxlength="20" placeholder="e.g. FY" autocomplete="off">
+                            </div>
+                            <button type="submit" class="btn btn-secondary fiscal-create-button"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate periods</button>
+                        </div>
+                    </form>
+                </div>
             </section>
 
             <section class="fiscal-period-list" aria-labelledby="period-list-title">
                 <div class="fiscal-period-list-heading">
-                    <div>
-                        <h2 id="period-list-title"><i class="bi bi-calendar-range" aria-hidden="true"></i> Fiscal periods</h2>
-                    </div>
+                    <h2 id="period-list-title"><i class="bi bi-calendar-range" aria-hidden="true"></i> Fiscal periods</h2>
                     <span class="fiscal-period-count"><?= count($periods) ?> total</span>
                 </div>
 
@@ -443,68 +449,88 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                             $periodStatus = strtolower((string)$period['status']);
                             $cardTitleId = 'period-heading-' . (int)$period['period_id'];
                             $endDateId = 'period-end-' . (int)$period['period_id'];
+                            $hintId = 'period-hint-' . (int)$period['period_id'];
+                            $startTimestamp = strtotime((string)$period['start_date']);
+                            $endTimestamp = strtotime((string)$period['end_date']);
+                            $sameYear = date('Y', $startTimestamp) === date('Y', $endTimestamp);
+                            $startLabel = date($sameYear ? 'M j' : 'M j, Y', $startTimestamp);
+                            $endLabel = date('M j, Y', $endTimestamp);
+                            $scheduledNote = $periodStatus === 'scheduled' && $openableId !== (int)$period['period_id']
+                                ? $scheduledHint($period)
+                                : '';
                             ?>
-                            <article class="fiscal-period-card" aria-labelledby="<?= $cardTitleId ?>">
+                            <article class="fiscal-period-card<?= $periodStatus === 'open' ? ' is-open' : '' ?>" aria-labelledby="<?= $cardTitleId ?>">
                                 <div class="fiscal-period-card-header">
                                     <div class="fiscal-period-title">
                                         <span class="fiscal-period-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></span>
                                         <div>
                                             <h3 id="<?= $cardTitleId ?>"><?= htmlspecialchars($period['period_name']) ?></h3>
-                                            <span><time datetime="<?= htmlspecialchars((string)$period['start_date']) ?>"><?= htmlspecialchars(date('M j, Y', strtotime((string)$period['start_date']))) ?></time> – <time datetime="<?= htmlspecialchars((string)$period['end_date']) ?>"><?= htmlspecialchars(date('M j, Y', strtotime((string)$period['end_date']))) ?></time></span>
+                                            <span class="fiscal-period-range"><time datetime="<?= htmlspecialchars((string)$period['start_date']) ?>"><?= htmlspecialchars($startLabel) ?></time> – <time datetime="<?= htmlspecialchars((string)$period['end_date']) ?>"><?= htmlspecialchars($endLabel) ?></time></span>
                                         </div>
                                     </div>
-                                    <span class="fiscal-status-badge <?= htmlspecialchars($periodStatus) ?>"><?= htmlspecialchars(ucfirst($periodStatus)) ?></span>
+                                    <div class="fiscal-period-badges">
+                                        <span class="fiscal-status-badge <?= htmlspecialchars($periodStatus) ?>"><?= htmlspecialchars(ucfirst($periodStatus)) ?></span>
+                                        <?php if ($scheduledNote !== ''): ?>
+                                            <span class="info-tooltip">
+                                                <button class="info-tooltip-trigger" type="button" aria-label="Why this period is waiting" aria-describedby="<?= $hintId ?>"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                                <span class="tooltip-box" id="<?= $hintId ?>" role="tooltip"><?= htmlspecialchars($scheduledNote) ?></span>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
 
-                                <dl class="fiscal-period-details">
-                                    <div>
-                                        <dt>Created by</dt>
-                                        <dd><?= htmlspecialchars($period['created_by_name'] ?? 'Unknown') ?></dd>
-                                    </div>
-                                    <div>
-                                        <dt>Created at</dt>
-                                        <dd><?= htmlspecialchars(format_display_datetime($period['created_at'])) ?></dd>
-                                    </div>
-                                    <?php if (in_array($periodStatus, ['closed', 'locked'], true)): ?>
+                                <details class="fiscal-period-more">
+                                    <summary><i class="bi bi-chevron-right fiscal-caret" aria-hidden="true"></i> Details</summary>
+                                    <dl class="fiscal-period-details">
                                         <div>
-                                            <dt>Closed by</dt>
-                                            <dd><?= htmlspecialchars($period['closed_by_name'] ?? ($period['closed_by'] === null && $period['closed_at'] ? 'Automatic rollover' : 'Unknown')) ?></dd>
+                                            <dt>Created by</dt>
+                                            <dd><?= htmlspecialchars($period['created_by_name'] ?? 'Unknown') ?></dd>
                                         </div>
                                         <div>
-                                            <dt>Closed at</dt>
-                                            <dd><?= htmlspecialchars($period['closed_at'] ? format_display_datetime($period['closed_at']) : 'N/A') ?></dd>
+                                            <dt>Created at</dt>
+                                            <dd><?= htmlspecialchars(format_display_datetime($period['created_at'])) ?></dd>
                                         </div>
-                                    <?php endif; ?>
-                                </dl>
+                                        <?php if (in_array($periodStatus, ['closed', 'locked'], true)): ?>
+                                            <div>
+                                                <dt>Closed by</dt>
+                                                <dd><?= htmlspecialchars($period['closed_by_name'] ?? ($period['closed_by'] === null && $period['closed_at'] ? 'Automatic rollover' : 'Unknown')) ?></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Closed at</dt>
+                                                <dd><?= htmlspecialchars($period['closed_at'] ? format_display_datetime($period['closed_at']) : 'N/A') ?></dd>
+                                            </div>
+                                        <?php endif; ?>
+                                    </dl>
+                                </details>
 
-                                <div class="fiscal-period-actions">
-                                    <?php if ($periodStatus === 'open'): ?>
+                                <?php if ($periodStatus === 'open'): ?>
+                                    <div class="fiscal-period-actions">
                                         <form method="POST" data-confirm="Closing prevents new entries but keeps records viewable." data-confirm-title="Close fiscal period" data-confirm-button="Close period">
                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                             <input type="hidden" name="action" value="close">
                                             <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                            <button type="submit" class="btn fiscal-action-close" aria-label="Close fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-minus" aria-hidden="true"></i> Close period</button>
+                                            <button type="submit" class="btn btn-quiet fiscal-action-close" aria-label="Close fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-minus" aria-hidden="true"></i> Close period</button>
                                         </form>
-                                    <?php elseif ($periodStatus === 'closed'): ?>
+                                    </div>
+                                <?php elseif ($periodStatus === 'closed'): ?>
+                                    <div class="fiscal-period-actions">
                                         <form method="POST" data-confirm="Locking makes all period records read-only for compliance." data-confirm-title="Lock fiscal period" data-confirm-button="Lock period" data-confirm-danger="1">
                                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                             <input type="hidden" name="action" value="lock">
                                             <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                            <button type="submit" class="btn fiscal-action-lock" aria-label="Lock fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-lock" aria-hidden="true"></i> Lock period</button>
+                                            <button type="submit" class="btn btn-quiet fiscal-action-lock" aria-label="Lock fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-lock" aria-hidden="true"></i> Lock period</button>
                                         </form>
-                                    <?php elseif ($periodStatus === 'scheduled'): ?>
-                                        <?php if ($openableId === (int)$period['period_id']): ?>
-                                            <form method="POST">
-                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-                                                <input type="hidden" name="action" value="open">
-                                                <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                                <button type="submit" class="btn btn-primary" aria-label="Open scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-check" aria-hidden="true"></i> Open period</button>
-                                            </form>
-                                        <?php else: ?>
-                                            <span class="fiscal-read-only"><i class="bi bi-clock-history" aria-hidden="true"></i> <?= htmlspecialchars($scheduledHint($period)) ?></span>
-                                        <?php endif; ?>
+                                    </div>
+                                <?php elseif ($periodStatus === 'scheduled'): ?>
+                                    <div class="fiscal-period-actions">
+                                        <form method="POST" class="fiscal-delete-form" data-confirm="Deleting removes this reserved range. Later periods must be deleted first." data-confirm-title="Delete scheduled period" data-confirm-button="Delete period" data-confirm-danger="1">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
+                                            <button type="submit" class="fiscal-icon-button" aria-label="Delete scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>" title="Delete"><i class="bi bi-trash3" aria-hidden="true"></i></button>
+                                        </form>
                                         <details class="fiscal-period-amend">
-                                            <summary class="btn btn-secondary">Edit end date</summary>
+                                            <summary><i class="bi bi-chevron-right fiscal-caret" aria-hidden="true"></i> Edit end date</summary>
                                             <form method="POST" class="fiscal-period-amend-form">
                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                                                 <input type="hidden" name="action" value="amend_end">
@@ -514,16 +540,16 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                                                 <button type="submit" class="btn btn-primary">Save</button>
                                             </form>
                                         </details>
-                                        <form method="POST" data-confirm="Deleting removes this reserved range. Later periods must be deleted first." data-confirm-title="Delete scheduled period" data-confirm-button="Delete period" data-confirm-danger="1">
-                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
-                                            <input type="hidden" name="action" value="delete">
-                                            <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
-                                            <button type="submit" class="btn fiscal-action-lock" aria-label="Delete scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-trash3" aria-hidden="true"></i> Delete</button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span class="fiscal-read-only"><i class="bi bi-shield-lock" aria-hidden="true"></i> Read-only</span>
-                                    <?php endif; ?>
-                                </div>
+                                        <?php if ($openableId === (int)$period['period_id']): ?>
+                                            <form method="POST">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                                <input type="hidden" name="action" value="open">
+                                                <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
+                                                <button type="submit" class="btn btn-primary" aria-label="Open scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-check" aria-hidden="true"></i> Open period</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
                             </article>
                         <?php endforeach; ?>
                     </div>
@@ -531,5 +557,6 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
             </section>
         </main>
     </div>
+    <script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>" defer></script>
 </body>
 </html>

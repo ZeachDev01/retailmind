@@ -144,6 +144,13 @@ const fixture = (action, extra) => {
                         assert.equal(await page.locator('body').evaluate(el => el.classList.contains('has-guidance-dock')), false);
                         if (topicId === 'stock_receiving') assert.equal(await page.locator('.receiving-summary').evaluate(el => el.hidden), true);
                         if (topicId === 'products') assert.equal(await page.locator('#add-product-modal').evaluate(el => el.classList.contains('open')), false);
+                        if (role === 'admin' && topicId === 'store_settings' && theme === 'light' && width === 1440) {
+                            // Finishing consumes the ?guidance=&replay= link: refresh must stay closed.
+                            assert.equal(new URL(page.url()).searchParams.has('replay'), false, 'Finishing guidance releases its replay link');
+                            await page.reload();
+                            await page.waitForLoadState('load');
+                            assert.equal(await page.locator('#guidance-dock').count(), 0, 'Finished guidance stays closed after refresh');
+                        }
                     }
                 }
             }

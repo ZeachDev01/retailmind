@@ -178,6 +178,16 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         titleEl.focus({preventScroll: true});
     }
 
+    // Guidance links carry ?guidance= and &replay=. Once this run is finished the
+    // link is spent, so drop both; otherwise a refresh relaunches a completed topic.
+    function releaseGuidanceUrl() {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('guidance') && !url.searchParams.has('replay')) return;
+        url.searchParams.delete('guidance');
+        url.searchParams.delete('replay');
+        history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+    }
+
     function saveProgress(action, stepIndex) {
         try {
             fetch(postUrl, {
@@ -231,6 +241,7 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
         } else {
             // Last step: complete!
             saveProgress('complete', currentStep);
+            releaseGuidanceUrl();
             document.querySelectorAll('.guidance-spotlight-target').forEach(el => {
                 el.classList.remove('guidance-spotlight-target');
             });

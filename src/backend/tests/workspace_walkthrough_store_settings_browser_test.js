@@ -267,6 +267,22 @@ const fixture = (action, extra) => {
         await page.locator('#guidance-dock').waitFor();
         assert.match(await page.locator('#guidance-dock .guidance-step-count').innerText(), /Step 1 of 4/i, 'Replay restarts at step 1');
 
+        // Finishing a replay consumes its link: refreshing must not relaunch the dock.
+        for (let guard = 0; guard < 10; guard++) {
+            const next = page.locator('#guidance-dock').getByRole('button', {name: 'Next', exact: true});
+            if (!await next.count()) break;
+            await next.click();
+        }
+        await page.locator('#guidance-dock').getByRole('button', {name: /Finish guidance/i}).click();
+        await page.locator('.guidance-completion-status').waitFor();
+        await page.locator('#guidance-btn-done').click();
+        const refreshedUrl = new URL(page.url());
+        assert.equal(refreshedUrl.searchParams.has('replay'), false, 'Finished replay drops the replay link');
+        assert.equal(refreshedUrl.searchParams.has('guidance'), false, 'Finished replay drops the guidance link');
+        await page.reload();
+        await page.waitForLoadState('load');
+        assert.equal(await page.locator('#guidance-dock').count(), 0, 'Finished replay does not reopen after refresh');
+
         // 10. Multi-account / Multi-role Scoping
         // Log in as inventory manager
         await page.goto(origin + '/components/auth/logout.php');

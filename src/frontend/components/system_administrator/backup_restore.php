@@ -281,25 +281,56 @@ $storePaused = RecoveryStore::isPaused();
                                 <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
                             </form>
                             <?php if ($preflight): ?>
-                                <?php $compatibility = $preflight['compatibility'] ?? null; ?>
-                                <div class="preflight-result" role="status"<?= $compatibility ? ' data-restore-compatibility="' . $escape($compatibility['status']) . '"' : '' ?>>
-                                    <p><i class="bi bi-file-earmark-check" aria-hidden="true"></i> <strong><?= (int)$preflight['files'] ?></strong> files &bull; <strong><?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB</strong> &bull; Snapshot <?= $escape($preflight['snapshot_at']) ?></p>
+                                <?php
+                                $compatibility = $preflight['compatibility'] ?? null;
+                                $conflictGroups = [];
+                                foreach (($preflight['conflicts'] ?? []) as $conflict) {
+                                    $sourceId = (int)$conflict['source_id'];
+                                    $conflictGroups[$sourceId]['kinds'][(string)$conflict['kind']] = true;
+                                    $conflictGroups[$sourceId]['targets'][(int)$conflict['destination_id']] = true;
+                                }
+                                $conflictTotal = count($preflight['conflicts'] ?? []);
+                                ?>
+                                <div class="preflight-result" role="status" data-preflight-state="<?= $preflight['valid'] ? 'valid' : 'blocked' ?>"<?= $compatibility ? ' data-restore-compatibility="' . $escape($compatibility['status']) . '"' : '' ?>>
+                                    <div class="preflight-summary">
+                                        <?php if ($preflight['snapshot_at'] !== ''): ?>
+                                            <p class="preflight-meta">
+                                                <span><i class="bi bi-files" aria-hidden="true"></i> <strong><?= (int)$preflight['files'] ?></strong> files</span>
+                                                <span><i class="bi bi-hdd" aria-hidden="true"></i> <strong><?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB</strong></span>
+                                                <span><i class="bi bi-clock-history" aria-hidden="true"></i> Snapshot <?= $escape($preflight['snapshot_at']) ?></span>
+                                            </p>
+                                        <?php endif; ?>
+                                        <span class="tag <?= $preflight['valid'] ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $preflight['valid'] ? 'bi-check2-circle' : 'bi-shield-exclamation' ?>" aria-hidden="true"></i> <?= $preflight['valid'] ? 'Validated' : 'Restore blocked' ?></span>
+                                    </div>
                                     <?php if ($compatibility): ?>
-                                        <p class="backup-hint" data-restore-compatibility-message>
+                                        <div class="preflight-compat" data-restore-compatibility-message>
                                             <span class="tag <?= $compatibility['status'] === 'current' ? 'tag-success' : ($compatibility['status'] === 'upgradable' ? 'tag-warning' : 'tag-danger') ?>"><?= $escape($compatibility['label']) ?></span>
-                                            <?= $escape($compatibility['message']) ?>
-                                            <?php if (!empty($compatibility['missing_migrations'])): ?>
-                                                <span>Database updates involved: <code><?= $escape(implode(', ', $compatibility['missing_migrations'])) ?></code></span>
-                                            <?php endif; ?>
-                                        </p>
+                                            <p><?= $escape($compatibility['message']) ?>
+                                                <?php if (!empty($compatibility['missing_migrations'])): ?>
+                                                    <span>Database updates involved: <code><?= $escape(implode(', ', $compatibility['missing_migrations'])) ?></code></span>
+                                                <?php endif; ?>
+                                            </p>
+                                        </div>
                                     <?php endif; ?>
-                                    <?php if ($preflight['conflicts']): ?>
-                                        <h3>Identity conflicts to resolve</h3>
-                                        <ul>
-                                            <?php foreach ($preflight['conflicts'] as $conflict): ?>
-                                                <li><?= $escape($conflict['kind']) ?>: user <?= (int)$conflict['source_id'] ?> &rarr; <?= (int)$conflict['destination_id'] ?> &mdash; <?= $escape($conflict['message']) ?></li>
-                                            <?php endforeach; ?>
-                                        </ul>
+                                    <?php if ($conflictTotal): ?>
+                                        <div class="preflight-conflicts">
+                                            <div class="preflight-conflicts-head">
+                                                <h3><i class="bi bi-people" aria-hidden="true"></i> Identity conflicts</h3>
+                                                <span class="backup-record-count"><?= $conflictTotal ?> <?= $conflictTotal === 1 ? 'conflict' : 'conflicts' ?></span>
+                                            </div>
+                                            <ul class="preflight-conflict-list">
+                                                <?php foreach ($conflictGroups as $sourceId => $group): ?>
+                                                    <li>
+                                                        <span class="preflight-source"><i class="bi bi-box-arrow-in-down" aria-hidden="true"></i> Backup user <strong><?= $sourceId ?></strong></span>
+                                                        <span class="preflight-kinds">
+                                                            <?php foreach (array_keys($group['kinds']) as $kind): ?><span class="preflight-kind"><?= $escape($kind) ?></span><?php endforeach; ?>
+                                                        </span>
+                                                        <span class="preflight-target">Server user <?= implode(', ', array_map('intval', array_keys($group['targets']))) ?></span>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                            <p class="preflight-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Review the account choices before replacement.</p>
+                                        </div>
                                     <?php endif; ?>
                                 </div>
                             <?php endif; ?>
