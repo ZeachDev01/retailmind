@@ -1,0 +1,162 @@
+.platform-settings-page .page-heading {
+    margin-bottom: 1.5rem;
+}
+
+.platform-settings-page .dashboard-section {
+    padding: 1.5rem;
+}
+
+.platform-settings-page .dashboard-section + .dashboard-section {
+    margin-top: 1.5rem;
+}
+
+.platform-settings-page .section-header {
+    align-items: center;
+    margin-bottom: 1.35rem;
+}
+
+.platform-settings-page .section-header h2 {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    margin: 0;
+    font-size: 1.12rem;
+}
+
+.platform-settings-page .settings-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: var(--theme-info-surface, #dbeafe);
+    color: var(--theme-info-text, #1e40af);
+    font-size: 1.05rem;
+}
+
+.platform-settings-page .platform-settings-pill {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: .35rem;
+    padding: .32rem .68rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-soft);
+    color: var(--muted);
+    font-size: .76rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.platform-settings-page .platform-settings-pill.is-on {
+    border-color: transparent;
+    background: var(--theme-success-surface, #dcfce7);
+    color: var(--theme-success-text, #166534);
+}
+
+.platform-settings-page .platform-settings-pill.is-off {
+    border-color: transparent;
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+}
+
+.platform-settings-page .platform-settings-pill.is-info {
+    border-color: transparent;
+    background: var(--theme-info-surface, #dbeafe);
+    color: var(--theme-info-text, #1e40af);
+}
+
+.platform-settings-page .settings-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: .75rem;
+    margin-bottom: 1.35rem;
+}
+
+.platform-settings-page .settings-email-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.platform-settings-page .settings-meta-item {
+    min-width: 0;
+    padding: .8rem .95rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-soft);
+}
+
+.platform-settings-page .settings-meta-label {
+    display: block;
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.platform-settings-page .settings-meta-value {
+    display: block;
+    margin-top: .25rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.platform-settings-page .settings-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: 1.1rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--border);
+}
+
+.platform-settings-page .form-actions {
+    flex-wrap: wrap;
+}
+
+.platform-settings-page .form-group .settings-check {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    margin: 0;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.platform-settings-page .settings-check input {
+    flex: 0 0 auto;
+    width: 1.15rem;
+    height: 1.15rem;
+    min-height: 0;
+    margin: .15rem 0 0;
+    padding: 0;
+    accent-color: var(--primary);
+}
+
+@media (max-width: 900px) {
+    .platform-settings-page .section-header {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .platform-settings-page .dashboard-section {
+        padding: 1.15rem;
+    }
+
+    .platform-settings-page .form-actions,
+    .platform-settings-page .settings-status-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .platform-settings-page .form-actions .btn,
+    .platform-settings-page .settings-status-row .btn {
+        width: 100%;
+    }
+}

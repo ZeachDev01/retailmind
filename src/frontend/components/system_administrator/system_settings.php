@@ -35,8 +35,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? $apiKeyInput
                     : ($savedKey !== '' ? decrypt_store_email_secret($savedKey) : '');
                 // Real Brevo keys never contain whitespace; this catches pasted prose before it overwrites a working key.
+                $testRecipient = trim((string)($_POST['test_recipient'] ?? ''));
                 if (filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false || $apiKey === '' || strlen($apiKey) > 512 || preg_match('/\s/', $apiKey) === 1) {
                     throw new InvalidArgumentException('Enter a Brevo API key and a valid verified sender email address.');
+                }
+                if ($action === 'test_brevo' && ($testRecipient === '' || filter_var($testRecipient, FILTER_VALIDATE_EMAIL) === false)) {
+                    throw new InvalidArgumentException('Enter a valid test recipient email address.');
                 }
                 $previousSettings = [
                     'brevo_api_key' => $savedKey,
@@ -52,13 +56,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         )");
                     });
                 };
-                $saveBrevo([
+                $brevoUpdates = [
                     'brevo_api_key' => $apiKeyInput !== ''
                         ? encrypt_store_email_secret($apiKeyInput)
                         : $savedKey,
                     'brevo_sender_email' => $senderEmail,
                     'store_email_alerts_enabled' => '0',
-                ]);
+                ];
+                if ($action === 'test_brevo') {
+                    // Keep the typed test address so a failed attempt does not make the user retype it.
+                    $brevoUpdates['brevo_test_recipient'] = $testRecipient;
+                }
+                $saveBrevo($brevoUpdates);
 
                 if ($action === 'save_brevo') {
                     log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Platform Settings', null, null, [
@@ -67,21 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Brevo settings saved. Send a test email to enable Store email alerts.';
                     $messageClass = 'tag-success';
                 } else {
-                    $recipient = trim((string)($savedSettings['store_email'] ?? ''));
+                    $recipient = $testRecipient;
                     if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
-                        $stmt = $pdo->prepare('SELECT email FROM users WHERE user_id = ?');
-                        $stmt->execute([(int)$_SESSION['user_id']]);
-                        $recipient = trim((string)$stmt->fetchColumn());
-                    }
-                    if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
-                        $message = 'Brevo settings saved. Add a valid email address, then send a test email.';
+                        $message = 'Brevo settings saved. Enter a valid test recipient email address, then try again.';
                         $messageClass = 'tag-warning';
                     } elseif (send_email_notification($recipient, 'RetailMind email test', 'Your Brevo API settings are working. Store email alerts are now enabled.')) {
                         $saveBrevo(['store_email_alerts_enabled' => '1']);
                         log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Platform Settings', null, null, [
                             'brevo_sender_email' => $senderEmail,
                         ]);
-                        $message = 'Test email sent. Store email alerts are enabled.';
+                        $message = 'Test email sent to ' . $recipient . '. Store email alerts are enabled.';
                         $messageClass = 'tag-success';
                     } else {
                         // A failed test must not replace a working key with the rejected one.
@@ -165,10 +169,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $dormancyThresholds = $dormancyPolicyService->thresholds();
 $settings = get_store_settings($pdo);
 $brevoConfigured = !empty($settings['brevo_api_key']);
+$brevoTestRecipient = trim((string)($settings['brevo_test_recipient'] ?? ''));
+if (filter_var($brevoTestRecipient, FILTER_VALIDATE_EMAIL) === false) {
+    $brevoTestRecipient = trim((string)($settings['store_email'] ?? ''));
+}
+if (filter_var($brevoTestRecipient, FILTER_VALIDATE_EMAIL) === false) {
+    $brevoTestRecipient = '';
+}
 $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
 $tunnelNotifyEnabled = ($settings['tunnel_url_notify_enabled'] ?? '1') !== '0';
+$emailAlertsEnabled = !empty($settings['store_email_alerts_enabled']);
+$remoteModeLabel = !empty($tunnelStatus['token_configured'])
+    ? 'Custom domain'
+    : (!empty($tunnelStatus['url']) ? 'Quick tunnel' : 'Offline');
+$remoteModeClass = !empty($tunnelStatus['token_configured'])
+    ? 'is-info'
+    : (!empty($tunnelStatus['url']) ? 'is-on' : 'is-off');
+$remoteModeIcon = !empty($tunnelStatus['token_configured'])
+    ? 'bi-globe2'
+    : (!empty($tunnelStatus['url']) ? 'bi-lightning-charge-fill' : 'bi-cloud-slash');
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
+$platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform-settings.css') ?: 1;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -179,12 +201,13 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
     <title>Platform Settings | RetailMind</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . $styleVersion) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/platform-settings.css') . '?v=' . $platformSettingsStyleVersion) ?>">
 </head>
 <body class="platform-settings-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="topbar">
+        <header class="page-heading">
             <div>
                 <h1>Platform Settings</h1>
             </div>
@@ -199,7 +222,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 
         <section class="dashboard-section" aria-labelledby="heading-dormancy">
             <div class="section-header">
-                <h2 id="heading-dormancy"><i class="bi bi-shield-lock" aria-hidden="true"></i> Dormancy Policy</h2>
+                <h2 id="heading-dormancy"><span class="settings-icon"><i class="bi bi-shield-lock" aria-hidden="true"></i></span> Dormancy Policy</h2>
             </div>
             <form method="post">
                 <?= csrf_field() ?>
@@ -207,7 +230,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="disable_days">
-                            Disable after inactivity (days)
+                            Disable after (days)
                             <span class="required-mark" aria-hidden="true">*</span>
                         </label>
                         <input type="number"
@@ -223,7 +246,7 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                     </div>
                     <div class="form-group">
                         <label for="warn_days">
-                            Warn after inactivity (days)
+                            Warn after (days)
                             <span class="required-mark" aria-hidden="true">*</span>
                         </label>
                         <input type="number"
@@ -234,68 +257,61 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                                inputmode="numeric"
                                value="<?= htmlspecialchars((string)$dormancyThresholds['warn_days']) ?>"
                                autocomplete="off"
-                               aria-describedby="warn_days_help"
                                aria-required="true"
                                required>
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save Dormancy Policy</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save policy</button>
                 </div>
             </form>
         </section>
 
         <section class="dashboard-section" aria-labelledby="email-heading">
             <div class="section-header">
-                <div>
-                    <h2 id="email-heading"><i class="bi bi-envelope-paper" aria-hidden="true"></i> Email (Brevo)</h2>
-                    <p class="section-description">Brevo sends Store alerts and other application emails. Enter a Brevo API key and a verified sender address. The API key is encrypted at rest and never displayed.</p>
-                </div>
+                <h2 id="email-heading"><span class="settings-icon"><i class="bi bi-envelope-paper" aria-hidden="true"></i></span> Email (Brevo)</h2>
+                <span class="platform-settings-pill <?= $brevoConfigured ? 'is-on' : 'is-off' ?>"><?= $brevoConfigured ? 'Configured' : 'Not configured' ?></span>
             </div>
             <form method="post" id="platform-brevo-form">
                 <?= csrf_field() ?>
-                <input type="hidden" name="action" value="save_brevo" id="brevo-action">
-                <div class="form-grid">
+                <input type="hidden" name="action" value="save_brevo">
+                <div class="form-grid settings-email-grid">
                     <div class="form-group">
-                        <label for="brevo_api_key">Brevo API key</label>
-                        <input id="brevo_api_key" name="brevo_api_key" type="password" autocomplete="new-password" placeholder="<?= $brevoConfigured ? 'Saved; leave blank to keep it' : 'Enter Brevo API key' ?>">
-                        <small class="field-help">Use an API key, not an SMTP key. Leave blank to keep the saved key.</small>
+                        <label for="brevo_api_key">API key</label>
+                        <input id="brevo_api_key" name="brevo_api_key" type="password" autocomplete="new-password" placeholder="<?= $brevoConfigured ? 'Saved — leave blank to keep' : 'Enter Brevo API key' ?>">
                     </div>
                     <div class="form-group">
-                        <label for="brevo_sender_email">Verified sender email</label>
+                        <label for="brevo_sender_email">Verified sender</label>
                         <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" spellcheck="false" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
-                        <small class="field-help">Must be verified in your Brevo account. To send without whitelisting the server IP, keep Brevo's "Blocking unauthorized IP addresses" deactivated (Account &rarr; Security &rarr; Authorized IPs).</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="brevo_test_recipient">Test recipient</label>
+                        <input id="brevo_test_recipient" name="test_recipient" type="email" autocomplete="email" spellcheck="false" value="<?= htmlspecialchars($brevoTestRecipient) ?>" placeholder="you@example.com">
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button type="submit" class="btn btn-primary">Save Brevo settings</button>
-                    <button type="submit" class="btn btn-secondary" onclick="document.getElementById('brevo-action').value='test_brevo'">Save and send test email</button>
+                    <button type="submit" name="action" value="save_brevo" class="btn btn-primary">Save settings</button>
+                    <button type="submit" name="action" value="test_brevo" class="btn btn-secondary">Save &amp; test</button>
                 </div>
             </form>
-            <form method="post" class="form-actions">
+            <form method="post" class="settings-status-row">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="disable_brevo">
-                <button type="submit" class="btn btn-secondary"<?= empty($settings['store_email_alerts_enabled']) ? ' disabled' : '' ?>>Disable Store alerts</button>
-                <span class="field-help" role="status"><?= !empty($settings['store_email_alerts_enabled']) ? 'Store email alerts are enabled.' : 'Store alerts are disabled until a test email succeeds.' ?></span>
+                <span class="platform-settings-pill <?= $emailAlertsEnabled ? 'is-on' : 'is-off' ?>"><i class="bi <?= $emailAlertsEnabled ? 'bi-bell-fill' : 'bi-bell-slash' ?>" aria-hidden="true"></i> Alerts <?= $emailAlertsEnabled ? 'on' : 'off' ?></span>
+                <button type="submit" class="btn btn-secondary"<?= $emailAlertsEnabled ? '' : ' disabled' ?>>Disable alerts</button>
             </form>
         </section>
 
         <section class="dashboard-section" aria-labelledby="tunnel-heading">
             <div class="section-header">
-                <div>
-                    <h2 id="tunnel-heading"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Cloudflare Remote Access</h2>
-                    <p class="section-description">Configure the permanent tunnel token and supervisor URL-change notifications. The tunnel start/stop switch and public URL stay in the Administrator Workspace.</p>
-                </div>
+                <h2 id="tunnel-heading"><span class="settings-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span> Remote Access</h2>
+                <span class="platform-settings-pill <?= $remoteModeClass ?>"><i class="bi <?= $remoteModeIcon ?>" aria-hidden="true"></i> <?= $remoteModeLabel ?></span>
             </div>
 
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Mode</label>
-                    <p class="field-help"><?= !empty($tunnelStatus['token_configured']) ? 'Custom domain (permanent token configured)' : 'Quick Tunnel (ephemeral domain)' ?></p>
-                </div>
-                <div class="form-group">
-                    <label>Public URL</label>
-                    <p class="field-help"><?= !empty($tunnelStatus['url']) ? htmlspecialchars((string)$tunnelStatus['url']) : 'Tunnel is offline' ?></p>
+            <div class="settings-meta">
+                <div class="settings-meta-item">
+                    <span class="settings-meta-label">Public URL</span>
+                    <span class="settings-meta-value"><?= !empty($tunnelStatus['url']) ? htmlspecialchars((string)$tunnelStatus['url']) : 'Tunnel is offline' ?></span>
                 </div>
             </div>
 
@@ -303,23 +319,22 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
                 <?= csrf_field() ?>
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="tunnel_token">Permanent Token</label>
+                        <label for="tunnel_token">Permanent token</label>
                         <input type="password" id="tunnel_token" name="tunnel_token" autocomplete="off"
                                value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
                                placeholder="eyJh… from Cloudflare Zero Trust">
-                        <small class="field-help">Paste a Cloudflare Tunnel token for a fixed domain. Leave blank and save to clear it and fall back to a Quick Tunnel.</small>
                     </div>
                     <div class="form-group">
-                        <label for="tunnel_hostname">Custom Hostname (Optional)</label>
+                        <label for="tunnel_hostname">Custom hostname (optional)</label>
                         <input type="text" id="tunnel_hostname" name="tunnel_hostname" autocomplete="off"
                                value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
                                placeholder="supervisor.mystore.com">
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Token</button>
+                    <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save token</button>
                     <?php if (!empty($tunnelStatus['token_configured'])): ?>
-                        <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
+                        <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear token</button>
                     <?php endif; ?>
                 </div>
             </form>
@@ -327,15 +342,14 @@ $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
             <form method="post" class="u-mt-2">
                 <?= csrf_field() ?>
                 <div class="form-group">
-                    <label for="tunnel_url_notify_enabled">
+                    <label for="tunnel_url_notify_enabled" class="settings-check">
                         <input type="checkbox" id="tunnel_url_notify_enabled" name="tunnel_url_notify_enabled" value="1"<?= $tunnelNotifyEnabled ? ' checked' : '' ?>>
-                        Email admins when the remote URL changes
+                        <span>Email admins when the URL changes</span>
                     </label>
-                    <small class="field-help">Sends the new public URL to active Admin and Super Admin users whenever a Quick Tunnel domain rotates.</small>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button type="submit" name="action" value="save_tunnel_notify" class="btn btn-primary">Save Notification Setting</button>
-                    <button type="submit" name="action" value="test_tunnel_notify" class="btn btn-secondary">Send Test Notification</button>
+                    <button type="submit" name="action" value="save_tunnel_notify" class="btn btn-primary">Save</button>
+                    <button type="submit" name="action" value="test_tunnel_notify" class="btn btn-secondary">Send test</button>
                 </div>
             </form>
         </section>
