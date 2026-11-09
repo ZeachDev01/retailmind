@@ -87,8 +87,16 @@ try {
     $assert(ScheduledBackupSettings::isDue($previous, 0, '23:00', $exact), 'Due at exactly the scheduled time');
     $assert(ScheduledBackupSettings::isDue($previous, 0, '23:00', $after), 'Due one minute after the scheduled time');
     $assert(
+        !ScheduledBackupSettings::isDue('2026-11-08 23:00:00', 0, '23:00', $exact),
+        'A success exactly at the configured slot is not due that minute'
+    );
+    $assert(
         !ScheduledBackupSettings::isDue('2026-11-08 23:00:00', 0, '23:00', $nextDay),
         'Not due again until the next scheduled week'
+    );
+    $assert(
+        ScheduledBackupSettings::isDue('2026-11-08 23:00:00', 0, '23:00', new DateTimeImmutable('2026-11-15 23:00:00', $manila)),
+        'Due again at the next scheduled week slot'
     );
     $assert(ScheduledBackupSettings::isDue(null, 0, '23:00', $before), 'A first-ever schedule is a normal due run');
 

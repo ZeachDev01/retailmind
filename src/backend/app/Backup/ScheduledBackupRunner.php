@@ -13,24 +13,9 @@ interface ScheduledBackupRunner
 {
     public function createForSystem(?string $filename = null): array;
 
-    public function recordHistory(
-        string $filename,
-        string $type,
-        int $size,
-        string $status,
-        ?int $userId,
-        ?string $notes = null,
-        ?string $snapshotAt = null,
-        ?string $version = null,
-        ?string $cipher = null,
-        ?string $actorRole = null,
-        ?string $keyFingerprint = null,
-        ?string $artifactPath = null,
-        ?string $triggerSource = null,
-        ?string $verifiedAt = null
-    ): int;
+    public function recordScheduledHistory(string $filename, string $status, ?string $notes, ?string $when = null): int;
+
+    public function markHistoryFailed(int $backupId, string $notes, ?string $triggerSource = null): void;
 
     public function updateHistoryArtifact(int $backupId, string $path, ?string $fingerprint = null): void;
-
-    public function authorizeActor(int $actorUserId, string $actorRole): array;
 }

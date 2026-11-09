@@ -149,7 +149,12 @@ final class DatabaseBackupService implements ScheduledBackupRunner
             $capture['size'] = strlen($package);
             $capture['files'] = count($files);
             unset($package, $sql, $files);
-            $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $schema);
+            $verified = StorePackageFormat::decode(
+                (string)file_get_contents($artifactPath),
+                $schema,
+                null,
+                $this->appliedMigrationKeys()
+            );
             $snapshotAt = $verified['manifest']['snapshot_at'];
             $keyFingerprint = $verified['key_fingerprint'];
             unset($verified);
@@ -379,6 +384,39 @@ final class DatabaseBackupService implements ScheduledBackupRunner
         return (int)$this->pdo->lastInsertId();
     }
 
+    /** Record a scheduled skip/failure without the 13-argument positional call. */
+    public function recordScheduledHistory(string $filename, string $status, ?string $notes, ?string $when = null): int
+    {
+        return $this->recordHistory(
+            $filename,
+            'scheduled',
+            0,
+            $status,
+            null,
+            $notes,
+            $when,
+            StorePackageFormat::KEY_VERSION,
+            null,
+            'scheduled',
+            null,
+            null,
+            'scheduled',
+            $when
+        );
+    }
+
+    /** Turn an already-recorded completed capture into its failed outcome. */
+    public function markHistoryFailed(int $backupId, string $notes, ?string $triggerSource = null): void
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE backup_history
+                SET status = 'failed', notes = ?, artifact_path = NULL,
+                    trigger_source = COALESCE(?, trigger_source)
+              WHERE backup_id = ?"
+        );
+        $stmt->execute([$notes, $triggerSource, $backupId]);
+    }
+
     /** Bind a retained artifact (scheduled destination) to an existing history row. */
     public function updateHistoryArtifact(int $backupId, string $path, ?string $fingerprint = null): void
     {
@@ -459,10 +497,29 @@ final class DatabaseBackupService implements ScheduledBackupRunner
     private static function backupTypeLabel(string $type): string
     {
         return match ($type) {
-            'manual' => 'Manual backup',
-            'scheduled' => 'Scheduled backup',
+            'manual' => 'Manual',
+            'scheduled' => 'Scheduled',
             'restore' => 'Restore',
             default => ucfirst($type),
+        };
+    }
+
+    public static function artifactLabel(string $state): string
+    {
+        return match ($state) {
+            'available' => 'Available on server',
+            'removed' => 'Removed after replacement',
+            'missing' => 'Missing',
+            default => 'Not retained',
+        };
+    }
+
+    public static function artifactClass(string $state): string
+    {
+        return match ($state) {
+            'available' => 'tag-success',
+            'missing' => 'tag-warning',
+            default => 'tag-soft',
         };
     }
 
