@@ -105,6 +105,23 @@ $assert(
     str_contains($sharedModule, 'DatabaseSnapshotWriter'),
     'The shared module must reuse the single snapshot writer'
 );
+$backupService = $read('src/backend/app/Backup/DatabaseBackupService.php');
+$assert(
+    str_contains($backupService, "'schema_migrations'"),
+    'Captured packages must exclude the source migration ledger rows'
+);
+$assert(
+    str_contains($backupService, 'appliedKeys()') && str_contains($backupService, 'currentFingerprint()'),
+    'Captured packages must seal the applied migrations and the encryption key fingerprint'
+);
+$assert(
+    str_contains($backupService, 'key_fingerprint') && str_contains($backupService, 'artifact_path'),
+    'Backup history must record the key fingerprint and artifact identity'
+);
+$assert(
+    str_contains($backupService, 'artifact_state') && str_contains($backupService, 'updateHistoryArtifact'),
+    'Backup history must expose artifact state and let scheduling bind a retained file'
+);
 $assert(
     str_contains($scheduledScript, 'createForSystem()'),
     'The scheduled script must share the encrypted workflow instead of a second exporter'

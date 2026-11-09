@@ -64,6 +64,10 @@ try {
     $case = $manifest; $case['members'][0]['link'] = '../outside'; $bad['linked member'] = $case;
     $case = $manifest; $case['schema'] = str_repeat('0', 64); $bad['incompatible schema'] = $case;
     $case = $manifest; $case['format'] = 'RMSTORE999'; $bad['incompatible version'] = $case;
+    $case = $manifest; $case['migrations'] = '202601010001_x'; $bad['migrations not a list'] = $case;
+    $case = $manifest; $case['migrations'] = ['not a migration key']; $bad['malformed migration key'] = $case;
+    $case = $manifest; $case['migrations'] = array_fill(0, 501, '202601010001_x'); $bad['migration list too long'] = $case;
+    $case = $manifest; $case['key_fingerprint'] = 'not-a-fingerprint'; $bad['invalid key fingerprint'] = $case;
     $case = $manifest; $case['members'][0]['size'] = 33554433; $bad['content resource limit'] = $case;
     $case = $manifest; $case['members'][0]['size']--; $bad['false declared size'] = $case;
     $case = $manifest; $case['members'][0]['content'] = base64_encode('DROP DATABASE store;'); $case['members'][0]['size'] = 20; $bad['arbitrary SQL'] = $case;
@@ -78,6 +82,24 @@ try {
     $assert(str_starts_with($automatic, "RMSTORE2\n"), 'Automatic encryption identifies its recovery key');
     $assert(!str_contains($automatic, $sql) && !str_contains($automatic, $key), 'Encrypted backup exposes neither SQL nor key');
     $assert(StorePackageFormat::decode($automatic, $schema)['sql'] === $sql, 'Automatic restore needs no login-derived encryption secret');
+    $fingerprint = hash('sha256', $key);
+    $legacyManifest = StorePackageFormat::decode($automatic, $schema);
+    $assert($legacyManifest['key_fingerprint'] === $fingerprint, 'Decoding always exposes the envelope key fingerprint');
+    $assert($legacyManifest['migrations'] === [], 'Packages made before #460 carry no migration list');
+    $withMetadata = StorePackageFormat::encode($sql, [], $schema, '', '', [
+        'migrations' => ['202601010002_second', '202601010001_first', '202601010002_second'],
+        'key_fingerprint' => $fingerprint,
+    ]);
+    $metadata = StorePackageFormat::decode($withMetadata, $schema);
+    $assert($metadata['key_fingerprint'] === $fingerprint, 'The sealed key fingerprint matches the envelope header');
+    $assert($metadata['migrations'] === ['202601010001_first', '202601010002_second'], 'The manifest records a sorted unique migration list');
+    $assert($metadata['manifest']['migrations'] === ['202601010001_first', '202601010002_second'], 'The manifest exposes the applied migration keys');
+    $reject(fn() => StorePackageFormat::encode($sql, [], $schema, '', '', ['key_fingerprint' => str_repeat('0', 64)]),
+        'A key fingerprint that does not match the encryption key is rejected');
+    $reject(fn() => StorePackageFormat::encode($sql, [], $schema, '', '', ['migrations' => ['not a migration key']]),
+        'Malformed migration keys are rejected');
+    $reject(fn() => StorePackageFormat::encode($sql, [], $schema, '', '', ['migrations' => array_fill(0, 501, '202601010001_x')]),
+        'The migration list is bounded');
     $tampered = $automatic;
     $tampered[strlen($tampered)-1] = chr(ord($tampered[strlen($tampered)-1]) ^ 1);
     $reject(fn() => StorePackageFormat::decode($tampered, $schema), 'Automatic encryption rejects damaged packages');
