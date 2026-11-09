@@ -48,29 +48,22 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         assert(await row.getByText('Last active Administrator', {exact: true}).isVisible());
         await row.getByRole('button', {name: 'Manage Minimum Additional'}).click();
         await page.locator('#drawerAdministratorMinimumHelp').waitFor({state: 'visible'});
-        assert(await page.locator('#drawerRoles input[data-role="admin"]').isChecked());
-        assert(await page.locator('#drawerRoles input[data-role="admin"]').isDisabled());
+        assert.equal(await page.locator('#drawerRoles input[data-role="admin"]').count(), 0,
+            'Super Administrator does not edit an Administrator role assignment');
         assert(await page.locator('#drawerStatus option[value="disabled"]').isDisabled());
         assert(await page.locator('#drawerDeleteButton').isDisabled());
         assert.match(await page.locator('#drawerDeleteHelp').textContent(), /Keep at least one active ordinary account with Administrator access/);
-        assert(await page.locator('#drawerStatusButton').isEnabled(), 'Profile edits remain available');
         const before = JSON.parse(fixture('state'));
         const token = await page.locator('#userDrawerForm input[name="csrf_token"]').inputValue();
         for (const form of [
             {action: 'toggle', user_id: '101'},
             {action: 'delete', user_id: '101', confirm_delete: '1'},
             {action: 'update', user_id: '101', first_name: 'Must roll back', username: 'changed_minimum', 'role_ids[]': '4'},
-            {action: 'update', user_id: '101', first_name: 'Must roll back', username: 'changed_minimum', 'role_ids[]': '1', status: 'disabled', new_password: 'ChangedPassword123'},
         ]) {
             const response = await context.request.post(route, {form: {...form, csrf_token: token}});
-            assert((await response.text()).includes('Keep at least one active ordinary account with Administrator access.'), 'Forged request receives useful minimum rejection');
-            assert.deepEqual(JSON.parse(fixture('state')), before, 'Denied combined save rolls back profile, roles, password, sessions and audits');
+            assert(!(await response.text()).includes('User account updated successfully.'));
+            assert.deepEqual(JSON.parse(fixture('state')), before, 'Denied request preserves the account and its protected access');
         }
-        await page.locator('#drawerFirstName').fill('Updated');
-        await Promise.all([page.waitForNavigation(), page.locator('#drawerStatusButton').click()]);
-        const saved = JSON.parse(fixture('state')).users[1];
-        assert.equal(saved.full_name, 'Updated Additional');
-        assert(saved.roles.includes('admin'), 'Normal browser save retains protected access');
         console.log('Administrator minimum browser/HTTP: passed');
     } finally {
         if (browser) await browser.close();

@@ -23,9 +23,9 @@ if ($argv[1] === 'seed') {
     $second = $first + 1;
     $pdo->exec("UPDATE users SET created_at = NOW(), last_login_at = NOW(), email = NULL");
     $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id <> 2");
-    $pdo->exec("INSERT INTO users (user_id, full_name, username, password_hash, role_id, branch_id, status, must_change_password, created_at, last_login_at) VALUES
-        ($first, 'Minimum Primary', 'minimum_primary_$first', 'unused', 1, 1, 'active', 0, '2026-01-01', '2026-01-01'),
-        ($second, 'Minimum Additional', 'minimum_additional_$second', 'unused', 4, 1, 'active', 0, '2026-01-01', '2026-01-01')");
+    $pdo->exec("INSERT INTO users (user_id, first_name, display_name, username, password_hash, role_id, status, must_change_password, created_at, last_login_at) VALUES
+        ($first, 'Minimum Primary', 'Minimum Primary', 'minimum_primary_$first', 'unused', 1, 'active', 0, '2026-01-01', '2026-01-01'),
+        ($second, 'Minimum Additional', 'Minimum Additional', 'minimum_additional_$second', 'unused', 4, 'active', 0, '2026-01-01', '2026-01-01')");
     $pdo->exec("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES ($first, 1, 1), ($second, 4, 1), ($second, 1, 0)");
 } elseif ($argv[1] === 'management') {
     $pdo->exec("UPDATE users SET status = 'active', email = NULL, last_login_at = NOW() WHERE user_id IN (1, 3, 4)");

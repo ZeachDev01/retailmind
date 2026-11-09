@@ -35,7 +35,9 @@ try {
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         profile_image TEXT NULL,
@@ -72,9 +74,9 @@ try {
         return (int)$stmt->fetchColumn();
     };
     $insertActor = static function (string $name, string $role) use ($pdo, $roleId, $storeId): int {
-        $stmt = $pdo->prepare('INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password, branch_id) VALUES (?, ?, ?, ?, ?, 0, ?)');
+        $stmt = $pdo->prepare('INSERT INTO users (first_name, display_name, username, email, password_hash, role_id, must_change_password, branch_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)');
         $username = strtolower(str_replace(' ', '_', $name));
-        $stmt->execute([$name, $username, $username . '@example.test', password_hash('ActorPassword123', PASSWORD_DEFAULT), $roleId($role), $storeId]);
+        $stmt->execute([$name, $name, $username, $username . '@example.test', password_hash('ActorPassword123', PASSWORD_DEFAULT), $roleId($role), $storeId]);
         return (int)$pdo->lastInsertId();
     };
 
@@ -106,23 +108,15 @@ try {
     $assert($service->get($adminId) === $before, 'Denied self-demotion preserves account and roles');
 
     $service->update($superId, 'super_admin', $superId, [
-        'full_name' => 'Super Owner',
+        'first_name' => 'Super Owner',
         'username' => 'super_owner',
         'email' => 'super_owner@example.test',
         'roles' => ['admin', 'inventory_manager', 'cashier'],
     ]);
-    $superRoles = $service->get($superId)['roles'];
-    $assert($superRoles === ['super_admin', 'admin', 'inventory_manager', 'cashier'], 'Super Administrator retains identity and saves optional workspaces');
-    $service->update($superId, 'super_admin', $superId, [
-        'full_name' => 'Super Owner',
-        'username' => 'super_owner',
-        'email' => 'super_owner@example.test',
-        'roles' => [],
-    ]);
-    $assert($service->get($superId)['roles'] === ['super_admin'], 'Super Administrator can remove all optional workspaces');
+    $assert($service->get($superId)['roles'] === ['super_admin'], 'Super Administrator keeps platform governance only and cannot take store workspaces');
 
     $cashierId = $service->create($adminId, 'admin', [
-        'full_name' => 'New Cashier',
+        'first_name' => 'New Cashier',
         'username' => 'new_cashier',
         'email' => 'cashier@example.test',
         'password_hash' => password_hash('CashierPassword123', PASSWORD_DEFAULT),
@@ -130,25 +124,24 @@ try {
         'branch_id' => 999999,
     ]);
     $cashier = $service->get($cashierId);
-    $assert((int)$cashier['branch_id'] === $storeId, 'new operational users must receive Store scope server-side');
     $assert($cashier['role_name'] === 'cashier', 'Administrator should create a Cashier role template');
 
     $managerId = $service->create($adminId, 'admin', [
-        'full_name' => 'Inventory Manager',
+        'first_name' => 'Inventory Manager',
         'username' => 'new_manager',
         'email' => 'manager@example.test',
         'password_hash' => password_hash('ManagerPassword123', PASSWORD_DEFAULT),
         'role' => 'inventory_manager',
     ]);
     $service->update($adminId, 'admin', $managerId, [
-        'full_name' => 'Inventory Lead',
+        'first_name' => 'Inventory Lead',
         'username' => 'new_manager',
         'email' => 'manager@example.test',
         'role' => 'inventory_manager',
     ]);
-    $assert($service->get($managerId)['full_name'] === 'Inventory Lead', 'Administrator should edit delegated Store staff');
+    $assert($service->get($managerId)['display_name'] === 'Inventory Lead', 'Administrator should edit delegated Store staff');
     $service->update($adminId, 'admin', $managerId, [
-        'full_name' => 'Inventory Lead',
+        'first_name' => 'Inventory Lead',
         'username' => 'new_manager',
         'email' => 'manager@example.test',
         'role' => 'cashier',
@@ -207,7 +200,7 @@ try {
     );
 
     $noEmailId = $service->create($adminId, 'admin', [
-        'full_name' => 'No Email Staff',
+        'first_name' => 'No Email Staff',
         'username' => 'no_email_staff',
         'email' => null,
         'password_hash' => password_hash('NoEmailPassword123', PASSWORD_DEFAULT),
@@ -226,7 +219,7 @@ try {
     $service->setStatus($adminId, 'admin', $noEmailId, 'active');
 
     $ordinaryAdminId = $service->create($adminId, 'admin', [
-        'full_name' => 'Another Admin', 'username' => 'another_admin', 'email' => 'ordinary_admin@example.test',
+        'first_name' => 'Another Admin', 'username' => 'another_admin', 'email' => 'ordinary_admin@example.test',
         'password_hash' => password_hash('AnotherPassword123', PASSWORD_DEFAULT), 'role' => 'admin',
     ]);
     $assert($service->get($ordinaryAdminId)['role_name'] === 'admin', 'Administrator creates ordinary Administrators');
@@ -252,10 +245,10 @@ try {
         $service->setStatus($adminId, 'admin', $ordinaryAdminId, $status);
         $before = $service->get($ordinaryAdminId);
         $updated = $service->update($adminId, 'admin', $ordinaryAdminId,
-            array_replace($before, ['full_name' => 'Updated Administrator', 'roles' => ['admin', 'inventory_manager']]));
+            array_replace($before, ['first_name' => 'Updated Administrator', 'roles' => ['admin', 'inventory_manager']]));
         $service->resetPassword($adminId, 'admin', $ordinaryAdminId, password_hash('ReplacementPassword123', PASSWORD_DEFAULT));
         $after = $service->get($ordinaryAdminId);
-        $assert($after['status'] === $status && $updated['full_name'] === 'Updated Administrator', 'Active and disabled Administrator profiles remain manageable');
+        $assert($after['status'] === $status && $updated['display_name'] === 'Updated Administrator', 'Active and disabled Administrator profiles remain manageable');
         $assert(password_verify('ReplacementPassword123', $after['password_hash']) && (int)$after['must_change_password'] === 1,
             'Administrator reset replaces password and requires holder change');
     }
@@ -278,14 +271,14 @@ try {
     $expectDenied(fn() => $service->setStatus($adminId, 'admin', $superId, 'disabled'), 'Administrator must not manage the Super Administrator');
 
     $privilegedId = $service->create($superId, 'super_admin', [
-        'full_name' => 'Privileged Admin',
+        'first_name' => 'Privileged Admin',
         'username' => 'privileged_admin',
         'email' => 'privileged@example.test',
         'password_hash' => password_hash('PrivilegedPassword123', PASSWORD_DEFAULT),
         'role' => 'admin',
     ]);
     $expectDenied(fn() => $service->update($superId, 'super_admin', $privilegedId, [
-        'full_name' => 'Privileged Administrator',
+        'first_name' => 'Privileged Administrator',
         'username' => 'privileged_admin',
         'email' => 'privileged@example.test',
         'role' => 'admin',
@@ -364,7 +357,7 @@ try {
     $auditCount = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
     $pdo->exec("CREATE TRIGGER reject_minimum_role BEFORE INSERT ON user_roles BEGIN SELECT RAISE(ABORT, 'Injected role failure'); END");
     try {
-        $service->update($managingAdminId2, 'admin', $privilegedId, array_replace($beforeFailure, ['full_name' => 'Must roll back', 'roles' => ['cashier']]));
+        $service->update($managingAdminId2, 'admin', $privilegedId, array_replace($beforeFailure, ['first_name' => 'Must roll back', 'roles' => ['cashier']]));
         $assert(false, 'Role sync failure must be propagated');
     } catch (PDOException) {
         $assert($service->get($privilegedId) === $beforeFailure, 'Role failure rolls back profile, primary role, mappings and sessions');

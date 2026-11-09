@@ -325,8 +325,8 @@ $roles = ['admin','super_admin','inventory_manager','cashier'];
 foreach ($roles as $index => $role) {
     $id = $index + 1;
     $pdo->prepare('INSERT INTO roles (role_id,role_name) VALUES (?,?)')->execute([$id,$role]);
-    $pdo->prepare('INSERT INTO users (user_id,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,0)')
-        ->execute([$id,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
+    $pdo->prepare('INSERT INTO users (user_id,first_name,display_name,username,password_hash,role_id,must_change_password) VALUES (?,?,?,?,?,?,0)')
+        ->execute([$id,'Theme Test ' . $role,'Theme Test ' . $role,'theme_' . $role,password_hash($password,PASSWORD_DEFAULT),$id]);
     if ($pdo->query('SELECT theme_preference FROM users WHERE user_id=' . $id)->fetchColumn() !== 'system') {
         throw new RuntimeException('Fresh accounts must default to System.');
     }

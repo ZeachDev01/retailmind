@@ -67,7 +67,9 @@ try {
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         profile_image TEXT NULL,
@@ -104,9 +106,9 @@ try {
         return (int)$stmt->fetchColumn();
     };
     $insertActor = static function (string $name, string $role) use ($pdo, $roleId, $storeId): int {
-        $stmt = $pdo->prepare('INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password, branch_id) VALUES (?, ?, ?, ?, ?, 0, ?)');
+        $stmt = $pdo->prepare('INSERT INTO users (first_name, display_name, username, email, password_hash, role_id, must_change_password, branch_id) VALUES (?, ?, ?, ?, ?, ?, 0, ?)');
         $username = strtolower(str_replace(' ', '_', $name));
-        $stmt->execute([$name, $username, $username . '@example.test', password_hash('ActorPassword123', PASSWORD_DEFAULT), $roleId($role), $storeId]);
+        $stmt->execute([$name, $name, $username, $username . '@example.test', password_hash('ActorPassword123', PASSWORD_DEFAULT), $roleId($role), $storeId]);
         return (int)$pdo->lastInsertId();
     };
 
@@ -114,7 +116,7 @@ try {
     $service = new UserLifecycleService($pdo, new RoleCapabilityPolicy());
     $countUsers = static fn(): int => (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
     $buildAccount = static fn(string $username, $email): array => [
-        'full_name' => 'Contract Staff',
+        'first_name' => 'Contract Staff',
         'username' => $username,
         'email' => $email,
         'password_hash' => password_hash('StaffPassword123', PASSWORD_DEFAULT),
@@ -140,14 +142,14 @@ try {
     $editableId = $service->create($adminId, 'admin', $buildAccount('editable.cashier_01', 'editable@example.test'));
     $expectShapeRejected(
         fn() => $service->update($adminId, 'admin', $editableId, [
-            'full_name' => 'Contract Staff', 'username' => 'new@example.test',
+            'first_name' => 'Contract Staff', 'username' => 'new@example.test',
             'email' => 'editable@example.test', 'role' => 'cashier',
         ]),
         'update must reject a Username containing @'
     );
     $expectShapeRejected(
         fn() => $service->update($adminId, 'admin', $editableId, [
-            'full_name' => 'Contract Staff', 'username' => 'new name',
+            'first_name' => 'Contract Staff', 'username' => 'new name',
             'email' => 'editable@example.test', 'role' => 'cashier',
         ]),
         'update must reject a Username containing a space'
@@ -158,7 +160,7 @@ try {
     $dottedId = $service->create($adminId, 'admin', $buildAccount('john.doe_99-x', 'john.doe@example.test'));
     $assert($service->get($dottedId)['username'] === 'john.doe_99-x', 'dotted/underscored/hyphenated Username must keep working on create');
     $service->update($adminId, 'admin', $dottedId, [
-        'full_name' => 'Contract Staff', 'username' => 'Jane.DOE_01-y',
+        'first_name' => 'Contract Staff', 'username' => 'Jane.DOE_01-y',
         'email' => 'john.doe@example.test', 'role' => 'cashier',
     ]);
     $assert($service->get($dottedId)['username'] === 'Jane.DOE_01-y', 'dotted/underscored/hyphenated Username must keep working on update');
@@ -187,7 +189,7 @@ try {
     // Email stays unique on update: taking another account's address fails.
     $expectUniqueRejected(
         fn() => $service->update($adminId, 'admin', $editableId, [
-            'full_name' => 'Contract Staff', 'username' => 'editable.cashier_01',
+            'first_name' => 'Contract Staff', 'username' => 'editable.cashier_01',
             'email' => 'unique@example.test', 'role' => 'cashier',
         ]),
         'update to a duplicate email must be rejected'
@@ -197,7 +199,7 @@ try {
     // Changing a staff email immediately invalidates the old address: the old
     // value is gone from storage and reports free, the new value is stored.
     $service->update($adminId, 'admin', $holderId, [
-        'full_name' => 'Contract Staff', 'username' => 'email.holder',
+        'first_name' => 'Contract Staff', 'username' => 'email.holder',
         'email' => 'rotated@example.test', 'role' => 'cashier',
     ]);
     $assert($service->get($holderId)['email'] === 'rotated@example.test', 'changed email must be stored immediately');

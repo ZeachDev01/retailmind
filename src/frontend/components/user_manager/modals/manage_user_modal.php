@@ -62,7 +62,7 @@
                         <div class="form-group">
                             <label for="drawerUsername">Username</label>
                             <input id="drawerUsername" name="username" autocomplete="username" spellcheck="false" required aria-describedby="drawerUsernameHelp" placeholder="e.g. jdoe">
-                            <small class="field-help" id="drawerUsernameHelp">Letters, numbers, dots, hyphens, and underscores.</small>
+                            <small class="field-help" id="drawerUsernameHelp">Usernames cannot contain @ or spaces. Use letters, numbers, dots, underscores, and hyphens.</small>
                         </div>
                         <div class="form-group">
                             <label for="drawerEmail">Email</label>
@@ -91,6 +91,7 @@
                         </div>
                     </div>
 
+                    <?php if ($actorRole !== 'super_admin'): ?>
                     <div class="drawer-card">
                         <div class="drawer-card-header" id="drawerRolesLabel">
                             <i class="bi bi-shield-check" aria-hidden="true"></i>
@@ -123,6 +124,7 @@
                         </div>
                         <small class="field-help" id="drawerRolesHelp">Workspace access and permissions.</small>
                     </div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Panel 2: Status -->

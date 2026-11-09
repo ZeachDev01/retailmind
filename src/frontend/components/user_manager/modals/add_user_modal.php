@@ -1,7 +1,7 @@
 <div class="user-modal-overlay" id="userModalOverlay" aria-hidden="true">
     <div class="user-modal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
         <div class="user-modal-header">
-            <div><h3 id="userModalTitle">Add Store Staff</h3><p>Create an account with a fixed operational role template.</p></div>
+            <div><h3 id="userModalTitle"><?= $actorRole === 'super_admin' ? 'Add Administrator' : 'Add Store Staff' ?></h3><p><?= $actorRole === 'super_admin' ? 'Create the Store Administrator account.' : 'Create an account with one or more workspaces.' ?></p></div>
             <button type="button" class="user-modal-close" id="closeUserModal" aria-label="Close add user form">&times;</button>
         </div>
         <form method="POST" enctype="multipart/form-data" class="user-form" id="createUserForm">
@@ -25,14 +25,26 @@
             </div>
             <div class="form-group" role="group" aria-labelledby="createRolesLabel" aria-describedby="createRolesHelp">
                 <label id="createRolesLabel">Role access</label>
-                <div class="role-check-list">
-                    <?php foreach ($roles as $r): ?>
-                        <?php if (!in_array($r['role_name'], ['super_admin', 'seller'], true)): ?>
-                            <label class="role-check"><input type="checkbox" name="role_ids[]" value="<?= (int)$r['role_id'] ?>" <?= in_array((string)$r['role_id'], $createFormValues['role_ids'], true) ? ' checked' : '' ?>> <span><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></span></label>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                </div>
-                <small class="field-help" id="createRolesHelp">Select every workspace this user can access. The first selected role becomes the default workspace.</small>
+                <?php if ($actorRole === 'super_admin'): ?>
+                    <?php $createdRole = $roles[0] ?? null; ?>
+                    <?php if ($createdRole !== null): ?>
+                        <input type="hidden" name="role_ids[]" value="<?= (int)$createdRole['role_id'] ?>">
+                        <div class="role-check-list">
+                            <label class="role-check"><input type="checkbox" checked disabled> <span><?= htmlspecialchars(display_label((string)$createdRole['role_name'])) ?></span></label>
+                        </div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="role-check-list">
+                        <?php foreach ($roles as $r): ?>
+                            <?php if (!in_array($r['role_name'], ['super_admin', 'seller'], true)): ?>
+                                <label class="role-check"><input type="checkbox" name="role_ids[]" value="<?= (int)$r['role_id'] ?>" <?= in_array((string)$r['role_id'], $createFormValues['role_ids'], true) ? ' checked' : '' ?>> <span><?= htmlspecialchars(display_label((string)$r['role_name'])) ?></span></label>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <small class="field-help" id="createRolesHelp"><?= $actorRole === 'super_admin'
+                    ? "Super Administrators create Administrator accounts. Add Cashier or Inventory workspaces later from the account's edit drawer."
+                    : 'Select every workspace this user can access. The first selected role becomes the default workspace.' ?></small>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="cancelUserModal">Cancel</button>

@@ -80,7 +80,9 @@ try {
 
         CREATE TABLE users (
             user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
+            first_name TEXT NULL,
+            last_name TEXT NULL,
+            display_name TEXT NULL,
             username TEXT UNIQUE NOT NULL,
             email TEXT UNIQUE,
             password_hash TEXT NOT NULL,
@@ -204,14 +206,14 @@ try {
 
     $pw = password_hash('AdminPass123!', PASSWORD_BCRYPT);
     // User 1: Primary Super Admin with secondary Admin role
-    $pdo->prepare("INSERT INTO users (user_id, full_name, username, email, password_hash, role_id) VALUES (1, 'Super Tech', 'supertech', 'tech@example.com', ?, 2)")->execute([$pw]);
+    $pdo->prepare("INSERT INTO users (user_id, first_name, display_name, username, email, password_hash, role_id) VALUES (1, 'Super Tech', 'Super Tech', 'supertech', 'tech@example.com', ?, 2)")->execute([$pw]);
     $pdo->prepare("INSERT INTO user_roles (user_id, role_id) VALUES (1, 1)")->execute();
 
     // User 2: Pure Admin
-    $pdo->prepare("INSERT INTO users (user_id, full_name, username, email, password_hash, role_id) VALUES (2, 'Store Admin', 'storeadmin', 'admin@example.com', ?, 1)")->execute([$pw]);
+    $pdo->prepare("INSERT INTO users (user_id, first_name, display_name, username, email, password_hash, role_id) VALUES (2, 'Store Admin', 'Store Admin', 'storeadmin', 'admin@example.com', ?, 1)")->execute([$pw]);
 
     // User 3: Cashier with secondary Admin role
-    $pdo->prepare("INSERT INTO users (user_id, full_name, username, email, password_hash, role_id) VALUES (3, 'Multi Cashier', 'multicashier', 'cashier@example.com', ?, 3)")->execute([$pw]);
+    $pdo->prepare("INSERT INTO users (user_id, first_name, display_name, username, email, password_hash, role_id) VALUES (3, 'Multi Cashier', 'Multi Cashier', 'multicashier', 'cashier@example.com', ?, 3)")->execute([$pw]);
     $pdo->prepare("INSERT INTO user_roles (user_id, role_id) VALUES (3, 1)")->execute();
 
     // Seed a closed GCash session with discrepancies

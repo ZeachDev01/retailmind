@@ -141,10 +141,9 @@ final class UserLifecycleService
 
             $targetRoles = $account['roles'] ?? ($account['role'] ?? $before['roles']);
             if (in_array('super_admin', array_merge([$before['role_name']], $before['roles']), true)) {
+                // Platform governance is one workspace; store workspaces are never assigned to it.
                 $targetRole = 'super_admin';
-                $optionalRoles = array_values(array_diff((array)$targetRoles, ['super_admin']));
-                $targetRoles = array_merge(['super_admin'], $optionalRoles === []
-                    ? [] : $this->requireAssignableRoles($actorRole, $optionalRoles));
+                $targetRoles = ['super_admin'];
             } else {
                 $targetRoles = $this->requireAssignableRoles($actorRole, $targetRoles);
                 $targetRole = $targetRoles[0];

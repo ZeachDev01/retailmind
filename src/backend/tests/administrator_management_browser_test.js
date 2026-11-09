@@ -54,8 +54,15 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         await page.locator('#createFirstName').fill('Created');
         await page.locator('#createLastName').fill('Administrator');
         await page.locator('#createUserPassword').fill('CreatedPassword123');
-        await page.locator('#createUserForm input[name="role_ids[]"][value="1"]').check();
-        assert.equal(await page.locator('#createUserForm input[name="role_ids[]"][value="2"]').count(), 0);
+        if (superadmin) {
+            assert.equal(await page.locator('#createUserForm input[type="hidden"][name="role_ids[]"]').inputValue(), '1',
+                'Super Administrator create form fixes the Administrator role');
+            assert.equal(await page.locator('#createUserForm input[type="checkbox"][name="role_ids[]"]').count(), 0,
+                'Super Administrator create form offers no other role choice');
+        } else {
+            await page.locator('#createUserForm input[name="role_ids[]"][value="1"]').check();
+            assert.equal(await page.locator('#createUserForm input[name="role_ids[]"][value="2"]').count(), 0);
+        }
         await Promise.all([page.waitForNavigation(), page.locator('#createUserSubmit').click()]);
         assert(await page.getByText('User created successfully in the Store.', {exact: true}).isVisible());
         assert.equal(await page.locator('.rm-toast').filter({hasText: 'Unfinished duties pending:'}).count(), 0,
@@ -76,11 +83,11 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         await open();
         await page.locator('#drawerFirstName').fill('Edited');
         await save();
-        assert.equal(state().users[1].full_name, 'Edited Additional');
+        assert.equal(state().users[1].display_name, 'Edited');
         // Keep the locator stable after editing the display name.
-        const editedRow = page.locator('tr').filter({hasText: 'Edited Additional'});
+        const editedRow = page.locator('tr').filter({hasText: 'Edited'});
         const reopen = async () => {
-            await editedRow.getByRole('button', {name: 'Manage Edited Additional'}).click();
+            await editedRow.getByRole('button', {name: 'Manage Edited'}).click();
             await page.locator('#drawerFirstName').waitFor({state: 'visible'});
         };
         await reopen();
@@ -99,13 +106,13 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             assert.equal(state().users[1].status, status);
         }
         await reopen();
-        await page.locator('#drawerRoles input[data-role="admin"]').uncheck();
+        await page.locator('#drawerRoles .drawer-role-tile').filter({has: page.locator('input[data-role="admin"]')}).click();
         const beforeDemotion = state().users[1];
         await save();
         assert.deepEqual(state().users[1].roles, ['cashier']);
         assert.equal(Number(state().users[1].session_version), Number(beforeDemotion.session_version) + 1);
         await reopen();
-        await page.locator('#drawerRoles input[data-role="admin"]').check();
+        await page.locator('#drawerRoles .drawer-role-tile').filter({has: page.locator('input[data-role="admin"]')}).click();
         await save();
         assert(state().users[1].roles.includes('admin'), 'Staff promotion through Users');
         const token = await page.locator('#userDrawerForm input[name="csrf_token"]').inputValue();
@@ -150,7 +157,9 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             assert(await admin.isChecked(), 'Own Admin role stays assigned');
             assert(await admin.isDisabled(), 'Own Admin role cannot be removed');
             assert(await cashier.isEnabled(), 'Own optional roles remain editable');
-            await cashier.setChecked(assigned);
+            if ((await cashier.isChecked()) !== assigned) {
+                await page.locator('#drawerRoles .drawer-role-tile').filter({has: page.locator('input[data-role="cashier"]')}).click();
+            }
             await save();
             // Role changes revoke sessions; sign in again to verify persisted access.
             await page.goto('/?login=1');

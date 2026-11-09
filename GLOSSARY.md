@@ -4,6 +4,22 @@ Core domain model and language for RetailMind single-store retail operations and
 
 ## Language
 
+**Super Administrator**:
+The single platform-governance account that creates Administrator accounts. It holds one Workspace and never takes store operational Workspaces.
+_Avoid_: Super admin, main admin, owner account
+
+**Administrator**:
+The ordinary account that governs one Store, including creating Staff Accounts and assigning their Workspaces.
+_Avoid_: Admin user, store manager, super admin
+
+**Staff Account**:
+A login for a person who works in the Store, holding one or more Workspaces and created by an Administrator.
+_Avoid_: User account, employee login, cashier account
+
+**Multi-role Account**:
+A Staff Account assigned more than one Workspace. Each Workspace is entered separately; capabilities are never combined.
+_Avoid_: Role bundle, combined permissions, role switching
+
 **Receipt Logo**:
 The Store's chosen brand image displayed above the receipt details. Each Store has one Receipt Logo; it is not a complete receipt design or template.
 _Avoid_: Receipt template, receipt background

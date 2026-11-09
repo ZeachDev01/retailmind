@@ -193,7 +193,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
 $roles = array_values(array_filter(
     $pdo->query("SELECT role_id, role_name FROM roles WHERE role_name <> 'seller' ORDER BY role_id")->fetchAll(PDO::FETCH_ASSOC),
-    static fn(array $role): bool => has_capability(RoleCapabilityPolicy::ASSIGN_ROLES, (string)$role['role_name'])
+    static fn(array $role): bool => has_capability(RoleCapabilityPolicy::MANAGE_USERS, (string)$role['role_name'])
         && $role['role_name'] !== 'super_admin'
 ));
 $users = $pdo->query(
