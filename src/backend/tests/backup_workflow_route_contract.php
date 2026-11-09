@@ -26,6 +26,8 @@ $downloadEndpoint = $read('src/frontend/components/backup/backup_download.php');
 $statusEndpoint = $read('src/frontend/components/backup/backup_status.php');
 $sidebar = $read('src/frontend/components/sidebar.php');
 $scheduledScript = $read('src/backend/scripts/backup_database.php');
+$scheduledBackupScript = $read('src/backend/scripts/run_scheduled_backup.php');
+$taskInstaller = $read('src/backend/scripts/install_scheduled_tasks.ps1');
 $sharedModule = $read('src/backend/includes/backup.php');
 $envExample = $read('.env.example');
 $runAll = $read('src/backend/tests/run_all.sh');
@@ -131,6 +133,40 @@ $assert(
     'The scheduled script must not keep a separate plaintext exporter'
 );
 
+// --- the weekly Scheduled Backup entry points (#460) ------------------------
+$assert(
+    str_contains($scheduledBackupScript, "PHP_SAPI !== 'cli'"),
+    'The Scheduled Backup CLI must refuse non-CLI callers'
+);
+$assert(
+    str_contains($scheduledBackupScript, 'runDue()') && str_contains($scheduledBackupScript, 'ScheduledBackupService'),
+    'The Scheduled Backup CLI must use the weekly due service'
+);
+$assert(
+    !str_contains($scheduledBackupScript, 'artifact_path'),
+    'The Scheduled Backup CLI must not print private artifact paths'
+);
+$assert(
+    str_contains($superAdministratorPage, "action === 'run_scheduled_backup'")
+        && str_contains($superAdministratorPage, 'Run scheduled backup now'),
+    'Only the Super Administrator page offers the in-app Scheduled Backup run'
+);
+$assert(
+    substr_count($superAdministratorPage, 'require_local_request(') >= 1 && str_contains($superAdministratorPage, 'csrf_verify()'),
+    'The in-app Scheduled Backup run keeps local-request and CSRF checks'
+);
+$assert(
+    !str_contains($administratorPage, 'run_scheduled_backup')
+        && !str_contains($administratorPage, 'name="backup_destination_path"'),
+    'The Administrator page must show schedule status read-only and no destination control'
+);
+$assert(
+    str_contains($taskInstaller, 'RetailMind Weekly Backup')
+        && str_contains($taskInstaller, 'run_scheduled_backup.php')
+        && str_contains($taskInstaller, 'weekly-backup.log'),
+    'The Windows task installer must register the hourly weekly-backup task'
+);
+
 
 // --- Administrator-facing navigation: backup yes, restoration no -------------
 $assert(
@@ -170,6 +206,9 @@ $assert(
 foreach ([
     'php src/backend/tests/database_backup_workflow_integration.php',
     'php src/backend/tests/backup_workflow_route_contract.php',
+    'php src/backend/tests/scheduled_backup_schedule_contract.php',
+    'php src/backend/tests/scheduled_backup_service_contract.php',
+    'php src/backend/tests/scheduled_backup_settings_contract.php',
     'php src/backend/tests/sql_backup_format_test.php',
     'node src/backend/tests/backup_status_alert_behavior_test.js',
 ] as $command) {
