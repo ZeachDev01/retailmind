@@ -76,7 +76,13 @@ function current_workspace_roles(?string $primaryRole = null): array
     $roles = current_roles();
     $primaryRole ??= in_array('super_admin', $roles, true) ? 'super_admin' : null;
     if ($primaryRole === 'super_admin') {
-        return array_values(array_unique(array_merge(['super_admin'], $roles)));
+        $roles = array_values(array_unique(array_merge(['super_admin'], $roles)));
+    }
+
+    // ADR-0030: the Super Administrator workspace is local-only. Tunnel
+    // sessions keep every other assigned workspace.
+    if (is_tunnel_request()) {
+        $roles = array_values(array_filter($roles, static fn(string $role): bool => $role !== 'super_admin'));
     }
 
     return $roles;
@@ -290,8 +296,17 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             : [(string)$user['role_name']];
         $_SESSION['user_id'] = (int)$user['user_id'];
         $_SESSION['display_name'] = $user['display_name'];
-        $_SESSION['role'] = $assignedRoles[0] ?? (string)$user['role_name'];
         $_SESSION['roles'] = $assignedRoles;
+        $availableWorkspaces = current_workspace_roles((string)$user['role_name']);
+        if ($availableWorkspaces === []) {
+            // ADR-0030: tunnel sessions cannot use the Super Administrator workspace.
+            App\Core\Session::destroy();
+            access_denied_page(
+                'The Super Administrator workspace is only available on the Store computer.',
+                'Super Administrator workspace · local only'
+            );
+        }
+        $_SESSION['role'] = $availableWorkspaces[0];
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
@@ -365,10 +380,19 @@ function validate_current_session(PDO $pdo): void
     $selectedWorkspace = current_role();
     $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
     $_SESSION['roles'] = $assignedRoles;
+    $availableWorkspaces = current_workspace_roles((string)$user['role_name']);
+    if ($availableWorkspaces === []) {
+        // ADR-0030: tunnel sessions cannot use the Super Administrator workspace.
+        App\Core\Session::destroy();
+        access_denied_page(
+            'The Super Administrator workspace is only available on the Store computer.',
+            'Super Administrator workspace · local only'
+        );
+    }
     $_SESSION['role'] = $selectedWorkspace !== null
-        && in_array($selectedWorkspace, current_workspace_roles((string)$user['role_name']), true)
+        && in_array($selectedWorkspace, $availableWorkspaces, true)
         ? $selectedWorkspace
-        : ($assignedRoles[0] ?? (string)$user['role_name']);
+        : $availableWorkspaces[0];
     $_SESSION['profile_image'] = $user['profile_image'];
     $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);
     $_SESSION['is_recovery_account'] = (bool)($user['is_recovery_account'] ?? false);
@@ -390,13 +414,16 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
+    require_workspace_access();
     // Issue #86: the active workspace is authoritative. POS-adjacent pages
     // are evaluated from the single selected workspace (current_role()),
     // never from the union of all assigned roles.
     $activeRole = current_role();
     if ($activeRole === null || !in_array($activeRole, $allowed_roles, true)) {
-        http_response_code(403);
-        die('Access denied: your role does not have permission to view this page.');
+        access_denied_page(
+            'Your current workspace does not include this page. Switch to the workspace that owns it.',
+            'Workspace: ' . ucwords(str_replace('_', ' ', (string)$activeRole))
+        );
     }
 }
 
@@ -406,58 +433,22 @@ function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
     return $policy ??= new App\Authorization\RoleCapabilityPolicy();
 }
 
-if (!function_exists('is_remote_request')) {
-    function is_remote_request(): bool
-    {
-        if (!empty($_SESSION['is_remote'])) {
-            return true;
-        }
-        if (!empty($_SERVER['RETAILMIND_REMOTE']) || !empty($_ENV['RETAILMIND_REMOTE'])) {
-            return true;
-        }
-        if (!empty($_SERVER['HTTP_CF_RAY'])
-            || !empty($_SERVER['HTTP_CF_CONNECTING_IP'])
-            || !empty($_SERVER['HTTP_CF_ACCESS_AUTHENTICATED_USER_EMAIL'])
-            || !empty($_SERVER['HTTP_CF_VISITOR'])) {
-            return true;
-        }
+// is_remote_request() lives in bootstrap/app.php (loaded above) so tunnel hosts
+// are classified once for every caller (ADR-0030).
 
-        $isLocalAddress = static function (string $raw): bool {
-            $target = strtolower(trim(explode(':', trim($raw))[0]));
-            if ($target === '' || $target === 'localhost' || $target === '127.0.0.1' || $target === '::1' || $target === '[::1]') {
-                return true;
-            }
-            if (str_ends_with($target, '.local') || str_ends_with($target, '.localhost')) {
-                return true;
-            }
-            if (filter_var($target, FILTER_VALIDATE_IP)) {
-                return filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
-            }
-            return false;
-        };
+function workspace_blocked_over_tunnel(?string $role = null): bool
+{
+    $role ??= current_role();
+    return $role === 'super_admin' && is_tunnel_request();
+}
 
-        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $ips = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
-            $clientIp = trim($ips[0]);
-            if (!$isLocalAddress($clientIp)) {
-                return true;
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
-            $host = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
-            if (!$isLocalAddress($host)) {
-                return true;
-            }
-        }
-
-        if (!empty($_SERVER['HTTP_HOST'])) {
-            if (!$isLocalAddress($_SERVER['HTTP_HOST'])) {
-                return true;
-            }
-        }
-
-        return false;
+function require_workspace_access(): void
+{
+    if (workspace_blocked_over_tunnel()) {
+        access_denied_page(
+            'The Super Administrator workspace is only available on the Store computer. Switch to another workspace to keep working.',
+            'Super Administrator workspace · local only'
+        );
     }
 }
 
@@ -470,14 +461,13 @@ function require_local_request(string $message = 'This action is not available d
         return;
     }
     if (is_remote_request()) {
-        http_response_code(403);
         if (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) {
+            http_response_code(403);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success' => false, 'error' => $message]);
-        } else {
-            echo $message;
+            exit;
         }
-        exit;
+        access_denied_page($message, 'Local-only action');
     }
 }
 
@@ -528,13 +518,19 @@ function require_any_capability(
         exit;
     }
     validate_current_session($pdo);
+    require_workspace_access();
     foreach ($capabilities as $capability) {
         if (has_capability((string)$capability, $targetRole, $context)) {
             return;
         }
     }
-    http_response_code(403);
-    die('Access denied: your account does not have this capability.');
+    access_denied_page(
+        'Your role does not include the permission this action needs.',
+        'Missing permission · ' . implode(' / ', array_map(
+            static fn($capability): string => ucwords(str_replace('_', ' ', strtolower((string)$capability))),
+            $capabilities
+        ))
+    );
 }
 
 function store_scope_id(PDO $pdo): int
@@ -565,6 +561,7 @@ function logout_user(): void
 
 function redirect_by_role(): void
 {
+    require_workspace_access();
     header('Location: ' . app_url(App\Authorization\RoleWorkspaceRouter::pathFor(current_role())));
     exit;
 }

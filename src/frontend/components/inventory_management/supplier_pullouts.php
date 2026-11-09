@@ -25,8 +25,10 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$canMutate) {
-        http_response_code(403);
-        die('Access denied: only active Inventory Managers can record supplier pullouts.');
+        access_denied_page(
+            'Only an active Inventory Manager workspace can record supplier pullouts.',
+            'Workspace: Inventory Manager'
+        );
     }
 
     verify_csrf_token($_POST['csrf_token'] ?? '');

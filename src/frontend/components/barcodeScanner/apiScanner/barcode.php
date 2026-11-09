@@ -9,7 +9,7 @@ function barcode_apply_cors(): void {
     if ($origin === '') {
         return;
     }
-    $serverOrigin = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $serverOrigin = app_origin();
     $allowed = array_filter(array_map('trim', explode(',', (string)env('BARCODE_ALLOWED_ORIGINS', ''))));
     if ($origin === $serverOrigin || in_array($origin, $allowed, true)) {
         header('Access-Control-Allow-Origin: ' . $origin);

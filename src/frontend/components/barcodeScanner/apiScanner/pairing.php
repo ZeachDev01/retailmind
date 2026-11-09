@@ -8,7 +8,7 @@ function api_apply_cors(): void {
     if ($origin === '') {
         return;
     }
-    $serverOrigin = ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $serverOrigin = app_origin();
     $allowed = array_filter(array_map('trim', explode(',', (string)env('BARCODE_ALLOWED_ORIGINS', ''))));
     if ($origin === $serverOrigin || in_array($origin, $allowed, true)) {
         header('Access-Control-Allow-Origin: ' . $origin);
@@ -57,10 +57,9 @@ try {
     if ($action === 'create') {
         csrf_verify($_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($input['csrf_token'] ?? null));
         $pairing = pairing_create($pdo, (int)$_SESSION['user_id'], 10);
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $scannerBase = $scheme . '://' . $host . app_url('components/barcodeScanner/index.html');
-        $apiUrl = $scheme . '://' . $host . app_url('components/barcodeScanner/apiScanner/barcode.php');
+        $origin = app_origin();
+        $scannerBase = $origin . app_url('components/barcodeScanner/index.html');
+        $apiUrl = $origin . app_url('components/barcodeScanner/apiScanner/barcode.php');
         $scannerUrl = $scannerBase . '?code=' . urlencode($pairing['code']) . '&api=' . urlencode($apiUrl);
         echo json_encode([
             'success' => true,

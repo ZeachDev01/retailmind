@@ -130,7 +130,7 @@ function correction_e(mixed $value): string {
                     } ?>
                 </span>
                 <?php if ($remote): ?>
-                    <span class="status-chip chip-warning">Remote (Read-only)</span>
+                    <span class="status-chip chip-warning">Remote</span>
                 <?php endif; ?>
             </div>
         </div>

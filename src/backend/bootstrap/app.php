@@ -51,6 +51,8 @@ if (!function_exists('env')) {
     }
 }
 
+require_once dirname(__DIR__) . '/includes/access_denied.php';
+
 $appEnv = (string)env('APP_ENV', 'production');
 $debugDefault = $appEnv !== 'production' ? 'true' : 'false';
 $debug = filter_var(env('APP_DEBUG', $debugDefault), FILTER_VALIDATE_BOOLEAN);
@@ -206,9 +208,69 @@ if (!function_exists('app_origin')) {
     }
 }
 
+if (!function_exists('tunnel_host_suffixes')) {
+    /**
+     * Hostnames that identify a developer/supervisor tunnel in front of the
+     * local Store PC. Requests arriving through these hosts are treated as
+     * local requests (ADR-0030): full workspace parity, no monitoring whitelist.
+     */
+    function tunnel_host_suffixes(): array
+    {
+        return [
+            '.trycloudflare.com',
+            '.ngrok-free.app',
+            '.ngrok-free.dev',
+            '.ngrok.io',
+            '.ngrok.app',
+            '.loca.lt',
+            '.lhr.life',
+            '.localtunnel.me',
+        ];
+    }
+}
+
+if (!function_exists('is_tunnel_host')) {
+    function is_tunnel_host(?string $host = null): bool
+    {
+        $host = strtolower(trim((string)$host));
+        if ($host === '') {
+            return false;
+        }
+        if ($host[0] === '[') {
+            $end = strpos($host, ']');
+            $host = $end === false ? trim($host, '[]') : substr($host, 1, $end - 1);
+        } elseif (substr_count($host, ':') === 1) {
+            $host = explode(':', $host, 2)[0];
+        }
+        foreach (tunnel_host_suffixes() as $suffix) {
+            if (str_ends_with($host, $suffix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('is_tunnel_request')) {
+    function is_tunnel_request(): bool
+    {
+        if (is_tunnel_host($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? null)) {
+            return true;
+        }
+        if (!empty($_SERVER['HTTP_X_FORWARDED_HOST'])) {
+            return is_tunnel_host((string)explode(',', (string)$_SERVER['HTTP_X_FORWARDED_HOST'])[0]);
+        }
+        return false;
+    }
+}
+
 if (!function_exists('is_remote_request')) {
     function is_remote_request(): bool
     {
+        // Tunnel ingress is the Store PC's own link, not remote monitoring.
+        if (is_tunnel_request()) {
+            return false;
+        }
         if (!empty($_SESSION['is_remote'])) {
             return true;
         }
@@ -300,10 +362,19 @@ if (PHP_SAPI !== 'cli' && $remoteRequest) {
         || ($method === 'POST' && in_array($scriptFile, $remoteSessionRoutes, true));
 
     if (!$routeAllowed || !$methodAllowed) {
-        http_response_code(403);
-        header('Cache-Control: no-store');
-        header('Content-Type: text/plain; charset=utf-8');
-        exit('This action is not available during remote monitoring.');
+        $expectsJson = str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')
+            || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        if ($expectsJson) {
+            http_response_code(403);
+            header('Cache-Control: no-store');
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => 'This action is not available during remote monitoring.']);
+            exit;
+        }
+        access_denied_page(
+            'This page can only be opened from the Store computer or an approved tunnel link.',
+            'Remote monitoring · read-only route'
+        );
     }
 }
 

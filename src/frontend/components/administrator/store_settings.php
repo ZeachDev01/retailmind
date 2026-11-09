@@ -282,7 +282,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 <div class="remote-access-header-wrap">
                     <div>
                         <h2 id="remote-access-heading">Remote Access</h2>
-                        <p class="section-description">Encrypted external access for supervisors without port forwarding.</p>
+                        <p class="section-description">Encrypted external access for staff and supervisors without port forwarding.</p>
                     </div>
                     <div class="remote-badges-group">
                         <span id="remote-mode-badge" class="remote-pill <?= !empty($tunnelStatus['token_configured']) ? 'pill-primary' : 'pill-muted' ?>">

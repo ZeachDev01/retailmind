@@ -1,5 +1,10 @@
 # Owner Remote Monitoring through Cloudflare
 
+> **Superseded for the read-only boundary by [ADR-0030](../adr/0030-tunnel-sessions-have-full-workspace-parity.md).**
+> Tunnel sessions now have full workspace parity for Administrator, Inventory Manager, and Cashier;
+> only the Super Administrator workspace stays local-only. The Cloudflare Access guidance below
+> still applies to tunnel exposure.
+
 ## Problem Statement
 
 The Store owner wants to monitor staff and Store activity from a phone or laptop while away from the Store. RetailMind will run on a dedicated Windows Store PC; a localhost address cannot be reached from outside the Store. The owner wants a stable link available whenever that PC and its internet connection are running, without giving staff remote access or allowing remote changes. The existing local Windows deployment plan instead describes an installed private-network client and remote staff workflows.

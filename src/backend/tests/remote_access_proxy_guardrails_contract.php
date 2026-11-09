@@ -222,11 +222,20 @@ $assert(is_remote_request(), 'Public HTTP_X_FORWARDED_FOR identifies as remote r
 
 $resetEnv();
 $_SERVER['HTTP_X_FORWARDED_HOST'] = 'store-demo.trycloudflare.com';
-$assert(is_remote_request(), 'Cloudflare tunnel forwarded host identifies as remote request');
+$assert(!is_remote_request(), 'Cloudflare tunnel forwarded host is treated as local (ADR-0030)');
 
 $resetEnv();
 $_SERVER['HTTP_HOST'] = 'store-demo.trycloudflare.com';
-$assert(is_remote_request(), 'Cloudflare tunnel host identifies as remote request');
+$assert(!is_remote_request(), 'Cloudflare tunnel host is treated as local (ADR-0030)');
+
+$resetEnv();
+$_SERVER['HTTP_HOST'] = 'store-demo.trycloudflare.com';
+$_SERVER['HTTP_CF_RAY'] = '8d1234567890abcd-NRT';
+$assert(!is_remote_request(), 'Tunnel host wins over Cloudflare edge headers (ADR-0030)');
+
+$resetEnv();
+$_SERVER['HTTP_HOST'] = 'retailmind.infinityfreeapp.com';
+$assert(is_remote_request(), 'Non-tunnel public host stays remote');
 
 // 4.2 Guardrails reject physical register and cash drawer operations when remote
 // Set up in-memory sqlite test database for CashierShiftService

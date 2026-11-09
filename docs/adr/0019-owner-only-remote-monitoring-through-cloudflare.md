@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0030
 ---
 
 # Owner-only remote monitoring through Cloudflare

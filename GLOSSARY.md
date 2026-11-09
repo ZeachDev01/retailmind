@@ -292,9 +292,9 @@ _Avoid_: Feature tour, production workflow
 The active role context through which a user accesses RetailMind. A multi-role user switches Workspace to perform each role's permitted tasks; assigned privileges are not combined.
 _Avoid_: Combined permissions, role bundle
 
-**Owner Remote Monitoring**:
-The Store owner's read-only access to Store activity while away from the Store. It does not authorize remote operational or administrative changes.
-_Avoid_: Remote administration, staff remote access
+**Tunnel Session**:
+A RetailMind session opened through the Store's tunnel link, away from the Store computer. Administrator, Inventory Manager, and Cashier workspaces have the same capabilities as on localhost; the Super Administrator workspace remains local-only.
+_Avoid_: Remote monitoring, read-only remote access, owner-only monitoring
 
 **Stock Status Indicator**:
 A standardized color-coded visual indicator (🔴 Out of stock, 🟡 Low stock, 🟢 In stock/Available, 🔵 Needs replenishment) displayed across inventory dropdowns and status badges to convey stock health without altering underlying filter values.

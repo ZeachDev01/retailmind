@@ -34,7 +34,7 @@ $isLocalHost = $host === ''
     || $endsWith($host, '.local')
     || $endsWith($host, '.localhost')
     || $endsWith($host, '.test')
-    || $endsWith($host, '.trycloudflare.com');
+    || is_tunnel_host($host);
 
 $databaseEnv = strtolower((string)env('DATABASE_ENV', ''));
 $useHostedDatabase = $databaseEnv === 'hosted';

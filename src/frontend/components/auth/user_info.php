@@ -49,8 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!can_manage_own_profile_image()
             || isset($_POST['user_id']) || isset($_GET['user_id'])
         ) {
-            http_response_code(403);
-            die('Access denied: you can manage only your own profile picture.');
+            access_denied_page(
+                'You can only manage your own profile picture.',
+                'Account: own profile'
+            );
         }
 
         $imageService = profile_image_storage();
