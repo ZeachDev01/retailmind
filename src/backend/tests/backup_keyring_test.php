@@ -50,6 +50,8 @@ try {
 
     $promotion = BackupKeyStore::promote($importedFingerprint);
     $assert(BackupKeyStore::primaryFingerprint() === $importedFingerprint, 'Promotion switches the primary key');
+    $again = BackupKeyStore::promote($importedFingerprint);
+    $assert($again['archived'] === null, 'Promoting the current primary key is a no-op');
     $assert(BackupKeyStore::current() === $imported, 'New backups use the promoted key');
     $assert(BackupKeyStore::currentFingerprint() === $importedFingerprint, 'The current fingerprint follows promotion');
     $assert(($promotion['archived'] ?? null) === $primaryFingerprint, 'Promotion reports the archived primary');

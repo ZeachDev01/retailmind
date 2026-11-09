@@ -126,6 +126,9 @@ final class BackupKeyStore
     {
         self::assertReference($fingerprint);
         return self::withKeyringLock(static function () use ($fingerprint): array {
+            if (self::primaryFingerprint() === $fingerprint) {
+                return ['primary' => $fingerprint, 'archived' => null];
+            }
             $path = RecoveryStore::path('backup-key-' . $fingerprint . '.key');
             if (!is_file($path)) {
                 throw new DomainException('That recovery key is not in the Backup Keyring. Import it first.');
@@ -136,9 +139,6 @@ final class BackupKeyStore
             }
 
             $oldFingerprint = self::primaryFingerprint();
-            if ($oldFingerprint === $fingerprint) {
-                return ['primary' => $fingerprint, 'archived' => null];
-            }
             $old = null;
             $primaryPath = RecoveryStore::path('backup-encryption.key');
             if (is_file($primaryPath)) {

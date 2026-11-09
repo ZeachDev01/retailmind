@@ -226,7 +226,13 @@ final class DatabaseBackupService
         if (!Schema::tableExists($this->pdo, 'schema_migrations')) {
             return [];
         }
-        return (new MigrationRunner($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->appliedKeys();
+        $keys = (new MigrationRunner($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->appliedKeys();
+        // The ledger also carries opaque legacy keys; only real migration files
+        // belong in the package manifest.
+        return array_values(array_filter(
+            $keys,
+            static fn(mixed $key): bool => is_string($key) && preg_match('/^[0-9]{12}_[a-z0-9_]+$/D', $key) === 1
+        ));
     }
 
     /**
