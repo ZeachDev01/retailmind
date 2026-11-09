@@ -1954,3 +1954,16 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_
 -- 202611100001_backup_keyring_and_history: repair backup history metadata and
 -- record per-account recovery-key acknowledgements.
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_backup_keyring_and_history','Repair backup history metadata and record per-account recovery-key acknowledgements') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611100002_scheduled_backup_settings: seed Sunday 23:00 Scheduled Backup
+-- schedule, Backup Destination, and last-run state.
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_weekday', '0');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_time', '23:00');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_destination_path', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_success_at', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_attempt_at', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_outcome', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_message', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_backup_id', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_catchup_checked_at', '');
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);

@@ -1675,6 +1675,7 @@ INSERT INTO categories (category_name) VALUES
 INSERT IGNORE INTO user_roles (user_id,role_id,is_primary) SELECT user_id,role_id,1 FROM users WHERE role_id IS NOT NULL;
 INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes');
 INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('dormancy_disable_days','45'),('dormancy_warn_days','30');
+INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('backup_schedule_weekday','0'),('backup_schedule_time','23:00'),('backup_destination_path',''),('backup_schedule_last_success_at',''),('backup_schedule_last_attempt_at',''),('backup_schedule_last_outcome',''),('backup_schedule_last_message',''),('backup_schedule_last_backup_id',''),('backup_schedule_catchup_checked_at','');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
@@ -2138,3 +2139,5 @@ CREATE TABLE `store_weekly_schedule` (
 INSERT INTO schema_migrations (migration_key,description) VALUES ("202611020001_store_weekly_schedule","Configurable weekly store schedule revisions with effective dates") ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_backup_keyring_and_history','Repair backup history metadata and record per-account recovery-key acknowledgements') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);
