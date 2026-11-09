@@ -97,6 +97,8 @@ Policy decisions were confirmed in the design discussion on 2026-10-22. This spe
 
 Revision 2026-11-10: Scheduled Periods and opt-in Automatic Rollover were agreed with the Store owner and implemented; see [ADR-0029](../adr/0029-scheduled-fiscal-periods-and-opt-in-rollover.md). While the Store Setting is off, the earlier manual close/open behavior remains the default.
 
+Revision 2026-11-10 (second): the Administrator may now generate a contiguous Period Schedule (monthly or quarterly, calendar-aligned, 1–24 periods, optional name prefix) in one all-or-nothing action, and rollover outcomes are notified. This is an explicit Administrator action, not automatic period invention; the Out of Scope line about "automatic creation or skipping of period ranges" still applies to system-initiated scheduling. See the amendment in [ADR-0029](../adr/0029-scheduled-fiscal-periods-and-opt-in-rollover.md).
+
 Current code exploration found missing-period permission, ambiguous overlap selection, insufficient lifecycle transition checks, absent closure prerequisites, and missing fiscal checks in GCash and drawer cash workflows. Existing Inventory Count approval checks both the original count date and the adjustment date, which is why pending counts must be resolved before finalization.
 
 No actual operational database was audited during specification writing. Existing-data resolution must respect immutable history; if the discovered conflicts cannot be resolved within these agreed rules, report the concrete conflict for a separate decision instead of silently relaxing the rules.

@@ -101,6 +101,7 @@ class FiscalPeriodGuardService
                 if ($start !== $expectedStart) {
                     throw new RuntimeException(
                         'The next fiscal period must start the day after the previous period ends (' . $expectedStart . ').'
+                        . ' Use Generate periods to schedule the rest of the chain without gaps.'
                     );
                 }
             }
@@ -147,6 +148,146 @@ class FiscalPeriodGuardService
             }
             throw $e;
         }
+    }
+
+    /**
+     * Create a contiguous set of calendar-aligned periods in one transaction.
+     *
+     * The chain always continues from the day after the last period (or starts
+     * today when the Store has none), so no day is left without fiscal
+     * coverage. Any invalid or duplicate name aborts the whole batch.
+     */
+    public function generatePeriodSchedule(
+        string $cadence,
+        int $count,
+        string $prefix,
+        int $actorId,
+        ?string $today = null
+    ): array {
+        $cadence = strtolower(trim($cadence));
+        if (!in_array($cadence, ['monthly', 'quarterly'], true)) {
+            throw new InvalidArgumentException('Choose monthly or quarterly periods.');
+        }
+        if ($count < 1 || $count > 24) {
+            throw new InvalidArgumentException('Generate between 1 and 24 fiscal periods.');
+        }
+        $prefix = trim($prefix);
+        if (mb_strlen($prefix) > 20) {
+            throw new InvalidArgumentException('Period name prefix must be 20 characters or fewer.');
+        }
+        $today = $this->date($today ?? date('Y-m-d'), 'current date');
+
+        \App\Store\StoreWriteGate::begin($this->pdo);
+        try {
+            $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $periods = $this->pdo->query(
+                'SELECT period_id, period_name, start_date, end_date, status FROM fiscal_periods
+                 ORDER BY start_date, period_id' . $lock
+            )->fetchAll(PDO::FETCH_ASSOC);
+            $last = $periods ? $periods[count($periods) - 1] : null;
+
+            $hasOpen = false;
+            $coversToday = false;
+            $takenNames = [];
+            foreach ($periods as $period) {
+                $takenNames[mb_strtolower((string)$period['period_name'])] = true;
+                if ($period['status'] === 'open') {
+                    $hasOpen = true;
+                }
+                if ($period['start_date'] <= $today && $period['end_date'] >= $today) {
+                    $coversToday = true;
+                }
+            }
+
+            $cursor = new DateTimeImmutable(
+                $last
+                    ? date('Y-m-d', strtotime((string)$last['end_date'] . ' +1 day'))
+                    : $today
+            );
+
+            $ranges = [];
+            for ($i = 0; $i < $count; $i++) {
+                if ($cadence === 'monthly') {
+                    $rangeEnd = $cursor->modify('last day of this month');
+                    $label = $cursor->format('Y-m');
+                } else {
+                    $quarter = intdiv((int)$cursor->format('n') - 1, 3) + 1;
+                    $rangeEnd = $cursor->setDate((int)$cursor->format('Y'), $quarter * 3, 1)
+                        ->modify('last day of this month');
+                    $label = 'Q' . $quarter . ' ' . $cursor->format('Y');
+                }
+                $name = $prefix === '' ? $label : $prefix . ' ' . $label;
+                $nameKey = mb_strtolower($name);
+                if (isset($takenNames[$nameKey])) {
+                    throw new RuntimeException(
+                        'Fiscal period "' . $name . '" already exists. Nothing was generated.'
+                    );
+                }
+                $takenNames[$nameKey] = true;
+                $ranges[] = [
+                    'name' => $name,
+                    'start' => $cursor->format('Y-m-d'),
+                    'end' => $rangeEnd->format('Y-m-d'),
+                ];
+                $cursor = $rangeEnd->modify('+1 day');
+            }
+
+            $insert = $this->pdo->prepare(
+                'INSERT INTO fiscal_periods
+                    (period_name, start_date, end_date, created_by, status)
+                 VALUES (?, ?, ?, ?, ?)'
+            );
+            $created = [];
+            foreach ($ranges as $range) {
+                if ($hasOpen || $coversToday) {
+                    $status = self::STATUS_SCHEDULED;
+                } elseif ($today >= $range['start'] && $today <= $range['end']) {
+                    $status = 'open';
+                    $hasOpen = true;
+                } elseif ($periods) {
+                    throw new RuntimeException(
+                        'Create and open a fiscal period that includes today before adding later periods.'
+                    );
+                } else {
+                    throw new RuntimeException("The first fiscal period must include today's date.");
+                }
+                $insert->execute([$range['name'], $range['start'], $range['end'], $actorId, $status]);
+                $created[] = [
+                    'period_id' => (int)$this->pdo->lastInsertId(),
+                    'period_name' => $range['name'],
+                    'start_date' => $range['start'],
+                    'end_date' => $range['end'],
+                    'status' => $status,
+                ];
+            }
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        // Scheduling future periods signals intent to keep the chain running.
+        $autoRolloverEnabled = false;
+        if (in_array(self::STATUS_SCHEDULED, array_column($created, 'status'), true)) {
+            try {
+                $settings = new \App\Attention\AttentionSettingsService($this->pdo, new \App\Attention\SystemClock());
+                if ((float)($settings->storeSettings()[self::AUTO_ROLLOVER_SETTING] ?? 0) <= 0) {
+                    $settings->updateStore('admin', [self::AUTO_ROLLOVER_SETTING => 1], $actorId);
+                    $autoRolloverEnabled = true;
+                }
+            } catch (Throwable $e) {
+                error_log('Fiscal period automatic rollover could not be enabled: ' . $e->getMessage());
+            }
+        }
+
+        return [
+            'periods' => $created,
+            'start_date' => $created[0]['start_date'],
+            'end_date' => $created[count($created) - 1]['end_date'],
+            'auto_rollover_enabled' => $autoRolloverEnabled,
+        ];
     }
 
     public function closePeriod(int $periodId, int $actorId, ?string $today = null): void
@@ -385,6 +526,7 @@ class FiscalPeriodGuardService
                 if ($this->pdo->inTransaction()) {
                     $this->pdo->commit();
                 }
+                $this->notifyRollover($result, $period, $today);
                 return $result;
             }
 
@@ -421,6 +563,7 @@ class FiscalPeriodGuardService
                 'opened_period_id' => $result['opened_period_id'],
             ]);
             $this->pdo->commit();
+            $this->notifyRollover($result, $period, $today);
             return $result;
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -517,6 +660,95 @@ class FiscalPeriodGuardService
             }
         }
         return $blockers;
+    }
+
+    /**
+     * Notify Administrators once per rollover event, and at most once per
+     * period per day while a rollover stays blocked, so a stuck overdue period
+     * cannot flood the bell on repeated page loads.
+     */
+    private function notifyRollover(array $result, array $period, string $today): void
+    {
+        foreach (['notifications', 'users', 'roles', 'user_roles'] as $table) {
+            if (!$this->tableExists($table)) {
+                return;
+            }
+        }
+        $destination = 'components/system_administrator/fiscal_periods.php';
+        $closedId = (int)$period['period_id'];
+        $blocked = !empty($result['blockers']);
+        $missingSuccessor = !$blocked && !empty($result['rolled']) && $result['opened_period_id'] === null;
+
+        if ($blocked) {
+            $key = 'store.fiscal-period.rollover-blocked.' . $closedId . '.' . $today;
+            $severity = 'critical';
+            $title = 'Fiscal Period rollover is blocked';
+            $message = sprintf(
+                'Cannot close "%s" (ended %s) automatically: %s. Resolve these, then close the period or wait for the next daily check.',
+                (string)$period['period_name'],
+                (string)$period['end_date'],
+                implode('; ', $result['blockers'])
+            );
+        } elseif ($missingSuccessor) {
+            $key = 'store.fiscal-period.rollover.orphan.' . $closedId;
+            $severity = 'critical';
+            $title = 'Fiscal Period rolled over without a successor';
+            $message = sprintf(
+                '"%s" closed automatically, but no scheduled fiscal period starts on %s. Trading is blocked until you generate the next period.',
+                (string)$period['period_name'],
+                date('M j, Y', strtotime((string)$period['end_date'] . ' +1 day'))
+            );
+        } elseif (!empty($result['rolled'])) {
+            $key = 'store.fiscal-period.rollover.' . $closedId;
+            $severity = 'info';
+            $title = 'Fiscal Period rolled over automatically';
+            $message = sprintf('"%s" closed and the next scheduled period is now open.', (string)$period['period_name']);
+        } else {
+            return;
+        }
+
+        $hasPrefs = $this->tableExists('notification_preferences');
+        $sql = 'SELECT u.user_id'
+            . ($hasPrefs ? ', COALESCE(np.notify_inapp, 1) AS notify_inapp' : ', 1 AS notify_inapp')
+            . ' FROM users u'
+            . ($hasPrefs ? ' LEFT JOIN notification_preferences np ON np.user_id = u.user_id' : '')
+            . " WHERE u.status = 'active' AND EXISTS (
+                SELECT 1 FROM roles r WHERE r.role_name = 'admin' AND (
+                    EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id AND ur.role_id = r.role_id)
+                    OR (r.role_id = u.role_id AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id))
+                ))";
+
+        try {
+            $recipients = $this->pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+            $seen = $this->pdo->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND attention_key = ?');
+            $insert = $this->pdo->prepare(
+                "INSERT INTO notifications
+                    (user_id, type, title, message, reference_id, reference_type, attention_key,
+                     attention_severity, attention_count, attention_destination, is_read, created_at,
+                     workspace, inapp_enabled, email_pending)
+                 VALUES (?, 'fiscal_period', ?, ?, ?, 'fiscal_period', ?, ?, 1, ?, 0, ?, 'admin', ?, 0)"
+            );
+            foreach ($recipients as $recipient) {
+                $userId = (int)$recipient['user_id'];
+                $seen->execute([$userId, $key]);
+                if ((int)$seen->fetchColumn() > 0) {
+                    continue;
+                }
+                $insert->execute([
+                    $userId,
+                    $title,
+                    $message,
+                    $closedId,
+                    $key,
+                    $severity,
+                    $destination,
+                    date('Y-m-d H:i:s'),
+                    (int)!empty($recipient['notify_inapp']),
+                ]);
+            }
+        } catch (Throwable $e) {
+            error_log('Fiscal period rollover notification skipped: ' . $e->getMessage());
+        }
     }
 
     private function autoRolloverEnabled(): bool

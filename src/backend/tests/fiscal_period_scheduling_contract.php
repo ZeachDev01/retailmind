@@ -141,3 +141,92 @@ $expectError(fn() => $guard->deleteScheduledPeriod($decemberId, 1), 'Only a sche
 $guard->closePeriod($decemberId, 1, '2027-01-01');
 
 echo "Fiscal period scheduling contract: passed\n";
+
+// 14. A generated set is continuous, calendar-aligned and opens the first due range.
+$pdo->exec("UPDATE attention_settings SET setting_value = '0' WHERE setting_scope = 'store' AND setting_key = 'fiscal_period_auto_rollover'");
+$generated = $guard->generatePeriodSchedule('monthly', 3, '', 1, '2027-01-05');
+$assert(count($generated['periods']) === 3, 'Three monthly periods generated');
+$assert(array_column($generated['periods'], 'period_name') === ['2027-01', '2027-02', '2027-03'], 'Monthly names follow the calendar');
+$assert($generated['start_date'] === '2027-01-01' && $generated['end_date'] === '2027-03-31', 'Generated set covers the full quarter');
+$assert(array_column($generated['periods'], 'status') === ['open', 'scheduled', 'scheduled'], 'The first covering range opens, the rest stay scheduled');
+$assert($generated['auto_rollover_enabled'] === true, 'Scheduling future periods turns automatic rollover on');
+$assert((float)$pdo->query("SELECT setting_value FROM attention_settings WHERE setting_scope = 'store' AND setting_key = 'fiscal_period_auto_rollover'")->fetchColumn() === 1.0, 'Automatic rollover setting persisted');
+
+$monthlyRows = $pdo->query("SELECT start_date, end_date FROM fiscal_periods WHERE period_name LIKE '2027-0%' ORDER BY start_date")->fetchAll(PDO::FETCH_ASSOC);
+for ($i = 1; $i < count($monthlyRows); $i++) {
+    $assert(date('Y-m-d', strtotime($monthlyRows[$i - 1]['end_date'] . ' +1 day')) === $monthlyRows[$i]['start_date'], 'Generated months are contiguous');
+}
+
+// 15. Quarterly generation aligns to calendar quarters and honours the prefix.
+$quarterly = $guard->generatePeriodSchedule('quarterly', 2, 'FY', 1, '2027-01-05');
+$assert(array_column($quarterly['periods'], 'period_name') === ['FY Q2 2027', 'FY Q3 2027'], 'Quarterly names carry the prefix and quarter');
+$assert($quarterly['start_date'] === '2027-04-01' && $quarterly['end_date'] === '2027-09-30', 'Quarters cover complete calendar quarters');
+$assert(array_column($quarterly['periods'], 'status') === ['scheduled', 'scheduled'], 'Later generated quarters stay scheduled');
+
+// 16. A duplicate generated name aborts the whole batch.
+$outOfSequenceId = $guard->createPeriod('2027-12', '2027-10-01', '2027-10-31', 1, '2027-01-05');
+$before = (int)$pdo->query('SELECT COUNT(*) FROM fiscal_periods')->fetchColumn();
+$expectError(fn() => $guard->generatePeriodSchedule('monthly', 4, '', 1, '2027-01-05'), 'already exists');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM fiscal_periods')->fetchColumn() === $before, 'Nothing is inserted when one generated name collides');
+$assert($pdo->query("SELECT status FROM fiscal_periods WHERE period_id = {$outOfSequenceId}")->fetchColumn() === 'scheduled', 'The colliding existing period is untouched');
+
+// 17. Invalid cadence and counts are refused before writing anything.
+$expectError(fn() => $guard->generatePeriodSchedule('weekly', 2, '', 1, '2027-01-05'), 'monthly or quarterly');
+$expectError(fn() => $guard->generatePeriodSchedule('monthly', 0, '', 1, '2027-01-05'), 'between 1 and 24');
+$expectError(fn() => $guard->generatePeriodSchedule('monthly', 25, '', 1, '2027-01-05'), 'between 1 and 24');
+
+echo "Fiscal period generation contract: passed\n";
+
+// 18. Rollover outcomes notify Administrators once per event.
+$pdo->exec('
+    CREATE TABLE users (
+        user_id INTEGER PRIMARY KEY,
+        status TEXT,
+        role_id INTEGER
+    );
+    CREATE TABLE roles (
+        role_id INTEGER PRIMARY KEY,
+        role_name TEXT
+    );
+    CREATE TABLE user_roles (
+        user_id INTEGER,
+        role_id INTEGER
+    );
+    CREATE TABLE notifications (
+        notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        reference_id INTEGER,
+        reference_type TEXT,
+        attention_key TEXT,
+        attention_severity TEXT,
+        attention_count INTEGER,
+        attention_destination TEXT,
+        is_read INTEGER DEFAULT 0,
+        created_at TEXT,
+        workspace TEXT DEFAULT \'\',
+        inapp_enabled INTEGER DEFAULT 1,
+        email_pending INTEGER DEFAULT 0
+    );
+    INSERT INTO roles (role_id, role_name) VALUES (1, \'admin\');
+    INSERT INTO users (user_id, status, role_id) VALUES (10, \'active\', 1);
+');
+
+$notified = $guard->rolloverIfDue('2027-02-01', 1);
+$assert($notified['rolled'] === true, 'Rollover runs when a notification test account exists');
+$assert(
+    (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 10 AND type = 'fiscal_period'")->fetchColumn() === 1,
+    'Administrator receives one fiscal period rollover notification'
+);
+$notice = $pdo->query("SELECT * FROM notifications WHERE user_id = 10 ORDER BY notification_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$assert($notice['attention_destination'] === 'components/system_administrator/fiscal_periods.php', 'Notification links to the Fiscal Periods page');
+
+$guard->rolloverIfDue('2027-02-01', 1);
+$assert(
+    (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 10 AND type = 'fiscal_period'")->fetchColumn() === 1,
+    'A repeated rollover check does not duplicate the notification'
+);
+
+echo "Fiscal period rollover notification contract: passed\n";

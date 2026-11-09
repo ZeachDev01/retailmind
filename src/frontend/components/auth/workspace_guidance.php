@@ -113,8 +113,12 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             if ($topic && !empty($topic['steps']) && (str_ends_with($scriptName, $topic['path']) || basename($scriptName) === basename($topic['path']))) {
                 $walkthroughProgress = $guidanceProgress;
                 $isReplay = !empty($_GET['replay']);
-                $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
-                include __DIR__ . '/workspace_walkthrough_dock.php';
+                $topicCompleted = in_array((string)$topic['id'], (array)($guidanceProgress['completed_topics'] ?? []), true);
+                // A completed topic stays closed; Replay from Help is the only way to reopen it.
+                if ($isReplay || !$topicCompleted) {
+                    $initialStep = $isReplay ? 0 : ($walkthroughProgress['active_topic'] === $topic['id'] ? ($walkthroughProgress['active_step'] ?? 0) : 0);
+                    include __DIR__ . '/workspace_walkthrough_dock.php';
+                }
             }
         }
     } catch (Throwable $e) {

@@ -306,6 +306,24 @@ const fixture = (action, extra) => {
         const replayFpBtn = fpTopicFinished.getByRole('link', {name: /Replay/i});
         assert.equal(await replayFpBtn.count(), 1, 'Replay action available for Fiscal Periods');
 
+        // A completed topic stays closed; only Replay reopens its dock.
+        await page.goto(origin + '/components/system_administrator/fiscal_periods.php?guidance=fiscal_periods');
+        await page.waitForLoadState('networkidle');
+        assert.equal(await page.locator('#guidance-dock').count(), 0, 'Completed topic does not reopen its dock');
+
+        await page.goto(origin + '/components/system_administrator/fiscal_periods.php?guidance=fiscal_periods&replay=1');
+        await page.locator('#guidance-dock').waitFor();
+        assert.equal(await page.locator('#guidance-dock').isVisible(), true, 'Replay explicitly reopens the dock');
+
+        // Fiscal Periods actions redirect after POST so the dock cannot return on refresh.
+        await page.goto(origin + '/components/system_administrator/fiscal_periods.php');
+        await page.locator('#prefix').fill('FY');
+        await page.locator('#count').fill('2');
+        await page.getByRole('button', {name: /Generate periods/i}).click();
+        await page.waitForURL(u => u.pathname.endsWith('/fiscal_periods.php') && u.search === '');
+        assert.match(await page.locator('.message.success').innerText(), /Generated 2 monthly fiscal periods/i);
+        assert.equal(await page.locator('#guidance-dock').count(), 0, 'Generated schedule does not reopen the guidance dock');
+
         // 6. Non-admin isolation
         await page.goto(origin + '/components/auth/logout.php');
         await page.goto(origin + '/?login=1');

@@ -180,8 +180,12 @@ _Avoid_: Cashier Shift, work session, branch fiscal period
 A Fiscal Period whose dates are reserved in advance but which accepts no transactions until its start date is reached and it is opened, manually or by Automatic Rollover.
 _Avoid_: Draft period, upcoming period, pending period
 
+**Period Schedule**:
+A contiguous, calendar-aligned set of Fiscal Periods generated together from the day after the latest period ends. Generating a set is a single all-or-nothing Administrator action and does not create, skip, or invent ranges by itself.
+_Avoid_: Recurring period, auto-generated periods, fiscal calendar
+
 **Automatic Rollover**:
-An opt-in Store Setting that closes a Fiscal Period once its end date has passed and opens the next Scheduled Period. Closure prerequisites still block it, and it never creates, skips, or invents a period.
+An opt-in Store Setting that closes a Fiscal Period once its end date has passed and opens the next Scheduled Period. Closure prerequisites still block it, and it never creates, skips, or invents a period. Generating a Period Schedule turns it on once; an Administrator may turn it off again.
 _Avoid_: Auto-close, auto-renew, recurring period
 
 **Store Reports**:

@@ -70,6 +70,21 @@
     min-height: 42px;
 }
 
+.fiscal-period-form-grid select {
+    width: 100%;
+    min-height: 42px;
+}
+
+.fiscal-period-subheading {
+    margin: 1.5rem 0 0.35rem;
+    font-size: 1rem;
+}
+
+.fiscal-rollover-form {
+    display: inline-block;
+    margin: 0 0 0.75rem;
+}
+
 .fiscal-create-button {
     min-height: 42px;
     white-space: nowrap;

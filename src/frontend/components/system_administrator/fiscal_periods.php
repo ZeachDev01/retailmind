@@ -35,6 +35,13 @@ try {
     error_log('Fiscal period automatic rollover skipped: ' . $exception->getMessage());
 }
 
+$flash = $_SESSION['fiscal_period_flash'] ?? null;
+unset($_SESSION['fiscal_period_flash']);
+if (is_array($flash)) {
+    $message = (string)($flash['message'] ?? '');
+    $error = (string)($flash['error'] ?? '');
+}
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = (string)($_POST['action'] ?? '');
     $periodId = (int)($_POST['period_id'] ?? 0);
@@ -178,7 +185,70 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $error = $exception->getMessage();
             }
         }
+    } elseif ($action === 'generate') {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        try {
+            $generated = $guard->generatePeriodSchedule(
+                (string)($_POST['cadence'] ?? ''),
+                (int)($_POST['count'] ?? 0),
+                (string)($_POST['prefix'] ?? ''),
+                $actorId
+            );
+            $periodCount = count($generated['periods']);
+            $message = sprintf(
+                'Generated %d %s fiscal period%s: %s to %s.%s',
+                $periodCount,
+                (string)($_POST['cadence'] ?? ''),
+                $periodCount === 1 ? '' : 's',
+                date('M j, Y', strtotime((string)$generated['start_date'])),
+                date('M j, Y', strtotime((string)$generated['end_date'])),
+                $generated['auto_rollover_enabled'] ? ' Automatic rollover is now on.' : ''
+            );
+            $lastPeriod = $generated['periods'][$periodCount - 1];
+            log_activity(
+                $pdo,
+                $actorId,
+                'Fiscal period schedule generated',
+                'Fiscal Periods',
+                (int)$lastPeriod['period_id'],
+                null,
+                $generated['periods']
+            );
+        } catch (Throwable $exception) {
+            $error = $exception->getMessage();
+        }
+    } elseif ($action === 'set_rollover') {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        if (current_role() !== 'admin') {
+            $error = 'Only the Administrator may change automatic rollover.';
+        } else {
+            $value = ((string)($_POST['auto_rollover'] ?? '0')) === '1' ? 1.0 : 0.0;
+            try {
+                $settings = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
+                $settings->updateStore('admin', [FiscalPeriodGuardService::AUTO_ROLLOVER_SETTING => $value], $actorId);
+                $message = $value > 0
+                    ? 'Automatic rollover is now on. Due periods close and the next scheduled period opens.'
+                    : 'Automatic rollover is now off. Periods close only when you close them.';
+                log_activity(
+                    $pdo,
+                    $actorId,
+                    'Fiscal period automatic rollover setting changed',
+                    'Fiscal Periods',
+                    null,
+                    null,
+                    ['fiscal_period_auto_rollover' => $value]
+                );
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        }
     }
+
+    $_SESSION['fiscal_period_flash'] = ['message' => $message, 'error' => $error];
+    header('Location: ' . app_url('components/system_administrator/fiscal_periods.php'), true, 303);
+    exit;
 }
 
 $periodsStatement = $pdo->query("SELECT fp.*, u.display_name AS created_by_name, cu.display_name AS closed_by_name
@@ -287,9 +357,20 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                         <h2 id="create-period-title"><i class="bi bi-plus-circle" aria-hidden="true"></i> Create period</h2>
                         <p class="section-description">
                             Add periods ahead of time. A future range stays <strong>scheduled</strong> until its start date, then opens manually or automatically.
-                            Automatic rollover is <strong><?= $autoRollover ? 'on' : 'off' ?></strong>
-                            &middot; <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>">change in Store Settings</a>.
+                            Automatic rollover is <strong><?= $autoRollover ? 'on' : 'off' ?></strong>.
                         </p>
+                        <?php if (current_role() === 'admin'): ?>
+                            <form method="POST" class="fiscal-rollover-form">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="set_rollover">
+                                <input type="hidden" name="auto_rollover" value="<?= $autoRollover ? '0' : '1' ?>">
+                                <button type="submit" class="btn btn-small btn-secondary">Turn automatic rollover <?= $autoRollover ? 'off' : 'on' ?></button>
+                            </form>
+                        <?php else: ?>
+                            <p class="section-description">
+                                <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>">Change automatic rollover in Store Settings</a>.
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <form method="POST" class="fiscal-period-form">
@@ -309,6 +390,34 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                             <input type="date" id="end_date" name="end_date" autocomplete="off" required aria-required="true">
                         </div>
                         <button type="submit" class="btn btn-primary fiscal-create-button"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create period</button>
+                    </div>
+                </form>
+
+                <h3 class="fiscal-period-subheading">Generate a period schedule</h3>
+                <p class="section-description">
+                    Creates a continuous run of calendar-aligned periods starting the day after the latest period ends.
+                    The whole set is created together, or nothing is created if any name already exists.
+                </p>
+                <form method="POST" class="fiscal-period-form">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                    <input type="hidden" name="action" value="generate">
+                    <div class="fiscal-period-form-grid">
+                        <div class="form-group">
+                            <label for="cadence">Cadence</label>
+                            <select id="cadence" name="cadence">
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="count">Periods to generate</label>
+                            <input type="number" id="count" name="count" min="1" max="24" value="12" required aria-required="true">
+                        </div>
+                        <div class="form-group">
+                            <label for="prefix">Name prefix (optional)</label>
+                            <input type="text" id="prefix" name="prefix" maxlength="20" placeholder="e.g. FY" autocomplete="off">
+                        </div>
+                        <button type="submit" class="btn btn-secondary fiscal-create-button"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate periods</button>
                     </div>
                 </form>
             </section>
