@@ -101,7 +101,8 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
   - Backing JS: `backup_restore.js`, `backup_recovery_tabs.js`, `backup_status.js`, `backup_review.js`
   - Backend Services: `App\Backup\DatabaseBackupService`, `DatabaseRestoreService`, `RecoveryStore`, `SafetyCopyService`
 - **Platform Settings & Reset**: `components/system_administrator/system_settings.php`, `components/administrator/reset_data.php`
-  - Backend Services: `App\Services\OperationalDataResetService`
+  - Backend Services: `App\Services\OperationalDataResetService`, `App\Services\TunnelSetupBlockBuilder`
+  - Contract Tests: `tunnel_setup_block_contract.php`
 - **Forecasting Pipeline**:
   - Import Sales: `components/system_administrator/forecast_import.php` (`App\Services\ForecastHistoryImportService`)
   - Data Readiness: `components/report/data_readiness.php` (`App\Forecasting\DemandHistoryService`)

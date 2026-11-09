@@ -17,6 +17,7 @@ bash src/backend/tests/javascript_syntax_check.sh
 python src/backend/tests/css_balance_check.py
 python src/backend/tests/infinityfree_deploy_contract.py
 php src/backend/tests/smoke_checks.php
+php src/backend/tests/tunnel_setup_block_contract.php
 php src/backend/tests/store_reopening_test.php
 php src/backend/tests/daily_sales_range_contract.php
 php src/backend/tests/environment_loading_test.php

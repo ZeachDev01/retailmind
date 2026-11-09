@@ -1,17 +1,21 @@
 <#
 .SYNOPSIS
-    Single-command Windows Service uninstallation for persistent Cloudflare Tunnel.
+    Single-command Windows Service uninstallation for RetailMind Remote Access.
 .DESCRIPTION
-    Stops and removes the RetailMind Cloudflare Tunnel Windows Service cleanly.
-    Uses relative paths with zero machine coupling.
+    Stops and removes the RetailMind Cloudflare Tunnel Windows Service and the
+    legacy Quick Tunnel scheduled task cleanly. Uses relative paths with zero
+    machine coupling. The application, database, and backups are not deleted.
 .PARAMETER ServiceName
     Windows Service identifier (default: RetailMindCloudflareTunnel).
+.PARAMETER LegacyTaskName
+    Legacy Quick Tunnel scheduled task to remove (default: RetailMindQuickTunnel).
 .PARAMETER KeepConfig
-    Preserve tunnel_config.json containing saved token.
+    Preserve tunnel_config.json containing the saved token.
 #>
 
 param (
     [string]$ServiceName = "RetailMindCloudflareTunnel",
+    [string]$LegacyTaskName = "RetailMindQuickTunnel",
     [switch]$KeepConfig
 )
 
@@ -49,6 +53,15 @@ try {
     Write-Warning "Service was not registered or could not be removed."
 }
 
+Write-Host "[INFO] Removing legacy Quick Tunnel scheduled task '$LegacyTaskName'..." -ForegroundColor Cyan
+if (Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue) {
+    try { & schtasks.exe /Delete /TN $LegacyTaskName /F 2>$null | Out-Null } catch {}
+    $legacyShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "RetailMind_Remote_Link.bat"
+    if (Test-Path $legacyShortcut) {
+        Remove-Item -Path $legacyShortcut -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # Clean state
 Remove-Item -Path $PidPath -Force -ErrorAction SilentlyContinue
 Remove-Item -Path $UrlPath -Force -ErrorAction SilentlyContinue
@@ -60,4 +73,5 @@ if (-not $KeepConfig) {
 Write-Host "`n========================================================" -ForegroundColor Green
 Write-Host "  RETAILMIND TUNNEL SERVICE UNINSTALLED" -ForegroundColor Green
 Write-Host "  Service $ServiceName stopped and removed." -ForegroundColor White
+Write-Host "  Legacy Quick Tunnel task removed." -ForegroundColor White
 Write-Host "========================================================`n" -ForegroundColor Green

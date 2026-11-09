@@ -138,6 +138,78 @@
     accent-color: var(--primary);
 }
 
+.platform-settings-page .tunnel-setup {
+    margin-top: 1.5rem;
+    padding-top: 1.35rem;
+    border-top: 1px solid var(--border);
+}
+
+.platform-settings-page .tunnel-setup-heading {
+    margin: 0 0 .65rem;
+    font-size: .95rem;
+}
+
+.platform-settings-page .tunnel-checklist {
+    margin: 0 0 .9rem;
+    padding-left: 1.25rem;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.platform-settings-page .tunnel-checklist code {
+    padding: .1rem .3rem;
+    border-radius: 5px;
+    background: var(--surface-soft);
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.platform-settings-page .tunnel-setup-note {
+    margin: 0;
+    color: var(--muted);
+}
+
+.platform-settings-page .tunnel-setup-warning {
+    margin: .9rem 0 0;
+    padding: .85rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+    line-height: 1.55;
+}
+
+.platform-settings-page .tunnel-setup-result {
+    margin-top: 1.35rem;
+}
+
+.platform-settings-page .tunnel-setup-result-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .65rem;
+    margin-bottom: .55rem;
+}
+
+.platform-settings-page .tunnel-setup-result-heading .tunnel-setup-heading {
+    margin: 0;
+}
+
+.platform-settings-page .tunnel-setup-block {
+    width: 100%;
+    min-height: 15rem;
+    padding: .9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-soft);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: .78rem;
+    line-height: 1.55;
+    resize: vertical;
+}
+
 @media (max-width: 900px) {
     .platform-settings-page .section-header {
         align-items: flex-start;
