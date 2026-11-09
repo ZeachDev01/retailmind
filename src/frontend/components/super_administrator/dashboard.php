@@ -129,7 +129,7 @@ $platformHealth = $dashboard['headline']['platform_health'] ?? ['status' => 'hea
                 <span>Auto-refresh paused while working</span>
             </p>
 
-            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
+            <?php $recoveryKeyHref = app_url('components/system_administrator/backup_restore.php') . '#recovery-key'; require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <?php if ($dashboard['state'] !== 'error'): ?>
             <section class="signals-grid" aria-label="Platform Health Indicators">

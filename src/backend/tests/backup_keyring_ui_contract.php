@@ -151,7 +151,8 @@ $assert(str_contains($banner, 'data-password-authorization'),
     'The banner download must require the current login password');
 $assert(substr_count($banner, 'type="password"') === 1,
     'The banner must collect exactly one password field');
-$assert(str_contains($banner, 'href="#recovery-key"'),
+$assert(str_contains($banner, "\$recoveryKeyHref = \$recoveryKeyHref ?? '#recovery-key'")
+    && str_contains($banner, 'href="<?= $escape($recoveryKeyHref) ?>"'),
     'The recommendation must link to the existing Recovery key area, not a second download path');
 $assert(str_contains($banner, 'substr($recommendedFingerprint, 0, 8)') && str_contains($banner, 'title="<?= $escape($recommendedFingerprint) ?>"'),
     'The banner must identify the key by fingerprint without exposing key material');

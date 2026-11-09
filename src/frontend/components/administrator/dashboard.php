@@ -98,7 +98,7 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
-            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
+            <?php $recoveryKeyHref = app_url('components/administrator/database_backup.php') . '#recovery-key'; require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <section class="dashboard-section governance-queue store-attention-queue" id="store-attention-section" aria-labelledby="store-attention-title">
                 <div class="section-header">
