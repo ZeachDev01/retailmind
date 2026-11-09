@@ -16,7 +16,7 @@ use Throwable;
  * the Super Administrator (#69). One workflow, one exporter, one history: the
  * two roles differ only in what the role capability policy lets them do.
  */
-final class DatabaseBackupService
+final class DatabaseBackupService implements ScheduledBackupRunner
 {
     public const OUTCOME_READY = 'ready';
     public const OUTCOME_IN_PROGRESS = 'already_in_progress';
