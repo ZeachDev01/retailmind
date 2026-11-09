@@ -225,11 +225,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $dormancyThresholds = $dormancyPolicyService->thresholds();
 $backupSchedule = $scheduledBackupSettings->get();
-$scheduleOutcomeLabels = [
-    'completed' => 'Completed',
-    'skipped' => 'Skipped — retried next run',
-    'failed' => 'Failed',
-];
 $settings = get_store_settings($pdo);
 $brevoConfigured = !empty($settings['brevo_api_key']);
 $brevoTestRecipient = trim((string)($settings['brevo_test_recipient'] ?? ''));
@@ -345,7 +340,7 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
                 </div>
                 <div class="settings-meta-item">
                     <span class="settings-meta-label">Last outcome</span>
-                    <span class="settings-meta-value"><?= htmlspecialchars($scheduleOutcomeLabels[$backupSchedule['last_outcome']] ?? 'Not run yet') ?></span>
+                    <span class="settings-meta-value"><span class="tag <?= htmlspecialchars(\App\Backup\ScheduledBackupSettings::outcomeClass((string)$backupSchedule['last_outcome'])) ?>"><?= htmlspecialchars(\App\Backup\ScheduledBackupSettings::outcomeLabel((string)$backupSchedule['last_outcome'])) ?></span></span>
                 </div>
             </div>
             <form method="post">

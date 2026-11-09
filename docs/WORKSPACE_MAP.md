@@ -97,7 +97,8 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
   - Modals: `components/modals/system_health.php`
   - Backend Services: `App\Services\SystemHealthService`, `App\Attention\AttentionCenter`, `AttentionRuleService`
 - **Backup & Restore**: `components/system_administrator/backup_restore.php`, `components/administrator/database_backup.php`
-  - Modals: `components/backup/restore_form.php`, `components/backup/recovery_key_recommendation.php`
+  - Modals: `components/backup/restore_form.php`
+  - Shared partials: `components/backup/recovery_key_recommendation.php` (also rendered on both role dashboards)
   - Backing JS: `backup_restore.js`, `backup_recovery_tabs.js`, `backup_status.js`, `backup_review.js`, `backup_key_recommendation.js`
   - Backend Services: `App\Backup\DatabaseBackupService`, `ScheduledBackupService`, `ScheduledBackupSettings`, `DatabaseRestoreService`, `BackupKeyStore`, `BackupKeyRecommendation`, `RecoveryStore`, `SafetyCopyService`
   - CLI: `src/backend/scripts/run_scheduled_backup.php`

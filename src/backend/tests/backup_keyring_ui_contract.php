@@ -54,10 +54,9 @@ $assert(str_contains($endpoint, 'password_verify($password, (string)$actor[\'pas
 $assert(str_contains($endpoint, "\$allowedActions = ['download', 'export', 'import', 'promote', 'delete'];")
     && str_contains($endpoint, 'in_array($action, $allowedActions, true)'),
     'The key endpoint must answer only the documented action allow-list');
-$assert(str_contains($endpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)"),
-    'The key endpoint must validate the fingerprint before resolving a key');
-$assert(str_contains($endpoint, 'BackupKeyStore::find($fingerprint)'),
-    'Exports must resolve the requested key by fingerprint');
+$assert(str_contains($endpoint, 'BackupKeyStore::find($fingerprint)')
+    && !str_contains($endpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)"),
+    'Exports must delegate fingerprint validation to the one key-store path');
 $assert(str_contains($endpoint, 'BackupKeyStore::currentFingerprint()'),
     'The legacy download action must alias the primary fingerprint');
 $assert(str_contains($endpoint, 'BackupKeyStore::import(')
@@ -152,7 +151,8 @@ $assert(str_contains($banner, 'data-password-authorization'),
     'The banner download must require the current login password');
 $assert(substr_count($banner, 'type="password"') === 1,
     'The banner must collect exactly one password field');
-$assert(str_contains($banner, 'href="#recovery-key"'),
+$assert(str_contains($banner, "\$recoveryKeyHref = \$recoveryKeyHref ?? '#recovery-key'")
+    && str_contains($banner, 'href="<?= $escape($recoveryKeyHref) ?>"'),
     'The recommendation must link to the existing Recovery key area, not a second download path');
 $assert(str_contains($banner, 'substr($recommendedFingerprint, 0, 8)') && str_contains($banner, 'title="<?= $escape($recommendedFingerprint) ?>"'),
     'The banner must identify the key by fingerprint without exposing key material');
@@ -166,13 +166,27 @@ $assert(str_contains($script, "'cancel'"), 'The modal must close on Escape/cance
 $assert(!str_contains($script, 'fetch(') && !str_contains($script, 'XMLHttpRequest'),
     'The recommendation script must make no network calls');
 
-foreach (['Administrator page' => $administratorPage, 'Super Administrator page' => $superAdministratorPage] as $name => $source) {
-    $assert(str_contains($source, '(new BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION[\'user_id\'], (string)current_role())'),
+$administratorDashboard = $read('src/frontend/components/administrator/dashboard.php');
+$superAdministratorDashboard = $read('src/frontend/components/super_administrator/dashboard.php');
+foreach ([
+    'Administrator page' => $administratorPage,
+    'Super Administrator page' => $superAdministratorPage,
+    'Administrator dashboard' => $administratorDashboard,
+    'Super Administrator dashboard' => $superAdministratorDashboard,
+] as $name => $source) {
+    $assert(str_contains($source, 'BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION[\'user_id\'], (string)current_role())'),
         ucfirst($name) . ' must compute the recommendation for the signed-in account');
     $assert(str_contains($source, "'/../backup/recovery_key_recommendation.php'"),
         ucfirst($name) . ' must render the shared recommendation partial');
+    $assert(substr_count($source, "'/../backup/recovery_key_recommendation.php'") === 1,
+        ucfirst($name) . ' must render exactly one recommendation banner');
     $assert(str_contains($source, 'backup_key_recommendation.js'),
         ucfirst($name) . ' must load the recommendation script');
+}
+foreach ([
+    'Administrator page' => $administratorPage,
+    'Super Administrator page' => $superAdministratorPage,
+] as $name => $source) {
     $reviewAt = strpos($source, 'backup_review.js');
     $recommendationAt = strpos($source, 'backup_key_recommendation.js');
     $assert($reviewAt !== false && $recommendationAt !== false && $recommendationAt > $reviewAt,

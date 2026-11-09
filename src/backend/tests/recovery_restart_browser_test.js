@@ -88,13 +88,10 @@ const fixture = action => {
             await page.screenshot({ path: path.join(proofDirectory, `recovery-actions-${width}.png`), fullPage: true });
         }
 
-        // 4. Test wrong passphrase for safety recovery
-        await page.locator('#safety-passphrase').fill('WrongPassphrase1234');
-        await page.locator('[data-recovery-submit="safety"]').click();
-        assert.match(await page.locator('[data-recovery-alert="error"]').innerText(), /passphrase/i);
-
-        // 5. Execute valid safety recovery via browser form
-        await page.locator('#safety-passphrase').fill(recoveryInfo.safety_passphrase);
+        // 4. Execute safety recovery through the current automatic-key flow.
+        // The removed #safety-passphrase input belonged to the retired
+        // passphrase-package path; RMSTORE2 safety copies need no passphrase.
+        assert.ok(recoveryInfo.safety_op_id, 'Prep should bind a safety operation');
         await Promise.all([
             page.waitForNavigation(),
             page.locator('[data-recovery-submit="safety"]').click(),

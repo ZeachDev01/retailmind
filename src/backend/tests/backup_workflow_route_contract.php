@@ -150,9 +150,10 @@ $assert(
     'The Scheduled Backup CLI must not print private artifact paths'
 );
 $assert(
-    str_contains($superAdministratorPage, "action === 'run_scheduled_backup'")
-        && str_contains($superAdministratorPage, 'Run scheduled backup now'),
-    'Only the Super Administrator page offers the in-app Scheduled Backup run'
+    str_contains($superAdministratorPage, "action === 'run_scheduled_catchup'")
+        && str_contains($superAdministratorPage, 'Catch up missed backup')
+        && str_contains($superAdministratorPage, '->runCatchup()'),
+    'Only the Super Administrator page offers the throttled in-app Scheduled Backup catch-up'
 );
 $assert(
     substr_count($superAdministratorPage, 'require_local_request(') >= 1 && str_contains($superAdministratorPage, 'csrf_verify()'),
@@ -231,9 +232,10 @@ $assert(
     'The recovery-key endpoint must answer only the documented actions'
 );
 $assert(
-    str_contains($recoveryKeyEndpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)")
+    str_contains($recoveryKeyEndpoint, 'BackupKeyStore::find($fingerprint)')
+        && !str_contains($recoveryKeyEndpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)")
         && !str_contains($recoveryKeyEndpoint, '?key='),
-    'Recovery-key exports must validate the fingerprint and never put key material in a URL'
+    'Recovery-key exports delegate fingerprint validation to the key store and never put key material in a URL'
 );
 $assert(
     str_contains($recoveryKeyEndpoint, 'password_verify(')

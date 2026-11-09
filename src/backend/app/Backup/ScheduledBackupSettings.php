@@ -44,6 +44,47 @@ final class ScheduledBackupSettings
         $this->clock = $clock ?? new SystemClock();
     }
 
+    /** Safe display defaults when the settings table is not readable yet. */
+    public static function summary(PDO $pdo): array
+    {
+        try {
+            return (new self($pdo))->get();
+        } catch (Throwable) {
+            return [
+                'weekday' => self::DEFAULT_WEEKDAY,
+                'time' => self::DEFAULT_TIME,
+                'destination' => '',
+                'destination_configured' => '',
+                'last_success_at' => null,
+                'last_attempt_at' => null,
+                'last_outcome' => '',
+                'last_message' => '',
+                'last_backup_id' => null,
+                'catchup_checked_at' => null,
+                'next_run_at' => '',
+            ];
+        }
+    }
+
+    public static function outcomeLabel(?string $outcome): string
+    {
+        return match ($outcome) {
+            'completed' => 'Completed',
+            'skipped' => 'Skipped — retried next run',
+            'failed' => 'Failed',
+            default => 'Not run yet',
+        };
+    }
+
+    public static function outcomeClass(?string $outcome): string
+    {
+        return match ($outcome) {
+            'completed' => 'tag-success',
+            'skipped', 'failed' => 'tag-warning',
+            default => 'tag-soft',
+        };
+    }
+
     /**
      * @return array{
      *     weekday: int, time: string, destination: string, destination_configured: string,
@@ -296,8 +337,9 @@ final class ScheduledBackupSettings
         return $real;
     }
 
-    private static function assertOutsidePublicRoots(string $candidate, string $message): void
+    public static function isOutsidePublicRoots(string $candidate): bool
     {
+        $candidate = self::normalize($candidate);
         $project = dirname(__DIR__, 4);
         foreach ([$project, (string)($_SERVER['DOCUMENT_ROOT'] ?? '')] as $public) {
             $public = $public !== '' ? realpath($public) : false;
@@ -306,29 +348,43 @@ final class ScheduledBackupSettings
             }
             $prefix = self::normalize($public);
             if ($candidate === $prefix || str_starts_with($candidate, rtrim($prefix, '/') . '/')) {
-                throw new InvalidArgumentException($message);
+                return false;
             }
+        }
+        return true;
+    }
+
+    public static function isOutsideRecoveryStore(string $candidate): bool
+    {
+        $candidate = self::normalize($candidate);
+        try {
+            $store = realpath(RecoveryStore::directory());
+        } catch (Throwable) {
+            return true;
+        }
+        if ($store === false) {
+            return true;
+        }
+        $store = self::normalize($store);
+        if ($candidate === $store || str_starts_with($store . '/', rtrim($candidate, '/') . '/')) {
+            return false;
+        }
+        if ($candidate === $store . '/downloads' || str_starts_with($candidate, $store . '/downloads/')) {
+            return false;
+        }
+        return preg_match('~(?:^|/)safety-[^/]*$~', $candidate) !== 1;
+    }
+
+    private static function assertOutsidePublicRoots(string $candidate, string $message): void
+    {
+        if (!self::isOutsidePublicRoots($candidate)) {
+            throw new InvalidArgumentException($message);
         }
     }
 
     private static function assertOutsideRecoveryStore(string $candidate): void
     {
-        try {
-            $store = realpath(RecoveryStore::directory());
-        } catch (Throwable) {
-            return;
-        }
-        if ($store === false) {
-            return;
-        }
-        $store = self::normalize($store);
-        if ($candidate === $store || str_starts_with($store . '/', rtrim($candidate, '/') . '/')) {
-            throw new InvalidArgumentException('Choose a Backup Destination outside the private recovery store.');
-        }
-        if ($candidate === $store . '/downloads' || str_starts_with($candidate, $store . '/downloads/')) {
-            throw new InvalidArgumentException('Choose a Backup Destination outside the private recovery store.');
-        }
-        if (preg_match('~(?:^|/)safety-[^/]*$~', $candidate) === 1) {
+        if (!self::isOutsideRecoveryStore($candidate)) {
             throw new InvalidArgumentException('Choose a Backup Destination outside the private recovery store.');
         }
     }

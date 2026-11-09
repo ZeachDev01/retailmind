@@ -3,9 +3,9 @@
 //
 // Proves the scheduled-run seam with an injected clock, a fake package runner,
 // and a temporary Backup Destination: verified completion, history binding,
-// bounded retention, failure preservation, busy/recovery/ML skips, catch-up
-// throttle, forced run authority, and no absolute paths in the returned view
-// data. No MySQL and no real Store capture here.
+// cross-destination retention, failure preservation, busy/recovery/ML skips,
+// in-app catch-up throttle, and no absolute paths in the returned view data.
+// No MySQL and no real Store capture here.
 $private = sys_get_temp_dir() . '/rm-sched-service-' . bin2hex(random_bytes(6));
 putenv('BACKUP_STORAGE_PATH=' . $private);
 require_once __DIR__ . '/../bootstrap/app.php';
@@ -23,15 +23,6 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
         $failures[] = $message;
     }
 };
-$throws = static function (callable $operation, string $exceptionClass, string $message) use ($assert): void {
-    try {
-        $operation();
-        $assert(false, $message);
-    } catch (Throwable $exception) {
-        $assert($exception instanceof $exceptionClass, $message . ' (received ' . $exception::class . ')');
-    }
-};
-
 final class ScheduledServiceContractClock implements Clock
 {
     public function __construct(public DateTimeImmutable $now)
@@ -120,17 +111,41 @@ final class ScheduledServiceContractRunner implements ScheduledBackupRunner
         return (int)$this->pdo->lastInsertId();
     }
 
+    public function recordScheduledHistory(string $filename, string $status, ?string $notes, ?string $when = null): int
+    {
+        return $this->recordHistory(
+            $filename,
+            'scheduled',
+            0,
+            $status,
+            null,
+            $notes,
+            $when,
+            'RMSTORE2',
+            null,
+            'scheduled',
+            null,
+            null,
+            'scheduled',
+            $when
+        );
+    }
+
+    public function markHistoryFailed(int $backupId, string $notes, ?string $triggerSource = null): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE backup_history SET status = ?, notes = ?, artifact_path = NULL, trigger_source = COALESCE(?, trigger_source)
+              WHERE backup_id = ?'
+        );
+        $statement->execute(['failed', $notes, $triggerSource, $backupId]);
+    }
+
     public function updateHistoryArtifact(int $backupId, string $path, ?string $fingerprint = null): void
     {
         $statement = $this->pdo->prepare(
             'UPDATE backup_history SET artifact_path = ?, key_fingerprint = COALESCE(?, key_fingerprint) WHERE backup_id = ?'
         );
         $statement->execute([$path, $fingerprint, $backupId]);
-    }
-
-    public function authorizeActor(int $actorUserId, string $actorRole): array
-    {
-        return ['user_id' => $actorUserId, 'role_name' => $actorRole];
     }
 }
 
@@ -242,18 +257,45 @@ try {
     $assert(($again['outcome'] ?? '') === ScheduledBackupService::OUTCOME_NOT_DUE, 'A second tick in the same week should be not due');
     $assert($scheduledCount() === 1, 'A not-due tick should not record another scheduled row');
 
-    // --- Next week's run replaces the previous automatic copy ---------------
+    // --- Next week's run at a new destination replaces the old artifact ------
     $firstPath = (string)$row['artifact_path'];
     $firstId = (int)$row['backup_id'];
+    $destinationB = sys_get_temp_dir() . '/rm-sched-dest-b-' . bin2hex(random_bytes(6));
+    mkdir($destinationB, 0700, true);
     $clock->advance('+7 days');
+    $service = new ScheduledBackupService($pdo, $clock, $settings, $runner, $destinationB, $verifier);
     $second = $service->runDue();
     $assert(($second['outcome'] ?? '') === ScheduledBackupService::OUTCOME_COMPLETED, 'The next week should complete');
-    $assert(!is_file($firstPath), 'Retention should remove the previous scheduled artifact');
-    $assert(count($filesIn($destination)) === 1, 'Retention should keep exactly one automatic package');
+    $assert(!is_file($firstPath), 'Retention should remove the previous scheduled artifact even after a destination change');
+    $assert($filesIn($destination) === [], 'Retention should leave the old destination empty');
+    $assert(count($filesIn($destinationB)) === 1, 'Retention should keep exactly one automatic package in the new destination');
     $removedAt = $pdo->query('SELECT removed_at FROM backup_history WHERE backup_id = ' . $firstId)->fetchColumn();
     $assert($removedAt !== null && $removedAt !== false && (string)$removedAt !== '', 'Retention should mark the replaced row as removed');
     $newRow = $pdo->query("SELECT * FROM backup_history WHERE status = 'completed' AND backup_type = 'scheduled' AND removed_at IS NULL ORDER BY backup_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     $assert(is_file((string)$newRow['artifact_path']), 'The current package must survive its own retention pass');
+
+    // --- Verification failure marks the one captured row, never a phantom ---
+    $clock->advance('+7 days');
+    $beforeFailure = (int)$pdo->query('SELECT COALESCE(MAX(backup_id), 0) FROM backup_history')->fetchColumn();
+    $failingVerifierService = new ScheduledBackupService(
+        $pdo,
+        $clock,
+        $settings,
+        $runner,
+        $destinationB,
+        static function (string $path, string $bytes): string {
+            throw new RuntimeException('fixture verification failure');
+        }
+    );
+    $verifyFailed = $failingVerifierService->runDue();
+    $assert(($verifyFailed['outcome'] ?? '') === ScheduledBackupService::OUTCOME_FAILED, 'A verification failure should return failed');
+    $attemptRows = $pdo->query('SELECT * FROM backup_history WHERE backup_id > ' . $beforeFailure . ' ORDER BY backup_id')->fetchAll(PDO::FETCH_ASSOC);
+    $assert(count($attemptRows) === 1, 'A verification failure should leave exactly one scheduled row');
+    $assert(($attemptRows[0]['status'] ?? '') === 'failed', 'The captured row should be marked failed');
+    $assert(($attemptRows[0]['artifact_path'] ?? null) === null, 'The failed captured row should not retain an artifact path');
+    $assert(($attemptRows[0]['trigger_source'] ?? '') === 'scheduled', 'The failed captured row should record its trigger');
+    $assert(str_contains((string)($attemptRows[0]['notes'] ?? ''), 'fixture verification failure'), 'The failed row should keep the verification detail');
+    $assert(is_file((string)$newRow['artifact_path']), 'A verification failure must keep the previous automatic artifact');
 
     // --- Failure keeps the previous artifact --------------------------------
     $clock->advance('+7 days');
@@ -274,7 +316,7 @@ try {
     $pdo->exec("INSERT INTO backup_operations (operation_key, active_slot, state, started_at, heartbeat_at)
                 VALUES ('busy-fixture', 1, 'capturing', '2026-11-29 23:05:00', '2026-11-29 23:05:00')");
     $clock->advance('+7 days');
-    $busy = $service->runForced(1, 'super_admin');
+    $busy = $service->runDue();
     $assert(($busy['outcome'] ?? '') === ScheduledBackupService::OUTCOME_SKIPPED, 'A busy backup slot should skip');
     $assert(($busy['reason'] ?? '') === 'backup_in_progress', 'A busy backup slot should explain backup_in_progress');
     $assert(str_contains((string)($busy['message'] ?? ''), 'retry'), 'A skip message should say the run will retry');
@@ -286,14 +328,14 @@ try {
 
     // --- ML jobs skip -------------------------------------------------------
     $pdo->exec("INSERT INTO ml_jobs (status) VALUES ('running')");
-    $ml = $service->runForced(1, 'super_admin');
+    $ml = $service->runDue();
     $assert(($ml['outcome'] ?? '') === ScheduledBackupService::OUTCOME_SKIPPED, 'Active ML work should skip');
     $assert(($ml['reason'] ?? '') === 'ml_jobs_active', 'Active ML work should explain ml_jobs_active');
     $pdo->exec('DELETE FROM ml_jobs');
 
     // --- Recovery pause skips ----------------------------------------------
     file_put_contents(RecoveryStore::path('restore-state.json'), '{}');
-    $paused = $service->runForced(1, 'super_admin');
+    $paused = $service->runDue();
     $assert(($paused['outcome'] ?? '') === ScheduledBackupService::OUTCOME_SKIPPED, 'Recovery should skip');
     $assert(($paused['reason'] ?? '') === 'recovery_paused', 'Recovery should explain recovery_paused');
     @unlink(RecoveryStore::path('restore-state.json'));
@@ -301,24 +343,34 @@ try {
     // A tick that skipped does not advance the success instant, so it retries.
     $assert($settings->get()['last_success_at'] !== '2026-12-20 23:05:00', 'Skipped ticks must not advance the last success');
 
-    // --- Catch-up runs once then throttles ---------------------------------
+    // --- In-app catch-up runs for a missed slot or a 7-day gap, then throttles
     $oldSuccess = $clock->now()->setTimezone($manila)->modify('-30 days')->format('Y-m-d H:i:s');
     $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'backup_schedule_last_success_at'")->execute([$oldSuccess]);
     $catchup = $service->runCatchup();
     $assert(($catchup['outcome'] ?? '') === ScheduledBackupService::OUTCOME_COMPLETED, 'A catch-up should complete once');
     $assert(($catchup['trigger'] ?? '') === 'catchup', 'The catch-up trigger should be catchup');
+    $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'backup_schedule_last_success_at'")->execute([$oldSuccess]);
     $throttled = $service->runCatchup();
     $assert(($throttled['outcome'] ?? '') === ScheduledBackupService::OUTCOME_THROTTLED, 'A second catch-up within the window should throttle');
     $assert($settings->get()['catchup_checked_at'] !== null, 'Catch-up should stamp the throttle before the attempt');
 
-    // --- Forced run authority ----------------------------------------------
-    $throws(
-        static fn() => $service->runForced(2, 'admin'),
-        DomainException::class,
-        'An ordinary Administrator must not force a Scheduled Backup'
-    );
+    // A missed configured slot also runs from the in-app catch-up.
+    $justMissed = $clock->now()->setTimezone($manila)->modify('-2 hours')->format('Y-m-d H:i:s');
+    $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'backup_schedule_last_success_at'")->execute([$justMissed]);
+    $pdo->exec("DELETE FROM platform_settings WHERE setting_key = 'backup_schedule_catchup_checked_at'");
+    $slotMissed = $service->runCatchup();
+    $assert(($slotMissed['outcome'] ?? '') === ScheduledBackupService::OUTCOME_COMPLETED, 'A missed configured slot should run from the in-app catch-up');
+    $assert(($slotMissed['trigger'] ?? '') === 'catchup', 'The missed-slot in-app run should use the catchup trigger');
+
+    // Neither a missed slot nor a seven-day gap means no attempt.
+    $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'backup_schedule_last_success_at'")
+        ->execute([$clock->now()->setTimezone($manila)->format('Y-m-d H:i:s')]);
+    $pdo->exec("DELETE FROM platform_settings WHERE setting_key = 'backup_schedule_catchup_checked_at'");
+    $notDue = $service->runCatchup();
+    $assert(($notDue['outcome'] ?? '') === ScheduledBackupService::OUTCOME_NOT_DUE, 'A catch-up with nothing owed should return not_due');
 
     // --- Invalid destination fails closed ----------------------------------
+    $pdo->prepare("UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'backup_schedule_last_success_at'")->execute([$oldSuccess]);
     $invalidService = new ScheduledBackupService(
         $pdo,
         $clock,
@@ -327,11 +379,12 @@ try {
         dirname(__DIR__, 3) . '/src/backend/storage/not-a-scheduled-destination',
         $verifier
     );
-    $rejected = $invalidService->runForced(1, 'super_admin');
+    $rejected = $invalidService->runDue();
     $assert(($rejected['outcome'] ?? '') === ScheduledBackupService::OUTCOME_FAILED, 'An unsafe destination should fail the run');
     $assert(!str_contains((string)($rejected['message'] ?? ''), 'not-a-scheduled-destination'), 'The failure message must not echo the destination path');
 
     $cleanup($destination);
+    $cleanup($destinationB);
 } catch (Throwable $exception) {
     $failures[] = 'Scheduled Backup service contract threw: ' . $exception->getMessage();
 }

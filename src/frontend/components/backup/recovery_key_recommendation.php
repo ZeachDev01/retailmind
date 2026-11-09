@@ -3,6 +3,7 @@
 // newest completed backup. The banner follows server acknowledgement state;
 // the dialog is shown at most once per session by backup_key_recommendation.js.
 $backupRecommendation = $backupRecommendation ?? null;
+$recoveryKeyHref = $recoveryKeyHref ?? '#recovery-key';
 $recommendedFingerprint = is_array($backupRecommendation) ? (string)($backupRecommendation['fingerprint'] ?? '') : '';
 if ($recommendedFingerprint !== '' && preg_match('/^[a-f0-9]{64}$/D', $recommendedFingerprint) === 1
     && \App\Backup\RecoveryStore::isAvailable() && !\App\Backup\RecoveryStore::isPaused()):
@@ -16,7 +17,7 @@ if ($recommendedFingerprint !== '' && preg_match('/^[a-f0-9]{64}$/D', $recommend
             <?php if ($recommendedSnapshot !== null && $recommendedSnapshot !== ''): ?>from <?= $escape(format_display_datetime((string)$recommendedSnapshot)) ?><?php endif; ?>.
             Download it and keep it somewhere separate from this computer. Without it this backup cannot be opened.</p>
     </div>
-    <form class="backup-key-recommendation-download" method="post" action="<?= $escape(app_url('components/backup/recovery_key.php')) ?>" aria-labelledby="backup-key-recommendation-download-title" data-password-authorization data-backup-key-download>
+    <form class="backup-key-recommendation-download" method="post" action="<?= $escape(app_url('components/backup/recovery_key.php')) ?>" aria-labelledby="backup-key-recommendation-download-title" data-password-authorization>
         <?= csrf_field() ?>
         <input type="hidden" name="key_action" value="export">
         <input type="hidden" name="key_fingerprint" value="<?= $escape($recommendedFingerprint) ?>">
@@ -24,16 +25,15 @@ if ($recommendedFingerprint !== '' && preg_match('/^[a-f0-9]{64}$/D', $recommend
         <div class="form-group"><label for="key-recommendation-password">Current login password</label><input id="key-recommendation-password" name="key_password" type="password" autocomplete="current-password" required></div>
         <div class="backup-key-recommendation-actions">
             <button class="btn btn-primary" type="submit"><i class="bi bi-download" aria-hidden="true"></i> Download recovery key</button>
-            <a class="backup-history-link" href="#recovery-key">Open the Backup Keyring</a>
+            <a class="backup-history-link" href="<?= $escape($recoveryKeyHref) ?>">Open the Backup Keyring</a>
         </div>
     </form>
 </section>
 <dialog class="backup-authorization backup-key-recommendation-dialog" data-backup-key-dialog aria-labelledby="backup-key-recommendation-dialog-title">
-    <h2 id="backup-key-recommendation-dialog-title">Save your recovery key</h2>
-    <p>Your newest backup uses recovery key <code title="<?= $escape($recommendedFingerprint) ?>"><?= $escape($recommendedShort) ?>…</code>.
-        Download it from the banner on this page and keep it somewhere separate from this computer.</p>
+    <h2 id="backup-key-recommendation-dialog-title">Keep this key safe</h2>
+    <p>Key <code title="<?= $escape($recommendedFingerprint) ?>"><?= $escape($recommendedShort) ?>…</code> opens your newest backup.</p>
     <div class="backup-authorization-actions">
-        <a class="btn btn-secondary" href="#recovery-key">Open the Backup Keyring</a>
+        <a class="btn btn-secondary" href="<?= $escape($recoveryKeyHref) ?>">Open the Backup Keyring</a>
         <button class="btn btn-primary" type="button" data-backup-key-dialog-close>Got it</button>
     </div>
 </dialog>

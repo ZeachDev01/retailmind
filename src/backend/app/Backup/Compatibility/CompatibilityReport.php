@@ -12,16 +12,6 @@ final class CompatibilityReport
         return (string)$this->report['status'];
     }
 
-    public function adapter(): ?string
-    {
-        return $this->report['adapter'] ?? null;
-    }
-
-    public function message(): string
-    {
-        return (string)$this->report['message'];
-    }
-
     public function isSupported(): bool
     {
         return $this->status() !== RestoreCompatibilityRegistry::UNSUPPORTED;

@@ -4,6 +4,7 @@ namespace App\Backup;
 
 use App\Authorization\RoleCapabilityPolicy;
 use App\Backup\Compatibility\RestoreCompatibilityRegistry;
+use App\Backup\Compatibility\UnsupportedPackageStructure;
 use App\Database\MigrationLedger;
 use App\Database\MigrationRunner;
 use DomainException;
@@ -71,7 +72,20 @@ final class DatabaseRestoreService
     public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword): array
     {
-        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
+        try {
+            $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
+        } catch (UnsupportedPackageStructure $exception) {
+            return [
+                'valid' => false,
+                'message' => $exception->getMessage(),
+                'conflicts' => [],
+                'files' => 0,
+                'bytes' => 0,
+                'snapshot_at' => '',
+                'replacement_authorized' => false,
+                'compatibility' => $exception->report(),
+            ];
+        }
         $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
         foreach (['user_id' => 'id', 'username' => 'username', 'email' => 'email'] as $column => $kind) {

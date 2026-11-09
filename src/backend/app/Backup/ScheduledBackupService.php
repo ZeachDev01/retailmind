@@ -5,11 +5,11 @@ namespace App\Backup;
 use App\Attention\Clock;
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Database\MigrationLedger;
 use App\Services\PhilippineTime;
 use App\Store\StoreWriteGate;
 use DateTimeImmutable;
 use DateTimeZone;
-use DomainException;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -30,9 +30,6 @@ final class ScheduledBackupService
     public const OUTCOME_FAILED = 'failed';
     public const OUTCOME_NOT_DUE = 'not_due';
     public const OUTCOME_THROTTLED = 'throttled';
-
-    public const CATCHUP_INTERVAL_HOURS = 6;
-    public const CATCHUP_AGE_DAYS = 7;
 
     public const STABLE_NAME_PATTERN = '/^retailmind-scheduled-\d{4}-\d{2}-\d{2}-\d{6}(?:-\d+)?\.rmpkg$/D';
 
@@ -74,11 +71,21 @@ final class ScheduledBackupService
         );
     }
 
-    /** In-app catch-up path: one attempt per throttle window. */
+    /** In-app catch-up path: missed slot or seven-day gap, one attempt per throttle window. */
     public function runCatchup(): array
     {
         $now = $this->nowLocal();
         $state = $this->settings->get();
+        $missedSlot = ScheduledBackupSettings::isDue($state['last_success_at'], $state['weekday'], $state['time'], $now);
+        if (!$missedSlot && !ScheduledBackupSettings::isCatchUp($state['last_success_at'], $now)) {
+            return $this->result(
+                self::OUTCOME_NOT_DUE,
+                'catchup',
+                'The Scheduled Backup does not need a catch-up.',
+                'not_due',
+                $now
+            );
+        }
         if (ScheduledBackupSettings::catchUpThrottled($state['catchup_checked_at'], $now)) {
             return $this->result(
                 self::OUTCOME_THROTTLED,
@@ -88,27 +95,7 @@ final class ScheduledBackupService
                 $now
             );
         }
-        if (!ScheduledBackupSettings::isCatchUp($state['last_success_at'], $now)) {
-            return $this->result(
-                self::OUTCOME_NOT_DUE,
-                'catchup',
-                'The Scheduled Backup does not need a catch-up.',
-                'not_due',
-                $now
-            );
-        }
         return $this->catchUpAt($now);
-    }
-
-    /** Super Administrator "Run scheduled backup now". */
-    public function runForced(int $actorUserId, string $actorRole): array
-    {
-        if ($actorRole !== 'super_admin') {
-            throw new DomainException('Only the Super Administrator may run a Scheduled Backup now.');
-        }
-        $this->backups->authorizeActor($actorUserId, $actorRole);
-        $this->logActivity(null, 'Scheduled Database Backup requested', $actorRole === 'super_admin' ? ['trigger' => 'forced'] : []);
-        return $this->attempt('forced', $this->nowLocal());
     }
 
     private function catchUpAt(DateTimeImmutable $now): array
@@ -154,7 +141,13 @@ final class ScheduledBackupService
         $tempPath = (string)($capture['path'] ?? '');
         $backupId = (int)($capture['backup_id'] ?? 0);
         if (($capture['status'] ?? '') !== DatabaseBackupService::OUTCOME_READY || $tempPath === '' || $backupId <= 0) {
-            return $this->fail(new RuntimeException('The encrypted package was not produced.'), $trigger, $now, $filename);
+            return $this->fail(
+                new RuntimeException('The encrypted package was not produced.'),
+                $trigger,
+                $now,
+                $filename,
+                $backupId > 0 ? $backupId : null
+            );
         }
 
         $newPath = $destination . DIRECTORY_SEPARATOR . $filename;
@@ -163,7 +156,7 @@ final class ScheduledBackupService
             $this->publish($tempPath, $newPath);
             $this->backups->updateHistoryArtifact($backupId, $newPath, $fingerprint);
             $this->stampHistory($backupId, $trigger, $now->format('Y-m-d H:i:s'));
-            $removed = $this->retention($destination, $backupId, $now->format('Y-m-d H:i:s'));
+            $removed = $this->retention($backupId, $now->format('Y-m-d H:i:s'));
         } catch (Throwable $exception) {
             if (is_file($tempPath)) {
                 @unlink($tempPath);
@@ -171,7 +164,7 @@ final class ScheduledBackupService
             if (is_file($newPath)) {
                 @unlink($newPath);
             }
-            return $this->fail($exception, $trigger, $now, $filename);
+            return $this->fail($exception, $trigger, $now, $filename, $backupId);
         }
 
         $message = 'Scheduled Backup completed and verified. The previous automatic copy was replaced.';
@@ -212,12 +205,23 @@ final class ScheduledBackupService
         return $this->result(self::OUTCOME_SKIPPED, $trigger, $message, $reason, $now, $backupId, $filename);
     }
 
-    private function fail(Throwable $exception, string $trigger, DateTimeImmutable $now, string $filename): array
-    {
+    private function fail(
+        Throwable $exception,
+        string $trigger,
+        DateTimeImmutable $now,
+        string $filename,
+        ?int $backupId = null
+    ): array {
         // The full detail goes to the Super Administrator-only history note and
         // the server log; the operator only sees this stable sentence.
         $message = 'The Scheduled Backup did not complete. The previous automatic copy was kept. Review Backup history and the Windows task.';
-        $backupId = $this->recordHistory($filename, 'failed', $exception->getMessage(), $now);
+        if ($backupId === null) {
+            $backupId = $this->recordHistory($filename, 'failed', $exception->getMessage(), $now);
+        } else {
+            // createForSystem already recorded the completed capture; a later
+            // publish/verification failure must not leave a second phantom row.
+            $this->backups->markHistoryFailed($backupId, $exception->getMessage(), $trigger);
+        }
         try {
             $this->settings->recordOutcome(self::OUTCOME_FAILED, $backupId, $message);
         } catch (Throwable $recordError) {
@@ -229,22 +233,7 @@ final class ScheduledBackupService
 
     private function recordHistory(string $filename, string $status, string $notes, DateTimeImmutable $now): int
     {
-        return $this->backups->recordHistory(
-            $filename,
-            'scheduled',
-            0,
-            $status,
-            null,
-            $notes,
-            $now->format('Y-m-d H:i:s'),
-            StorePackageFormat::KEY_VERSION,
-            null,
-            'scheduled',
-            null,
-            null,
-            'scheduled',
-            $now->format('Y-m-d H:i:s')
-        );
+        return $this->backups->recordScheduledHistory($filename, $status, $notes, $now->format('Y-m-d H:i:s'));
     }
 
     private function verifyPackage(string $path): string
@@ -254,7 +243,12 @@ final class ScheduledBackupService
             $result = ($this->packageVerifier)($path, $bytes);
             $fingerprint = is_array($result) ? (string)($result['key_fingerprint'] ?? '') : (string)$result;
         } else {
-            $decoded = StorePackageFormat::decode($bytes, SqlBackupFormat::schema($this->pdo));
+            $decoded = StorePackageFormat::decode(
+                $bytes,
+                SqlBackupFormat::schema($this->pdo),
+                null,
+                $this->migrationKeys()
+            );
             $fingerprint = (string)($decoded['key_fingerprint'] ?? '');
         }
         if (preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1) {
@@ -292,10 +286,11 @@ final class ScheduledBackupService
     }
 
     /**
-     * Remove only previous completed Scheduled Backup artifacts inside the
-     * configured destination. Manual, restore, and safety copies are untouched.
+     * Remove every previous completed Scheduled Backup artifact, even one
+     * retained by an older destination. Manual, restore, and safety copies are
+     * untouched; accepted rows are marked removed even when the file is gone.
      */
-    private function retention(string $destination, int $currentBackupId, string $removedAt): ?string
+    private function retention(int $currentBackupId, string $removedAt): ?string
     {
         $statement = $this->pdo->query(
             "SELECT backup_id, artifact_path FROM backup_history
@@ -303,20 +298,13 @@ final class ScheduledBackupService
                 AND artifact_path IS NOT NULL AND artifact_path <> '' AND removed_at IS NULL
               ORDER BY backup_id DESC"
         );
-        $destinationReal = realpath($destination);
         $removed = null;
         foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
             if ((int)$row['backup_id'] === $currentBackupId) {
                 continue;
             }
             $path = (string)$row['artifact_path'];
-            $name = basename($path);
-            if (preg_match(self::STABLE_NAME_PATTERN, $name) !== 1) {
-                continue;
-            }
-            $directory = realpath(dirname($path));
-            if ($destinationReal === false || $directory === false
-                || str_replace('\\', '/', $directory) !== str_replace('\\', '/', $destinationReal)) {
+            if (!self::isRetentionArtifact($path)) {
                 continue;
             }
             if (is_file($path) && !@unlink($path)) {
@@ -324,9 +312,24 @@ final class ScheduledBackupService
             }
             $update = $this->pdo->prepare('UPDATE backup_history SET removed_at = ? WHERE backup_id = ?');
             $update->execute([$removedAt, (int)$row['backup_id']]);
-            $removed = $name;
+            $removed = basename($path);
         }
         return $removed;
+    }
+
+    private static function isRetentionArtifact(string $path): bool
+    {
+        $name = basename($path);
+        if (preg_match(self::STABLE_NAME_PATTERN, $name) !== 1) {
+            return false;
+        }
+        $directory = realpath(dirname($path));
+        if ($directory === false) {
+            return false;
+        }
+        $candidate = $directory . DIRECTORY_SEPARATOR . $name;
+        return ScheduledBackupSettings::isOutsidePublicRoots($candidate)
+            && ScheduledBackupSettings::isOutsideRecoveryStore($candidate);
     }
 
     private function stableFilename(DateTimeImmutable $now, string $destination): string
@@ -339,6 +342,11 @@ final class ScheduledBackupService
             $suffix++;
         }
         return $filename;
+    }
+
+    private function migrationKeys(): array
+    {
+        return (new MigrationLedger($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->keys();
     }
 
     private function mlJobsActive(): bool
