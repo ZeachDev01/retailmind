@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
             });
             $message = isset($updates['store_email_alerts_enabled'])
-                ? 'Store and receipt settings saved. Test email again to enable alerts for the new Store email address.'
+                ? 'Store and receipt settings saved. Store email alerts were disabled because the Store email changed. Ask your Super Administrator to send a test email from Platform Settings to re-enable them.'
                 : 'Store and receipt settings saved.';
         } elseif ($action === 'save_receipt_logo' || $action === 'remove_receipt_logo') {
             if ($action === 'remove_receipt_logo' && trim((string)($settings['store_name'] ?? '')) === '') {
@@ -125,61 +125,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Receipt logo update', 'Store Settings', null, null, ['action' => $action]);
             });
             $message = $logo === '' ? 'Receipt logo removed. Existing receipts keep their original logo.' : 'Receipt logo saved. New receipts will use this logo.';
-        } elseif ($action === 'save_brevo' || $action === 'test_brevo') {
-            $senderEmail = trim((string)($_POST['brevo_sender_email'] ?? ''));
-            $apiKeyInput = trim((string)($_POST['brevo_api_key'] ?? ''));
-            $savedSettings = get_store_settings($pdo);
-            $apiKey = $apiKeyInput !== ''
-                ? $apiKeyInput
-                : (!empty($savedSettings['brevo_api_key']) ? decrypt_store_email_secret((string)$savedSettings['brevo_api_key']) : '');
-            if (filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false || $apiKey === '' || strlen($apiKey) > 512) {
-                throw new InvalidArgumentException('Enter a Brevo API key and a valid verified sender email address.');
-            }
-            $updates = [
-                'brevo_api_key' => $apiKeyInput !== ''
-                    ? encrypt_store_email_secret($apiKeyInput)
-                    : (string)$savedSettings['brevo_api_key'],
-                'brevo_sender_email' => $senderEmail,
-                'store_email_alerts_enabled' => '0',
-            ];
-            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
-                save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
-                $pdo->exec("DELETE FROM store_settings WHERE setting_key IN (
-                    'smtp_provider', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
-                    'smtp_from_email', 'smtp_password', 'smtp_email_enabled'
-                )");
-            });
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Store Settings', null, null, [
-                'brevo_sender_email' => $senderEmail,
-            ]);
-
-            if ($action === 'test_brevo') {
-                $recipient = trim((string)($savedSettings['store_email'] ?? ''));
-                if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
-                    $message = 'Brevo settings saved. Add a valid Store email address, then send a test email.';
-                    $messageClass = 'tag-warning';
-                } else {
-                    if (send_email_notification($recipient, 'RetailMind email test', 'Your Brevo API settings are working. Store email alerts are now enabled.')) {
-                        $updates['store_email_alerts_enabled'] = '1';
-                        \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
-                            save_key_value_settings($pdo, 'store_settings', ['store_email_alerts_enabled' => $updates['store_email_alerts_enabled']], (int)$_SESSION['user_id']);
-                        });
-                        $message = 'Test email sent. Store email alerts are enabled.';
-                        $messageClass = 'tag-success';
-                    } else {
-                        $message = 'Test email failed. Check the Brevo API key, verified sender, and Store email address, then try again. Email alerts remain disabled.';
-                        $messageClass = 'tag-warning';
-                    }
-                }
-            } else {
-                $message = 'Brevo settings saved. Send a test email to enable Store email alerts.';
-                $messageClass = 'tag-success';
-            }
-        } elseif ($action === 'disable_brevo') {
-            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo): void {
-                save_key_value_settings($pdo, 'store_settings', ['store_email_alerts_enabled' => '0'], (int)$_SESSION['user_id']);
-            });
-            $message = 'Store email alerts disabled.';
         } elseif ($action === 'save_attention') {
             $updates = [];
             foreach ($fields as $key => $config) {
@@ -188,25 +133,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Store attention thresholds updated', 'Store Settings', null, null, $updates);
             $message = 'Store attention thresholds saved. Platform safety limits are applied automatically.';
-        } elseif ($action === 'save_tunnel_token') {
-            $tunnelToken = trim((string)($_POST['tunnel_token'] ?? ''));
-            $tunnelHostname = trim((string)($_POST['tunnel_hostname'] ?? ''));
-            $ts = new \App\Services\CloudflareTunnelService();
-            if ($tunnelToken === '') {
-                $ts->clearToken();
-                $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
-            } else {
-                $ts->setToken($tunnelToken, $tunnelHostname !== '' ? $tunnelHostname : null);
-                log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token updated', 'Store Settings', null, null, [
-                    'hostname' => $tunnelHostname,
-                ]);
-                $message = 'Permanent Cloudflare Tunnel token configured.';
-            }
-        } elseif ($action === 'clear_tunnel_token') {
-            $ts = new \App\Services\CloudflareTunnelService();
-            $ts->clearToken();
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token cleared', 'Store Settings');
-            $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
         } else {
             throw new InvalidArgumentException('Choose a Store Settings section to save.');
         }
@@ -343,42 +269,6 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 </div>
             </form>
         </section>
-        <?php $brevoConfigured = !empty($settings['brevo_api_key']); ?>
-        <section class="dashboard-section" aria-labelledby="email-heading">
-            <div class="section-header">
-                <div>
-                    <h2 id="email-heading">Brevo email</h2>
-                    <p class="section-description">Brevo sends Store alerts and other application emails. Enter a Brevo API key and a verified sender address. The API key is encrypted at rest and never displayed.</p>
-                </div>
-            </div>
-            <form method="post" id="store-brevo-form">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="save_brevo" id="brevo-action">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="brevo_api_key">Brevo API key</label>
-                        <input id="brevo_api_key" name="brevo_api_key" type="password" autocomplete="new-password" placeholder="<?= $brevoConfigured ? 'Saved; leave blank to keep it' : 'Enter Brevo API key' ?>">
-                        <small class="field-help">Use an API key, not an SMTP key. Leave blank to keep the saved key.</small>
-                    </div>
-                    <div class="form-group">
-                        <label for="brevo_sender_email">Verified sender email</label>
-                        <input id="brevo_sender_email" name="brevo_sender_email" type="email" autocomplete="email" spellcheck="false" value="<?= htmlspecialchars((string)($settings['brevo_sender_email'] ?? '')) ?>" required>
-                        <small class="field-help">This sender must be verified in your Brevo account. Emails display the Store name. Test emails are sent to the Store email address above.</small>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save Brevo settings</button>
-                    <button type="submit" class="btn btn-secondary" onclick="document.getElementById('brevo-action').value='test_brevo'">Save and send test email</button>
-                </div>
-            </form>
-            <form method="post" class="form-actions">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="disable_brevo">
-                <button type="submit" class="btn btn-secondary"<?= empty($settings['store_email_alerts_enabled']) ? ' disabled' : '' ?>>Disable Store alerts</button>
-                <span class="field-help" role="status"><?= !empty($settings['store_email_alerts_enabled']) ? 'Store email alerts are enabled.' : 'Store alerts are disabled until a test email succeeds.' ?></span>
-            </form>
-        </section>
-
         <section class="dashboard-section" id="remote-access-card" aria-labelledby="remote-access-heading">
             <div class="section-header">
                 <div class="remote-access-header-wrap">
@@ -455,46 +345,6 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 </div>
 
                 <div id="remote-access-feedback" class="remote-feedback" role="status" aria-live="polite"></div>
-
-                <!-- Sleek Accordion: Advanced Custom Domain & Token -->
-                <details class="remote-advanced-card" <?= !empty($tunnelStatus['token_configured']) ? 'open' : '' ?>>
-                    <summary class="remote-advanced-summary">
-                        <div class="remote-summary-content">
-                            <span class="remote-summary-title">Custom Domain &amp; Token</span>
-                            <span class="remote-summary-pill <?= !empty($tunnelStatus['token_configured']) ? 'is-configured' : '' ?>">
-                                <?= !empty($tunnelStatus['token_configured']) ? 'Configured' : 'Optional' ?>
-                            </span>
-                        </div>
-                        <svg class="remote-chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </summary>
-                    <div class="remote-advanced-body">
-                        <form method="post" class="remote-token-config-form">
-                            <?= csrf_field() ?>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="tunnel_token" class="field-label">Permanent Token</label>
-                                    <input type="password" id="tunnel_token" name="tunnel_token" class="input-text" autocomplete="off"
-                                           value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
-                                           placeholder="eyJh… from Cloudflare Zero Trust">
-                                </div>
-                                <div class="form-group">
-                                    <label for="tunnel_hostname" class="field-label">Custom Hostname (Optional)</label>
-                                    <input type="text" id="tunnel_hostname" name="tunnel_hostname" class="input-text" autocomplete="off"
-                                           value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
-                                           placeholder="supervisor.mystore.com">
-                                </div>
-                            </div>
-                            <div class="form-actions u-mt-1">
-                                <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save Token</button>
-                                <?php if (!empty($tunnelStatus['token_configured'])): ?>
-                                    <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear Token</button>
-                                <?php endif; ?>
-                            </div>
-                        </form>
-                    </div>
-                </details>
 
                 <!-- Dedicated Store PC 24/7 Strip -->
                 <div class="remote-service-strip">

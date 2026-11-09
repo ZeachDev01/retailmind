@@ -21,6 +21,7 @@ try {
         require_role(['admin', 'super_admin', 'inventory_manager', 'cashier']);
         $status = $service->getStatus();
         if (!empty($status['url'])) {
+            notify_tunnel_url_change($pdo, (string)$status['url']);
             $status['qr_svg'] = $qrService->generateSvg($status['url']);
         }
         echo json_encode(['success' => true] + $status, JSON_UNESCAPED_SLASHES);
@@ -54,6 +55,7 @@ try {
         if ($action === 'start') {
             $result = $service->start();
             if (!empty($result['url'])) {
+                notify_tunnel_url_change($pdo, (string)$result['url']);
                 $result['qr_svg'] = $qrService->generateSvg($result['url']);
             }
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);

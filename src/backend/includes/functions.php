@@ -609,6 +609,82 @@ function send_email_notification(string $email, string $subject, string $message
     return $success;
 }
 
+/**
+ * Active admin and super admin users, resolved from both user_roles and the
+ * primary users.role_id fallback. Used to deliver remote-access URL updates.
+ */
+function tunnel_notify_recipients(PDO $pdo): array
+{
+    try {
+        $stmt = $pdo->query(
+            "SELECT DISTINCT u.email
+             FROM users u
+             JOIN roles r ON r.role_name IN ('admin','super_admin')
+             WHERE u.status = 'active'
+               AND u.email IS NOT NULL AND u.email <> ''
+               AND (
+                   EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.user_id AND ur.role_id = r.role_id)
+                   OR (u.role_id = r.role_id AND NOT EXISTS (SELECT 1 FROM user_roles ur2 WHERE ur2.user_id = u.user_id))
+               )"
+        );
+        $recipients = [];
+        while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $email = trim((string)($row['email'] ?? ''));
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $recipients[$email] = true;
+            }
+        }
+        return array_keys($recipients);
+    } catch (Throwable $exception) {
+        error_log('Remote access notify: could not resolve recipients: ' . $exception->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Email active admin and super admin users when the remote-access tunnel URL
+ * changes (a quick-tunnel domain is rotated on restart). Dedupes against the
+ * last notified URL so restarts do not re-email the same address.
+ */
+function notify_tunnel_url_change(PDO $pdo, string $newUrl): bool
+{
+    $newUrl = rtrim(trim($newUrl), '/');
+    if ($newUrl === '' || !preg_match('#^https?://#i', $newUrl)) {
+        return false;
+    }
+
+    $settings = get_store_settings($pdo);
+    // Enabled by default; a Super Admin can switch it off explicitly.
+    if (($settings['tunnel_url_notify_enabled'] ?? '1') === '0') {
+        return false;
+    }
+    $lastNotified = trim((string)($settings['tunnel_last_notified_url'] ?? ''));
+    if ($lastNotified === $newUrl) {
+        return false;
+    }
+
+    $recipients = tunnel_notify_recipients($pdo);
+    if (empty($recipients)) {
+        return false;
+    }
+
+    // Record before sending so a failed send does not loop on every status poll.
+    save_key_value_settings($pdo, 'store_settings', ['tunnel_last_notified_url' => $newUrl], null);
+
+    $storeName = trim((string)($settings['store_name'] ?? 'RetailMind'));
+    $sent = false;
+    foreach ($recipients as $recipient) {
+        if (send_email_notification(
+            $recipient,
+            $storeName . ' remote access URL updated',
+            "The remote access URL has changed.\n\nNew URL: " . $newUrl . "\n\nUse this address to keep monitoring the system and store operations remotely."
+        )) {
+            $sent = true;
+        }
+    }
+    return $sent;
+}
+
 function validate_calendar_date(mixed $rawDate): ?string
 {
     if ($rawDate === null) {

@@ -156,16 +156,16 @@ $apiSource = file_get_contents($apiFile);
 $assert(str_contains($apiSource, 'save_token'), "remote_access_api.php supports 'save_token' action");
 $assert(str_contains($apiSource, 'clear_token'), "remote_access_api.php supports 'clear_token' action");
 
-echo "\n=== 4. Store Configuration UI Permanent Token Form Controls ===\n";
+echo "\n=== 4. Platform Settings UI Permanent Token Form Controls ===\n";
 
-$settingsFile = $root . '/src/frontend/components/administrator/store_settings.php';
-$assert(file_exists($settingsFile), "store_settings.php exists");
+$settingsFile = $root . '/src/frontend/components/system_administrator/system_settings.php';
+$assert(file_exists($settingsFile), "system_settings.php exists");
 $settingsSource = file_get_contents($settingsFile);
 
-$assert(str_contains($settingsSource, 'name="tunnel_token"') || str_contains($settingsSource, 'id="tunnel_token"'), "store_settings.php has tunnel_token input field");
-$assert(str_contains($settingsSource, 'save_tunnel_token'), "store_settings.php supports 'save_tunnel_token' action");
-$assert(str_contains($settingsSource, 'clear_tunnel_token'), "store_settings.php supports 'clear_tunnel_token' action");
-$assert(str_contains($settingsSource, 'Permanent') || str_contains($settingsSource, 'permanent'), "store_settings.php mentions permanent tunnel mode");
+$assert(str_contains($settingsSource, 'name="tunnel_token"') || str_contains($settingsSource, 'id="tunnel_token"'), "system_settings.php has tunnel_token input field");
+$assert(str_contains($settingsSource, 'save_tunnel_token'), "system_settings.php supports 'save_tunnel_token' action");
+$assert(str_contains($settingsSource, 'clear_tunnel_token'), "system_settings.php supports 'clear_tunnel_token' action");
+$assert(str_contains($settingsSource, 'Permanent') || str_contains($settingsSource, 'permanent'), "system_settings.php mentions permanent tunnel mode");
 
 echo "\n=== 5. Standalone Windows Service Script Contracts ===\n";
 
