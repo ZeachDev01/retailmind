@@ -19,6 +19,13 @@ $backupFailureLine = 'The backup could not be created. Check free space and your
 $service = new DatabaseBackupService($pdo, role_capability_policy());
 $actorUserId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
+$scheduledSettings = new \App\Backup\ScheduledBackupSettings($pdo);
+try {
+    $scheduledSchedule = $scheduledSettings->get();
+} catch (Throwable) {
+    $scheduledSchedule = ['last_outcome' => '', 'next_run_at' => ''];
+}
+$scheduleOutcomeLabels = ['completed' => 'Completed', 'skipped' => 'Skipped — retried next run', 'failed' => 'Failed'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_local_request('Database backup is not available during remote monitoring.');
@@ -69,6 +76,19 @@ $completedHistory = array_filter($history, static fn(array $row): bool => ($row[
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
 $totalSnapshots = count($completedHistory);
 $storePaused = \App\Backup\RecoveryStore::isPaused();
+$backupKindLabels = ['manual' => 'Manual', 'scheduled' => 'Scheduled', 'restore' => 'Restore'];
+$artifactLabels = [
+    'available' => 'Available on server',
+    'removed' => 'Removed after replacement',
+    'missing' => 'Missing',
+    'not_retained' => 'Not retained',
+];
+$artifactClasses = [
+    'available' => 'tag-success',
+    'removed' => 'tag-soft',
+    'missing' => 'tag-warning',
+    'not_retained' => 'tag-soft',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -105,6 +125,14 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     <dt>Store status</dt>
                     <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
                 </div>
+                <div>
+                    <dt>Next scheduled run</dt>
+                    <dd><?= $scheduledSchedule['next_run_at'] !== '' ? $escape(format_display_datetime((string)$scheduledSchedule['next_run_at'])) : '—' ?></dd>
+                </div>
+                <div>
+                    <dt>Last outcome</dt>
+                    <dd><?= $escape($scheduleOutcomeLabels[$scheduledSchedule['last_outcome']] ?? 'Not run yet') ?></dd>
+                </div>
             </dl>
 
             <?php if ($download): ?>
@@ -133,6 +161,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 </div>
                 <div class="backup-create-footer">
                     <p><i class="bi bi-download" aria-hidden="true"></i> Download each backup and store it away from this server.</p>
+                    <p class="backup-hint">Creating a backup does not confirm the file was saved on your device.</p>
                     <details class="backup-tips">
                         <summary>What to keep</summary>
                         <ul class="backup-guidance-list">
@@ -179,18 +208,22 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Backup date</th>
+                            <th scope="col">Kind</th>
                             <th scope="col">Backup file</th>
+                            <th scope="col">File</th>
                             <th scope="col" class="backup-size">Size</th>
                             <th scope="col">Outcome</th>
                             <th scope="col">Requested by</th>
                         </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
                                 <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
+                                <td><span class="tag tag-soft"><?= $escape($backupKindLabels[(string)($row['backup_type'] ?? 'manual')] ?? 'Manual') ?></span></td>
                                 <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <td><span class="tag <?= $escape($artifactClasses[(string)($row['artifact_state'] ?? 'not_retained')] ?? 'tag-soft') ?>"><?= $escape($artifactLabels[(string)($row['artifact_state'] ?? 'not_retained')] ?? 'Not retained') ?></span></td>
                                 <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
-                                <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
+                                <td><?php $rowStatus = (string)$row['status']; ?><span class="tag <?= $rowStatus === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $rowStatus === 'completed' ? 'bi-check-circle' : ($rowStatus === 'skipped' ? 'bi-arrow-repeat' : 'bi-exclamation-circle') ?>" aria-hidden="true"></i> <?= $rowStatus === 'completed' ? 'Created' : ($rowStatus === 'skipped' ? 'Skipped — retried next run' : 'Not created') ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
+                                <td colspan="7" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>
