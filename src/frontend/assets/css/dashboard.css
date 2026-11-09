@@ -43,10 +43,80 @@
 .decision-pill.action { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
 .decision-pill.ok { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #166534); }
 .decision-pill.info { background: var(--theme-info-surface, #dbeafe); color: var(--theme-info-text, #1e40af); }
-.quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 0.9rem; margin-bottom: 1.2rem; }
-.quick-action { display: block; min-width: 0; padding: 0.95rem 1rem; border-radius: 12px; border: 1px solid var(--border); background: linear-gradient(135deg, var(--theme-surface-soft, #eff6ff) 0%, var(--theme-surface, #ffffff) 100%); text-decoration: none; color: var(--text); }
-.quick-action strong { display: block; margin-bottom: 0.2rem; }
-.quick-action span { color: var(--muted); font-size: 0.85rem; }
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+    gap: 0.85rem;
+    margin-bottom: 0.85rem;
+}
+.quick-action {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 1rem 1.15rem;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--card-bg, #ffffff);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.quick-action:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary, #2563eb);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    text-decoration: none;
+}
+.quick-action:active {
+    transform: translateY(0);
+}
+.quick-action strong {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+}
+.quick-action strong i {
+    color: var(--primary, #2563eb);
+    font-size: 1rem;
+}
+.quick-action span {
+    display: block;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+.store-onboarding-section {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+}
+.store-onboarding-section .section-header {
+    margin-bottom: 0.85rem;
+}
+.store-onboarding-section .section-header h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.2rem;
+}
+.store-onboarding-section .section-description {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0;
+}
+.store-onboarding-section .section-note {
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.45;
+}
 
 
 .page-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }

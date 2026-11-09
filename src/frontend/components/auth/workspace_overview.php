@@ -135,7 +135,8 @@ $dailyOversightTopics = $allWalkthroughPaths['daily_oversight']['topics'] ?? [];
 $imTopics = $allWalkthroughPaths['first_useful_tasks']['topics'] ?? [];
 ?>
 <h2 id="workspace-guidance-title">
-    <?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
+    <i class="bi bi-compass" aria-hidden="true"></i>
+    <span><?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?></span>
 </h2>
 
 <?php
@@ -275,14 +276,7 @@ $primaryActionLabel = $isAdmin
         </section>
     <?php endif; ?>
 <?php elseif ($activeWorkflow): ?>
-    <p class="workspace-guidance-nav">
-        <?php foreach ($allWalkthroughPaths as $pDef): ?>
-            <?php foreach ($pDef['topics'] as $tId => $tDef): ?>
-                <a href="<?= htmlspecialchars(app_url($tDef['path'] . '?guidance=' . $tId)) ?>"><?= htmlspecialchars($pDef['title'] . ': ' . $tDef['title']) ?></a> &middot;
-            <?php endforeach; ?>
-        <?php endforeach; ?>
-        <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
-    </p>
+    <p class="workspace-guidance-desc"><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
 <?php else: ?>
     <p><?= htmlspecialchars($introText) ?></p>
     <p class="workspace-guidance-nav">
@@ -291,5 +285,5 @@ $primaryActionLabel = $isAdmin
     </p>
 <?php endif; ?>
 <?php if (!$guidanceIsHelp): ?>
-<p class="workspace-guidance-note">Optional — guidance does not confirm Store setup or change operational records. Reopen it from Help in your account menu.</p>
+<p class="workspace-guidance-note"><i class="bi bi-info-circle" aria-hidden="true"></i> <span>Optional — guidance does not confirm Store setup or change operational records. Reopen it from Help in your account menu.</span></p>
 <?php endif; ?>

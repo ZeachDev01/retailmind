@@ -119,19 +119,19 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                     </div>
                     <div class="quick-actions">
                         <a class="quick-action" href="<?= $escape(app_url('components/administrator/store_calendar.php')) ?>" data-dashboard-action>
-                            <strong>1. Store Calendar</strong>
+                            <strong><i class="bi bi-calendar3" aria-hidden="true"></i> 1. Store Calendar</strong>
                             <span>Set trading days and closures</span>
                         </a>
                         <a class="quick-action" href="<?= $escape(app_url('components/user_manager/user_manager.php')) ?>" data-dashboard-action>
-                            <strong>2. Staff Management</strong>
+                            <strong><i class="bi bi-people" aria-hidden="true"></i> 2. Staff Management</strong>
                             <span>Maintain staff accounts and roles</span>
                         </a>
                         <a class="quick-action" href="<?= $escape(app_url('components/report/report_generation.php')) ?>" data-dashboard-action>
-                            <strong>3. Store Reports</strong>
+                            <strong><i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i> 3. Store Reports</strong>
                             <span>Review sales and performance</span>
                         </a>
                         <a class="quick-action" href="<?= $escape(app_url('components/report/forecast_exceptions.php')) ?>" data-dashboard-action>
-                            <strong>4. Forecast Exceptions</strong>
+                            <strong><i class="bi bi-graph-up-arrow" aria-hidden="true"></i> 4. Forecast Exceptions</strong>
                             <span>Check readiness and oversight</span>
                         </a>
                     </div>
