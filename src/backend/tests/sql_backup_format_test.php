@@ -46,6 +46,40 @@ try {
         try { SqlBackupFormat::statements($sql, $schema); } catch (RuntimeException) { $rejected = true; }
         $assert($rejected, $name . ' must be rejected before replacement');
     }
+    // Producer-schema extraction never needs a destination or a live database.
+    $emptyDdl = "CREATE TABLE `empty_table` (\n  `a` int NOT NULL,\n  `b` text DEFAULT NULL,\n  `c` int GENERATED ALWAYS AS (`a` + 1) STORED,\n  PRIMARY KEY (`a`)\n) ENGINE=InnoDB";
+    $producerSql = $wrap('DROP TABLE IF EXISTS `items`;' . "\n{$ddl};\n"
+        . "INSERT INTO `items` (`id`, `note`) VALUES (X'31', X'32');\n"
+        . 'DROP TABLE IF EXISTS `empty_table`;' . "\n{$emptyDdl};");
+    $producer = SqlBackupFormat::producerSchema($producerSql);
+    $assert(array_keys($producer) === ['items', 'empty_table'], 'Producer schema lists every captured table in SQL order');
+    $assert($producer['items']['columns'] === ['id', 'note'], 'Producer columns come from the INSERT column list');
+    $assert($producer['items']['ddl'] === SqlBackupFormat::normalizeDdl($ddl), 'Producer DDL is read from the package only');
+    $assert($producer['empty_table']['columns'] === ['a', 'b'], 'Empty tables keep their DDL columns and skip generated columns');
+    $assert(isset(SqlBackupFormat::producerSchema($wrap('DROP TABLE IF EXISTS `items`;' . "\n{$ddl};"))['items']['columns'][1]), 'A table without INSERTs still exposes DDL columns');
+
+    $source = ['items' => ['ddl' => $ddl, 'columns' => ['id', 'note']], 'legacy' => ['ddl' => 'CREATE TABLE `legacy` (`id` int) ENGINE=InnoDB', 'columns' => ['id']]];
+    $destination = ['items' => ['ddl' => $ddl, 'columns' => ['id', 'note', 'status']], 'newer' => ['ddl' => 'CREATE TABLE `newer` (`id` int) ENGINE=InnoDB', 'columns' => ['id']]];
+    $diff = SqlBackupFormat::structureDiff($source, $destination);
+    $assert($diff['tables_removed'] === ['legacy'], 'structureDiff names source-only tables');
+    $assert($diff['tables_added'] === ['newer'], 'structureDiff names destination-only tables');
+    $assert($diff['columns_added'] === ['items.status'], 'structureDiff names destination-only columns');
+    $assert($diff['columns_removed'] === [], 'structureDiff does not invent dropped columns');
+    $assert($diff['changed'] === [] && $diff['enums'] === [], 'Column changes are not double-reported as DDL drift');
+    $enumSource = ['flags' => ['ddl' => "CREATE TABLE `flags` (\n  `state` enum('a','b') NOT NULL\n) ENGINE=InnoDB", 'columns' => ['state']]];
+    $enumDestination = ['flags' => ['ddl' => "CREATE TABLE `flags` (\n  `state` enum('a','b','c') NOT NULL\n) ENGINE=InnoDB", 'columns' => ['state']]];
+    $enumDiff = SqlBackupFormat::structureDiff($enumSource, $enumDestination);
+    $assert($enumDiff['enums'] === ['flags.state' => ['added' => ['c'], 'removed' => []]], 'structureDiff reports enum widening per column');
+    $assert($enumDiff['changed'] === [], 'Enum widening is not reported as opaque DDL drift');
+    $narrowed = SqlBackupFormat::structureDiff($enumDestination, $enumSource);
+    $assert($narrowed['enums'] === ['flags.state' => ['added' => [], 'removed' => ['c']]], 'structureDiff reports enum narrowing');
+    $assert(SqlBackupFormat::structureFingerprint($source) !== SqlBackupFormat::structureFingerprint($destination), 'Structure fingerprints distinguish table and column changes');
+    $assert(SqlBackupFormat::structureFingerprint($source) === SqlBackupFormat::structureFingerprint($source), 'Structure fingerprints are stable');
+    $assert(SqlBackupFormat::portableDdl("CREATE TABLE `items` (\n  `id` int(11) NOT NULL\n) ENGINE=InnoDB")
+        === SqlBackupFormat::portableDdl("CREATE TABLE `items` (\n  `id` int NOT NULL\n) ENGINE=InnoDB"), 'Portable DDL comparison is reusable');
+    $producerRejected = false;
+    try { SqlBackupFormat::statements($producerSql, $schema); } catch (RuntimeException) { $producerRejected = true; }
+    $assert($producerRejected, 'Strict statements() still rejects unadapted producer SQL');
     Session::start();
     $_SESSION['user_id'] = 1;
     $_SESSION['_authenticated_at'] = time();

@@ -31,6 +31,8 @@ php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/scheduled_backup_schedule_contract.php
 php src/backend/tests/scheduled_backup_service_contract.php
 php src/backend/tests/scheduled_backup_settings_contract.php
+php src/backend/tests/backup_schema_bootstrap_contract.php
+php src/backend/tests/restore_compatibility_test.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/identity_review_ui_browser_test.js
 node src/backend/tests/backup_package_browser_test.js

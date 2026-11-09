@@ -60,8 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-ensure_backup_schema($pdo);
-$history = $service->history($actorRole);
+$storageMessage = '';
+try {
+    ensure_backup_storage($pdo);
+    $history = $service->history($actorRole);
+} catch (Throwable $exception) {
+    error_log('Backup history unavailable: ' . $exception->getMessage());
+    $history = [];
+    $storageMessage = 'Backup history needs database updates before it can be shown. Ask your Super Administrator to Apply Database Updates.';
+}
 $historyPerPage = 10;
 $historyTotal = count($history);
 $historyPages = max(1, (int)ceil($historyTotal / $historyPerPage));
@@ -112,6 +119,7 @@ $artifactClasses = [
             </header>
 
             <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($storageMessage): ?><p class="alert tag-warning" role="alert"><?= $escape($storageMessage) ?></p><?php endif; ?>
             <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
 
             <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
@@ -149,6 +157,7 @@ $artifactClasses = [
                             <span class="tag tag-success"><?= number_format($download['size'] / 1024, 1) ?> KB</span>
                         </p>
                         <p><a class="btn btn-primary" href="<?= $escape($download['url']) ?>" download data-backup-download><i class="bi bi-download" aria-hidden="true"></i> Download backup</a></p>
+                        <p class="backup-hint">Creating a backup does not confirm the file was saved outside this server. Download and store your copy separately.</p>
                     </div>
                 </section>
             <?php endif; ?>
