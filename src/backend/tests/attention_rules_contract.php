@@ -128,6 +128,30 @@ try {
     $assert($refreshedByKey['platform.security.failed-logins']['detected_at'] === $platformItems[array_search('platform.security.failed-logins', $platformKeys)]['detected_at'], 'An unchanged condition should retain its first detected time');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === $firstNotificationCount, 'Unchanged active conditions must not create duplicate notifications');
 
+    // A failed Scheduled Backup must raise one platform attention condition (#460).
+    $assert(!in_array('platform.backup.scheduled-failure', $platformKeys, true), 'No Scheduled Backup failure should be active before one occurs');
+    $assert(
+        ($settings->thresholdsFor('super_admin')['scheduled_backup_failure_count'] ?? null) === 1.0,
+        'Scheduled Backup failure attention should default to a threshold of one'
+    );
+    $pdo->exec("INSERT INTO backup_history VALUES ('failed','scheduled','2026-09-18 09:00:00')");
+    $scheduledFailureItems = $center->getAttention(1, 'super_admin', $healthChecks);
+    $scheduledFailure = null;
+    foreach ($scheduledFailureItems as $item) {
+        if ($item->key === 'platform.backup.scheduled-failure') {
+            $scheduledFailure = $item;
+        }
+    }
+    $assert($scheduledFailure !== null, 'A failed Scheduled Backup should raise platform attention');
+    if ($scheduledFailure !== null) {
+        $assert($scheduledFailure->severity === 'critical', 'A failed Scheduled Backup should be critical');
+        $assert($scheduledFailure->category === 'backup_recovery', 'A failed Scheduled Backup should stay in backup_recovery');
+        $assert($scheduledFailure->destination === 'components/system_administrator/backup_restore.php', 'The Scheduled Backup failure should link to Backup & Restore');
+        $assert(str_contains($scheduledFailure->explanation, 'Scheduled Backup'), 'The explanation should name the Scheduled Backup');
+        $assert(!str_contains($scheduledFailure->explanation, ':\\') && !str_contains($scheduledFailure->explanation, '/'), 'The explanation must not expose filesystem paths');
+    }
+    $pdo->exec("DELETE FROM backup_history WHERE backup_type = 'scheduled' AND status = 'failed'");
+
     $pdo->exec("INSERT INTO cashier_shifts VALUES (1,'closed',NULL,600);
         INSERT INTO fiscal_periods VALUES ('open','2026-09-17')");
     $storeItems = $center->synchronize(7, 'admin')->dashboardItems();
