@@ -30,31 +30,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $senderEmail = trim((string)($_POST['brevo_sender_email'] ?? ''));
                 $apiKeyInput = trim((string)($_POST['brevo_api_key'] ?? ''));
                 $savedSettings = get_store_settings($pdo);
+                $savedKey = (string)($savedSettings['brevo_api_key'] ?? '');
                 $apiKey = $apiKeyInput !== ''
                     ? $apiKeyInput
-                    : (!empty($savedSettings['brevo_api_key']) ? decrypt_store_email_secret((string)$savedSettings['brevo_api_key']) : '');
-                if (filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false || $apiKey === '' || strlen($apiKey) > 512) {
+                    : ($savedKey !== '' ? decrypt_store_email_secret($savedKey) : '');
+                // Real Brevo keys never contain whitespace; this catches pasted prose before it overwrites a working key.
+                if (filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false || $apiKey === '' || strlen($apiKey) > 512 || preg_match('/\s/', $apiKey) === 1) {
                     throw new InvalidArgumentException('Enter a Brevo API key and a valid verified sender email address.');
                 }
-                $updates = [
+                $previousSettings = [
+                    'brevo_api_key' => $savedKey,
+                    'brevo_sender_email' => (string)($savedSettings['brevo_sender_email'] ?? ''),
+                    'store_email_alerts_enabled' => (string)($savedSettings['store_email_alerts_enabled'] ?? '0'),
+                ];
+                $saveBrevo = static function (array $updates) use ($pdo): void {
+                    \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
+                        save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
+                        $pdo->exec("DELETE FROM store_settings WHERE setting_key IN (
+                            'smtp_provider', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
+                            'smtp_from_email', 'smtp_password', 'smtp_email_enabled'
+                        )");
+                    });
+                };
+                $saveBrevo([
                     'brevo_api_key' => $apiKeyInput !== ''
                         ? encrypt_store_email_secret($apiKeyInput)
-                        : (string)$savedSettings['brevo_api_key'],
+                        : $savedKey,
                     'brevo_sender_email' => $senderEmail,
                     'store_email_alerts_enabled' => '0',
-                ];
-                \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
-                    save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
-                    $pdo->exec("DELETE FROM store_settings WHERE setting_key IN (
-                        'smtp_provider', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
-                        'smtp_from_email', 'smtp_password', 'smtp_email_enabled'
-                    )");
-                });
-                log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Platform Settings', null, null, [
-                    'brevo_sender_email' => $senderEmail,
                 ]);
 
-                if ($action === 'test_brevo') {
+                if ($action === 'save_brevo') {
+                    log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Platform Settings', null, null, [
+                        'brevo_sender_email' => $senderEmail,
+                    ]);
+                    $message = 'Brevo settings saved. Send a test email to enable Store email alerts.';
+                    $messageClass = 'tag-success';
+                } else {
                     $recipient = trim((string)($savedSettings['store_email'] ?? ''));
                     if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
                         $stmt = $pdo->prepare('SELECT email FROM users WHERE user_id = ?');
@@ -65,18 +77,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = 'Brevo settings saved. Add a valid email address, then send a test email.';
                         $messageClass = 'tag-warning';
                     } elseif (send_email_notification($recipient, 'RetailMind email test', 'Your Brevo API settings are working. Store email alerts are now enabled.')) {
-                        \App\Store\StoreWriteGate::run($pdo, function () use ($pdo): void {
-                            save_key_value_settings($pdo, 'store_settings', ['store_email_alerts_enabled' => '1'], (int)$_SESSION['user_id']);
-                        });
+                        $saveBrevo(['store_email_alerts_enabled' => '1']);
+                        log_activity($pdo, (int)$_SESSION['user_id'], 'Brevo email settings updated', 'Platform Settings', null, null, [
+                            'brevo_sender_email' => $senderEmail,
+                        ]);
                         $message = 'Test email sent. Store email alerts are enabled.';
                         $messageClass = 'tag-success';
                     } else {
-                        $message = 'Test email failed. Check the Brevo API key and verified sender, then try again. Email alerts remain disabled.';
+                        // A failed test must not replace a working key with the rejected one.
+                        $saveBrevo($previousSettings);
+                        $detail = '';
+                        try {
+                            $stmt = $pdo->query("SELECT error_message FROM email_delivery_log WHERE subject = 'RetailMind email test' ORDER BY email_log_id DESC LIMIT 1");
+                            $detail = trim((string)$stmt->fetchColumn());
+                        } catch (Throwable) {
+                        }
+                        $message = 'Test email failed' . ($detail !== '' ? ': ' . $detail : '')
+                            . '. Previous Brevo settings were kept. Check the API key and verified sender, then try again.';
                         $messageClass = 'tag-warning';
                     }
-                } else {
-                    $message = 'Brevo settings saved. Send a test email to enable Store email alerts.';
-                    $messageClass = 'tag-success';
                 }
             } elseif ($action === 'disable_brevo') {
                 \App\Store\StoreWriteGate::run($pdo, function () use ($pdo): void {

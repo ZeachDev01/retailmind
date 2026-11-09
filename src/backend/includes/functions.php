@@ -406,6 +406,13 @@ function check_and_notify_low_stock(PDO $pdo): void
     (new NotificationService($pdo))->checkAndNotifyLowStock();
 }
 
+/** Brevo rejects a blank sender name, so fall back to the app name when Store name is empty. */
+function brevo_sender_name(array $config): string
+{
+    $name = trim((string)($config['store_name'] ?? ''));
+    return $name !== '' ? $name : 'RetailMind';
+}
+
 function send_brevo_email(string $email, string $subject, string $message, ?string $htmlContent = null): bool
 {
     $config = get_store_brevo_settings(App\Core\Database::connection());
@@ -418,7 +425,7 @@ function send_brevo_email(string $email, string $subject, string $message, ?stri
     $payloadData = [
         'sender' => [
             'email' => $from,
-            'name' => (string)($config['store_name'] ?? 'RetailMind'),
+            'name' => brevo_sender_name($config),
         ],
         'to' => [['email' => $email]],
         'subject' => $subject,
@@ -472,7 +479,14 @@ function send_brevo_email(string $email, string $subject, string $message, ?stri
         }
 
         if ($response === false || $curlError !== '' || $httpCode < 200 || $httpCode >= 300) {
-            throw new RuntimeException($curlError !== '' ? $curlError : "Brevo API returned HTTP {$httpCode}.");
+            $detail = '';
+            if (is_string($response) && $response !== '') {
+                $json = json_decode($response, true);
+                $detail = trim((string)($json['message'] ?? ''));
+            }
+            throw new RuntimeException($detail !== ''
+                ? $detail
+                : ($curlError !== '' ? $curlError : "Brevo API returned HTTP {$httpCode}."));
         }
 
         return true;
