@@ -76,7 +76,9 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             ob_start();
             $guidanceIsHelp = false;
             ?>
-            <section id="workspace-guidance" class="workspace-guidance" aria-labelledby="workspace-guidance-title">
+            <section id="workspace-guidance" class="workspace-guidance workspace-guidance-banner" aria-labelledby="workspace-guidance-title">
+                <span class="wi-orb wi-orb-a" aria-hidden="true"></span>
+                <span class="wi-orb wi-orb-b" aria-hidden="true"></span>
                 <?php include __DIR__ . '/workspace_overview.php'; ?>
                 <?php include __DIR__ . '/store_setup_checklist.php'; ?>
                 <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>

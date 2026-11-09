@@ -7,6 +7,7 @@ $adminWorkflows = [
     'store_calendar.php' => [
         'title' => 'Store setup & calendar',
         'icon' => 'calendar',
+        'chip' => 'Store calendar',
         'path' => 'administrator/store_calendar.php',
         'link_label' => 'Review the Store calendar',
         'summary' => 'Set trading days and planned closures.',
@@ -15,6 +16,7 @@ $adminWorkflows = [
     'user_manager.php' => [
         'title' => 'Staff management',
         'icon' => 'conference_call',
+        'chip' => 'Staff',
         'path' => 'user_manager/user_manager.php',
         'link_label' => 'Manage staff',
         'summary' => 'Maintain operational staff accounts and access.',
@@ -23,6 +25,7 @@ $adminWorkflows = [
     'report_generation.php' => [
         'title' => 'Store reports',
         'icon' => 'statistics',
+        'chip' => 'Reports',
         'path' => 'report/report_generation.php',
         'link_label' => 'Review Store Reports',
         'summary' => 'Check Store performance and reporting.',
@@ -31,6 +34,7 @@ $adminWorkflows = [
     'forecast_exceptions.php' => [
         'title' => 'Forecasting oversight',
         'icon' => 'disclaimer',
+        'chip' => 'Forecasting',
         'path' => 'report/forecast_exceptions.php',
         'link_label' => 'Review forecast exceptions',
         'summary' => 'Check readiness and available oversight actions.',
@@ -39,6 +43,7 @@ $adminWorkflows = [
     'dashboard.php' => [
         'title' => 'Store operations & exceptions',
         'icon' => 'shop',
+        'chip' => 'Operations',
         'path' => 'administrator/dashboard.php',
         'link_label' => 'Review Store operations',
         'summary' => 'Find exceptions and work needing attention.',
@@ -50,6 +55,7 @@ $inventoryWorkflows = [
     'replenishment_queue.php' => [
         'title' => 'Replenishment recommendations',
         'icon' => 'workflow',
+        'chip' => 'Replenishment',
         'path' => 'inventory_management/replenishment_queue.php',
         'link_label' => 'Review replenishment needs',
         'summary' => 'Start daily buying review: buying quantities, basis and reasons. Forecast details are optional supporting information.',
@@ -58,6 +64,7 @@ $inventoryWorkflows = [
     'products.php' => [
         'title' => 'Product setup',
         'icon' => 'package',
+        'chip' => 'Products',
         'path' => 'inventory_management/products.php',
         'link_label' => 'Set up Products',
         'summary' => 'Use Add Product for details, counted opening stock, package sizes and stock rules.',
@@ -66,6 +73,7 @@ $inventoryWorkflows = [
     'inventory_overview.php' => [
         'title' => 'Stock monitoring',
         'icon' => 'deployment',
+        'chip' => 'Stock',
         'path' => 'inventory_management/inventory_overview.php',
         'link_label' => 'Monitor stock',
         'summary' => 'Check availability, low stock and expiry risk across the Store catalog.',
@@ -74,6 +82,7 @@ $inventoryWorkflows = [
     'stock_receiving.php' => [
         'title' => 'Stock Receiving',
         'icon' => 'shipped',
+        'chip' => 'Receiving',
         'path' => 'report/stock_receiving.php',
         'link_label' => 'Record Stock Receiving',
         'summary' => 'Record the actual goods and quantities that arrived at the Store.',
@@ -82,6 +91,7 @@ $inventoryWorkflows = [
     'inventory_counts.php' => [
         'title' => 'Inventory counts',
         'icon' => 'survey',
+        'chip' => 'Counts',
         'path' => 'inventory_management/inventory_counts.php',
         'link_label' => 'Check inventory counts',
         'summary' => 'Count stock and resolve differences through Inventory Control.',
@@ -90,6 +100,7 @@ $inventoryWorkflows = [
     'stock_issues.php' => [
         'title' => 'Stock Issue review',
         'icon' => 'high_priority',
+        'chip' => 'Stock issues',
         'path' => 'inventory_management/stock_issues.php',
         'link_label' => 'Review Stock Issues',
         'summary' => 'Review damage, loss or shrinkage reports and decide permitted stock corrections.',
@@ -134,11 +145,6 @@ $getOrientedTopics = $allWalkthroughPaths['get_oriented']['topics'] ?? [];
 $dailyOversightTopics = $allWalkthroughPaths['daily_oversight']['topics'] ?? [];
 $imTopics = $allWalkthroughPaths['first_useful_tasks']['topics'] ?? [];
 ?>
-<h2 id="workspace-guidance-title">
-    <i class="bi bi-compass" aria-hidden="true"></i>
-    <span><?= htmlspecialchars($guidanceTitle) ?><?= ($activeWorkflow && !$guidanceIsHelp) ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?></span>
-</h2>
-
 <?php
 $introText = $isAdmin
     ? 'Oversee Store performance, staff and operational exceptions.'
@@ -150,6 +156,35 @@ $primaryActionLabel = $isAdmin
     ? 'Review Store operations'
     : 'Review replenishment needs';
 ?>
+<div class="workspace-guidance-header">
+    <?php if (!$guidanceIsHelp): ?>
+    <span class="workspace-guidance-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.6 8.4l-2.2 5.2-5.2 2.2 2.2-5.2z"/></svg>
+    </span>
+    <div class="workspace-guidance-headline">
+    <?php endif; ?>
+        <h2 id="workspace-guidance-title">
+            <?php if ($guidanceIsHelp): ?>
+                <i class="bi bi-compass" aria-hidden="true"></i>
+                <span><?= htmlspecialchars($guidanceTitle) ?></span>
+            <?php else: ?>
+                <?= htmlspecialchars($guidanceTitle) ?><?= $activeWorkflow ? ' &middot; ' . htmlspecialchars($activeWorkflow['title']) : '' ?>
+            <?php endif; ?>
+        </h2>
+    <?php if (!$guidanceIsHelp): ?>
+        <ul class="workspace-guidance-chips" aria-label="Workspace workflows">
+            <?php foreach ($workflows as $workflow): $isCurrentChip = $activeWorkflow && $workflow['path'] === $activeWorkflow['path']; ?>
+            <li>
+                <a href="<?= htmlspecialchars(app_url('components/' . $workflow['path'])) ?>"<?= $isCurrentChip ? ' class="is-current" aria-current="page"' : '' ?>>
+                    <?= sidebar_icon($workflow['icon'], 'workspace-guidance-chip-icon') ?>
+                    <span><?= htmlspecialchars($workflow['chip'] ?? $workflow['title']) ?></span>
+                </a>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+    <?php endif; ?>
+</div>
 <?php if ($guidanceIsHelp): ?>
     <?php if ($activeTopicDef && !empty($activeTopicDef['steps'])): ?>
         <section class="guidance-continue-card" aria-label="Continue guidance">
@@ -275,15 +310,10 @@ $primaryActionLabel = $isAdmin
             </div>
         </section>
     <?php endif; ?>
-<?php elseif ($activeWorkflow): ?>
-    <p class="workspace-guidance-desc"><?= htmlspecialchars($activeWorkflow['guidance']) ?></p>
-<?php else: ?>
+<?php elseif (!$activeWorkflow): ?>
     <p><?= htmlspecialchars($introText) ?></p>
     <p class="workspace-guidance-nav">
         <a href="<?= htmlspecialchars($primaryActionUrl) ?>"><?= htmlspecialchars($primaryActionLabel) ?></a>
         <a href="<?= htmlspecialchars(app_url('components/auth/help.php')) ?>">Explore Workspace guidance</a>
     </p>
-<?php endif; ?>
-<?php if (!$guidanceIsHelp): ?>
-<p class="workspace-guidance-note"><i class="bi bi-info-circle" aria-hidden="true"></i> <span>Optional — guidance does not confirm Store setup or change operational records. Reopen it from Help in your account menu.</span></p>
 <?php endif; ?>

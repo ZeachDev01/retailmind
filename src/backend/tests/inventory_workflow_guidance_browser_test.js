@@ -75,7 +75,6 @@ const fixture = action => {
         // Check contextual heading and copy on landing (Stock monitoring)
         assert.match(await guidanceBanner.locator('h2').innerText(), /Inventory Manager Workspace/);
         assert.match(await guidanceBanner.locator('h2').innerText(), /Stock monitoring/);
-        assert.match(await guidanceBanner.innerText(), /stock availability, out-of-stock items, low stock warnings, and expiry risk across the Store catalog/i);
 
         // Check Store setup checklist presence
         const checklist = guidanceBanner.locator('.store-setup-checklist');
@@ -112,13 +111,6 @@ const fixture = action => {
         const prodGuidance = page.locator('#workspace-guidance');
         await prodGuidance.waitFor();
         assert.match(await prodGuidance.locator('h2').innerText(), /Product setup/);
-        const prodText = await prodGuidance.innerText();
-        assert.match(prodText, /existing Add Product form/i);
-        assert.match(prodText, /physically counted opening stock/i);
-        assert.match(prodText, /package unit sizes/i);
-        assert.match(prodText, /stock rules/i);
-        assert.match(prodText, /Store knowledge rather than relying on defaults/i);
-        assert.match(prodText, /no per-product onboarding confirmations/i);
         assert.equal(await page.locator('#add-product-btn').count(), 1, 'Existing Add Product button is present');
 
         // 3. Replenishment Recommendations workflow (replenishment_queue.php)
@@ -128,14 +120,6 @@ const fixture = action => {
         const replGuidance = page.locator('#workspace-guidance');
         await replGuidance.waitFor();
         assert.match(await replGuidance.locator('h2').innerText(), /Replenishment recommendations/);
-        const replText = await replGuidance.innerText();
-        assert.match(replText, /daily buying review here/i);
-        assert.match(replText, /buying quantities, basis, and reasons/i);
-        assert.match(replText, /Without an approved forecast, suggestions use stock rules/i);
-        assert.match(replText, /optional supporting information/i);
-        assert.match(replText, /Staff decide what to buy/i);
-        assert.match(replText, /reviewing recommendations creates no purchase or inventory change/i);
-        assert.match(replText, /Record actual arrivals in Stock Receiving/i);
 
         // Inspect buying advice in the table
         const table = page.locator('.queue-list table');
@@ -162,10 +146,6 @@ const fixture = action => {
         const rcvGuidance = page.locator('#workspace-guidance');
         await rcvGuidance.waitFor();
         assert.match(await rcvGuidance.locator('h2').innerText(), /Stock Receiving/);
-        const rcvText = await rcvGuidance.innerText();
-        assert.match(rcvText, /goods and quantities that physically arrived/i);
-        assert.match(rcvText, /commits stock to inventory/i);
-        assert.match(rcvText, /does not establish customer demand history/i);
 
         // Record actual goods arrival through Stock Receiving
         const csrfToken = await page.locator('#receiving_form input[name="csrf_token"]').inputValue();
@@ -205,9 +185,6 @@ const fixture = action => {
         const countsGuidance = page.locator('#workspace-guidance');
         await countsGuidance.waitFor();
         assert.match(await countsGuidance.locator('h2').innerText(), /Inventory counts/);
-        const countsText = await countsGuidance.innerText();
-        assert.match(countsText, /physical inventory counts/i);
-        assert.match(countsText, /resolve discrepancies through Inventory Control/i);
 
         // 6. Stock Issue review workflow (stock_issues.php)
         await page.goto(origin + '/components/inventory_management/stock_issues.php');
@@ -215,9 +192,6 @@ const fixture = action => {
         const issuesGuidance = page.locator('#workspace-guidance');
         await issuesGuidance.waitFor();
         assert.match(await issuesGuidance.locator('h2').innerText(), /Stock Issue review/);
-        const issuesText = await issuesGuidance.innerText();
-        assert.match(issuesText, /damage, expired goods, loss, and shrinkage/i);
-        assert.match(issuesText, /permitted stock corrections/i);
 
         // 7. Skip guidance and verify persisted state
         const skipBtn = issuesGuidance.getByRole('button', {name: 'Skip guidance', exact: true});

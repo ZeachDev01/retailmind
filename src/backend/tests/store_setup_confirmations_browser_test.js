@@ -203,7 +203,7 @@ const fixture = action => {
         // - Calendar task: NO link to store_calendar.php! Shows Administrator note and Awaiting Administrator
         const invCalendarTask = invChecklist.locator('.setup-task-item', {hasText: 'Store calendar review'});
         assert.equal(await invCalendarTask.getByRole('link', {name: 'Review Store calendar'}).count(), 0, 'Inventory Manager has NO link to store_calendar.php');
-        assert.match(await invCalendarTask.innerText(), /Administrator review/);
+        assert.match(await invCalendarTask.locator('.setup-task-owner').innerText(), /^Administrator$/);
         assert.match(await invCalendarTask.innerText(), /Awaiting Administrator/);
 
         // In Inventory workspace, attempting calendar fails with 403

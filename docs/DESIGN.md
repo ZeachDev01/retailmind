@@ -272,6 +272,8 @@ Workspace Help presents role-specific walkthroughs as divided rows within task g
 
 Overview preferences now save in place and replace their controls with a persistent profile-menu Help reminder. Reuse the semantic success alert and visible keyboard focus. Motion is a 150 ms exit and 220 ms arrival, reduced to 80 ms opacity feedback for reduced motion. Save failures retain the controls; JavaScript-disabled submissions keep the server redirect fallback. See `.impeccable/surfaces/workspace-help.md` for the scope and verification verdict. No global tokens, dependencies or image assets added.
 
+The first-visit guidance banner now mirrors the Administrator invitation: icon tile, workspace heading, workflow chips and the same soft-blue card. It shows only those cues, the Store setup checklist and the three choices; long workflow explanations and helper notes no longer render in the banner. The duplicate “Administrator Workflows” quick-action panel was removed from Store Overview so the Needs attention queue follows the page heading directly. Heading, chips behavior and Help are unchanged. Details are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). No global tokens added.
+
 ## Forecast workspace — 2026-11-03
 
 Forecast screens prioritize expected sales, on-hand stock and required action. Reuse compact status rows, paired quantity bars, native disclosures and the shared keyboard-accessible info tooltip. Missing measurements remain unavailable; forecast quantities stay distinct from suggested buying quantities. Scope, confirmed direction and checks are recorded in the [Forecast workspace surface brief](../.impeccable/surfaces/forecast-workspace.md).

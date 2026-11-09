@@ -37,14 +37,11 @@ $currentRole = current_role();
                     <strong class="setup-task-title"><?= htmlspecialchars($task['title']) ?></strong>
                     <span class="setup-task-owner"><?= htmlspecialchars($task['role_label']) ?></span>
                 </div>
-                <?php if (!$guidanceIsHelp): ?><p class="setup-task-desc"><?= htmlspecialchars($task['description']) ?></p><?php endif; ?>
+                <?php if ($isPermittedLink): ?>
                 <div class="setup-task-links">
-                    <?php if ($isPermittedLink): ?>
-                        <a href="<?= htmlspecialchars(app_url('components/' . $task['link'])) ?>" class="setup-task-link"><?= htmlspecialchars($task['link_label']) ?></a>
-                    <?php elseif (!$guidanceIsHelp): ?>
-                        <span class="setup-task-restricted-note"><?= htmlspecialchars($task['title']) ?> (<?= htmlspecialchars($task['role_label']) ?> review)</span>
-                    <?php endif; ?>
+                    <a href="<?= htmlspecialchars(app_url('components/' . $task['link'])) ?>" class="setup-task-link"><?= htmlspecialchars($task['link_label']) ?></a>
                 </div>
+                <?php endif; ?>
             </div>
             <div class="setup-task-action">
                 <?php if ($isConfirmed): ?>

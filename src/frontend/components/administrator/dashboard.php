@@ -97,48 +97,6 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
 
-            <?php
-            $setupComplete = false;
-            $guidanceStatus = null;
-            try {
-                $setupComplete = \App\Store\StoreSetupConfirmations::isComplete($pdo);
-                $guidanceStmt = $pdo->prepare('SELECT status FROM workspace_guidance WHERE user_id = ? AND workspace = ?');
-                $guidanceStmt->execute([(int)($_SESSION['user_id'] ?? 0), current_role()]);
-                $guidanceStatus = $guidanceStmt->fetchColumn() ?: null;
-            } catch (Throwable) {}
-
-            $showStoreOnboarding = !$setupComplete && empty($guidanceStatus);
-            ?>
-            <?php if ($showStoreOnboarding): ?>
-                <section class="dashboard-section store-onboarding-section" aria-labelledby="store-onboarding-title">
-                    <div class="section-header">
-                        <div>
-                            <h2 id="store-onboarding-title">Administrator Workflows</h2>
-                            <p class="section-description">Permitted operational workflows for Shalom Store administration.</p>
-                        </div>
-                    </div>
-                    <div class="quick-actions">
-                        <a class="quick-action" href="<?= $escape(app_url('components/administrator/store_calendar.php')) ?>" data-dashboard-action>
-                            <strong><i class="bi bi-calendar3" aria-hidden="true"></i> 1. Store Calendar</strong>
-                            <span>Set trading days and closures</span>
-                        </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/user_manager/user_manager.php')) ?>" data-dashboard-action>
-                            <strong><i class="bi bi-people" aria-hidden="true"></i> 2. Staff Management</strong>
-                            <span>Maintain staff accounts and roles</span>
-                        </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/report/report_generation.php')) ?>" data-dashboard-action>
-                            <strong><i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i> 3. Store Reports</strong>
-                            <span>Review sales and performance</span>
-                        </a>
-                        <a class="quick-action" href="<?= $escape(app_url('components/report/forecast_exceptions.php')) ?>" data-dashboard-action>
-                            <strong><i class="bi bi-graph-up-arrow" aria-hidden="true"></i> 4. Forecast Exceptions</strong>
-                            <span>Check readiness and oversight</span>
-                        </a>
-                    </div>
-                    <p class="section-note" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--muted);">Operational setup prepares Store trading. Customer sales history accumulates through genuine sales over time; stock receiving does not establish sales history.</p>
-                </section>
-            <?php endif; ?>
-
             <section class="dashboard-section governance-queue store-attention-queue" id="store-attention-section" aria-labelledby="store-attention-title">
                 <div class="section-header">
                     <div class="section-title-row">

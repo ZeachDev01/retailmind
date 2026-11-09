@@ -69,38 +69,13 @@ const fixture = action => {
         const guidanceBanner = page.locator('#workspace-guidance');
         await guidanceBanner.waitFor();
 
-        // Check contextual heading and copy on dashboard
+        // Check contextual heading on dashboard
         assert.match(await guidanceBanner.locator('h2').innerText(), /Administrator Workspace/);
-        assert.match(await guidanceBanner.innerText(), /Store operations/);
-        assert.match(await guidanceBanner.innerText(), /Needs Attention queue/);
 
         // Check Store setup checklist presence
         const checklist = guidanceBanner.locator('.store-setup-checklist');
         await checklist.waitFor();
         assert.match(await checklist.innerText(), /Store setup checklist/);
-
-        // Check reconciled dashboard setup panel (store-onboarding-section)
-        const dashboardSetup = page.locator('.store-onboarding-section');
-        await dashboardSetup.waitFor();
-        assert.match(await dashboardSetup.locator('h2').innerText(), /Administrator Workflows/);
-        const setupText = await dashboardSetup.innerText();
-        assert.match(setupText, /Store Calendar/);
-        assert.match(setupText, /Staff Management/);
-        assert.match(setupText, /Store Reports/);
-        assert.match(setupText, /Forecast Exceptions/);
-        assert.doesNotMatch(setupText, /Fiscal Period/);
-        assert.match(setupText, /genuine sales over time/);
-        assert.match(setupText, /Stock receiving does not establish sales history/i);
-
-        // Verify quick-action links are permitted for Administrator
-        const calendarLink = dashboardSetup.getByRole('link', {name: /Store Calendar/});
-        assert.ok((await calendarLink.getAttribute('href')).includes('administrator/store_calendar.php'));
-        const staffLink = dashboardSetup.getByRole('link', {name: /Staff Management/});
-        assert.ok((await staffLink.getAttribute('href')).includes('user_manager/user_manager.php'));
-        const reportsLink = dashboardSetup.getByRole('link', {name: /Store Reports/});
-        assert.ok((await reportsLink.getAttribute('href')).includes('report/report_generation.php'));
-        const forecastLink = dashboardSetup.getByRole('link', {name: /Forecast Exceptions/});
-        assert.ok((await forecastLink.getAttribute('href')).includes('report/forecast_exceptions.php'));
 
         // Visual screenshot of dashboard guidance
         for (const theme of ['light', 'dark']) {
@@ -119,11 +94,6 @@ const fixture = action => {
         const calGuidance = page.locator('#workspace-guidance');
         await calGuidance.waitFor();
         assert.match(await calGuidance.locator('h2').innerText(), /Store setup & calendar/);
-        const calText = await calGuidance.innerText();
-        assert.match(calText, /trading days and holiday closures/i);
-        assert.match(calText, /separate from customer sales history|separate from genuine customer sales history/i);
-        assert.match(calText, /Stock receiving does not establish customer demand history/i);
-        assert.match(calText, /technical workflow/i);
         // Calendar setup confirmation button is active for Admin
         assert.equal(await calGuidance.getByRole('button', {name: 'Confirm calendar review'}).count(), 1);
 
@@ -133,8 +103,6 @@ const fixture = action => {
         const userGuidance = page.locator('#workspace-guidance');
         await userGuidance.waitFor();
         assert.match(await userGuidance.locator('h2').innerText(), /Staff management/);
-        assert.match(await userGuidance.innerText(), /operational staff accounts/i);
-        assert.match(await userGuidance.innerText(), /active Workspace permissions/i);
 
         // 2c. Store Reports
         await page.goto(origin + '/components/report/report_generation.php');
@@ -142,8 +110,6 @@ const fixture = action => {
         const reportGuidance = page.locator('#workspace-guidance');
         await reportGuidance.waitFor();
         assert.match(await reportGuidance.locator('h2').innerText(), /Store reports/);
-        assert.match(await reportGuidance.innerText(), /sales, gross profit/i);
-        assert.match(await reportGuidance.innerText(), /CSV summaries/i);
 
         // 2d. Forecasting Oversight
         await page.goto(origin + '/components/report/forecast_exceptions.php');
@@ -151,10 +117,6 @@ const fixture = action => {
         const forecastGuidance = page.locator('#workspace-guidance');
         await forecastGuidance.waitFor();
         assert.match(await forecastGuidance.locator('h2').innerText(), /Forecasting oversight/);
-        const fText = await forecastGuidance.innerText();
-        assert.match(fText, /genuine customer sales history/i);
-        assert.match(fText, /replenishment recommendations/i);
-        assert.match(fText, /Nonfunctional approval actions are not advertised|does not advertise a nonfunctional approval action/i);
         // Check that page does not advertise a nonfunctional approval button
         assert.equal(await page.locator('button:has-text("Approve Model"), a:has-text("Approve Model")').count(), 0);
 
@@ -182,7 +144,6 @@ const fixture = action => {
         await page.goto(origin + '/components/administrator/dashboard.php');
         await page.waitForLoadState('domcontentloaded');
         assert.equal(await page.locator('#workspace-guidance').count(), 0, 'No automatic guidance banner after skip');
-        assert.equal(await page.locator('.store-onboarding-section').count(), 0, 'No redundant store-onboarding-section after skip');
 
         await page.goto(origin + '/components/administrator/store_calendar.php');
         assert.equal(await page.locator('#workspace-guidance').count(), 0, 'No guidance banner on calendar after skip');
@@ -197,7 +158,6 @@ const fixture = action => {
         await login('admin');
         await page.waitForURL('**/administrator/dashboard.php');
         assert.equal(await page.locator('#workspace-guidance').count(), 0, 'No guidance prompt on re-login');
-        assert.equal(await page.locator('.store-onboarding-section').count(), 0, 'No onboarding panel on re-login');
 
         // 4. Reopen through Help
         await page.goto(origin + '/components/auth/help.php');
@@ -246,7 +206,6 @@ const fixture = action => {
         // Leaving Help does NOT restart automatic guidance
         await page.goto(origin + '/components/administrator/dashboard.php');
         assert.equal(await page.locator('#workspace-guidance').count(), 0, 'Leaving Help does not re-enable automatic guidance');
-        assert.equal(await page.locator('.store-onboarding-section').count(), 0, 'Leaving Help does not re-enable onboarding section');
 
         // 5. Verify guidance creates NO operational changes
         const currentInventory = JSON.parse(fixture('inventory_state'));
