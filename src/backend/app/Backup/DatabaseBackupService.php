@@ -4,6 +4,8 @@ namespace App\Backup;
 
 use App\Audit\AuditRecordCategory;
 use App\Authorization\RoleCapabilityPolicy;
+use App\Database\MigrationRunner;
+use App\Database\Schema;
 use App\Store\StoreWriteGate;
 use DomainException;
 use PDO;
@@ -50,12 +52,12 @@ final class DatabaseBackupService
      * The existing scheduled script shares the same capture, coordination, and
      * encrypted package format instead of keeping a second exporter.
      */
-    public function createForSystem(): array
+    public function createForSystem(?string $filename = null): array
     {
-        return $this->capture(null, null);
+        return $this->capture(null, null, null, $filename);
     }
 
-    private function capture(?int $actorUserId, ?string $actorRole, $requestLease = null): array
+    private function capture(?int $actorUserId, ?string $actorRole, $requestLease = null, ?string $filename = null): array
     {
         StorePackageFormat::assertRuntime();
         if (RecoveryStore::isPaused()) {
@@ -72,11 +74,12 @@ final class DatabaseBackupService
         }
 
         $token = bin2hex(random_bytes(24));
-        $filename = self::downloadFilename();
+        $filename = $filename ?? self::downloadFilename();
         $artifactPath = $coordinator->artifactDirectory() . '/' . $token . '.rmpkg';
         $snapshotAt = gmdate('Y-m-d H:i:s');
         $sqlPath = $coordinator->artifactDirectory() . '/' . $token . '.capture';
         $requestLock = null;
+        $keyFingerprint = null;
 
         try {
             // Drain HTTP writers, including uploaded-file mutations outside the SQL gate.
@@ -88,13 +91,13 @@ final class DatabaseBackupService
                 }
             } else { $requestLock = RecoveryStore::exclusive(); }
             $coordinator->beginCapture((int)$actorUserId);
-            if (\App\Database\Schema::tableExists($this->pdo, 'ml_jobs')
+            if (Schema::tableExists($this->pdo, 'ml_jobs')
                 && $this->pdo->query("SELECT 1 FROM ml_jobs WHERE status IN ('queued','running') LIMIT 1")->fetchColumn()) {
                 throw new DomainException('Stop and drain forecasting/background workers before capturing a Store package.');
             }
             $capture = (new DatabaseSnapshotWriter($this->pdo, static function () use ($coordinator, $operationKey): void {
                 $coordinator->heartbeat($operationKey);
-            }))->write($sqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate']);
+            }))->write($sqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate', 'schema_migrations']);
             $available = disk_free_space(dirname($sqlPath));
             if ($available === false || $available < 2 * StorePackageFormat::MAX_BYTES) {
                 throw new DomainException('Private backup storage needs at least 96 MB of free disk space.');
@@ -124,7 +127,17 @@ final class DatabaseBackupService
             }
             $originPath = RecoveryStore::path('installation-id');
             if (!is_file($originPath)) RecoveryStore::write('installation-id', bin2hex(random_bytes(16)));
-            $package = StorePackageFormat::encode($sql, $files, $schema, trim((string)file_get_contents($originPath)), (string)$this->pdo->getAttribute(PDO::ATTR_SERVER_VERSION));
+            $package = StorePackageFormat::encode(
+                $sql,
+                $files,
+                $schema,
+                trim((string)file_get_contents($originPath)),
+                (string)$this->pdo->getAttribute(PDO::ATTR_SERVER_VERSION),
+                [
+                    'migrations' => $this->appliedMigrationKeys(),
+                    'key_fingerprint' => BackupKeyStore::currentFingerprint(),
+                ]
+            );
             $handle = fopen($artifactPath, 'xb');
             if ($handle === false) throw new DomainException('The encrypted package could not be opened.');
             chmod($artifactPath, 0600);
@@ -138,6 +151,7 @@ final class DatabaseBackupService
             unset($package, $sql, $files);
             $verified = StorePackageFormat::decode((string)file_get_contents($artifactPath), $schema);
             $snapshotAt = $verified['manifest']['snapshot_at'];
+            $keyFingerprint = $verified['key_fingerprint'];
             unset($verified);
             $coordinator->discard($sqlPath);
             $coordinator->releaseCapture();
@@ -178,7 +192,10 @@ final class DatabaseBackupService
                 $snapshotAt,
                 StorePackageFormat::KEY_VERSION,
                 StorePackageFormat::CIPHER,
-                $actorRole
+                $actorRole,
+                $keyFingerprint,
+                $artifactPath,
+                $actorUserId === null ? 'scheduled' : 'manual'
             );
 
         } catch (Throwable $exception) {
@@ -199,7 +216,23 @@ final class DatabaseBackupService
             'tables' => (int)$capture['tables'],
             'rows' => (int)$capture['rows'],
             'cipher' => StorePackageFormat::CIPHER,
+            'key_fingerprint' => $keyFingerprint,
         ];
+    }
+
+    /** Applied ledger keys are recorded even though the rows are excluded from the package. */
+    private function appliedMigrationKeys(): array
+    {
+        if (!Schema::tableExists($this->pdo, 'schema_migrations')) {
+            return [];
+        }
+        $keys = (new MigrationRunner($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->appliedKeys();
+        // The ledger also carries opaque legacy keys; only real migration files
+        // belong in the package manifest.
+        return array_values(array_filter(
+            $keys,
+            static fn(mixed $key): bool => is_string($key) && preg_match('/^[0-9]{12}_[a-z0-9_]+$/D', $key) === 1
+        ));
     }
 
     /**
@@ -263,7 +296,8 @@ final class DatabaseBackupService
         $this->authorize($actorRole);
         $limit = max(1, min(100, $limit));
         $sql = 'SELECT bh.backup_id, bh.filename, bh.backup_type, bh.file_size, bh.status, bh.created_at,
-                       bh.snapshot_at, bh.requested_by_role, bh.envelope_version, bh.cipher, bh.notes, u.display_name
+                       bh.snapshot_at, bh.requested_by_role, bh.envelope_version, bh.cipher, bh.notes, u.display_name,
+                       bh.key_fingerprint, bh.artifact_path, bh.trigger_source, bh.verified_at, bh.removed_at
                   FROM backup_history bh
                   LEFT JOIN users u ON u.user_id = bh.performed_by';
         $parameters = [];
@@ -278,16 +312,21 @@ final class DatabaseBackupService
 
         return array_map(static function (array $row) use ($isSuperAdministrator): array {
             $isOperationalCreate = (string)$row['backup_type'] === 'manual';
-            return [
+            $artifactPath = (string)($row['artifact_path'] ?? '');
+            $result = [
                 'backup_id' => (int)$row['backup_id'],
                 'filename' => (string)$row['filename'],
                 'backup_type' => (string)$row['backup_type'],
+                'backup_type_label' => self::backupTypeLabel((string)$row['backup_type']),
                 'file_size' => (int)($row['file_size'] ?? 0),
                 'status' => (string)$row['status'],
                 'created_at' => (string)$row['created_at'],
                 'snapshot_at' => $row['snapshot_at'] === null ? null : (string)$row['snapshot_at'],
                 'requested_by' => (string)($row['display_name'] ?? 'Scheduled task'),
                 'requested_by_role' => (string)($row['requested_by_role'] ?? ''),
+                'trigger_source' => $row['trigger_source'] === null ? null : (string)$row['trigger_source'],
+                'artifact_exists' => $artifactPath !== '' && is_file($artifactPath),
+                'artifact_state' => self::artifactState($row, $artifactPath),
                 'format' => $row['envelope_version'] === StorePackageFormat::KEY_VERSION
                     ? 'Encrypted Store package'
                     : ($row['envelope_version'] === SqlBackupFormat::VERSION
@@ -300,6 +339,10 @@ final class DatabaseBackupService
                     ? (string)($row['notes'] ?? '')
                     : self::administratorNote($row),
             ];
+            if ($isSuperAdministrator) {
+                $result['key_fingerprint'] = $row['key_fingerprint'] === null ? null : (string)$row['key_fingerprint'];
+            }
+            return $result;
         }, $stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
@@ -318,15 +361,30 @@ final class DatabaseBackupService
         ?string $snapshotAt = null,
         ?string $version = null,
         ?string $cipher = null,
-        ?string $actorRole = null
+        ?string $actorRole = null,
+        ?string $keyFingerprint = null,
+        ?string $artifactPath = null,
+        ?string $triggerSource = null,
+        ?string $verifiedAt = null
     ): int {
         $stmt = $this->pdo->prepare(
             'INSERT INTO backup_history
-                (filename, backup_type, file_size, status, performed_by, notes, snapshot_at, envelope_version, cipher, requested_by_role)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                (filename, backup_type, file_size, status, performed_by, notes, snapshot_at, envelope_version, cipher, requested_by_role,
+                 key_fingerprint, artifact_path, trigger_source, verified_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$filename, $type, $size, $status, $userId, $notes, $snapshotAt, $version, $cipher, $actorRole]);
+        $stmt->execute([$filename, $type, $size, $status, $userId, $notes, $snapshotAt, $version, $cipher, $actorRole,
+            $keyFingerprint, $artifactPath, $triggerSource, $verifiedAt]);
         return (int)$this->pdo->lastInsertId();
+    }
+
+    /** Bind a retained artifact (scheduled destination) to an existing history row. */
+    public function updateHistoryArtifact(int $backupId, string $path, ?string $fingerprint = null): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE backup_history SET artifact_path = ?, key_fingerprint = COALESCE(?, key_fingerprint) WHERE backup_id = ?'
+        );
+        $stmt->execute([$path, $fingerprint, $backupId]);
     }
 
     public function logActivity(int $actorUserId, string $action, array $metadata = []): void
@@ -395,5 +453,26 @@ final class DatabaseBackupService
             return 'The backup was not created. Ask your Super Administrator for the stored failure details.';
         }
         return 'Backup created on the server. This does not confirm the file was saved on your device.';
+    }
+
+    private static function backupTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'manual' => 'Manual backup',
+            'scheduled' => 'Scheduled backup',
+            'restore' => 'Restore',
+            default => ucfirst($type),
+        };
+    }
+
+    private static function artifactState(array $row, string $path): string
+    {
+        if ($path === '') {
+            return 'not_retained';
+        }
+        if (($row['removed_at'] ?? null) !== null) {
+            return 'removed';
+        }
+        return is_file($path) ? 'available' : 'missing';
     }
 }
