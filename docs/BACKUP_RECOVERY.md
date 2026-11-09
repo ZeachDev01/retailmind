@@ -1,39 +1,39 @@
 # Database Backup and recovery
 
-Current ordinary workflow: [Encrypted Store package contract](STORE_PACKAGE_FORMAT.md). Both administrator roles create and restore encrypted database-and-upload `.rmpkg` packages with a separate passphrase. Restoration requires approved Identity Reconciliation, a fresh verified destination safety copy, and recovery review before reopening. Super Administrator package validation alone remains read-only. The SQL-only instructions below describe retained **legacy offline recovery**, not the ordinary browser workflow. Keep old recovery files private until replacement encrypted recovery has been fully tested.
+Current ordinary workflow: [Encrypted Store package contract](STORE_PACKAGE_FORMAT.md). Both administrator roles create and restore encrypted database-and-upload `.rmpkg` packages using the installation's automatic Recovery Key; no backup passphrase is entered. Restoration requires approved Identity Reconciliation, a fresh verified destination safety copy, and recovery review before reopening. Super Administrator package validation alone remains read-only. The SQL-only instructions below describe retained **legacy offline recovery**, not the ordinary browser workflow. Keep old recovery files private until replacement encrypted recovery has been fully tested.
 
 ## Current capture
 
-Enter a separate backup passphrase (16–1024 bytes), create, then download. Keep the package and an off-server passphrase recovery copy separately. Creation history confirms capture, not that your browser saved it. Missing every passphrase copy makes the package unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
+Create the backup, then download it. Keep the package and an off-server copy of the Recovery Key separately. Creation history confirms capture, not that your browser saved it; the download recommendation and Backup Keyring exist to close that gap. A Scheduled Backup runs weekly without an operator, keeps the newest verified automatic package, and records failures for follow-up. Missing every Recovery Key copy makes those packages unusable. See the linked contract for runtime limits, complete upload capture, CLI input and security inventory.
 
 ## Identity Reconciliation preview
 
-The Super Administrator can open **Review Identity Reconciliation** from Backup & Restore. Upload a compatible encrypted package and enter the current destination login password plus that package's separate passphrase. Source installation access is not required. The preview lists source/destination people and matching numeric IDs, usernames and emails; no match automatically links people.
+The Super Administrator can open **Review Identity Reconciliation** from Backup & Restore. Upload a compatible encrypted package and enter the current destination login password. Decryption uses the Recovery Key automatically; import a transferred installation's key into the Backup Keyring first when needed. Source installation access is not required. The preview lists source/destination people and matching numeric IDs, usernames and emails; no match automatically links people.
 
 Choose an explicit same-person destination account or unused login details for each distinct ordinary person. Leaving the optional email blank explicitly clears it. Links retain the entire destination account, including password, status, roles, security state and profile. Source privileged-only and Recovery identities become roleless Historical Actors: disabled, unusable passwords, no memberships/reset/recovery authority, and permanently excluded from account activation or role assignment. Ordinary source memberships are restricted to the destination's fixed role templates. A reviewed result requires an active ordinary Administrator; designation is explicit.
 
-Reselect the same package and supply both secrets again to review resolutions and inspect the complete destination preservation closure and resulting access. The preservation closure guarantees complete retention of destination-owned security: protected accounts, credentials, profiles and sealed recovery accounts (`recovery_accounts`); platform settings (`platform_settings`); platform-scoped attention settings (`attention_settings`); technical forecasting configuration (`ml_settings`); classified security, recovery, platform-setting and recovery-account evidence (`activity_log`); login tracking and review watermarks (`login_attempts`, `attention_states`); valid protected reset state (`password_reset_tokens`); protected notification preferences and alerts (`notification_preferences`, `notifications`); backup and email-delivery history (`backup_history`, `email_delivery_log`); and dependent logical actors preserved as evidence-only accounts without usable access.
+Reselect the same package and re-enter the current destination login password to review resolutions and inspect the complete destination preservation closure and resulting access. The preservation closure guarantees complete retention of destination-owned security: protected accounts, credentials, profiles and sealed recovery accounts (`recovery_accounts`); platform settings (`platform_settings`); platform-scoped attention settings (`attention_settings`); technical forecasting configuration (`ml_settings`); classified security, recovery, platform-setting and recovery-account evidence (`activity_log`); login tracking and review watermarks (`login_attempts`, `attention_states`); valid protected reset state (`password_reset_tokens`); protected notification preferences and alerts (`notification_preferences`, `notifications`); backup and email-delivery history (`backup_history`, `email_delivery_log`); and dependent logical actors preserved as evidence-only accounts without usable access.
 
 The approving Super Administrator confirms reconciliation with their current destination login password. This records protected destination-owned preparation evidence in `RecoveryStore` (`reconciliation-approval.json`) capturing the exact package ID, origin, schema hash, decisions, explicit identity/file maps, active administrators count, resulting access, and a cryptographic destination watermark. Ordinary Administrators cannot approve or alter reconciliation; later authorized consumers may use valid preparation without receiving platform governance.
 
-Immediately before destructive use, the package integrity, required credentials, current authority, effective roles, relevant destination state (watermark), and mappings are strictly rechecked. Any discrepancy invalidates approval and demands renewed review. Clear, actionable errors are returned without exposing restricted evidence or secrets. Existing historical JSON stays unchanged; installation-aware record provenance resolves embedded source identities and survives repeated transfers. Required imported images receive collision-free paths without replacing destination profiles. Both installations must apply `202610250002_identity_provenance`; strict schema compatibility and original producer-fingerprint checks remain enforced across MySQL and MariaDB. See ADR-0021 for the allowed representation differences.
+Immediately before destructive use, the package integrity, required credentials, current authority, effective roles, relevant destination state (watermark), and mappings are strictly rechecked. Any discrepancy invalidates approval and demands renewed review. Clear, actionable errors are returned without exposing restricted evidence or secrets. Existing historical JSON stays unchanged; installation-aware record provenance resolves embedded source identities and survives repeated transfers. Required imported images receive collision-free paths without replacing destination profiles. Both installations must apply `202610250002_identity_provenance`. Review classifies packages as current, upgradable, or unsupported from the sealed migration ledger plus schema structure; registered adapters upgrade known older structures, the destination migration ledger is preserved, and unknown or newer structures stop before destructive work. Original producer-fingerprint checks remain enforced across MySQL and MariaDB. See ADR-0021 for the allowed representation differences and ADR-0028 for scheduling, keyring, and compatibility decisions.
 
 ## Start encrypted restoration
 
-After reconciliation approval, open **Restore encrypted backup** on either administrator backup screen. Select the exact approved package, enter your current destination login password and its original passphrase, and choose a new destination safety passphrase. Keep that safety passphrase off-server before continuing. Confirm that newer Store records will be replaced and stop source sales and background workers.
+After reconciliation approval, open **Restore encrypted backup** on either administrator backup screen. Select the exact approved package and enter your current destination login password. The destination safety copy is encrypted automatically with the Recovery Key; keep an off-server key copy available before continuing. Confirm that newer Store records will be replaced and stop source sales and background workers.
 
 Restoration acquires the exclusive Store request lock and captures a fresh verified safety checkpoint; previously downloaded safety copies are not reused. Destination security evidence is preserved from this checkpoint, including changes recorded after reconciliation approval. The operation is bound to the exact approval and package, and retained destination credentials authorize recovery even if replacement loses database tables. Old forecasting jobs are invalidated and model approval is cleared; forecasting recommendations remain suspended until destination rebuilding and approval.
 
 The browser opens the Recovery Console after replacement, or after a failure that requires recovery. Sign in with retained destination credentials, review and confirm the stock/receipt/upload/attribution checklist, then explicitly reopen with your password and confirmation that only one Store installation is active. Everyone signs in again. If replacement fails, use the original encrypted safety checkpoint or restart the approved incoming replacement as described below. Do not remove recovery state to bypass verification.
 ## Verified encrypted destination safety copies
 
-Both administrator backup screens also provide **Destination safety copy** for a separate manual checkpoint. Enter your current destination login password and a separately supplied safety-copy passphrase (16–1024 bytes). This captures the current complete database and referenced Product/profile images using the existing coordinated encrypted capture. Full decryption, schema/type/uniqueness/foreign-key and upload-integrity checks complete before safety readiness is published. Starting a restore captures its own fresh checkpoint.
+Both administrator backup screens also provide **Destination safety copy** for a separate manual checkpoint. Enter your current destination login password. The capture uses the existing coordinated encrypted workflow and the installation's Recovery Key. Full decryption, schema/type/uniqueness/foreign-key and upload-integrity checks complete before safety readiness is published. Starting a restore captures its own fresh checkpoint.
 
-Download the encrypted safety artifact and retain it outside both servers. Keep a separate owner-controlled recovery copy of its passphrase; neither the login password nor an incoming package secret is assumed to unlock it. Losing every copy makes this fallback unusable. Downloading does not consume or delete the original server artifact.
+Download the encrypted safety artifact and retain it outside both servers. Keep an owner-controlled off-server copy of the Recovery Key; neither the login password nor another installation's incoming key is assumed to unlock it. Losing every key copy makes this fallback unusable. Downloading does not consume or delete the original server artifact.
 
 Each operation owns one immutable fallback under private `BACKUP_STORAGE_PATH/safety-<operation-id>/`, separate from temporary backup-download cleanup and replacement tables/uploads. Its checkpoint binds requester, exact schema, package/origin IDs, encrypted hash, SQL/upload hashes and snapshot time. Retry verifies the same original rather than capturing changed or partial state. Missing/changed artifacts or invalid checkpoints fail closed; never substitute another operation's copy. Checkpoint verification uses its retained schema even if application users are missing. Protected browser recovery authentication and replacement/reopening are separate dependent deliveries; an ordinary session safety download cannot recover or reopen a failed restore.
 
-Capture requires functioning PHP 8.2+, OpenSSL/fileinfo, 512 MiB PHP memory, private persistent worker-accessible storage and reliable locks. Existing limits remain 48 MiB encrypted input, 32 MiB decoded contents, 100,000 rows, 2,000 images and 5 MiB per image. Capture requires at least 96 MiB free before encryption, in addition to existing retained copies. Database/upload/encryption/storage/verification failure cannot authorize destruction. Temporary plaintext SQL is deleted after capture or a handled failure; no decrypted copy or passphrase is kept as recovery material. Independently stop/drain background workers as documented for package capture.
+Capture requires functioning PHP 8.2+, OpenSSL/fileinfo, 512 MiB PHP memory, private persistent worker-accessible storage and reliable locks. Existing limits remain 48 MiB encrypted input, 32 MiB decoded contents, 100,000 rows, 2,000 images and 5 MiB per image. Capture requires at least 96 MiB free before encryption, in addition to existing retained copies. Database/upload/encryption/storage/verification failure cannot authorize destruction. Temporary plaintext SQL is deleted after capture or a handled failure; no decrypted copy or Recovery Key is kept as recovery material. Independently stop/drain background workers as documented for package capture.
 
 Disposable checks: `RUN_DB_TESTS=1 php -d memory_limit=512M src/backend/tests/safety_copy_workflow_integration.php` and `RUN_DB_TESTS=1 node src/backend/tests/safety_copy_browser_test.js`. The complete-schema test covers Product/profile bytes, exact stock, immutable retries, both roles, private repeatable download, wrong secrets, missing users and independent encryption/write/readback/checkpoint/capacity failures. Browser checks exercise both screens, password/CSRF errors, requester denial and mobile/desktop fit. Matching-runtime hosted capacity, persistence, isolation and recovery drills remain unexecuted under #288; these local checks do not certify migration readiness.
 
@@ -86,13 +86,13 @@ The browser recovery console (`/components/backup/recovery.php`) provides two cl
 
 1. **Complete Safety Recovery (`recover_safety`)**:
    - Restores destination database tables and referenced image uploads directly from the verified destination safety copy (`safety-<operation_id>/safety.rmpkg`).
-   - Requires only the destination safety-copy passphrase.
-   - Operates completely without incoming package material or incoming passphrases.
+   - Requires the destination login password and the destination Recovery Key.
+   - Operates completely without incoming package material or incoming keys.
    - Retains original verified safety artifact and checkpoint immutably on disk.
 
 2. **Restart Approved Incoming Replacement (`restart_incoming`)**:
    - Restarts replacement deterministically from the beginning using the approved encrypted Store package (`.rmpkg`).
-   - Requires both the incoming package passphrase AND the destination safety-copy passphrase.
+   - Requires the destination login password and the Recovery Key that opens both the incoming package and the safety copy.
    - Revalidates package identity, destination watermark, and reconciliation plan against the original safety checkpoint independently of partial live tables.
    - Re-applies approved identity and file mappings, preserves destination security closure, maps Historical Actors, and writes actor provenance to `store_record_origins`.
 
@@ -189,7 +189,31 @@ verified safety checkpoint, pauses Store writes, replaces the database and
 referenced uploads, invalidates sessions, and requires Store Reopening after
 automated verification and human review.
 
-Legacy plaintext SQL is not accepted by the ordinary browser recovery path.
-`RMSTORE1` packages require their original recovery passphrase through the
-older-backup flow. Never place recovery keys or passwords in URLs, logs,
-filenames, command arguments, or source control.
+Legacy plaintext SQL and `RMSTORE1` passphrase packages are not accepted by the
+ordinary browser recovery path; only `RMSTORE2` automatic-key packages are.
+Never place recovery keys or passwords in URLs, logs, filenames, command
+arguments, or source control.
+
+## Scheduled backups and key custody
+
+A Scheduled Backup runs weekly from the Windows scheduler and can be caught up
+from Backup & Restore when the task was missed. The Super Administrator owns the
+weekday, local time, and Backup Destination; the default is Sunday at 23:00
+Asia/Manila. The destination must be absolute, writable, outside both the
+application and web document root, and have at least 96 MiB free. The previous
+Scheduled Backup is removed only after the new package authenticates and
+verifies; manual backups, restore safety copies, and restore evidence are never
+retention targets. Replaced rows stay in Backup history with their removal time,
+and a failure leaves the previous package in place while raising an attention
+item and, when enabled, a Store Email Alert.
+
+After a completed backup, each Administrator is recommended to download the
+Recovery Key that encrypted the newest package. The recommendation appears as a
+once-per-session prompt and a persistent banner until that specific key is
+exported with the current login password. Acknowledgement is recorded only
+after the download stream completes; another Administrator who has not saved
+the key still sees the recommendation. The Backup Keyring lists the Primary
+Recovery Key and every imported or archived key with its fingerprint and dates.
+Import stays additive, promotion archives the previous primary, any key can be
+exported, and deletion requires an explicit password-confirmed warning while the
+primary key remains protected.
