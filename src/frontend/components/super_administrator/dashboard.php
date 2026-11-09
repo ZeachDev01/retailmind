@@ -17,6 +17,7 @@ $workspace = new DashboardWorkspace(
 $dashboard = $workspace->load('super_admin', 30);
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$backupRecommendation = (new \App\Backup\BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION['user_id'], (string)current_role());
 $formatDate = static function (?string $value): string {
     if ($value === null || $value === '') {
         return 'Never';
@@ -127,6 +128,8 @@ $platformHealth = $dashboard['headline']['platform_health'] ?? ['status' => 'hea
                 <i class="bi bi-pause-circle" aria-hidden="true"></i>
                 <span>Auto-refresh paused while working</span>
             </p>
+
+            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <?php if ($dashboard['state'] !== 'error'): ?>
             <section class="signals-grid" aria-label="Platform Health Indicators">
@@ -289,6 +292,7 @@ $platformHealth = $dashboard['headline']['platform_health'] ?? ['status' => 'hea
 
         </main>
     </div>
+    <script src="<?= $escape(app_url('assets/js/backup_key_recommendation.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_key_recommendation.js')) ?>"></script>
     <script>
     (() => {
         const dashboard = document.querySelector('[data-dashboard-refresh]');

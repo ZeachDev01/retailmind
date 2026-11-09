@@ -18,6 +18,7 @@ $workspace = new StoreOperationsDashboardWorkspace(
 $dashboard = $workspace->load('admin', $selectedRange);
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$backupRecommendation = (new \App\Backup\BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION['user_id'], (string)current_role());
 $formatDate = static function (?string $value): string {
     if ($value === null || $value === '') {
         return 'Not available';
@@ -96,6 +97,8 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
             </header>
 
             <p class="dashboard-stale" role="status" aria-live="polite" hidden><i class="bi bi-hourglass-split" aria-hidden="true"></i> Refresh paused until you finish.</p>
+
+            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <section class="dashboard-section governance-queue store-attention-queue" id="store-attention-section" aria-labelledby="store-attention-title">
                 <div class="section-header">
@@ -251,6 +254,7 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
 
         </main>
     </div>
+    <script src="<?= $escape(app_url('assets/js/backup_key_recommendation.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_key_recommendation.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/vendor/chartjs/chart.umd.min.js') . '?v=' . filemtime(__DIR__ . '/../../assets/vendor/chartjs/chart.umd.min.js')) ?>"></script>
     <script>
     (() => {

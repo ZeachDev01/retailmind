@@ -56,7 +56,7 @@
                                 <button class="btn btn-secondary" type="submit"><i class="bi bi-arrow-up-circle" aria-hidden="true"></i> Use for new backups</button>
                             </form>
                             <?php endif; ?>
-                            <form method="post" action="<?= $escape(app_url('components/backup/recovery_key.php')) ?>" aria-label="Export this key" data-password-authorization data-backup-key-export>
+                            <form method="post" action="<?= $escape(app_url('components/backup/recovery_key.php')) ?>" aria-label="Export this key" data-password-authorization>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="key_action" value="export">
                                 <input type="hidden" name="key_fingerprint" value="<?= $escape($key['fingerprint']) ?>">
@@ -68,7 +68,6 @@
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="key_action" value="delete">
                                 <input type="hidden" name="key_fingerprint" value="<?= $escape($key['fingerprint']) ?>">
-                                <p class="backup-keyring-warning" role="note">Backups encrypted with this key cannot be opened afterwards.</p>
                                 <div class="form-group"><label><input type="checkbox" name="confirm_delete" value="1" required> I understand backups encrypted with this key cannot be opened afterwards.</label></div>
                                 <div class="form-group"><label for="key-delete-password-<?= $escape($key['fingerprint']) ?>">Current login password</label><input id="key-delete-password-<?= $escape($key['fingerprint']) ?>" name="key_password" type="password" autocomplete="current-password" required></div>
                                 <button class="btn btn-danger" type="submit"><i class="bi bi-trash3" aria-hidden="true"></i> Delete key</button>

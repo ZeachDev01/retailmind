@@ -155,14 +155,15 @@ try {
         'The Administrator backup page must not show the Backup Destination control'
     );
 
-    // --- Super Administrator forced run ------------------------------------
+    // --- Super Administrator in-app catch-up -------------------------------
     $superPage = $read('src/frontend/components/system_administrator/backup_restore.php');
     foreach ([
         'PLATFORM_GOVERNANCE',
-        "action === 'run_scheduled_backup'",
-        'run_scheduled_backup',
+        "action === 'run_scheduled_catchup'",
+        'run_scheduled_catchup',
         'ScheduledBackupService',
-        'Run scheduled backup now',
+        'runCatchup()',
+        'Catch up missed backup',
         'require_local_request(',
         'csrf_field()',
         'csrf_verify()',
@@ -172,16 +173,24 @@ try {
         $assert(str_contains($superPage, $needle), "Super Administrator backup page must contain {$needle}");
     }
 
-    // --- History Kind/File columns on both pages ---------------------------
+    // --- Shared history labels replace per-page copies ----------------------
+    $backupService = $read('src/backend/app/Backup/DatabaseBackupService.php');
+    $scheduledSettings = $read('src/backend/app/Backup/ScheduledBackupSettings.php');
+    foreach (['Manual', 'Scheduled', 'Restore', 'Available on server', 'Removed after replacement', 'Not retained', 'Missing'] as $needle) {
+        $assert(str_contains($backupService, $needle), 'DatabaseBackupService must own history label ' . $needle);
+    }
+    foreach (['Skipped — retried next run', 'Completed', 'Failed'] as $needle) {
+        $assert(str_contains($scheduledSettings, $needle), 'ScheduledBackupSettings must own outcome label ' . $needle);
+    }
     foreach (['System Administrator page' => $superPage, 'Administrator page' => $adminPage] as $name => $page) {
         foreach (['<th scope="col">Kind</th>', '<th scope="col">File</th>', 'colspan="7"'] as $needle) {
             $assert(str_contains($page, $needle), $name . ' history must contain ' . $needle);
         }
-        foreach (['Manual', 'Scheduled', 'Restore', 'Skipped — retried next run', 'Removed after replacement', 'Not retained'] as $needle) {
-            $assert(str_contains($page, $needle), $name . ' history must explain/record ' . $needle);
+        foreach (["\$row['backup_type_label']", 'DatabaseBackupService::artifactLabel', 'DatabaseBackupService::artifactClass', 'ScheduledBackupSettings::outcomeLabel'] as $needle) {
+            $assert(str_contains($page, $needle), $name . ' history must use the shared label helper ' . $needle);
         }
     }
-    $assert(str_contains($superPage, 'Available on server'), 'The Super Administrator history must label a retained file');
+    $assert(str_contains($superPage, 'Available on server') || str_contains($backupService, 'Available on server'), 'The Super Administrator history must label a retained file');
 
     // --- CLI + Windows task installer --------------------------------------
     $cli = $read('src/backend/scripts/run_scheduled_backup.php');

@@ -48,9 +48,7 @@ try {
         $fingerprint = $action === 'download'
             ? BackupKeyStore::currentFingerprint()
             : (string)($_POST['key_fingerprint'] ?? '');
-        if (preg_match('/^[a-f0-9]{64}$/D', $fingerprint) !== 1) {
-            throw new RuntimeException('Invalid backup key reference.');
-        }
+        // BackupKeyStore::find() is the single fingerprint validation path.
         $key = BackupKeyStore::find($fingerprint);
         $filename = 'retailmind-recovery-' . substr($fingerprint, 0, 8) . '.key';
         $service->logActivity($actorUserId, 'Recovery key exported', [

@@ -199,8 +199,10 @@ arguments, or source control.
 A Scheduled Backup runs weekly from the Windows scheduler and can be caught up
 from Backup & Restore when the task was missed. The Super Administrator owns the
 weekday, local time, and Backup Destination; the default is Sunday at 23:00
-Asia/Manila. The destination must be absolute, writable, outside both the
-application and web document root, and have at least 96 MiB free. The previous
+Asia/Manila. A blank Backup Destination uses the private recovery store's
+`scheduled` folder. A configured destination must be an absolute path outside
+both the application and web document root, writable, and have at least 96 MiB
+free. The previous
 Scheduled Backup is removed only after the new package authenticates and
 verifies; manual backups, restore safety copies, and restore evidence are never
 retention targets. Replaced rows stay in Backup history with their removal time,

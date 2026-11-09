@@ -151,6 +151,20 @@ try {
         $assert(!str_contains($scheduledFailure->explanation, ':\\') && !str_contains($scheduledFailure->explanation, '/'), 'The explanation must not expose filesystem paths');
     }
     $pdo->exec("DELETE FROM backup_history WHERE backup_type = 'scheduled' AND status = 'failed'");
+    $resolvedFailureKeys = array_map(
+        static fn($item): string => $item->key,
+        $center->getAttention(1, 'super_admin', $healthChecks)
+    );
+    $assert(!in_array('platform.backup.scheduled-failure', $resolvedFailureKeys, true),
+        'Removing the failed scheduled row should resolve the Scheduled Backup condition');
+    $pdo->exec("INSERT INTO backup_history VALUES ('failed','manual','2026-09-18 09:00:00')");
+    $manualOnlyKeys = array_map(
+        static fn($item): string => $item->key,
+        $center->getAttention(1, 'super_admin', $healthChecks)
+    );
+    $assert(!in_array('platform.backup.scheduled-failure', $manualOnlyKeys, true),
+        'A failed manual backup must not raise the Scheduled Backup condition');
+    $pdo->exec("DELETE FROM backup_history WHERE backup_type = 'manual' AND status = 'failed'");
 
     $pdo->exec("INSERT INTO cashier_shifts VALUES (1,'closed',NULL,600);
         INSERT INTO fiscal_periods VALUES ('open','2026-09-17')");
