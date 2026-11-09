@@ -477,7 +477,7 @@ CREATE TABLE `fiscal_periods` (
   `period_name` varchar(100) NOT NULL,
   `start_date` date NOT NULL,
   `end_date` date NOT NULL,
-  `status` enum('open','closed','locked') DEFAULT 'open',
+  `status` enum('scheduled','open','closed','locked') DEFAULT 'open',
   `created_by` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `closed_at` timestamp NULL DEFAULT NULL,

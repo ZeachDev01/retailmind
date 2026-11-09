@@ -13,6 +13,15 @@ require_once dirname(__DIR__) . '/includes/functions.php';
 $clock ??= new App\Attention\SystemClock();
 (new App\Authorization\DormancyRunner($pdo, $clock))->run();
 
+// Automatic Fiscal Period rollover runs on the daily tick, and lazily on the
+// Administrator landing pages, so trading keeps fiscal coverage.
+require_once dirname(__DIR__) . '/app/Services/FiscalPeriodGuardService.php';
+try {
+    (new FiscalPeriodGuardService($pdo))->rolloverIfDue(null, null);
+} catch (Throwable $rolloverError) {
+    error_log('Fiscal period automatic rollover failed: ' . $rolloverError->getMessage());
+}
+
 require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
 $notifications = new NotificationService($pdo, $clock);
 $notifications->checkAndNotifyLowStock();

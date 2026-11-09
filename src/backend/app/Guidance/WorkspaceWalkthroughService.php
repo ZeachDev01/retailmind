@@ -450,7 +450,9 @@ class WorkspaceWalkthroughService
             $completed[] = $topicId;
         }
         $json = json_encode($completed, JSON_THROW_ON_ERROR);
-        $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, active_topic, active_step, completed_topics) VALUES (?, ?, NULL, 0, ?) ON DUPLICATE KEY UPDATE active_topic = NULL, active_step = 0, completed_topics = VALUES(completed_topics)');
+        // Completing a guided topic is the user's onboarding choice: it also
+        // stops the automatic setup banner from returning on later pages.
+        $stmt = $pdo->prepare('INSERT INTO workspace_guidance (user_id, workspace, status, active_topic, active_step, completed_topics) VALUES (?, ?, \'completed\', NULL, 0, ?) ON DUPLICATE KEY UPDATE status = \'completed\', active_topic = NULL, active_step = 0, completed_topics = VALUES(completed_topics)');
         $stmt->execute([$userId, $workspace, $json]);
     }
 

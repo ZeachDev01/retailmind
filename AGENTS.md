@@ -26,6 +26,7 @@ Before writing any code, walk down this ladder and stop at the first working ste
 ## Context Pointers
 - Workspace routes, views, modals, CSS bundle sources (`build_styles.php`), & contract test needles: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
 - Review rules, UI/UX density standards, & accessibility gates: [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
+- Scheduled backups, recovery-key prompts, & structure compatibility: [`docs/specs/scheduled-backups-and-recovery-keys.md`](docs/specs/scheduled-backups-and-recovery-keys.md), [`docs/adr/0028-scheduled-weekly-backups-and-managed-key-custody.md`](docs/adr/0028-scheduled-weekly-backups-and-managed-key-custody.md)
 - Fast verification: `npm run check` (runs stylesheet bundle check, view markup audit, and smoke contracts). For layout debugging, query `getBoundingClientRect()` via Playwright instead of scraping screenshots.
 
 ## Available Skills

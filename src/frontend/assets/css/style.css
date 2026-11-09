@@ -3480,6 +3480,78 @@ tbody tr.table-ghost-row:last-child td {
   background: var(--surface-soft);
   color: var(--text);
 }
+/* Password criteria feedback, matching the reset / change password meter. */
+.user-form .cp-meter-container {
+  width: 100%;
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.user-form .cp-meter-bars {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+  height: 4px;
+}
+.user-form .cp-meter-bar {
+  flex: 1;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color 0.25s ease;
+}
+.user-form .cp-meter-bar.active-weak { background: #ef4444; }
+.user-form .cp-meter-bar.active-fair { background: #f59e0b; }
+.user-form .cp-meter-bar.active-good { background: #3b82f6; }
+.user-form .cp-meter-bar.active-strong { background: #10b981; }
+.user-form .cp-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 0.4rem;
+}
+.user-form .cp-req-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.user-form .cp-req-chip i {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+.user-form .cp-req-chip.valid {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  font-weight: 700;
+  transform: translateY(-1px);
+}
+.user-form .cp-req-chip.valid i {
+  opacity: 1;
+  color: #059669;
+}
+html[data-theme="dark"] .user-form .cp-req-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+  color: var(--muted);
+}
+html[data-theme="dark"] .user-form .cp-req-chip.valid {
+  background: rgba(16, 185, 129, 0.22);
+  color: #a7f3d0;
+  border-color: rgba(16, 185, 129, 0.5);
+}
+html[data-theme="dark"] .user-form .cp-req-chip.valid i {
+  color: #6ee7b7;
+}
 .drawer-modal-actions {
   display: flex;
   justify-content: flex-end;

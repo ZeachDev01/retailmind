@@ -292,7 +292,7 @@ These scripts are discovery pointers, not evidence that their entire associated 
 | --- | --- |
 | ADM staff/settings/Register, SE role limits | `administrator_management_browser_test.js`, `role_capability_policy_contract.php`, `register_administration_contract.php`, `user_lifecycle_contract.php` |
 | ADM sales/Gross Profit/report consistency | `administrator_dashboard_financial_test.php`, `gross_profit_reporting_test.php`, `gross_profit_report_browser_test.js`, `sales_refunds_payment_date_contract.php` |
-| ADM Fiscal Period and Operational Audit | `fiscal_period_custody_closure_contract.php`, `audit_visibility_integration.php`, `audit_modules_test.php` |
+| ADM Fiscal Period and Operational Audit | `fiscal_period_custody_closure_contract.php`, `fiscal_period_scheduling_contract.php`, `audit_visibility_integration.php`, `audit_modules_test.php` |
 | ADM Database Backup | `database_backup_workflow_integration.php`, `backup_package_browser_test.js`, `backup_workflow_route_contract.php` |
 | ADM/INV forecasts and replenishment | `forecast_generation_contract.php`, `demand_forecast_service_test.php`, `demand_forecast_workflow_browser_test.js`, `forecast_decision_browser_test.js` |
 | INV Product/CSV/receiving | `product_csv_import_test.php`, `product_create_browser_test.js`, `batch_receiving_mysql_test.php`, `receiving_history_browser_test.js` |

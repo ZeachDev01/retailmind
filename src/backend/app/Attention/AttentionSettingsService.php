@@ -27,6 +27,7 @@ final class AttentionSettingsService
         'inventory_overdue_hours' => 24.0,
         'inventory_high_value_amount' => 5000.0,
         'fiscal_period_days_to_close' => 3.0,
+        'fiscal_period_auto_rollover' => 0.0,
     ];
 
     private const STORE_LIMITS = [

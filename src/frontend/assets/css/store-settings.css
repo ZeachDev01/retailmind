@@ -719,3 +719,19 @@
         transition: none !important;
     }
 }
+
+.setting-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.setting-toggle input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: 0.15rem;
+    accent-color: var(--primary);
+}

@@ -130,9 +130,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($fields as $key => $config) {
                 $updates[$key] = $_POST[$key] ?? '';
             }
+            $updates['fiscal_period_auto_rollover'] = empty($_POST['fiscal_period_auto_rollover']) ? '0' : '1';
             $service->updateStore(current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Store attention thresholds updated', 'Store Settings', null, null, $updates);
-            $message = 'Store attention thresholds saved. Platform safety limits are applied automatically.';
+            $message = 'Store attention thresholds and automatic Fiscal Period rollover saved. Platform safety limits are applied automatically.';
         } else {
             throw new InvalidArgumentException('Choose a Store Settings section to save.');
         }
@@ -264,8 +265,15 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                         </div>
                     <?php endforeach; ?>
                 </div>
+                <div class="form-group u-mt-1">
+                    <label class="setting-toggle" for="fiscal_period_auto_rollover">
+                        <input type="checkbox" id="fiscal_period_auto_rollover" name="fiscal_period_auto_rollover" value="1" <?= !empty($requested['fiscal_period_auto_rollover']) ? 'checked' : '' ?>>
+                        <span>Close the due Fiscal Period and open the next scheduled period automatically</span>
+                    </label>
+                    <small class="field-help u-text-muted">Closure blockers still stop the rollover. Leave off to open each period manually.</small>
+                </div>
                 <div class="form-actions u-mt-1">
-                    <button class="btn btn-primary" type="submit">Save attention thresholds</button>
+                    <button class="btn btn-primary" type="submit">Save attention settings</button>
                 </div>
             </form>
         </section>

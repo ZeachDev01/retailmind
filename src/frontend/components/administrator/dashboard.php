@@ -6,6 +6,13 @@ use App\Attention\SystemClock;
 use App\Authorization\RoleCapabilityPolicy;
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 
+require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
+try {
+    (new FiscalPeriodGuardService($pdo))->rolloverIfDue(null, (int)$_SESSION['user_id']);
+} catch (Throwable $rolloverError) {
+    error_log('Fiscal period automatic rollover skipped: ' . $rolloverError->getMessage());
+}
+
 $displayName = trim((string)($_SESSION['display_name'] ?? 'Administrator'));
 $selectedRange = 30;
 $requestedPeriod = filter_input(INPUT_GET, 'period', FILTER_DEFAULT);

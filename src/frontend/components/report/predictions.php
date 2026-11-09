@@ -55,8 +55,11 @@ foreach ($coverage['products'] as $p) {
 
 $originTimestamp = $forecastOrigin ? strtotime($forecastOrigin) : null;
 $now = time();
-$originAgeDays = $originTimestamp ? (int)floor(($now - $originTimestamp) / 86400) : null;
-$originAgeText = $originAgeDays !== null ? ($originAgeDays === 0 ? 'Today' : ($originAgeDays === 1 ? '1 day old' : "{$originAgeDays} days old")) : 'Unavailable';
+$originAgeDays = $originTimestamp ? max(0, (int)floor(($now - $originTimestamp) / 86400)) : null;
+$originDateLabel = $forecastOrigin ? date('M j, Y', strtotime($forecastOrigin)) : 'No history yet';
+$originAgeText = $originAgeDays === null
+    ? 'Import sales to begin'
+    : ($originAgeDays === 0 ? 'Updated today' : ($originAgeDays === 1 ? 'Updated yesterday' : "Updated {$originAgeDays} days ago"));
 
 // Guidance target range
 $targetRangeText = 'Unavailable';
@@ -75,9 +78,9 @@ if ($isGenerating) {
     $statusBadgeClass = 'tag-danger';
     $statusBadgeLabel = 'Unavailable';
 } elseif ($originAgeDays !== null && $originAgeDays > 7) {
-    $generationStatus = 'old';
+    $generationStatus = 'old'; // 'old' forecast state: sales history is more than a week behind.
     $statusBadgeClass = 'tag-warning';
-    $statusBadgeLabel = 'Old';
+    $statusBadgeLabel = 'Needs update';
 } else {
     $generationStatus = 'ready';
     $statusBadgeClass = 'tag-success';
@@ -85,8 +88,17 @@ if ($isGenerating) {
 }
 
 $statusTitle = $isGenerating
-    ? 'Forecast update in progress'
-    : ($coverage['is_guidance_usable'] ? 'Expected sales are available' : 'Current sales forecasts are unavailable');
+    ? 'Updating your forecasts'
+    : (!$coverage['is_guidance_usable']
+        ? 'Forecasts are not available yet'
+        : ($generationStatus === 'old' ? 'Forecasts need an update' : 'Forecasts are ready'));
+
+$statusIcon = match ($generationStatus) {
+    'ready' => 'check2-circle',
+    'updating' => 'arrow-repeat',
+    'old' => 'clock-history',
+    default => 'exclamation-circle',
+};
 
 $displayProducts = $coverage['filtered']['is_filtered'] ? $coverage['filtered']['products'] : $coverage['products'];
 
@@ -139,12 +151,13 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <header class="page-heading">
             <div>
                 <h1>Demand Forecast</h1>
-                <p class="page-subtitle">Expected sales. Stock on hand. What needs attention.</p>
+                <p class="page-subtitle">Expected sales, stock, and what needs attention.</p>
             </div>
         </header>
         <?php forecast_workflow('forecast'); ?>
         <?php
         $primaryIssue = $operationalIssues[0] ?? null;
+        $reviewCount = count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true)));
         $nextUrl = $primaryIssue['action_url'] ?? null;
         $nextLabel = $primaryIssue['action_label'] ?? 'Check sales data';
         $nextText = $primaryIssue ? $primaryIssue['responsible_role'] . ': ' . $nextLabel . '.' : 'Check sales data and model approval.';
@@ -165,36 +178,45 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 : (has_capability(RoleCapabilityPolicy::APPROVE_MODELS) ? app_url('components/administrator/model_review.php') : null);
             $nextLabel = has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS) ? 'Check training result' : 'Check model review';
         }
+        if (!$nextUrl && !$isGenerating && $coverage['is_guidance_usable'] && !$coverage['is_observation_mode'] && !$coverage['is_recommendations_suspended'] && has_capability(RoleCapabilityPolicy::MUTATE_INVENTORY)) {
+            $nextUrl = app_url('components/inventory_management/replenishment_queue.php');
+            $nextLabel = 'See what to reorder';
+        }
         ?>
         <?php if ($isDemoMode): ?>
             <div class="forecast-notice" role="status"><strong>Historical demo · <?= htmlspecialchars($demoSource) ?></strong> — not current Store forecasts.</div>
         <?php endif; ?>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="alert"><?= htmlspecialchars($message) ?></div><?php endif; ?>
-        <section class="forecast-overview forecast-status-card" aria-labelledby="heading-usability">
+        <section class="forecast-overview forecast-status-card is-<?= htmlspecialchars($generationStatus) ?>" aria-labelledby="heading-usability">
             <div class="forecast-status-content">
                 <div class="forecast-status-heading">
-                    <h2 id="heading-usability">Forecast status</h2>
+                    <h2 id="heading-usability"><i class="bi bi-<?= $statusIcon ?>" aria-hidden="true"></i>Forecast status</h2>
                     <span class="status-badge <?= $statusBadgeClass ?>"><?= $statusBadgeLabel ?></span>
                     <?php forecast_help('coverage-help', $coverage['coverage_summary_text'], 'About forecast availability'); ?>
                 </div>
                 <p class="forecast-status-message">
                     <strong><?= htmlspecialchars($statusTitle) ?></strong>
-                    <?= htmlspecialchars($isGenerating ? 'Wait for the background job. Buying suggestions keep their current basis until it finishes.' : $nextText) ?>
+                    <?= htmlspecialchars($isGenerating ? 'Forecasts are being updated. Buying suggestions keep their current basis until it finishes.' : $nextText) ?>
                 </p>
             </div>
             <dl class="forecast-facts">
                 <div class="forecast-fact">
-                    <dt>Products with forecasts</dt>
+                    <dt>Products covered</dt>
                     <dd>
                         <strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?></strong>
-                        <meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Forecast product coverage"></meter>
-                        <small><?= (int)$coverage['stock_rule_count'] ?> using stock rules</small>
+                        <meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Products covered by a forecast"></meter>
+                        <small><?php
+                            $stockRuleCount = (int)$coverage['stock_rule_count'];
+                            echo $stockRuleCount === 0
+                                ? 'Every product has a forecast'
+                                : ($stockRuleCount === 1 ? '1 product has no forecast' : $stockRuleCount . ' products have no forecast');
+                        ?></small>
                     </dd>
                 </div>
                 <div class="forecast-fact">
-                    <dt>Sales history through</dt>
+                    <dt>Sales data up to</dt>
                     <dd>
-                        <strong><?= htmlspecialchars($forecastOrigin ?? 'Unavailable') ?></strong>
+                        <strong><?= htmlspecialchars($originDateLabel) ?></strong>
                         <small><?= htmlspecialchars($originAgeText) ?></small>
                     </dd>
                 </div>
@@ -207,7 +229,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <div class="forecast-notice" role="status"><?= $coverage['is_recommendations_suspended'] ? 'Forecast buying suggestions are paused. Use stock rules.' : 'Observation only. Forecasts are not approved for routine buying.' ?></div>
         <?php endif; ?>
         <details class="forecast-details forecast-actions">
-            <summary id="heading-actions"><span>Forecast checks <span class="forecast-check-count"><?= count(array_filter($operationalIssues, static fn(array $issue): bool => !in_array($issue['severity'] ?? '', ['healthy', 'success'], true))) ?> to review</span></span></summary>
+            <summary id="heading-actions"><span>Forecast checks <span class="forecast-check-count"><?= $reviewCount > 0 ? $reviewCount . ' to review' : 'All clear' ?></span></span></summary>
             <div role="list">
             <?php foreach ($operationalIssues as $issueIndex => $issue):
                 $issueIcon = match($issue['severity'] ?? 'info') {
@@ -252,18 +274,18 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <div class="forecast-panel forecast-products" id="product-forecasts">
             <div class="forecast-panel-heading">
                 <div class="forecast-panel-title">
-                    <h2>Product Forecasts <span class="forecast-count">(<?= $totalFilteredProducts ?><?= $coverage['filtered']['is_filtered'] || $basisFilter !== 'all' ? ' of ' . (int)$coverage['scope_count'] : '' ?>)</span></h2>
-                    <p class="forecast-panel-subtitle">Expected sales in Base Units · <?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', '7-, 14-, and 28-day totals each start the day after the forecast origin. These are expected sales, not quantities to buy. Review Replenishment Recommendations before purchasing.', 'About forecast quantities'); ?></p>
+                    <h2>Product forecasts <span class="forecast-count">(<?= $totalFilteredProducts ?><?= $coverage['filtered']['is_filtered'] || $basisFilter !== 'all' ? ' of ' . (int)$coverage['scope_count'] : '' ?>)</span></h2>
+                    <p class="forecast-panel-subtitle">Expected units customers may buy · <?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', 'Expected units customers may buy in the next 7, 14, or 28 days. These are sales estimates, not a buying order. Use Replenishment Recommendations for purchase quantities.', 'About these numbers'); ?></p>
                 </div>
                 <div class="forecast-panel-toolbar">
-                    <nav class="forecast-basis-tabs" aria-label="Forecast filter basis">
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'all', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'all' ? 'is-active' : '' ?>"<?= $basisFilter === 'all' ? ' aria-current="page"' : '' ?>>All (<?= (int)$coverage['scope_count'] ?>)</a>
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'forecast_backed', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'forecast_backed' ? 'is-active' : '' ?>"<?= $basisFilter === 'forecast_backed' ? ' aria-current="page"' : '' ?>>Forecast-backed (<?= (int)$coverage['forecast_backed_count'] ?>)</a>
-                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'stock_rules', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'stock_rules' ? 'is-active' : '' ?>"<?= $basisFilter === 'stock_rules' ? ' aria-current="page"' : '' ?>>Stock rules (<?= (int)$coverage['stock_rule_count'] ?>)</a>
+                    <nav class="forecast-basis-tabs" aria-label="Filter products by forecast basis">
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'all', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'all' ? 'is-active' : '' ?>"<?= $basisFilter === 'all' ? ' aria-current="page"' : '' ?>>All products (<?= (int)$coverage['scope_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'forecast_backed', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'forecast_backed' ? 'is-active' : '' ?>"<?= $basisFilter === 'forecast_backed' ? ' aria-current="page"' : '' ?>>Has forecast (<?= (int)$coverage['forecast_backed_count'] ?>)</a>
+                        <a href="?<?= htmlspecialchars(http_build_query(array_filter(array_merge($_GET, ['basis' => 'stock_rules', 'p' => 1])))) ?>" class="forecast-basis-chip <?= $basisFilter === 'stock_rules' ? 'is-active' : '' ?>"<?= $basisFilter === 'stock_rules' ? ' aria-current="page"' : '' ?>>No forecast (<?= (int)$coverage['stock_rule_count'] ?>)</a>
                     </nav>
                     <form method="get" action="" class="search-form" role="search">
                         <?php if ($basisFilter !== 'all'): ?><input type="hidden" name="basis" value="<?= htmlspecialchars($basisFilter) ?>"><?php endif; ?>
-                        <input type="search" name="search" autocomplete="off" aria-label="Search products by name, SKU, or ID" placeholder="Name, SKU, or ID…" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                        <input type="search" name="search" autocomplete="off" aria-label="Search products by name, SKU, or ID" placeholder="Product name or SKU" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
                         <button type="submit" class="btn btn-secondary">Search</button>
                         <?php if ($searchQuery !== ''): ?>
                             <a href="predictions.php<?= $basisFilter !== 'all' ? '?basis=' . urlencode($basisFilter) : '' ?>" class="btn btn-quiet">Clear</a>
@@ -275,19 +297,19 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 <div class="empty-state">
                     <i class="bi bi-graph-up-arrow empty-icon" aria-hidden="true"></i>
                     <h2><?= $searchQuery !== '' ? 'No matching products' : 'No forecasts available' ?></h2>
-                    <p><?= $searchQuery !== '' ? 'No matching products found. Clear the search to view all products.' : 'Demand forecasts have not been generated yet or the last run failed.' ?></p>
+                    <p><?= $searchQuery !== '' ? 'No matching products found. Clear the search to view all products.' : 'Generate a forecast or add products first. Expected sales will appear here once they are ready.' ?></p>
                 </div>
             <?php else: ?>
                 <div class="table-wrap" role="region" aria-label="Demand forecasts table" tabindex="0">
-                    <table class="data-table forecast-table" data-no-smart-table>
+                    <table class="data-table forecast-table" data-no-smart-table data-no-ghost-rows>
                         <thead>
                             <tr>
                                 <th scope="col">Product</th>
-                                <th scope="col" class="num">On hand</th>
+                                <th scope="col" class="num">In stock</th>
                                 <th scope="col" class="num">7 days</th>
                                 <th scope="col" class="num">14 days</th>
                                 <th scope="col" class="num">28 days</th>
-                                <th scope="col">Forecast basis <?php forecast_help('basis-help', 'Forecast-backed products use estimated sales. Other products use stock rules. Readiness describes available evidence, not an accuracy guarantee.', 'About forecast basis'); ?></th>
+                                <th scope="col">Forecast quality <?php forecast_help('basis-help', 'Quality shows how much recent sales history supports the estimate. Products without a forecast use stock rules instead.', 'About forecast quality'); ?></th>
                                 <th scope="col">Action</th>
                             </tr>
                         </thead>
@@ -298,6 +320,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 $stock = (int)($f['current_stock'] ?? 0);
                                 $isForecastBacked = !empty($f['is_forecast_backed']);
                                 $readiness = $f['readiness_level'] ?? 'Insufficient';
+                                $qualityLabel = ['High' => 'Good', 'Medium' => 'Fair', 'Low' => 'Limited', 'Insufficient' => 'Limited'][$readiness] ?? $readiness;
                                 $missingForecast = '<span class="muted" aria-label="No forecast">&mdash;</span>';
                             ?>
                                 <tr>
@@ -305,24 +328,24 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                         <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>"><?= htmlspecialchars($name) ?></a></strong>
                                         <small class="forecast-sku"><?= htmlspecialchars($sku) ?></small>
                                     </td>
-                                    <td class="num" data-label="On hand"><?= htmlspecialchars((string)$stock) ?></td>
+                                    <td class="num" data-label="In stock"><?= htmlspecialchars((string)$stock) ?></td>
                                     <td class="num" data-label="7 days"><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_7_day'] ?? 0)) : $missingForecast ?></td>
                                     <td class="num" data-label="14 days"><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_14_day'] ?? 0)) : $missingForecast ?></td>
                                     <td class="num forecast-strong" data-label="28 days"><?= $isForecastBacked ? htmlspecialchars((string)($f['forecast_28_day'] ?? 0)) : $missingForecast ?></td>
-                                    <td data-label="Forecast basis">
+                                    <td data-label="Forecast quality">
                                         <?php if ($isForecastBacked): ?>
                                             <span class="status-badge readiness-tag-<?= htmlspecialchars($readiness) ?>">
-                                                 <?= htmlspecialchars($readiness) ?>
+                                                 <?= htmlspecialchars($qualityLabel) ?>
                                             </span>
                                             <?php forecast_help('basis-' . (int)$f['product_id'], (string)$f['basis'], 'Forecast evidence for ' . $name); ?>
                                         <?php else: ?>
-                                            <span class="badge tag-secondary">Stock-rule</span>
-                                            <?php forecast_help('excluded-' . (int)$f['product_id'], (string)($f['exclusion_reason'] ?? 'Stock rules'), 'Why ' . $name . ' uses stock rules'); ?>
+                                            <span class="status-badge readiness-tag-Insufficient">No forecast</span>
+                                            <?php forecast_help('excluded-' . (int)$f['product_id'], (string)($f['exclusion_reason'] ?? 'Stock rules'), 'Why ' . $name . ' has no forecast'); ?>
                                         <?php endif; ?>
                                     </td>
                                     <td class="forecast-action-cell" data-label="Action">
                                         <a class="btn btn-sm btn-secondary forecast-row-link" href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . $f['product_id'])) ?>">
-                                            View Forecast
+                                            View forecast
                                         </a>
                                     </td>
                                 </tr>
@@ -342,9 +365,9 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                                 <?php if ($currentProductPage < $totalProductPages): ?>
                                     <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage + 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">Next &rarr;</a>
                                 <?php endif; ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View All</a>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View all</a>
                             <?php elseif ($showAllProducts): ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show Paginated</a>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show pages</a>
                             <?php endif; ?>
                         </div>
                     </nav>

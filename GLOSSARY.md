@@ -32,6 +32,10 @@ _Avoid_: Default product category, automatic classification
 A familiar brand name offered while entering a Product's optional Brand. It does not restrict or automatically set the Product's Brand.
 _Avoid_: Default brand, required brand
 
+**Store PC**:
+The single dedicated Windows machine that hosts the live RetailMind installation and its local database.
+_Avoid_: Server, cloud host, second live PC
+
 **Store Migration**:
 The transfer of the Store's recorded state and uploaded files to another RetailMind installation, which becomes its sole active installation after verification. It supports movement between a local host and web hosting.
 _Avoid_: Synchronization, merging Stores
@@ -47,6 +51,34 @@ _Avoid_: Plain SQL backup, unverified backup
 **Recovery Key**:
 The private encryption key required to authenticate and decrypt a Verified Encrypted Database Backup. It is separate from the database and application files.
 _Avoid_: Backup password, database password
+
+**Backup Keyring**:
+The Recovery Keys retained by an installation: its Primary Recovery Key plus any Imported Recovery Keys.
+_Avoid_: Key vault, key list
+
+**Primary Recovery Key**:
+The Recovery Key used to encrypt new Verified Encrypted Database Backups.
+_Avoid_: Active key, master key
+
+**Imported Recovery Key**:
+A Recovery Key added from another installation so that installation's packages can be opened. It becomes the Primary Recovery Key only when explicitly promoted.
+_Avoid_: Foreign key, secondary key
+
+**Scheduled Backup**:
+A Verified Encrypted Database Backup created automatically on the Store's weekly schedule without an operator present.
+_Avoid_: Cron backup, automatic dump
+
+**Backup Destination**:
+The configurable private folder outside the web document root where Scheduled Backups are retained.
+_Avoid_: Backup folder, download folder
+
+**Backup Retention**:
+The rule that keeps only the newest Scheduled Backup and removes the previous one after the new package is verified.
+_Avoid_: Cleanup policy, backup rotation
+
+**Recovery Key Acknowledgement**:
+An administrator's confirmation that a copy of a specific Recovery Key is saved separately from its packages.
+_Avoid_: Key dismissal, download reminder
 
 **Identity Reconciliation**:
 The restoring Administrator or Super Administrator's explicit determination of whether accounts from the source and destination represent the same person before Database Restore. Different people remain separately attributable, and the destination's protected access remains authoritative.
@@ -143,6 +175,14 @@ _Avoid_: Work period, Session
 **Fiscal Period**:
 A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.
 _Avoid_: Cashier Shift, work session, branch fiscal period
+
+**Scheduled Period**:
+A Fiscal Period whose dates are reserved in advance but which accepts no transactions until its start date is reached and it is opened, manually or by Automatic Rollover.
+_Avoid_: Draft period, upcoming period, pending period
+
+**Automatic Rollover**:
+An opt-in Store Setting that closes a Fiscal Period once its end date has passed and opens the next Scheduled Period. Closure prerequisites still block it, and it never creates, skips, or invents a period.
+_Avoid_: Auto-close, auto-renew, recurring period
 
 **Store Reports**:
 Aggregated analytical summaries of business performance (e.g. daily/weekly revenue, category sales, product sales).

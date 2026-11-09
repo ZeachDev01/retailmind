@@ -23,7 +23,12 @@
 }
 
 .fiscal-period-stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fiscal-period-stats .fiscal-stat-scheduled .stat-icon {
+    background: rgba(37, 99, 235, 0.11);
+    color: var(--primary);
 }
 
 .fiscal-period-stats .fiscal-stat-locked {
@@ -173,6 +178,11 @@
     color: var(--theme-success-text, #166534);
 }
 
+.fiscal-status-badge.scheduled {
+    background: rgba(37, 99, 235, 0.12);
+    color: var(--primary);
+}
+
 .fiscal-status-badge.closed {
     background: var(--theme-warning-surface, #fef3c7);
     color: var(--theme-warning-text, #92400e);
@@ -211,8 +221,10 @@
 
 .fiscal-period-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
+    gap: 0.5rem;
     min-height: 38px;
     margin-top: auto;
     padding-top: 1rem;
@@ -224,6 +236,51 @@
 }
 
 .fiscal-period-actions .btn {
+    min-height: 38px;
+}
+
+.fiscal-period-actions .fiscal-read-only {
+    margin-right: auto;
+}
+
+.fiscal-period-amend {
+    flex: 0 0 auto;
+}
+
+.fiscal-period-amend summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.fiscal-period-amend summary::-webkit-details-marker {
+    display: none;
+}
+
+.fiscal-period-amend[open] {
+    flex: 1 0 100%;
+}
+
+.fiscal-period-amend-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.6rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--theme-surface-soft, #f8fafc);
+}
+
+.fiscal-period-amend-form label {
+    flex: 1 1 100%;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.fiscal-period-amend-form input {
+    flex: 1 1 160px;
     min-height: 38px;
 }
 
@@ -281,6 +338,10 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .fiscal-period-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .fiscal-create-button {
         width: max-content;
     }
@@ -314,7 +375,10 @@
 
     .fiscal-period-actions,
     .fiscal-period-actions form,
-    .fiscal-period-actions .btn {
+    .fiscal-period-actions .btn,
+    .fiscal-period-amend,
+    .fiscal-period-amend summary,
+    .fiscal-period-amend-form input {
         width: 100%;
     }
 }

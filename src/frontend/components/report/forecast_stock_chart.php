@@ -10,17 +10,17 @@ foreach ($chartProducts as $chartProduct) {
 <section class="forecast-panel forecast-chart-panel" aria-labelledby="stock-demand-title">
     <div class="forecast-panel-heading">
         <div>
-            <h2 id="stock-demand-title">Stock vs expected sales · 7 days</h2>
-            <small class="muted">First <?= count($chartProducts) ?> forecast-backed product<?= count($chartProducts) === 1 ? '' : 's' ?><?= $searchQuery !== '' ? ' matching your search' : '' ?> · Base Units</small>
+            <h2 id="stock-demand-title">In stock vs expected 7-day sales</h2>
+            <small class="muted"><?= count($chartProducts) ?> product<?= count($chartProducts) === 1 ? '' : 's' ?> with a forecast<?= $searchQuery !== '' ? ' matching your search' : '' ?> · units</small>
         </div>
-        <div class="forecast-key"><span><i class="stock-key" aria-hidden="true"></i>On hand</span><span><i aria-hidden="true"></i>Expected sales</span></div>
+        <div class="forecast-key"><span><i class="stock-key" aria-hidden="true"></i>In stock</span><span><i aria-hidden="true"></i>Expected sales</span></div>
     </div>
     <div class="forecast-bars">
         <?php foreach ($chartProducts as $chartProduct): ?>
         <div class="forecast-bar-row">
             <a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . (int)$chartProduct['product_id'])) ?>"><?= htmlspecialchars($chartProduct['product_name']) ?></a>
             <div class="forecast-bar-pair">
-                <?php foreach (['current_stock' => 'On hand', 'forecast_7_day' => 'Expected sales'] as $key => $label): ?>
+                <?php foreach (['current_stock' => 'In stock', 'forecast_7_day' => 'Expected sales'] as $key => $label): ?>
                 <div class="forecast-bar-track" aria-label="<?= htmlspecialchars($label . ': ' . $chartProduct[$key] . ' units') ?>">
                     <span aria-hidden="true"><i class="forecast-bar <?= $key === 'current_stock' ? 'stock' : '' ?>" style="width: <?= max(0, (float)$chartProduct[$key]) / $chartMax * 100 ?>%"></i></span>
                     <small><?= htmlspecialchars((string)$chartProduct[$key]) ?></small>

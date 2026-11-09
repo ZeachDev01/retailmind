@@ -8,7 +8,7 @@ Periods must fit owner-defined reporting ranges rather than a mandatory calendar
 
 Provide one Administrator-governed Fiscal Period lifecycle for the Store. Permit at most one open period, disallow overlapping dates, and require consecutive periods to meet without date gaps. Require every new money or stock movement to have an open period covering its effective date.
 
-The Administrator chooses the first range, which must include the Store's current date before trading starts. Later periods start the day after the previous period ends. Ranges may span any owner-defined number of days. Closing and opening remain explicit Administrator actions; there is no automatic rollover.
+The Administrator chooses the first range, which must include the Store's current date before trading starts. Later periods start the day after the previous period ends, and may be created in advance as Scheduled Periods whose dates are reserved but which accept no transactions. Ranges may span any owner-defined number of days. Opening is a manual Administrator action by default; the Administrator may enable Automatic Rollover, which closes an expired period and opens its scheduled successor only when closure prerequisites are already satisfied.
 
 Closing is allowed only once the end date has arrived, every Cashier Shift is closed, all GCash sessions are closed and reconciled, and pending Inventory Counts dated within the period are approved or rejected. Closed periods and their dates remain fixed. Later refunds and supported corrections create traceable entries in the current open period while preserving original records.
 
@@ -40,6 +40,10 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 24. As an authorized operator, I want supported corrections recorded as new, linked entries in the current open period, so that the original history remains traceable.
 25. As the Store owner, I want existing period conflicts identified before strict enforcement starts, so that transition problems are visible without silently rewriting transactions.
 26. As the Store owner, I want simultaneous actions to preserve the same rules as ordinary actions, so that concurrent requests cannot create two open periods or post into a period being closed.
+27. As an Administrator, I want to create several future periods in advance, so that trading does not stop when the current period ends.
+28. As an Administrator, I want a future period to stay scheduled until it is opened, so that its dates are reserved without accepting transactions.
+29. As an Administrator, I want to turn Automatic Rollover on or off, so that the system closes and opens periods for me only when I choose.
+30. As an Administrator, I want a blocked Automatic Rollover to stop and explain the unfinished work, so that reconciliation is never bypassed.
 
 ## Implementation Decisions
 
@@ -47,6 +51,9 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 - Preserve the single-Store model and Administrator workspace authority. The owner defines ranges through that workspace; do not add an owner role. Fiscal authority does not grant inventory-review or Cashier permissions. Retain authorization, CSRF protection, and existing table-specific locks.
 - Validate real calendar dates and ordered, inclusive date ranges server-side. Use the existing Philippine Store-time conventions consistently for effective transaction dates and the current date, including midnight boundaries.
 - Enforce at most one open period, including concurrent create requests. Reject all range intersections, including an end date reused as the next start date. The successor starts on the following calendar day, including across month, year, and leap-day boundaries.
+- Represent a period created ahead of time as `scheduled`: its dates are reserved and continuous, and no money or stock movement may post against them until it becomes open. A range that covers today becomes open when no other period is open; every later range is scheduled.
+- Let the Administrator open a scheduled period once its start date has arrived and no other period is open, and amend or delete scheduled ranges while they stay continuous. Deleting requires removing later scheduled periods first.
+- Automatic Rollover is a Store Setting, off by default. When on, an expired open period closes and its scheduled successor opens only when every closure prerequisite already passes; otherwise the period stays open and the blocker is reported. One period rolls per run, and the rollover never creates, skips, or invents a range.
 - There may temporarily be zero open periods between explicit closure and opening. No money or stock transaction may use this gap to bypass fiscal protection. An expired period still marked open does not authorize today's activity outside its range.
 - Require an open period for each new money or stock movement's effective date. Cover checkout, refunds, receiving and purchase stock, opening stock, stock-affecting product changes, adjustments, counts, Stock Issue inventory effects, supplier pullouts, GCash, drawer cash, imports, and other supported write paths. Find and close alternate-path bypasses rather than relying on disabled buttons.
 - Fiscal refusal must preserve existing validation and leave the operation's records, balances, stock effects, and success audit records uncommitted. Preserve existing transaction atomicity.
@@ -79,7 +86,7 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 
 - Mandatory monthly, quarterly, or yearly ranges; fiscal periods as Cashier Shifts.
 - Multiple Stores, branches, tenants, or concurrent operational Fiscal Periods.
-- Automatic rollover, automatic reopening, retroactive edits to finalized periods, and backdated corrections into closed periods.
+- Automatic rollover while the Store setting is off, automatic creation or skipping of period ranges, automatic reopening, retroactive edits to finalized periods, and backdated corrections into closed periods.
 - Mandatory full-store stocktaking at every close, automatic approval/rejection of counts, or new review permissions.
 - New financial ledgers, tax-reporting rules, accounting exports, correction transaction types, dependencies, or a general workflow engine.
 - A broad interface redesign, notification project, or destructive production-data migration.
@@ -87,6 +94,8 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 ## Further Notes
 
 Policy decisions were confirmed in the design discussion on 2026-10-22. This specification records requested behavior; no application implementation or database repair has been performed.
+
+Revision 2026-11-10: Scheduled Periods and opt-in Automatic Rollover were agreed with the Store owner and implemented; see [ADR-0029](../adr/0029-scheduled-fiscal-periods-and-opt-in-rollover.md). While the Store Setting is off, the earlier manual close/open behavior remains the default.
 
 Current code exploration found missing-period permission, ambiguous overlap selection, insufficient lifecycle transition checks, absent closure prerequisites, and missing fiscal checks in GCash and drawer cash workflows. Existing Inventory Count approval checks both the original count date and the adjustment date, which is why pending counts must be resolved before finalization.
 

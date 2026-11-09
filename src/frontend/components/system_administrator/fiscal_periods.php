@@ -2,13 +2,42 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/app/Services/FiscalPeriodGuardService.php';
+require_once __DIR__ . '/../../../backend/app/Attention/AttentionSettingsService.php';
+require_once __DIR__ . '/../../../backend/app/Attention/SystemClock.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::STORE_OPERATIONS);
 
 $message = '';
 $error = '';
+$actorId = (int)($_SESSION['user_id'] ?? 0);
+$guard = new FiscalPeriodGuardService($pdo);
+
+// Lazy automatic rollover: the page that opens after the period end date is
+// enough to close the due period and open its scheduled successor.
+try {
+    $rollover = $guard->rolloverIfDue(null, $actorId);
+    if (!empty($rollover['rolled'])) {
+        $message = sprintf(
+            'Fiscal period "%s" closed automatically. %s',
+            (string)$rollover['period_name'],
+            $rollover['opened_period_id'] !== null
+                ? 'The next scheduled period is now open.'
+                : 'Add the next fiscal period to resume trading coverage.'
+        );
+    } elseif (!empty($rollover['blockers'])) {
+        $error = sprintf(
+            'Automatic rollover is waiting on %s before "%s" can close.',
+            implode('; ', $rollover['blockers']),
+            (string)$rollover['period_name']
+        );
+    }
+} catch (Throwable $exception) {
+    error_log('Fiscal period automatic rollover skipped: ' . $exception->getMessage());
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $action = (string)($_POST['action'] ?? '');
+    $periodId = (int)($_POST['period_id'] ?? 0);
 
     if ($action === 'create') {
         verify_csrf_token($_POST['csrf_token'] ?? '');
@@ -19,89 +48,134 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         if ($periodName === '' || $startDate === '' || $endDate === '') {
             $error = 'All fields are required';
-        } elseif (strtotime($startDate) > strtotime($endDate)) {
-            $error = 'Start date must be before end date';
         } else {
-            $statement = $pdo->prepare("INSERT INTO fiscal_periods (period_name, start_date, end_date, created_by, status)
-                                        VALUES (?, ?, ?, ?, 'open')");
             try {
-                $statement->execute([$periodName, $startDate, $endDate, $_SESSION['user_id']]);
-                $periodId = (int)$pdo->lastInsertId();
-                $message = "Fiscal period \"{$periodName}\" created successfully";
+                $createdId = $guard->createPeriod($periodName, $startDate, $endDate, $actorId);
+                $statusStatement = $pdo->prepare('SELECT status FROM fiscal_periods WHERE period_id = ?');
+                $statusStatement->execute([$createdId]);
+                $createdStatus = (string)$statusStatement->fetchColumn();
+                $message = $createdStatus === 'open'
+                    ? "Fiscal period \"{$periodName}\" created and opened."
+                    : "Fiscal period \"{$periodName}\" scheduled. It opens on " . date('M j, Y', strtotime($startDate)) . '.';
                 log_activity(
                     $pdo,
-                    (int)$_SESSION['user_id'],
+                    $actorId,
                     'Fiscal period creation',
                     'Fiscal Periods',
-                    $periodId,
+                    $createdId,
                     null,
                     [
-                        'period_id' => $periodId,
+                        'period_id' => $createdId,
                         'period_name' => $periodName,
                         'start_date' => $startDate,
                         'end_date' => $endDate,
-                        'status' => 'open',
+                        'status' => $createdStatus,
                     ]
                 );
-            } catch (PDOException $exception) {
-                $error = 'Error creating period: ' . ($exception->errorInfo[2] ?? $exception->getMessage());
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        }
+    } elseif ($action === 'open') {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        if ($periodId <= 0) {
+            $error = 'Invalid period';
+        } else {
+            try {
+                $guard->openScheduledPeriod($periodId, $actorId);
+                $message = 'Fiscal period opened successfully';
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     } elseif ($action === 'close') {
         verify_csrf_token($_POST['csrf_token'] ?? '');
 
-        $periodId = (int)($_POST['period_id'] ?? 0);
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
             $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
             $beforeStatement->execute([$periodId]);
             $before = $beforeStatement->fetch();
-            $statement = $pdo->prepare("UPDATE fiscal_periods SET status = 'closed', closed_at = NOW(), closed_by = ?
-                                        WHERE period_id = ?");
-            if ($statement->execute([$_SESSION['user_id'], $periodId])) {
+            try {
+                $guard->closePeriod($periodId, $actorId);
                 $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
                 $afterStatement->execute([$periodId]);
                 $message = 'Fiscal period closed successfully';
                 log_activity(
                     $pdo,
-                    (int)$_SESSION['user_id'],
+                    $actorId,
                     'Fiscal-period closing',
                     'Fiscal Periods',
                     $periodId,
                     $before,
                     $afterStatement->fetch()
                 );
-            } else {
-                $error = 'Error closing period';
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     } elseif ($action === 'lock') {
         verify_csrf_token($_POST['csrf_token'] ?? '');
 
-        $periodId = (int)($_POST['period_id'] ?? 0);
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
             $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
             $beforeStatement->execute([$periodId]);
             $before = $beforeStatement->fetch();
-            $statement = $pdo->prepare("UPDATE fiscal_periods SET status = 'locked' WHERE period_id = ?");
-            if ($statement->execute([$periodId])) {
+            try {
+                $guard->lockPeriod($periodId);
                 $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
                 $afterStatement->execute([$periodId]);
                 $message = 'Fiscal period locked successfully';
                 log_activity(
                     $pdo,
-                    (int)$_SESSION['user_id'],
+                    $actorId,
                     'Fiscal period locked',
                     'Fiscal Periods',
                     $periodId,
                     $before,
                     $afterStatement->fetch()
                 );
-            } else {
-                $error = 'Error locking period';
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        }
+    } elseif ($action === 'amend_end') {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        if ($periodId <= 0) {
+            $error = 'Invalid period';
+        } else {
+            try {
+                $amended = $guard->amendScheduledEndDate($periodId, trim((string)($_POST['end_date'] ?? '')));
+                $message = 'Scheduled fiscal period end date updated';
+                log_activity(
+                    $pdo,
+                    $actorId,
+                    'Scheduled fiscal period end date amended',
+                    'Fiscal Periods',
+                    $periodId,
+                    $amended['before'] ?? null,
+                    ['end_date' => $amended['end_date'] ?? null]
+                );
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
+            }
+        }
+    } elseif ($action === 'delete') {
+        verify_csrf_token($_POST['csrf_token'] ?? '');
+
+        if ($periodId <= 0) {
+            $error = 'Invalid period';
+        } else {
+            try {
+                $deleted = $guard->deleteScheduledPeriod($periodId, $actorId);
+                $message = sprintf('Scheduled fiscal period "%s" deleted', (string)($deleted['period_name'] ?? ''));
+            } catch (Throwable $exception) {
+                $error = $exception->getMessage();
             }
         }
     }
@@ -113,13 +187,49 @@ $periodsStatement = $pdo->query("SELECT fp.*, u.display_name AS created_by_name,
                                  LEFT JOIN users cu ON fp.closed_by = cu.user_id
                                  ORDER BY fp.start_date DESC");
 $periods = $periodsStatement->fetchAll();
-$statusCounts = ['open' => 0, 'closed' => 0, 'locked' => 0];
+$statusCounts = ['scheduled' => 0, 'open' => 0, 'closed' => 0, 'locked' => 0];
 foreach ($periods as $period) {
     $status = strtolower((string)$period['status']);
     if (isset($statusCounts[$status])) {
         $statusCounts[$status]++;
     }
 }
+
+$today = date('Y-m-d');
+$scheduledQueue = array_values(array_filter(
+    $periods,
+    static fn(array $period): bool => strtolower((string)$period['status']) === FiscalPeriodGuardService::STATUS_SCHEDULED
+));
+usort($scheduledQueue, static fn(array $a, array $b): int => strcmp((string)$a['start_date'], (string)$b['start_date'])
+    ?: ((int)$a['period_id'] <=> (int)$b['period_id']));
+$nextScheduled = $scheduledQueue[0] ?? null;
+$openableId = ($statusCounts['open'] === 0 && $nextScheduled && $nextScheduled['start_date'] <= $today)
+    ? (int)$nextScheduled['period_id']
+    : null;
+$suggestedStart = $periods
+    ? date('Y-m-d', strtotime((string)$periods[0]['end_date'] . ' +1 day'))
+    : $today;
+
+$autoRollover = false;
+try {
+    $attentionSettings = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
+    $autoRollover = (float)($attentionSettings->storeSettings()[FiscalPeriodGuardService::AUTO_ROLLOVER_SETTING] ?? 0) > 0;
+} catch (Throwable $exception) {
+    $autoRollover = false;
+}
+
+$scheduledHint = static function (array $period) use ($statusCounts, $today, $openableId): string {
+    if ($openableId === (int)$period['period_id']) {
+        return '';
+    }
+    if ($statusCounts['open'] > 0) {
+        return 'Waiting for the current period to close';
+    }
+    if ((string)$period['start_date'] > $today) {
+        return 'Opens ' . date('M j, Y', strtotime((string)$period['start_date']));
+    }
+    return 'An earlier scheduled period opens first';
+};
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -154,6 +264,11 @@ foreach ($periods as $period) {
                     <div class="value"><?= $statusCounts['open'] ?></div>
                     <div class="label">Open</div>
                 </article>
+                <article class="stat-card with-icon fiscal-stat-scheduled">
+                    <span class="stat-icon"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span>
+                    <div class="value"><?= $statusCounts['scheduled'] ?></div>
+                    <div class="label">Scheduled</div>
+                </article>
                 <article class="stat-card with-icon warning">
                     <span class="stat-icon"><i class="bi bi-calendar2-minus" aria-hidden="true"></i></span>
                     <div class="value"><?= $statusCounts['closed'] ?></div>
@@ -170,6 +285,11 @@ foreach ($periods as $period) {
                 <div class="section-header">
                     <div>
                         <h2 id="create-period-title"><i class="bi bi-plus-circle" aria-hidden="true"></i> Create period</h2>
+                        <p class="section-description">
+                            Add periods ahead of time. A future range stays <strong>scheduled</strong> until its start date, then opens manually or automatically.
+                            Automatic rollover is <strong><?= $autoRollover ? 'on' : 'off' ?></strong>
+                            &middot; <a href="<?= htmlspecialchars(app_url('components/administrator/store_settings.php')) ?>">change in Store Settings</a>.
+                        </p>
                     </div>
                 </div>
                 <form method="POST" class="fiscal-period-form">
@@ -182,7 +302,7 @@ foreach ($periods as $period) {
                         </div>
                         <div class="form-group">
                             <label for="start_date">Start date</label>
-                            <input type="date" id="start_date" name="start_date" autocomplete="off" required aria-required="true">
+                            <input type="date" id="start_date" name="start_date" value="<?= htmlspecialchars($suggestedStart) ?>" autocomplete="off" required aria-required="true">
                         </div>
                         <div class="form-group">
                             <label for="end_date">End date</label>
@@ -213,6 +333,7 @@ foreach ($periods as $period) {
                             <?php
                             $periodStatus = strtolower((string)$period['status']);
                             $cardTitleId = 'period-heading-' . (int)$period['period_id'];
+                            $endDateId = 'period-end-' . (int)$period['period_id'];
                             ?>
                             <article class="fiscal-period-card" aria-labelledby="<?= $cardTitleId ?>">
                                 <div class="fiscal-period-card-header">
@@ -238,7 +359,7 @@ foreach ($periods as $period) {
                                     <?php if (in_array($periodStatus, ['closed', 'locked'], true)): ?>
                                         <div>
                                             <dt>Closed by</dt>
-                                            <dd><?= htmlspecialchars($period['closed_by_name'] ?? 'Unknown') ?></dd>
+                                            <dd><?= htmlspecialchars($period['closed_by_name'] ?? ($period['closed_by'] === null && $period['closed_at'] ? 'Automatic rollover' : 'Unknown')) ?></dd>
                                         </div>
                                         <div>
                                             <dt>Closed at</dt>
@@ -261,6 +382,34 @@ foreach ($periods as $period) {
                                             <input type="hidden" name="action" value="lock">
                                             <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
                                             <button type="submit" class="btn fiscal-action-lock" aria-label="Lock fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-lock" aria-hidden="true"></i> Lock period</button>
+                                        </form>
+                                    <?php elseif ($periodStatus === 'scheduled'): ?>
+                                        <?php if ($openableId === (int)$period['period_id']): ?>
+                                            <form method="POST">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                                <input type="hidden" name="action" value="open">
+                                                <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
+                                                <button type="submit" class="btn btn-primary" aria-label="Open scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-calendar2-check" aria-hidden="true"></i> Open period</button>
+                                            </form>
+                                        <?php else: ?>
+                                            <span class="fiscal-read-only"><i class="bi bi-clock-history" aria-hidden="true"></i> <?= htmlspecialchars($scheduledHint($period)) ?></span>
+                                        <?php endif; ?>
+                                        <details class="fiscal-period-amend">
+                                            <summary class="btn btn-secondary">Edit end date</summary>
+                                            <form method="POST" class="fiscal-period-amend-form">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                                <input type="hidden" name="action" value="amend_end">
+                                                <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
+                                                <label for="<?= $endDateId ?>">End date</label>
+                                                <input type="date" id="<?= $endDateId ?>" name="end_date" value="<?= htmlspecialchars((string)$period['end_date']) ?>" min="<?= htmlspecialchars((string)$period['start_date']) ?>" required aria-required="true">
+                                                <button type="submit" class="btn btn-primary">Save</button>
+                                            </form>
+                                        </details>
+                                        <form method="POST" data-confirm="Deleting removes this reserved range. Later periods must be deleted first." data-confirm-title="Delete scheduled period" data-confirm-button="Delete period" data-confirm-danger="1">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="period_id" value="<?= (int)$period['period_id'] ?>">
+                                            <button type="submit" class="btn fiscal-action-lock" aria-label="Delete scheduled fiscal period <?= htmlspecialchars($period['period_name']) ?>"><i class="bi bi-trash3" aria-hidden="true"></i> Delete</button>
                                         </form>
                                     <?php else: ?>
                                         <span class="fiscal-read-only"><i class="bi bi-shield-lock" aria-hidden="true"></i> Read-only</span>

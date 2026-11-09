@@ -20,8 +20,22 @@
             </div>
             <div class="form-group">
                 <label for="createUserPassword">Password</label>
-                <div class="password-field"><input type="password" name="password" id="createUserPassword" autocomplete="new-password" required minlength="8" aria-describedby="createPasswordHelp"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
+                <div class="password-field"><input type="password" name="password" id="createUserPassword" autocomplete="new-password" required minlength="8" aria-describedby="createPasswordHelp" data-password-criteria="createPasswordCriteria"><button type="button" class="password-toggle" data-password-toggle="createUserPassword" aria-label="Show password" aria-pressed="false"><i class="bi bi-eye" aria-hidden="true"></i></button></div>
                 <small class="field-help" id="createPasswordHelp">Use at least 8 characters with uppercase, lowercase, and a number.</small>
+                <div class="cp-meter-container" id="createPasswordCriteria" aria-hidden="true">
+                    <div class="cp-meter-bars">
+                        <span class="cp-meter-bar" data-strength-bar></span>
+                        <span class="cp-meter-bar" data-strength-bar></span>
+                        <span class="cp-meter-bar" data-strength-bar></span>
+                        <span class="cp-meter-bar" data-strength-bar></span>
+                    </div>
+                    <div class="cp-requirements">
+                        <span class="cp-req-chip" data-rule="len"><i class="bi bi-circle"></i> 8+ chars</span>
+                        <span class="cp-req-chip" data-rule="upper"><i class="bi bi-circle"></i> Uppercase</span>
+                        <span class="cp-req-chip" data-rule="lower"><i class="bi bi-circle"></i> Lowercase</span>
+                        <span class="cp-req-chip" data-rule="num"><i class="bi bi-circle"></i> Number</span>
+                    </div>
+                </div>
             </div>
             <div class="form-group" role="group" aria-labelledby="createRolesLabel" aria-describedby="createRolesHelp">
                 <label id="createRolesLabel">Role access</label>

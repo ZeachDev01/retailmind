@@ -307,6 +307,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
 <?php include __DIR__ . '/modals/manage_user_modal.php'; ?>
 <?php include __DIR__ . '/modals/add_user_modal.php'; ?>
 <script src="<?= htmlspecialchars(app_url('assets/js/password-feedback.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/password-criteria.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/store-staff-availability.js')) ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
