@@ -165,7 +165,7 @@ try {
     $assert($sales === $records($sql, 'sales'), 'Update changed sales');
     // Added backup metadata is nullable; existing fields retain their exact values.
     $oldBackup = array_map('json_decode', $backupHistory);
-    $newBackup = array_map(static fn(string $row) => array_diff_key(json_decode($row, true), array_flip(['snapshot_at', 'envelope_version', 'cipher', 'requested_by_role'])), $records($sql, 'backup_history'));
+    $newBackup = array_map(static fn(string $row) => array_diff_key(json_decode($row, true), array_flip(['snapshot_at', 'envelope_version', 'cipher', 'requested_by_role', 'key_fingerprint', 'artifact_path', 'trigger_source', 'verified_at', 'removed_at'])), $records($sql, 'backup_history'));
     $assert(json_encode($oldBackup) === json_encode($newBackup), 'Update changed backup history');
     $assert($sql->query("SELECT status FROM held_sales WHERE reference_no='SQL-LEGACY-CART'")->fetchColumn() === 'discarded', 'Legacy cart was not retained as discarded');
     $assert($sql->query("SELECT status FROM registers WHERE name='Migration till'")->fetchColumn() === 'disabled', 'Legacy Register availability changed');
