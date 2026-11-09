@@ -483,3 +483,39 @@
     .administrator-backup-page .backup-recovery .btn { width: 100%; white-space: normal; }
     .administrator-backup-page .main-content input { font-size: 1rem; }
 }
+
+/* Recovery-key recommendation banner + Backup Keyring (#460). */
+.backup-key-recommendation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+    padding: 1.25rem;
+    background: var(--surface-soft, #f8fafc);
+    border: 1px solid var(--border);
+    border-inline-start: 4px solid var(--primary);
+}
+.backup-key-recommendation-copy { flex: 1 1 20rem; min-width: 0; }
+.backup-key-recommendation-copy h2 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.backup-key-recommendation-copy p { margin: 0; color: var(--muted); font-size: .9rem; }
+.backup-key-recommendation-download { flex: 0 1 22rem; min-width: 0; margin: 0; padding: 0; }
+.backup-key-recommendation-download h3 { margin: 0 0 .5rem; font-size: .9rem; }
+.backup-key-recommendation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.backup-key-recommendation-dialog p { margin: 0 0 1rem; color: var(--muted); font-size: .9rem; }
+.backup-keyring { margin-top: 2rem; }
+.backup-keyring .table-wrap { max-width: 100%; overflow-x: auto; }
+.backup-keyring h3 { margin: 0 0 .5rem; color: var(--text); font-size: .95rem; }
+.backup-keyring-table { min-width: 48rem; }
+.backup-keyring-table code { font-size: .8rem; white-space: nowrap; }
+.backup-keyring-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .75rem; }
+.backup-keyring-actions form { flex: 1 1 12rem; max-width: 16rem; margin: 0; }
+.backup-keyring-actions label { font-size: .8rem; }
+.backup-keyring-actions .btn { width: 100%; }
+.backup-keyring-warning { margin: 0; color: var(--theme-warning-text, #92400e); font-size: .8rem; }
+@media (max-width: 760px) {
+    .backup-key-recommendation { flex-direction: column; }
+    .backup-key-recommendation-download { flex-basis: auto; width: 100%; }
+    .backup-keyring-table { min-width: 40rem; }
+}
