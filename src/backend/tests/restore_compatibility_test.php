@@ -190,6 +190,53 @@ try {
     } catch (RuntimeException $exception) {
         $assert(str_contains($exception->getMessage(), 'fingerprint'), 'The hash mismatch is reported as a schema fingerprint failure');
     }
+
+    // Read-only preflight must surface an unsupported review instead of a
+    // generic error, so the unsupported chip branch stays reachable.
+    if (getenv('RUN_DB_TESTS') === '1') {
+        $config = require __DIR__ . '/../config/database.php';
+        $dsn = "mysql:host={$config['host']};port={$config['port']};charset=utf8mb4";
+        $server = new PDO($dsn, $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $database = 'rm_preflight_' . bin2hex(random_bytes(6));
+        $futureKey = '209901010001_future_format';
+        try {
+            $server->exec("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            $destination = new PDO($dsn . ';dbname=' . $database, $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $destination->exec('CREATE TABLE roles (role_id INT PRIMARY KEY, role_name VARCHAR(30)) ENGINE=InnoDB');
+            $destination->exec("INSERT INTO roles VALUES (1, 'super_admin')");
+            $destination->exec('CREATE TABLE users (user_id INT PRIMARY KEY, username VARCHAR(100), password_hash VARCHAR(255), status VARCHAR(20), role_id INT) ENGINE=InnoDB');
+            $password = 'Preflight@2026';
+            $destination->prepare("INSERT INTO users VALUES (1, 'preflight', ?, 'active', 1)")
+                ->execute([password_hash($password, PASSWORD_DEFAULT)]);
+            $destination->exec('CREATE TABLE schema_migrations (migration_key VARCHAR(100) PRIMARY KEY, description VARCHAR(255) NOT NULL, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB');
+
+            $futureSchema = ['users' => $table('users', ['user_id', 'username', 'password_hash', 'status', 'role_id'])];
+            $futurePackage = StorePackageFormat::encode(
+                $sqlFor($futureSchema, ['users' => []]),
+                [],
+                $futureSchema,
+                str_repeat('1', 32),
+                'mariadb',
+                ['migrations' => [$futureKey]]
+            );
+            $futurePath = $private . '/future-preflight.rmpkg';
+            file_put_contents($futurePath, $futurePackage);
+            $policy = new \App\Authorization\RoleCapabilityPolicy();
+            $restorer = new \App\Backup\DatabaseRestoreService(
+                $destination,
+                $policy,
+                new \App\Backup\DatabaseBackupService($destination, $policy)
+            );
+            $preflight = $restorer->preflight(1, 'super_admin', $futurePath, 'future-preflight.rmpkg', $password);
+            $assert($preflight['valid'] === false, 'Unsupported preflight must be invalid');
+            $assert(($preflight['compatibility']['status'] ?? '') === 'unsupported', 'Unsupported preflight keeps the compatibility report');
+            $assert(in_array($futureKey, $preflight['compatibility']['missing_migrations'] ?? [], true), 'Unsupported preflight names the newer migration');
+            $assert($preflight['conflicts'] === [] && $preflight['files'] === 0 && $preflight['bytes'] === 0 && $preflight['snapshot_at'] === '',
+                'Unsupported preflight returns empty conflicts, files, bytes, and snapshot');
+        } finally {
+            $server->exec("DROP DATABASE IF EXISTS `{$database}`");
+        }
+    }
 } catch (Throwable $exception) {
     fwrite(STDERR, $exception->getMessage() . "\n" . $exception->getTraceAsString() . "\n");
     exit(1);

@@ -71,11 +71,11 @@ final class StorePackageFormat
     }
 
     /**
-     * @param list<string> $appliedMigrations destination ledger keys; defaults to the
-     *        package's own list when the caller has no destination ledger evidence
+     * @param list<string>|null $appliedMigrations destination ledger keys; null
+     *        is only for callers without destination evidence (tests)
      */
     public static function decode(string $package, array $schema, ?RestoreCompatibilityRegistry $registry = null,
-        array $appliedMigrations = []): array
+        ?array $appliedMigrations = null): array
     {
         self::assertRuntime();
         $offset = strlen(self::KEY_HEADER) + 64;
@@ -96,7 +96,7 @@ final class StorePackageFormat
             $result['migrations'] = $result['manifest']['migrations'] ?? [];
             $registry ??= new RestoreCompatibilityRegistry();
             $report = $registry->classify($result['manifest'], $result['source_schema'], $schema,
-                $appliedMigrations !== [] ? $appliedMigrations : $result['migrations']);
+                $appliedMigrations ?? $result['migrations']);
             if (!$report->isSupported()) throw new UnsupportedPackageStructure($report->toArray());
             $result['compatibility'] = $report->toArray();
             $result['rows'] = SqlBackupFormat::rows($result['sql'], $result['source_schema']);

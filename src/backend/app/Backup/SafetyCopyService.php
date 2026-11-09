@@ -3,6 +3,7 @@
 namespace App\Backup;
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Database\MigrationLedger;
 use DomainException;
 use PDO;
 use Throwable;
@@ -49,7 +50,7 @@ final class SafetyCopyService
             $schema = SqlBackupFormat::schema($this->pdo);
             $bytes = file_get_contents($created['path']);
             if ($bytes === false) throw new DomainException('The safety artifact could not be read for full verification.');
-            $package = StorePackageFormat::decode($bytes, $schema);
+            $package = StorePackageFormat::decode($bytes, $schema, null, $this->migrationKeys());
             (new DatabaseRestoreService($this->pdo, $this->policy, $backups))->validateReferences($package['rows']);
             $metadata = [
                 'operation_id' => $operationId, 'stage' => 'safety_verified', 'requested_by' => $actorId, 'requested_by_role' => $role,
@@ -81,7 +82,7 @@ final class SafetyCopyService
         $this->assertArtifact($path, $metadata);
         $bytes = file_get_contents($path);
         if ($bytes === false) throw new DomainException('The original safety copy could not be read. Keep Store operations closed.');
-        $package = StorePackageFormat::decode($bytes, $metadata['schema']);
+        $package = StorePackageFormat::decode($bytes, $metadata['schema'], null, $this->migrationKeys());
         if ($package['manifest']['package_id'] !== $metadata['package_id'] || $package['manifest']['origin_id'] !== $metadata['origin_id']
             || $package['manifest']['schema'] !== $metadata['schema_hash'] || hash('sha256', $package['sql']) !== $metadata['sql_sha256']
             || array_map(static fn(string $content): string => hash('sha256', $content), $package['files']) !== $metadata['file_sha256']) {
@@ -130,5 +131,10 @@ final class SafetyCopyService
         $directory = RecoveryStore::path('safety-' . $operationId);
         if (is_link($directory)) throw new DomainException('The private safety directory is unsafe.');
         return $directory;
+    }
+
+    private function migrationKeys(): array
+    {
+        return (new MigrationLedger($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->keys();
     }
 }

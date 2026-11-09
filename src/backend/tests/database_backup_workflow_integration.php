@@ -330,8 +330,13 @@ try {
     $newerPackagePath = $private . '/newer.rmpkg';
     file_put_contents($newerPackagePath, StorePackageFormat::encode($fullDecoded['sql'], $fullDecoded['files'], $fullSchema, '', 'mariadb',
         ['migrations' => array_merge($fullDecoded['migrations'], ['209901010001_future_format'])]));
-    $reject(fn() => $fullRestorer->preflight($fullActor, 'super_admin', $newerPackagePath, 'newer.rmpkg', 'Full-schema-password'),
-        'A newer package is rejected before any destructive work');
+    $newerPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $newerPackagePath, 'newer.rmpkg', 'Full-schema-password');
+    $assert($newerPreflight['valid'] === false
+        && ($newerPreflight['compatibility']['status'] ?? '') === 'unsupported'
+        && in_array('209901010001_future_format', $newerPreflight['compatibility']['missing_migrations'] ?? [], true),
+        'A newer package is reviewed as unsupported before any destructive work');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture',
+        'Unsupported preflight leaves destination data unchanged');
 
     // Story 40: a partially upgraded installation repairs through the migration runner.
     $full->exec("DELETE FROM schema_migrations WHERE migration_key='202611100001_backup_keyring_and_history'");

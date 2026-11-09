@@ -2,10 +2,10 @@
 
 namespace App\Backup\Compatibility;
 
-use RuntimeException;
+use DomainException;
 
-/** Package structure this installation refuses to guess at. */
-final class UnsupportedPackageStructure extends RuntimeException
+/** Package structure this installation refuses to guess at; carries the review report. */
+final class UnsupportedPackageStructure extends DomainException
 {
     public function __construct(private array $report)
     {
