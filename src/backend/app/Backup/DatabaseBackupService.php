@@ -91,7 +91,7 @@ final class DatabaseBackupService
                 }
             } else { $requestLock = RecoveryStore::exclusive(); }
             $coordinator->beginCapture((int)$actorUserId);
-            if (\App\Database\Schema::tableExists($this->pdo, 'ml_jobs')
+            if (Schema::tableExists($this->pdo, 'ml_jobs')
                 && $this->pdo->query("SELECT 1 FROM ml_jobs WHERE status IN ('queued','running') LIMIT 1")->fetchColumn()) {
                 throw new DomainException('Stop and drain forecasting/background workers before capturing a Store package.');
             }
