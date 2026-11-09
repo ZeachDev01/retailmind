@@ -13,9 +13,15 @@ function render(tool, verified = false) {
             function role_capability_policy() { return new class { function allows(...$args) { return true; } }; }
             function app_url($path) { return '/'.$path; }
             function csrf_field() { return '<input type="hidden" name="csrf_token" value="fixture">'; }
+            function format_display_datetime($value) { return (string)$value; }
             $_SESSION = [];
             $escape = fn($value) => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
             $recoveryTabbed = true;
+            $keyringKeys = [
+                ['fingerprint' => str_repeat('a', 64), 'kind' => 'primary', 'created_at' => '2026-11-01T10:00:00+00:00', 'imported_at' => null, 'archived_at' => null, 'resolvable' => true],
+                ['fingerprint' => str_repeat('b', 64), 'kind' => 'imported', 'created_at' => '2026-11-08T10:00:00+00:00', 'imported_at' => '2026-11-08T10:00:00+00:00', 'archived_at' => null, 'resolvable' => true],
+                ['fingerprint' => str_repeat('c', 64), 'kind' => 'archived', 'created_at' => '2026-11-02T10:00:00+00:00', 'imported_at' => '2026-11-02T10:00:00+00:00', 'archived_at' => '2026-11-09T10:00:00+00:00', 'resolvable' => true],
+            ];
             $safetyError = ''; $safetyDownload = ${verified ? 'true' : 'null'}; $safetyOperation = 'fixture';
             ${tool === 'key' ? "require 'src/frontend/components/backup/recovery_key_form.php';" : `
                 $source = file_get_contents('src/frontend/components/backup/safety_copy.php');
@@ -77,6 +83,30 @@ function render(tool, verified = false) {
                         await page.getByRole('dialog').getByRole('button', {name: 'Cancel'}).click();
                         assert.equal(await form.getByLabel('Current login password').inputValue(), '', 'Cancel clears credentials after a submission too');
                     }
+                    const keyring = page.locator('.backup-keyring-table');
+                    assert.equal(await keyring.locator('tbody tr').count(), 3, 'Every keyring key renders a row');
+                    assert.equal(await keyring.locator('tbody').getByText('Primary', {exact: true}).count(), 1);
+                    assert.equal(await keyring.locator('tbody').getByText('Imported', {exact: true}).count(), 1);
+                    assert.equal(await keyring.locator('tbody').getByText('Archived', {exact: true}).count(), 1);
+                    assert.equal(await keyring.locator('tbody button:disabled').count(), 1, 'The primary key cannot be deleted');
+                    assert.equal(await keyring.getByText('Promote another key before deleting this one.', {exact: true}).isVisible(), true);
+                    const rows = keyring.locator('tbody tr');
+                    assert.equal(await rows.nth(0).getByRole('button', {name: 'Use for new backups', exact: true}).count(), 0, 'The primary key is not promoted');
+                    assert.equal(await rows.nth(0).getByRole('button', {name: 'Export key', exact: true}).count(), 1);
+                    assert.equal(await rows.nth(1).getByRole('button', {name: 'Use for new backups', exact: true}).count(), 1);
+                    assert.equal(await rows.nth(2).getByText('Archived', {exact: true}).count(), 1);
+                    for (const form of await keyring.locator('tbody form').all()) {
+                        assert.equal(await form.locator('input[type="password"]').count(), 1, 'Each keyring form has one password');
+                        assert.equal(await form.locator('button:not([type])').count(), 0, 'Each keyring button declares its type');
+                        assert.equal(await form.locator('input[name="csrf_token"]').count(), 1);
+                    }
+                    assert.equal(await rows.nth(1).locator('input[name="confirm_delete"][required]').count(), 1, 'Deleting needs the warning checkbox');
+                    const deleteForm = rows.nth(1).locator('form', {has: page.locator('input[name="key_action"][value="delete"]')});
+                    assert.equal(await deleteForm.getByRole('button', {name: 'Delete key', exact: true}).isDisabled(), false);
+                    await deleteForm.getByLabel('I understand backups encrypted with this key cannot be opened afterwards.').check();
+                    await deleteForm.getByRole('button', {name: 'Delete key', exact: true}).click();
+                    assert.equal(await page.getByRole('dialog').getByLabel('Current login password').isVisible(), true);
+                    await page.getByRole('dialog').getByRole('button', {name: 'Cancel'}).click();
                 } else {
                     assert.equal(await page.locator(verified ? '[data-safety-download]' : '[data-safety-create]').isVisible(), true);
                     if (!verified) {

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Backup\BackupKeyRecommendation;
 use App\Backup\DatabaseBackupService;
 
 $message = '';
@@ -64,6 +65,7 @@ $restoreCapability = role_capability_policy()->allows($actorRole, RoleCapability
 $restoreService = new \App\Backup\DatabaseRestoreService($pdo, role_capability_policy(), $service);
 $restoreGuidance = $restoreService->workflowGuidance();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$backupRecommendation = (new BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION['user_id'], (string)current_role());
 
 $completedHistory = array_filter($history, static fn(array $row): bool => ($row['status'] ?? '') === 'completed');
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
@@ -91,6 +93,8 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
 
             <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
             <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
+
+            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <dl class="backup-summary" aria-label="Backup overview">
                 <div>
@@ -210,6 +214,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_review.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_key_recommendation.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_key_recommendation.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_recovery_tabs.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_recovery_tabs.js')) ?>"></script>
 </body>
 

@@ -24,6 +24,7 @@ $superAdministratorPage = $read('src/frontend/components/system_administrator/ba
 $legacyRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
 $downloadEndpoint = $read('src/frontend/components/backup/backup_download.php');
 $statusEndpoint = $read('src/frontend/components/backup/backup_status.php');
+$recoveryKeyEndpoint = $read('src/frontend/components/backup/recovery_key.php');
 $sidebar = $read('src/frontend/components/sidebar.php');
 $scheduledScript = $read('src/backend/scripts/backup_database.php');
 $sharedModule = $read('src/backend/includes/backup.php');
@@ -166,10 +167,41 @@ $assert(
     'The status endpoint must not leak artifact identity or key material'
 );
 
+// --- Recovery-key actions share one guarded, POST-only key endpoint ---------
+$assert(
+    str_contains($recoveryKeyEndpoint, 'require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)')
+        && str_contains($recoveryKeyEndpoint, 'require_local_request(')
+        && str_contains($recoveryKeyEndpoint, 'csrf_verify()')
+        && str_contains($recoveryKeyEndpoint, "\$_SERVER['REQUEST_METHOD'] !== 'POST'"),
+    'The recovery-key endpoint must keep capability, local access, CSRF, and POST-only checks'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, "\$allowedActions = ['download', 'export', 'import', 'promote', 'delete'];"),
+    'The recovery-key endpoint must answer only the documented actions'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)")
+        && !str_contains($recoveryKeyEndpoint, '?key='),
+    'Recovery-key exports must validate the fingerprint and never put key material in a URL'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, 'password_verify(')
+        && str_contains($recoveryKeyEndpoint, "(\$_POST['confirm_delete'] ?? '') !== '1'"),
+    'Every recovery-key action needs the current password, and deletion needs the explicit warning'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, "header('Cache-Control: no-store')")
+        && str_contains($recoveryKeyEndpoint, 'Content-Length')
+        && str_contains($recoveryKeyEndpoint, 'connection_aborted()'),
+    'Recovery-key downloads must stay uncached, sized, and acknowledged only after a complete stream'
+);
+
 // --- the feature stays in the test suite -----------------------------------
 foreach ([
     'php src/backend/tests/database_backup_workflow_integration.php',
     'php src/backend/tests/backup_workflow_route_contract.php',
+    'php src/backend/tests/backup_keyring_ui_contract.php',
+    'php src/backend/tests/backup_key_recommendation_test.php',
     'php src/backend/tests/sql_backup_format_test.php',
     'node src/backend/tests/backup_status_alert_behavior_test.js',
 ] as $command) {
