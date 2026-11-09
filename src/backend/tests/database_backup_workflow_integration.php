@@ -57,9 +57,13 @@ try {
         foreach ([1 => 'Super', 2 => 'Owner', 3 => 'Cashier'] as $id => $name) {
             $insert->execute([$id, $name, $id, password_hash($db === $source ? 'Snapshot-password' : 'Current-password', PASSWORD_DEFAULT)]);
         }
+        $db->exec('ALTER TABLE users ADD COLUMN display_name VARCHAR(100) NULL AFTER full_name');
+        $db->exec('UPDATE users SET display_name = full_name');
         $db->exec('CREATE TABLE activity_log (log_id INT AUTO_INCREMENT PRIMARY KEY, note TEXT) ENGINE=InnoDB');
         $db->exec('CREATE TABLE products (product_id INT PRIMARY KEY, product_name TEXT, optional_value TEXT NULL, binary_value BLOB, stock INT) ENGINE=InnoDB');
         $migration = require __DIR__ . '/../database/migrations/202609260001_shared_database_backups.php';
+        $migration['up']($db);
+        $migration = require __DIR__ . '/../database/migrations/202611100001_backup_keyring_and_history.php';
         $migration['up']($db);
     }
     $text = "O'Brien; DROP DATABASE not_a_command;\nüñicode \\ test";
@@ -208,8 +212,8 @@ try {
     require_once __DIR__ . '/../includes/functions.php';
     (new \App\Database\MigrationRunner($full, __DIR__ . '/../database/migrations'))->runPending();
     $superRole = (int)$full->query("SELECT role_id FROM roles WHERE role_name='super_admin'")->fetchColumn();
-    $full->prepare('INSERT INTO users (full_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, 0)')
-        ->execute(['Full schema fixture', 'sql_roundtrip_fixture', password_hash('Full-schema-password', PASSWORD_DEFAULT), $superRole]);
+    $full->prepare('INSERT INTO users (first_name, display_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, 0)')
+        ->execute(['Full', 'Full schema fixture', 'sql_roundtrip_fixture', password_hash('Full-schema-password', PASSWORD_DEFAULT), $superRole]);
     $fullActor = (int)$full->lastInsertId();
     $receiptSentinel = '{"reference_number":"00000000000000000000000000123456","fee_amount":"123.45","store":{"name":"Saved Store","footer":"Saved footer"}}';
     $full->prepare("INSERT INTO gcash_transactions (transaction_type,reference_number,amount,cashier_id,verification_status,receipt_details_json) VALUES ('Cash-In','00000000000000000000000000123456',12345,?,'Completed',?)")->execute([$fullActor, $receiptSentinel]);
@@ -218,7 +222,7 @@ try {
     }
     $fullBackups = new DatabaseBackupService($full, $policy, $private . '/full-downloads', $full, $uploadRoot);
     $fullBackup = $fullBackups->create($fullActor, 'super_admin');
-    $full->prepare('UPDATE users SET full_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
+    $full->prepare('UPDATE users SET display_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
     $fullSchema = SqlBackupFormat::schema($full);
     foreach (['privileges', 'role_privileges', 'user_privileges', 'restore_preserved_activity', 'emergency_access_sessions'] as $retiredTable) {
@@ -226,12 +230,64 @@ try {
     }
     $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password');
     $assert($fullPreflight['replacement_authorized'] === false, 'Complete migrated schema preflight never authorizes replacement');
-    $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
     $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), SqlBackupFormat::schema($full));
+    $assert($fullDecoded['rows']['schema_migrations'] === [], 'Captured packages exclude the source migration ledger rows');
+    $assert($fullDecoded['compatibility']['status'] === 'current', 'A current package classifies as current');
+    $ledgerPath = __DIR__ . '/../database/migrations';
+    $ledgerBefore = (new \App\Database\MigrationLedger($full, $ledgerPath))->snapshot();
+    $assert($ledgerBefore !== [], 'The destination ledger is populated before replacement');
     file_put_contents($legacySql, $fullDecoded['sql']);
     $fullRestorer->restore($fullActor, 'super_admin', $legacySql, 'legacy-private.sql', 'Full-schema-password');
-    $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
+    $assert((new \App\Database\MigrationLedger($full, $ledgerPath))->snapshot() === $ledgerBefore, 'The destination migration ledger survives replacement');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
     $assert($full->query("SELECT receipt_details_json FROM gcash_transactions WHERE reference_number='00000000000000000000000000123456'")->fetchColumn() === $receiptSentinel, 'GCash receipt snapshot survives full backup and restore byte for byte');
+
+    // Synthesize a pre-branch-retirement package from the same destination structure.
+    $compactDdl = static fn(string $table, array $columns): string => "CREATE TABLE `{$table}` ("
+        . implode(",\n  ", array_map(static fn(string $column): string => "`{$column}` text DEFAULT NULL", $columns))
+        . "\n) ENGINE=InnoDB";
+    $olderSchema = $fullSchema;
+    unset($olderSchema['held_sale_items'], $olderSchema['cashier_shift_payment_totals']);
+    $olderSchema['branches'] = ['ddl' => $compactDdl('branches', ['branch_id', 'branch_name']), 'columns' => ['branch_id', 'branch_name']];
+    $olderSchema['users'] = ['ddl' => $compactDdl('users', ['user_id', 'full_name', 'branch_id']), 'columns' => ['user_id', 'full_name', 'branch_id']];
+    $olderSchema['products'] = ['ddl' => $compactDdl('products', ['product_id', 'branch_id', 'product_name']), 'columns' => ['product_id', 'branch_id', 'product_name']];
+    $olderSchema['held_sales'] = ['ddl' => $compactDdl('held_sales', ['held_sale_id', 'cart_json']), 'columns' => ['held_sale_id', 'cart_json']];
+    $olderSchema['cashier_shifts'] = ['ddl' => $compactDdl('cashier_shifts', ['shift_id', 'payment_totals']), 'columns' => ['shift_id', 'payment_totals']];
+    ksort($olderSchema, SORT_STRING);
+    $schemaOnlySql = static function (array $schema): string {
+        $body = '';
+        foreach ($schema as $table => $definition) {
+            $quoted = '`' . $table . '`';
+            $body .= 'DROP TABLE IF EXISTS ' . $quoted . ";\n" . $definition['ddl'] . ";\n";
+        }
+        $body = SqlBackupFormat::HEADER . "SET FOREIGN_KEY_CHECKS=0;\nSET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';\n" . $body . "\nSET FOREIGN_KEY_CHECKS=1;";
+        return $body . "\n-- SHA256: " . hash('sha256', $body) . "\n";
+    };
+    $olderMigrations = array_values(array_filter($fullDecoded['migrations'],
+        static fn(string $key): bool => strcmp($key, '202611010001_retire_branches') < 0));
+    $olderPackagePath = $private . '/older.rmpkg';
+    file_put_contents($olderPackagePath, StorePackageFormat::encode($schemaOnlySql($olderSchema), [], $olderSchema,
+        str_repeat('a', 32), 'mariadb', ['migrations' => $olderMigrations]));
+    $olderPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $olderPackagePath, 'older.rmpkg', 'Full-schema-password');
+    $assert(($olderPreflight['compatibility']['status'] ?? '') === 'upgradable',
+        'An older package is classified as upgradable: ' . ($olderPreflight['compatibility']['message'] ?? 'missing report'));
+    $assert(($olderPreflight['compatibility']['adapter'] ?? '') === 'pre-202611010001', 'The registered adapter handles an older package');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture',
+        'Older package preflight leaves destination data unchanged');
+    $newerPackagePath = $private . '/newer.rmpkg';
+    file_put_contents($newerPackagePath, StorePackageFormat::encode($fullDecoded['sql'], $fullDecoded['files'], $fullSchema, '', 'mariadb',
+        ['migrations' => array_merge($fullDecoded['migrations'], ['209901010001_future_format'])]));
+    $reject(fn() => $fullRestorer->preflight($fullActor, 'super_admin', $newerPackagePath, 'newer.rmpkg', 'Full-schema-password'),
+        'A newer package is rejected before any destructive work');
+
+    // Story 40: a partially upgraded installation repairs through the migration runner.
+    $full->exec("DELETE FROM schema_migrations WHERE migration_key='202611100001_backup_keyring_and_history'");
+    $full->exec('ALTER TABLE backup_history DROP COLUMN snapshot_at');
+    ensure_backup_storage($full);
+    $assert(App\Database\Schema::columnExists($full, 'backup_history', 'snapshot_at'), 'Backup history repairs through the normal migration path');
+    $assert(is_array($fullBackups->history('super_admin')), 'Repaired backup history is readable again');
+
     $full->exec('CREATE VIEW unsupported_fixture_view AS SELECT user_id FROM users');
     $reject(fn() => $fullBackups->create($fullActor, 'super_admin'), 'Unsupported custom objects must fail rather than produce an incomplete backup');
     $assert(!$fullBackups->status()['paused'], 'Failed unsupported capture releases the write gate');

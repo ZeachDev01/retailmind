@@ -13,6 +13,9 @@ $role = (string)current_role();
 $file = null;
 try {
     if (empty($_POST['confirm_replacement'])) throw new DomainException('Confirm that this snapshot replaces newer Store records and pauses operations.');
+    if (!empty($_FILES['backup_file']['tmp_name']) && !is_uploaded_file((string)$_FILES['backup_file']['tmp_name'])) {
+        throw new DomainException('Select the encrypted Store package to restore.');
+    }
     $file = backup_review_source();
     $decisions = is_array($_POST['people'] ?? null) ? $_POST['people'] : [];
     if ($decisions !== [] && (!is_string($_POST['package_hash'] ?? null)

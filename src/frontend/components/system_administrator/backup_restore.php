@@ -110,11 +110,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $service->cleanupStrandedArtifacts();
+$storageMessage = '';
 try {
+    ensure_backup_storage($pdo);
     $history = $service->history($actorRole);
-} catch (PDOException) {
-    ensure_backup_schema($pdo);
-    $history = $service->history($actorRole);
+} catch (Throwable $exception) {
+    error_log('Backup history unavailable: ' . $exception->getMessage());
+    $history = [];
+    $storageMessage = 'Backup history needs database updates before it can be shown.';
 }
 
 $historyPerPage = 10;
@@ -152,6 +155,7 @@ $storePaused = RecoveryStore::isPaused();
             </header>
 
             <?php if ($message): ?><div id="recovery-feedback" class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($storageMessage): ?><p class="alert tag-warning" role="alert"><?= $escape($storageMessage) ?> <a href="<?= $escape(app_url('components/system_administrator/database_updates.php')) ?>">Apply Database Updates</a>.</p><?php endif; ?>
             <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
 
             <dl class="backup-summary" aria-label="Backup overview">
@@ -235,8 +239,18 @@ $storePaused = RecoveryStore::isPaused();
                                 <button type="submit" class="btn btn-primary" data-backup-restore aria-describedby="restore-warning"><i class="bi bi-search" aria-hidden="true"></i> Validate package</button>
                             </form>
                             <?php if ($preflight): ?>
-                                <div class="preflight-result" role="status">
+                                <?php $compatibility = $preflight['compatibility'] ?? null; ?>
+                                <div class="preflight-result" role="status"<?= $compatibility ? ' data-restore-compatibility="' . $escape($compatibility['status']) . '"' : '' ?>>
                                     <p><i class="bi bi-file-earmark-check" aria-hidden="true"></i> <strong><?= (int)$preflight['files'] ?></strong> files &bull; <strong><?= number_format((int)$preflight['bytes'] / 1048576, 1) ?> MB</strong> &bull; Snapshot <?= $escape($preflight['snapshot_at']) ?></p>
+                                    <?php if ($compatibility): ?>
+                                        <p class="backup-hint" data-restore-compatibility-message>
+                                            <span class="tag <?= $compatibility['status'] === 'current' ? 'tag-success' : ($compatibility['status'] === 'upgradable' ? 'tag-warning' : 'tag-danger') ?>"><?= $escape($compatibility['label']) ?></span>
+                                            <?= $escape($compatibility['message']) ?>
+                                            <?php if (!empty($compatibility['missing_migrations'])): ?>
+                                                <span>Database updates involved: <code><?= $escape(implode(', ', $compatibility['missing_migrations'])) ?></code></span>
+                                            <?php endif; ?>
+                                        </p>
+                                    <?php endif; ?>
                                     <?php if ($preflight['conflicts']): ?>
                                         <h3>Identity conflicts to resolve</h3>
                                         <ul>

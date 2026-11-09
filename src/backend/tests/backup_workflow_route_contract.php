@@ -27,6 +27,8 @@ $statusEndpoint = $read('src/frontend/components/backup/backup_status.php');
 $sidebar = $read('src/frontend/components/sidebar.php');
 $scheduledScript = $read('src/backend/scripts/backup_database.php');
 $sharedModule = $read('src/backend/includes/backup.php');
+$reconciliationPage = $read('src/frontend/components/system_administrator/identity_reconciliation.php');
+$restoreService = $read('src/backend/app/Backup/DatabaseRestoreService.php');
 $envExample = $read('.env.example');
 $runAll = $read('src/backend/tests/run_all.sh');
 
@@ -151,6 +153,19 @@ $assert(
     str_contains($superAdministratorPage, 'restore_password') && !str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
     'Read-only preflight requires distinct credentials and cannot replace records'
 );
+$assert(
+    str_contains($superAdministratorPage, 'compatibility') && str_contains($superAdministratorPage, 'data-restore-compatibility')
+        && str_contains($reconciliationPage, 'data-restore-compatibility'),
+    'Both restore surfaces show the compatibility status before confirmation'
+);
+$assert(
+    str_contains($restoreService, 'RestoreCompatibilityRegistry') && str_contains($restoreService, "STAGE_DESTRUCTIVE_START"),
+    'Incoming restarts classify the package before destructive work'
+);
+$assert(
+    str_contains($restoreService, 'MigrationLedger') && str_contains($restoreService, 'snapshot()') && str_contains($restoreService, 'reinstate('),
+    'Restore preserves the destination migration ledger'
+);
 
 // --- active-user notice, and the paused save behaviour ----------------------
 $assert(
@@ -171,6 +186,8 @@ foreach ([
     'php src/backend/tests/database_backup_workflow_integration.php',
     'php src/backend/tests/backup_workflow_route_contract.php',
     'php src/backend/tests/sql_backup_format_test.php',
+    'php src/backend/tests/restore_compatibility_test.php',
+    'php src/backend/tests/backup_schema_bootstrap_contract.php',
     'node src/backend/tests/backup_status_alert_behavior_test.js',
 ] as $command) {
     $assert(str_contains($runAll, $command), "The full suite must run: {$command}");

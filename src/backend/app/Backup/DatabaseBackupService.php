@@ -226,12 +226,13 @@ final class DatabaseBackupService
         if (!Schema::tableExists($this->pdo, 'schema_migrations')) {
             return [];
         }
-        $keys = (new MigrationRunner($this->pdo, dirname(__DIR__, 2) . '/database/migrations'))->appliedKeys();
-        // The ledger also carries opaque legacy keys; only real migration files
-        // belong in the package manifest.
+        $runner = new MigrationRunner($this->pdo, dirname(__DIR__, 2) . '/database/migrations');
+        // The ledger also carries opaque legacy keys seeded by schema.sql; only
+        // migration files this installation knows belong in the package manifest.
+        $available = array_flip(array_map(static fn(array $migration): string => (string)$migration['key'], $runner->available()));
         return array_values(array_filter(
-            $keys,
-            static fn(mixed $key): bool => is_string($key) && preg_match('/^[0-9]{12}_[a-z0-9_]+$/D', $key) === 1
+            $runner->appliedKeys(),
+            static fn(mixed $key): bool => is_string($key) && isset($available[$key])
         ));
     }
 
