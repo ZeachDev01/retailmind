@@ -97,12 +97,14 @@ Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/ba
   - Modals: `components/modals/system_health.php`
   - Backend Services: `App\Services\SystemHealthService`, `App\Attention\AttentionCenter`, `AttentionRuleService`
 - **Backup & Restore**: `components/system_administrator/backup_restore.php`, `components/administrator/database_backup.php`
-  - Modals: `components/backup/restore_form.php`
-  - Backing JS: `backup_restore.js`, `backup_recovery_tabs.js`, `backup_status.js`, `backup_review.js`
-  - Backend Services: `App\Backup\DatabaseBackupService`, `DatabaseRestoreService`, `RecoveryStore`, `SafetyCopyService`
+  - Modals: `components/backup/restore_form.php`, `components/backup/recovery_key_recommendation.php`
+  - Backing JS: `backup_restore.js`, `backup_recovery_tabs.js`, `backup_status.js`, `backup_review.js`, `backup_key_recommendation.js`
+  - Backend Services: `App\Backup\DatabaseBackupService`, `ScheduledBackupService`, `ScheduledBackupSettings`, `DatabaseRestoreService`, `BackupKeyStore`, `BackupKeyRecommendation`, `RecoveryStore`, `SafetyCopyService`
+  - CLI: `src/backend/scripts/run_scheduled_backup.php`
+  - Contract Tests: `scheduled_backup_schedule_contract.php`, `scheduled_backup_service_contract.php`, `scheduled_backup_settings_contract.php`, `backup_keyring_test.php`, `backup_key_recommendation_test.php`, `backup_keyring_ui_contract.php`, `restore_compatibility_test.php`
 - **Platform Settings & Reset**: `components/system_administrator/system_settings.php`, `components/administrator/reset_data.php`
   - Backend Services: `App\Services\OperationalDataResetService`, `App\Services\TunnelSetupBlockBuilder`
-  - Contract Tests: `tunnel_setup_block_contract.php`
+  - Contract Tests: `tunnel_setup_block_contract.php`, `dormancy_policy_settings_contract.php`
 - **Forecasting Pipeline**:
   - Import Sales: `components/system_administrator/forecast_import.php` (`App\Services\ForecastHistoryImportService`)
   - Data Readiness: `components/report/data_readiness.php` (`App\Forecasting\DemandHistoryService`)
