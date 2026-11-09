@@ -25,7 +25,7 @@
         <h3 id="backup-keyring-title">Backup Keyring</h3>
         <p class="backup-hint">Every key this installation holds. Archived keys cannot make new backups, but they still open the packages encrypted with them.</p>
         <div class="table-wrap" tabindex="0" role="region" aria-labelledby="backup-keyring-title">
-            <table class="backup-keyring-table" data-no-smart-table aria-labelledby="backup-keyring-title">
+            <table class="backup-keyring-table" data-no-smart-table data-no-ghost-rows aria-labelledby="backup-keyring-title">
                 <caption class="sr-only">Recovery keys held by this installation</caption>
                 <thead><tr>
                     <th scope="col">Fingerprint</th>
@@ -80,6 +80,9 @@
                         </td>
                     </tr>
                 <?php endforeach; ?>
+                <?php if ($keyringKeys === []): ?>
+                    <tr><td colspan="5" class="backup-empty"><i class="bi bi-key" aria-hidden="true"></i><strong>No recovery keys yet</strong><span>The first backup creates the Primary Recovery Key.</span></td></tr>
+                <?php endif; ?>
                 </tbody>
             </table>
         </div>
