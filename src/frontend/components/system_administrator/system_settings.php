@@ -2,10 +2,21 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+require_once __DIR__ . '/../../../backend/app/Services/TunnelSetupBlockBuilder.php';
 
 $message = '';
 $messageClass = '';
+$generatedTunnelBlock = '';
+$generatedTunnelBlockType = '';
 $dormancyPolicyService = new \App\Authorization\DormancyPolicyService($pdo);
+$appRoot = (string)(realpath(dirname(__DIR__, 4)) ?: dirname(__DIR__, 4));
+$localAppPort = 80;
+$appUrlPort = parse_url((string)env('APP_URL', ''), PHP_URL_PORT);
+if (is_int($appUrlPort) && $appUrlPort > 0) {
+    $localAppPort = $appUrlPort;
+} elseif (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] > 0) {
+    $localAppPort = (int)$_SERVER['SERVER_PORT'];
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -23,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (in_array($action, [
             'save_brevo', 'test_brevo', 'disable_brevo',
             'save_tunnel_token', 'clear_tunnel_token', 'save_tunnel_notify', 'test_tunnel_notify',
+            'generate_tunnel_setup_block', 'generate_tunnel_removal_block',
         ], true)) {
             require_local_request();
 
@@ -152,6 +164,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Test notification failed. Check the Brevo API key and verified sender, then try again.';
                     $messageClass = 'tag-warning';
                 }
+            } elseif ($action === 'generate_tunnel_setup_block' || $action === 'generate_tunnel_removal_block') {
+                $tunnelServiceForBlock = new \App\Services\CloudflareTunnelService();
+                $savedToken = $tunnelServiceForBlock->getToken();
+                $builder = new \App\Services\TunnelSetupBlockBuilder();
+                $tunnelMode = $builder->mode($savedToken);
+                $blockInput = [
+                    'app_root' => $appRoot,
+                    'local_port' => $localAppPort,
+                    'token' => $savedToken,
+                    'hostname' => $tunnelServiceForBlock->getHostname(),
+                    'mode' => $tunnelMode,
+                ];
+
+                if ($action === 'generate_tunnel_setup_block') {
+                    $generatedTunnelBlock = $builder->buildSetupBlock($blockInput);
+                    $generatedTunnelBlockType = 'setup';
+                    log_activity($pdo, (int)$_SESSION['user_id'], 'Remote Access setup block generated', 'Platform Settings', null, null, null, null, null, [
+                        'mode' => $tunnelMode,
+                    ]);
+                    $message = $tunnelMode === 'permanent'
+                        ? 'Store PC setup block generated for the permanent named tunnel.'
+                        : 'Interim Quick Tunnel setup block generated. The public URL will change on restart.';
+                } else {
+                    $generatedTunnelBlock = $builder->buildRemovalBlock([
+                        'app_root' => $appRoot,
+                        'local_port' => $localAppPort,
+                    ]);
+                    $generatedTunnelBlockType = 'removal';
+                    log_activity($pdo, (int)$_SESSION['user_id'], 'Remote Access removal block generated', 'Platform Settings', null, null, null, null, null, [
+                        'mode' => $tunnelMode,
+                    ]);
+                    $message = 'Remote Access removal block generated.';
+                }
+                $messageClass = 'tag-success';
             }
         } else {
             $message = 'Choose a platform setting to save. Store and receipt settings are managed in the Administrator Workspace.';
@@ -352,9 +398,89 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
                     <button type="submit" name="action" value="test_tunnel_notify" class="btn btn-secondary">Send test</button>
                 </div>
             </form>
+
+            <div class="tunnel-setup">
+                <h3 class="tunnel-setup-heading">Cloudflare dashboard checklist</h3>
+                <ol class="tunnel-checklist">
+                    <li>Create a tunnel in Cloudflare Zero Trust &rarr; Networks &rarr; Tunnels.</li>
+                    <li>Add a public hostname that points to <code>http://127.0.0.1:<?= (int)$localAppPort ?></code>. This needs a domain you own.</li>
+                    <li>Create an owner-only Cloudflare Access policy for that hostname.</li>
+                    <li>Copy the tunnel token, save it above, then generate the Store PC setup block.</li>
+                </ol>
+
+                <?php if (!empty($tunnelStatus['token_configured'])): ?>
+                    <p class="tunnel-setup-note">Permanent mode uses the saved token and hostname. Re-run the block to repair the service or apply a changed token.</p>
+                    <?php if (empty($tunnelStatus['hostname'])): ?>
+                        <div class="tunnel-setup-warning" role="note">
+                            <strong>No custom hostname saved.</strong> The named tunnel can still run, but this card cannot show the public URL until you add one.
+                        </div>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="tunnel-setup-warning" role="note">
+                        <strong>Interim Quick Tunnel.</strong> No token is saved, so the generated block creates a Quick Tunnel.
+                        Its public URL changes every time the service restarts, and Cloudflare Access is not in front of it.
+                        RetailMind sign-in and the application read-only boundary still apply. Save a token and hostname, then regenerate to upgrade.
+                    </div>
+                <?php endif; ?>
+
+                <form method="post" class="u-mt-2">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="generate_tunnel_setup_block">
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-magic" aria-hidden="true"></i> Generate Store PC setup block</button>
+                    </div>
+                </form>
+
+                <form method="post" class="u-mt-1">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="generate_tunnel_removal_block">
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-secondary"><i class="bi bi-trash3" aria-hidden="true"></i> Generate removal block</button>
+                    </div>
+                </form>
+
+                <?php if ($generatedTunnelBlock !== ''): ?>
+                    <div class="tunnel-setup-result">
+                        <div class="tunnel-setup-result-heading">
+                            <h3 class="tunnel-setup-heading">
+                                <?= $generatedTunnelBlockType === 'removal' ? 'Remove Remote Access' : 'Run once in an elevated PowerShell' ?>
+                            </h3>
+                            <button type="button" class="btn btn-secondary btn-sm" data-copy-target="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>">Copy block</button>
+                        </div>
+                        <textarea id="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>" class="tunnel-setup-block" readonly spellcheck="false" aria-label="<?= $generatedTunnelBlockType === 'removal' ? 'Remote Access removal PowerShell block' : 'Store PC Remote Access setup PowerShell block' ?>"><?= htmlspecialchars($generatedTunnelBlock) ?></textarea>
+                    </div>
+                <?php endif; ?>
+            </div>
         </section>
 
     </main>
 </div>
+<script>
+(() => {
+    document.querySelectorAll('[data-copy-target]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const target = document.getElementById(button.getAttribute('data-copy-target') || '');
+            if (!target) {
+                return;
+            }
+            const previous = button.textContent;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(target.value);
+                } else {
+                    target.focus();
+                    target.select();
+                    document.execCommand('copy');
+                }
+                button.textContent = 'Copied!';
+                setTimeout(() => { button.textContent = previous; }, 2000);
+            } catch (error) {
+                target.focus();
+                target.select();
+            }
+        });
+    });
+})();
+</script>
 </body>
 </html>
