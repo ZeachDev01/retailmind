@@ -30,6 +30,17 @@ class InterruptedRestorePdo extends PDO
         return parent::exec($statement);
     }
 }
+final class BackupIntegrationClock implements \App\Attention\Clock
+{
+    public function __construct(public DateTimeImmutable $now)
+    {
+    }
+
+    public function now(): DateTimeImmutable
+    {
+        return $this->now;
+    }
+}
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) { throw new RuntimeException($message); }
 };
@@ -52,15 +63,21 @@ try {
     foreach ([$source, $target] as $db) {
         $db->exec('CREATE TABLE roles (role_id INT PRIMARY KEY, role_name VARCHAR(30)) ENGINE=InnoDB');
         $db->exec("INSERT INTO roles VALUES (1, 'super_admin'), (2, 'admin'), (3, 'cashier')");
-        $db->exec("CREATE TABLE users (user_id INT PRIMARY KEY, full_name VARCHAR(100), role_id INT, password_hash VARCHAR(255), status VARCHAR(20), session_version INT) ENGINE=InnoDB");
-        $insert = $db->prepare("INSERT INTO users VALUES (?, ?, ?, ?, 'active', 1)");
+        $db->exec("CREATE TABLE users (user_id INT PRIMARY KEY, full_name VARCHAR(100), role_id INT, password_hash VARCHAR(255), status VARCHAR(20), session_version INT, display_name VARCHAR(100) NULL) ENGINE=InnoDB");
+        $insert = $db->prepare("INSERT INTO users VALUES (?, ?, ?, ?, 'active', 1, ?)");
         foreach ([1 => 'Super', 2 => 'Owner', 3 => 'Cashier'] as $id => $name) {
-            $insert->execute([$id, $name, $id, password_hash($db === $source ? 'Snapshot-password' : 'Current-password', PASSWORD_DEFAULT)]);
+            $insert->execute([$id, $name, $id, password_hash($db === $source ? 'Snapshot-password' : 'Current-password', PASSWORD_DEFAULT), $name]);
         }
         $db->exec('CREATE TABLE activity_log (log_id INT AUTO_INCREMENT PRIMARY KEY, note TEXT) ENGINE=InnoDB');
         $db->exec('CREATE TABLE products (product_id INT PRIMARY KEY, product_name TEXT, optional_value TEXT NULL, binary_value BLOB, stock INT) ENGINE=InnoDB');
         $migration = require __DIR__ . '/../database/migrations/202609260001_shared_database_backups.php';
         $migration['up']($db);
+        // The current backup history columns and status enum come from the
+        // foundation migration (#460); apply it to this disposable fixture too.
+        $history = require __DIR__ . '/../database/migrations/202611100001_backup_keyring_and_history.php';
+        $history['up']($db);
+        (require __DIR__ . '/../database/migrations/202609240002_dormancy_policy_settings.php')['up']($db);
+        (require __DIR__ . '/../database/migrations/202611100002_scheduled_backup_settings.php')['up']($db);
     }
     $text = "O'Brien; DROP DATABASE not_a_command;\nüñicode \\ test";
     $source->prepare('INSERT INTO products VALUES (1, ?, NULL, ?, 42)')->execute([$text, "\x00\xff\x01"]);
@@ -123,6 +140,45 @@ try {
     $systemBackup = $backups->createForSystem();
     $assert(str_starts_with((string)file_get_contents($systemBackup['path']), "RMSTORE2\n"), 'System export also requires encrypted package format');
     $backups->discardAfterDelivery($systemBackup['path']);
+
+    // The real scheduled-run seam: due, verified package, retention, manual
+    // evidence preservation, and a busy-slot skip against MySQL.
+    $scheduledClock = new BackupIntegrationClock(new DateTimeImmutable('2026-11-08 23:05:00', new DateTimeZone('Asia/Manila')));
+    $scheduledSettings = new \App\Backup\ScheduledBackupSettings($source, $scheduledClock);
+    $scheduledDestination = $private . '/scheduled-destination';
+    $scheduler = new \App\Backup\ScheduledBackupService($source, $scheduledClock, $scheduledSettings, $backups, $scheduledDestination);
+    $scheduledFiles = static fn(): array => array_values(glob($scheduledDestination . '/*.rmpkg') ?: []);
+    $firstScheduled = $scheduler->runDue();
+    $assert(($firstScheduled['outcome'] ?? '') === \App\Backup\ScheduledBackupService::OUTCOME_COMPLETED, 'The real scheduled seam completes a verified package');
+    $assert(count($scheduledFiles()) === 1, 'The scheduled destination holds exactly one package');
+    $scheduledRow = $source->query("SELECT * FROM backup_history WHERE backup_type='scheduled' AND status='completed' AND artifact_path IS NOT NULL ORDER BY backup_id DESC LIMIT 1")->fetch();
+    $assert(is_array($scheduledRow) && is_file((string)$scheduledRow['artifact_path']), 'The scheduled history row binds the retained package');
+    $assert(str_starts_with(str_replace('\\', '/', (string)$scheduledRow['artifact_path']), str_replace('\\', '/', (string)realpath($scheduledDestination))), 'The scheduled package lives in the configured destination');
+    $assert((string)$scheduledRow['key_fingerprint'] === \App\Backup\BackupKeyStore::currentFingerprint(), 'The scheduled row records the actual package key fingerprint');
+    $decodedScheduled = StorePackageFormat::decode((string)file_get_contents((string)$scheduledRow['artifact_path']), SqlBackupFormat::schema($source));
+    $assert(isset($decodedScheduled['rows']['products']), 'The retained scheduled package decodes against the source schema');
+    $firstScheduledPath = (string)$scheduledRow['artifact_path'];
+    $scheduledClock->now = $scheduledClock->now->modify('+8 days');
+    $secondScheduled = $scheduler->runDue();
+    $assert(($secondScheduled['outcome'] ?? '') === \App\Backup\ScheduledBackupService::OUTCOME_COMPLETED, 'The next due scheduled run completes');
+    $assert(!is_file($firstScheduledPath), 'Retention removes the replaced scheduled package');
+    $assert(count($scheduledFiles()) === 1, 'Retention leaves one scheduled package');
+    $firstRemovedAt = $source->query('SELECT removed_at FROM backup_history WHERE backup_id=' . (int)$scheduledRow['backup_id'])->fetchColumn();
+    $assert($firstRemovedAt !== null && (string)$firstRemovedAt !== '', 'Retention marks the replaced history row as removed');
+    $manualEvidence = $private . '/manual-evidence.rmpkg';
+    file_put_contents($manualEvidence, 'manual');
+    $source->prepare("INSERT INTO backup_history (filename,backup_type,file_size,status,artifact_path) VALUES ('manual-evidence.rmpkg','manual',6,'completed',?)")->execute([$manualEvidence]);
+    $scheduledClock->now = $scheduledClock->now->modify('+8 days');
+    $scheduler->runDue();
+    $assert(is_file($manualEvidence), 'Retention never removes manual evidence');
+    $manualRemovedAt = $source->query("SELECT removed_at FROM backup_history WHERE filename='manual-evidence.rmpkg'")->fetchColumn();
+    $assert($manualRemovedAt === null, 'Retention never marks manual evidence removed');
+    $busyClaim = $backups->coordinator()->claim(1, 'super_admin');
+    $scheduledClock->now = $scheduledClock->now->modify('+8 days');
+    $busyScheduled = $scheduler->runDue();
+    $assert(($busyScheduled['outcome'] ?? '') === \App\Backup\ScheduledBackupService::OUTCOME_SKIPPED, 'A busy capture slot skips the scheduled run');
+    $assert(($busyScheduled['reason'] ?? '') === 'backup_in_progress', 'A busy capture slot explains backup_in_progress');
+    $backups->coordinator()->fail((string)$busyClaim, 'fixture');
 
     $before = (string)$target->query('SELECT password_hash FROM users WHERE user_id=1')->fetchColumn();
     $preflight = $restorer->preflight(1, 'super_admin', $backup['path'], $backup['filename'], 'Current-password');
@@ -208,8 +264,8 @@ try {
     require_once __DIR__ . '/../includes/functions.php';
     (new \App\Database\MigrationRunner($full, __DIR__ . '/../database/migrations'))->runPending();
     $superRole = (int)$full->query("SELECT role_id FROM roles WHERE role_name='super_admin'")->fetchColumn();
-    $full->prepare('INSERT INTO users (full_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, 0)')
-        ->execute(['Full schema fixture', 'sql_roundtrip_fixture', password_hash('Full-schema-password', PASSWORD_DEFAULT), $superRole]);
+    $full->prepare('INSERT INTO users (first_name, display_name, username, password_hash, role_id, must_change_password) VALUES (?, ?, ?, ?, ?, 0)')
+        ->execute(['Full', 'Full schema fixture', 'sql_roundtrip_fixture', password_hash('Full-schema-password', PASSWORD_DEFAULT), $superRole]);
     $fullActor = (int)$full->lastInsertId();
     $receiptSentinel = '{"reference_number":"00000000000000000000000000123456","fee_amount":"123.45","store":{"name":"Saved Store","footer":"Saved footer"}}';
     $full->prepare("INSERT INTO gcash_transactions (transaction_type,reference_number,amount,cashier_id,verification_status,receipt_details_json) VALUES ('Cash-In','00000000000000000000000000123456',12345,?,'Completed',?)")->execute([$fullActor, $receiptSentinel]);
@@ -218,7 +274,7 @@ try {
     }
     $fullBackups = new DatabaseBackupService($full, $policy, $private . '/full-downloads', $full, $uploadRoot);
     $fullBackup = $fullBackups->create($fullActor, 'super_admin');
-    $full->prepare('UPDATE users SET full_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
+    $full->prepare('UPDATE users SET display_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
     $fullSchema = SqlBackupFormat::schema($full);
     foreach (['privileges', 'role_privileges', 'user_privileges', 'restore_preserved_activity', 'emergency_access_sessions'] as $retiredTable) {
@@ -226,11 +282,11 @@ try {
     }
     $fullPreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password');
     $assert($fullPreflight['replacement_authorized'] === false, 'Complete migrated schema preflight never authorizes replacement');
-    $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
     $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), SqlBackupFormat::schema($full));
     file_put_contents($legacySql, $fullDecoded['sql']);
     $fullRestorer->restore($fullActor, 'super_admin', $legacySql, 'legacy-private.sql', 'Full-schema-password');
-    $assert($full->query('SELECT full_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Full schema fixture', 'Complete migrated application schema must round-trip');
     $assert($full->query("SELECT receipt_details_json FROM gcash_transactions WHERE reference_number='00000000000000000000000000123456'")->fetchColumn() === $receiptSentinel, 'GCash receipt snapshot survives full backup and restore byte for byte');
     $full->exec('CREATE VIEW unsupported_fixture_view AS SELECT user_id FROM users');
     $reject(fn() => $fullBackups->create($fullActor, 'super_admin'), 'Unsupported custom objects must fail rather than produce an incomplete backup');

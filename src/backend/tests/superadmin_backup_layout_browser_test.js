@@ -76,7 +76,7 @@ function render(count = 23, historyPage = '1', action = '') {
                 assert.equal(await recommendationDialog.evaluate(dialog => dialog.open), false, 'Escape closes the recommendation prompt');
                 assert.equal(await recommendation.isVisible(), true, 'Dismissing the prompt keeps the persistent banner');
             }
-            assert.equal(await page.locator('.backup-summary > div').count(), 3);
+            assert.equal(await page.locator('.backup-summary > div').count(), 5);
             assert.equal(await page.locator('#backup-history tbody tr').count(), 10);
             assert.equal(await page.getByRole('link', {name: 'Identity Reconciliation', exact: true}).count(), 1);
             assert.equal(await page.locator('[role="tabpanel"]:visible').count(), 1);

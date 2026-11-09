@@ -9,6 +9,7 @@ $messageClass = '';
 $generatedTunnelBlock = '';
 $generatedTunnelBlockType = '';
 $dormancyPolicyService = new \App\Authorization\DormancyPolicyService($pdo);
+$scheduledBackupSettings = new \App\Backup\ScheduledBackupSettings($pdo);
 $appRoot = (string)(realpath(dirname(__DIR__, 4)) ?: dirname(__DIR__, 4));
 $localAppPort = 80;
 $appUrlPort = parse_url((string)env('APP_URL', ''), PHP_URL_PORT);
@@ -30,6 +31,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dormancyPolicyService->update((string)current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Dormancy Policy thresholds updated', 'Platform Settings', null, null, $updates);
             $message = 'Dormancy Policy thresholds saved.';
+            $messageClass = 'tag-success';
+        } elseif ($action === 'save_backup_schedule') {
+            $updates = [
+                'weekday' => trim((string)($_POST['backup_schedule_weekday'] ?? '')),
+                'time' => trim((string)($_POST['backup_schedule_time'] ?? '')),
+                'destination' => trim((string)($_POST['backup_destination_path'] ?? '')),
+            ];
+            $scheduledBackupSettings->update((string)current_role(), $updates, (int)$_SESSION['user_id']);
+            log_activity($pdo, (int)$_SESSION['user_id'], 'Scheduled backup settings updated', 'Platform Settings', null, null, $updates);
+            $message = 'Scheduled Backup settings saved. The next run uses the new schedule.';
             $messageClass = 'tag-success';
         } elseif (in_array($action, [
             'save_brevo', 'test_brevo', 'disable_brevo',
@@ -213,6 +224,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $dormancyThresholds = $dormancyPolicyService->thresholds();
+$backupSchedule = $scheduledBackupSettings->get();
+$scheduleOutcomeLabels = [
+    'completed' => 'Completed',
+    'skipped' => 'Skipped — retried next run',
+    'failed' => 'Failed',
+];
 $settings = get_store_settings($pdo);
 $brevoConfigured = !empty($settings['brevo_api_key']);
 $brevoTestRecipient = trim((string)($settings['brevo_test_recipient'] ?? ''));
@@ -309,6 +326,52 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
                 </div>
                 <div class="form-actions u-mt-1">
                     <button type="submit" class="btn btn-primary"><i class="bi bi-shield-check" aria-hidden="true"></i> Save policy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="dashboard-section" aria-labelledby="heading-backup-schedule">
+            <div class="section-header">
+                <h2 id="heading-backup-schedule"><span class="settings-icon"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span> Scheduled Backup</h2>
+            </div>
+            <div class="settings-meta">
+                <div class="settings-meta-item">
+                    <span class="settings-meta-label">Next scheduled run</span>
+                    <span class="settings-meta-value"><?= htmlspecialchars(format_display_datetime((string)$backupSchedule['next_run_at'])) ?></span>
+                </div>
+                <div class="settings-meta-item">
+                    <span class="settings-meta-label">Last successful run</span>
+                    <span class="settings-meta-value"><?= $backupSchedule['last_success_at'] !== null ? htmlspecialchars(format_display_datetime((string)$backupSchedule['last_success_at'])) : 'None yet' ?></span>
+                </div>
+                <div class="settings-meta-item">
+                    <span class="settings-meta-label">Last outcome</span>
+                    <span class="settings-meta-value"><?= htmlspecialchars($scheduleOutcomeLabels[$backupSchedule['last_outcome']] ?? 'Not run yet') ?></span>
+                </div>
+            </div>
+            <form method="post">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_backup_schedule">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="backup_schedule_weekday">Weekday</label>
+                        <select id="backup_schedule_weekday" name="backup_schedule_weekday">
+                            <?php foreach (\App\Backup\ScheduledBackupSettings::WEEKDAY_NAMES as $weekdayIndex => $weekdayName): ?>
+                                <option value="<?= (int)$weekdayIndex ?>"<?= $backupSchedule['weekday'] === $weekdayIndex ? ' selected' : '' ?>><?= htmlspecialchars($weekdayName) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="backup_schedule_time">Local time</label>
+                        <input type="time" id="backup_schedule_time" name="backup_schedule_time" value="<?= htmlspecialchars((string)$backupSchedule['time']) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="backup_destination_path">Backup Destination</label>
+                        <input type="text" id="backup_destination_path" name="backup_destination_path" spellcheck="false" autocomplete="off" value="<?= htmlspecialchars((string)$backupSchedule['destination_configured']) ?>" placeholder="<?= htmlspecialchars((string)$backupSchedule['destination']) ?>">
+                        <span class="backup-hint">Use an absolute folder outside the application and web root. Leave blank to use the private recovery store.</span>
+                    </div>
+                </div>
+                <div class="form-actions u-mt-1">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check" aria-hidden="true"></i> Save schedule</button>
                 </div>
             </form>
         </section>

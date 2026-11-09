@@ -32,6 +32,10 @@ final class DatabaseAttentionSignalSource
             "SELECT COUNT(*) FROM backup_history WHERE status = 'failed' AND created_at >= ?",
             [$dayAgo]
         );
+        $scheduledBackupFailures = $this->scalar(
+            "SELECT COUNT(*) FROM backup_history WHERE backup_type = 'scheduled' AND status = 'failed' AND created_at >= ?",
+            [$dayAgo]
+        );
         $latestModel = $this->row(
             "SELECT completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1"
         );
@@ -62,6 +66,7 @@ final class DatabaseAttentionSignalSource
             'locked_account_count' => $this->signal($lockedAccounts, (int)$lockedAccounts),
             'backup_age_days' => $this->signal($backupAge),
             'recovery_failure_count' => $this->signal($recoveryFailures, (int)$recoveryFailures),
+            'scheduled_backup_failure_count' => $this->signal($scheduledBackupFailures, (int)$scheduledBackupFailures),
             'service_unhealthy_count' => $this->signal($serviceFailures, $serviceFailures),
             'ml_model_age_days' => $this->signal(max($modelAge, $mlFailures > 0 ? 9999 : 0)),
             'platform_setting_change_count' => $this->signal($platformChanges, (int)$platformChanges),
