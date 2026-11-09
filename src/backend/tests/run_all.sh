@@ -17,6 +17,7 @@ bash src/backend/tests/javascript_syntax_check.sh
 python src/backend/tests/css_balance_check.py
 python src/backend/tests/infinityfree_deploy_contract.py
 php src/backend/tests/smoke_checks.php
+php src/backend/tests/tunnel_setup_block_contract.php
 php src/backend/tests/store_reopening_test.php
 php src/backend/tests/daily_sales_range_contract.php
 php src/backend/tests/environment_loading_test.php
@@ -27,9 +28,15 @@ php src/backend/tests/procurement_schema_integration.php
 php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
+php src/backend/tests/scheduled_backup_schedule_contract.php
+php src/backend/tests/scheduled_backup_service_contract.php
+php src/backend/tests/scheduled_backup_settings_contract.php
+php src/backend/tests/backup_schema_bootstrap_contract.php
+php src/backend/tests/restore_compatibility_test.php
 php src/backend/tests/identity_reconciliation_mysql_test.php
 node src/backend/tests/identity_review_ui_browser_test.js
 node src/backend/tests/backup_package_browser_test.js
+node src/backend/tests/backup_keyring_browser_test.js
 node src/backend/tests/backup_recovery_tabs_browser_test.js
 node src/backend/tests/recovery_tools_browser_test.js
 node src/backend/tests/backup_history_pagination_browser_test.js
@@ -40,6 +47,9 @@ node src/backend/tests/safety_copy_browser_test.js
 php src/backend/tests/backup_unavailable_navigation_test.php
 php src/backend/tests/sql_backup_format_test.php
 php -d memory_limit=512M src/backend/tests/store_package_format_test.php
+php -d memory_limit=512M src/backend/tests/backup_keyring_test.php
+php src/backend/tests/backup_key_recommendation_test.php
+php src/backend/tests/backup_keyring_ui_contract.php
 php src/backend/tests/portable_store_package_test.php
 php src/backend/tests/session_policy_test.php
 node src/backend/tests/session_policy_browser_test.js

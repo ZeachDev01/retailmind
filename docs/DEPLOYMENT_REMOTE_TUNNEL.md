@@ -37,9 +37,22 @@ Physical cash drawers and POS sale completion remain strictly guarded by local h
 
 ### Step 2: Configure & Install on Store PC (2 mins)
 
-Choose either the **Automated Script** (recommended for dedicated PCs) or the **Store Configuration UI**.
+Choose the **one-paste setup block** (recommended), the **Automated Script**, or the **Store Configuration UI**.
 
-#### Option A: Automated Windows Service Script (Recommended)
+#### Option A: One-paste Setup Block (Recommended)
+
+1. On the Store PC, open RetailMind as **Super Administrator** &rarr; **Platform Settings** &rarr; **Remote Access**.
+2. For a permanent named tunnel, save the tunnel token and public hostname. To use the interim Quick Tunnel while no domain exists, leave the token blank.
+3. Click **Generate Store PC setup block**, then **Copy block**.
+4. Open **PowerShell as Administrator** on the same Store PC, paste the whole block, and press Enter.
+
+The block checks elevation, 64-bit Windows, internet access, and the local RetailMind origin before changing anything. It then provisions `cloudflared`, persists the token, removes the legacy Quick Tunnel scheduled task, registers the `RetailMindCloudflareTunnel` service with automatic startup and crash recovery, starts it, and prints the resulting state.
+
+Re-run the same block to repair the service or apply a changed token. Use **Generate removal block** to stop and delete the service and the legacy scheduled task without deleting the application, database, or backups.
+
+> **Interim Quick Tunnel:** with no saved token, the URL changes on every restart and Cloudflare Access is not in front of it. RetailMind sign-in and the read-only remote boundary still apply.
+
+#### Option B: Automated Windows Service Script
 
 Open **PowerShell as Administrator** on the Store PC and run:
 
@@ -58,7 +71,7 @@ This single command automatically:
    - **Crash auto-recovery (`sc.exe failure`)**: Automatically restarts after 5s, 10s, and 20s if interrupted.
 4. Starts the tunnel service immediately.
 
-#### Option B: Store Configuration Web UI
+#### Option C: Store Configuration Web UI
 
 1. Open RetailMind in a browser on the Store PC: `http://localhost/retailmind`
 2. Log in as **Administrator** &rarr; Go to **Store Configuration** (`store_settings.php`).

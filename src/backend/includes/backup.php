@@ -44,18 +44,21 @@ function backup_review_source(): array {
     return ['tmp_name' => $path, 'name' => $draft['filename'], 'error' => UPLOAD_ERR_OK, 'temporary' => true];
 }
 
-function ensure_backup_schema(PDO $pdo): void {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS backup_history (
-        backup_id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        filename VARCHAR(255) NOT NULL,
-        backup_type ENUM('manual','scheduled','restore') NOT NULL DEFAULT 'manual',
-        file_size BIGINT NULL,
-        status ENUM('completed','failed') NOT NULL DEFAULT 'completed',
-        performed_by INT NULL,
-        notes TEXT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (performed_by) REFERENCES users(user_id) ON DELETE SET NULL
-    )");
+/**
+ * Repair a partially upgraded installation through the normal migration path.
+ * Runs at most once per request and only when the history metadata is missing.
+ */
+function ensure_backup_storage(PDO $pdo): void {
+    static $repaired = [];
+    $connection = spl_object_id($pdo);
+    if (isset($repaired[$connection])) return;
+    $missing = !App\Database\Schema::tableExists($pdo, 'backup_history')
+        || !App\Database\Schema::columnExists($pdo, 'backup_history', 'snapshot_at')
+        || !App\Database\Schema::columnExists($pdo, 'backup_history', 'key_fingerprint');
+    if ($missing) {
+        (new App\Database\MigrationRunner($pdo, dirname(__DIR__) . '/database/migrations'))->runPending();
+    }
+    $repaired[$connection] = true;
 }
 
 function backup_safe_identifier(string $identifier): string {
@@ -143,13 +146,12 @@ function split_sql_statements(string $sql): array {
 }
 
 function record_backup_history(PDO $pdo, string $filename, string $type, int $size, string $status, ?int $userId, ?string $notes = null): void {
-    ensure_backup_schema($pdo);
-    $available = App\Database\Schema::columnExists($pdo, 'backup_history', 'snapshot_at');
-    if (!$available) {
-        $stmt = $pdo->prepare('INSERT INTO backup_history (filename, backup_type, file_size, status, performed_by, notes) VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$filename, $type, $size, $status, $userId, $notes]);
-        return;
+    try {
+        ensure_backup_storage($pdo);
+        $stmt = $pdo->prepare('INSERT INTO backup_history (filename, backup_type, file_size, status, performed_by, notes, snapshot_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$filename, $type, $size, $status, $userId, $notes, gmdate('Y-m-d H:i:s')]);
+    } catch (Throwable $exception) {
+        // Never mask the original backup failure with a history write error.
+        error_log('Backup history write failed: ' . $exception->getMessage());
     }
-    $stmt = $pdo->prepare('INSERT INTO backup_history (filename, backup_type, file_size, status, performed_by, notes, snapshot_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    $stmt->execute([$filename, $type, $size, $status, $userId, $notes, gmdate('Y-m-d H:i:s')]);
 }

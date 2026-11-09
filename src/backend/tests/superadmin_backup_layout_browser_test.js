@@ -31,13 +31,15 @@ function render(count = 23, historyPage = '1', action = '') {
             'notes' => '', 'file_size' => 1024, 'status' => 'completed', 'requested_by' => 'Super Administrator'
         ];
         $message = ''; $messageClass = ''; $download = null; $invalidField = ''; $preflight = null;
+        $keyringKeys = [['fingerprint' => str_repeat('a', 64), 'kind' => 'primary', 'created_at' => '2026-11-01T10:00:00+00:00', 'imported_at' => null, 'archived_at' => null, 'resolvable' => true]];
+        $backupRecommendation = ['fingerprint' => str_repeat('d', 64), 'short' => 'dddddddd', 'snapshot_at' => '2026-11-01 10:00:00', 'filename' => 'latest.rmpkg'];
         $maxUploadBytes = $restorer->supportedUploadBytes();
         $path = realpath('src/frontend/components/system_administrator/backup_restore.php');
         $source = file_get_contents($path);
         $source = substr($source, strpos($source, '$historyPerPage ='));
         $source = str_replace("<?php include __DIR__ . '/../sidebar.php'; ?>", '', $source);
         $source = str_replace('__DIR__', var_export(dirname($path), true), $source);
-        eval('use App\\Backup\\RecoveryStore;' . $source);
+        eval('use App\\Backup\\RecoveryStore; use App\\Backup\\BackupKeyRecommendation;' . $source);
     `, String(count), historyPage, action], {encoding: 'utf8'});
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
@@ -49,6 +51,7 @@ function render(count = 23, historyPage = '1', action = '') {
     fs.mkdirSync(output, {recursive: true});
     try {
         const page = await browser.newPage();
+        let recommendationPromptShown = false;
         async function show(count = 23, number = '1', action = '') {
             await page.setContent(render(count, number, action));
             await page.addStyleTag({path: 'src/frontend/assets/css/style.css'});
@@ -56,14 +59,25 @@ function render(count = 23, historyPage = '1', action = '') {
             // The production sidebar normally owns the navigation gutter.
             await page.addStyleTag({content: '.main-content {margin:0!important;width:100%;}'});
             await page.addScriptTag({path: 'src/frontend/assets/js/backup_review.js'});
+            await page.addScriptTag({path: 'src/frontend/assets/js/backup_key_recommendation.js'});
             await page.addScriptTag({path: 'src/frontend/assets/js/backup_restore.js'});
             await page.addScriptTag({path: 'src/frontend/assets/js/backup_recovery_tabs.js'});
         }
         for (const width of [1440, 390]) {
             await page.setViewportSize({width, height: 960});
             await show();
-            assert.equal(await page.locator('.backup-summary > div').count(), 3);
-            assert.equal(await page.locator('tbody tr').count(), 10);
+            const recommendation = page.locator('[data-backup-key-recommendation]');
+            const recommendationDialog = page.locator('[data-backup-key-dialog]');
+            assert.equal(await recommendation.isVisible(), true, 'The recommendation banner persists for the account');
+            assert.equal(await recommendationDialog.count(), 1, 'The recommendation prompt markup is present');
+            if (await recommendationDialog.evaluate(dialog => dialog.open)) {
+                recommendationPromptShown = true;
+                await page.keyboard.press('Escape');
+                assert.equal(await recommendationDialog.evaluate(dialog => dialog.open), false, 'Escape closes the recommendation prompt');
+                assert.equal(await recommendation.isVisible(), true, 'Dismissing the prompt keeps the persistent banner');
+            }
+            assert.equal(await page.locator('.backup-summary > div').count(), 5);
+            assert.equal(await page.locator('#backup-history tbody tr').count(), 10);
             assert.equal(await page.getByRole('link', {name: 'Identity Reconciliation', exact: true}).count(), 1);
             assert.equal(await page.locator('[role="tabpanel"]:visible').count(), 1);
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -86,7 +100,7 @@ function render(count = 23, historyPage = '1', action = '') {
         }
         for (const [number, expected, label] of [['2', 10, 'Showing 11–20 of 23'], ['999', 3, 'Showing 21–23 of 23'], ['-1', 10, 'Showing 1–10 of 23']]) {
             await show(23, number);
-            assert.equal(await page.locator('tbody tr').count(), expected);
+            assert.equal(await page.locator('#backup-history tbody tr').count(), expected);
             assert.equal(await page.locator('.backup-pagination p').textContent(), label);
         }
         await show(0);
@@ -96,6 +110,7 @@ function render(count = 23, historyPage = '1', action = '') {
         assert(await page.locator('#safety-panel').isVisible(), 'Safety action returns to its tab');
         await show(1, '1', 'preflight');
         assert(await page.locator('#restore-panel details.backup-tips').evaluate(node => node.open), 'Validation feedback remains expanded');
+        assert.equal(recommendationPromptShown, true, 'The recommendation prompt opens once per session');
         console.log('Superadmin backup layout: passed (production PHP, tabs, validation, pagination, empty, desktop/mobile)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

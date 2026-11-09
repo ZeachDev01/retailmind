@@ -39,7 +39,7 @@ final class SqlBackupFormat
     }
 
     /** Compare known SHOW CREATE differences without changing literals, constraints or the stored fingerprint. */
-    private static function portableDdl(string $ddl): string
+    public static function portableDdl(string $ddl): string
     {
         if (str_contains($ddl, "\x01") || str_contains($ddl, "\x02")) throw new RuntimeException('Invalid schema text.');
         $literals = [];
@@ -74,6 +74,146 @@ final class SqlBackupFormat
         }
         unset($line);
         return strtr(implode("\n", $lines), $literals);
+    }
+
+    /**
+     * Recover the producer's ['ddl','columns'] map from the package alone.
+     * Only the emitted dialect is parsed; no statement is ever executed.
+     */
+    public static function producerSchema(string $sql): array
+    {
+        $statements = \split_sql_statements($sql);
+        $schema = [];
+        $count = count($statements);
+        $index = 0;
+        // HEADER and the two leading SET statements are comments/prefix, not schema.
+        while ($index < $count && !preg_match('/^DROP TABLE IF EXISTS `([^`]+)`$/D', $statements[$index], $match)) $index++;
+        while ($index < $count) {
+            if (str_starts_with($statements[$index], 'SET ')) break;
+            if (!preg_match('/^DROP TABLE IF EXISTS `([^`]+)`$/D', $statements[$index++], $match)) {
+                throw new RuntimeException('The backup contains an unsupported table sequence.');
+            }
+            $table = $match[1];
+            if (!isset($statements[$index]) || !str_starts_with($statements[$index], 'CREATE TABLE ')) {
+                throw new RuntimeException('The backup is missing a table definition.');
+            }
+            $ddl = self::normalizeDdl($statements[$index++]);
+            $quoted = DatabaseSnapshotWriter::identifier($table);
+            $columns = null;
+            while (isset($statements[$index]) && str_starts_with($statements[$index], "INSERT INTO {$quoted} (")) {
+                if ($columns === null) {
+                    if (!preg_match('/^INSERT INTO `[^`]+` \((.*?)\) VALUES \(/sD', $statements[$index], $insert)) {
+                        throw new RuntimeException('The backup contains an unsupported data statement.');
+                    }
+                    $columns = array_map(static fn(string $column): string => trim($column, '`'), explode('`, `', $insert[1]));
+                }
+                $index++;
+            }
+            $schema[$table] = ['ddl' => $ddl, 'columns' => $columns ?? self::ddlColumns($ddl)];
+        }
+        if ($schema === []) throw new RuntimeException('The backup contains no database structure.');
+        return $schema;
+    }
+
+    /** Columns declared by a CREATE TABLE statement, excluding keys and generated columns. */
+    private static function ddlColumns(string $ddl): array
+    {
+        $open = strpos($ddl, '(');
+        $close = strrpos($ddl, ')');
+        if ($open === false || $close === false || $close <= $open) return [];
+        $declarations = [];
+        $buffer = '';
+        $depth = 0;
+        $quote = null;
+        $body = substr($ddl, $open + 1, $close - $open - 1);
+        for ($i = 0, $length = strlen($body); $i < $length; $i++) {
+            $char = $body[$i];
+            if ($quote !== null) {
+                $buffer .= $char;
+                if ($char === $quote && ($body[$i + 1] ?? '') === $quote) { $buffer .= $body[++$i]; continue; }
+                if ($char === $quote && ($i === 0 || $body[$i - 1] !== '\\')) $quote = null;
+                continue;
+            }
+            if ($char === '`' || $char === "'" || $char === '"') { $quote = $char; $buffer .= $char; continue; }
+            if ($char === '(') $depth++;
+            if ($char === ')') $depth--;
+            if ($char === ',' && $depth === 0) { $declarations[] = $buffer; $buffer = ''; continue; }
+            $buffer .= $char;
+        }
+        $declarations[] = $buffer;
+        $columns = [];
+        foreach ($declarations as $declaration) {
+            if (!preg_match('/^`([^`]+)` /', ltrim($declaration), $match)) continue;
+            if (str_contains($declaration, ' GENERATED ALWAYS AS ')) continue;
+            $columns[] = $match[1];
+        }
+        return $columns;
+    }
+
+    /**
+     * Describe how a producer structure differs from the current destination.
+     * Source-only tables/columns and opaque DDL drift must be explained by an adapter.
+     */
+    public static function structureDiff(array $source, array $destination): array
+    {
+        $diff = ['tables_added' => [], 'tables_removed' => [], 'columns_added' => [], 'columns_removed' => [], 'changed' => [], 'enums' => []];
+        foreach (array_keys($destination) as $table) if (!isset($source[$table])) $diff['tables_added'][] = (string)$table;
+        foreach (array_keys($source) as $table) if (!isset($destination[$table])) $diff['tables_removed'][] = (string)$table;
+        foreach ($source as $table => $definition) {
+            if (!isset($destination[$table])) continue;
+            $sourceColumns = $definition['columns'];
+            $destinationColumns = $destination[$table]['columns'];
+            foreach (array_diff($destinationColumns, $sourceColumns) as $column) $diff['columns_added'][] = $table . '.' . $column;
+            foreach (array_diff($sourceColumns, $destinationColumns) as $column) $diff['columns_removed'][] = $table . '.' . $column;
+            if (array_diff($sourceColumns, $destinationColumns) || array_diff($destinationColumns, $sourceColumns)) continue;
+            if (self::portableDdl($definition['ddl']) === self::portableDdl($destination[$table]['ddl'])) continue;
+            $enums = self::enumDiff($definition['ddl'], $destination[$table]['ddl']);
+            foreach ($enums as $column => $sets) $diff['enums'][$table . '.' . $column] = $sets;
+            if ($enums === []) $diff['changed'][$table][] = 'ddl';
+        }
+        foreach (['tables_added', 'tables_removed', 'columns_added', 'columns_removed'] as $key) sort($diff[$key], SORT_STRING);
+        ksort($diff['changed'], SORT_STRING);
+        ksort($diff['enums'], SORT_STRING);
+        return $diff;
+    }
+
+    /** @return array<string,array{added:list<string>,removed:list<string>}> */
+    private static function enumDiff(string $sourceDdl, string $destinationDdl): array
+    {
+        $source = self::enumSets($sourceDdl);
+        $destination = self::enumSets($destinationDdl);
+        $diff = [];
+        foreach ($source as $column => $values) {
+            if (!isset($destination[$column]) || $values === $destination[$column]) continue;
+            $diff[$column] = [
+                'added' => array_values(array_diff($destination[$column], $values)),
+                'removed' => array_values(array_diff($values, $destination[$column])),
+            ];
+        }
+        return $diff;
+    }
+
+    /** @return array<string,list<string>> */
+    private static function enumSets(string $ddl): array
+    {
+        $sets = [];
+        foreach (explode("\n", $ddl) as $line) {
+            if (!preg_match('/^  `([^`]+)` enum\((.*?)\)/iD', $line, $match)) continue;
+            preg_match_all("/'((?:[^'\\\\]|\\\\.|'')*)'/", $match[2], $values);
+            $sets[$match[1]] = $values[1];
+        }
+        return $sets;
+    }
+
+    /** Stable, engine-independent key for a captured structure. */
+    public static function structureFingerprint(array $schema): string
+    {
+        $portable = [];
+        foreach ($schema as $table => $definition) {
+            $portable[(string)$table] = ['ddl' => self::portableDdl($definition['ddl']), 'columns' => $definition['columns']];
+        }
+        ksort($portable, SORT_STRING);
+        return hash('sha256', json_encode($portable, JSON_THROW_ON_ERROR));
     }
 
     /** The encrypted producer SQL is parsed with its original schema; replacement still uses destination DDL. */

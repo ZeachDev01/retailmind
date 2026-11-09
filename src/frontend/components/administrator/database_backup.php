@@ -8,6 +8,7 @@ require_once __DIR__ . '/../../../backend/includes/backup.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Backup\BackupKeyRecommendation;
 use App\Backup\DatabaseBackupService;
 
 $message = '';
@@ -19,6 +20,7 @@ $backupFailureLine = 'The backup could not be created. Check free space and your
 $service = new DatabaseBackupService($pdo, role_capability_policy());
 $actorUserId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
+$scheduledSchedule = \App\Backup\ScheduledBackupSettings::summary($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_local_request('Database backup is not available during remote monitoring.');
@@ -52,8 +54,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-ensure_backup_schema($pdo);
-$history = $service->history($actorRole);
+$storageMessage = '';
+try {
+    ensure_backup_storage($pdo);
+    $history = $service->history($actorRole);
+} catch (Throwable $exception) {
+    error_log('Backup history unavailable: ' . $exception->getMessage());
+    $history = [];
+    $storageMessage = 'Backup history needs database updates before it can be shown. Ask your Super Administrator to Apply Database Updates.';
+}
 $historyPerPage = 10;
 $historyTotal = count($history);
 $historyPages = max(1, (int)ceil($historyTotal / $historyPerPage));
@@ -64,6 +73,7 @@ $restoreCapability = role_capability_policy()->allows($actorRole, RoleCapability
 $restoreService = new \App\Backup\DatabaseRestoreService($pdo, role_capability_policy(), $service);
 $restoreGuidance = $restoreService->workflowGuidance();
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$backupRecommendation = (new BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION['user_id'], (string)current_role());
 
 $completedHistory = array_filter($history, static fn(array $row): bool => ($row['status'] ?? '') === 'completed');
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
@@ -90,7 +100,10 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
             </header>
 
             <?php if ($message): ?><div class="alert <?= $escape($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>"><?= $escape($message) ?></div><?php endif; ?>
+            <?php if ($storageMessage): ?><p class="alert tag-warning" role="alert"><?= $escape($storageMessage) ?></p><?php endif; ?>
             <?php if (\App\Backup\RecoveryStore::isPaused()): ?><p class="alert tag-warning" role="status">Store operations are paused for recovery. <a href="#backup-recovery">Continue recovery</a>.</p><?php endif; ?>
+
+            <?php require __DIR__ . '/../backup/recovery_key_recommendation.php'; ?>
 
             <dl class="backup-summary" aria-label="Backup overview">
                 <div>
@@ -104,6 +117,14 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 <div>
                     <dt>Store status</dt>
                     <dd><?= $storePaused ? 'Paused for recovery' : 'Operational' ?></dd>
+                </div>
+                <div>
+                    <dt>Next scheduled run</dt>
+                    <dd><?= $scheduledSchedule['next_run_at'] !== '' ? $escape(format_display_datetime((string)$scheduledSchedule['next_run_at'])) : '—' ?></dd>
+                </div>
+                <div>
+                    <dt>Last outcome</dt>
+                    <dd><span class="tag <?= $escape(\App\Backup\ScheduledBackupSettings::outcomeClass($scheduledSchedule['last_outcome'])) ?>"><?= $escape(\App\Backup\ScheduledBackupSettings::outcomeLabel($scheduledSchedule['last_outcome'])) ?></span></dd>
                 </div>
             </dl>
 
@@ -132,7 +153,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                     </form>
                 </div>
                 <div class="backup-create-footer">
-                    <p><i class="bi bi-download" aria-hidden="true"></i> Download each backup and store it away from this server.</p>
+                    <p class="backup-hint">Creating a backup does not confirm the file was saved on your device.</p>
                     <details class="backup-tips">
                         <summary>What to keep</summary>
                         <ul class="backup-guidance-list">
@@ -179,18 +200,23 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                         <caption class="sr-only">Recorded database backup snapshots and outcomes</caption>
                         <thead><tr>
                             <th scope="col">Backup date</th>
+                            <th scope="col">Kind</th>
                             <th scope="col">Backup file</th>
+                            <th scope="col">File</th>
                             <th scope="col" class="backup-size">Size</th>
                             <th scope="col">Outcome</th>
                             <th scope="col">Requested by</th>
                         </tr></thead><tbody><?php foreach ($historyRows as $row): ?><tr>
                                 <td class="backup-date"><?= $escape(format_display_datetime((string)($row['snapshot_at'] ?? $row['created_at']))) ?></td>
+                                <td><span class="tag tag-soft"><?= $escape($row['backup_type_label'] ?? 'Manual') ?></span></td>
                                 <td><i class="bi bi-file-earmark-lock" aria-hidden="true"></i> <span class="backup-filename"><?= $escape($row['filename']) ?></span><span class="backup-hint backup-format"><?= $escape($row['format']) ?></span><?php if (trim((string)$row['notes']) !== ''): ?><details class="backup-row-notes"><summary>View note</summary><p><?= $escape($row['notes']) ?></p></details><?php endif; ?></td>
+                                <?php $artifactState = (string)($row['artifact_state'] ?? 'not_retained'); ?>
+                                <td><span class="tag <?= $escape(\App\Backup\DatabaseBackupService::artifactClass($artifactState)) ?>"><?= $escape(\App\Backup\DatabaseBackupService::artifactLabel($artifactState)) ?></span></td>
                                 <td class="backup-size"><?= number_format($row['file_size'] / 1024, 1) ?> KB</td>
-                                <td><span class="tag <?= $row['status'] === 'completed' ? 'tag-success' : 'tag-warning' ?>"><i class="bi <?= $row['status'] === 'completed' ? 'bi-check-circle' : 'bi-exclamation-circle' ?>" aria-hidden="true"></i> <?= $row['status'] === 'completed' ? 'Created' : 'Not created' ?></span></td>
+                                <td><?php $rowStatus = (string)$row['status']; ?><span class="tag <?= \App\Backup\ScheduledBackupSettings::outcomeClass($rowStatus) ?>"><i class="bi <?= $rowStatus === 'completed' ? 'bi-check-circle' : ($rowStatus === 'skipped' ? 'bi-arrow-repeat' : 'bi-exclamation-circle') ?>" aria-hidden="true"></i> <?= $escape(\App\Backup\ScheduledBackupSettings::outcomeLabel($rowStatus)) ?></span></td>
                                 <td><?= $escape($row['requested_by']) ?></td>
                             </tr><?php endforeach; ?><?php if (!$history): ?><tr>
-                                <td colspan="5" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
+                                <td colspan="7" class="backup-empty"><i class="bi bi-archive" aria-hidden="true"></i><strong>No backups yet</strong><span>Create a backup above to record your first copy.</span></td>
                             </tr><?php endif; ?></tbody>
                     </table>
                 </div>
@@ -210,6 +236,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_review.js')) ?>"></script>
+    <script src="<?= $escape(app_url('assets/js/backup_key_recommendation.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_key_recommendation.js')) ?>"></script>
     <script src="<?= $escape(app_url('assets/js/backup_recovery_tabs.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/backup_recovery_tabs.js')) ?>"></script>
 </body>
 

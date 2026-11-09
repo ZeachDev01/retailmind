@@ -14,7 +14,7 @@ final class IdentityReconciliationService
         'recovery_accounts', 'platform_settings', 'attention_settings', 'ml_settings',
         'password_reset_tokens', 'notification_preferences', 'workspace_guidance', 'notifications',
         'attention_states', 'login_attempts', 'backup_history', 'email_delivery_log',
-        'activity_log', 'store_record_origins'
+        'activity_log', 'store_record_origins', 'schema_migrations'
     ];
 
     public function __construct(private PDO $pdo, private RoleCapabilityPolicy $policy) {}
@@ -45,7 +45,8 @@ final class IdentityReconciliationService
         $sourceRecovery = array_fill_keys(array_column($source['recovery_accounts'] ?? [], 'user_id'), true);
         $result = ['source_users' => [], 'destination_users' => [], 'conflicts' => [], 'identity_map' => [],
             'file_map' => [], 'rows' => $source, 'provenance' => [], 'errors' => [], 'ready' => false,
-            'active_administrators' => 0, 'replacement_authorized' => false, 'protected_user_ids' => $this->protectedUserIds()];
+            'active_administrators' => 0, 'replacement_authorized' => false, 'protected_user_ids' => $this->protectedUserIds(),
+            'compatibility' => $package['compatibility'] ?? null];
         foreach ($destination as $user) $result['destination_users'][] = $this->displayUser($user, $this->destinationRoleNames((int)$user['user_id']));
         foreach ($source['users'] ?? [] as $user) {
             $id = (int)$user['user_id'];
@@ -198,6 +199,7 @@ final class IdentityReconciliationService
             'package_id' => $package['manifest']['package_id'],
             'origin_id' => $package['manifest']['origin_id'],
             'schema_hash' => $package['manifest']['schema'],
+            'compatibility' => $review['compatibility'] ?? null,
             'sql_sha256' => isset($package['sql']) ? hash('sha256', (string)$package['sql']) : null,
             'decisions' => $decisions,
             'identity_map' => $review['identity_map'],
@@ -477,6 +479,8 @@ final class IdentityReconciliationService
         // Coordination state never restored
         $result['rows']['backup_operations'] = [];
         $result['rows']['store_write_gate'] = [];
+        // The destination migration ledger is authoritative, not the package's.
+        $result['rows']['schema_migrations'] = $destRows['schema_migrations'] ?? [];
 
         // Dependent actors and evidence closure (AC 2, 3)
         $referencedDestUsers = [];

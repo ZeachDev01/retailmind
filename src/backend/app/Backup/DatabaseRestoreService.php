@@ -3,6 +3,10 @@
 namespace App\Backup;
 
 use App\Authorization\RoleCapabilityPolicy;
+use App\Backup\Compatibility\RestoreCompatibilityRegistry;
+use App\Backup\Compatibility\UnsupportedPackageStructure;
+use App\Database\MigrationLedger;
+use App\Database\MigrationRunner;
 use DomainException;
 use PDO;
 use Throwable;
@@ -56,7 +60,8 @@ final class DatabaseRestoreService
         }
         $schema = SqlBackupFormat::schema($this->pdo);
         try {
-            $package = StorePackageFormat::decode((string)file_get_contents($sourcePath), $schema);
+            $package = StorePackageFormat::decode((string)file_get_contents($sourcePath), $schema,
+                $this->compatibilityRegistry(), $this->migrationLedger()->keys());
         } catch (\RuntimeException $exception) {
             throw new DomainException($exception->getMessage(), 0, $exception);
         }
@@ -67,7 +72,20 @@ final class DatabaseRestoreService
     public function preflight(int $actorUserId, string $actorRole, string $sourcePath, string $originalName,
         #[\SensitiveParameter] string $loginPassword): array
     {
-        $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
+        try {
+            $package = $this->readPackage($actorUserId, $actorRole, $sourcePath, $originalName, $loginPassword);
+        } catch (UnsupportedPackageStructure $exception) {
+            return [
+                'valid' => false,
+                'message' => $exception->getMessage(),
+                'conflicts' => [],
+                'files' => 0,
+                'bytes' => 0,
+                'snapshot_at' => '',
+                'replacement_authorized' => false,
+                'compatibility' => $exception->report(),
+            ];
+        }
         $schema = SqlBackupFormat::schema($this->pdo);
         $conflicts = [];
         foreach (['user_id' => 'id', 'username' => 'username', 'email' => 'email'] as $column => $kind) {
@@ -85,7 +103,8 @@ final class DatabaseRestoreService
         }
         return ['valid' => $conflicts === [], 'message' => $conflicts ? 'Resolve the listed identity conflicts before retrying.' : 'Package validated. No records or uploads were replaced.',
             'conflicts' => $conflicts, 'files' => count($package['files']), 'bytes' => $package['bytes'],
-            'snapshot_at' => $package['manifest']['snapshot_at'], 'replacement_authorized' => false];
+            'snapshot_at' => $package['manifest']['snapshot_at'], 'replacement_authorized' => false,
+            'compatibility' => $package['compatibility'] ?? null];
     }
 
     /** Validate actual declared keys; no source SQL is executed against the destination. */
@@ -190,6 +209,7 @@ final class DatabaseRestoreService
         $pausedHere = false;
         $executed = 0;
         $oldSqlMode = null;
+        $destinationLedger = null;
         try {
             $state = RecoveryStore::state();
             if ($state && !$recovery) {
@@ -247,6 +267,7 @@ final class DatabaseRestoreService
             RecoveryStore::write('restore-state.json', json_encode([
                 'actor_id' => $actorUserId, 'password_hash' => $hash, 'schema' => $schema, 'replacement_started' => true,
             ], JSON_THROW_ON_ERROR));
+            $destinationLedger = $this->migrationLedger()->snapshot();
             $destructive = true;
             $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
             $this->pdo->exec("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
@@ -279,6 +300,9 @@ final class DatabaseRestoreService
                 $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
                 if ($oldSqlMode !== null) {
                     $this->pdo->exec('SET SQL_MODE=' . $this->pdo->quote($oldSqlMode));
+                }
+                if ($destinationLedger !== null) {
+                    $this->migrationLedger()->reinstate($destinationLedger);
                 }
             } catch (Throwable $cleanupFailure) {
                 error_log('Restore connection cleanup: ' . $cleanupFailure->getMessage());
@@ -402,7 +426,8 @@ final class DatabaseRestoreService
             if ($pkgBytes === false) {
                 throw new DomainException('The incoming package could not be read.');
             }
-            $incomingPackage = StorePackageFormat::decode($pkgBytes, $schema);
+            $incomingPackage = StorePackageFormat::decode($pkgBytes, $schema,
+                $this->compatibilityRegistry(), $this->migrationLedger()->keys());
 
             if (($incomingPackage['manifest']['package_id'] ?? '') !== $approval['package_id']
                 || ($incomingPackage['manifest']['origin_id'] ?? '') !== $approval['origin_id']
@@ -416,10 +441,20 @@ final class DatabaseRestoreService
                 throw new DomainException('Reconciliation replay failed against destination checkpoint: ' . implode(' ', $projected['errors']));
             }
 
+            if (($incomingPackage['compatibility']['status'] ?? '') === RestoreCompatibilityRegistry::UNSUPPORTED) {
+                throw new DomainException((string)($incomingPackage['compatibility']['message'] ?? 'The package structure is not supported.'));
+            }
+            // The destination ledger is authoritative; snapshot it before any table is dropped.
+            $destinationLedger = $this->migrationLedger()->snapshot();
+
             RecoveryStore::transitionStage(RecoveryStore::STAGE_DESTRUCTIVE_START);
             RecoveryStore::transitionStage(RecoveryStore::STAGE_DATABASE_REPLACEMENT);
 
-            $executed = $this->replaceTablesFromRows($projected['rows'], $schema, $projected['provenance'] ?? []);
+            try {
+                $executed = $this->replaceTablesFromRows($projected['rows'], $schema, $projected['provenance'] ?? []);
+            } finally {
+                $this->migrationLedger()->reinstate($destinationLedger);
+            }
             // Models bind to the previous Store data and require fresh destination approval.
             $this->pdo->exec("UPDATE platform_settings SET setting_value='' WHERE setting_key IN ('ml_approved_model_version','ml_previous_approved_model_version','ml_store_activation_record')");
             $this->pdo->exec("INSERT INTO platform_settings (setting_key,setting_value) VALUES ('ml_observation_mode','1'),('ml_recommendations_suspended','1') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
@@ -469,6 +504,7 @@ final class DatabaseRestoreService
     private function replaceTablesFromSql(string $sql, array $schema): int
     {
         $statements = SqlBackupFormat::statements($sql, $schema);
+        $destinationLedger = $this->migrationLedger()->snapshot();
         $oldSqlMode = (string)$this->pdo->query('SELECT @@SESSION.sql_mode')->fetchColumn();
         $this->pdo->exec('SET FOREIGN_KEY_CHECKS=0');
         $this->pdo->exec("SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO'");
@@ -483,6 +519,11 @@ final class DatabaseRestoreService
             $this->pdo->exec('SET FOREIGN_KEY_CHECKS=1');
             if ($oldSqlMode !== '') {
                 $this->pdo->exec('SET SESSION sql_mode=' . $this->pdo->quote($oldSqlMode));
+            }
+            try {
+                $this->migrationLedger()->reinstate($destinationLedger);
+            } catch (Throwable $exception) {
+                error_log('Migration ledger reinstate: ' . $exception->getMessage());
             }
         }
         return $executed;
@@ -658,6 +699,25 @@ final class DatabaseRestoreService
         if (!$found) {
             throw new DomainException('Operator is not authorized for this recovery operation.');
         }
+    }
+
+    private function migrationPath(): string
+    {
+        return dirname(__DIR__, 2) . '/database/migrations';
+    }
+
+    private function migrationLedger(): MigrationLedger
+    {
+        return new MigrationLedger($this->pdo, $this->migrationPath());
+    }
+
+    private function compatibilityRegistry(): RestoreCompatibilityRegistry
+    {
+        static $registry = null;
+        return $registry ??= new RestoreCompatibilityRegistry(null, array_map(
+            static fn(array $migration): string => (string)$migration['key'],
+            (new MigrationRunner($this->pdo, $this->migrationPath()))->available()
+        ));
     }
 
     private static function iniBytes(string $value): int

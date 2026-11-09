@@ -13,6 +13,7 @@ final class AttentionSettingsService
         'locked_account_count' => 1.0,
         'backup_age_days' => 7.0,
         'recovery_failure_count' => 1.0,
+        'scheduled_backup_failure_count' => 1.0,
         'service_unhealthy_count' => 1.0,
         'ml_model_age_days' => 7.0,
         'platform_setting_change_count' => 1.0,

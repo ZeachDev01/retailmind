@@ -681,6 +681,39 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE tabl
 PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='backup_history' AND column_name='key_fingerprint'), 'ALTER TABLE `backup_history` ADD COLUMN `key_fingerprint` CHAR(64) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='backup_history' AND column_name='artifact_path'), 'ALTER TABLE `backup_history` ADD COLUMN `artifact_path` VARCHAR(512) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='backup_history' AND column_name='trigger_source'), 'ALTER TABLE `backup_history` ADD COLUMN `trigger_source` VARCHAR(16) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='backup_history' AND column_name='verified_at'), 'ALTER TABLE `backup_history` ADD COLUMN `verified_at` DATETIME NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='backup_history' AND column_name='removed_at'), 'ALTER TABLE `backup_history` ADD COLUMN `removed_at` DATETIME NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='backup_history' AND index_name='idx_backup_history_type_created'), 'ALTER TABLE `backup_history` ADD INDEX `idx_backup_history_type_created` (`backup_type`, `created_at`)', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+ALTER TABLE `backup_history` MODIFY COLUMN `status` ENUM('completed','failed','skipped') NOT NULL DEFAULT 'completed';
+CREATE TABLE IF NOT EXISTS user_backup_key_acknowledgements (
+                    user_id INT NOT NULL,
+                    key_fingerprint CHAR(64) NOT NULL,
+                    acknowledged_at DATETIME NOT NULL,
+                    PRIMARY KEY (user_id, key_fingerprint),
+                    KEY idx_backup_key_ack_fingerprint (key_fingerprint),
+                    CONSTRAINT fk_backup_key_ack_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS restore_preserved_activity LIKE activity_log;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609260001_shared_database_backups','Shared encrypted Database Backup coordination for Administrator and Super Administrator') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
@@ -1918,6 +1951,23 @@ SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE tabl
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_notification_resolution','Retain resolution for each notification occurrence (#420)') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+-- 202611100001_backup_keyring_and_history: repair backup history metadata and
+-- record per-account recovery-key acknowledgements.
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_backup_keyring_and_history','Repair backup history metadata and record per-account recovery-key acknowledgements') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 -- 202611100001_fiscal_period_scheduling: reserve future Fiscal Periods without accepting transactions.
 ALTER TABLE `fiscal_periods` MODIFY COLUMN `status` ENUM('scheduled','open','closed','locked') NULL DEFAULT 'open';
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_fiscal_period_scheduling','Allow scheduled future Fiscal Periods and opt-in automatic rollover') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611100002_scheduled_backup_settings: seed Sunday 23:00 Scheduled Backup
+-- schedule, Backup Destination, and last-run state.
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_weekday', '0');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_time', '23:00');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_destination_path', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_success_at', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_attempt_at', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_outcome', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_message', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_backup_id', '');
+INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_catchup_checked_at', '');
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);

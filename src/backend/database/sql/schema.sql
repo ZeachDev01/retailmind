@@ -107,7 +107,7 @@ CREATE TABLE `backup_history` (
   `filename` varchar(255) NOT NULL,
   `backup_type` enum('manual','scheduled','restore') NOT NULL DEFAULT 'manual',
   `file_size` bigint DEFAULT NULL,
-  `status` enum('completed','failed') NOT NULL DEFAULT 'completed',
+  `status` enum('completed','failed','skipped') NOT NULL DEFAULT 'completed',
   `performed_by` int DEFAULT NULL,
   `notes` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -115,9 +115,32 @@ CREATE TABLE `backup_history` (
   `envelope_version` varchar(16) DEFAULT NULL,
   `cipher` varchar(64) DEFAULT NULL,
   `requested_by_role` varchar(32) DEFAULT NULL,
+  `key_fingerprint` char(64) DEFAULT NULL,
+  `artifact_path` varchar(512) DEFAULT NULL,
+  `trigger_source` varchar(16) DEFAULT NULL,
+  `verified_at` datetime DEFAULT NULL,
+  `removed_at` datetime DEFAULT NULL,
   PRIMARY KEY (`backup_id`),
   KEY `performed_by` (`performed_by`),
+  KEY `idx_backup_history_type_created` (`backup_type`,`created_at`),
   CONSTRAINT `backup_history_ibfk_1` FOREIGN KEY (`performed_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `user_backup_key_acknowledgements`
+--
+
+DROP TABLE IF EXISTS `user_backup_key_acknowledgements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `user_backup_key_acknowledgements` (
+  `user_id` int NOT NULL,
+  `key_fingerprint` char(64) NOT NULL,
+  `acknowledged_at` datetime NOT NULL,
+  PRIMARY KEY (`user_id`,`key_fingerprint`),
+  KEY `idx_backup_key_ack_fingerprint` (`key_fingerprint`),
+  CONSTRAINT `fk_backup_key_ack_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1652,6 +1675,7 @@ INSERT INTO categories (category_name) VALUES
 INSERT IGNORE INTO user_roles (user_id,role_id,is_primary) SELECT user_id,role_id,1 FROM users WHERE role_id IS NOT NULL;
 INSERT IGNORE INTO store_write_gate (gate_key) VALUES ('store_writes');
 INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('dormancy_disable_days','45'),('dormancy_warn_days','30');
+INSERT IGNORE INTO platform_settings (setting_key,setting_value) VALUES ('backup_schedule_weekday','0'),('backup_schedule_time','23:00'),('backup_destination_path',''),('backup_schedule_last_success_at',''),('backup_schedule_last_attempt_at',''),('backup_schedule_last_outcome',''),('backup_schedule_last_message',''),('backup_schedule_last_backup_id',''),('backup_schedule_catchup_checked_at','');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('2026_07_operational_updates','Suppliers, purchase orders, shifts, held sales, forecast decisions, units, and inventory insights');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
@@ -2113,3 +2137,7 @@ CREATE TABLE `store_weekly_schedule` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ("202611020001_store_weekly_schedule","Configurable weekly store schedule revisions with effective dates") ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_backup_keyring_and_history','Repair backup history metadata and record per-account recovery-key acknowledgements') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);

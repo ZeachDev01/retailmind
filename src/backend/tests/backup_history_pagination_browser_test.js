@@ -11,6 +11,7 @@ assert(source.indexOf('id="backup-recovery"') < source.indexOf('id="backup-histo
 // Render the production pagination calculation and history markup with isolated records.
 function render(count, page = '1') {
     const result = spawnSync(process.env.PHP_BINARY || 'php', ['-r', `
+        require_once 'src/backend/bootstrap/app.php';
         $source = file_get_contents('src/frontend/components/administrator/database_backup.php');
         $history = [];
         for ($i = 1; $i <= (int)$argv[1]; $i++) $history[] = [

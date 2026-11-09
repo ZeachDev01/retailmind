@@ -5,7 +5,8 @@
     Installs and configures:
     1. RetailMind ML Scheduler (runs every 5 minutes for background forecasting & model jobs)
     2. RetailMind Daily Notifications (runs daily at 3:00 AM for the Daily Stock Brief & expiry alerts)
-    3. Enables store email alerts in the database
+    3. RetailMind Weekly Backup (checks hourly and creates the week's verified Scheduled Backup)
+    4. Enables store email alerts in the database
 #>
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -163,6 +164,29 @@ Register-ScheduledTask -TaskName $dailyTaskName -Action $dailyAction -Trigger $d
 
 Write-Host "      ✓ Registered task: $dailyTaskName (Daily at 03:00 AM, Catch-up enabled)" -ForegroundColor Green
 
+# Task C: RetailMind Weekly Backup (#460). Hourly because the weekday/time live
+# in Platform Settings, so saving a new schedule never rewrites the task.
+$backupTaskName = 'RetailMind Weekly Backup'
+if (Get-ScheduledTask -TaskName $backupTaskName -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName $backupTaskName -Confirm:$false
+}
+$backupScript = Join-Path $projectRoot 'src/backend/scripts/run_scheduled_backup.php'
+$backupLog = Join-Path $logDir 'weekly-backup.log'
+$backupCommand = "& '{0}' '{1}' *>> '{2}'" -f $phpBinary, $backupScript, $backupLog
+$backupAction = New-ScheduledTaskAction -Execute $powershellBinary -Argument (
+    '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -Command "{0}"' -f $backupCommand
+) -WorkingDirectory $projectRoot
+$backupStartup = New-ScheduledTaskTrigger -AtStartup
+$backupRepeater = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Hours 1)
+$backupSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
+    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+
+Register-ScheduledTask -TaskName $backupTaskName -Action $backupAction -Trigger @($backupStartup, $backupRepeater) `
+    -Settings $backupSettings -Principal $principal `
+    -Description 'RetailMind weekly Scheduled Backup; checks hourly and creates one verified package when the week is due (Settings control the weekday/time).' | Out-Null
+
+Write-Host "      ✓ Registered task: $backupTaskName (Hourly check, startup catch-up)" -ForegroundColor Green
+
 # Optional Test Run
 if ($TestRun) {
     Write-Host ""
@@ -182,5 +206,7 @@ Write-Host "========================================================" -Foregroun
 Write-Host "Tasks configured:"
 Write-Host "  1. '$mlTaskName'           -> Runs every 5 minutes"
 Write-Host "  2. '$dailyTaskName'  -> Runs daily at 3:00 AM (runs upon wake if missed)"
+Write-Host "  3. '$backupTaskName'  -> Checks hourly; runs the configured weekly backup (runs upon wake if missed)"
 Write-Host "Logs are stored in: $logDir"
+Write-Host "Weekly backup log: $backupLog"
 Write-Host ""

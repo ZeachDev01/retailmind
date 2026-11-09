@@ -24,9 +24,14 @@ $superAdministratorPage = $read('src/frontend/components/system_administrator/ba
 $legacyRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
 $downloadEndpoint = $read('src/frontend/components/backup/backup_download.php');
 $statusEndpoint = $read('src/frontend/components/backup/backup_status.php');
+$recoveryKeyEndpoint = $read('src/frontend/components/backup/recovery_key.php');
 $sidebar = $read('src/frontend/components/sidebar.php');
 $scheduledScript = $read('src/backend/scripts/backup_database.php');
+$scheduledBackupScript = $read('src/backend/scripts/run_scheduled_backup.php');
+$taskInstaller = $read('src/backend/scripts/install_scheduled_tasks.ps1');
 $sharedModule = $read('src/backend/includes/backup.php');
+$reconciliationPage = $read('src/frontend/components/system_administrator/identity_reconciliation.php');
+$restoreService = $read('src/backend/app/Backup/DatabaseRestoreService.php');
 $envExample = $read('.env.example');
 $runAll = $read('src/backend/tests/run_all.sh');
 
@@ -105,6 +110,23 @@ $assert(
     str_contains($sharedModule, 'DatabaseSnapshotWriter'),
     'The shared module must reuse the single snapshot writer'
 );
+$backupService = $read('src/backend/app/Backup/DatabaseBackupService.php');
+$assert(
+    str_contains($backupService, "'schema_migrations'"),
+    'Captured packages must exclude the source migration ledger rows'
+);
+$assert(
+    str_contains($backupService, 'appliedKeys()') && str_contains($backupService, 'currentFingerprint()'),
+    'Captured packages must seal the applied migrations and the encryption key fingerprint'
+);
+$assert(
+    str_contains($backupService, 'key_fingerprint') && str_contains($backupService, 'artifact_path'),
+    'Backup history must record the key fingerprint and artifact identity'
+);
+$assert(
+    str_contains($backupService, 'artifact_state') && str_contains($backupService, 'updateHistoryArtifact'),
+    'Backup history must expose artifact state and let scheduling bind a retained file'
+);
 $assert(
     str_contains($scheduledScript, 'createForSystem()'),
     'The scheduled script must share the encrypted workflow instead of a second exporter'
@@ -112,6 +134,41 @@ $assert(
 $assert(
     !str_contains($scheduledScript, 'create_database_backup'),
     'The scheduled script must not keep a separate plaintext exporter'
+);
+
+// --- the weekly Scheduled Backup entry points (#460) ------------------------
+$assert(
+    str_contains($scheduledBackupScript, "PHP_SAPI !== 'cli'"),
+    'The Scheduled Backup CLI must refuse non-CLI callers'
+);
+$assert(
+    str_contains($scheduledBackupScript, 'runDue()') && str_contains($scheduledBackupScript, 'ScheduledBackupService'),
+    'The Scheduled Backup CLI must use the weekly due service'
+);
+$assert(
+    !str_contains($scheduledBackupScript, 'artifact_path'),
+    'The Scheduled Backup CLI must not print private artifact paths'
+);
+$assert(
+    str_contains($superAdministratorPage, "action === 'run_scheduled_catchup'")
+        && str_contains($superAdministratorPage, 'Catch up missed backup')
+        && str_contains($superAdministratorPage, '->runCatchup()'),
+    'Only the Super Administrator page offers the throttled in-app Scheduled Backup catch-up'
+);
+$assert(
+    substr_count($superAdministratorPage, 'require_local_request(') >= 1 && str_contains($superAdministratorPage, 'csrf_verify()'),
+    'The in-app Scheduled Backup run keeps local-request and CSRF checks'
+);
+$assert(
+    !str_contains($administratorPage, 'run_scheduled_backup')
+        && !str_contains($administratorPage, 'name="backup_destination_path"'),
+    'The Administrator page must show schedule status read-only and no destination control'
+);
+$assert(
+    str_contains($taskInstaller, 'RetailMind Weekly Backup')
+        && str_contains($taskInstaller, 'run_scheduled_backup.php')
+        && str_contains($taskInstaller, 'weekly-backup.log'),
+    'The Windows task installer must register the hourly weekly-backup task'
 );
 
 
@@ -134,6 +191,19 @@ $assert(
     str_contains($superAdministratorPage, 'restore_password') && !str_contains($superAdministratorPage, 'backup_passphrase') && str_contains($superAdministratorPage, '->preflight(') && !str_contains($superAdministratorPage, '->restore('),
     'Read-only preflight requires distinct credentials and cannot replace records'
 );
+$assert(
+    str_contains($superAdministratorPage, 'compatibility') && str_contains($superAdministratorPage, 'data-restore-compatibility')
+        && str_contains($reconciliationPage, 'data-restore-compatibility'),
+    'Both restore surfaces show the compatibility status before confirmation'
+);
+$assert(
+    str_contains($restoreService, 'RestoreCompatibilityRegistry') && str_contains($restoreService, "STAGE_DESTRUCTIVE_START"),
+    'Incoming restarts classify the package before destructive work'
+);
+$assert(
+    str_contains($restoreService, 'MigrationLedger') && str_contains($restoreService, 'snapshot()') && str_contains($restoreService, 'reinstate('),
+    'Restore preserves the destination migration ledger'
+);
 
 // --- active-user notice, and the paused save behaviour ----------------------
 $assert(
@@ -149,11 +219,48 @@ $assert(
     'The status endpoint must not leak artifact identity or key material'
 );
 
+// --- Recovery-key actions share one guarded, POST-only key endpoint ---------
+$assert(
+    str_contains($recoveryKeyEndpoint, 'require_capability(RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP)')
+        && str_contains($recoveryKeyEndpoint, 'require_local_request(')
+        && str_contains($recoveryKeyEndpoint, 'csrf_verify()')
+        && str_contains($recoveryKeyEndpoint, "\$_SERVER['REQUEST_METHOD'] !== 'POST'"),
+    'The recovery-key endpoint must keep capability, local access, CSRF, and POST-only checks'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, "\$allowedActions = ['download', 'export', 'import', 'promote', 'delete'];"),
+    'The recovery-key endpoint must answer only the documented actions'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, 'BackupKeyStore::find($fingerprint)')
+        && !str_contains($recoveryKeyEndpoint, "preg_match('/^[a-f0-9]{64}$/D', \$fingerprint)")
+        && !str_contains($recoveryKeyEndpoint, '?key='),
+    'Recovery-key exports delegate fingerprint validation to the key store and never put key material in a URL'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, 'password_verify(')
+        && str_contains($recoveryKeyEndpoint, "(\$_POST['confirm_delete'] ?? '') !== '1'"),
+    'Every recovery-key action needs the current password, and deletion needs the explicit warning'
+);
+$assert(
+    str_contains($recoveryKeyEndpoint, "header('Cache-Control: no-store')")
+        && str_contains($recoveryKeyEndpoint, 'Content-Length')
+        && str_contains($recoveryKeyEndpoint, 'connection_aborted()'),
+    'Recovery-key downloads must stay uncached, sized, and acknowledged only after a complete stream'
+);
+
 // --- the feature stays in the test suite -----------------------------------
 foreach ([
     'php src/backend/tests/database_backup_workflow_integration.php',
     'php src/backend/tests/backup_workflow_route_contract.php',
+    'php src/backend/tests/backup_keyring_ui_contract.php',
+    'php src/backend/tests/backup_key_recommendation_test.php',
+    'php src/backend/tests/scheduled_backup_schedule_contract.php',
+    'php src/backend/tests/scheduled_backup_service_contract.php',
+    'php src/backend/tests/scheduled_backup_settings_contract.php',
     'php src/backend/tests/sql_backup_format_test.php',
+    'php src/backend/tests/restore_compatibility_test.php',
+    'php src/backend/tests/backup_schema_bootstrap_contract.php',
     'node src/backend/tests/backup_status_alert_behavior_test.js',
 ] as $command) {
     $assert(str_contains($runAll, $command), "The full suite must run: {$command}");

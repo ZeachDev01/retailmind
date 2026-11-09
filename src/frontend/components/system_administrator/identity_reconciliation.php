@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'token' => bin2hex(random_bytes(32)), 'package_hash' => $packageHash, 'filename' => $file['name'],
             'encrypted_package' => $encryptedPackage, 'snapshot_at' => $package['manifest']['snapshot_at'],
             'review' => array_intersect_key($review, array_flip(['source_users', 'destination_users', 'conflicts', 'errors',
-                'ready', 'active_administrators', 'preservation_closure', 'resulting_access'])),
+                'ready', 'active_administrators', 'preservation_closure', 'resulting_access', 'compatibility'])),
             'decisions' => $decisions, 'action' => $action,
         ];
     } catch (DomainException $e) {
@@ -147,6 +147,15 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                         <?php endif; ?>
                     </div>
 
+                    <?php if ($review && !empty($review['compatibility'])): $compatibility = $review['compatibility']; ?>
+                        <p class="backup-hint" data-restore-compatibility="<?= $escape($compatibility['status']) ?>">
+                            <span class="tag <?= $compatibility['status'] === 'current' ? 'tag-success' : ($compatibility['status'] === 'upgradable' ? 'tag-warning' : 'tag-danger') ?>"><?= $escape($compatibility['label']) ?></span>
+                            <?= $escape($compatibility['message']) ?>
+                            <?php if (!empty($compatibility['missing_migrations'])): ?>
+                                <span>Database updates involved: <code><?= $escape(implode(', ', $compatibility['missing_migrations'])) ?></code></span>
+                            <?php endif; ?>
+                        </p>
+                    <?php endif; ?>
                     <?php if ($review): ?>
                         <div data-reviewed-package<?= $draft ? '' : ' hidden' ?>>
                             <dl class="reconcile-facts">
