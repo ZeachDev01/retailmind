@@ -1,15 +1,18 @@
 # Documentation
 
-Start with the repository [README](../README.md) for setup, testing, database
-updates, and InfinityFree deployment. Paths in commands are relative to the
-repository root unless stated otherwise.
+Start with the [fresh Windows localhost installation guide](guides/WINDOWS_LOCALHOST_INSTALL.md)
+to prepare a Store PC. Use the repository [README](../README.md) for the short
+install summary, testing commands, and database imports. Paths in commands are
+relative to the repository root unless stated otherwise.
 
 ## Setup and recovery
 
+- [Fresh Windows localhost installation](guides/WINDOWS_LOCALHOST_INSTALL.md)
+- [Fresh-install acceptance checklist](DEPLOYMENT_CHECKLIST.md)
 - [Project structure](PROJECT_STRUCTURE.md)
-- [Production deployment checklist](DEPLOYMENT_CHECKLIST.md)
 - [Database Backup and recovery](BACKUP_RECOVERY.md)
 - [Offline Recovery Account procedure](RECOVERY_ACCOUNT.md)
+- [Remote access tunnel deployment](DEPLOYMENT_REMOTE_TUNNEL.md)
 
 ## Interface guides
 
@@ -21,8 +24,8 @@ repository root unless stated otherwise.
 - [Xprinter XP-58IID setup](guides/xprinter-xp-58iid-setup.md)
 - [Real public-data forecasting and replenishment demo](guides/public-forecasting-demo.md)
 - [Recent-date train/test sales replay and stock preview](guides/train-test-sales-replay.md)
-- [Hostinger Demo database import and saved replay](guides/hostinger-demo-replay.md)
-- [Hostinger Demo deployment plan](guides/hostinger-demo-deployment-plan.md)
+- [Hostinger Demo database import and saved replay](guides/hostinger-demo-replay.md) — historical reference only.
+- [Hostinger Demo deployment plan](guides/hostinger-demo-deployment-plan.md) — historical record of a removed workflow.
 - [Platform health, migrations, and logs](guides/platform-health-migrations-and-logs.md)
 - [Failed sign-in review](guides/failed-sign-in-review.md)
 - [Stock monitoring, recommendations, and direct receiving](guides/direct-stock-receiving.md)
@@ -39,6 +42,7 @@ repository root unless stated otherwise.
 - [Architecture decisions](adr) — numbered decisions; later decisions may supersede earlier ones.
 - [Specifications](specs) — agreed scope and acceptance scenarios.
 - [Research](research) — findings from a particular investigation; check the current code before treating them as current behavior.
+- Preserved research sources: [capstone adjustments](research/capstone-adjustments-2026-11-04), [capstone paste-ready](research/capstone-paste-ready-2026-11-04), and the [codebase deepening plan](research/codebase-deepening-plan-2026-11-07.md).
 - [Legacy feature notes](research/legacy-feature-notes.md)
 
 Design and policy discussions:
@@ -60,6 +64,7 @@ Design and policy discussions:
 - [Responsive UI verification](verification/responsive-ui-verification.md)
 - Workspace audits: [Administrator](verification/admin-ui-audit.md), [Super Administrator](verification/superadmin-ui-audit.md), [Cashier](verification/cashier-ui-audit.md), [Inventory Manager](verification/inventory-manager-ui-audit.md).
 - Workflow audits: [audit logs](verification/audit-logs-ui-audit.md), [notifications](verification/notifications-ui-audit.md), [Receipt History](verification/receipt-history-audit.md), [Registers](verification/registers-ui-audit.md).
+- [Local codebase cleanup verification, 2026-11-10](verification/local-cleanup-verification-20261110.md) — measured reduction, retained checks, and shallow-clone proof.
 
 These notes record their original checks, not proof that the current revision passes.
 
@@ -68,7 +73,8 @@ These notes record their original checks, not proof that the current revision pa
 - [Daily Store operations lesson](teaching/lessons/0001-one-store-day.html)
 - [Printable demo reference](teaching/reference/daily-operations.html)
 - [Teaching mission](teaching/MISSION.md), [notes](teaching/NOTES.md), and [resources](teaching/RESOURCES.md)
-- [Datasets, prototypes, and preserved scratch artifacts](../work/README.md)
+- [Preserved research and teaching material](teaching/manuals) — retained manuals and authored source material.
+- [Research data and reviewed workbooks](../outputs) — retained external datasets and workbook evidence.
 
 ## Release history
 

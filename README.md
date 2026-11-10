@@ -2,28 +2,53 @@
 
 Single-Store inventory, receiving, sales, and forecasting application.
 
-Start with the [project map](docs/PROJECT_STRUCTURE.md) to locate code,
-the [documentation index](docs/README.md) for operating guides, or
-the [development work index](work/README.md) for datasets and retained artifacts.
+Start with the [fresh Windows localhost installation guide](docs/guides/WINDOWS_LOCALHOST_INSTALL.md)
+to prepare a Store PC. Use the [project map](docs/PROJECT_STRUCTURE.md) to locate
+code and the [documentation index](docs/README.md) for operating guides and
+architecture decisions.
 
 Demo forecasting before Store history is available:
 [setup, approval, browser review, and verification](docs/guides/DEMO_FORECASTING.md).
 
-See the [documentation index](docs/README.md) for deployment, recovery,
-interface guides, architecture decisions, and release history.
+## Fresh install summary
 
-The shared stylesheet is built from the individual files in
-`src/frontend/assets/css/`. After editing those files, run
-`php src/backend/scripts/build_styles.php` (or `composer build:styles`).
-Release packaging and deployment rebuild it automatically; the test suite checks
-that the checked-in `style.css` is current.
+1. Install XAMPP with PHP 8.2+ (8.3 recommended), MySQL/MariaDB, Composer, and Git.
+2. Clone the current source without history:
+
+   ```powershell
+   cd C:\xampp\htdocs
+   git clone --depth 1 https://github.com/ZeachDev01/retailmind.git
+   ```
+
+3. Copy `.env.example` to `.env` and replace every placeholder.
+4. Run `composer install`. The repository does not commit `composer.lock` or
+   `vendor/`, so this needs network access.
+5. Create an empty database and import
+   `src/backend/database/sql/schema.sql`. Never import it into an operating Store.
+6. Sign in as `superadmin` / `RetailMind@2026` and change the password immediately.
+7. Run `setup_scheduled_tasks.bat` once in an elevated PowerShell to register the
+   ML scheduler, daily notifications, and weekly backup.
+
+The full guide covers writable storage, private recovery storage, Recovery Key
+custody, Apache access rules, HTTPS, and Cloudflare remote access.
 
 Fresh-install login:
 
 - Username: superadmin
 - Password: RetailMind@2026
 
+The seeded account must change this password before the Store is used.
+
+The shared stylesheet is built from the individual files in
+`src/frontend/assets/css/`. After editing those files, run
+`php src/backend/scripts/build_styles.php` (or `composer build:styles`).
+Release packaging rebuilds it. The test suite checks that the checked-in
+`style.css` is current.
+
 ## Local browser testing
+
+Node.js and npm are optional developer tools. They are not required to serve the
+application.
 
 The end-to-end inventory scan workflow uses Playwright with Chromium. It starts
 PHP's built-in web server, creates isolated test records in the configured local
@@ -34,7 +59,7 @@ Prerequisites:
 - PHP and MySQL are running locally.
 - The schema and migrations have been applied to the database configured in
   `.env`.
-- Node.js 22, 24, or 26 is installed.
+- Node.js 22, 24, or 26 is installed when running browser tests.
 
 Install the project dependencies and Chromium once:
 
@@ -67,7 +92,7 @@ php src/backend/tests/cash_refund_concurrency_integration.php
 
 The same flag enables this test in `src/backend/tests/run_all.sh`.
 
-## InfinityFree upload pipeline
+## Profile pictures and upload limits
 
 Profile pictures accept still JPG, PNG, and WebP originals up to 5 MB (5,242,880
 bytes). GIF and animated PNG/WebP uploads are rejected; existing pictures remain
@@ -83,88 +108,60 @@ Run `node src/backend/tests/profile_picture_crop_browser_test.js` to verify the
 HTTP upload/crop flow with Chromium and an isolated temporary SQLite database;
 this test never connects to the Store database. PHP needs PDO SQLite for it.
 
-PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The release ships
-`.user.ini` for CGI/FastCGI and `.htaccess` settings for Apache mod_php:
-`upload_max_filesize=5M`, `post_max_size=8M`, and `memory_limit=256M`. Hosts with
-locked settings must permit those limits, including multipart request overhead.
-Check the effective web PHP settings after deployment; CLI settings may differ.
+PHP requires Fileinfo and GD with JPEG, PNG, and WebP support. The repository
+includes `.user.ini` for CGI/FastCGI and `.htaccess` settings for Apache
+mod_php: `upload_max_filesize=12M`, `post_max_size=16M`, and
+`memory_limit=512M`. Hosts with locked settings must permit those limits,
+including multipart request overhead. Check the effective web PHP settings after
+deployment; CLI settings may differ.
 
-On each push to `main`, `.github/workflows/ci.yml` builds the PHP release,
-checks deployment isolation and database configuration, then uploads `.release/`
-to the [Hosted Demo](https://antiquewhite-cattle-865506.hostingersite.com).
-A local commit deploys after it is pushed to GitHub. Manual redeployment is
-available under **Actions > Deploy to Hostinger > Run workflow**.
+Back up the database and stop Store activity before importing SQL. Stop on the
+first error. MySQL/MariaDB DDL commits independently, so a failed import can leave
+a partial upgrade; resolve the reported problem and rerun the file.
 
-FTPS uses `srv2062.hstgr.io:21` with strict certificate verification. Create an
-additional FTP account restricted to the Demo's `public_html` directory, then
-configure these repository secrets under **Settings > Secrets and variables >
-Actions**:
+## Database imports
 
-| Secret | Value |
-| --- | --- |
-| `HOSTINGER_DEMO_FTP_USERNAME` | Complete assigned username of the Demo-only FTP account |
-| `HOSTINGER_DEMO_FTP_PASSWORD` | Password of that FTP account |
+For the normal local installation, import the fresh schema into an empty
+database:
 
-The FTP account's root must be
-`/home/u125532033/domains/antiquewhite-cattle-865506.hostingersite.com/public_html`;
-the workflow uploads to `./` inside it. Do not use the main account with access
-to every website. Existing generic `FTP_*` and `DB_*` repository secrets are
-not used by this deployment.
+| File | Use | Existing records |
+| --- | --- | --- |
+| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, except retired development procurement records and links |
+| `src/backend/database/sql/schema.sql` | Install into an empty database | Drops and recreates RetailMind tables; seeds roles and one `superadmin` account only |
 
-Deployments preserve the hosted `.env`, sessions, uploads and logs. Keep
-`APP_ENV=production`, `APP_DEBUG=false`, `DATABASE_ENV=hosted`, the Demo database
-credentials and `FORECAST_REPLAY_DATABASE` in the private hosted `.env`.
-Database migrations and Demo SQL imports are never run automatically. Never
-import `schema.sql` or a Demo snapshot into an operating Store.
+A fresh `schema.sql` import leaves product and transaction tables empty. Load the
+optional sample catalog with `composer seed:products`; see the
+[installation guide](docs/guides/WINDOWS_LOCALHOST_INSTALL.md).
 
-Uploads run one at a time without cancelling an active upload. After upload,
-the workflow checks the HTTPS login page and confirms `/.env` returns 403.
-These checks do not authenticate or verify database contents. The separate
-Playwright workflow tests `playwright.dev` examples and does not gate deployment.
-
-For a hosted database error, read
-`public_html/src/backend/storage/logs/app.log` in hPanel. Correct the private
-hosted `.env`; redeployment deliberately leaves it unchanged. See the
-[Hosted Demo guide](docs/guides/hostinger-demo-replay.md) for the isolated snapshot.
-
-### Single-run database imports
-
-Select your RetailMind database in phpMyAdmin, then use **Import** with one file:
-
-| File                         | Use                                               | Existing records                                                           |
-| ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/backend/database/sql/update.sql` | Upgrade or repair an existing RetailMind database | Retained, except retired development procurement records and links                      |
-| `src/backend/database/sql/schema.sql` | Install into an empty database                    | Drops and recreates RetailMind tables; includes seed accounts and products |
-
-Both files include procurement retirement through `202610150003_retire_procurement_storage`
-(October 15, 2026), including grouped Receiving History, required operational tables, role mappings, settings defaults,
+Both SQL files include procurement retirement through
+`202610150003_retire_procurement_storage` (October 15, 2026), including grouped
+Receiving History, required operational tables, role mappings, settings defaults,
 indexes, foreign keys, and historical backfills. Barcode pairing, email logs,
-settings, and forecasting SQL dependencies are included too. The update checks actual table,
-column, and constraint state even if the migration ledger incorrectly reports an
-update as applied. It can be imported again. It requires the existing base
-RetailMind tables; it is not a fresh-install script.
+settings, and forecasting SQL dependencies are included too. The update checks
+actual table, column, and constraint state even if the migration ledger
+incorrectly reports an update as applied. It can be imported again. It requires
+the existing base RetailMind tables; it is not a fresh-install script.
 
-The development procurement retirement deletes supplier administration, Supplier Product Terms,
-requests, orders, and document links. Receiving quantities, shopping-store text, receipt
-references, optional cost history, product planning defaults, stock/batches, accounts,
-sales/refunds, customer receipts, and Protected Audit Records survive. This supersedes
-#176’s preservation scope under #181; historical ADRs remain records of past decisions.
-See [the operator workflow](docs/guides/direct-stock-receiving.md) and
+The development procurement retirement deletes supplier administration, Supplier
+Product Terms, requests, orders, and document links. Receiving quantities,
+shopping-store text, receipt references, optional cost history, product planning
+defaults, stock/batches, accounts, sales/refunds, customer receipts, and
+Protected Audit Records survive. This supersedes #176's preservation scope under
+#181; historical ADRs remain records of past decisions. See
+[the operator workflow](docs/guides/direct-stock-receiving.md) and
 [ADR 0011](docs/adr/0011-retire-development-procurement.md).
 
-Back up the database and stop Store activity before importing the update. Stop
-on the first error. MySQL/MariaDB DDL commits independently, so a failed import
-can leave a partial upgrade; resolve the reported problem and rerun the file.
 Conflicting open shifts, orphaned references, and Stores needing consolidation
 must be resolved rather than silently discarded. Neither file needs a hardcoded
 database name, stored-procedure permissions, or a separate PHP migration run for
 the included updates.
 
-SQL does not install Composer packages, PHP extensions, the Python forecasting
-service, `.env` credentials, or private backup storage; configure those separately.
-For later migrations, use `php src/backend/scripts/migrate.php` locally or open
+SQL does not install Composer packages, PHP extensions, the optional Python
+forecasting worker, `.env` credentials, or private backup storage; configure
+those separately. For later migrations, use
+`php src/backend/scripts/migrate.php` locally or open
 `/src/frontend/components/system_administrator/database_updates.php` as Super
-Administrator. Change the seeded password after a fresh installation.
+Administrator.
 
 Validation (creates and removes disposable databases only):
 
@@ -174,10 +171,11 @@ php src/backend/tests/consolidated_sql_integration.php
 php src/backend/tests/procurement_schema_integration.php
 ```
 
-**Hosting compatibility:** InfinityFree only permits application files under
-`htdocs`, so the app starts in web-only mode when its default private recovery
-directory is inaccessible. Database Backup and Restore are unavailable in that
-mode; they require private storage outside the web root under ADR-0004. The
-Python/Flask forecasting service and scheduled CLI tasks also cannot run on
-InfinityFree free hosting. Set `APP_ENV=production` and `APP_DEBUG=false` in the
-server's `.env` before using the site.
+## Hosted demo material
+
+The Hostinger and InfinityFree deployment procedures are retained as historical
+reference only. Automatic deployment to a hosted site has been removed. Current
+installation and remote access use a local Windows Store PC and the existing
+Cloudflare Tunnel. See the
+[saved train/test Demo record](docs/guides/hostinger-demo-replay.md) for earlier
+evidence; do not treat it as current deployment instructions.

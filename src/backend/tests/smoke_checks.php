@@ -320,7 +320,7 @@ $checks = [
     ],
     'Release cleanup covers runtime files' => [
         'file' => 'src/backend/scripts/build_release.sh',
-        'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/legacy/demandForcasting/models/*'],
+        'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/storage/backups/*'],
     ],
     'Cashier navigation offers one direct Report Stock Issue destination' => [
         'file' => 'src/frontend/components/sidebar.php',
@@ -387,7 +387,7 @@ $checks = [
             'require_capability(RoleCapabilityPolicy::MANAGE_REGISTERS)',
             'RegisterService',
             'csrf_verify',
-            'Create Register',
+            'Create Checkout Station',
             'Rename',
             'Disable',
             'Delete',
@@ -423,7 +423,7 @@ $checks = [
     ],
     'Administrator navigation offers Register administration' => [
         'file' => 'src/frontend/components/sidebar.php',
-        'needles' => ["'path' => 'components/administrator/registers.php'", "'label' => 'Registers'"],
+        'needles' => ["'path' => 'components/administrator/registers.php'", "'label' => 'Checkout Stations'"],
     ],
     'Register structure ships in an upgrade migration' => [
         'file' => 'src/backend/database/migrations/202609290001_store_registers.php',

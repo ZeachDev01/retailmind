@@ -1,4 +1,0 @@
-CSS balance: passed (51 files)
-Hostinger deployment contract: passed
-Smoke checks failed:
-- Administrator navigation offers Register administration: missing 'label' => 'Registers'

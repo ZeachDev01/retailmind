@@ -1,22 +1,31 @@
 # Hostinger: saved train/test Demo
 
+> **Historical/reference only.** Automatic Hostinger deployment has been removed
+> from this repository; the current deployment path is a fresh localhost
+> installation from a GitHub clone. This page records an earlier hosted Demo
+> procedure and its observed results.
+
 Use a separate Demo website/subdomain and a new empty database. This snapshot
 shows saved training results, predicted-versus-actual sales, stock and experimental
 buying previews. It does not activate Store forecasting.
 
 ## Files prepared for this session
 
+The earlier session worked from a separate `work` directory that is not part of
+the current checkout; the snapshot and manifest are not available in a fresh
+clone.
+
 | File | Purpose |
 | --- | --- |
-| `work/hostinger-demo/replay-demo.sql` | Committed schema and sanitized Demo data, about 1 MB |
-| `work/hostinger-demo/manifest.json` | Exported row counts and SHA-256 checksum |
-| `.scratch/hostinger-demo-private/activate-accounts.sql` | Private account activation; not committed |
-| `.scratch/hostinger-demo-private/credentials.txt` | New private passwords; not committed |
-| `.scratch/hostinger-demo-private/hostinger-demo-import.zip` | Convenience bundle containing SQL, activation, private passwords and this guide; not committed |
+| `replay-demo.sql` | Earlier committed schema and sanitized Demo data, about 1 MB |
+| `manifest.json` | Earlier exported row counts and SHA-256 checksum |
+| `.scratch/hostinger-demo-private/activate-accounts.sql` | Private account activation; never committed |
+| `.scratch/hostinger-demo-private/credentials.txt` | Private passwords; never committed |
+| `.scratch/hostinger-demo-private/hostinger-demo-import.zip` | Convenience bundle; never committed |
 
-The private files belong to this computer and are not in a Git clone. Keep a
-private backup of the import ZIP. Do not upload that ZIP, passwords, SQL exports,
-`work/`, `.scratch/`, or Git metadata into `public_html`.
+The private files belonged to the operator's computer. The import ZIP, passwords,
+SQL exports, scratch files, and Git metadata must never be uploaded into
+`public_html`.
 
 ## Import the database
 
@@ -44,16 +53,16 @@ Uploading only SQL will not add the replay screen to an older app version.
 
 Use the existing release layout: root `index.php`, `.htaccess`, `.user.ini`,
 `src/.htaccess`, `src/frontend/`, PHP runtime directories under `src/backend/`
-and Composer `vendor/`. See `scripts/build-infinityfree-release.sh` for the
-existing allowlist/package builder; its PHP runtime layout can also be uploaded
-to a Hostinger PHP site. Run `composer install --no-dev --optimize-autoloader`
-before packaging. Keep its access-denial `.htaccess` files and create writable
-backend log/session directories as required by the normal app setup.
+and Composer `vendor/`. The hosted-only InfinityFree package builder has been
+removed; `src/backend/scripts/build_release.sh` still
+builds a generic release ZIP from the current tree. Run
+`composer install --no-dev --optimize-autoloader` before packaging. Keep its
+access-denial `.htaccess` files and create writable backend log/session
+directories as required by the normal app setup.
 
 Use an existing supported PHP version for this app with PDO MySQL, Fileinfo
-and GD enabled. Configure HTTPS. Do not use the repository's automatic Hostinger
-deployment workflow for this separate Demo without configuring its target and
-the Demo environment, including `FORECAST_REPLAY_DATABASE`.
+and GD enabled. Configure HTTPS. The repository's automatic Hostinger deployment
+workflow has been removed.
 
 Create a private `.env` beside root `index.php`, replacing every placeholder:
 

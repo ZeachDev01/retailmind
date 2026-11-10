@@ -43,16 +43,11 @@ Options -Indexes
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # Hosted login requires HTTPS so the browser retains the secure session cookie.
-    RewriteCond %{HTTP_HOST} ^retailmind\.infinityfreeapp\.com(?::80)?$ [NC]
-    RewriteCond %{HTTPS} !=on
-    RewriteRule ^ https://retailmind.infinityfreeapp.com%{REQUEST_URI} [R=308,L]
-
     RewriteRule (^|/)\.(?:git|svn|hg|env)(?:/|$) - [F,L]
     RewriteRule ^backend(?:/|$) - [F,L]
     RewriteRule ^src/(?:backend|vendor|storage)(?:/|$) - [F,L]
     RewriteRule ^assets/bootstrap(?:/|$) - [F,L]
-    RewriteRule ^(?:app|config|database|includes|demandForcasting|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
+    RewriteRule ^(?:app|config|database|includes|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
     RewriteRule (?:^|/)(?:storage/backups|backups|database/backups)(?:/|$) - [F,L]
     RewriteRule (?:^|/)(?:tests?|phpunit|.*_test\.php|.*Test\.php)(?:/|$|\?) - [F,NC,L]
     RewriteRule \.(?:sql|env|log|bak|dump|sqlite|db|joblib|pyc|rmpkg)(?:$|\?) - [F,NC,L]

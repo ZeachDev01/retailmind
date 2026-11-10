@@ -1,6 +1,8 @@
 name: Contracts
 
 on:
+  push:
+    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
@@ -22,6 +24,7 @@ jobs:
           coverage: none
 
       - name: Lint changed PHP
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin "${{ github.base_ref }}" --depth=1
           git diff -z --name-only --diff-filter=ACM FETCH_HEAD HEAD -- '*.php' \

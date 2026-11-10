@@ -6,7 +6,7 @@ Quick navigation reference for roles, frontend views, modals, backing client scr
 
 ## 1. Role Routing & Entry Points
 
-Defined in [`RoleWorkspaceRouter.php`](file:///c:/xampp/htdocs/retailmind/src/backend/app/Authorization/RoleWorkspaceRouter.php) and [`sidebar.php`](file:///c:/xampp/htdocs/retailmind/src/frontend/components/sidebar.php).
+Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWorkspaceRouter.php) and [`sidebar.php`](../src/frontend/components/sidebar.php).
 
 | Role | Landing View | Command Product Target | Key Sections |
 |---|---|---|---|

@@ -15,7 +15,6 @@ find . -type f -name '*.php' -not -path './vendor/*' -not -path './.kilo/worktre
 python -m py_compile src/backend/scripts/ml_worker.py src/backend/scripts/ml_evaluation.py src/backend/scripts/ml_cv.py src/backend/scripts/feature_pipeline.py
 bash src/backend/tests/javascript_syntax_check.sh
 python src/backend/tests/css_balance_check.py
-python src/backend/tests/infinityfree_deploy_contract.py
 php src/backend/tests/smoke_checks.php
 php src/backend/tests/tunnel_setup_block_contract.php
 php src/backend/tests/store_reopening_test.php

@@ -495,7 +495,7 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                     <div class="tunnel-setup-warning" role="note">
                         <strong>Interim Quick Tunnel.</strong> No token is saved, so the generated block creates a Quick Tunnel.
                         Its public URL changes every time the service restarts, and Cloudflare Access is not in front of it.
-                        RetailMind sign-in and the application read-only boundary still apply. Save a token and hostname, then regenerate to upgrade.
+                        RetailMind sign-in and each account's existing Workspace permissions still apply. Store Workspaces keep full localhost capabilities; the Super Administrator stays local-only. Save a token and hostname, then regenerate to upgrade.
                     </div>
                 <?php endif; ?>
 

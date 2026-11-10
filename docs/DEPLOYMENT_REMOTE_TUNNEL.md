@@ -6,12 +6,17 @@ Quick 5-minute setup guide to configure a permanent Cloudflare Zero Trust tunnel
 
 ## Overview
 
-RetailMind Remote Access enables authorized store managers and supervisors to monitor real-time sales, inventory, and fiscal summaries from any smartphone or offsite laptop without requiring:
+RetailMind Remote Access lets authorized staff use the same Workspaces and
+capabilities they have on the Store PC from a smartphone or offsite laptop,
+without requiring:
 - Inbound router port forwarding (zero open ports)
 - Static public IP addresses
 - Complex VPN client software
 
-Physical cash drawers and POS sale completion remain strictly guarded by local hardware checks (`require_local_request()`). Remote connections are limited to management and oversight routes.
+Tunnel sessions for `admin`, `inventory_manager`, and `cashier` keep full
+localhost parity, including writes, exports, and receipt printing. The Super
+Administrator Workspace stays local-only. See
+[ADR-0030](adr/0030-tunnel-sessions-have-full-workspace-parity.md).
 
 ---
 
@@ -50,7 +55,7 @@ The block checks elevation, 64-bit Windows, internet access, and the local Retai
 
 Re-run the same block to repair the service or apply a changed token. Use **Generate removal block** to stop and delete the service and the legacy scheduled task without deleting the application, database, or backups.
 
-> **Interim Quick Tunnel:** with no saved token, the URL changes on every restart and Cloudflare Access is not in front of it. RetailMind sign-in and the read-only remote boundary still apply.
+> **Interim Quick Tunnel:** with no saved token, the URL changes on every restart and Cloudflare Access is not in front of it. RetailMind sign-in and each account's existing Workspace permissions still apply. Save a token and hostname to move to a permanent named tunnel.
 
 #### Option B: Automated Windows Service Script
 
@@ -64,7 +69,7 @@ powershell.exe -ExecutionPolicy Bypass -File .\scripts\tunnel\service_install.ps
 *Or double-click `scripts\tunnel\service_install.bat` and pass the token.*
 
 This single command automatically:
-1. Provisions the self-contained portable `cloudflared.exe` into `src/backend/storage/bin/`.
+1. Provisions the self-contained portable `cloudflared.exe` into `src/backend/storage/bin/`. The binary is downloaded from the official Cloudflare GitHub release when absent; it is not committed and a fresh clone does not contain it.
 2. Stores the permanent token safely in `src/backend/storage/tunnel/tunnel_config.json`.
 3. Registers the Windows Service `RetailMindCloudflareTunnel` configured with:
    - **Automatic startup at boot (`start= auto`)**: Launches before user login when PC turns on.
@@ -101,7 +106,7 @@ This single command automatically:
    ```text
    https://supervisor.yourstore.com
    ```
-4. Verify the RetailMind login page loads with valid HTTPS and log in as supervisor/admin.
+4. Verify the RetailMind login page loads with valid HTTPS and sign in with an authorized account.
 
 ---
 

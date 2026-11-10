@@ -8,7 +8,7 @@ The [original receipt CSV](../../outputs/receipt-review-2026-10-27/original/rece
 
 ## Sources and checks
 
-- Inspected the user-supplied `drive-download-20261026T233425Z-1-001.zip`: 54 JPG images and an inner `receipt_and_item_categorize.zip` containing receipt and item workbooks. Its 13 receipt records and 835 item rows match the same fields in the separately supplied root ZIP. The outer combined workbook does not contain receipt review statuses, so its receipt metadata is unreviewed.
+- Inspected the user-supplied `drive-download-20261026T233425Z-1-001.zip`: 54 JPG images and an inner `receipt_and_item_categorize.zip` containing receipt and item workbooks. Its 13 receipt records and 835 item rows match the same fields in the separately supplied [root ZIP](../../outputs/receipt-review-2026-10-27/original/receipt_and_item_categorize.zip). The outer combined workbook does not contain receipt review statuses, so its receipt metadata is unreviewed.
 - Compared every listed image path with the archive, every item receipt ID with the receipt table, and receipt-level item sums with saved totals. Visually checked selected source images, including each material exception and printed dates or totals. This is an evidence review, not a line-by-line certification of all 835 item descriptions and category labels.
 - There are 12 purchase receipts and one linked return slip. Seven purchases have confirmed September 2026 dates, one has only a September folder date, and four are dated October 2026. A photographed return does not erase its original purchase event.
 
