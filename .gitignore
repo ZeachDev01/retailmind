@@ -23,14 +23,6 @@
 !/backend/storage/exports/.gitkeep
 /backend/storage/receipts/*
 !/backend/storage/receipts/.gitkeep
-/backend/legacy/demandForcasting/logs/*
-!/backend/legacy/demandForcasting/logs/.gitkeep
-/backend/legacy/demandForcasting/models/*
-!/backend/legacy/demandForcasting/models/.gitkeep
-/backend/legacy/demandForcasting/*.joblib
-/backend/legacy/demandForcasting/model_metrics.json
-/backend/legacy/demandForcasting/.training.lock
-/backend/legacy/demandForcasting/.api-retrain.lock
 **/__pycache__/
 *.pyc
 *.joblib
