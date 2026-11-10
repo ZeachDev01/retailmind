@@ -404,7 +404,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                             <span id="modal-copy-btn-text">Copy URL</span>
                         </button>
                     </div>
-                    <small class="field-help u-text-center">Authorized store supervisors only.</small>
+                    <small class="field-help u-text-center">Authorized Store users with remote access.</small>
                 </div>
                 <div class="qr-modal-footer">
                     <button type="button" id="close-qr-modal-footer-btn" class="btn btn-secondary">Done</button>
