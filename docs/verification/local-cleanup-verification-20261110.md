@@ -48,7 +48,7 @@ Run from the ticket worktree at `6e5a2c99`. All passed unless listed as not run.
 | PHP lint, changed files | `php -l` on the five changed PHP files | Pass: no syntax errors |
 | Manifest JSON | `php -r 'json_decode(composer.json)'`, `node -e JSON.parse(package.json)` | Pass |
 | Composer validation | `composer validate` | Not run: `composer` is not installed on this machine and `composer.lock` is absent |
-| Playwright / E2E suites | `npm run test:e2e`, `npm run playwright:install` | Not run: browser suites require a running app and database and are covered by `.github/workflows/playwright.yml` |
+| Playwright / E2E suites | `npm run test:e2e`, `npm run playwright:install` | Not run: browser suites require a running app and database. `.github/workflows/playwright.yml` runs the root `tests/` suite, not the DB-backed `test:e2e` suite, so these remain unverified |
 
 Changed PHP files linted: `src/backend/app/Services/OperationalDataResetService.php`, `src/backend/app/Services/TunnelSetupBlockBuilder.php`, `src/backend/tests/smoke_checks.php`, `src/frontend/components/administrator/store_settings.php`, `src/frontend/components/system_administrator/system_settings.php`.
 

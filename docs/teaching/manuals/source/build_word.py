@@ -8,7 +8,7 @@ from PIL import Image
 
 root = Path(__file__).resolve().parents[4]
 source = (root/'docs/teaching/manuals/source/build_manual.py').read_text(encoding='utf-8')
-data = {}
+data = {'__file__': str(root/'docs/teaching/manuals/source/build_manual.py')}
 exec(compile(source.split('\nstyles = {')[0], 'manual_content', 'exec'), data)
 pages = data['pages']
 doc = Document()
