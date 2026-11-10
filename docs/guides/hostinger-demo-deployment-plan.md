@@ -1,5 +1,10 @@
 # Hosted Demo deployment plan
 
+> **Historical/reference only.** Automatic Hostinger deployment has been removed
+> from this repository. The current deployment path is a fresh localhost
+> installation on a Windows Store PC. This page records the earlier hosted Demo
+> plan and its observed results; its commands are not current setup instructions.
+
 Decisions confirmed on 2026-10-21 (Asia/Manila):
 
 - Deploy a private Hosted Demo with isolated Demo Data today.
@@ -48,18 +53,20 @@ Decisions confirmed on 2026-10-21 (Asia/Manila):
   backend configuration path returns 404. The login form renders and the
   forecast report redirects unauthenticated visitors to login. Staff
   authentication and data screens remain unverified by the agent.
-- Verified the snapshot SHA-256 against `work/hostinger-demo/manifest.json`.
+- Verified the earlier snapshot SHA-256 against its manifest. The snapshot and
+  manifest are no longer part of the checkout.
 - Removed hosted database credential fallbacks. PHP syntax, hosted database
   configuration checks and the deployment contract pass.
 - The old exposed credentials identify a different hosting account; rotation
   requires access to that account. The new Demo uses fresh credentials.
 
-## Automatic redeployment
+## Historical automatic redeployment
 
-The workflow targets this Demo on pushes to `main` and manual dispatch. It uses
+At that time, the workflow targeted this Demo on pushes to `main` and manual
+dispatch. It used
 strict FTPS to `srv2062.hstgr.io`, a Demo-only FTP account rooted at this site's
 `public_html`, and repository secrets `HOSTINGER_DEMO_FTP_USERNAME` and
-`HOSTINGER_DEMO_FTP_PASSWORD`. It preserves the manually uploaded `.env` and
+`HOSTINGER_DEMO_FTP_PASSWORD`. It preserved the manually uploaded `.env` and
 runtime storage, serializes uploads, and checks the HTTPS login and `/.env`
 protection after deployment. It never imports SQL or runs migrations.
 
@@ -106,7 +113,7 @@ The user reports importing the private snapshot into the fresh hosted database
 `.scratch/hostinger-current-private/`; never commit them. The original hosted
 database remains intact for rollback. Cutover uses a new session cookie name,
 the new database credentials and replay opt-in, and separate private recovery
-storage. Autodeployment continues to preserve the hosted `.env`.
+storage. Autodeployment at that time preserved the hosted `.env`.
 
 Cutover to `u125532033_rmcurrent26` completed. A temporary CLI check on Hostinger
 verified all catalog/account/stock counts, account password/status fingerprints,

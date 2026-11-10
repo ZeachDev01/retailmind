@@ -79,8 +79,7 @@ presentation choices.
   and timestamps now have measured contrast checks in both themes. Controls retain
   44px minimum height and visible keyboard focus.
 - Impeccable detector ran once and returned no findings. Screenshots were
-  disposable captures under `.impeccable/review/notifications-unread/` and are
-  not retained.
+  disposable review captures; they are not retained.
 
 The full repository suite, screen readers, and physical touch devices were not
 tested. Browser checks used fixtures; live Store data was not changed.

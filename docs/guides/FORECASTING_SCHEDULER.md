@@ -2,7 +2,7 @@
 
 This document provides operational instructions for deploying and maintaining the scheduled ML worker, which is responsible for daily Forecast Generation and weekly Model Retraining.
 
-The commands below run forecasting only. Also configure the independent [daily notification job](DAILY_NOTIFICATIONS.md) for Product-aware expiry reminders, including on days without transactions. The full-source maintenance wrappers already call both scripts.
+The commands below run forecasting only. On a Windows Store PC, the supported setup is `setup_scheduled_tasks.bat`: it registers the ML scheduler together with daily notifications and weekly backup. See the [installation guide](WINDOWS_LOCALHOST_INSTALL.md). Also review the independent [daily notification job](DAILY_NOTIFICATIONS.md) for Product-aware expiry reminders, including on days without transactions.
 
 ## Automatic training rules
 
@@ -27,7 +27,9 @@ The scheduled worker requires reliable execution and must not be interrupted by 
 
 ## Windows Store-PC Scheduling (Task Scheduler)
 
-From a PowerShell terminal at the repository root, with PHP and Python available:
+For a Store PC, prefer `setup_scheduled_tasks.bat` at the repository root. It registers `RetailMind ML Scheduler` to run every five minutes and at startup as `NT AUTHORITY\SYSTEM`, alongside the notification and backup tasks. It searches the usual XAMPP PHP location and accepts `-PhpPath` and `-PythonPath` overrides.
+
+The forecasting-only installer below is a manual alternative. From a PowerShell terminal at the repository root, with PHP and Python available:
 
 ```powershell
 ./src/backend/scripts/install_forecasting_scheduler.ps1 -WhatIf
@@ -36,7 +38,7 @@ Get-ScheduledTask -TaskName 'RetailMind ML Scheduler'
 Get-ScheduledTaskInfo -TaskName 'RetailMind ML Scheduler'
 ```
 
-The installer creates a hidden task every five minutes under the current Windows account, with no administrator elevation or password stored by RetailMind. **This setup runs only while that user is signed in.** The PC must be awake, and the application's database must be running. Closing the browser does not stop scheduling. The installer refuses to overwrite an existing task.
+This forecasting-only installer creates a hidden task every five minutes under the current Windows account, with no administrator elevation or password stored by RetailMind. **This setup runs only while that user is signed in.** The PC must be awake, and the application's database must be running. Closing the browser does not stop scheduling. The installer refuses to overwrite an existing task.
 
 Scheduler output is appended to `src/backend/storage/logs/forecasting-scheduler.log`. Database connection failures return a nonzero task result. The task uses the installation's `.env`; isolated Demo launch settings from another terminal do not carry over. No successful task run or model training is implied by the task's `Ready` status.
 
@@ -75,12 +77,12 @@ On a Linux server, the scheduler relies on cron and the Python virtual environme
    cd /path/to/retailmind
    python3 -m venv venv
    source venv/bin/activate
-   pip install -r src/backend/scripts/requirements.txt
+   pip install numpy pandas scikit-learn joblib
    ```
 2. **Configure Cron:**
    Open crontab with `crontab -e` and add the following entry to trigger the PHP scheduler script every 5 minutes, which delegates to the ML worker if tasks are due:
    ```cron
-   */5 * * * * cd /path/to/retailmind && php src/backend/scripts/run_scheduler.php >> /path/to/retailmind/storage/logs/scheduler.log 2>&1
+   */5 * * * * cd /path/to/retailmind && php src/backend/scripts/run_scheduler.php >> /path/to/retailmind/src/backend/storage/logs/forecasting-scheduler.log 2>&1
    ```
    *Note: Ensure PHP and Python are accessible in the cron environment's PATH.*
 

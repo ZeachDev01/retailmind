@@ -129,8 +129,9 @@ Keep the workbook unchanged. Generated files stay local under the ignored
   model parameters, fold dates, RF and baseline metrics.
 - `daily_history.csv`: 20 external product series; Excel can open this CSV.
 - `train.csv` and `test.csv`: chronological daily observations, using the final
-  84 days for testing. Ready-made files and usage notes are in
-  [work/forecasting-dataset](../../work/forecasting-dataset/README.md).
+  84 days for testing. The experiment output directory holds these files; they
+  are not bundled with the checkout. Retain the output if you need to rerun the
+  replay.
 - `products.csv`: original external codes and descriptions from the training period.
 - `forecasts.csv`: 28 daily expected-unit predictions per product beyond the archive.
   Fractional units are model expectations, not actual transactions or order quantities.

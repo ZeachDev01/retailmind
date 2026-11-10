@@ -44,8 +44,9 @@ final class TunnelSetupBlockBuilder
                 . "# Safe to re-run: the service is stopped, deleted, and recreated.\n"
             : "# RetailMind Remote Access setup - INTERIM Quick Tunnel\n"
                 . "# INTERIM: the public URL changes every time the service restarts.\n"
-                . "# Cloudflare Access is not in front of this URL. RetailMind sign-in and the\n"
-                . "# application read-only boundary remain in force.\n"
+                . "# Cloudflare Access is not in front of this URL. RetailMind sign-in and\n"
+                . "# each account's existing Workspace permissions still apply. Store Workspaces\n"
+                . "# keep full tunnel capabilities; the Super Administrator stays local-only.\n"
                 . "# Paste this entire block into an elevated PowerShell on the Store PC.\n"
                 . "# Safe to re-run: the service is stopped, deleted, and recreated.\n";
 
