@@ -48,3 +48,21 @@ node_modules/
 /playwright/.cache/
 /playwright/.auth/
 .worktrees/
+
+# Generated browser captures and scratch output
+/tmp/
+/output/
+
+# Design review captures (surface briefs stay tracked)
+/.impeccable/review/
+/.impeccable/build/
+/.impeccable/mocks/
+/.impeccable/config.local.json
+/.impeccable/hook.cache.json
+/.impeccable/hook.pending.json
+
+# Machine-generated forecasting runner config
+/src/backend/config/forecasting_runner.json
+
+# Generated model artifacts
+/src/backend/storage/ml_models/*.joblib
