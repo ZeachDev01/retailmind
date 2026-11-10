@@ -1,6 +1,6 @@
 # Train/test sales replay
 
-To move this saved Demo to Hostinger, use the [SQL snapshot and hosting guide](hostinger-demo-replay.md).
+To move this saved Demo to Hostinger, use the [SQL snapshot and hosting guide](hostinger-demo-replay.md). That guide is a historical record; the repository no longer deploys automatically to Hostinger.
 
 Open [local Demo login](http://127.0.0.1:8092/?login=1). This separate Demo uses
 `retailmind_demo_replay_20261021`; it does not change the Store database.
@@ -35,7 +35,8 @@ training validation. The replay preview does not approve a model or place orders
 
 The source is [UCI Online Retail](https://archive.ics.uci.edu/dataset/352/online+retail),
 real public UK transactions, under CC BY 4.0. These are not the partner Store's sales.
-The original CSV files in `work/forecasting-dataset/` remain unchanged.
+The dataset is not bundled with this checkout; download it from the dataset link
+or reuse a retained experiment output.
 
 | Split | Original dates | Simulated dates | Daily product rows |
 | --- | --- | --- | --- |
@@ -90,10 +91,13 @@ Restart the prepared Demo with local MySQL running:
 ./src/backend/scripts/start_public_sales_demo.ps1 -Database retailmind_demo_replay_20261021 -Port 8092
 ```
 
-For a fresh replay, choose unused output and database names. Stop on any failing command:
+For a fresh replay, choose unused output and database names. Stop on any failing command.
+`public_sales_replay.py` expects a directory containing prepared `train.csv`,
+`test.csv`, and `products.csv` from an earlier `public_sales_experiment.py` run.
+That directory is not bundled; replace `C:\data\forecasting-dataset` with your copy.
 
 ```powershell
-python src/backend/scripts/public_sales_replay.py work/forecasting-dataset --end-date 2026-10-20 --output-dir .scratch/replay-new
+python src/backend/scripts/public_sales_replay.py C:\data\forecasting-dataset --end-date 2026-10-20 --output-dir .scratch/replay-new
 $env:APP_ENV='development'
 $env:DATABASE_ENV='local'
 $env:DB_HOST='127.0.0.1'

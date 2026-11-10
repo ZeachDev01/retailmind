@@ -41,64 +41,65 @@ src/backend/includes/                Shared legacy helpers used by existing page
 src/backend/database/migrations/     PHP migrations run by src/backend/scripts/migrate.php
 src/backend/database/seeds/          Product seed CSV used by local seed commands and forecast previews
 src/backend/database/sql/            Fresh schema, consolidated upgrades, and historical SQL migrations
-src/backend/legacy/demandForcasting/ Python forecasting service and training scripts
-src/backend/scripts/                 Maintenance, backup, migration, and release commands
+src/backend/legacy/routes/           Retired duplicate route files retained for reference
+src/backend/scripts/                 Maintenance, backup, migration, release, and tunnel commands
 src/backend/storage/                 Runtime output only; keep generated files out of Git
-src/backend/tests/                   Smoke, database, and release package checks
-scripts/                            Release packaging
-scripts/archive/                    Retained one-off development scripts; run from repository root only after review
-tests/                              Playwright specs configured at the repository root
+src/backend/tests/                   PHP smoke, database, contract, and browser-script checks
+src/backend/dataset/                 Bundled example inventory dataset
+scripts/tunnel/                      Windows tunnel wrappers for the backend tunnel scripts
+scripts/archive/                     Retained one-off development scripts; review before running
+tests/                               Playwright specs configured at the repository root
 retailmind-products-import-sample.csv Product import example used by the CSV import test
 ```
 
 ## Documentation
 
 ```text
-README.md                        Setup, upgrade, and operating guide
+README.md                        Fresh-install summary, testing, and database imports
 docs/README.md                   Documentation index
 GLOSSARY.md                      Store operations vocabulary; read alongside docs/CONTEXT.md
 docs/CONTEXT.md                   Core Store, role, account, inventory, and forecasting vocabulary
-docs/DEPLOYMENT_CHECKLIST.md     Deployment checklist
-docs/guides/                    Interface and browser behavior guides
+docs/guides/WINDOWS_LOCALHOST_INSTALL.md  Complete fresh Windows installation procedure
+docs/DEPLOYMENT_CHECKLIST.md     Fresh-install acceptance checklist
+docs/guides/                    Interface, installation, and browser behavior guides
 docs/adr/                       Architecture decisions
 docs/specs/                     Agreed specifications
-docs/research/                  Investigation evidence
+docs/research/                  Investigation evidence, capstone sources, and notebooks
 docs/verification/              Recorded checks and manual verification
 docs/release-notes/              Feature notes and release documentation
 docs/release-notes/archive/      Legacy release documentation
 docs/agents/                    Repository workflow instructions
-docs/teaching/                  Lessons, printable reference, teaching CSS, mission, notes, and resources
+docs/teaching/                  Lessons, printable reference, teaching CSS, mission, notes, resources, and manuals
 ```
 
-## Development Artifacts and Local State
+## Retained Material and Local State
 
 ```text
-work/README.md                  Index of datasets, prototypes, and preserved archives
-work/forecasting-dataset/        Forecasting train/test CSVs and product data
-work/hostinger-demo/             Demo snapshot, manifest, and replay instructions
-work/visualizations/             Development prototypes
-work/archive/root-scratch/      Retained root scratch notes, commit list, and diff
-work/archives/                  Retained source ZIP archive
-output/                         Ignored generated browser captures and verification output
-.impeccable/                    Design surface briefs; ignored review captures
-.scratch/, tmp/                 Ignored local scratch and temporary files
-backend/storage/                Existing storage tree; not a second application backend
+outputs/                        Retained research data and reviewed workbooks
+docs/research/                  Investigation notes, capstone sources, and notebooks
+docs/teaching/manuals/          Authored manual sources and generated deliverables
+docs/verification/evidence/     Curated verification captures
+scripts/archive/                Retained one-off development scripts
+output/                         Ignored generated browser captures; tests recreate directories
+tmp/, .scratch/                 Ignored local scratch and temporary files
+.impeccable/                    Design surface briefs; ignored review captures and local config
 src/backend/storage/            Application runtime storage
+src/backend/storage/bin/        Downloaded runtime tools such as cloudflared.exe
+src/backend/storage/tunnel/     Runtime tunnel configuration and logs
 retailmind-private-*/           Recovery storage naming; inspect configuration before any relocation
 .release/                       Generated release package
 .worktrees/                     Separate Git working trees
 vendor/, node_modules/          Installed dependencies
 ```
 
-The organization pass preserved all files. Runtime code, configuration, recovery
-storage, dependencies, and generated directories retain their existing paths.
-Loose guides, audits, and design notes use the existing documentation categories;
-their filenames and historical contents are retained. Root teaching materials
-now live together under `docs/teaching/`.
+Runtime code, configuration, recovery storage, dependencies, and generated
+directories keep their current paths. Retained authored manuals, capstone
+sources, research data, and curated evidence stay in the existing documentation
+categories. Generated browser captures, scratch files, and design-review images
+are ignored and can be recreated by their producers.
 
 ## Naming Notes
 
 - `src/frontend/components/` contains the current authenticated admin, inventory, invoice, and notification pages.
-- `src/backend/legacy/demandForcasting/` keeps its existing spelling because scripts and deployment docs already reference it.
 - Older role URLs such as `admin/`, `manager/`, `invoice/`, and `notification/` are rewritten to `src/frontend/components/`.
-- Old duplicate route files live under `src/backend/legacy/routes/` for reference and are blocked from direct web access.
+- Retired duplicate route files live under `src/backend/legacy/routes/` for reference and are blocked from direct web access.

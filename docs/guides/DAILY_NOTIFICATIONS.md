@@ -2,6 +2,8 @@
 
 Run `src/backend/scripts/run_notifications.php` once each day using the deployment's PHP CLI and database environment. It evaluates Product warning lead times, outstanding expired batches, and the existing unrelated operational checks. It never removes stock. The release package includes this CLI entrypoint; a code upload does not install its scheduled job.
 
+On a Windows Store PC, the supported installer is `setup_scheduled_tasks.bat`. It registers the daily notification task together with the ML scheduler and weekly backup. See the [installation guide](WINDOWS_LOCALHOST_INSTALL.md).
+
 Apply database updates before enabling the job, including `202610190001_attention_notification_type`. Older notification enums reject the shared attention writer and stop the daily check before expiry evaluation.
 
 ## Hosted cron
@@ -20,7 +22,9 @@ InfinityFree free hosting does not support the required scheduled CLI execution.
 
 ## Windows Task Scheduler
 
-For a full source deployment, the existing daily `run_maintenance.bat` invokes forecasting and notifications. To evaluate notifications independently of forecasting, create a daily Task Scheduler action with the actual PHP path and deployed script. For example, use `cmd.exe` with arguments:
+For a Windows Store PC, run `setup_scheduled_tasks.bat` from the repository root in an elevated PowerShell. It registers `RetailMind Daily Notifications` for 03:00 with catch-up, plus the ML scheduler and weekly backup tasks. This is the primary setup; see the [installation guide](WINDOWS_LOCALHOST_INSTALL.md).
+
+The older `run_maintenance.bat` wrapper invokes forecasting and notifications together. To create or repair a notifications-only task manually, use a daily Task Scheduler action with the actual PHP path and deployed script. For example, use `cmd.exe` with arguments:
 
 ```text
 /d /c ""C:\path\to\php.exe" "C:\path\to\retailmind\src\backend\scripts\run_notifications.php" >> "C:\path\to\retailmind\src\backend\storage\logs\daily-notifications.log" 2>&1"

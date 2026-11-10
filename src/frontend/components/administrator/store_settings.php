@@ -341,7 +341,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                 <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
                     <div class="remote-url-top">
                         <span class="remote-url-label">Public Tunnel URL</span>
-                        <span class="remote-url-security-note">Supervisors only &bull; Cashiers stay local</span>
+                        <span class="remote-url-security-note">Full staff Workspaces &bull; Super Administrator stays local</span>
                     </div>
                     <div class="remote-url-group">
                         <div class="remote-input-wrapper">
