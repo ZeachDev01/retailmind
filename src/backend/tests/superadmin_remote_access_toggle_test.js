@@ -57,6 +57,11 @@ function createPage(config) {
         ["tunnel-public-url"],
         ["remote-mode-pill"],
         ["remote-mode-label"],
+        ["remote-active-provider"],
+        ["remote-link-copy-value"],
+        ["remote-copy-link"],
+        ["remote-link-empty"],
+        ["remote-link-note"],
         ["remote-mode-icon"]
     ].forEach(([id, options]) => {
         elements.set(id, createElement(id, options));
@@ -68,6 +73,7 @@ function createPage(config) {
     return {
         elements,
         document: {
+            querySelectorAll() { return []; },
             getElementById(id) {
                 return elements.get(id) || null;
             }
@@ -171,7 +177,8 @@ async function scenario(name, run) {
             app.page.elements.get("tunnel-public-url").textContent,
             "https://hand-test.trycloudflare.com"
         );
-        assert.match(app.page.elements.get("remote-mode-label").textContent, /Quick tunnel/);
+        assert.equal(app.page.elements.get("remote-mode-label").textContent, 'Online');
+        assert.equal(app.page.elements.get("remote-active-provider").textContent, 'Cloudflare Quick Tunnel');
         assert.ok(app.page.elements.get("remote-mode-pill").classList.contains("is-on"));
     });
 
@@ -187,7 +194,7 @@ async function scenario(name, run) {
 
         assert.equal(toggle.checked, false);
         assert.equal(toggle.disabled, false);
-        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Disabled");
+        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Connection is stopped or unavailable");
         assert.equal(
             app.page.elements.get("remote-access-feedback").textContent,
             "Failed to start tunnel daemon."
@@ -209,7 +216,7 @@ async function scenario(name, run) {
 
         assert.equal(toggle.checked, false);
         assert.equal(toggle.disabled, false);
-        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Disabled");
+        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Connection is stopped or unavailable");
         assert.equal(
             app.page.elements.get("remote-access-feedback").textContent,
             "Failed to start tunnel daemon."
@@ -246,7 +253,7 @@ async function scenario(name, run) {
         assert.equal(toggle.checked, false);
         assert.equal(toggle.attributes["aria-checked"], "false");
         assert.equal(toggle.disabled, false);
-        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Disabled");
+        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Connection is stopped or unavailable");
     });
 
     await scenario("a stale status poll cannot overwrite a later stop", async () => {
@@ -274,7 +281,7 @@ async function scenario(name, run) {
         await flush();
 
         assert.equal(toggle.checked, false);
-        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Disabled");
+        assert.equal(app.page.elements.get("remote-toggle-status-text").textContent, "Connection is stopped or unavailable");
         assert.notEqual(
             app.page.elements.get("tunnel-public-url").textContent,
             "https://stale.trycloudflare.com"
@@ -303,6 +310,21 @@ async function scenario(name, run) {
         await flush();
 
         assert.equal(app.page.elements.get("tunnel-public-url").textContent, "https://single.trycloudflare.com");
+    });
+
+    await scenario("an enabled ngrok service loses Online when disconnected and recovers", async () => {
+        const app = createSandbox({...baseConfig('online'), mode: 'ngrok', configuredUrl: 'https://store.ngrok-free.dev'});
+        app.responders.push({success: true, status: 'starting', running: true, online: false, url: null, mode: 'ngrok'});
+        await Promise.all(app.fireIntervals());
+        assert.equal(app.page.elements.get('remote-mode-label').textContent, 'Connecting');
+        assert.equal(app.page.elements.get('tunnel-public-url').textContent, 'https://store.ngrok-free.dev');
+        assert.equal(app.page.elements.get('remote-active-provider').textContent, 'ngrok Free');
+        assert.match(app.page.elements.get('remote-link-note').textContent, /not been verified/);
+        assert.equal(app.page.elements.get('remote-access-toggle').checked, true, 'The service remains enabled while reconnecting');
+        app.responders.push({success: true, status: 'online', online: true, url: 'https://store.ngrok-free.dev', mode: 'ngrok'});
+        await Promise.all(app.fireIntervals());
+        assert.equal(app.page.elements.get('remote-mode-label').textContent, 'Online');
+        assert.equal(app.page.elements.get('tunnel-public-url').textContent, 'https://store.ngrok-free.dev');
     });
 
     if (failures.length > 0) {

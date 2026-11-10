@@ -105,7 +105,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Contract Tests: `scheduled_backup_schedule_contract.php`, `scheduled_backup_service_contract.php`, `scheduled_backup_settings_contract.php`, `backup_keyring_test.php`, `backup_key_recommendation_test.php`, `backup_keyring_ui_contract.php`, `restore_compatibility_test.php`
 - **Platform Settings & Reset**: `components/system_administrator/system_settings.php`, `components/administrator/reset_data.php`
   - Backend Services: `App\Services\OperationalDataResetService`, `App\Services\TunnelSetupBlockBuilder`
-  - Contract Tests: `tunnel_setup_block_contract.php`, `dormancy_policy_settings_contract.php`
+  - Remote Access installer: `src/backend/scripts/tunnel/service_setup.ps1` (ngrok Free / Cloudflare); public connectivity proof: `src/frontend/remote_health.php`
+  - Contract Tests: `tunnel_setup_block_contract.php`, `remote_access_setup_test.php`, `remote_access_service_setup_test.ps1`, `remote_access_setup_browser_test.js`, `dormancy_policy_settings_contract.php`
 - **Forecasting Pipeline**:
   - Import Sales: `components/system_administrator/forecast_import.php` (`App\Services\ForecastHistoryImportService`)
   - Data Readiness: `components/report/data_readiness.php` (`App\Forecasting\DemandHistoryService`)

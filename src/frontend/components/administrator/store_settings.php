@@ -294,7 +294,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     </div>
                     <div class="remote-badges-group">
                         <span id="remote-mode-badge" class="remote-pill <?= !empty($tunnelStatus['token_configured']) ? 'pill-primary' : 'pill-muted' ?>">
-                            <?= !empty($tunnelStatus['token_configured']) ? 'Custom Domain' : 'Quick Tunnel' ?>
+                            <?= ($tunnelStatus['mode'] ?? '') === 'ngrok' ? 'ngrok Free' : (($tunnelStatus['mode'] ?? '') === 'permanent' ? 'Custom Domain' : 'Quick Tunnel') ?>
                         </span>
                         <span id="remote-status-badge" class="remote-status-pill <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'status-online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'status-starting' : 'status-offline') ?>" role="status">
                             <?= ($tunnelStatus['status'] ?? 'offline') === 'online' ? 'Online' : (($tunnelStatus['status'] ?? 'offline') === 'starting' ? 'Connecting...' : 'Offline') ?>
@@ -589,7 +589,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     if (data.status === 'online' && data.url) {
                         stopPolling();
                         handleOnlinePayload(data);
-                    } else if (!data.online) {
+                    } else if (data.status === 'offline') {
                         stopPolling();
                         setBadge('offline');
                         if (toggle) {
@@ -671,6 +671,12 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     toggle.disabled = false;
+                    if (!data || !data.success || data.status !== 'offline') {
+                        toggle.checked = true;
+                        setBadge(data && data.status === 'online' ? 'online' : 'starting');
+                        setFeedback(data && data.error ? data.error : 'The tunnel service has not stopped. Check it on the Store PC.', true);
+                        return;
+                    }
                     setBadge('offline');
                     urlContainer.classList.add('u-hidden');
                     urlInput.value = '';
@@ -679,10 +685,9 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                 })
                 .catch(function() {
                     toggle.disabled = false;
-                    setBadge('offline');
-                    urlContainer.classList.add('u-hidden');
-                    closeQrModal();
-                    setFeedback('Remote access tunnel stopped.');
+                    toggle.checked = true;
+                    setBadge('starting');
+                    setFeedback('Could not verify whether the tunnel stopped. Check it on the Store PC.', true);
                 });
             }
         });

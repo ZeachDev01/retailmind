@@ -169,7 +169,7 @@ $assert(str_contains($settingsSource, 'Permanent') || str_contains($settingsSour
 
 echo "\n=== 5. Standalone Windows Service Script Contracts ===\n";
 
-$serviceInstallScript = $root . '/src/backend/scripts/tunnel/service_install.ps1';
+$serviceInstallScript = $root . '/src/backend/scripts/tunnel/service_setup.ps1';
 $serviceUninstallScript = $root . '/src/backend/scripts/tunnel/service_uninstall.ps1';
 $runTunnelScript = $root . '/src/backend/scripts/tunnel/run_tunnel.ps1';
 
@@ -181,7 +181,7 @@ if (file_exists($serviceInstallScript)) {
     $installSource = file_get_contents($serviceInstallScript);
     $assert(str_contains($installSource, '$PSScriptRoot'), "service_install.ps1 resolves paths relative to PSScriptRoot");
     $assert(str_contains($installSource, 'sc.exe') || str_contains($installSource, 'New-Service'), "service_install.ps1 uses sc.exe or New-Service");
-    $assert(str_contains($installSource, 'start= auto') || str_contains($installSource, 'StartupType Automatic'), "service_install.ps1 sets service to start automatically at boot (start= auto)");
+    $assert(str_contains($installSource, "'start=', 'auto'"), 'Installer sets automatic boot startup');
     $assert(str_contains($installSource, 'failure') || str_contains($installSource, 'restart'), "service_install.ps1 configures recovery/restart on failure");
     $assert(str_contains($installSource, '--token'), "service_install.ps1 supports --token configuration");
 }

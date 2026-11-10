@@ -37,21 +37,19 @@ if (-not $isAdmin) {
     exit 1
 }
 
-Write-Host "[INFO] Stopping Windows Service '$ServiceName'..." -ForegroundColor Cyan
-try {
-    sc.exe stop $ServiceName | Out-Null
-    Start-Sleep -Seconds 1
-} catch {}
-
-Write-Host "[INFO] Deleting Windows Service '$ServiceName'..." -ForegroundColor Cyan
-try {
-    $deleteOut = sc.exe delete $ServiceName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "sc.exe delete: $deleteOut"
+$BinDir = Join-Path $RootDir 'src\backend\storage\bin'
+foreach ($name in @($ServiceName, 'ngrok')) {
+    $registered = Get-CimInstance Win32_Service -Filter "Name='$name'"
+    if ($registered -and $registered.PathName.Contains($BinDir)) {
+        Stop-Service -Name $name -Force -ErrorAction Stop
+        sc.exe delete $name | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not remove the $name service." }
+    } elseif ($registered -and $name -eq $ServiceName) {
+        throw 'The registered Cloudflare service belongs to another installation; it was left unchanged.'
     }
-} catch {
-    Write-Warning "Service was not registered or could not be removed."
 }
+
+Write-Host '[INFO] RetailMind tunnel services removed.' -ForegroundColor Cyan
 
 Write-Host "[INFO] Removing legacy Quick Tunnel scheduled task '$LegacyTaskName'..." -ForegroundColor Cyan
 if (Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue) {
@@ -65,6 +63,9 @@ if (Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue) {
 # Clean state
 Remove-Item -Path $PidPath -Force -ErrorAction SilentlyContinue
 Remove-Item -Path $UrlPath -Force -ErrorAction SilentlyContinue
+foreach ($name in @('active_tunnel.json', 'health.json', 'ngrok.yml', 'cloudflare.token')) {
+    Remove-Item -LiteralPath (Join-Path $RunDir $name) -Force -ErrorAction SilentlyContinue
+}
 
 if (-not $KeepConfig) {
     Remove-Item -Path $ConfigPath -Force -ErrorAction SilentlyContinue

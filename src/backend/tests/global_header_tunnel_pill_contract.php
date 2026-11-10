@@ -90,12 +90,14 @@ PHP;
     ];
 };
 
-$roleConfigs = [
-    'super_admin' => ['user_id' => 1, 'session_version' => 5],
-    'admin' => ['user_id' => 1, 'session_version' => 5],
-    'inventory_manager' => ['user_id' => 1, 'session_version' => 5],
-    'cashier' => ['user_id' => 76, 'session_version' => 1],
-];
+$roleConfigs = [];
+foreach (['super_admin', 'admin', 'inventory_manager', 'cashier'] as $role) {
+    $stmt = $pdo->prepare("SELECT u.user_id, u.session_version FROM users u JOIN roles r ON r.role_id = u.role_id WHERE r.role_name = ? AND u.status = 'active' AND u.must_change_password = 0 LIMIT 1");
+    $stmt->execute([$role]);
+    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($account) { $roleConfigs[$role] = $account; }
+    else { echo "SKIP: No active {$role} account available for live-session authorization check.\n"; }
+}
 
 foreach ($roleConfigs as $testRole => $cfg) {
     $res = $runApiRequest($cfg['user_id'], $cfg['session_version'], $testRole, 'GET');
@@ -113,6 +115,7 @@ foreach ($roleConfigs as $testRole => $cfg) {
 $dummyToken = 'valid-token';
 
 foreach (['inventory_manager', 'cashier'] as $nonAdminRole) {
+    if (!isset($roleConfigs[$nonAdminRole])) { continue; }
     $cfg = $roleConfigs[$nonAdminRole];
     $postRes = $runApiRequest($cfg['user_id'], $cfg['session_version'], $nonAdminRole, 'POST', ['action' => 'start'], $dummyToken);
     $assert(
@@ -126,7 +129,7 @@ echo "\n=== 2. Navbar Absence Contract Across Roles in sidebar.php ===\n";
 $sidebarFile = $root . '/src/frontend/components/sidebar.php';
 $assert(file_exists($sidebarFile), "sidebar.php exists at {$sidebarFile}");
 
-$tunnelDir = $root . '/src/backend/storage/tunnel';
+$tunnelDir = sys_get_temp_dir() . '/retailmind-pill-' . bin2hex(random_bytes(6));
 $testPidFile = $tunnelDir . '/tunnel.pid';
 $testUrlFile = $tunnelDir . '/tunnel.url';
 $testLogFile = $tunnelDir . '/tunnel.log';
@@ -408,6 +411,7 @@ if (file_exists($pillCssFile)) {
 
 // Clean up test files
 $setTestTunnelState(false);
+@rmdir($tunnelDir);
 
 echo "\n==========================================\n";
 if (!empty($failures)) {

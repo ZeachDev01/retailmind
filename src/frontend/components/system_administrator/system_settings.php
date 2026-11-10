@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
 require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
 require_once __DIR__ . '/../../../backend/app/Services/TunnelSetupBlockBuilder.php';
+header('Cache-Control: no-store, no-cache, must-revalidate');
 
 $message = '';
 $messageClass = '';
@@ -46,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'save_brevo', 'test_brevo', 'disable_brevo',
             'save_tunnel_token', 'clear_tunnel_token', 'save_tunnel_notify', 'test_tunnel_notify',
             'generate_tunnel_setup_block', 'generate_tunnel_removal_block',
+            'test_tunnel_connection',
         ], true)) {
             require_local_request();
 
@@ -138,19 +140,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $tunnelToken = (string)($ts->getToken() ?? '');
                 }
                 if ($tunnelToken === '') {
-                    $ts->clearToken();
-                    $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
+                    if (!$ts->clearToken()) { throw new RuntimeException('Could not clear the saved tunnel token.'); }
+                    $message = 'Saved Cloudflare token cleared. The active connection is unchanged.';
                 } else {
-                    $ts->setToken($tunnelToken, $tunnelHostname !== '' ? $tunnelHostname : null);
+                    if (!$ts->setToken($tunnelToken, $tunnelHostname)) { throw new RuntimeException('Could not save the tunnel token.'); }
                     log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token updated', 'Platform Settings', null, null, [
                         'hostname' => $tunnelHostname,
                     ]);
-                    $message = 'Permanent Cloudflare Tunnel token configured.';
+                    $message = 'Cloudflare settings saved. Generate and run the custom domain setup block to apply them.';
                 }
             } elseif ($action === 'clear_tunnel_token') {
-                (new \App\Services\CloudflareTunnelService())->clearToken();
+                if (!(new \App\Services\CloudflareTunnelService())->clearToken()) { throw new RuntimeException('Could not clear the saved tunnel token.'); }
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Cloudflare Tunnel token cleared', 'Platform Settings');
-                $message = 'Permanent Cloudflare Tunnel token cleared. Ephemeral quick tunnel fallback enabled.';
+                $message = 'Saved Cloudflare token cleared. The active connection is unchanged.';
+            } elseif ($action === 'test_tunnel_connection') {
+                $tested = (new \App\Services\CloudflareTunnelService())->getStatus(true);
+                $message = !empty($tested['online'])
+                    ? 'Public RetailMind connection verified.'
+                    : 'Public connection could not be verified. Check the setup script output, internet, domain/DNS, and provider quota.';
+                $messageClass = !empty($tested['online']) ? 'tag-success' : 'tag-warning';
             } elseif ($action === 'save_tunnel_notify') {
                 $enabled = !empty($_POST['tunnel_url_notify_enabled']) ? '1' : '0';
                 \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $enabled): void {
@@ -179,13 +187,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $tunnelServiceForBlock = new \App\Services\CloudflareTunnelService();
                 $savedToken = $tunnelServiceForBlock->getToken();
                 $builder = new \App\Services\TunnelSetupBlockBuilder();
-                $tunnelMode = $builder->mode($savedToken);
+                $requestedMode = (string)($_POST['setup_mode'] ?? ($savedToken ? 'permanent' : 'ngrok'));
+                if (!in_array($requestedMode, ['ngrok', 'permanent', 'quick'], true)) {
+                    throw new InvalidArgumentException('Choose a supported Remote Access setup.');
+                }
+                $tunnelMode = $builder->mode($savedToken, $requestedMode);
+                if ($requestedMode === 'permanent' && (!$savedToken || !$tunnelServiceForBlock->getHostname())) {
+                    throw new InvalidArgumentException('Save the Cloudflare token and custom hostname first.');
+                }
                 $blockInput = [
                     'app_root' => $appRoot,
                     'local_port' => $localAppPort,
-                    'token' => $savedToken,
-                    'hostname' => $tunnelServiceForBlock->getHostname(),
+                    'token' => $tunnelMode === 'ngrok' ? trim((string)($_POST['ngrok_token'] ?? '')) : $savedToken,
+                    'hostname' => $tunnelMode === 'ngrok' ? strtolower(trim((string)($_POST['ngrok_hostname'] ?? ''))) : $tunnelServiceForBlock->getHostname(),
                     'mode' => $tunnelMode,
+                    'health_path' => app_url('remote_health.php'),
                 ];
 
                 if ($action === 'generate_tunnel_setup_block') {
@@ -194,9 +210,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     log_activity($pdo, (int)$_SESSION['user_id'], 'Remote Access setup block generated', 'Platform Settings', null, null, null, null, null, [
                         'mode' => $tunnelMode,
                     ]);
-                    $message = $tunnelMode === 'permanent'
+                    $message = $tunnelMode === 'ngrok'
+                        ? 'Free ngrok setup block generated. Copy it into PowerShell as Administrator on this Store PC.'
+                        : ($tunnelMode === 'permanent'
                         ? 'Store PC setup block generated for the permanent named tunnel.'
-                        : 'Interim Quick Tunnel setup block generated. The public URL will change on restart.';
+                        : 'Interim Quick Tunnel setup block generated. The public URL will change on restart.');
                 } else {
                     $generatedTunnelBlock = $builder->buildRemovalBlock([
                         'app_root' => $appRoot,
@@ -239,15 +257,15 @@ $tunnelStatus = $tunnelService->getStatus();
 $tunnelNotifyEnabled = ($settings['tunnel_url_notify_enabled'] ?? '1') !== '0';
 $emailAlertsEnabled = !empty($settings['store_email_alerts_enabled']);
 $remoteTunnelState = (string)($tunnelStatus['status'] ?? 'offline');
-$remoteModeLabel = !empty($tunnelStatus['token_configured'])
-    ? 'Custom domain'
-    : ($remoteTunnelState === 'online' ? 'Quick tunnel' : ($remoteTunnelState === 'starting' ? 'Connecting' : 'Offline'));
-$remoteModeClass = !empty($tunnelStatus['token_configured'])
-    ? 'is-info'
-    : ($remoteTunnelState === 'online' ? 'is-on' : ($remoteTunnelState === 'starting' ? 'is-info' : 'is-off'));
-$remoteModeIcon = !empty($tunnelStatus['token_configured'])
-    ? 'bi-globe2'
-    : ($remoteTunnelState === 'online' ? 'bi-lightning-charge-fill' : ($remoteTunnelState === 'starting' ? 'bi-arrow-repeat' : 'bi-cloud-slash'));
+$remoteModeLabel = $remoteTunnelState === 'online' ? 'Online' : ($remoteTunnelState === 'starting' ? 'Connecting' : 'Offline');
+$remoteProviderLabel = ['ngrok' => 'ngrok Free', 'permanent' => 'Cloudflare', 'quick' => 'Cloudflare Quick Tunnel'][$tunnelStatus['mode'] ?? 'quick'] ?? 'Not configured';
+if (empty($tunnelStatus['installed'])) { $remoteProviderLabel = 'Not set up'; }
+$remotePublicUrl = (string)($tunnelStatus['configured_url'] ?? $tunnelStatus['url'] ?? '');
+$remoteSetupProvider = (string)($_POST['setup_mode'] ?? (in_array($_POST['action'] ?? '', ['save_tunnel_token', 'clear_tunnel_token'], true) ? 'permanent' : ($_GET['provider'] ?? (($tunnelStatus['mode'] ?? '') === 'permanent' ? 'permanent' : 'ngrok'))));
+if (!in_array($remoteSetupProvider, ['ngrok', 'permanent'], true)) { $remoteSetupProvider = 'ngrok'; }
+$ngrokHostname = ($tunnelStatus['mode'] ?? '') === 'ngrok' ? (string)parse_url($remotePublicUrl, PHP_URL_HOST) : '';
+$remoteModeClass = $remoteTunnelState === 'online' ? 'is-on' : ($remoteTunnelState === 'starting' ? 'is-info' : 'is-off');
+$remoteModeIcon = $remoteTunnelState === 'online' ? 'bi-globe2' : ($remoteTunnelState === 'starting' ? 'bi-arrow-repeat' : 'bi-cloud-slash');
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform-settings.css') ?: 1;
 $storeSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/store-settings.css') ?: 1;
@@ -427,134 +445,154 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
             </form>
         </section>
 
-        <section class="dashboard-section" data-platform-section="remote-access" aria-labelledby="tunnel-heading"<?= $activePlatformSection !== 'remote-access' ? ' hidden' : '' ?>>
+        <section class="dashboard-section remote-access-section" data-platform-section="remote-access" aria-labelledby="tunnel-heading"<?= $activePlatformSection !== 'remote-access' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="tunnel-heading"><span class="settings-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span> Remote Access</h2>
                 <span id="remote-mode-pill" class="platform-settings-pill <?= $remoteModeClass ?>"><i id="remote-mode-icon" class="bi <?= $remoteModeIcon ?>" aria-hidden="true"></i> <span id="remote-mode-label"><?= $remoteModeLabel ?></span></span>
             </div>
 
-            <div class="settings-meta">
-                <div class="settings-meta-item">
-                    <span class="settings-meta-label">Public URL</span>
-                    <span id="tunnel-public-url" class="settings-meta-value"><?= !empty($tunnelStatus['url']) ? htmlspecialchars((string)$tunnelStatus['url']) : 'Tunnel is offline' ?></span>
-                </div>
-            </div>
-
-            <div class="remote-switch-panel">
-                <div class="remote-switch-info">
-                    <div class="remote-icon-badge" aria-hidden="true">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <label for="remote-access-toggle" class="remote-toggle-title">Cloudflare Tunnel</label>
-                        <span id="remote-toggle-status-text" class="remote-toggle-sub">
-                            <?= $remoteTunnelState === 'online' ? 'Active &amp; encrypted' : ($remoteTunnelState === 'starting' ? 'Connecting...' : 'Disabled') ?>
-                        </span>
-                    </div>
-                </div>
+            <div class="remote-connection-row">
                 <div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="remote-access-toggle" role="switch" <?= $remoteTunnelState !== 'offline' ? 'checked' : '' ?> aria-checked="<?= $remoteTunnelState !== 'offline' ? 'true' : 'false' ?>" aria-label="Toggle Remote Access Tunnel">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <span class="remote-field-label">Installed provider</span>
+                    <strong id="remote-active-provider"><?= htmlspecialchars($remoteProviderLabel) ?></strong>
+                    <span id="remote-toggle-status-text" class="remote-toggle-sub"><?= $remoteTunnelState === 'online' ? 'Active &amp; encrypted' : ($remoteTunnelState === 'starting' ? 'Checking the public connection…' : 'Connection is stopped or unavailable') ?></span>
                 </div>
+                <label class="remote-enable-control" for="remote-access-toggle">
+                    <span>Enable connection</span>
+                    <span class="toggle-switch">
+                        <input type="checkbox" id="remote-access-toggle" role="switch" <?= $remoteTunnelState !== 'offline' ? 'checked' : '' ?> aria-checked="<?= $remoteTunnelState !== 'offline' ? 'true' : 'false' ?>" aria-label="Enable connection">
+                        <span class="toggle-slider"></span>
+                    </span>
+                </label>
             </div>
+            <div class="remote-public-link">
+                <span class="remote-field-label">Public link</span>
+                <div class="remote-link-row">
+                    <a id="tunnel-public-url" href="<?= $remotePublicUrl !== '' ? htmlspecialchars($remotePublicUrl) : '#' ?>" target="_blank" rel="noopener noreferrer"<?= $remotePublicUrl === '' ? ' hidden' : '' ?>><?= htmlspecialchars($remotePublicUrl) ?></a>
+                    <span id="remote-link-empty"<?= $remotePublicUrl !== '' ? ' hidden' : '' ?>>Run a setup script to create your public link.</span>
+                    <input type="hidden" id="remote-link-copy-value" value="<?= htmlspecialchars($remotePublicUrl) ?>">
+                    <button type="button" id="remote-copy-link" class="btn btn-secondary btn-sm" data-copy-target="remote-link-copy-value"<?= $remotePublicUrl === '' ? ' disabled' : '' ?>><i class="bi bi-copy" aria-hidden="true"></i> Copy link</button>
+                </div>
+                <p id="remote-link-note" class="remote-help"><?= $remoteTunnelState === 'online' ? 'Open this link from another device and sign in to RetailMind.' : ($remotePublicUrl !== '' ? 'Saved link. Public access has not been verified.' : 'Use ngrok Free now, or Cloudflare with your own domain.') ?></p>
+            </div>
+            <form method="post" class="remote-test-row">
+                <?= csrf_field() ?>
+                <button type="submit" name="action" value="test_tunnel_connection" class="btn btn-secondary">Test connection</button>
+                <span class="remote-help">Status refreshes automatically.</span>
+            </form>
             <div id="remote-access-feedback" class="remote-feedback" role="status" aria-live="polite"></div>
 
-            <form method="post" class="u-mt-2">
-                <?= csrf_field() ?>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="tunnel_token">Permanent token</label>
-                        <input type="password" id="tunnel_token" name="tunnel_token" autocomplete="off"
-                               value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>"
-                               placeholder="eyJh… from Cloudflare Zero Trust">
-                    </div>
-                    <div class="form-group">
-                        <label for="tunnel_hostname">Custom hostname (optional)</label>
-                        <input type="text" id="tunnel_hostname" name="tunnel_hostname" autocomplete="off"
-                               value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>"
-                               placeholder="supervisor.mystore.com">
-                    </div>
-                </div>
-                <div class="form-actions u-mt-1">
-                    <button type="submit" name="action" value="save_tunnel_token" class="btn btn-primary">Save token</button>
-                    <?php if (!empty($tunnelStatus['token_configured'])): ?>
-                        <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear token</button>
-                    <?php endif; ?>
-                </div>
+            <form method="get" class="remote-provider-tabs" role="group" aria-label="Remote Access provider setup">
+                <input type="hidden" name="section" value="remote-access">
+                <button type="submit" class="btn-quiet" name="provider" value="ngrok" data-remote-provider="ngrok" aria-pressed="<?= $remoteSetupProvider === 'ngrok' ? 'true' : 'false' ?>" aria-controls="remote-ngrok-panel">ngrok Free</button>
+                <button type="submit" class="btn-quiet" name="provider" value="permanent" data-remote-provider="permanent" aria-pressed="<?= $remoteSetupProvider === 'permanent' ? 'true' : 'false' ?>" aria-controls="remote-cloudflare-panel">Cloudflare</button>
             </form>
+            <p class="remote-help remote-provider-hint">Tabs show setup options. Run a script to change providers.</p>
 
-            <form method="post" class="u-mt-2">
-                <?= csrf_field() ?>
-                <div class="form-group">
-                    <label for="tunnel_url_notify_enabled" class="settings-check">
-                        <input type="checkbox" id="tunnel_url_notify_enabled" name="tunnel_url_notify_enabled" value="1"<?= $tunnelNotifyEnabled ? ' checked' : '' ?>>
-                        <span>Email admins when the URL changes</span>
-                    </label>
-                </div>
-                <div class="form-actions u-mt-1">
-                    <button type="submit" name="action" value="save_tunnel_notify" class="btn btn-primary">Save</button>
-                    <button type="submit" name="action" value="test_tunnel_notify" class="btn btn-secondary">Send test</button>
-                </div>
-            </form>
-
-            <div class="tunnel-setup">
-                <h3 class="tunnel-setup-heading">Cloudflare dashboard checklist</h3>
-                <ol class="tunnel-checklist">
-                    <li>Create a tunnel in Cloudflare Zero Trust &rarr; Networks &rarr; Tunnels.</li>
-                    <li>Add a public hostname that points to <code>http://127.0.0.1:<?= (int)$localAppPort ?></code>. This needs a domain you own.</li>
-                    <li>Create an owner-only Cloudflare Access policy for that hostname.</li>
-                    <li>Copy the tunnel token, save it above, then generate the Store PC setup block.</li>
-                </ol>
-
-                <?php if (!empty($tunnelStatus['token_configured'])): ?>
-                    <p class="tunnel-setup-note">Permanent mode uses the saved token and hostname. Re-run the block to repair the service or apply a changed token.</p>
-                    <?php if (empty($tunnelStatus['hostname'])): ?>
-                        <div class="tunnel-setup-warning" role="note">
-                            <strong>No custom hostname saved.</strong> The named tunnel can still run, but this card cannot show the public URL until you add one.
-                        </div>
-                    <?php endif; ?>
-                <?php else: ?>
-                    <div class="tunnel-setup-warning" role="note">
-                        <strong>Interim Quick Tunnel.</strong> No token is saved, so the generated block creates a Quick Tunnel.
-                        Its public URL changes every time the service restarts, and Cloudflare Access is not in front of it.
-                        RetailMind sign-in and each account's existing Workspace permissions still apply. Store Workspaces keep full localhost capabilities; the Super Administrator stays local-only. Save a token and hostname, then regenerate to upgrade.
-                    </div>
-                <?php endif; ?>
-
-                <form method="post" class="u-mt-2">
+            <div id="remote-ngrok-panel" data-remote-provider-panel="ngrok"<?= $remoteSetupProvider !== 'ngrok' ? ' hidden' : '' ?>>
+                <h3 class="remote-panel-title">Connect with ngrok Free</h3>
+                <p class="remote-help">No domain needed. Use the authtoken and assigned hostname from your Store’s ngrok account.</p>
+                <form method="post" class="remote-provider-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="generate_tunnel_setup_block">
+                    <input type="hidden" name="setup_mode" value="ngrok">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="ngrok_token">ngrok authtoken</label>
+                            <input type="password" id="ngrok_token" name="ngrok_token" autocomplete="new-password" maxlength="512" placeholder="Paste token to generate a setup script" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ngrok_hostname">Assigned free hostname</label>
+                            <input type="text" id="ngrok_hostname" name="ngrok_hostname" autocomplete="off" spellcheck="false" value="<?= htmlspecialchars($ngrokHostname) ?>" placeholder="your-name.ngrok-free.dev" required>
+                        </div>
+                    </div>
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-magic" aria-hidden="true"></i> Generate Store PC setup block</button>
+                        <button type="submit" class="btn btn-primary">Generate free setup block</button>
                     </div>
                 </form>
+                <p class="remote-help">Free plan: 1 GB outbound / 20,000 requests monthly. Browser warning applies.</p>
+                <details class="remote-details">
+                    <summary>Get your ngrok credentials</summary>
+                    <ol class="tunnel-checklist">
+                        <li>Create your Store’s account at <a href="https://dashboard.ngrok.com/signup" target="_blank" rel="noopener noreferrer">ngrok</a>.</li>
+                        <li>Copy only the authtoken, not the full command. Find your assigned hostname under Domains.</li>
+                        <li>Generate the script here, copy it, and run it in PowerShell as Administrator on this PC.</li>
+                    </ol>
+                </details>
+            </div>
 
-                <form method="post" class="u-mt-1">
+            <div id="remote-cloudflare-panel" data-remote-provider-panel="permanent"<?= $remoteSetupProvider !== 'permanent' ? ' hidden' : '' ?>>
+                <h3 class="remote-panel-title">Connect your own domain</h3>
+                <p class="remote-help">Use a Cloudflare Named Tunnel after your domain and hostname are ready. Saving these settings keeps the current connection running.</p>
+                <form method="post" class="remote-provider-form">
+                    <?= csrf_field() ?>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="tunnel_token">Cloudflare permanent token</label>
+                            <input type="password" id="tunnel_token" name="tunnel_token" autocomplete="off" value="<?= !empty($tunnelStatus['masked_token']) ? htmlspecialchars((string)$tunnelStatus['masked_token']) : '' ?>" placeholder="Paste Cloudflare tunnel token">
+                        </div>
+                        <div class="form-group">
+                            <label for="tunnel_hostname">Custom hostname</label>
+                            <input type="text" id="tunnel_hostname" name="tunnel_hostname" autocomplete="off" spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['hostname'] ?? '')) ?>" placeholder="remote.yourstore.com">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" name="action" value="save_tunnel_token" class="btn btn-secondary">Save Cloudflare settings</button>
+                        <?php if (!empty($tunnelStatus['token_configured'])): ?>
+                            <button type="submit" name="action" value="clear_tunnel_token" class="btn btn-secondary">Clear saved token</button>
+                        <?php endif; ?>
+                    </div>
+                </form>
+                <form method="post" class="remote-generate-cloudflare">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="generate_tunnel_setup_block">
+                    <input type="hidden" name="setup_mode" value="permanent">
+                    <button type="submit" class="btn btn-primary"<?= empty($tunnelStatus['token_configured']) || empty($tunnelStatus['hostname']) ? ' disabled' : '' ?>>Generate custom domain setup block</button>
+                </form>
+                <p class="remote-help">The script verifies Cloudflare before stopping ngrok. If verification fails, the previous setup is restored.</p>
+                <details class="remote-details">
+                    <summary>Cloudflare dashboard checklist</summary>
+                    <ol class="tunnel-checklist">
+                        <li>Add a domain you own to Cloudflare and create a Named Tunnel.</li>
+                        <li>Route your public hostname to <code>http://127.0.0.1:<?= (int)$localAppPort ?></code>.</li>
+                        <li>Copy the tunnel token and save it with the hostname above.</li>
+                        <li>Generate and run the setup script as Administrator. Share the new link after it passes verification.</li>
+                    </ol>
+                </details>
+            </div>
+
+            <?php if ($generatedTunnelBlock !== ''): ?>
+                <div class="tunnel-setup-result">
+                    <div class="tunnel-setup-result-heading">
+                        <h3 class="tunnel-setup-heading"><?= $generatedTunnelBlockType === 'removal' ? 'Remove Remote Access' : 'Run in PowerShell as Administrator' ?></h3>
+                        <button type="button" class="btn btn-secondary btn-sm" data-copy-target="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>">Copy block</button>
+                    </div>
+                    <p class="remote-help">This script may contain your token. Keep it private.</p>
+                    <textarea id="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>" class="tunnel-setup-block" readonly spellcheck="false" aria-label="<?= $generatedTunnelBlockType === 'removal' ? 'Remote Access removal PowerShell block' : 'Store PC Remote Access setup PowerShell block' ?>"><?= htmlspecialchars($generatedTunnelBlock) ?></textarea>
+                </div>
+            <?php endif; ?>
+
+            <p class="remote-operating-note">RetailMind login and role permissions protect Store access. Keep this PC, Apache, the database, and internet running during store hours.</p>
+            <details class="remote-details remote-maintenance">
+                <summary>Email alerts and removal</summary>
+                <form method="post">
+                    <?= csrf_field() ?>
+                    <label for="tunnel_url_notify_enabled" class="settings-check">
+                        <input type="checkbox" id="tunnel_url_notify_enabled" name="tunnel_url_notify_enabled" value="1"<?= $tunnelNotifyEnabled ? ' checked' : '' ?>>
+                        <span>Email admins when the public link changes</span>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" name="action" value="save_tunnel_notify" class="btn btn-secondary">Save alerts</button>
+                        <button type="submit" name="action" value="test_tunnel_notify" class="btn btn-secondary">Send test email</button>
+                    </div>
+                </form>
+                <form method="post" class="remote-removal-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="generate_tunnel_removal_block">
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-secondary"><i class="bi bi-trash3" aria-hidden="true"></i> Generate removal block</button>
-                    </div>
+                    <button type="submit" class="btn btn-secondary">Generate removal block</button>
+                    <p class="remote-help">Removes this PC’s tunnel services. Your application and Store data are kept.</p>
                 </form>
-
-                <?php if ($generatedTunnelBlock !== ''): ?>
-                    <div class="tunnel-setup-result">
-                        <div class="tunnel-setup-result-heading">
-                            <h3 class="tunnel-setup-heading">
-                                <?= $generatedTunnelBlockType === 'removal' ? 'Remove Remote Access' : 'Run once in an elevated PowerShell' ?>
-                            </h3>
-                            <button type="button" class="btn btn-secondary btn-sm" data-copy-target="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>">Copy block</button>
-                        </div>
-                        <textarea id="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>" class="tunnel-setup-block" readonly spellcheck="false" aria-label="<?= $generatedTunnelBlockType === 'removal' ? 'Remote Access removal PowerShell block' : 'Store PC Remote Access setup PowerShell block' ?>"><?= htmlspecialchars($generatedTunnelBlock) ?></textarea>
-                    </div>
-                <?php endif; ?>
-            </div>
+            </details>
         </section>
 
         </div>
@@ -579,19 +617,27 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                 return;
             }
             const previous = button.textContent;
+            let copyField = target;
             try {
                 if (navigator.clipboard && window.isSecureContext) {
                     await navigator.clipboard.writeText(target.value);
                 } else {
-                    target.focus();
-                    target.select();
+                    if (target.type === 'hidden') {
+                        copyField = document.createElement('textarea');
+                        copyField.value = target.value;
+                        copyField.className = 'remote-copy-buffer';
+                        document.body.append(copyField);
+                    }
+                    copyField.focus();
+                    copyField.select();
                     document.execCommand('copy');
                 }
                 button.textContent = 'Copied!';
                 setTimeout(() => { button.textContent = previous; }, 2000);
             } catch (error) {
-                target.focus();
-                target.select();
+                if (target.type !== 'hidden') { target.focus(); target.select(); }
+            } finally {
+                if (copyField !== target) { copyField.remove(); }
             }
         });
     });
@@ -601,8 +647,11 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
     'apiUrl' => app_url('components/administrator/remote_access_api.php'),
     'csrfToken' => csrf_token(),
     'permanent' => !empty($tunnelStatus['token_configured']),
+    'mode' => $tunnelStatus['mode'] ?? 'quick',
+    'installed' => !empty($tunnelStatus['installed']),
+    'configuredUrl' => $remotePublicUrl,
     'state' => $remoteTunnelState,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?></script>
-<script src="<?= htmlspecialchars(app_url('assets/js/remote-access-toggle.js')) ?>"></script>
+<script src="<?= htmlspecialchars(theme_url('assets/js/remote-access-toggle.js')) ?>"></script>
 </body>
 </html>

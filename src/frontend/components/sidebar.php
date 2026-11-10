@@ -163,8 +163,8 @@ function sidebar_render_remote_access_pill(string $idSuffix = 'desktop', ?string
     $statusText = $isOnline ? ($hasUrl ? 'Online' : 'Connecting') : 'Offline';
     $pillLabel = $isOnline ? ($hasUrl ? 'Remote Online' : 'Connecting...') : 'Remote Offline';
     $descText = $isOnline
-        ? ($hasUrl ? 'Cloudflare Zero Trust tunnel is active. Authorized supervisors can access real-time store monitoring.' : 'Tunnel is active. Resolving secure public URL...')
-        : 'Remote monitoring is offline. Local Store PC checkout and operations run normally.';
+        ? ($hasUrl ? 'Public access is verified through the Store tunnel. RetailMind sign-in and Workspace permissions apply.' : 'Tunnel is active. Resolving secure public URL...')
+        : 'Remote access is offline. Local Store PC checkout and operations run normally.';
     $apiUrl = app_url('components/administrator/remote_access_api.php');
     $canManage = in_array($role, ['admin', 'super_admin'], true);
     $settingsUrl = app_url('components/administrator/store_settings.php?section=remote-access');

@@ -108,6 +108,8 @@ components:
 
 # Design System: RetailMind
 
+Remote Access now uses separate ngrok Free and Cloudflare setup views beneath a persistent installed-provider, status and public-link area. Guides and maintenance use native disclosures; setup view selection does not switch the running provider. See the [Remote Access surface brief](../.impeccable/surfaces/remote-access.md) for verification and remaining deployment checks. Existing visual identity and global tokens are unchanged.
+
 ## Overview
 
 **Creative North Star: "The Working Stockroom"**

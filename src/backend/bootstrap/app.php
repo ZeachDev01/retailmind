@@ -247,6 +247,13 @@ if (!function_exists('is_tunnel_host')) {
                 return true;
             }
         }
+        $installation = json_decode((string)@file_get_contents(dirname(__DIR__) . '/storage/tunnel/active_tunnel.json'), true);
+        if (is_array($installation) && ($installation['mode'] ?? '') === 'permanent') {
+            $configuredHost = parse_url((string)($installation['url'] ?? ''), PHP_URL_HOST);
+            if (is_string($configuredHost) && $host === strtolower($configuredHost)) {
+                return true;
+            }
+        }
         return false;
     }
 }

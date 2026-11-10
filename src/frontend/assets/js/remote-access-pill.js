@@ -21,7 +21,7 @@
             const pillLabel = isOnline ? (hasUrl ? 'Remote Online' : 'Remote Connecting') : 'Remote Offline';
             const publicUrl = isOnline && hasUrl ? status.url.trim() : '';
             const descText = isOnline
-                ? (hasUrl ? 'Public access is active through Cloudflare Tunnel.' : 'Tunnel is active. Resolving public URL...')
+                ? (hasUrl ? 'Public access is verified through the Store tunnel.' : 'Tunnel is active. Resolving public URL...')
                 : 'Remote access is currently offline.';
 
             wrappers.forEach(wrapper => {
@@ -78,7 +78,7 @@
                     }
                 }
             } catch (_) {
-                // Silently ignore network failures; existing status remains displayed
+                updateAllPills({online: false});
             }
         }
 

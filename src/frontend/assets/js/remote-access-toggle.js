@@ -10,11 +10,32 @@
     const modePill = document.getElementById('remote-mode-pill');
     const modeLabel = document.getElementById('remote-mode-label');
     const modeIcon = document.getElementById('remote-mode-icon');
+    const providerText = document.getElementById('remote-active-provider');
+    const linkValue = document.getElementById('remote-link-copy-value');
+    const copyLink = document.getElementById('remote-copy-link');
+    const linkEmpty = document.getElementById('remote-link-empty');
+    const linkNote = document.getElementById('remote-link-note');
     const configNode = document.getElementById('remote-access-toggle-config');
     const config = configNode ? JSON.parse(configNode.textContent || '{}') : {};
     const csrfToken = config.csrfToken || '';
     const apiUrl = config.apiUrl || '';
     const permanentMode = Boolean(config.permanent);
+    let activeMode = config.installed === false ? 'none' : (config.mode || (permanentMode ? 'permanent' : 'quick'));
+    let savedUrl = config.configuredUrl || '';
+
+    const providerButtons = document.querySelectorAll('[data-remote-provider]');
+    const providerPanels = document.querySelectorAll('[data-remote-provider-panel]');
+    providerButtons.forEach(button => button.addEventListener('click', event => {
+        event.preventDefault();
+        const selected = button.getAttribute('data-remote-provider');
+        providerButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+        providerPanels.forEach(panel => { panel.hidden = panel.getAttribute('data-remote-provider-panel') !== selected; });
+        if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('provider', selected);
+            window.history.replaceState(null, '', url);
+        }
+    }));
 
     let pollTimer = null;
     let pollInFlight = false;
@@ -28,13 +49,16 @@
     }
 
     function setBadge(state) {
+        if (providerText) {
+            providerText.textContent = activeMode === 'none' ? 'Not set up' : (activeMode === 'ngrok' ? 'ngrok Free' : (activeMode === 'permanent' ? 'Cloudflare' : 'Cloudflare Quick Tunnel'));
+        }
         if (!modePill) {
             return;
         }
         modePill.classList.remove('is-on', 'is-off', 'is-info');
         if (state === 'online') {
             modePill.classList.add('is-on');
-            modeLabel.textContent = permanentMode ? 'Custom domain' : 'Quick tunnel';
+            modeLabel.textContent = 'Online';
             modeIcon.className = 'bi bi-globe2';
         } else if (state === 'starting') {
             modePill.classList.add('is-info');
@@ -47,22 +71,27 @@
         }
     }
 
-    function setState(state, url) {
+    function setState(state, url, configuredUrl) {
+        savedUrl = configuredUrl || url || savedUrl;
         toggle.checked = state !== 'offline';
         toggle.setAttribute('aria-checked', state === 'offline' ? 'false' : 'true');
         if (statusText) {
             statusText.textContent = state === 'online'
                 ? 'Active & encrypted'
-                : (state === 'starting' ? 'Connecting...' : 'Disabled');
+                : (state === 'starting' ? 'Checking the public connection…' : 'Connection is stopped or unavailable');
         }
         setBadge(state);
         if (publicUrl) {
-            if (url) {
-                publicUrl.textContent = url;
-            } else if (state === 'offline') {
-                publicUrl.textContent = 'Tunnel is offline';
-            }
+            publicUrl.textContent = savedUrl;
+            publicUrl.href = savedUrl || '#';
+            publicUrl.hidden = !savedUrl;
         }
+        if (linkValue) linkValue.value = savedUrl;
+        if (copyLink) copyLink.disabled = !savedUrl;
+        if (linkEmpty) linkEmpty.hidden = Boolean(savedUrl);
+        if (linkNote) linkNote.textContent = state === 'online'
+            ? 'Open this link from another device and sign in to RetailMind.'
+            : (savedUrl ? 'Saved link. Public access has not been verified.' : 'Use ngrok Free now, or Cloudflare with your own domain.');
     }
 
     function setFeedback(message, isError) {
@@ -101,10 +130,11 @@
     }
 
     function renderOnline(data) {
+        activeMode = data.installed === false ? 'none' : (data.mode || activeMode);
         toggle.disabled = false;
         confirmState('online');
-        setState('online', data.url);
-        setFeedback('Remote access tunnel is active and ready.');
+        setState('online', data.url, data.configured_url);
+        setFeedback('');
     }
 
     function pollStatus(generation) {
@@ -137,12 +167,12 @@
                 if (data && data.success && data.status === 'online' && data.url) {
                     stopPolling();
                     renderOnline(data);
-                } else if (data && data.success && !data.online) {
+                } else if (data && data.success && data.status === 'offline') {
                     stopPolling();
                     toggle.disabled = false;
                     confirmState('offline');
                     setState('offline');
-                    setFeedback('Tunnel terminated unexpectedly.', true);
+                    setFeedback('The connection is not running. Enable it or run its setup script.', true);
                 }
             } catch (error) {
                 // Ignore transient network errors while polling.
@@ -202,7 +232,7 @@
             }
             setBadge('starting');
         }
-        setFeedback(shouldStart ? 'Starting portable tunnel daemon...' : 'Stopping tunnel daemon...');
+        setFeedback(shouldStart ? 'Starting the connection…' : 'Stopping the connection…');
 
         try {
             const data = await request(shouldStart ? 'start' : 'stop');
@@ -231,9 +261,10 @@
                 }
             } else {
                 toggle.disabled = false;
-                confirmState('offline');
-                setState('offline');
-                setFeedback('Remote access tunnel stopped.');
+                const state = data.status || 'offline';
+                confirmState(state);
+                setState(state, data.url, data.configured_url);
+                setFeedback(state === 'offline' ? 'Remote access tunnel stopped.' : 'The connection is still stopping. Its status will refresh.');
             }
         } catch (error) {
             if (!isCurrent(generation)) {
@@ -249,4 +280,22 @@
         toggle.disabled = true;
         pollStatus(operation);
     }
+    setInterval(async () => {
+        if (toggle.disabled || pollInFlight || document.visibilityState === 'hidden') return;
+        const generation = operation;
+        pollInFlight = true;
+        try {
+            const data = await request(null);
+            if (!isCurrent(generation) || !data || !data.success) return;
+            activeMode = data.installed === false ? 'none' : (data.mode || activeMode);
+            confirmState(data.status);
+            setState(data.status, data.url, data.configured_url);
+            setFeedback('');
+        } catch (_) {
+            if (isCurrent(generation)) {
+                setState('starting');
+                setFeedback('Connection status unavailable. Test the connection again.', true);
+            }
+        } finally { pollInFlight = false; }
+    }, 30000);
 })();

@@ -58,13 +58,13 @@ try {
                 notify_tunnel_url_change($pdo, (string)$result['url']);
                 $result['qr_svg'] = $qrService->generateSvg($result['url']);
             }
-            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
+            echo json_encode(['success' => empty($result['error'])] + $result, JSON_UNESCAPED_SLASHES);
             exit;
         }
 
         if ($action === 'stop') {
             $result = $service->stop();
-            echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);
+            echo json_encode(['success' => empty($result['error'])] + $result, JSON_UNESCAPED_SLASHES);
             exit;
         }
 
@@ -100,6 +100,8 @@ try {
         }
 
         if ($action === 'save_token') {
+            require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+            require_local_request();
             $token = trim((string)($input['token'] ?? ($_POST['token'] ?? '')));
             $hostname = trim((string)($input['hostname'] ?? ($_POST['hostname'] ?? '')));
             if ($token === '') {
@@ -113,6 +115,8 @@ try {
         }
 
         if ($action === 'clear_token') {
+            require_capability(\App\Authorization\RoleCapabilityPolicy::PLATFORM_GOVERNANCE);
+            require_local_request();
             $service->clearToken();
             $result = $service->getStatus();
             echo json_encode(['success' => true] + $result, JSON_UNESCAPED_SLASHES);

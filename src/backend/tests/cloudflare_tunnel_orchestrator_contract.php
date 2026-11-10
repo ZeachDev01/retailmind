@@ -93,6 +93,8 @@ if (class_exists($serviceClass)) {
     @mkdir($simulatedRunDir, 0777, true);
 
     $simService = new $serviceClass($tempDir, $simulatedBinDir, $simulatedRunDir);
+    $simService->setHealthChecker(static fn(string $url): bool => true);
+    $simService->setProcessChecker(static fn(int $pid): bool => false);
 
     // Initial state: offline
     $status0 = $simService->getStatus();

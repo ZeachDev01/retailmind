@@ -2,6 +2,8 @@
 
 Quick 5-minute setup guide to configure a permanent Cloudflare Zero Trust tunnel with resilient Windows Service persistence for RetailMind on dedicated Store PCs.
 
+For the current **free ngrok demo → optional Cloudflare custom domain** flow, follow [Store PC setup](guides/STORE_PC_TUNNEL_SETUP.md). Use the generated Remote Access blocks for verification and rollback; the manual Cloudflare reference below assumes a domain is already available. See [ADR-0031](adr/0031-free-ngrok-demo-with-cloudflare-domain-upgrade.md).
+
 ---
 
 ## Overview

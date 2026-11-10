@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "sfmono-regular",
+        "createdAt": "2026-11-10T13:23:15.680Z",
+        "reason": "Agent: existing PowerShell setup textarea displays literal code using a monospace fallback; interface typography remains the RetailMind system font."
+      }
+    ]
+  }
+}

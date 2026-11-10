@@ -44,18 +44,19 @@ $permanent = $builder->buildSetupBlock([
 $assert(str_contains($permanent, 'PERMANENT named Cloudflare Tunnel'), 'Permanent block is labelled as a permanent named tunnel');
 $assert(str_contains($permanent, "C:\\Store PC\\retailmind"), 'Permanent block embeds the resolved application root');
 $assert(str_contains($permanent, '$localPort = 8080'), 'Permanent block embeds the configured local port');
-$assert(str_contains($permanent, "service_install.ps1"), 'Permanent block invokes the existing tunnel installer');
+$assert(str_contains($permanent, "service_setup.ps1"), 'Permanent block invokes the verified tunnel installer');
 $assert(str_contains($permanent, '-Mode Permanent'), 'Permanent block selects permanent installer mode');
 $assert(str_contains($permanent, '-Hostname \'supervisor.mystore.com\''), 'Permanent block passes the saved hostname');
 $assert(str_contains($permanent, '-Token \'' . $permanentToken . '\''), 'Permanent block passes the saved token once');
 $assert(substr_count($permanent, $permanentToken) === 1, 'Raw token appears exactly once in the generated block');
 $assert(str_contains($permanent, 'RetailMindCloudflareTunnel'), 'Permanent block names the shared Windows Service');
 $assert(str_contains($permanent, 'sc.exe query'), 'Permanent block prints the resulting service state');
+$assert(str_contains(str_replace("\r\n", "\n", $permanent), "\n& {\n") && str_ends_with(trim($permanent), '}'), 'The pasted setup runs as one script block so installer failure stops subsequent commands');
 $assert(str_contains($permanent, 'IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'), 'Permanent block requires an elevated PowerShell');
 $assert(str_contains($permanent, 'Is64BitOperatingSystem'), 'Permanent block requires 64-bit Windows');
 $assert(str_contains($permanent, "ConnectAsync('1.1.1.1', 443)"), 'Permanent block checks internet access');
 $assert(str_contains($permanent, "ConnectAsync('127.0.0.1', \$localPort)"), 'Permanent block checks the local RetailMind origin');
-$assert(str_contains($permanent, 'scripts/tunnel/service_install.ps1'), 'Permanent block uses the existing installer path');
+$assert(str_contains($permanent, 'src/backend/scripts/tunnel/service_setup.ps1'), 'Permanent block uses the verified installer path');
 $assert(!str_contains($permanent, '--url'), 'Permanent block does not create a Quick Tunnel');
 
 echo "\n=== 2. Interim Quick Tunnel block ===\n";
@@ -128,20 +129,20 @@ $assert(str_contains($removal, 'IsInRole([Security.Principal.WindowsBuiltInRole]
 
 echo "\n=== 5. Installer and removal script contracts ===\n";
 
-$installerPath = $root . '/src/backend/scripts/tunnel/service_install.ps1';
+$installerPath = $root . '/src/backend/scripts/tunnel/service_setup.ps1';
 $uninstallerPath = $root . '/src/backend/scripts/tunnel/service_uninstall.ps1';
 $assert(file_exists($installerPath), 'service_install.ps1 exists');
 $assert(file_exists($uninstallerPath), 'service_uninstall.ps1 exists');
 
 $installer = file_get_contents($installerPath);
-$assert(str_contains($installer, '[ValidateSet("Permanent", "Quick", "Auto")]'), 'Installer exposes Permanent, Quick, and Auto modes');
-$assert(str_contains($installer, '[string]$Mode = "Permanent"'), 'Installer defaults to Permanent so tokenless manual runs still fail safely');
+$assert(str_contains($installer, "[ValidateSet('Permanent', 'Quick', 'Ngrok')]"), 'Installer exposes permanent, Quick, and ngrok modes');
+$assert(str_contains($installer, "[string]\$Mode = 'Permanent'"), 'Installer defaults to Permanent so tokenless manual runs still fail safely');
 $assert(str_contains($installer, '[string]$Hostname'), 'Installer accepts a hostname');
 $assert(str_contains($installer, '[int]$Port = 80'), 'Installer accepts a local port');
 $assert(str_contains($installer, 'tunnel --url http://127.0.0.1:$Port'), 'Installer creates a Quick Tunnel in Quick mode');
-$assert(str_contains($installer, 'run --token $activeToken'), 'Installer creates a permanent named tunnel with a token');
-$assert(str_contains($installer, 'start= auto'), 'Installer sets automatic boot startup');
-$assert(str_contains($installer, 'sc.exe failure'), 'Installer configures crash restart actions');
+$assert(str_contains($installer, 'run --token-file'), 'Installer keeps permanent credentials out of the service command line');
+$assert(str_contains($installer, "'start=', 'auto'"), 'Installer sets automatic boot startup');
+$assert(str_contains($installer, "'failure'") && str_contains($installer, 'restart/5000'), 'Installer configures crash restart actions');
 $assert(str_contains($installer, 'RetailMindQuickTunnel'), 'Installer removes the legacy Quick Tunnel task');
 $assert(str_contains($installer, '--logfile'), 'Installer writes tunnel logs used by the status card');
 
@@ -168,7 +169,7 @@ $assert(!preg_match("/log_activity\([^;]*'token'/s", $settings), 'Audit record e
 $assert(str_contains($settings, "masked_token"), 'Card displays only the masked token by default');
 $assert(str_contains($settings, 'Cloudflare dashboard checklist'), 'Card shows the Cloudflare dashboard checklist');
 $assert(str_contains($settings, 'Interim Quick Tunnel'), 'Card labels Quick Tunnel mode as interim');
-$assert(str_contains($settings, 'Cloudflare Access is not in front of it'), 'Card states the Quick Tunnel lacks Cloudflare Access');
+$assert(str_contains($settings, 'RetailMind login and role permissions protect Store access'), 'Card explains the free demo access boundary');
 $assert(str_contains($settings, 'http://127.0.0.1:<?= (int)$localAppPort ?>'), 'Checklist points at the configured local origin');
 $assert(str_contains($settings, 'id="tunnel-setup-block"') || str_contains($settings, "'tunnel-setup-block'"), 'Generated setup block has a copyable element');
 $assert(str_contains($settings, 'navigator.clipboard'), 'Generated block supports clipboard copy');

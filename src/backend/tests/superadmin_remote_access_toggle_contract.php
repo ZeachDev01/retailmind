@@ -33,7 +33,8 @@ $script = file_exists($scriptFile) ? (string)file_get_contents($scriptFile) : ''
 
 $assert(str_contains($settings, 'id="remote-access-toggle"'), 'Platform Settings has the Remote Access toggle switch');
 $assert(str_contains($settings, 'role="switch"'), 'Remote Access toggle exposes the switch role');
-$assert(str_contains($settings, 'Cloudflare Tunnel'), 'Toggle is labelled Cloudflare Tunnel');
+$assert(str_contains($settings, 'remote-active-provider'), 'Installed provider has its own persistent label');
+$assert(str_contains($settings, 'data-remote-provider="ngrok"') && str_contains($settings, 'data-remote-provider="permanent"'), 'Provider setup uses separate ngrok and Cloudflare views');
 $assert(str_contains($settings, 'Active &amp; encrypted'), 'Toggle shows the Active & encrypted state copy');
 $assert(str_contains($settings, 'remote-toggle-status-text'), 'Toggle has live state text');
 $assert(str_contains($settings, 'remote-access-feedback'), 'Toggle has an aria-live feedback region');

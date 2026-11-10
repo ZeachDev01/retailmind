@@ -36,6 +36,25 @@ class CloudflareTunnelService
     /** @var callable|null */
     private $processKiller = null;
 
+    private $healthChecker = null;
+
+    public function setHealthChecker(?callable $checker): self
+    {
+        $this->healthChecker = $checker;
+        return $this;
+    }
+
+    public function getInstallation(): array
+    {
+        $data = json_decode((string)@file_get_contents($this->runDir . '/active_tunnel.json'), true);
+        return is_array($data) ? $data : [];
+    }
+
+    public function getActiveMode(): string
+    {
+        return (string)($this->getInstallation()['mode'] ?? ($this->isPermanent() ? 'permanent' : 'quick'));
+    }
+
     public function __construct(
         ?string $rootDir = null,
         ?string $binDir = null,
@@ -189,6 +208,14 @@ class CloudflareTunnelService
         if ($token === '') {
             return $this->clearToken();
         }
+        if (strlen($token) > 4096 || preg_match('/^[a-zA-Z0-9_=+\/-]+$/D', $token) !== 1) {
+            throw new \InvalidArgumentException('Enter a valid Cloudflare tunnel token.');
+        }
+        if ($hostname !== null && trim($hostname) !== ''
+            && (filter_var($hostname, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
+                || !str_contains($hostname, '.'))) {
+            throw new \InvalidArgumentException('Enter the hostname only, for example remote.store.com.');
+        }
 
         if (!is_dir($this->runDir)) {
             if (!@mkdir($this->runDir, 0755, true) && !is_dir($this->runDir)) {
@@ -274,6 +301,9 @@ class CloudflareTunnelService
 
     public function isBinaryInstalled(): bool
     {
+        if ($this->getActiveMode() === 'ngrok') {
+            return is_file($this->binDir . '/ngrok.exe');
+        }
         return file_exists($this->binPath) && filesize($this->binPath) > 0;
     }
 
@@ -405,6 +435,9 @@ class CloudflareTunnelService
 
     public function isRunning(): bool
     {
+        if ($this->getInstallation() !== []) {
+            return $this->isWindowsServiceRunning($this->getActiveMode() === 'ngrok' ? 'ngrok' : 'RetailMindCloudflareTunnel');
+        }
         $pid = $this->getPid();
         if ($pid !== null) {
             if ($this->isPidRunning($pid)) {
@@ -413,7 +446,7 @@ class CloudflareTunnelService
             $this->cleanState();
         }
 
-        if ($this->isWindowsServiceRunning()) {
+        if ($this->processChecker === null && $this->isWindowsServiceRunning()) {
             return true;
         }
 
@@ -492,6 +525,11 @@ class CloudflareTunnelService
             return null;
         }
 
+        $installedUrl = $this->getInstallation()['url'] ?? null;
+        if (is_string($installedUrl) && $installedUrl !== '') {
+            return $installedUrl;
+        }
+
         if ($this->isPermanent()) {
             $hostname = $this->getHostname();
             if ($hostname !== null && $hostname !== '') {
@@ -517,27 +555,88 @@ class CloudflareTunnelService
         return null;
     }
 
-    public function getStatus(): array
+    public function isPublicUrlReachable(string $url, bool $force = false): bool
+    {
+        if ($this->healthChecker !== null) {
+            return (bool)($this->healthChecker)($url);
+        }
+        $parts = parse_url($url);
+        if (($parts['scheme'] ?? '') !== 'https' || empty($parts['host'])
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['port'])
+            || filter_var($parts['host'], FILTER_VALIDATE_IP)
+            || !str_contains($parts['host'], '.')) {
+            return false;
+        }
+        $marker = trim((string)@file_get_contents($this->runDir . '/health.id'));
+        if (!preg_match('/^[a-f0-9]{32}$/D', $marker)) {
+            return false;
+        }
+        $path = (string)($this->getInstallation()['health_path'] ?? (function_exists('app_url') ? app_url('remote_health.php') : '/' . basename($this->rootDir) . '/src/frontend/remote_health.php'));
+        if (!str_starts_with($path, '/') || str_starts_with($path, '//') || str_contains($path, '?')) {
+            return false;
+        }
+        $cachePath = $this->runDir . '/health.json';
+        $cache = json_decode((string)@file_get_contents($cachePath), true);
+        // shortcut: status can lag by 60 seconds to limit free-plan probe traffic; use Test connection for a fresh check.
+        if (!$force && is_array($cache) && ($cache['url'] ?? '') === $url . $path
+            && ($cache['checked_at'] ?? 0) > time() - 60) {
+            return !empty($cache['reachable']);
+        }
+        $reachable = false;
+        if (function_exists('curl_init')) {
+            $addresses = @gethostbynamel($parts['host']) ?: [];
+            if ($addresses === [] || array_filter($addresses, static fn(string $ip): bool => filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false)) {
+                return false;
+            }
+            $ch = curl_init('https://' . $parts['host'] . $path);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_TIMEOUT => 4,
+                CURLOPT_PROXY => '',
+                CURLOPT_RESOLVE => [$parts['host'] . ':443:' . $addresses[0]],
+                CURLOPT_HTTPHEADER => ['ngrok-skip-browser-warning: 1', 'Cache-Control: no-cache'],
+            ]);
+            if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA')) {
+                curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+            }
+            $body = curl_exec($ch);
+            $reachable = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) === 200
+                && is_string($body) && hash_equals('RetailMind:' . $marker, trim($body));
+            curl_close($ch);
+        }
+        @file_put_contents($cachePath, json_encode(['url' => $url . $path, 'reachable' => $reachable, 'checked_at' => time()]), LOCK_EX);
+        return $reachable;
+    }
+
+    public function getStatus(bool $forceHealthCheck = false): array
     {
         $running = $this->isRunning();
         $pid = $running ? $this->getPid() : null;
-        $url = $running ? $this->getUrl() : null;
-
-        $state = 'offline';
-        if ($running) {
-            $state = $url !== null ? 'online' : 'starting';
+        $url = ($running ? $this->getUrl() : null) ?? ($this->getInstallation()['url'] ?? null);
+        $reachable = $url !== null && $this->isPublicUrlReachable($url, $forceHealthCheck);
+        $publicAppUrl = $url;
+        $healthPath = $this->getInstallation()['health_path'] ?? null;
+        if ($url !== null && is_string($healthPath)) {
+            $publicAppUrl = rtrim($url, '/') . rtrim(str_replace('\\', '/', dirname($healthPath)), '/') . '/';
         }
+
+        $state = $reachable ? 'online' : ($running ? 'starting' : 'offline');
 
         $isPerm = $this->isPermanent();
 
         return [
             'status' => $state,
-            'online' => $running,
-            'url' => $url,
+            'online' => $reachable,
+            'running' => $running,
+            'installed' => $this->getInstallation() !== [] || $running,
+            'url' => $reachable ? $publicAppUrl : null,
+            'configured_url' => $publicAppUrl,
             'pid' => $pid,
             'binary_installed' => $this->isBinaryInstalled(),
-            'local_server_available' => $this->isLocalServerAvailable(),
-            'mode' => $isPerm ? 'permanent' : 'quick',
+            'local_server_available' => $this->isLocalServerAvailable((int)($this->getInstallation()['port'] ?? $this->defaultPort)),
+            'mode' => $this->getActiveMode(),
             'token_configured' => $isPerm,
             'masked_token' => $this->getMaskedToken(),
             'hostname' => $this->getHostname(),
@@ -546,6 +645,9 @@ class CloudflareTunnelService
 
     public function start(?int $port = null, int $waitUrlSeconds = 3): array
     {
+        if ($this->getInstallation() !== []) {
+            return $this->controlInstalledService('start');
+        }
         if ($this->isRunning()) {
             return $this->getStatus();
         }
@@ -653,6 +755,9 @@ class CloudflareTunnelService
 
     public function stop(): array
     {
+        if ($this->getInstallation() !== [] || ($this->processChecker === null && $this->isWindowsServiceRunning())) {
+            return $this->controlInstalledService('stop');
+        }
         $pid = $this->getPid();
         if ($pid !== null && $this->isPidRunning($pid)) {
             if ($this->processKiller !== null) {
@@ -664,6 +769,23 @@ class CloudflareTunnelService
 
         $this->cleanState();
         return $this->getStatus();
+    }
+
+    private function controlInstalledService(string $action): array
+    {
+        $name = $this->getActiveMode() === 'ngrok' ? 'ngrok' : 'RetailMindCloudflareTunnel';
+        $output = [];
+        @exec('sc.exe ' . $action . ' ' . escapeshellarg($name) . ' 2>NUL', $output, $code);
+        @unlink($this->runDir . '/health.json');
+        $result = $this->getStatus(true);
+        if ($action === 'start' && $code === 0 && !$result['online']) {
+            $result['status'] = 'starting';
+        }
+        if ($code !== 0 && !($action === 'start' && $this->isWindowsServiceRunning($name))
+            && !($action === 'stop' && !$this->isWindowsServiceRunning($name))) {
+            $result['error'] = 'Windows could not control the tunnel service. Run the setup block in PowerShell as Administrator.';
+        }
+        return $result;
     }
 
     private function launchProcess(string $binPath, array $args): ?int

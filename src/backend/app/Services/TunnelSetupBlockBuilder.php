@@ -31,14 +31,29 @@ final class TunnelSetupBlockBuilder
         $token = trim((string)($input['token'] ?? ''));
         $hostname = trim((string)($input['hostname'] ?? ''));
         $mode = $this->mode($token, (string)($input['mode'] ?? ''));
+        $healthPath = (string)($input['health_path'] ?? '/' . basename(str_replace('\\', '/', $root)) . '/src/frontend/remote_health.php');
+        if (!preg_match('#^/[a-zA-Z0-9_./% -]+$#D', $healthPath) || str_contains($healthPath, '..')) {
+            throw new \InvalidArgumentException('Invalid application health path.');
+        }
+        if ($mode === 'ngrok' && (strlen($token) > 512 || !preg_match('/^[a-zA-Z0-9_]+$/D', $token)
+            || !preg_match('/^[a-zA-Z0-9-]+\.ngrok-free\.(app|dev)$/D', $hostname))) {
+            throw new \InvalidArgumentException('Enter the ngrok authtoken and assigned ngrok-free.app or ngrok-free.dev hostname.');
+        }
 
         $rootLiteral = $this->singleQuoted($root);
         $hostnameLiteral = $this->singleQuoted($hostname);
         $tokenLiteral = $this->singleQuoted($token);
         $serviceName = self::SERVICE_NAME;
+        if ($mode === 'ngrok') {
+            $serviceName = 'ngrok';
+        }
         $legacyTaskName = self::LEGACY_TASK_NAME;
 
-        $header = $mode === 'permanent'
+        $header = $mode === 'ngrok'
+            ? "# RetailMind Remote Access setup - FREE ngrok assigned domain\n"
+                . "# Paste into PowerShell as Administrator on the Store PC. Keep this token private.\n"
+                . "# Free quota and browser warning apply. RetailMind sign-in is required.\n"
+            : ($mode === 'permanent'
             ? "# RetailMind Remote Access setup - PERMANENT named Cloudflare Tunnel\n"
                 . "# Paste this entire block into an elevated PowerShell on the Store PC.\n"
                 . "# Safe to re-run: the service is stopped, deleted, and recreated.\n"
@@ -48,10 +63,10 @@ final class TunnelSetupBlockBuilder
                 . "# each account's existing Workspace permissions still apply. Store Workspaces\n"
                 . "# keep full tunnel capabilities; the Super Administrator stays local-only.\n"
                 . "# Paste this entire block into an elevated PowerShell on the Store PC.\n"
-                . "# Safe to re-run: the service is stopped, deleted, and recreated.\n";
+                . "# Safe to re-run: the service is stopped, deleted, and recreated.\n");
 
-        $installerArgs = "-Port $port -Mode " . ucfirst($mode);
-        if ($mode === 'permanent') {
+        $installerArgs = "-Port $port -Mode " . ucfirst($mode) . ' -HealthPath ' . $this->singleQuoted($healthPath);
+        if ($mode === 'permanent' || $mode === 'ngrok') {
             if ($hostname !== '') {
                 $installerArgs .= " -Hostname $hostnameLiteral";
             }
@@ -59,12 +74,13 @@ final class TunnelSetupBlockBuilder
         }
 
         return $header . <<<POWERSHELL
+& {
 \$ErrorActionPreference = 'Stop'
 \$serviceName = '{$serviceName}'
 \$legacyTaskName = '{$legacyTaskName}'
 \$appRoot = {$rootLiteral}
 \$localPort = {$port}
-\$installer = Join-Path \$appRoot 'scripts/tunnel/service_install.ps1'
+\$installer = Join-Path \$appRoot 'src/backend/scripts/tunnel/service_setup.ps1'
 
 # Pre-flight: elevated PowerShell
 \$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -116,6 +132,7 @@ if (Get-ScheduledTask -TaskName \$legacyTaskName -ErrorAction SilentlyContinue) 
 
 # Print the resulting service state
 sc.exe query \$serviceName
+}
 POWERSHELL;
     }
 
@@ -156,6 +173,9 @@ POWERSHELL;
 
     public function mode(?string $token, string $requestedMode = ''): string
     {
+        if (strtolower(trim($requestedMode)) === 'ngrok') {
+            return 'ngrok';
+        }
         if (trim((string)$token) === '') {
             return 'quick';
         }
