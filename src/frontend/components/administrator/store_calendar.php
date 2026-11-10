@@ -70,6 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $date = trim($_POST['calendar_date'] ?? '');
             $throughDate = trim($_POST['through_date'] ?? '');
             $status = trim($_POST['status'] ?? '');
+            $notes = StoreCalendar::normalizeNotes($_POST['notes'] ?? '');
+
+            if ($notes !== null && mb_strlen($notes, 'UTF-8') > 500) {
+                throw new RuntimeException("Calendar note must be 500 characters or fewer.");
+            }
 
             // Validate date
             try {
@@ -97,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 if ($throughDate !== '' && $throughDate !== $date) {
                     // Range save
-                    $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id']);
+                    $changed = $calendar->recordCalendarRange($pdo, $date, $throughDate, $status, (int)$_SESSION['user_id'], $notes);
                     foreach ($changed as $item) {
                         log_activity(
                             $pdo,
@@ -109,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $item['new_status'],
                             null,
                             null,
-                            ['calendar_date' => $item['date']]
+                            ['calendar_date' => $item['date'], 'notes' => $notes]
                         );
                     }
                     $count = count($changed);
@@ -117,20 +122,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     // Single date save
                     $cutoff = date('Y-m-d H:i:s');
-                    $previousStatus = $calendar->getCalendarDateStatusAtCutoff($pdo, $date, $cutoff);
-                    if ($previousStatus !== $status) {
-                        $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id']);
+                    $previous = $calendar->getCalendarDateEvidenceAtCutoff($pdo, $date, $cutoff);
+                    if ($previous['status'] !== $status || $previous['notes'] !== $notes) {
+                        $calendar->recordCalendarDate($pdo, $date, $status, (int)$_SESSION['user_id'], $notes);
                         log_activity(
                             $pdo,
                             (int)$_SESSION['user_id'],
                             'Recorded Store calendar date',
                             'Store Settings',
                             null,
-                            $previousStatus,
+                            $previous['status'],
                             $status,
                             null,
                             null,
-                            ['calendar_date' => $date]
+                            ['calendar_date' => $date, 'notes' => $notes]
                         );
                     }
                     $message = "Store calendar status recorded for {$date}.";
@@ -393,6 +398,17 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
             font-size: 0.75rem;
             margin-top: 0.35rem;
         }
+        .day-note {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-top: 0.3rem;
+            font-size: 0.68rem;
+            line-height: 1.25;
+            color: var(--muted);
+            overflow-wrap: anywhere;
+        }
         .calendar-status-badge {
             display: inline-flex;
             align-items: center;
@@ -593,6 +609,7 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     $fullLabel = $statusFullNames[$statusKey] ?? 'Unrecorded';
 
                     $badgeClass = 'status-' . htmlspecialchars($statusKey);
+                    $note = $ev['notes'] ?? null;
                     if ($source === 'sale') {
                         $label = 'Open (Sale)';
                         $fullLabel .= ' (Completed Sales Provenance)';
@@ -600,13 +617,18 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                     } elseif ($isException) {
                         $label .= ' (Ex)';
                     }
+                    $cellAriaLabel = $dateStr . ': ' . $fullLabel;
+                    if ($note !== null) {
+                        $cellAriaLabel .= '. Note: ' . $note;
+                    }
                 ?>
                     <button type="button" class="calendar-day-cell <?= $isToday ? 'is-today' : '' ?> <?= $isSelected ? 'selected-day' : '' ?>"
                          data-date="<?= htmlspecialchars($dateStr) ?>"
                          data-status="<?= htmlspecialchars($statusKey) ?>"
+                         data-note="<?= htmlspecialchars($note ?? '') ?>"
                          aria-haspopup="dialog" aria-controls="calendar-editor"
                          aria-pressed="<?= $isSelected ? 'true' : 'false' ?>"
-                         aria-label="<?= htmlspecialchars($dateStr) ?>: <?= htmlspecialchars($fullLabel) ?>">
+                         aria-label="<?= htmlspecialchars($cellAriaLabel) ?>">
                         <div class="day-cell-top">
                             <span class="day-number"><?= $day ?></span>
                             <?php if ($isToday): ?>
@@ -616,6 +638,9 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                         <span class="day-status">
                             <span class="calendar-status-badge <?= $badgeClass ?>" title="<?= htmlspecialchars($fullLabel) ?>"><?= htmlspecialchars($label) ?></span>
                         </span>
+                        <?php if ($note !== null): ?>
+                            <span class="day-note" title="<?= htmlspecialchars($note) ?>"><?= htmlspecialchars($note) ?></span>
+                        <?php endif; ?>
                     </button>
                 <?php endfor; ?>
             </div>
@@ -656,6 +681,11 @@ $monthTitle = date('F Y', strtotime($firstOfMonth));
                                 <option value="<?= $value ?>" <?= ($_POST['status'] ?? 'open') === $value ? 'selected' : '' ?>><?= $text ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="calendar_notes">Note <span class="muted">(optional)</span></label>
+                        <input id="calendar_notes" type="text" name="notes" maxlength="500" autocomplete="off" aria-describedby="calendar-note-hint" value="<?= htmlspecialchars($_POST['notes'] ?? '') ?>">
+                        <small class="form-hint" id="calendar-note-hint">Shown on the calendar day. The same note applies to every date in a range.</small>
                     </div>
                 </div>
                 </div>
@@ -726,6 +756,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateInput = document.getElementById('calendar_date');
     const throughDateInput = document.getElementById('through_date');
     const statusSelect = document.getElementById('status');
+    const notesInput = document.getElementById('calendar_notes');
     const hint = document.getElementById('range-preview-hint');
     const dayCells = document.querySelectorAll('.calendar-day-cell:not(.is-empty)');
     const cellArray = Array.from(dayCells);
@@ -785,11 +816,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const cellDate = cell.getAttribute('data-date');
         const cellStatus = cell.getAttribute('data-status');
+        const cellNote = cell.getAttribute('data-note') || '';
 
         if (cellDate) {
             dateInput.value = cellDate;
         }
         throughDateInput.value = '';
+        if (notesInput) {
+            notesInput.value = cellNote;
+        }
 
         if (cellStatus && cellStatus !== 'unrecorded') {
             statusSelect.value = cellStatus;
@@ -822,6 +857,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     dateInput.addEventListener('change', updateRangeHint);
+    dateInput.addEventListener('change', function() {
+        if (!notesInput) return;
+        const matching = cellArray.find(c => c.getAttribute('data-date') === dateInput.value);
+        if (matching) {
+            notesInput.value = matching.getAttribute('data-note') || '';
+        }
+    });
     throughDateInput.addEventListener('change', updateRangeHint);
     statusSelect.addEventListener('change', updateRangeHint);
     updateRangeHint();

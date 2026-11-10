@@ -133,7 +133,7 @@ $prefs = get_notification_prefs($pdo, (int)$_SESSION['user_id']);
                         <label class="preference-option" for="notify_email">
                             <span>
                                 <strong>Email notifications</strong>
-                                <small>Send updates to your account email address.</small>
+                                <small>Send updates, including Fiscal Period notices, to your account email address.</small>
                             </span>
                             <input type="checkbox" name="notify_email" id="notify_email" <?= !empty($prefs['notify_email']) ? 'checked' : '' ?>>
                         </label>

@@ -359,7 +359,7 @@ INSERT IGNORE INTO role_privileges (role_id, privilege_id)
 INSERT IGNORE INTO role_privileges (role_id, privilege_id)
             SELECT r.role_id, p.privilege_id FROM roles r CROSS JOIN privileges p
             WHERE r.role_name IN ('seller', 'cashier') AND p.privilege_key = 'view_inventory';
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Retired branch storage; retained legacy single-store scope fields') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Branches, branch-scoped users and privilege assignments') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609130002_role_access_update: Make administrator inventory access read-only
 DELETE rp FROM role_privileges rp
@@ -390,7 +390,7 @@ DELETE r FROM roles r WHERE r.role_name='seller' AND EXISTS (SELECT 1 FROM (SELE
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130004_remove_seller_role','Replace the duplicate seller role with cashier') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609140001_branch_scoped_product_identifiers is superseded by single-store product keys.
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Single-store product identifiers') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 -- 202609170001_profile_images: Optional generated profile image filename for user accounts
 SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='profile_image'), 'ALTER TABLE `users` ADD COLUMN `profile_image` VARCHAR(80) NULL AFTER email', 'DO 0');
@@ -1826,7 +1826,7 @@ SET @rm_sql = IF(@rm_drops IS NULL, 'DO 0', CONCAT('ALTER TABLE `products` ', @r
 PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 DROP TABLE IF EXISTS `branches`;
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire branch storage for the single-store application') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire branch storage and normalize compatibility scope for the single Store') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 SET @rm_sql = IF(
     EXISTS (SELECT sku FROM products GROUP BY sku HAVING COUNT(*) > 1)
@@ -1931,7 +1931,8 @@ CREATE TABLE IF NOT EXISTS `store_weekly_schedule` (
   INDEX `idx_store_weekly_schedule_history` (`effective_date`, `recorded_at` DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-ALTER TABLE `store_calendar` ADD COLUMN `source` VARCHAR(50) NOT NULL DEFAULT 'manual' AFTER `recorded_by`;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='store_calendar' AND column_name='source'), 'ALTER TABLE `store_calendar` ADD COLUMN `source` VARCHAR(50) NOT NULL DEFAULT ''manual'' AFTER `recorded_by`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_store_weekly_schedule','Configurable weekly store schedule revisions with effective dates') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
@@ -1971,3 +1972,35 @@ INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backu
 INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_last_backup_id', '');
 INSERT IGNORE INTO platform_settings (setting_key, setting_value) VALUES ('backup_schedule_catchup_checked_at', '');
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611020001_ml_jobs_evidence_cutoff: add logical work deduplication columns.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='ml_jobs' AND column_name='evidence_cutoff'), 'ALTER TABLE `ml_jobs` ADD COLUMN `evidence_cutoff` VARCHAR(20) NULL AFTER `requester_id`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='ml_jobs' AND column_name='model_version'), 'ALTER TABLE `ml_jobs` ADD COLUMN `model_version` VARCHAR(50) NULL AFTER `evidence_cutoff`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_ml_jobs_evidence_cutoff','Add evidence_cutoff and model_version columns to ml_jobs for logical work deduplication') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611020003_forecasting_schedule_policy_defaults: correct the legacy 23:00 default.
+UPDATE ml_settings SET setting_value = '01:00' WHERE setting_key = 'schedule_daily_forecast_time' AND setting_value = '23:00' AND updated_by IS NULL;
+INSERT IGNORE INTO ml_settings (setting_key, setting_value) VALUES ('schedule_daily_forecast_time', '01:00');
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020003_forecasting_schedule_policy_defaults','Correct conflicting 23:00 forecasting schedule default to accepted 01:00 policy') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611030002_retire_recovery_account_page: point saved warnings at Protected Audit Records.
+UPDATE notifications
+   SET attention_destination = 'components/system_administrator/audit_logs.php'
+ WHERE attention_destination = 'components/system_administrator/recovery_account.php';
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030002_retire_recovery_account_page','Point saved Recovery Account warnings to Protected Audit Records') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611090001_super_admin_single_workspace: keep Super Administrators on platform governance only.
+DELETE store_role FROM user_roles store_role
+  JOIN user_roles super_role ON super_role.user_id = store_role.user_id
+  JOIN roles super_definition ON super_definition.role_id = super_role.role_id AND super_definition.role_name = 'super_admin'
+  JOIN roles store_definition ON store_definition.role_id = store_role.role_id AND store_definition.role_name <> 'super_admin';
+UPDATE user_roles super_role
+  JOIN roles super_definition ON super_definition.role_id = super_role.role_id AND super_definition.role_name = 'super_admin'
+   SET super_role.is_primary = 1;
+UPDATE users account
+  JOIN user_roles super_role ON super_role.user_id = account.user_id
+  JOIN roles super_definition ON super_definition.role_id = super_role.role_id AND super_definition.role_name = 'super_admin'
+   SET account.role_id = super_definition.role_id;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_super_admin_single_workspace','Keep the Super Administrator account on platform governance only') ON DUPLICATE KEY UPDATE description=VALUES(description);

@@ -65,4 +65,32 @@ assert_same('open', $range['2026-10-09'] ?? null, 'Range returns 10-09 status.')
 assert_same('exceptional_closure', $range['2026-10-10'] ?? null, 'Range returns 10-10 exceptional_closure.');
 assert_true(!isset($range['2026-10-11']), 'Unrecorded date in range is null/absent.');
 
+// Test 6: Notes are stored and returned with calendar evidence
+$noteCutoff = date('Y-m-d H:i:s', time() + 10);
+$calendar->recordCalendarDate($pdo, '2026-10-12', 'holiday', null, '  Barangay fiesta  ');
+$evidence = $calendar->getCalendarDateEvidenceAtCutoff($pdo, '2026-10-12', $noteCutoff);
+assert_same('Barangay fiesta', $evidence['notes'], 'Stored note must be trimmed and returned by evidence.');
+
+// Test 7: Same status with a different note records a new revision
+$calendar->recordCalendarDate($pdo, '2026-10-12', 'holiday', null, 'Fiesta moved');
+$evidence = $calendar->getCalendarDateEvidenceAtCutoff($pdo, '2026-10-12', date('Y-m-d H:i:s', time() + 15));
+assert_same('Fiesta moved', $evidence['notes'], 'Changing only the note must create a new revision.');
+
+// Test 8: Identical status and note must not duplicate history
+$countBefore = (int)$pdo->query("SELECT COUNT(*) FROM store_calendar WHERE calendar_date = '2026-10-12'")->fetchColumn();
+$calendar->recordCalendarDate($pdo, '2026-10-12', 'holiday', null, 'Fiesta moved');
+$countAfter = (int)$pdo->query("SELECT COUNT(*) FROM store_calendar WHERE calendar_date = '2026-10-12'")->fetchColumn();
+assert_same($countBefore, $countAfter, 'Unchanged status and note must not add duplicate history record.');
+
+// Test 9: A range save applies its note to every date
+$calendar->recordCalendarRange($pdo, '2026-10-13', '2026-10-14', 'closed', null, 'Stocktake');
+$rangeEvidence = $calendar->getCalendarDateEvidenceRangeAtCutoff($pdo, '2026-10-13', '2026-10-14', date('Y-m-d H:i:s', time() + 20));
+assert_same('Stocktake', $rangeEvidence['2026-10-13']['notes'] ?? null, 'Range note must reach the first date.');
+assert_same('Stocktake', $rangeEvidence['2026-10-14']['notes'] ?? null, 'Range note must reach the last date.');
+
+// Test 10: A range note-only change still records the date
+$calendar->recordCalendarRange($pdo, '2026-10-13', '2026-10-13', 'closed', null, 'Stocktake extended');
+$rangeEvidence = $calendar->getCalendarDateEvidenceRangeAtCutoff($pdo, '2026-10-13', '2026-10-13', date('Y-m-d H:i:s', time() + 25));
+assert_same('Stocktake extended', $rangeEvidence['2026-10-13']['notes'] ?? null, 'Range note-only change must persist.');
+
 echo "Domain seam tests passed.\n";

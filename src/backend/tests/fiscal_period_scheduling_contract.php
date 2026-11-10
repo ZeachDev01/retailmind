@@ -222,11 +222,19 @@ $assert(
 );
 $notice = $pdo->query("SELECT * FROM notifications WHERE user_id = 10 ORDER BY notification_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $assert($notice['attention_destination'] === 'components/system_administrator/fiscal_periods.php', 'Notification links to the Fiscal Periods page');
+$assert((int)$notice['email_pending'] === 1, 'Rollover notification queues the daily Brevo email');
 
 $guard->rolloverIfDue('2027-02-01', 1);
 $assert(
     (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE user_id = 10 AND type = 'fiscal_period'")->fetchColumn() === 1,
     'A repeated rollover check does not duplicate the notification'
 );
+
+$pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status) VALUES ('Manual close', '2026-01-01', '2026-01-31', 'open')");
+$manualId = (int)$pdo->lastInsertId();
+$guard->closePeriod($manualId, 1, '2026-02-01');
+$manualNotice = $pdo->query("SELECT * FROM notifications WHERE attention_key = 'store.fiscal-period.closed.{$manualId}'")->fetch(PDO::FETCH_ASSOC);
+$assert($manualNotice !== false, 'Manual closure notifies Administrators');
+$assert((int)$manualNotice['email_pending'] === 1, 'Manual closure queues the daily Brevo email');
 
 echo "Fiscal period rollover notification contract: passed\n";

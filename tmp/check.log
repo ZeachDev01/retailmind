@@ -1,0 +1,144 @@
+
+> check
+> php src/backend/scripts/build_styles.php --check && php src/backend/scripts/audit_views.php && php src/backend/tests/smoke_checks.php && php src/backend/tests/tunnel_setup_block_contract.php && php src/backend/tests/tunnel_parity_contract.php
+
+Stylesheet bundle: passed (9 sources, no CSS imports)
+=== RetailMind View Markup Audit ===
+Scanned: 117 PHP views in src/frontend/components
+Summary: 0 errors, 0 warnings.
+Smoke checks passed: 113
+PASS: TunnelSetupBlockBuilder.php exists
+PASS: Class App\Services\TunnelSetupBlockBuilder exists
+
+=== 1. Permanent named tunnel block ===
+PASS: Permanent block is labelled as a permanent named tunnel
+PASS: Permanent block embeds the resolved application root
+PASS: Permanent block embeds the configured local port
+PASS: Permanent block invokes the existing tunnel installer
+PASS: Permanent block selects permanent installer mode
+PASS: Permanent block passes the saved hostname
+PASS: Permanent block passes the saved token once
+PASS: Raw token appears exactly once in the generated block
+PASS: Permanent block names the shared Windows Service
+PASS: Permanent block prints the resulting service state
+PASS: Permanent block requires an elevated PowerShell
+PASS: Permanent block requires 64-bit Windows
+PASS: Permanent block checks internet access
+PASS: Permanent block checks the local RetailMind origin
+PASS: Permanent block uses the existing installer path
+PASS: Permanent block does not create a Quick Tunnel
+
+=== 2. Interim Quick Tunnel block ===
+PASS: Blank token forces the interim Quick Tunnel block
+PASS: Quick block warns that the URL changes on restart
+PASS: Quick block warns that Cloudflare Access is absent
+PASS: Quick block selects Quick installer mode
+PASS: Quick block does not pass a token
+PASS: Quick block does not pass a hostname
+PASS: Hostname without a token stays in Quick mode
+PASS: Quick block never includes a token
+PASS: Saving a token switches generation to permanent mode
+PASS: Clearing the token returns generation to Quick mode
+PASS: An explicit Quick request cannot be upgraded by a saved token
+
+=== 3. Quoting and validation ===
+PASS: Application root is safely single-quoted for PowerShell
+PASS: Token is safely single-quoted for PowerShell
+PASS: Non-default ports are preserved
+PASS: Invalid local port is rejected
+PASS: Missing application root is rejected
+
+=== 4. Removal block ===
+PASS: Removal block invokes the existing removal script
+PASS: Removal block names the shared Windows Service
+PASS: Removal block states application data is preserved
+PASS: Removal block never contains a token
+PASS: Removal block requires an elevated PowerShell
+
+=== 5. Installer and removal script contracts ===
+PASS: service_install.ps1 exists
+PASS: service_uninstall.ps1 exists
+PASS: Installer exposes Permanent, Quick, and Auto modes
+PASS: Installer defaults to Permanent so tokenless manual runs still fail safely
+PASS: Installer accepts a hostname
+PASS: Installer accepts a local port
+PASS: Installer creates a Quick Tunnel in Quick mode
+PASS: Installer creates a permanent named tunnel with a token
+PASS: Installer sets automatic boot startup
+PASS: Installer configures crash restart actions
+PASS: Installer removes the legacy Quick Tunnel task
+PASS: Installer writes tunnel logs used by the status card
+PASS: Removal script accepts the legacy task name
+PASS: Removal script deletes the legacy scheduled task
+PASS: Removal script documents preserved application data
+
+=== 6. Platform Settings card contract ===
+PASS: system_settings.php exists
+PASS: Card exposes the setup block generation action
+PASS: Card exposes the removal block generation action
+PASS: Generation is local-request only
+PASS: Card POST actions verify CSRF
+PASS: Card is guarded by platform governance
+PASS: Card uses the pure block builder
+PASS: Card writes an audit record for generation
+PASS: Audit record names the selected mode
+PASS: Audit record excludes the raw token
+PASS: Card displays only the masked token by default
+PASS: Card shows the Cloudflare dashboard checklist
+PASS: Card labels Quick Tunnel mode as interim
+PASS: Card states the Quick Tunnel lacks Cloudflare Access
+PASS: Checklist points at the configured local origin
+PASS: Generated setup block has a copyable element
+PASS: Generated block supports clipboard copy
+PASS: Generated block has a clipboard fallback
+
+==========================================
+SUCCESS: All Remote Access setup block contract tests passed!
+
+=== 1. Tunnel host detection ===
+PASS: store.trycloudflare.com is a tunnel host
+PASS: store.trycloudflare.com with port and casing is a tunnel host
+PASS: abc.ngrok-free.app is a tunnel host
+PASS: abc.ngrok-free.app with port and casing is a tunnel host
+PASS: abc.ngrok.io is a tunnel host
+PASS: abc.ngrok.io with port and casing is a tunnel host
+PASS: abc.loca.lt is a tunnel host
+PASS: abc.loca.lt with port and casing is a tunnel host
+PASS: abc.lhr.life is a tunnel host
+PASS: abc.lhr.life with port and casing is a tunnel host
+PASS: abc.localtunnel.me is a tunnel host
+PASS: abc.localtunnel.me with port and casing is a tunnel host
+PASS: localhost is not a tunnel host
+PASS: LAN address is not a tunnel host
+PASS: Hosted public domain is not a tunnel host
+
+=== 2. Tunnel requests are local, not remote ===
+PASS: Tunnel request is detected as tunnel
+PASS: Tunnel request is not remote
+PASS: Forwarded tunnel host is not remote
+PASS: Tunnel host wins over Cloudflare edge headers
+PASS: Localhost stays local
+PASS: Non-tunnel public host stays remote
+PASS: Cloudflare edge IP without tunnel host stays remote
+
+=== 3. Super Administrator workspace is local-only on tunnels ===
+PASS: Active super_admin workspace is blocked on a tunnel
+PASS: Tunnel hides the super_admin workspace from the switcher
+PASS: Active admin workspace is allowed on a tunnel
+PASS: Tunnel keeps other assigned workspaces
+PASS: super_admin workspace stays available on localhost
+PASS: Localhost keeps every assigned workspace
+PASS: super_admin-only account has no tunnel workspace
+
+=== 4. Gates and sources wire the policy ===
+PASS: Shared access-denied surface exists
+PASS: is_tunnel_host lives in bootstrap
+PASS: Remote detection short-circuits tunnel requests
+PASS: Database host classification reuses the tunnel helper
+PASS: require_role blocks the super_admin workspace on tunnels
+PASS: Capability gate exists
+PASS: Every gateway applies the workspace block
+PASS: Workspace switcher uses the filtered workspace list
+PASS: Sign-in lands on an available workspace
+
+Tunnel parity contract: passed.

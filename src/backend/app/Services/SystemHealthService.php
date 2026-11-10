@@ -104,7 +104,7 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
     private function workerHealthCheck(): array
     {
         try {
-            $stmt = $this->pdo->query("SELECT status, queued_at, completed_at FROM ml_jobs ORDER BY job_id DESC LIMIT 1");
+            $stmt = $this->pdo->query("SELECT status, queued_at, completed_at, diagnostic_reference FROM ml_jobs ORDER BY job_id DESC LIMIT 1");
             $job = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$job) {
@@ -112,6 +112,10 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             }
 
             if ($job['status'] === 'failed') {
+                // BLOCKED marks a missing prerequisite, not a worker crash.
+                if (str_starts_with((string)($job['diagnostic_reference'] ?? ''), 'BLOCKED:')) {
+                    return $this->result('Background Worker', 'warning', 'Waiting for an approved forecasting model; background forecasting is paused.', 'Forecasting');
+                }
                 return $this->result('Background Worker', 'critical', 'The worker encountered an error during its last task. Check diagnostic logs.', 'Forecasting');
             }
             if ($job['status'] === 'running' || $job['status'] === 'queued') {

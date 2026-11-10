@@ -70,7 +70,7 @@ if ($storeEmailEnabled && !$emailDeliveryDisabled) {
                     FROM notifications n
                     LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key
                     WHERE n.user_id = ? AND n.workspace = ? AND n.email_pending = 1
-                      AND (n.attention_key IS NULL OR s.is_active = 1)
+                      AND (n.attention_key IS NULL OR COALESCE(s.is_active, 1) = 1)
                     ORDER BY n.notification_id FOR UPDATE');
                 $pending->execute([(int)$recipient['user_id'], $role]);
                 $clear = $pdo->prepare('UPDATE notifications SET email_pending = 0 WHERE notification_id = ?');

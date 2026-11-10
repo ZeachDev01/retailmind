@@ -4,7 +4,6 @@ namespace App\Store;
 
 use App\Database\Schema;
 use PDO;
-use PDOStatement;
 use RuntimeException;
 use InvalidArgumentException;
 use DateTime;
@@ -22,6 +21,15 @@ final class StoreCalendar
             return 'exceptional_closure';
         }
         return $status;
+    }
+
+    /**
+     * Normalize an optional operator note: trimmed, empty becomes null.
+     */
+    public static function normalizeNotes(?string $notes): ?string
+    {
+        $notes = trim((string)$notes);
+        return $notes === '' ? null : $notes;
     }
 
     /**
@@ -178,42 +186,74 @@ final class StoreCalendar
     }
 
     /**
+     * Latest date-specific calendar exception at cutoff, including its optional note.
+     */
+    private function getCalendarDateExceptionAtCutoff(PDO $pdo, string $date, string $cutoff): ?array
+    {
+        if (!$this->tableExists($pdo, 'store_calendar')) {
+            return null;
+        }
+
+        $hasSource = $this->columnExists($pdo, 'store_calendar', 'source');
+        $hasNotes = $this->columnExists($pdo, 'store_calendar', 'notes');
+        $sourceCol = $hasSource ? 'source' : "'' AS source";
+        $notesCol = $hasNotes ? 'notes' : 'NULL AS notes';
+
+        $stmt = $pdo->prepare(
+            "SELECT calendar_id, status, {$sourceCol}, {$notesCol}, recorded_at
+             FROM store_calendar
+             WHERE calendar_date = ? AND recorded_at <= ?
+             ORDER BY recorded_at DESC, calendar_id DESC
+             LIMIT 1"
+        );
+        $stmt->execute([$date, $cutoff]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    /**
      * Records a new calendar entry for a specific date (date exception).
-     * Supports both (pdo, date, status, userId) and legacy (pdo, branchId, date, status, userId).
-     * Avoids duplicate history if current status already matches.
+     * Supports both (pdo, date, status, userId, notes) and legacy (pdo, branchId, date, status, userId, notes).
+     * Avoids duplicate history if current status and note already match.
      */
     public function recordCalendarDate(PDO $pdo, mixed ...$args): void
     {
         if (count($args) >= 4 && is_numeric($args[0])) {
-            // Legacy signature: ($branchId, $date, $status, $userId)
+            // Legacy signature: ($branchId, $date, $status, $userId, $notes)
             $date = (string)$args[1];
             $status = self::normalizeStatus((string)$args[2]);
             $userId = $args[3] !== null ? (int)$args[3] : null;
+            $notes = self::normalizeNotes(isset($args[4]) ? (string)$args[4] : null);
         } else {
-            // New signature: ($date, $status, $userId)
+            // New signature: ($date, $status, $userId, $notes)
             $date = (string)$args[0];
             $status = self::normalizeStatus((string)$args[1]);
             $userId = isset($args[2]) && $args[2] !== null ? (int)$args[2] : null;
+            $notes = self::normalizeNotes(isset($args[3]) ? (string)$args[3] : null);
         }
 
-        // Check if latest status matches to avoid redundant history
-        $latest = $this->getCalendarDateStatusAtCutoff($pdo, $date, date('Y-m-d H:i:s'));
-        if ($latest === $status) {
+        // Check if latest status and note match to avoid redundant history
+        $latest = $this->getCalendarDateExceptionAtCutoff($pdo, $date, date('Y-m-d H:i:s'));
+        if ($latest !== null
+            && self::normalizeStatus($latest['status']) === $status
+            && self::normalizeNotes($latest['notes']) === $notes
+        ) {
             return;
         }
 
-        $stmt = $this->prepareCalendarInsert($pdo);
-        $stmt->execute([$date, str_replace('_', '-', $status), $userId]);
+        $this->insertCalendarEntry($pdo, $date, str_replace('_', '-', $status), $userId, $notes);
     }
 
     /**
      * Records a calendar status across an inclusive date range [startDate, endDate].
      * Enforces bounds order, 366-day cap, skips unchanged dates, and inserts changed dates.
+     * The note applies to every changed date in the range.
      * Returns array of changed date details: [['date' => ..., 'previous_status' => ..., 'new_status' => ...], ...]
      */
-    public function recordCalendarRange(PDO $pdo, string $startDate, string $endDate, string $status, ?int $userId = null): array
+    public function recordCalendarRange(PDO $pdo, string $startDate, string $endDate, string $status, ?int $userId = null, ?string $notes = null): array
     {
         $status = self::normalizeStatus($status);
+        $notes = self::normalizeNotes($notes);
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
 
@@ -227,20 +267,19 @@ final class StoreCalendar
             throw new InvalidArgumentException("Date range exceeds the maximum allowed limit of 366 inclusive days ({$diffDays} days requested).");
         }
 
-        // Fetch current statuses across the range
-        $currentStatuses = $this->getCalendarDateRangeAtCutoff($pdo, $startDate, $endDate, date('Y-m-d H:i:s'));
-
-        $stmt = $this->prepareCalendarInsert($pdo);
+        // Fetch current resolved statuses and notes across the range
+        $currentEvidence = $this->getCalendarDateEvidenceRangeAtCutoff($pdo, $startDate, $endDate, date('Y-m-d H:i:s'));
 
         $changed = [];
         $cur = clone $start;
 
         while ($cur <= $end) {
             $curDate = $cur->format('Y-m-d');
-            $prevStatus = $currentStatuses[$curDate] ?? null;
+            $prevStatus = $currentEvidence[$curDate]['status'] ?? null;
+            $prevNotes = $currentEvidence[$curDate]['notes'] ?? null;
 
-            if ($prevStatus !== $status) {
-                $stmt->execute([$curDate, str_replace('_', '-', $status), $userId]);
+            if ($prevStatus !== $status || $prevNotes !== $notes) {
+                $this->insertCalendarEntry($pdo, $curDate, str_replace('_', '-', $status), $userId, $notes);
                 $changed[] = [
                     'date' => $curDate,
                     'previous_status' => $prevStatus,
@@ -254,9 +293,15 @@ final class StoreCalendar
         return $changed;
     }
 
-    private function prepareCalendarInsert(PDO $pdo): PDOStatement
+    private function insertCalendarEntry(PDO $pdo, string $date, string $status, ?int $userId, ?string $notes): void
     {
-        return $pdo->prepare('INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)');
+        if ($this->columnExists($pdo, 'store_calendar', 'notes')) {
+            $stmt = $pdo->prepare('INSERT INTO store_calendar (calendar_date, status, recorded_by, notes, recorded_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)');
+            $stmt->execute([$date, $status, $userId, $notes]);
+            return;
+        }
+        $stmt = $pdo->prepare('INSERT INTO store_calendar (calendar_date, status, recorded_by, recorded_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)');
+        $stmt->execute([$date, $status, $userId]);
     }
 
     /**
@@ -276,26 +321,16 @@ final class StoreCalendar
         $exceptionRow = null;
         $effectiveDate = null;
         $recordedAt = null;
+        $notes = null;
 
         // 1. Check date exception in store_calendar
-        if ($this->tableExists($pdo, 'store_calendar')) {
-            $hasSource = $this->columnExists($pdo, 'store_calendar', 'source');
-            $sourceCol = $hasSource ? 'source,' : "'' AS source,";
-            $stmt = $pdo->prepare(
-                "SELECT calendar_id, status, {$sourceCol} recorded_at
-                 FROM store_calendar
-                 WHERE calendar_date = ? AND recorded_at <= ?
-                 ORDER BY recorded_at DESC, calendar_id DESC
-                 LIMIT 1"
-            );
-            $stmt->execute([$date, $cutoff]);
-            $exceptionRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-            if ($exceptionRow) {
-                $underlyingStatus = self::normalizeStatus($exceptionRow['status']);
-                $underlyingSource = !empty($exceptionRow['source']) ? $exceptionRow['source'] : 'manual';
-                $isException = true;
-                $recordedAt = $exceptionRow['recorded_at'];
-            }
+        $exceptionRow = $this->getCalendarDateExceptionAtCutoff($pdo, $date, $cutoff);
+        if ($exceptionRow) {
+            $underlyingStatus = self::normalizeStatus($exceptionRow['status']);
+            $underlyingSource = !empty($exceptionRow['source']) ? $exceptionRow['source'] : 'manual';
+            $isException = true;
+            $recordedAt = $exceptionRow['recorded_at'];
+            $notes = self::normalizeNotes($exceptionRow['notes'] ?? null);
         }
 
         // 2. If no date exception, check weekly schedule
@@ -339,6 +374,7 @@ final class StoreCalendar
             'underlying_status' => $underlyingStatus,
             'effective_date' => $effectiveDate,
             'recorded_at' => $recordedAt,
+            'notes' => $notes,
         ];
     }
 
@@ -403,9 +439,11 @@ final class StoreCalendar
         if ($this->tableExists($pdo, 'store_calendar')) {
             try {
                 $hasSource = $this->columnExists($pdo, 'store_calendar', 'source');
+                $hasNotes = $this->columnExists($pdo, 'store_calendar', 'notes');
                 $sourceCol = $hasSource ? 'c1.source,' : "'' AS source,";
+                $notesCol = $hasNotes ? 'c1.notes,' : 'NULL AS notes,';
                 $sql = "
-                    SELECT c1.calendar_date, c1.status, {$sourceCol} c1.recorded_at
+                    SELECT c1.calendar_date, c1.status, {$sourceCol} {$notesCol} c1.recorded_at
                     FROM store_calendar c1
                     WHERE c1.calendar_date >= ?
                       AND c1.calendar_date <= ?
@@ -469,6 +507,7 @@ final class StoreCalendar
             $isException = false;
             $effectiveDate = null;
             $recordedAt = null;
+            $notes = null;
 
             if (isset($exceptions[$curDate])) {
                 $ex = $exceptions[$curDate];
@@ -476,6 +515,7 @@ final class StoreCalendar
                 $underlyingSource = !empty($ex['source']) ? $ex['source'] : 'manual';
                 $isException = true;
                 $recordedAt = $ex['recorded_at'];
+                $notes = self::normalizeNotes($ex['notes'] ?? null);
             } else {
                 $sched = $findActiveSchedule($curDate);
                 if ($sched !== null) {
@@ -515,6 +555,7 @@ final class StoreCalendar
                 'underlying_status' => $underlyingStatus,
                 'effective_date' => $effectiveDate,
                 'recorded_at' => $recordedAt,
+                'notes' => $notes,
             ];
 
             $cur->modify('+1 day');

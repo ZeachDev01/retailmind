@@ -1680,11 +1680,11 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('2026_07_opera
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040001_auth_security','Authentication security tables and mandatory password-change support') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040002_operational_updates','Operational workflow tables and columns') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202608040003_integrity_constraints','Foreign-key protections for upgraded operational databases') ON DUPLICATE KEY UPDATE description=VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Retired: single-store scope no longer uses branch storage') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130001_branch_management','Branches, branch-scoped users and privilege assignments') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130002_role_access_update','Make administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130003_superadmin_inventory_read_only','Make super administrator inventory access read-only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609130004_remove_seller_role','Replace the duplicate seller role with cashier') ON DUPLICATE KEY UPDATE description=VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Keep product identifiers unique within the single Store') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202609140001_branch_scoped_product_identifiers','Allow product identifiers to be reused across branches') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_admin_profile_images','Nullable generated profile image filename for administrator accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_staff_profile_images','Optional profile image filename for staff accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202609170001_profile_images','Optional generated profile image filename for user accounts') ON DUPLICATE KEY UPDATE description=VALUES(description);
@@ -1884,6 +1884,8 @@ CREATE TABLE ml_jobs (
     trigger_type VARCHAR(50) NOT NULL COMMENT 'e.g. forecast_generation, model_retraining',
     status VARCHAR(20) NOT NULL DEFAULT 'queued' COMMENT 'queued, running, succeeded, failed',
     requester_id INT NULL COMMENT 'User ID who requested it, NULL if scheduled',
+    evidence_cutoff VARCHAR(20) NULL COMMENT 'Latest completed Philippine calendar day cutoff YYYY-MM-DD',
+    model_version VARCHAR(50) NULL COMMENT 'Model version used or trained',
     queued_at DATETIME NOT NULL,
     started_at DATETIME NULL,
     completed_at DATETIME NULL,
@@ -1950,6 +1952,7 @@ CREATE TABLE `store_calendar` (
   `status` enum('open','closed','holiday','exceptional-closure') NOT NULL,
   `recorded_by` int DEFAULT NULL,
   `source` varchar(50) NOT NULL DEFAULT "manual",
+  `notes` text DEFAULT NULL,
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`calendar_id`),
   KEY `fk_store_calendar_user` (`recorded_by`),
@@ -2113,7 +2116,7 @@ CREATE TABLE `store_setup_confirmations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_store_setup_confirmations','Persist shared Store setup confirmations across Workspaces') ON DUPLICATE KEY UPDATE description=VALUES(description);
-INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire the branches table for the single-store application') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010001_retire_branches','Retire branch storage and normalize compatibility scope for the single Store') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611010002_remove_branch_id','Remove obsolete branch identifiers from the single-store schema') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 DROP TABLE IF EXISTS `store_weekly_schedule`;
@@ -2141,3 +2144,12 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ("202611020001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_backup_keyring_and_history','Repair backup history metadata and record per-account recovery-key acknowledgements') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100002_scheduled_backup_settings','Seed the Sunday 23:00 Scheduled Backup schedule, Backup Destination, and last-run state') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100003_store_calendar_notes','Optional operator notes on Store calendar dates') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_ml_jobs_evidence_cutoff','Add evidence_cutoff and model_version columns to ml_jobs for logical work deduplication') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020003_forecasting_schedule_policy_defaults','Correct conflicting 23:00 forecasting schedule default to accepted 01:00 policy') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_notification_resolution','Retain resolution for each notification occurrence (#420)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030002_retire_recovery_account_page','Point saved Recovery Account warnings to Protected Audit Records') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_super_admin_single_workspace','Keep the Super Administrator account on platform governance only') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_fiscal_period_scheduling','Allow scheduled future Fiscal Periods and opt-in automatic rollover') ON DUPLICATE KEY UPDATE description=VALUES(description);

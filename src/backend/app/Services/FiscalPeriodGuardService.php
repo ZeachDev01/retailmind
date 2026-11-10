@@ -327,6 +327,7 @@ class FiscalPeriodGuardService
             }
             throw $e;
         }
+        $this->notifyClosedManually($period);
     }
 
     public function lockPeriod(int $periodId): void
@@ -669,12 +670,6 @@ class FiscalPeriodGuardService
      */
     private function notifyRollover(array $result, array $period, string $today): void
     {
-        foreach (['notifications', 'users', 'roles', 'user_roles'] as $table) {
-            if (!$this->tableExists($table)) {
-                return;
-            }
-        }
-        $destination = 'components/system_administrator/fiscal_periods.php';
         $closedId = (int)$period['period_id'];
         $blocked = !empty($result['blockers']);
         $missingSuccessor = !$blocked && !empty($result['rolled']) && $result['opened_period_id'] === null;
@@ -707,6 +702,37 @@ class FiscalPeriodGuardService
             return;
         }
 
+        $this->insertPeriodNotice($period, $key, $severity, $title, $message);
+    }
+
+    /**
+     * Manual closure uses the same bell and daily Brevo email as a rollover.
+     */
+    private function notifyClosedManually(array $period): void
+    {
+        $this->insertPeriodNotice(
+            $period,
+            'store.fiscal-period.closed.' . (int)$period['period_id'],
+            'info',
+            'Fiscal Period closed',
+            sprintf(
+                '"%s" (ended %s) was closed. New sales need an open period that covers their date.',
+                (string)$period['period_name'],
+                (string)$period['end_date']
+            )
+        );
+    }
+
+    private function insertPeriodNotice(array $period, string $key, string $severity, string $title, string $message): void
+    {
+        foreach (['notifications', 'users', 'roles', 'user_roles'] as $table) {
+            if (!$this->tableExists($table)) {
+                return;
+            }
+        }
+        $destination = 'components/system_administrator/fiscal_periods.php';
+        $closedId = (int)$period['period_id'];
+
         $hasPrefs = $this->tableExists('notification_preferences');
         $sql = 'SELECT u.user_id'
             . ($hasPrefs ? ', COALESCE(np.notify_inapp, 1) AS notify_inapp' : ', 1 AS notify_inapp')
@@ -726,7 +752,7 @@ class FiscalPeriodGuardService
                     (user_id, type, title, message, reference_id, reference_type, attention_key,
                      attention_severity, attention_count, attention_destination, is_read, created_at,
                      workspace, inapp_enabled, email_pending)
-                 VALUES (?, 'fiscal_period', ?, ?, ?, 'fiscal_period', ?, ?, 1, ?, 0, ?, 'admin', ?, 0)"
+                 VALUES (?, 'fiscal_period', ?, ?, ?, 'fiscal_period', ?, ?, 1, ?, 0, ?, 'admin', ?, 1)"
             );
             foreach ($recipients as $recipient) {
                 $userId = (int)$recipient['user_id'];
@@ -747,7 +773,7 @@ class FiscalPeriodGuardService
                 ]);
             }
         } catch (Throwable $e) {
-            error_log('Fiscal period rollover notification skipped: ' . $e->getMessage());
+            error_log('Fiscal period notification skipped: ' . $e->getMessage());
         }
     }
 
