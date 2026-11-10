@@ -3090,7 +3090,8 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 .cashier-pos-page .cart-table th:nth-child(2) { text-align: center; }
 .cashier-pos-page .cart-actions { justify-content: center; }
 .cashier-pos-page .cart-empty-cell { white-space: normal; }
-.cashier-pos-page .quick-product-image { aspect-ratio: 16 / 9; font-size: 1.8rem; }
+.cashier-pos-page .quick-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cashier-pos-page .quick-product-image { height: 164px; aspect-ratio: auto; font-size: 1.8rem; }
 .cashier-pos-page .quick-product-stepper button {
     border: 1px solid var(--cashier-border);
     border-radius: 8px;
@@ -3220,6 +3221,10 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
         overflow: visible;
     }
 
+}
+
+@media (max-width: 560px) {
+    .cashier-pos-page .quick-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
