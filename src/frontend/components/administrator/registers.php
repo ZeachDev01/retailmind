@@ -34,22 +34,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     try {
         if ($action === 'create') {
             $registers->create($actorId, $actorRole, (string)($_POST['name'] ?? ''), (string)($_POST['paper_width_mm'] ?? '80'));
-            $message = 'Checkout station created and is available for new cashier shifts.';
+            $message = 'Checkout station created.';
             $messageClass = 'tag-success';
         } elseif ($action === 'rename') {
             $registers->rename($actorId, $actorRole, $registerId, (string)($_POST['name'] ?? ''));
-            $message = 'Checkout station renamed. Existing records retain their original station identity.';
+            $message = 'Checkout station renamed.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_paper_width') {
             $registers->setPaperWidth($actorId, $actorRole, $registerId, (string)($_POST['paper_width_mm'] ?? ''));
-            $message = 'Receipt paper width saved. Receipts use this setting for future cashier shifts.';
+            $message = 'Receipt paper width saved.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_status') {
             $status = (string)($_POST['status'] ?? RegisterService::STATUS_ACTIVE);
             $registers->setStatus($actorId, $actorRole, $registerId, $status);
             $message = $status === RegisterService::STATUS_DISABLED
-                ? 'Checkout station disabled. It is unavailable for new shifts; open shifts and past records remain available.'
-                : 'Checkout station enabled and available for new cashier shifts.';
+                ? 'Checkout station disabled. Existing cashier shifts stay active.'
+                : 'Checkout station enabled.';
             $messageClass = 'tag-success';
         } elseif ($action === 'delete') {
             $registers->delete($actorId, $actorRole, $registerId);
@@ -63,7 +63,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $submittedPaperWidth = (string)($_POST['paper_width_mm'] ?? '80');
         $message = OperatorAlert::message(
             $exception,
-            'The checkout station could not be saved. Check the details and try again. Contact your administrator if the issue continues.'
+            'The checkout station could not be saved. Check the details and try again.'
         );
         $messageClass = 'tag-warning';
     }
@@ -87,7 +87,6 @@ $allRegisters = $registers->all();
         <header class="page-heading">
             <div>
                 <h1>Checkout Stations</h1>
-                <p class="page-subheading">Manage points of sale, receipt widths, and shift availability.</p>
             </div>
         </header>
 
@@ -107,21 +106,18 @@ $allRegisters = $registers->all();
         <div class="card-grid" style="margin-bottom: 1.5rem;">
             <article class="stat-card with-icon">
                 <span class="stat-icon"><i class="bi bi-hdd-network" aria-hidden="true"></i></span>
-                <div class="label">Total Checkout Stations</div>
+                <div class="label">Total</div>
                 <div class="value"><?= count($allRegisters) ?></div>
-                <div class="hint">Configured tills</div>
             </article>
             <article class="stat-card with-icon status-healthy">
                 <span class="stat-icon"><i class="bi bi-check-circle" aria-hidden="true"></i></span>
-                <div class="label">Available Checkout Stations</div>
+                <div class="label">Available</div>
                 <div class="value"><?= $activeCount ?></div>
-                <div class="hint">Open for shifts</div>
             </article>
             <article class="stat-card with-icon <?= $disabledCount > 0 ? 'status-warning' : '' ?>">
                 <span class="stat-icon"><i class="bi bi-pause-circle" aria-hidden="true"></i></span>
-                <div class="label">Disabled Checkout Stations</div>
+                <div class="label">Disabled</div>
                 <div class="value"><?= $disabledCount ?></div>
-                <div class="hint">Blocked from shifts</div>
             </article>
         </div>
 
@@ -149,13 +145,13 @@ $allRegisters = $registers->all();
 
         <section class="dashboard-section" aria-labelledby="store-registers-heading">
             <h2 id="store-registers-heading"><i class="bi bi-hdd-network" aria-hidden="true"></i> Store Checkout Stations <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
-            <p class="section-description">Disabled stations cannot be assigned to new shifts. Open shifts remain active.</p>
+            <p class="section-description">A disabled station blocks new Shifts; existing cashier Shifts stay active.</p>
 
             <?php if ($allRegisters === []): ?>
                 <div class="empty-state">
                     <i class="bi bi-hdd-network" aria-hidden="true"></i>
                     <strong>No Checkout Stations Configured</strong>
-                    <p class="section-description">Add a checkout station to make it available for cashier shifts.</p>
+                    <p class="section-description">Add one above to make it available for cashier shifts.</p>
                 </div>
             <?php else: ?>
                 <div class="data-table-shell">

@@ -21,6 +21,38 @@ class FiscalPeriodGuardService
     {
     }
 
+    /**
+     * Display order: the open period leads, scheduled periods follow by start
+     * date, then closed and locked history newest first.
+     */
+    public static function orderForDisplay(array $periods): array
+    {
+        $open = [];
+        $scheduled = [];
+        $history = [];
+        foreach ($periods as $period) {
+            $status = strtolower((string)($period['status'] ?? ''));
+            if ($status === 'open') {
+                $open[] = $period;
+            } elseif ($status === self::STATUS_SCHEDULED) {
+                $scheduled[] = $period;
+            } else {
+                $history[] = $period;
+            }
+        }
+
+        $startAscending = static fn(array $a, array $b): int => strcmp((string)$a['start_date'], (string)$b['start_date'])
+            ?: ((int)$a['period_id'] <=> (int)$b['period_id']);
+        $startDescending = static fn(array $a, array $b): int => strcmp((string)$b['start_date'], (string)$a['start_date'])
+            ?: ((int)$b['period_id'] <=> (int)$a['period_id']);
+
+        usort($open, $startAscending);
+        usort($scheduled, $startAscending);
+        usort($history, $startDescending);
+
+        return array_merge($open, $scheduled, $history);
+    }
+
     public function assertOpenForDate(string $date, string $tableName, string $operationLabel = 'transaction'): void
     {
         $day = $this->effectiveDay($date);

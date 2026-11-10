@@ -159,6 +159,7 @@ unset($_SESSION['_login_username']);
     <main id="main-content">
         <section class="landing-hero" aria-labelledby="landing-title">
             <div class="landing-hero__content">
+                <p class="landing-kicker">Shalom Store · Store operations</p>
                 <h1 id="landing-title">
                     Know what is on the shelf.<br>
                     <span class="landing-hero__title-gradient">Reorder before it runs out.</span>
@@ -181,18 +182,19 @@ unset($_SESSION['_login_username']);
             <figure class="landing-hero__visual">
                 <div class="landing-hero__image">
                     <img <?= $shouldOpenLogin ? 'data-src' : 'src' ?>="<?= $heroImageUrl ?>" alt="Stocked Store shelves beside a barcode scanner and incoming inventory">
+                    <span class="landing-hero__scan" aria-hidden="true"></span>
                     <figcaption>Stock visibility from shelf to receiving</figcaption>
                 </div>
-                <div class="landing-preview" aria-label="RetailMind operational flow">
+                <div class="landing-preview" aria-label="RetailMind operational flow" data-live-flow>
                     <div class="landing-preview__header">
                         <strong>One connected Store record</strong>
-                        <span class="landing-preview__state">Ready</span>
+                        <span class="landing-preview__state" data-flow-state>Ready</span>
                     </div>
                     <ol>
-                        <li><span>Sale</span><strong>Scan barcode</strong></li>
-                        <li><span>Inventory</span><strong>Update stock</strong></li>
-                        <li><span>Planning</span><strong>Review demand</strong></li>
-                        <li><span>Purchasing</span><strong>Replenish</strong></li>
+                        <li data-flow-step="sale" data-flow-state="Scanning"><span>Sale</span><strong>Scan barcode</strong><span class="landing-preview__meter" aria-hidden="true"><i></i></span></li>
+                        <li data-flow-step="stock" data-flow-state="Updating stock"><span>Inventory</span><strong>Update stock</strong><span class="landing-preview__meter" aria-hidden="true"><i></i></span></li>
+                        <li data-flow-step="demand" data-flow-state="Reading demand"><span>Planning</span><strong>Review demand</strong><span class="landing-preview__meter" aria-hidden="true"><i></i></span></li>
+                        <li data-flow-step="replenish" data-flow-state="Receiving"><span>Purchasing</span><strong>Replenish</strong><span class="landing-preview__meter" aria-hidden="true"><i></i></span></li>
                     </ol>
                 </div>
             </figure>
@@ -519,6 +521,7 @@ unset($_SESSION['_login_username']);
     <script src="<?= htmlspecialchars(landing_app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
     <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js?v=' . filemtime(__DIR__ . '/assets/js/ui.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/landing-motion.js?v=' . filemtime(__DIR__ . '/assets/js/landing-motion.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>
         (function() {
             var modal = document.getElementById('loginModal');

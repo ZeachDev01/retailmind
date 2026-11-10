@@ -299,6 +299,30 @@ html[data-theme="dark"] .landing-hero::before {
     min-width: 0;
 }
 
+.landing-kicker {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    margin: 0 0 1.2rem;
+    color: #475569;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    text-wrap: balance;
+}
+
+html[data-theme="dark"] .landing-kicker {
+    color: #94a3b8;
+}
+
+.landing-kicker::before {
+    content: "";
+    width: 26px;
+    height: 2px;
+    background: var(--landing-blue);
+}
+
 /* Eyebrow Pill Badge */
 .landing-badge {
     display: inline-flex;
@@ -551,9 +575,13 @@ html[data-theme="dark"] .landing-btn--secondary:hover {
     position: relative;
     flex: 0 0 auto;
     padding-left: 1rem;
-    color: var(--landing-emerald);
+    color: #047857;
     font-size: .75rem;
     font-weight: 750;
+}
+
+html[data-theme="dark"] .landing-preview__header .landing-preview__state {
+    color: #6ee7b7;
 }
 
 .landing-preview__state::before {
@@ -1547,6 +1575,25 @@ html[data-theme="dark"] .landing-login-form .field-error {
 }
 
 @media (max-width: 480px) {
+    .landing-nav {
+        width: calc(100% - 1.5rem);
+        gap: .5rem;
+    }
+    .landing-nav__login {
+        padding: .5rem .8rem;
+        font-size: .8rem;
+        white-space: nowrap;
+    }
+    .landing-nav .theme-trigger {
+        min-width: 0;
+        gap: .35rem;
+        padding: .45rem .55rem;
+        font-size: .8rem;
+    }
+    .landing-nav .theme-trigger svg {
+        width: 18px;
+        height: 18px;
+    }
     .landing-hero h1 { font-size: 2.3rem; }
     .landing-proof-sep { display: none; }
     .landing-hero__proof-bar { flex-direction: column; align-items: flex-start; gap: .75rem; }
@@ -1565,8 +1612,192 @@ html[data-theme="dark"] .landing-login-form .field-error {
     .landing-capability-card,
     .landing-btn,
     .landing-status-dot,
-    .landing-badge__pulse {
+    .landing-badge__pulse,
+    .landing-hero__scan::after,
+    .landing-preview__meter i {
         animation: none !important;
         transition: none !important;
+    }
+}
+
+/* ==========================================================================
+   Living Store Record — one sale moves through the connected record
+   ========================================================================== */
+.landing-preview__meter {
+    display: block;
+    height: 2px;
+    margin-top: .55rem;
+    border-radius: 999px;
+    background: transparent;
+    overflow: hidden;
+}
+
+.landing-preview__meter i {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--landing-blue), #38bdf8);
+}
+
+.landing-preview li.is-active .landing-preview__meter i {
+    animation: landing-flow-fill 2400ms linear both;
+}
+
+@keyframes landing-flow-fill {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+.landing-preview li.is-active::before {
+    background: var(--landing-blue);
+    border-color: var(--landing-blue);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, .16);
+}
+
+.landing-preview li.is-active > span:first-child {
+    color: var(--landing-blue-deep);
+}
+
+html[data-theme="dark"] .landing-preview li.is-active > span:first-child {
+    color: #93c5fd;
+}
+
+.landing-preview[data-stage] .landing-preview__state::before {
+    animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+/* Scanner pass that fires while the record is in its Sale stage */
+.landing-hero__scan {
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+
+.landing-hero__scan::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    left: 0;
+    top: 12%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(125, 211, 252, .18) 6%, #7dd3fc 50%, rgba(125, 211, 252, .18) 94%, transparent);
+    box-shadow: 0 0 18px 3px rgba(37, 99, 235, .5);
+}
+
+.landing-hero__visual[data-stage="sale"] .landing-hero__scan {
+    opacity: 1;
+}
+
+.landing-hero__visual[data-stage="sale"] .landing-hero__scan::after {
+    animation: landing-scan 1600ms cubic-bezier(.45, .05, .55, .95) infinite;
+}
+
+@keyframes landing-scan {
+    0%, 100% { top: 12%; opacity: .25; }
+    10% { opacity: 1; }
+    50% { top: 84%; opacity: 1; }
+    90% { opacity: 1; }
+}
+
+/* Ledger grid under the hero, masked so it reads as paper, not decoration */
+.landing-hero::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(15, 23, 42, .1) 1px, transparent 1.4px);
+    background-size: 24px 24px;
+    -webkit-mask-image: radial-gradient(ellipse 58% 62% at 26% 34%, #000 0%, transparent 72%);
+    mask-image: radial-gradient(ellipse 58% 62% at 26% 34%, #000 0%, transparent 72%);
+    opacity: .45;
+    pointer-events: none;
+}
+
+html[data-theme="dark"] .landing-hero::after {
+    background-image: radial-gradient(circle, rgba(148, 163, 184, .24) 1px, transparent 1.4px);
+    opacity: .4;
+}
+
+/* Scroll-driven depth and reveals; static in browsers without scroll timelines */
+@supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .landing-hero__image img {
+            animation: landing-hero-drift linear both;
+            animation-timeline: scroll(root block);
+            animation-range: 0 620px;
+        }
+
+        .landing-section-heading,
+        .landing-capability--lead,
+        .landing-capability-card,
+        .landing-step-card,
+        .landing-workflow__content,
+        .landing-access {
+            animation: landing-reveal linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 22%;
+        }
+    }
+}
+
+@keyframes landing-hero-drift {
+    from { transform: scale(1.03) translateY(-8px); }
+    to { transform: scale(1.09) translateY(12px); }
+}
+
+@keyframes landing-reveal {
+    from { opacity: 0; translate: 0 18px; }
+    to { opacity: 1; translate: 0 0; }
+}
+
+/* ==========================================================================
+   Liquid theme reveal — the new theme floods out from the chosen control
+   ========================================================================== */
+html.theme-liquid::view-transition-group(root) {
+    animation: none;
+}
+
+html.theme-liquid::view-transition-old(root) {
+    animation: none;
+    opacity: 1;
+    z-index: 1;
+}
+
+html.theme-liquid::view-transition-new(root) {
+    z-index: 2;
+    mix-blend-mode: normal;
+    clip-path: circle(var(--liquid-reach, 150vmax) at var(--liquid-x, 50%) var(--liquid-y, 50%));
+    animation: landing-liquid-fallback 1050ms cubic-bezier(.32, .12, .26, 1) both;
+}
+
+@keyframes landing-liquid-fallback {
+    from {
+        clip-path: circle(0px at var(--liquid-x, 50%) var(--liquid-y, 50%));
+    }
+    to {
+        clip-path: circle(var(--liquid-reach, 150vmax) at var(--liquid-x, 50%) var(--liquid-y, 50%));
+    }
+}
+
+@media print {
+    .landing-section-heading,
+    .landing-capability--lead,
+    .landing-capability-card,
+    .landing-step-card,
+    .landing-workflow__content,
+    .landing-access,
+    .landing-hero__image img {
+        animation: none !important;
+        opacity: 1 !important;
+        translate: none !important;
+        transform: none !important;
+    }
+    .landing-hero__scan,
+    .landing-preview__meter {
+        display: none !important;
     }
 }

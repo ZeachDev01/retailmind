@@ -58,6 +58,73 @@
     };
     apply();
     window.addEventListener('retailmind:pagechange', apply);
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    const liquidFrames = (x, y, reach) => {
+        const frames = [];
+        const compact = window.innerWidth < 700;
+        const steps = compact ? 10 : 12;
+        const points = compact ? 40 : 64;
+        for (let step = 0; step <= steps; step++) {
+            const progress = step / steps;
+            const spread = 1 - Math.pow(1 - progress, 2.2);
+            const phase = progress * Math.PI * 2;
+            const coords = [];
+            for (let point = 0; point < points; point++) {
+                const angle = (point / points) * Math.PI * 2;
+                const wobble = 1 + 0.045 * Math.sin(6 * angle + phase) + 0.022 * Math.sin(11 * angle - phase * 1.6);
+                const radius = reach * spread * wobble;
+                coords.push((x + Math.cos(angle) * radius).toFixed(1) + 'px ' + (y + Math.sin(angle) * radius).toFixed(1) + 'px');
+            }
+            frames.push({ clipPath: 'polygon(' + coords.join(',') + ')' });
+        }
+        return frames;
+    };
+
+    // The landing page reveals the new theme as a spreading water front.
+    let liquidRun = 0;
+    const liquidSwap = (origin, update) => {
+        if (!origin || !document.body.classList.contains('landing-page')
+            || typeof document.startViewTransition !== 'function' || reduceMotion.matches) {
+            update();
+            return;
+        }
+        const run = ++liquidRun;
+        const root = document.documentElement;
+        const rect = origin.getBoundingClientRect();
+        const x = Math.round(rect.left + rect.width / 2);
+        const y = Math.round(rect.top + rect.height / 2);
+        const reach = Math.ceil(Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y)) + 48);
+        root.style.setProperty('--liquid-x', x + 'px');
+        root.style.setProperty('--liquid-y', y + 'px');
+        root.style.setProperty('--liquid-reach', reach + 'px');
+        root.classList.add('theme-liquid');
+        let transition;
+        try {
+            transition = document.startViewTransition(update);
+        } catch (_) {
+            root.classList.remove('theme-liquid');
+            update();
+            return;
+        }
+        transition.ready.then(() => {
+            if (typeof root.animate !== 'function') return;
+            root.animate(liquidFrames(x, y, reach), {
+                duration: 1050,
+                easing: 'linear',
+                fill: 'both',
+                pseudoElement: '::view-transition-new(root)'
+            });
+        }).catch(() => { /* Older engines keep the CSS fallback. */ });
+        transition.finished.finally(() => {
+            if (run !== liquidRun) return;
+            root.classList.remove('theme-liquid');
+            root.style.removeProperty('--liquid-x');
+            root.style.removeProperty('--liquid-y');
+            root.style.removeProperty('--liquid-reach');
+        }).catch(() => { /* A skipped transition still restores the page. */ });
+    };
     window.addEventListener('storage', event => {
         const key = config.authenticated ? 'retailmind.theme' : 'retailmind.login-theme';
         if (event.key !== key || !modes.includes(event.newValue)) return;
@@ -152,6 +219,7 @@
             const button = event.target.closest('[data-theme-mode]');
             if (!button) return;
             if (!modes.includes(button.dataset.themeMode)) return;
+            const previousTheme = document.documentElement.dataset.theme;
             mode = button.dataset.themeMode;
             config.mode = mode;
             try {
@@ -159,7 +227,12 @@
                 localStorage.setItem('retailmind.theme', mode);
                 if (!config.authenticated) localStorage.setItem('retailmind.login-theme', mode);
             } catch (_) { /* Storage is optional on shared/private browsers. */ }
-            apply();
+            const nextTheme = mode === 'system' ? (device.matches ? 'dark' : 'light') : mode;
+            if (previousTheme === nextTheme) {
+                apply();
+            } else {
+                liquidSwap(button, apply);
+            }
             const menu = button.closest('.theme-mobile-menu');
             if (menu) {
                 menu.open = false;

@@ -280,6 +280,8 @@ $suggestedStart = $periods
     ? date('Y-m-d', strtotime((string)$periods[0]['end_date'] . ' +1 day'))
     : $today;
 
+$periods = FiscalPeriodGuardService::orderForDisplay($periods);
+
 $autoRollover = false;
 try {
     $attentionSettings = new App\Attention\AttentionSettingsService($pdo, new App\Attention\SystemClock());
