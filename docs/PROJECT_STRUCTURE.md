@@ -79,9 +79,9 @@ work/hostinger-demo/             Demo snapshot, manifest, and replay instruction
 work/visualizations/             Development prototypes
 work/archive/root-scratch/      Retained root scratch notes, commit list, and diff
 work/archives/                  Retained source ZIP archive
-output/                         Screenshots, verification output, and worktree archives
-.impeccable/                    Design review evidence and surface notes
-.scratch/, tmp/                 Existing local scratch and temporary files
+output/                         Ignored generated browser captures and verification output
+.impeccable/                    Design surface briefs; ignored review captures
+.scratch/, tmp/                 Ignored local scratch and temporary files
 backend/storage/                Existing storage tree; not a second application backend
 src/backend/storage/            Application runtime storage
 retailmind-private-*/           Recovery storage naming; inspect configuration before any relocation

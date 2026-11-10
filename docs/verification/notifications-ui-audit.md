@@ -47,7 +47,7 @@ Systemic pattern on this surface: old view-specific styling duplicated theme dec
 
 `RUN_DB_TESTS=1 node src/backend/tests/notification_list_browser_test.js` passed against its randomly named disposable database. Coverage includes category filtering, 10/20/all expansion, individual/bulk read actions, invalid/malformed filters, account isolation, viewport overflow, touch-target height, timestamp contrast and focus visibility. Fixture cleanup remains in the test's finally block. Existing tests were adapted from h4 to h2 and extended for UI checks.
 
-Visual evidence: incumbent fixture screenshot matched the original source structure; final desktop, mobile and dark screenshots were inspected in two bounded rounds. Final evidence is in `.impeccable/review/notifications-after/`. Live user-browser inspection was unavailable; authenticated Chromium fixture rendering supplied the evidence instead. No live Store data was changed.
+Visual evidence: incumbent fixture screenshot matched the original source structure; final desktop, mobile and dark screenshots were inspected in two bounded rounds. The final screenshots were disposable browser captures under `.impeccable/review/notifications-after/` and were removed with the other generated captures; this audit record is the retained evidence. Live user-browser inspection was unavailable; authenticated Chromium fixture rendering supplied the evidence instead. No live Store data was changed.
 
 `node src/backend/tests/notification_responsive_browser_test.js` also passed: shipped article markup, ordinary and long unbroken messages, contained content and working read controls at 320, 375, 425, 768, 1024 and 1440px. Its extracted fixture was updated for the semantic article/h2 markup and page scope.
 
