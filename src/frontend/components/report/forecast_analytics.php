@@ -280,7 +280,6 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <div class="topbar">
             <div>
                 <h1>Forecast Analytics <?php if ($isDemoMode): ?><span class="demo-badge">Demo Evidence (<?= htmlspecialchars($demoSource) ?>)</span><?php endif; ?></h1>
-                <p class="page-subtitle">Compare forecasts with recorded sales. Review model evidence when needed.</p>
             </div>
         </div>
 
@@ -455,10 +454,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
         <section class="model-context-card" aria-label="Prediction Performance Evidence" style="margin-bottom: 1.5rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
                 <div>
-                    <h2 style="font-size:1.15rem; margin:0 0 0.25rem 0;">Performance on Store sales</h2>
-                    <p class="muted" style="margin:0; font-size:0.875rem;">
-                        Compares saved forecasts with later Store sales.
-                    </p>
+                    <h2 style="font-size:1.15rem; margin:0;">Performance on Store sales <?php forecast_help('performance-help', 'Compares saved forecasts with later Store sales. Results appear after target dates have usable observations.', 'About Store performance'); ?></h2>
                 </div>
                 <div>
                     <?php if ($perfEvidence['status'] === 'genuine_evidence'): ?>

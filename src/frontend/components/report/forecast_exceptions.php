@@ -47,15 +47,24 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
         <header class="page-heading">
             <div>
                 <h1>Forecast Exceptions</h1>
-                <p class="page-subtitle">Products using stock rules instead of forecasts.</p>
             </div>
         </header>
         <?php forecast_workflow('forecast'); ?>
 
-        <section class="forecast-overview" aria-label="Forecast exception summary">
-            <div><small>Using stock rules</small><strong><?= count($exceptions) ?> <?= count($exceptions) === 1 ? 'product' : 'products' ?></strong></div>
-            <div class="forecast-coverage"><small>Forecast coverage</small><strong><?= (int)$coverage['forecast_backed_count'] ?> / <?= (int)$coverage['scope_count'] ?></strong> <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?><meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Products with usable forecasts"><?= (int)$coverage['forecast_backed_count'] ?> / <?= (int)$coverage['scope_count'] ?></meter></div>
-            <div><small>Store status</small><strong><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></strong></div>
+        <section class="forecast-summary-strip" aria-label="Forecast exception summary">
+            <div>
+                <span class="forecast-summary-label">Using stock rules</span>
+                <strong><?= count($exceptions) ?> <?= count($exceptions) === 1 ? 'product' : 'products' ?></strong>
+            </div>
+            <div>
+                <span class="forecast-summary-label">Forecast coverage <?php forecast_help('exception-coverage-help', $coverage['coverage_summary_text'], 'About forecast coverage'); ?></span>
+                <strong><?= (int)$coverage['forecast_backed_count'] ?> of <?= (int)$coverage['scope_count'] ?></strong>
+                <meter min="0" max="<?= max(1, (int)$coverage['scope_count']) ?>" value="<?= (int)$coverage['forecast_backed_count'] ?>" aria-label="Products with usable forecasts"><?= (int)$coverage['forecast_backed_count'] ?> / <?= (int)$coverage['scope_count'] ?></meter>
+            </div>
+            <div>
+                <span class="forecast-summary-label">Store status</span>
+                <strong><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $coverage['store_status']))) ?></strong>
+            </div>
         </section>
 
         <section class="dashboard-section">
@@ -86,7 +95,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
             </form>
 
             <div class="table-wrap" role="region" aria-label="Forecast exceptions queue" tabindex="0">
-                <table>
+                <table class="data-table forecast-stack-table" data-no-smart-table data-no-ghost-rows>
                     <thead>
                         <tr>
                             <th scope="col">Product</th>
@@ -102,19 +111,19 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
                             $nextStep = $row['exclusion_action'] ?? 'Replenishment continues on stock rules';
                         ?>
                             <tr>
-                                <td>
+                                <td data-label="Product">
                                     <strong><a href="<?= htmlspecialchars(app_url('components/inventory_management/product_investigation.php?product_id=' . (int)$row['product_id'])) ?>"><?= htmlspecialchars($row['product_name']) ?></a></strong><br>
                                     <span class="u-text-muted"><?= htmlspecialchars($row['sku']) ?></span>
                                 </td>
-                                <td><strong><?= (int)$row['current_stock'] ?></strong> units</td>
-                                <td><strong><?= (int)$row['stock_rule_quantity'] ?></strong> units</td>
-                                <td>
+                                <td data-label="On hand"><strong><?= (int)$row['current_stock'] ?></strong> units</td>
+                                <td data-label="Stock-rule suggestion"><strong><?= (int)$row['stock_rule_quantity'] ?></strong> units</td>
+                                <td data-label="Reason">
                                     <div class="readiness-status-line">
                                         <span><?= htmlspecialchars(explode(':', $reason, 2)[0]) ?></span>
                                         <?php forecast_help('exception-' . (int)$row['product_id'], $reason . '. Next step: ' . $nextStep, 'Exception details for ' . $row['product_name']); ?>
                                     </div>
                                 </td>
-                                <td>
+                                <td data-label="Action">
                                     <a class="btn btn-secondary btn-small" href="<?= htmlspecialchars(app_url('components/report/predictions.php?search=' . urlencode($row['sku']))) ?>" aria-label="View forecast for <?= htmlspecialchars($row['product_name']) ?>">View Forecast</a>
                                 </td>
                             </tr>
@@ -129,7 +138,7 @@ $decisions = $decisionStatement->fetchAll(PDO::FETCH_ASSOC);
 
         <details class="forecast-details"><summary>Recent decisions (<?= count($decisions) ?>)</summary>
             <div class="table-wrap" role="region" aria-label="Recent forecast decisions" tabindex="0">
-                <table>
+                <table class="data-table" data-no-smart-table data-no-ghost-rows>
                     <thead>
                         <tr>
                             <th scope="col">Date</th>

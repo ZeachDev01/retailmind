@@ -136,7 +136,6 @@ $formatUnits = static function ($val): string {
         <header class="page-heading">
             <div>
                 <h1>Model Review &amp; Approval</h1>
-                <p class="page-subheading">Review the candidate, check evidence, then approve or reject.</p>
             </div>
         </header>
         <?php forecast_workflow('review'); ?>
@@ -322,8 +321,7 @@ $formatUnits = static function ($val): string {
 
         <!-- Product Coverage and Input Blockers -->
         <section class="dashboard-section" aria-labelledby="products-heading">
-            <h2 id="products-heading"><i class="bi bi-box-seam" aria-hidden="true"></i> Product coverage</h2>
-            <p class="section-description">Products without enough history use stock rules.</p>
+            <h2 id="products-heading"><i class="bi bi-box-seam" aria-hidden="true"></i> Product coverage <?php forecast_help('coverage-scope-help', 'Products without enough sales history use stock rules instead of forecasts.', 'About product coverage'); ?></h2>
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; margin-top: 1rem;">
                 <div class="approval-form-card">

@@ -156,65 +156,14 @@ function build_query(array $params): string {
             pointer-events: none;
             cursor: not-allowed;
         }
-        .forecast-help-card {
-            margin: 1.25rem 0 1.5rem;
-            padding: 1rem 1.15rem;
-            background: var(--theme-surface-soft, #f8fafc);
-            border: 1px solid var(--border-color, #e2e8f0);
-            border-radius: 12px;
-        }
-        .forecast-help-card > h2 {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 0 0 0.25rem;
-            font-size: 1rem;
-            color: var(--text, #1e293b);
-        }
-        .forecast-help-card > p {
-            margin: 0 0 0.65rem;
-            color: var(--muted, #64748b);
-            font-size: 0.875rem;
-        }
-        .forecast-help-item {
-            margin: 0;
+        .forecast-definitions-section + .forecast-definitions-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
             border-top: 1px solid var(--border-color, #e2e8f0);
         }
-        .forecast-help-item > summary {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
-            min-height: 44px;
-            padding: 0.7rem 0;
-            color: var(--text, #1e293b);
-            font-weight: 600;
-            cursor: pointer;
-            list-style: none;
-        }
-        .forecast-help-item > summary::-webkit-details-marker {
-            display: none;
-        }
-        .forecast-help-item > summary::after {
-            content: '';
-            width: 0.45rem;
-            height: 0.45rem;
-            flex: 0 0 auto;
-            border-right: 1.5px solid currentColor;
-            border-bottom: 1.5px solid currentColor;
-            transform: rotate(45deg) translateY(-2px);
-            transition: transform 160ms ease;
-        }
-        .forecast-help-item[open] > summary::after {
-            transform: rotate(225deg) translate(-2px, -1px);
-        }
-        .forecast-help-item > summary:focus-visible {
-            outline: 2px solid var(--primary, #2563eb);
-            outline-offset: 3px;
-            border-radius: 4px;
-        }
-        .forecast-help-item > :not(summary) {
-            margin-bottom: 0.9rem;
+        .forecast-definitions-section h3 {
+            margin: 0 0 0.5rem;
+            font-size: 1rem;
         }
     </style>
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
@@ -226,7 +175,6 @@ function build_query(array $params): string {
         <header class="page-heading">
             <div>
                 <h1>Forecast Data Readiness</h1>
-                <p class="page-subtitle">Check which products have enough sales data for training.</p>
             </div>
         </header>
 
@@ -290,7 +238,7 @@ function build_query(array $params): string {
             </form>
 
             <div class="table-wrap" role="region" aria-label="Product readiness catalog" tabindex="0">
-                <table class="data-table readiness-catalog" data-no-smart-table aria-label="Product data readiness">
+                <table class="data-table readiness-catalog forecast-stack-table" data-no-smart-table data-no-ghost-rows aria-label="Product data readiness">
                     <thead>
                         <tr>
                             <th scope="col">Product</th>
@@ -309,21 +257,21 @@ function build_query(array $params): string {
                                 : 'No history';
                         ?>
                             <tr>
-                                <td>
+                                <td data-label="Product">
                                     <strong><?= htmlspecialchars($row['product_name']) ?></strong><br>
                                     <span class="u-text-muted" style="font-size:0.8rem;"><?= htmlspecialchars($row['sku']) ?> &middot; <?= htmlspecialchars($row['category']) ?></span>
                                 </td>
-                                <td>
+                                <td data-label="Status">
                                     <div class="readiness-status-line">
                                         <span><?= htmlspecialchars($readinessState['label']) ?></span>
                                         <?php forecast_help('readiness-' . (int)$row['product_id'], $readinessState['reason'] . ' ' . $readinessState['next'], 'Readiness details for ' . $row['product_name']); ?>
                                     </div>
                                 </td>
-                                <td class="readiness-days">
+                                <td class="readiness-days" data-label="Usable days">
                                     <span><?= (int)$row['accumulated_usable_days'] ?> / <?= (int)$row['required_usable_days'] ?></span>
                                     <meter min="0" max="<?= max(1, (int)$row['required_usable_days']) ?>" value="<?= min((int)$row['accumulated_usable_days'], max(1, (int)$row['required_usable_days'])) ?>" aria-label="Usable sales days for <?= htmlspecialchars($row['product_name']) ?>"></meter>
                                 </td>
-                                <td>
+                                <td data-label="Data checks">
                                     <button type="button" class="btn btn-small btn-secondary" data-readiness-details="readiness-evidence-<?= (int)$row['product_id'] ?>" aria-haspopup="dialog" aria-controls="readiness-drawer" aria-label="Data checks for <?= htmlspecialchars($row['product_name']) ?>">Details <i class="bi bi-arrow-right" aria-hidden="true"></i></button>
                                     <template id="readiness-evidence-<?= (int)$row['product_id'] ?>">
                                         <section class="readiness-evidence-product">
@@ -391,25 +339,23 @@ function build_query(array $params): string {
                 </nav>
             <?php endif; ?>
         </section>
-        <section class="forecast-help-card" aria-labelledby="forecast-help-heading">
-            <h2 id="forecast-help-heading"><i class="bi bi-info-circle" aria-hidden="true"></i> Help &amp; definitions</h2>
-            <p>Quick explanations for training readiness and forecast statuses.</p>
-            <details class="forecast-help-item">
-                <summary>How training eligibility works</summary>
+        <details class="forecast-details">
+            <summary>Definitions &amp; statuses</summary>
+            <section class="forecast-definitions-section">
+                <h3>Training eligibility</h3>
                 <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
-            </details>
-
-            <details class="forecast-help-item">
-                <summary>Other forecast statuses</summary>
-                <section class="forecast-overview" aria-label="Readiness overview stats">
+            </section>
+            <section class="forecast-definitions-section">
+                <h3>Status counts</h3>
+                <div class="forecast-overview" aria-label="Readiness overview stats">
                     <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
                     <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
                     <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
                     <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
                     <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
-                </section>
-            </details>
-        </section>
+                </div>
+            </section>
+        </details>
 
     </main>
 </div>

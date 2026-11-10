@@ -286,6 +286,18 @@ try {
     $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), SqlBackupFormat::schema($full));
     $assert($fullDecoded['rows']['schema_migrations'] === [], 'Captured packages exclude the source migration ledger rows');
     $assert($fullDecoded['compatibility']['status'] === 'current', 'A current package classifies as current');
+    // A backup older than this installation (newer destination columns only)
+    // must stay restorable instead of demanding a migration that already ran.
+    $full->exec('ALTER TABLE store_calendar ADD COLUMN operator_note TEXT NULL');
+    $additivePreflight = $fullRestorer->preflight($fullActor, 'super_admin', $fullBackup['path'], $fullBackup['filename'], 'Full-schema-password');
+    $full->exec('ALTER TABLE store_calendar DROP COLUMN operator_note');
+    $assert(($additivePreflight['compatibility']['status'] ?? '') === 'upgradable'
+        && array_key_exists('adapter', $additivePreflight['compatibility'] ?? [])
+        && $additivePreflight['compatibility']['adapter'] === null
+        && in_array('store_calendar.operator_note', $additivePreflight['compatibility']['changes']['columns_added'] ?? [], true),
+        'A backup older than this installation is upgradable without an adapter: ' . ($additivePreflight['compatibility']['message'] ?? 'missing report'));
+    $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot',
+        'An older backup preflight leaves destination data unchanged');
     $ledgerPath = __DIR__ . '/../database/migrations';
     $ledgerBefore = (new \App\Database\MigrationLedger($full, $ledgerPath))->snapshot();
     $assert($ledgerBefore !== [], 'The destination ledger is populated before replacement');

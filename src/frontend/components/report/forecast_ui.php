@@ -29,7 +29,8 @@ function forecast_readiness_state(array $row): array
 
 function forecast_workflow(string $current): void
 {
-    if (current_role() === 'super_admin') {
+    $role = current_role();
+    if ($role === 'super_admin') {
         $pages = [
             ['forecast_import.php', 'Import history', 'cloud-arrow-up', 'system_administrator'],
             ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
@@ -38,37 +39,41 @@ function forecast_workflow(string $current): void
             ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
             ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],
         ];
-        $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        ?>
-        <nav class="forecast-studio-nav" aria-label="Forecasting workspace">
-            <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>
-                <a href="<?= htmlspecialchars(app_url('components/' . $folder . '/' . $file)) ?>" <?= $page === $file ? 'aria-current="page"' : '' ?>>
-                    <i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span>
-                </a>
-            <?php endforeach; ?>
-        </nav>
-        <?php
-        return;
-    }
-    if (current_role() === 'admin') {
+    } elseif ($role === 'admin') {
         $pages = [
             ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
             ['model_review.php', 'Model review', 'clipboard-check', 'administrator'],
             ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
             ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],
         ];
-        $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
-        ?>
-        <nav class="forecast-studio-nav forecast-studio-nav-admin" aria-label="Forecasting workspace">
-            <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>
-                <a href="<?= htmlspecialchars(app_url('components/' . $folder . '/' . $file)) ?>" <?= $page === $file ? 'aria-current="page"' : '' ?>>
-                    <i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span>
-                </a>
-            <?php endforeach; ?>
-        </nav>
-        <?php
+    } elseif ($role === 'inventory_manager') {
+        $pages = [
+            ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
+            ['replenishment_queue.php', 'Buying suggestions', 'workflow', 'inventory_management'],
+        ];
+    } else {
         return;
     }
+
+    $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
+    ?>
+    <nav class="forecast-studio-nav" aria-label="Forecasting workspace">
+        <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>
+            <a href="<?= htmlspecialchars(app_url('components/' . $folder . '/' . $file)) ?>" <?= $page === $file ? 'aria-current="page"' : '' ?>>
+                <i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><span><?= $label ?></span>
+            </a>
+        <?php endforeach; ?>
+    </nav>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const active = document.querySelector('.forecast-studio-nav a[aria-current="page"]');
+        const nav = active?.parentElement;
+        if (nav && nav.scrollWidth > nav.clientWidth) {
+            nav.scrollLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+        }
+    });
+    </script>
+    <?php
 }
 
 function forecast_status_summary(string $title, string $blocker, string $next, ?string $url = null, string $linkLabel = 'Continue'): void

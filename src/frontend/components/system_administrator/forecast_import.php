@@ -137,7 +137,6 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <div class="topbar">
             <div>
                 <h1>Import Sales History</h1>
-                <p class="page-subtitle">Add past daily sales from this Store.</p>
             </div>
         </div>
 

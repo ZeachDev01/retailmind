@@ -99,6 +99,23 @@ try {
         && $decoded['rows']['held_sales'] === $currentRows['held_sales'], 'Current package rows are returned unchanged');
     $assert($decoded['source_schema'] === $current, 'The producer schema is extracted from the package');
 
+    // A backup taken before this installation gained a column is restorable
+    // without an adapter: the destination structure wins and the new column is blank.
+    $behind = $current;
+    $behind['users'] = $table('users', ['user_id', 'first_name', 'last_name']);
+    $behindRows = $currentRows;
+    $behindRows['users'] = [['user_id' => '1', 'first_name' => 'Old', 'last_name' => 'Name']];
+    $behindSql = $sqlFor($behind, $behindRows);
+    $behindPackage = StorePackageFormat::encode($behindSql, [], $behind, str_repeat('8', 32), 'mariadb',
+        ['migrations' => $currentKeys]);
+    $additive = StorePackageFormat::decode($behindPackage, $current, $registry(), $currentKeys);
+    $additiveReport = $additive['compatibility'];
+    $assert($additiveReport['status'] === 'upgradable', 'Destination-only additions are upgradable: ' . $additiveReport['message']);
+    $assert($additiveReport['adapter'] === null, 'Safe additions need no structure adapter');
+    $assert($additiveReport['changes']['columns_added'] === ['users.display_name'], 'The report names the newer destination column');
+    $assert($additiveReport['missing_migrations'] === [], 'A behind package reports no missing migration');
+    $assert($additive['rows']['users'] === $behindRows['users'], 'A behind package keeps its rows unchanged');
+
     // An older package is classified and adapted before it reaches replacement.
     $olderSql = $sqlFor($older, $olderRows);
     $olderPackage = StorePackageFormat::encode($olderSql, [], $older, str_repeat('b', 32), 'mariadb',

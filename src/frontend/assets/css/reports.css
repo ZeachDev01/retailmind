@@ -9,49 +9,78 @@
 .forecast-analytics-tabs {
     margin-top: 1.25rem;
     border: 1px solid var(--border);
+    border-radius: 14px;
     background: var(--card-bg);
+    overflow: hidden;
 }
 
 .analytics-tab-list {
     display: flex;
+    gap: 0.15rem;
+    padding: 0.3rem;
     overflow-x: auto;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
     border-bottom: 1px solid var(--border);
     background: var(--theme-surface-soft, #f8fafc);
 }
 
+.analytics-tab-list::-webkit-scrollbar {
+    height: 4px;
+}
+
+.analytics-tab-list::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 999px;
+}
+
 .analytics-tab {
     display: inline-flex;
-    min-height: 48px;
+    min-height: 44px;
     flex: 1 0 auto;
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.8rem;
     border: 0;
-    border-bottom: 3px solid transparent;
+    border-radius: 9px;
     background: transparent;
     color: var(--muted);
     font: inherit;
-    font-size: 0.88rem;
-    font-weight: 700;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    scroll-snap-align: center;
     cursor: pointer;
 }
 
 .analytics-tab:hover,
 .analytics-tab:focus-visible {
-    color: var(--primary);
-    background: var(--theme-surface, #fff);
+    color: var(--text);
+    background: var(--card-bg);
 }
 
 .analytics-tab:focus-visible {
-    outline: 3px solid color-mix(in srgb, var(--primary) 30%, transparent);
-    outline-offset: -3px;
+    outline: 2px solid var(--text);
+    outline-offset: -2px;
 }
 
 .analytics-tab.is-active {
-    border-bottom-color: var(--primary);
-    background: var(--theme-surface, #fff);
-    color: var(--primary);
+    background: var(--primary);
+    color: #fff;
+}
+
+.analytics-tab.is-active:focus-visible {
+    outline-color: #fff;
+}
+
+html[data-theme="dark"] .analytics-tab.is-active {
+    background: #2563eb;
+    color: #fff;
+}
+
+.analytics-tab.is-active > i {
+    opacity: 1;
 }
 
 .analytics-tab-panel {

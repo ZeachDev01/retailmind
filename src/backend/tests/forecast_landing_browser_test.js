@@ -219,7 +219,7 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
 
         assert.match(await page.locator('h1').innerText(), /Demand Forecast/);
-        assert.match(await page.locator('.page-subtitle').innerText(), /Expected sales/);
+        assert.equal(await page.locator('.page-subtitle').count(), 0, 'Demand Forecast relies on its status panel instead of a page subtitle');
         const adminStudioNav = page.locator('.forecast-studio-nav');
         assert.equal(await adminStudioNav.count(), 1, 'Administrator uses the shared forecasting studio navigation');
         assert.equal(await adminStudioNav.locator('a').count(), 4, 'Administrator sees four permitted forecasting destinations');
@@ -319,6 +319,11 @@ const fixture = action => {
         await page.goto(origin + '/components/report/predictions.php');
         await page.waitForLoadState('domcontentloaded');
 
+        const managerStudioNav = page.locator('.forecast-studio-nav');
+        assert.equal(await managerStudioNav.locator('a').count(), 2, 'Inventory Manager sees demand forecast and buying suggestions');
+        assert.equal(await managerStudioNav.locator('a[aria-current="page"]').innerText(), 'Demand forecast', 'Demand Forecast is the active Inventory Manager destination');
+        assert.equal(await managerStudioNav.locator('a[href$="replenishment_queue.php"]').count(), 1, 'Inventory Manager navigation links to buying suggestions');
+
         // Usability and sections visible
         await checkWorkflow('inventory_manager', 'Inventory Manager');
         assert.match(await page.locator('#heading-usability').innerText(), /Forecast status/);
@@ -367,7 +372,7 @@ const fixture = action => {
                 }
             }
             if (route.includes('data_readiness')) {
-                await page.getByText('How training eligibility works', {exact: true}).click();
+                await page.getByText('Definitions & statuses', {exact: true}).click();
                 eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
             }
             for (const width of [1440, 390, 320]) {
@@ -560,7 +565,8 @@ const fixture = action => {
                     await page.locator('#schedule_hour').selectOption(hour);
                     await page.locator('#schedule_minute').selectOption(minute);
                     await page.locator('#schedule_period').selectOption(period);
-                    await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Save weekly schedule', exact: true}).click()]);
+                    await page.getByRole('button', {name: 'Save Weekly Schedule', exact: true}).click();
+                    await page.waitForFunction(() => document.querySelector('main [role="status"]')?.textContent.includes('Weekly schedule saved'));
                     assert.match(await page.locator('main [role="status"]').first().innerText(), /Weekly schedule saved/);
                     await page.reload();
                     assert.equal(await page.locator('#effective-training-schedule').innerText(), `Every Wednesday at ${display}, Philippine time (Asia/Manila).`);
@@ -599,7 +605,7 @@ const fixture = action => {
         const replay = await page.goto(origin + '/components/report/forecast_replay.php');
         assert.equal(replay.status(), 200);
         assert.equal(await page.locator('.replay-bar-pair').count(), 28);
-        assert.match(await page.locator('main p[role="status"]').innerText(), /Experimental preview only/);
+        assert.match(await page.locator('main p[role="status"]').filter({hasText: 'Experimental preview only'}).innerText(), /Experimental preview only/);
         if (process.env.FORECAST_SCREENSHOTS) {
             for (const width of [1440, 390]) {
                 await page.setViewportSize({width, height: 900});

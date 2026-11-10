@@ -151,7 +151,6 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <header class="page-heading">
             <div>
                 <h1>Demand Forecast</h1>
-                <p class="page-subtitle">Expected sales, stock, and what needs attention.</p>
             </div>
         </header>
         <?php forecast_workflow('forecast'); ?>
@@ -275,7 +274,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
             <div class="forecast-panel-heading">
                 <div class="forecast-panel-title">
                     <h2>Product forecasts <span class="forecast-count">(<?= $totalFilteredProducts ?><?= $coverage['filtered']['is_filtered'] || $basisFilter !== 'all' ? ' of ' . (int)$coverage['scope_count'] : '' ?>)</span></h2>
-                    <p class="forecast-panel-subtitle">Expected units customers may buy · <?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', 'Expected units customers may buy in the next 7, 14, or 28 days. These are sales estimates, not a buying order. Use Replenishment Recommendations for purchase quantities.', 'About these numbers'); ?></p>
+                    <p class="forecast-panel-subtitle"><?= htmlspecialchars($targetRangeText) ?> <?php forecast_help('quantity-help', 'Expected units customers may buy in the next 7, 14, or 28 days. These are sales estimates, not a buying order. Use Replenishment Recommendations for purchase quantities.', 'About these numbers'); ?></p>
                 </div>
                 <div class="forecast-panel-toolbar">
                     <nav class="forecast-basis-tabs" aria-label="Filter products by forecast basis">

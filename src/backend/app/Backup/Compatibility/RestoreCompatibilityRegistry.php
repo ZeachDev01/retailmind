@@ -59,6 +59,14 @@ final class RestoreCompatibilityRegistry
                 'message' => 'This backup matches the current database structure.']));
         }
 
+        // A backup taken before this installation gained tables or columns needs
+        // no adapter: the current structure is kept and the new columns restore blank.
+        if ($diff['tables_removed'] === [] && $diff['columns_removed'] === []
+            && $diff['changed'] === [] && $diff['enums'] === []) {
+            return new CompatibilityReport(array_replace($base, ['status' => self::UPGRADABLE,
+                'label' => 'Older structure (safe additions)', 'message' => $this->additiveMessage($diff)]));
+        }
+
         $selected = null;
         foreach ($this->adapters as $adapter) {
             if (!$adapter->supports($source, $packageKeys)) continue;
@@ -85,6 +93,7 @@ final class RestoreCompatibilityRegistry
     {
         $report = $report instanceof CompatibilityReport ? $report->toArray() : $report;
         if (($report['status'] ?? '') !== self::UPGRADABLE) return $rows;
+        if (($report['adapter'] ?? null) === null) return $rows;
         foreach ($this->adapters as $adapter) {
             if ($adapter::key() === ($report['adapter'] ?? null)) return $adapter->upgrade($rows, $source, $destination);
         }
@@ -110,6 +119,15 @@ final class RestoreCompatibilityRegistry
             if (($declared['enums'][$column] ?? null) !== $sets) $uncovered[] = $column;
         }
         return $uncovered;
+    }
+
+    private function additiveMessage(array $diff): string
+    {
+        $parts = [];
+        if ($diff['tables_added'] !== []) $parts[] = 'new tables ' . implode(', ', $diff['tables_added']);
+        if ($diff['columns_added'] !== []) $parts[] = 'new columns ' . implode(', ', $diff['columns_added']);
+        return 'This backup is older than this installation and can be restored. The current structure is kept; '
+            . implode(' and ', $parts) . ' restore blank.';
     }
 
     private function unsupportedMessage(array $diff): string

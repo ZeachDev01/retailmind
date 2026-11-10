@@ -265,7 +265,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         <div class="topbar">
             <div>
                 <h1>Model Training</h1>
-                <p class="page-subtitle">Prepare a new model for Administrator review.</p>
             </div>
         </div>
 
