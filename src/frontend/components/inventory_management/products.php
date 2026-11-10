@@ -1508,11 +1508,11 @@ foreach ($products as $product) {
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label for="create-pack-cost">Sales Pack Cost (&#8369;)</label>
-                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost" placeholder="e.g. 120.00">
+                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost">
                                     </div>
                                     <div class="form-group">
                                         <label for="create-pack-size">Items per Sales Pack</label>
-                                        <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
+                                        <input type="number" min="2" step="1" name="pack_size" id="create-pack-size">
                                     </div>
                                 </div>
                                 <p class="pricing-readout" id="pack-price-suggested" aria-live="polite"></p>
@@ -1524,21 +1524,21 @@ foreach ($products as $product) {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="create-pack-markup">Markup %</label>
-                                    <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup" placeholder="e.g. 20">
+                                    <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup">
                                 </div>
                                 <div class="form-group">
                                     <label for="selling-price">Item Selling Price (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required placeholder="e.g. 15.00">
+                                    <input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required>
                                     <small class="field-error">Selling price must not be lower than cost.</small>
                                 </div>
                                 <div class="form-group full">
                                     <label for="cost-price">Cost Price per Item (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required placeholder="e.g. 10.00">
+                                    <input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required>
                                     <small class="field-error">Enter a valid cost price.</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="create-pack-price">Sales Pack Price (&#8369;)</label>
-                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="e.g. 100.00">
+                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price">
                                     <small class="field-help">Must be lower than buying the items separately.</small>
                                 </div>
                                 <div class="form-group">
@@ -3028,7 +3028,7 @@ foreach ($products as $product) {
                 updatePackCostCalc();
             }
             document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
-            if (wizardStep === 2) {
+            if (wizardStep === 2 && !window.matchMedia('(pointer: coarse), (max-width: 900px)').matches) {
                 document.getElementById('create-barcode-input').focus({ preventScroll: true });
             }
         }
