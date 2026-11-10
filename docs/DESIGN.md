@@ -295,3 +295,7 @@ Switching light, dark or system on the landing page floods the new theme out fro
 ## Forecast workspace tabs — 2026-11-10
 
 Forecast pages now share one compact tab strip for the Super Administrator, Administrator and Inventory Manager. Icons sit inline with labels in a 44px control; the active destination uses solid Action Blue with white text, and the strip scrolls horizontally at narrow widths. Forecast Analytics uses the same segmented treatment. Page subtitles were removed across the forecast workspace; supporting explanations live in the existing tooltips and native disclosures. Exceptions and Data Readiness reflow their records to labelled rows on mobile. No tokens or dependencies were added.
+
+## Super Administrator control center — 2026-11-11
+
+The Control Center now answers "what is happening" in reading order. A verdict band states the count of critical issues and warnings in one sentence; the four duplicate KPI cards and the doubled service/continuity status are gone. The Platform attention queue groups items by severity and each row keeps the existing rule explanation, its category, and its action, so the reader sees what broke and why before choosing a destination. The Platform status column carries check-detail lines, the latest backup with its age, and Store continuity as plain-language sentences instead of bare "Nominal" labels. Semantic tinting is limited to the icon tile and badge for each state; no tokens, dependencies, or global styles were added.

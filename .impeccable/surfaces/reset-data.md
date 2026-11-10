@@ -9,11 +9,11 @@ related_targets: ["src/frontend/assets/css/reset-data.css"]
 
 THESIS: Two destructive tasks, read as a sequence. The operator removes one product or reviews exactly what the full reset deletes, then confirms with a password and typed phrase.
 
-OWN-WORLD: The change-password language inside the Super Administrator workspace: flat cool canvas, white 16px cards carrying the blue-to-cyan rule (red for destructive cards), a tinted icon tile, a compact step pill, Action Blue primary controls, and one outlined danger action for single-product removal.
+OWN-WORLD: The shared Super Administrator workspace grammar: `.main-content`, the `.page-heading` title with its Danger zone chip, and `.dashboard-section` panels at the house 14px radius and quiet shadow. A compact step pill marks each task, Action Blue owns the primary control, and single-product removal stays an outlined danger action.
 
 STORY: Step 1 removes one product. Step 2 opens the retained-record review and its confirmation. A finished reset surfaces the pre-reset backup as the next thing to take.
 
-FIRST VIEWPORT: Page heading with the Danger zone pill, then Step 1's card with its header, product field, password, typed phrase, and outlined delete action. Step 2 waits collapsed, with a blocker chip when the Store cannot reset.
+FIRST VIEWPORT: The standard page heading with the Danger zone chip in its action slot, then Step 1's panel with the product field, password, typed phrase, and outlined delete action. Step 2 waits collapsed, with its blocker line when the Store cannot reset.
 
 FORM: Local refinement of an existing operational screen. Existing shell, sidebar, authorization, nonce, CSRF, password and confirmation behavior are unchanged. No new tokens, dependencies or images.
 
@@ -27,4 +27,12 @@ Copy was cut to one line per task: the Step 1 header carries no helper paragraph
 
 Preserved for the browser suite: `#store-reset` details and summary, four `.reset-record-group` disclosures with nineteen `.reset-record` totals, `#delete-product` search dropdown with `#delete-product-search`, `#delete-product-empty`, `#delete-password`, `#delete-confirmation`, `#reset-password`, `#reset-confirmation`, `.reset-delete`, the `p.alert` error output, `p[role="status"]` success output, nonce and CSRF fields, and the exact "Download pre-reset backup" link. The delete button opts out of the dark submit override with the house `btn-quiet` class; the reset button uses `btn-danger`.
 
-Verification: `npm run check` passes (stylesheet bundle, 117 views with 0 errors and 0 warnings, 113 smoke checks), PHP lint and `git diff --check` pass. `operational_reset_browser_test.js` reached its capture stage and passed the dark outlined-deletion assertion, then stopped at the pre-existing fixture failure `Unknown column 'branch_id' in 'INSERT INTO'` (`theme_fixture.php:162`), before the reset, backup, rollback, and empty-catalog steps. Captures in `C:/Users/Mike/AppData/Local/Temp/opencode/shots/reset/` cover 1440×960 and 390×960, collapsed and expanded, plus dark at 1440. Backup-ready, success, and empty-catalog states were reviewed against a static mirror of the same markup in both themes. No reset was performed against the live Store.
+### Harden and match the Super Administrator shell — 2026-11-11
+
+Mode: Operate. The page stopped carrying its own visual world and now uses the classes every Super Administrator page already renders: `<body class="reset-data-page">`, `.main-content` at the shell's full width (the 1080px centered column is gone), `.page-heading` with the Danger zone chip in `.page-heading-actions`, `.dashboard-section` panels (14px, shared border and quiet shadow), `.btn` / `.btn-primary` / `.btn-danger` / `.btn-quiet`, `.form-group` fields, and `.tag-warning` for the permanence flag. The gradient card rule, tinted icon tiles, gradient primary button, and per-page alert/input/button overrides were deleted; `reset-data.css` now holds only this page's disclosure, record-list, and two-column structure.
+
+Hardening in the same pass: blocker text wraps on any width instead of pushing the summary sideways; record labels and product options wrap rather than clipping; the dark outlined delete action keeps a transparent surface without losing its danger colour; the destructive warning stays inline beside the confirmation instead of being promoted to a transient toast; and keyboard focus on both disclosures keeps a visible ring. Empty-catalog, disabled-action, and reduced-motion states are unchanged.
+
+The stale test fixture no longer inserts the removed `branch_id` column, so the whole reset suite now runs to completion.
+
+Verification: `npm run check` passes (stylesheet bundle, 0 errors and 0 warnings, 113 smoke checks) and PHP lint passes. `operational_reset_browser_test.js` passes end to end against a disposable database: keyboard disclosures, nineteen retained totals, 320–1440px fit, empty catalog, authorization, confirmation, rollback, backup download, full reset, preserved definitions and audit, sessions, and isolated model cleanup. Captures at `C:/Users/Mike/AppData/Local/Temp/opencode/reset-captures2/` cover 1440×960 light collapsed and expanded, 1440×960 dark expanded, and 390×960 light collapsed and expanded. The browser was Chromium headless; physical phones, Safari, Firefox, and screen readers remain unverified. No reset was performed against the live Store.

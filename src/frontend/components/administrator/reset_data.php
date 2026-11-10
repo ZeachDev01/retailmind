@@ -71,99 +71,77 @@ $recordGroups = [
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reset Data — RetailMind</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/reset-data.css')) ?>">
-</head><body><div class="app-shell">
+</head><body class="reset-data-page"><div class="app-shell">
 <?php include __DIR__ . '/../sidebar.php'; ?>
 <main class="main-content reset-page">
-<header class="reset-heading">
-    <div class="reset-heading-bar">
-        <h1>Reset Data</h1>
-        <span class="reset-danger-tag">Danger zone</span>
-    </div>
+<header class="page-heading">
+    <div><h1>Reset Data</h1></div>
+    <div class="page-heading-actions"><span class="tag-danger">Danger zone</span></div>
 </header>
-<?php if ($message): ?><p class="alert tag-success reset-alert" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($message) ?></p><?php endif; ?>
-<?php if ($error): ?><p class="alert tag-warning alert-danger reset-alert" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></p><?php endif; ?>
+<?php if ($message): ?><p class="alert tag-success" role="status" data-rm-alert-processed="1"><?= htmlspecialchars($message) ?></p><?php endif; ?>
+<?php if ($error): ?><p class="alert tag-danger" role="alert" data-rm-alert-processed="1"><?= htmlspecialchars($error) ?></p><?php endif; ?>
 
 <?php if ($backupToken): ?>
-<section class="reset-card reset-card--backup" aria-labelledby="backup-title">
-    <div class="reset-card-head">
-        <div class="reset-icon reset-icon--blue" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        </div>
-        <div class="reset-card-title">
-            <h2 id="backup-title">Pre-reset backup</h2>
-            <p class="reset-note">Saved before the last reset. Download it now.</p>
-        </div>
+<section class="dashboard-section reset-card reset-card--backup" aria-labelledby="backup-title">
+    <div class="reset-card-title">
+        <h2 id="backup-title">Pre-reset backup</h2>
+        <p class="section-description">Saved before the last reset. Download it now.</p>
     </div>
     <div class="reset-card-actions">
-        <a class="reset-btn reset-btn-primary" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>" download>Download pre-reset backup</a>
+        <a class="btn btn-primary" href="<?= htmlspecialchars(app_url('components/backup/backup_download.php?token=' . rawurlencode($backupToken))) ?>" download>Download pre-reset backup</a>
     </div>
 </section>
 <?php endif; ?>
 
-<section class="reset-card" aria-labelledby="product-title">
-    <div class="reset-card-head">
-        <div class="reset-icon reset-icon--danger" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </div>
-        <div class="reset-card-title">
-            <div class="reset-title-row">
-                <span class="reset-step">Step 1</span>
-                <h2 id="product-title">Delete one product</h2>
-            </div>
-        </div>
+<section class="dashboard-section reset-card" aria-labelledby="product-title">
+    <div class="reset-title-row">
+        <span class="reset-step">Step 1</span>
+        <h2 id="product-title">Delete one product</h2>
     </div>
 
     <form method="post" class="reset-product-form" aria-describedby="delete-product-warning">
         <?= csrf_field() ?>
         <input type="hidden" name="action" value="delete_product">
         <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
-        <div class="reset-field">
+        <div class="form-group">
             <label for="delete-product">Product</label>
-            <select class="reset-input" data-search-dropdown data-search-empty-label id="delete-product" name="product_id" <?= !$products ? 'aria-describedby="delete-product-empty" ' : '' ?>required>
+            <select data-search-dropdown data-search-empty-label id="delete-product" name="product_id" <?= !$products ? 'aria-describedby="delete-product-empty" ' : '' ?>required>
                 <option value="">Choose a product</option>
                 <?php foreach ($products as $product): ?>
                 <option value="<?= (int)$product['product_id'] ?>"><?= htmlspecialchars($product['product_name'] . ' — ' . $product['sku'] . ' (' . $product['status'] . ')') ?></option>
                 <?php endforeach; ?>
             </select>
-            <?php if (!$products): ?><p id="delete-product-empty" class="reset-note">No products to delete.</p><?php endif; ?>
+            <?php if (!$products): ?><p id="delete-product-empty" class="section-description">No products to delete.</p><?php endif; ?>
         </div>
         <div class="reset-fields">
-            <div class="reset-field">
+            <div class="form-group">
                 <label for="delete-password">Current password</label>
-                <input class="reset-input" type="password" id="delete-password" name="current_password" autocomplete="current-password" required>
+                <input type="password" id="delete-password" name="current_password" autocomplete="current-password" required>
             </div>
-            <div class="reset-field">
+            <div class="form-group">
                 <label for="delete-confirmation">Type <strong>DELETE PRODUCT</strong></label>
-                <input class="reset-input" type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required>
+                <input type="text" id="delete-confirmation" name="confirmation" pattern="DELETE PRODUCT" title="Type DELETE PRODUCT in uppercase to confirm" maxlength="32" autocomplete="off" spellcheck="false" required>
             </div>
         </div>
         <div class="reset-actions">
-            <span id="delete-product-warning" class="reset-flag">Permanent deletion. No automatic backup.</span>
-            <button type="submit" class="reset-btn reset-delete btn-quiet" <?= !$products ? 'disabled' : '' ?>>Delete selected product</button>
+            <span id="delete-product-warning" class="tag-warning">Permanent deletion. No automatic backup.</span>
+            <button type="submit" class="btn btn-quiet reset-delete" <?= !$products ? 'disabled' : '' ?>>Delete selected product</button>
         </div>
     </form>
 </section>
 
-<details id="store-reset" class="reset-card reset-card--danger" <?= $error && ($_POST['action'] ?? '') !== 'delete_product' ? 'open' : '' ?> aria-labelledby="store-title">
-    <summary class="reset-card-head reset-card-head--summary">
-        <div class="reset-icon reset-icon--danger" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </div>
-        <div class="reset-card-title">
-            <div class="reset-title-row">
-                <span class="reset-step">Step 2</span>
-                <h2 id="store-title">Reset the whole Store</h2>
-            </div>
-            <?php if ($blockers): ?><span class="reset-blocked"><?= htmlspecialchars(implode(' ', $blockers)) ?></span><?php endif; ?>
-        </div>
+<details id="store-reset" class="dashboard-section reset-card reset-card--danger" <?= $error && ($_POST['action'] ?? '') !== 'delete_product' ? 'open' : '' ?> aria-labelledby="store-title">
+    <summary class="reset-summary">
+        <span class="reset-title-row">
+            <span class="reset-step">Step 2</span>
+            <h2 id="store-title">Reset the whole Store</h2>
+        </span>
+        <?php if ($blockers): ?><span class="reset-blocked"><?= htmlspecialchars(implode(' ', $blockers)) ?></span><?php endif; ?>
         <span class="reset-review-link"><span class="reset-review-when-closed">Review</span><span class="reset-review-when-open">Hide</span> <svg class="reset-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
     </summary>
 
     <div class="reset-store-body">
-        <div id="store-warning-desc" class="reset-warning" role="alert">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <strong>Deletes all products, sales, inventory, and forecasting data.</strong>
-        </div>
+        <p id="store-warning-desc" class="reset-warning" role="alert"><strong>Deletes all products, sales, inventory, and forecasting data.</strong></p>
 
         <div class="reset-layout">
             <div class="reset-review">
@@ -196,15 +174,15 @@ $recordGroups = [
                 <form method="post" aria-labelledby="store-confirm-title" aria-describedby="store-warning-desc">
                     <?= csrf_field() ?>
                     <input type="hidden" name="reset_nonce" value="<?= htmlspecialchars($_SESSION['reset_data_nonce']) ?>">
-                    <div class="reset-field">
+                    <div class="form-group">
                         <label for="reset-password">Current password</label>
-                        <input class="reset-input" type="password" id="reset-password" name="current_password" autocomplete="current-password" required>
+                        <input type="password" id="reset-password" name="current_password" autocomplete="current-password" required>
                     </div>
-                    <div class="reset-field">
+                    <div class="form-group">
                         <label for="reset-confirmation">Type <strong>RESET ALL DATA</strong></label>
-                        <input class="reset-input" type="text" id="reset-confirmation" name="confirmation" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" autocomplete="off" required>
+                        <input type="text" id="reset-confirmation" name="confirmation" pattern="RESET ALL DATA" title="Type RESET ALL DATA in uppercase to confirm" maxlength="32" spellcheck="false" autocomplete="off" required>
                     </div>
-                    <button type="submit" class="reset-btn reset-btn-danger btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
+                    <button type="submit" class="btn btn-danger" <?= $blockers ? 'disabled' : '' ?>>Reset all operational data</button>
                 </form>
             </div>
         </div>

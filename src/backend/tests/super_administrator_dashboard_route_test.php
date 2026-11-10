@@ -35,11 +35,16 @@ foreach (['Recent Sales', 'Total Revenue', 'Inventory Value', 'Adjust Stock', 'R
 $assert(str_contains($route, '300000'), 'Dashboard must schedule a five-minute refresh');
 $assert(str_contains($route, 'actionInProgress'), 'Automatic refresh must defer while an action is in progress');
 $assert(str_contains($route, 'dashboard-stale'), 'Dashboard must expose a stale state when refresh is deferred');
-$assert(str_contains($route, '<a class="triage-item') && str_contains($route, 'data-dashboard-action>'), 'Issues must link directly to their controls');
+$assert(str_contains($route, '<a class="attention-row') && str_contains($route, 'data-dashboard-action>'), 'Issues must link directly to their controls');
+$assert(str_contains($route, 'attention-row-explain'), 'Issues must state what happened in plain language');
 $assert(!str_contains($route, 'data-resolution-') && !str_contains($route, 'data-triage-item'), 'Issue navigation must not require the removed selection panel');
 $assert(!str_contains($route, 'control-shortcuts'), 'Dashboard must not show the removed Platform controls section');
-$assert(str_contains($route, "<?php if (\$dashboard['state'] !== 'error'): ?>\n            <section class=\"risk-horizon\""), 'Unavailable data must not show zero-risk summary counts');
-foreach (['.control-center-headlines', '.governance-queue', '.continuity-grid', '@media (max-width: 640px)'] as $needle) {
+$assert(
+    str_contains($route, "<?php if (\$dashboard['state'] === 'error'): ?>")
+        && strpos($route, 'platform-verdict') > strpos($route, "<?php if (\$dashboard['state'] === 'error'): ?>"),
+    'Unavailable data must not show zero-risk summary counts'
+);
+foreach (['.attention-groups', '.superadmin-body-grid', '.platform-verdict', '@media (max-width: 640px)'] as $needle) {
     $assert(str_contains($styles, $needle), "Dashboard styles are missing responsive contract {$needle}");
 }
 

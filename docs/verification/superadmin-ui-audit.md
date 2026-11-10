@@ -23,7 +23,7 @@ Every page below received the shared shell, contrast, accessible-name, touch-tar
 
 | Page | Route under `src/frontend/components/` | Local outcome |
 | --- | --- | --- |
-| Platform Control Center | `super_administrator/dashboard.php` | Two-column risk signals through tablet widths; heading clears the two-row mobile header; touch issue selection verified. |
+| Platform Control Center | `super_administrator/dashboard.php` | Verdict strip, severity-grouped attention queue with plain-language explanations, and a platform status column; single column through tablet widths; touch issue selection verified. |
 | Users & Access | `user_manager/user_manager.php` | Title matches Super Administrator navigation; dark avatar contrast corrected; create and account dialogs open and dismiss by touch/keyboard. Administrator retains “Store Staff.” |
 | Protected Audit Records | `system_administrator/audit_logs.php` | HTTP 500 fixed using the existing permission helper; real DataTables controls checked; active pagination contrast and column-control touch targets improved. |
 | Recovery Account | `system_administrator/recovery_account.php` | Offline recovery guidance remains an inline note instead of interrupting every visit with a modal. No credential or activation controls added. |

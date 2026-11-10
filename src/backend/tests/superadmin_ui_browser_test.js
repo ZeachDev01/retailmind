@@ -228,7 +228,7 @@ const fixture = action => {
                     await page.keyboard.press('Escape');
                 }
                 if (screen === 'super_administrator/dashboard') {
-                    const issue = page.locator('.triage-item').nth(1);
+                    const issue = page.locator('.attention-row').nth(1);
                     const destination = new URL(await issue.getAttribute('href'), page.url()).href;
                     await issue.focus();
                     assert.equal(await issue.evaluate(el => getComputedStyle(el).outlineStyle), 'solid', 'Issue has a visible keyboard focus indicator');
