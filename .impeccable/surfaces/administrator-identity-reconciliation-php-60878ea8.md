@@ -13,7 +13,7 @@ OWN-WORLD: Inherit RetailMind's navy shell, cool neutral canvas, white working s
 
 STORY: The operator supplies credentials, compares destination people against incoming identities, explicitly resolves conflicts, then checks preservation and access before restoration.
 
-FIRST VIEWPORT: A compact title and return action lead into a three-stage progress strip. Package and password fields occupy the main column; a quieter adjacent explanation states what identity review preserves. Primary review action follows the form. Later states prioritize source decisions with a compact destination reference.
+FIRST VIEWPORT: A compact title and return action lead into a three-stage progress strip whose completed, current and upcoming states are visible. One full-width package panel holds the upload and password fields side by side, with a single non-destructive-review note. Primary review action follows the form. Later states prioritize source decisions with a compact destination reference.
 
 FORM: User-confirmed sequential review within the established operational world. Local page redesign; no replacement brand or concept roll required.
 
@@ -36,3 +36,9 @@ Verification evidence: initial, conflict, and ready-state captures at desktop/mo
 Finish-review verdict: Ship. The reviewer inspected all nine final captures and the code; both role-specific restore/reopen flows passed.
 
 The retained navy shell, Action Blue, neutral surfaces, system typography, semantic state colors, existing controls, and restrained borders remain consistent with `docs/DESIGN.md`. No product or global design documentation changed. Existing documentation gaps remain outside this local task: `.impeccable/design.json` is absent; `docs/PRODUCT.md` still describes readable SQL backups and Super Administrator-only restoration despite the implemented encrypted-package and Administrator flows. Existing compact typography also includes sizes outside the documented global ramp; this task does not redefine that ramp.
+
+### Distill and clarify — 2026-11-11
+
+Mode: Operate. The page follows one action per stage: choose the package, decide each sign-in, then confirm. The progress rail marks completed steps in semantic success and the current step in Action Blue; step 2's primary button now reads "Review resolutions" and only reaches confirmation after the choices validate. The package aside was removed: upload and password share one full-width panel with the upload limit under the field, and a reviewed package becomes a single summary row with Change backup. Each source person asks one question, "How they sign in", with the matching field revealed below it. Helper copy was cut to one line per task; projected access, preservation details, the destructive consent and the red restore action remain unchanged.
+
+Verification: `identity_review_ui_browser_test.js` passes with its fresh captures in `.impeccable/review/identity-review/` at 1440px and 390px, both decision paths and dark theme. `backup_review_cache_browser_test.js`, PHP lint and `npm run check` pass. The encrypted restore end-to-end browser test was not rerun: it replaces a disposable database and the local application was not put through a restore for this pass. No tokens, dependencies or images were added.

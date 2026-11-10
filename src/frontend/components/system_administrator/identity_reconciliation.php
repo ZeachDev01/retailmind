@@ -46,11 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $approved = $reconciler->approve((int)$_SESSION['user_id'], (string)current_role(), (string)($_POST['restore_password'] ?? ''), $package, $decisions);
             $review = $approved['review'];
             $approval = $approved['approval'];
-            $message = 'Reconciliation approved. Destination security and preparation evidence are recorded. No records or files were replaced.';
+            $message = 'Reconciliation approved. No records were replaced.';
         } else {
             $review = $reconciler->review((int)$_SESSION['user_id'], (string)current_role(), $package, $decisions);
-            $message = $action === 'edit' ? 'Review your account choices below. No records or files were replaced.'
-                : ($review['ready'] ? 'Account choices are ready. Confirm restoration below. No records or files were replaced.' : ($decisions === [] ? '' : implode(' ', $review['errors'])));
+            $message = $action === 'edit' ? 'Adjust the account choices below.'
+                : ($review['ready'] ? 'Account choices are ready. Confirm restoration below.' : ($decisions === [] ? '' : implode(' ', $review['errors'])));
         }
         $encryptedPackage = file_get_contents($file['tmp_name']);
         if ($encryptedPackage === false) throw new RuntimeException('The reviewed package could not be retained.');
@@ -80,7 +80,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <?php retailmind_theme_head(); ?>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Review Backup</title>
+    <title>Review backup</title>
     <link rel="stylesheet" href="<?= $escape(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
@@ -93,7 +93,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
     <main class="main-content">
         <header class="topbar recovery-heading">
             <div>
-                <h1>Review Backup</h1>
+                <h1>Review backup</h1>
             </div>
             <div class="recovery-heading-actions">
                 <a class="btn btn-secondary" href="<?= $escape(app_url('components/' . $backupPage)) ?>">
@@ -104,9 +104,19 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
 
         <div class="reconcile-stack">
             <ol class="reconcile-steps" aria-label="Restoration progress">
-                <li <?= !$review ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">1</span><span><strong>Select package</strong></span></li>
-                <li <?= $review && (empty($review['ready']) || $editing) ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">2</span><span><strong>Review identities</strong></span></li>
-                <li <?= $review && !empty($review['ready']) && !$editing ? 'aria-current="step"' : '' ?>><span class="reconcile-step-number">3</span><span><strong>Confirm restoration</strong></span></li>
+                <li class="<?= $review ? 'is-complete' : 'is-current' ?>"<?= $review ? '' : ' aria-current="step"' ?>>
+                    <span class="reconcile-step-number" aria-hidden="true">1</span>
+                    <strong>Select package</strong>
+                </li>
+                <?php $stepTwoDone = $review && !empty($review['ready']) && !$editing; ?>
+                <li class="<?= $review ? ($stepTwoDone ? 'is-complete' : 'is-current') : '' ?>"<?= $review && !$stepTwoDone ? ' aria-current="step"' : '' ?>>
+                    <span class="reconcile-step-number" aria-hidden="true">2</span>
+                    <strong>Review identities</strong>
+                </li>
+                <li class="<?= $approval ? 'is-complete' : ($stepTwoDone ? 'is-current' : '') ?>"<?= $stepTwoDone ? ' aria-current="step"' : '' ?>>
+                    <span class="reconcile-step-number" aria-hidden="true">3</span>
+                    <strong>Confirm restoration</strong>
+                </li>
             </ol>
 
             <?php if ($message !== ''): ?>
@@ -139,12 +149,9 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 <?php endif; ?>
 
                 <section class="dashboard-section reconcile-package" aria-labelledby="package-heading">
-                    <div>
                     <div class="recovery-panel-heading">
-                        <h2 id="package-heading"><i class="bi bi-shield-lock" aria-hidden="true"></i> Backup package</h2>
-                        <?php if (isset($package)): ?>
-                            <span class="history-total">Snapshot <?= $escape($package['manifest']['snapshot_at']) ?> UTC</span>
-                        <?php endif; ?>
+                        <h2 id="package-heading"><i class="bi bi-shield-lock" aria-hidden="true"></i> Choose backup</h2>
+                        <span class="backup-hint">No Store data changes during review</span>
                     </div>
 
                     <?php if ($review && !empty($review['compatibility'])): $compatibility = $review['compatibility']; ?>
@@ -156,35 +163,31 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             <?php endif; ?>
                         </p>
                     <?php endif; ?>
+
                     <?php if ($review): ?>
-                        <div data-reviewed-package<?= $draft ? '' : ' hidden' ?>>
-                            <dl class="reconcile-facts">
-                                <div><dt>Selected backup</dt><dd data-selected-package-name><?= $escape($draft['filename'] ?? '') ?></dd></div>
-                            </dl>
+                        <div class="reconcile-selected" data-reviewed-package<?= $draft ? '' : ' hidden' ?>>
+                            <i class="bi bi-file-earmark-zip" aria-hidden="true"></i>
+                            <div>
+                                <strong data-selected-package-name><?= $escape($draft['filename'] ?? '') ?></strong>
+                                <?php if (isset($package)): ?><span>Snapshot <?= $escape($package['manifest']['snapshot_at']) ?> UTC. Saved for 30 minutes in this session.</span><?php endif; ?>
+                            </div>
                             <a class="btn btn-secondary" href="<?= $escape(app_url('components/system_administrator/identity_reconciliation.php?new=1')) ?>">Change backup</a>
                         </div>
                     <?php endif; ?>
-                    <div data-package-inputs>
-                    <div class="form-group reconcile-field"<?= $review && $draft ? ' hidden' : '' ?>>
-                        <label for="identity-package">Encrypted Store package (.rmpkg)</label>
-                        <p class="restore-file-hint" id="identity-upload-help">Maximum <?= (int)floor($restorer->supportedUploadBytes() / 1048576) ?> MB.</p>
-                        <div class="restore-file-field">
-                            <input id="identity-package" type="file" name="backup_file" accept=".rmpkg"<?= $review && $draft ? '' : ' required' ?> aria-describedby="identity-upload-help">
-                        </div>
-                    </div>
 
-                    <div class="credentials-grid">
+                    <div class="package-fields" data-package-inputs>
+                        <div class="form-group"<?= $review && $draft ? ' hidden' : '' ?>>
+                            <label for="identity-package">Backup package (.rmpkg)</label>
+                            <div class="restore-file-field">
+                                <input id="identity-package" type="file" name="backup_file" accept=".rmpkg"<?= $review && $draft ? '' : ' required' ?> aria-describedby="identity-upload-help">
+                            </div>
+                            <p class="restore-file-hint" id="identity-upload-help">Maximum <?= (int)floor($restorer->supportedUploadBytes() / 1048576) ?> MB</p>
+                        </div>
                         <div class="form-group">
                             <label for="identity-password">Current login password</label>
                             <input id="identity-password" type="password" name="restore_password" autocomplete="current-password" required>
                         </div>
                     </div>
-                    </div>
-                    </div>
-                    <aside class="reconcile-guidance" aria-labelledby="identity-guidance-heading">
-                        <h3 id="identity-guidance-heading">Nothing changes during review</h3>
-                        <p><?= $review ? 'Your review is saved for 30 minutes in this session.' : 'Choose a backup, then review who each account belongs to before restoring.' ?></p>
-                    </aside>
                 </section>
 
                 <?php if ($review): ?>
@@ -194,7 +197,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             <h2 id="source-resolutions-heading"><i class="bi bi-person-gear" aria-hidden="true"></i> Accounts in the backup</h2>
                             <span class="history-total"><?= count($review['source_users']) ?> <?= count($review['source_users']) === 1 ? 'identity' : 'identities' ?></span>
                         </div>
-                        <p class="backup-hint">For each person, keep their existing server account or create a separate account. Matching names or IDs alone do not prove identity.</p>
+                        <p class="backup-hint">Match each person to one account on this server.</p>
                         <div class="resolution-list">
                             <?php foreach ($review['source_users'] as $person):
                                 $id = (int)$person['user_id'];
@@ -219,16 +222,16 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                             <p><strong>Historical Actor only.</strong> History is kept; login access is not imported.</p>
                                         </div>
                                     <?php else: ?>
-                                        <div class="resolution-grid">
+                                        <div class="form-group resolution-question">
+                                            <label for="resolution-<?= $id ?>">How they sign in</label>
+                                            <select id="resolution-<?= $id ?>" name="people[<?= $id ?>][action]" data-account-action required>
+                                                <option value="">Choose how they sign in</option>
+                                                <option value="link" <?= ($choice['action'] ?? '') === 'link' ? 'selected' : '' ?>>Use their existing account here</option>
+                                                <option value="distinct" <?= ($choice['action'] ?? '') === 'distinct' ? 'selected' : '' ?>>Create a separate account</option>
+                                            </select>
+                                        </div>
+                                        <div data-account-fields="link">
                                             <div class="form-group">
-                                                <label for="resolution-<?= $id ?>">How should this person sign in?</label>
-                                                <select id="resolution-<?= $id ?>" name="people[<?= $id ?>][action]" data-account-action required>
-                                                    <option value="">Choose an account option</option>
-                                                    <option value="link" <?= ($choice['action'] ?? '') === 'link' ? 'selected' : '' ?>>Use their existing account on this server</option>
-                                                    <option value="distinct" <?= ($choice['action'] ?? '') === 'distinct' ? 'selected' : '' ?>>Create a separate account</option>
-                                                </select>
-                                            </div>
-                                            <div class="form-group" data-account-fields="link">
                                                 <label for="destination-<?= $id ?>">Their account on this server</label>
                                                 <select id="destination-<?= $id ?>" name="people[<?= $id ?>][destination_id]">
                                                     <option value="">Choose their existing account</option>
@@ -239,10 +242,10 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                                     <?php endforeach; ?>
                                                 </select>
                                             </div>
+                                            <p class="backup-hint">Keeps that account's password and access.</p>
                                         </div>
-                                        <p class="backup-hint" data-account-fields="link">Keeps this server account's password and access.</p>
                                         <div data-account-fields="distinct">
-                                        <p class="backup-hint">Use an unused username and email. Super Administrator and Recovery access are not imported.</p>
+                                        <p class="backup-hint">Super Administrator and Recovery access are not imported.</p>
                                         <div class="resolution-grid">
                                             <div class="form-group">
                                                 <label for="username-<?= $id ?>">New username</label>
@@ -333,8 +336,8 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             ['Backup operations history', 'backup_history', 'Destination backup history preserved with collision-free IDs'],
                             ['Email delivery evidence', 'email_delivery_log', 'Destination email delivery records preserved'],
                         ]; ?>
-                        <details class="dashboard-section reconcile-details" aria-labelledby="preservation-heading">
-                            <summary id="preservation-heading">Security and settings preserved on this server</summary>
+                        <details class="reconcile-details reconcile-preserved" aria-labelledby="preservation-heading">
+                            <summary id="preservation-heading">Security and settings preserved</summary>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Preservation categories">
                                 <table data-no-smart-table>
                                     <thead>
@@ -358,7 +361,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                                 <h2 id="projection-heading"><i class="bi bi-person-check" aria-hidden="true"></i> Access after restore</h2>
                                 <span class="tag-success"><?= (int)$review['active_administrators'] ?> active <?= (int)$review['active_administrators'] === 1 ? 'Administrator' : 'Administrators' ?></span>
                             </div>
-                            <p class="backup-hint">Privileged-only source identities and unlinked destination accounts gain no imported login access.</p>
+                            <p class="backup-hint">Only linked accounts gain login access from the backup.</p>
                             <div class="table-wrap reconcile-table" tabindex="0" role="region" aria-label="Resulting access">
                                 <table data-no-smart-table>
                                     <thead>
@@ -410,12 +413,12 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                             </section>
                         <?php else: ?>
                             <section class="dashboard-section reconcile-confirm" aria-label="Confirm restoration">
-                                <div>
-                                    <h2>Confirm restoration</h2>
+                                <div class="recovery-panel-heading">
+                                    <h2><i class="bi bi-shield-check" aria-hidden="true"></i> Confirm restoration</h2>
                                 </div>
                                 <label class="resolution-option" for="confirm_replacement">
                                     <input type="checkbox" id="confirm_replacement" name="confirm_replacement" value="1" required>
-                                    <span>I understand this snapshot replaces newer records and Store operations remain paused until verification. Stop source sales and background workers before continuing.</span>
+                                    <span>I understand this backup replaces newer sales and records. Stop sales and background jobs before restoring.</span>
                                 </label>
                                 <div class="reconcile-actions">
                                     <button class="btn btn-danger" type="submit" formaction="<?= $escape(app_url('components/backup/restore.php')) ?>" data-start-restore>
@@ -433,7 +436,7 @@ $isSuccessMessage = ($approval !== null) || ($review !== null && !empty($review[
                 <?php if (!$review || empty($review['ready']) || $editing): ?>
                     <div class="reconcile-actions">
                         <button class="btn btn-primary" type="submit" name="action" value="review">
-                            <i class="bi bi-search" aria-hidden="true"></i> <?= $review ? 'Continue to confirmation' : 'Review identities' ?>
+                            <i class="bi bi-search" aria-hidden="true"></i> <?= $review ? 'Review resolutions' : 'Review identities' ?>
                         </button>
                     </div>
                 <?php endif; ?>

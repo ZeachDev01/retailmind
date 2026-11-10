@@ -284,7 +284,7 @@ Forecast screens prioritize expected sales, on-hand stock and required action. R
 
 Backup & Restore copy was simplified on 2026-11-03: retain essential replacement and key-security warnings, use concise upload limits, and avoid repeating labels in helper paragraphs. The [Backup & Restore surface brief](../.impeccable/surfaces/s-system-administrator-backup-restore-php-24753d25.md) records scope and verification. Existing layout and tokens remain unchanged.
 
-Identity review now leads with each backup person and shows only the fields for their selected account path. Server-account references and preservation details use native disclosures; final access and restore consent remain visible. Scope and verification are recorded in the [Identity reconciliation surface brief](../.impeccable/surfaces/administrator-identity-reconciliation-php-60878ea8.md).
+Identity review now leads with each backup person and shows only the fields for their selected account path. Server-account references and preservation details use native disclosures; final access and restore consent remain visible. Scope and verification are recorded in the [Identity reconciliation surface brief](../.impeccable/surfaces/administrator-identity-reconciliation-php-60878ea8.md). The 2026-11-11 pass kept that model and tightened the flow: the progress rail marks completed and current stages, the package panel holds upload and password side by side without an aside, and each person asks one sign-in question. Helper copy is one line per task.
 
 ## Landing page — living store record — 2026-11-10
 

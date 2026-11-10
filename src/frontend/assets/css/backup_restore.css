@@ -129,18 +129,27 @@ html[data-theme="dark"] .database-restore-page input[type="file"]::file-selector
 .identity-reconciliation-page .reconcile-stack > .dashboard-section { margin: 0; }
 .identity-reconciliation-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .identity-reconciliation-page .recovery-heading { max-width: 76rem; align-items: flex-start; }
-.identity-reconciliation-page .reconcile-subtitle { margin: .45rem 0 0; color: var(--recovery-muted); font-size: .9375rem; }
 .identity-reconciliation-page .reconcile-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0 0 1.25rem; border-bottom: 1px solid var(--recovery-line); gap: 1rem; }
-.identity-reconciliation-page .reconcile-steps li { display: flex; align-items: center; gap: .75rem; color: var(--recovery-muted); }
-.identity-reconciliation-page .reconcile-step-number { display: grid; place-items: center; flex: 0 0 2rem; height: 2rem; border: 1px solid var(--recovery-line); border-radius: 50%; font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.identity-reconciliation-page .reconcile-steps strong { display: block; font-size: .9375rem; font-weight: 600; }
-.identity-reconciliation-page .reconcile-steps small { display: block; margin-top: .15rem; font-size: .8125rem; }
+.identity-reconciliation-page .reconcile-steps li { display: flex; align-items: center; gap: .7rem; color: var(--recovery-muted); min-width: 0; }
+.identity-reconciliation-page .reconcile-step-number { display: grid; place-items: center; flex: 0 0 2rem; height: 2rem; border: 1px solid var(--recovery-line); border-radius: 50%; background: var(--card-bg, #ffffff); color: inherit; font-size: .875rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.identity-reconciliation-page .reconcile-steps strong { font-size: .9375rem; font-weight: 600; }
+.identity-reconciliation-page .reconcile-steps .is-complete { color: var(--recovery-ink); }
+.identity-reconciliation-page .reconcile-steps .is-complete .reconcile-step-number { border-color: color-mix(in srgb, #16a34a 45%, var(--recovery-line)); background: color-mix(in srgb, #16a34a 16%, var(--card-bg, #ffffff)); color: var(--theme-success-text, #166534); }
 .identity-reconciliation-page .reconcile-steps [aria-current] strong { color: var(--recovery-ink); }
 .identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { background: var(--primary, #2563eb); border-color: var(--primary, #2563eb); color: #fff; }
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-steps [aria-current] .reconcile-step-number { color: #0f172a; }
 html[data-theme="dark"] .identity-reconciliation-page .btn-secondary { background: var(--theme-surface); color: var(--recovery-ink); border-color: var(--recovery-line); }
 html[data-theme="dark"] .identity-reconciliation-page .btn-secondary:hover { background: var(--theme-surface-soft); }
-.identity-reconciliation-page .reconcile-package { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, 1fr); gap: 2rem; }
+.identity-reconciliation-page .reconcile-package .backup-hint { margin: 0; }
+.identity-reconciliation-page .package-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); align-items: start; gap: 1rem 1.25rem; margin-top: 1.25rem; }
+.identity-reconciliation-page .package-fields .form-group { margin-bottom: 0; }
+.identity-reconciliation-page .package-fields .restore-file-hint { margin: .4rem 0 0; }
+.identity-reconciliation-page .reconcile-selected { display: flex; align-items: center; gap: .85rem; margin-top: 1.25rem; padding: .85rem 1rem; border: 1px solid var(--recovery-line); border-radius: 12px; background: var(--surface-soft, #f8fafc); }
+.identity-reconciliation-page .reconcile-selected > i { flex: 0 0 auto; font-size: 1.15rem; color: var(--primary, #2563eb); }
+.identity-reconciliation-page .reconcile-selected > div { display: flex; flex: 1; flex-direction: column; gap: .2rem; min-width: 0; }
+.identity-reconciliation-page .reconcile-selected strong { font-size: .9375rem; color: var(--recovery-ink); overflow-wrap: anywhere; }
+.identity-reconciliation-page .reconcile-selected span { font-size: .8125rem; color: var(--recovery-muted); }
+.identity-reconciliation-page .reconcile-selected .btn { flex: 0 0 auto; }
 .identity-reconciliation-page [data-identity-choices] > .dashboard-section { margin: 0; }
 .identity-reconciliation-page .reconcile-details { margin-top: 1rem; }
 .identity-reconciliation-page .reconcile-details summary { cursor: pointer; padding: .5rem 0; font-weight: 600; color: var(--recovery-ink); }
@@ -149,13 +158,11 @@ html[data-theme="dark"] .identity-reconciliation-page .btn-secondary:hover { bac
 .identity-reconciliation-page .reconcile-details summary:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 4px; }
 .identity-reconciliation-page .reconcile-details[open] > .reconcile-reference { margin-top: 1rem; }
 .identity-reconciliation-page [data-account-fields][hidden] { display: none; }
-.identity-reconciliation-page p[data-account-fields],
 .identity-reconciliation-page [data-account-fields] > .backup-hint { margin: 0 0 1rem; }
-.identity-reconciliation-page .reconcile-guidance { padding-left: 1.5rem; border-left: 1px solid var(--recovery-line); color: var(--recovery-muted); font-size: .875rem; line-height: 1.6; }
-.identity-reconciliation-page .reconcile-guidance h3 { margin: 0; color: var(--recovery-ink); font-size: 1rem; font-weight: 700; }
-.identity-reconciliation-page .reconcile-guidance p { margin: .5rem 0 1rem; }
-.identity-reconciliation-page .reconcile-guidance ul { margin: 0; padding-left: 1.1rem; }
-.identity-reconciliation-page .reconcile-guidance li + li { margin-top: .75rem; }
+.identity-reconciliation-page .resolution-question { max-width: 34rem; }
+.identity-reconciliation-page .resolution-card [data-account-fields] > .form-group { max-width: 34rem; }
+.identity-reconciliation-page .reconcile-preserved { padding: 0 .25rem; }
+.identity-reconciliation-page .reconcile-preserved[open] > .reconcile-table { margin-top: .5rem; }
 .identity-reconciliation-page .reconcile-reference { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: 1.25rem; }
 .identity-reconciliation-page .reconcile-reference > .dashboard-section { min-width: 0; margin: 0; }
 .identity-reconciliation-page .reconcile-reference .reconcile-table { margin-top: 1rem; }
@@ -170,8 +177,7 @@ html[data-theme="dark"] .identity-reconciliation-page .btn-secondary:hover { bac
 .identity-reconciliation-page .dashboard-section > .recovery-panel-heading + .backup-hint { margin-top: .4rem; }
 .identity-reconciliation-page .recovery-panel-heading h2 { display: flex; align-items: center; gap: .5rem; }
 .identity-reconciliation-page .recovery-panel-heading h2 > i { color: var(--recovery-muted); }
-.identity-reconciliation-page .reconcile-field { margin-top: 1rem; }
-.identity-reconciliation-page .credentials-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; align-items: start; }
+.identity-reconciliation-page .dashboard-section > .recovery-panel-heading + .package-fields { margin-top: 1.35rem; }
 
 /* Inputs and selects match the password-field treatment. */
 .identity-reconciliation-page .form-group :is(input:not([type="file"], [type="checkbox"]), select) { width: 100%; min-height: 44px; padding: .65rem .9rem; border: 1px solid var(--recovery-line); border-radius: 10px; background: var(--card-bg, #ffffff); color: var(--recovery-ink); font-size: 1rem; caret-color: var(--primary, #2563eb); }
@@ -230,17 +236,16 @@ html[data-theme="dark"] .identity-reconciliation-page .btn-secondary:hover { bac
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-evidence { background: var(--theme-success-surface, var(--card-bg)); border-color: color-mix(in srgb, var(--theme-success-text) 35%, var(--border)); }
 html[data-theme="dark"] .identity-reconciliation-page .reconcile-conflicts li { background: var(--bg, #0f172a); }
 html[data-theme="dark"] .identity-reconciliation-page .resolution-historical,
-html[data-theme="dark"] .identity-reconciliation-page .resolution-option { background: var(--card-bg); }
+html[data-theme="dark"] .identity-reconciliation-page .resolution-option,
+html[data-theme="dark"] .identity-reconciliation-page .reconcile-selected { background: var(--card-bg); }
 @media (max-width: 1180px) {
     .identity-reconciliation-page .reconcile-reference { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 900px) {
-    .identity-reconciliation-page .reconcile-package { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-    .identity-reconciliation-page .reconcile-guidance { padding: 1rem 0 0; border-left: 0; border-top: 1px solid var(--recovery-line); }
 }
 @media (max-width: 600px) {
     .identity-reconciliation-page .reconcile-steps { grid-template-columns: minmax(0, 1fr); gap: .85rem; }
     .identity-reconciliation-page .reconcile-steps li { align-items: flex-start; }
+    .identity-reconciliation-page .reconcile-selected { flex-wrap: wrap; }
+    .identity-reconciliation-page .reconcile-selected .btn { width: 100%; }
     .identity-reconciliation-page .resolution-grid { grid-template-columns: minmax(0, 1fr); }
     .identity-reconciliation-page .resolution-card { padding: 1.25rem 0; }
     .identity-reconciliation-page .reconcile-actions .btn { width: 100%; }
