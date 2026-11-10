@@ -576,7 +576,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="unlock_register">
                         <label class="pos-field-label" for="pos-unlock-password">Account password</label>
-                        <input class="pos-input" type="password" id="pos-unlock-password" name="pos_unlock_password" autocomplete="current-password" required autofocus>
+                        <input class="pos-input" type="password" id="pos-unlock-password" name="pos_unlock_password" autocomplete="current-password" required>
                         <button class="btn btn-block" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unlock register</button>
                     </form>
                 </div>
@@ -2395,7 +2395,9 @@ function setFullscreenMode(enabled) {
         fullscreenToggle.querySelector('i').className = `bi ${enabled ? 'bi-fullscreen-exit' : 'bi-arrows-fullscreen'}`;
         fullscreenToggle.querySelector('span').textContent = enabled ? 'Exit full screen' : 'Full screen';
     }
-    setTimeout(() => skuInput.focus(), 50);
+    if (window.matchMedia('(pointer: fine) and (min-width: 901px)').matches) {
+        setTimeout(() => skuInput.focus(), 50);
+    }
 }
 if (fullscreenToggle) {
     fullscreenToggle.addEventListener('click', () => setFullscreenMode(!document.body.classList.contains('pos-fullscreen')));
@@ -2556,7 +2558,9 @@ checkoutAttempt.recover().then(async () => {
         await loadHeldSales();
     } catch (error) { showCartMessage('Unfinished work is preserved. ' + error.message, 'error'); }
 });
-setTimeout(() => { if (!document.getElementById('receiptModal')?.open) skuInput.focus(); }, 100);
+if (window.matchMedia('(pointer: fine) and (min-width: 901px)').matches) {
+    setTimeout(() => { if (!document.getElementById('receiptModal')?.open) skuInput.focus(); }, 100);
+}
 </script>
         <?php // Ticket #90: the point of sale and its scripts are withheld entirely while the Register is locked, so a locked till has no cart, no scanner, and no checkout to drive. ?>
         <?php endif; ?>

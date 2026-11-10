@@ -3205,10 +3205,12 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     }
 
     .cashier-pos-page .quick-product-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         max-height: none;
         overflow: visible;
     }
+
+    .cashier-pos-page .quick-product-image { height: 110px; }
 
 }
 

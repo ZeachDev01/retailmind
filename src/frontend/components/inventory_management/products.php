@@ -528,13 +528,18 @@ foreach ($products as $product) {
             display: none;
         }
 
-        #add-product-modal .pricing-shortcut {
+        #add-product-modal .pricing-cost-breakdown {
             display: grid;
             gap: 0.6rem;
-            padding: 0.8rem;
+            padding: 0.85rem;
+            border: 1px solid var(--border);
             border-radius: 10px;
             background: var(--theme-surface-soft, #f8fafc);
         }
+
+        #add-product-modal input[type="number"]::-webkit-inner-spin-button,
+        #add-product-modal input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
+        #add-product-modal input[type="number"] { -moz-appearance: textfield; }
 
         #add-product-modal .pricing-shortcut .planning-section-title {
             font-size: 0.92rem;
@@ -1058,23 +1063,29 @@ foreach ($products as $product) {
 
         @media (min-width: 641px) and (max-width: 1100px) {
             .catalog-toolbar-primary {
-                grid-template-columns: auto minmax(0, 1fr) minmax(150px, .7fr);
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                grid-template-areas:
+                    "search search search add"
+                    "views show sort filter";
+                align-items: end;
             }
+
+            .catalog-search { grid-area: search; }
+            .catalog-view-controls { grid-area: views; }
+            .catalog-show-field { grid-area: show; }
+            .catalog-sort-field { grid-area: sort; }
+            .catalog-filter-button { grid-area: filter; }
+            .catalog-toolbar .product-add-menu { grid-area: add; justify-self: end; }
 
             .catalog-filter-button,
             .catalog-toolbar .product-add-menu {
                 grid-column: auto;
             }
 
-            .catalog-sort-field {
-                grid-column: 2;
-            }
-
             .catalog-filter-button {
                 justify-self: stretch;
             }
 
-            .catalog-filter-button,
             .catalog-toolbar .product-add-trigger {
                 width: 100%;
             }
@@ -1492,55 +1503,50 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="3">
                         <div class="pricing-section">
-                            <h3 class="planning-section-title">Item pricing</h3>
-                            <p class="pricing-note">The price used every time one item is sold at checkout.</p>
-                            <div class="form-grid">
-                                <div class="form-group"><label for="cost-price">Cost Price (₱) *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
-                                <div class="form-group"><label for="selling-price">Selling Price (₱) *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
-                            </div>
-                        </div>
-
-                        <div class="pricing-section">
-                            <div class="pricing-section-head">
-                                <h3 class="planning-section-title">Sales pack</h3>
-                                <span class="pricing-optional">Optional</span>
-                            </div>
-                            <p class="pricing-note">Only if this product is also sold as a sealed pack, such as a 6-pack. Leave it blank if you sell single items only.</p>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="create-pack-size">Items per Sales Pack</label>
-                                    <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
-                                    <small class="field-help">Single items inside one pack.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="create-pack-price">Sales Pack Price (₱)</label>
-                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="e.g. 100.00">
-                                    <small class="field-help">Must be lower than buying the items separately.</small>
-                                </div>
-                                <div class="form-group full">
-                                    <label for="create-pack-barcode">Sales Pack Barcode</label>
-                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for the pack">
-                                    <small class="field-help">Scanned at checkout to sell the whole pack. Must differ from the item barcode, SKU, and Receiving Package Barcode.</small>
-                                </div>
-                            </div>
-                            <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
-                            <div class="pricing-shortcut">
-                                <h4 class="planning-section-title">Fill prices from a pack cost</h4>
-                                <p class="pricing-note">Optional shortcut. The pack cost sets the per-item Cost Price, and the markup sets the Selling Price.</p>
+                            <h3 class="planning-section-title">Pack &amp; cost breakdown</h3>
+                            <div class="pricing-cost-breakdown">
                                 <div class="form-grid">
                                     <div class="form-group">
-                                        <label for="create-pack-cost">Sales Pack Cost (₱)</label>
-                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost" placeholder="e.g. 120.00">
-                                        <small class="field-help">Total paid for one pack, divided by Items per Sales Pack.</small>
+                                        <label for="create-pack-cost">Sales Pack Cost (&#8369;)</label>
+                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost">
                                     </div>
                                     <div class="form-group">
-                                        <label for="create-pack-markup">Markup %</label>
-                                        <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup" placeholder="e.g. 20">
-                                        <small class="field-help">Added on top of the per-item cost.</small>
+                                        <label for="create-pack-size">Items per Sales Pack</label>
+                                        <input type="number" min="2" step="1" name="pack_size" id="create-pack-size">
                                     </div>
                                 </div>
                                 <p class="pricing-readout" id="pack-price-suggested" aria-live="polite"></p>
                             </div>
+                        </div>
+
+                        <div class="pricing-section">
+                            <h3 class="planning-section-title">Retail pricing &amp; selling</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="create-pack-markup">Markup %</label>
+                                    <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup">
+                                </div>
+                                <div class="form-group">
+                                    <label for="selling-price">Item Selling Price (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required>
+                                    <small class="field-error">Selling price must not be lower than cost.</small>
+                                </div>
+                                <div class="form-group full">
+                                    <label for="cost-price">Cost Price per Item (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required>
+                                    <small class="field-error">Enter a valid cost price.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-pack-price">Sales Pack Price (&#8369;)</label>
+                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price">
+                                    <small class="field-help">Must be lower than buying the items separately.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-pack-barcode">Sales Pack Barcode (Optional)</label>
+                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Enter pack barcode">
+                                </div>
+                            </div>
+                            <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
                         </div>
 
                         <div class="pricing-section">
@@ -2976,10 +2982,7 @@ foreach ($products as $product) {
                 return;
             }
             const money = value => '₱' + value.toFixed(2);
-            let text = `Cost per item ${money(packCost / size)} × ${size} items = ${money(packCost)}`;
-            if (isFinite(markup) && markup >= 0) {
-                text += ` · +${markup}% markup = ${money(Math.ceil(packCost * (1 + markup / 100) * 100) / 100)} suggested pack price`;
-            }
+            const text = `Calculated Cost per Item: \u20B1${(packCost / size).toFixed(2)}`;
             preview.textContent = text;
         }
         function applyPackMarkup() {
@@ -3025,7 +3028,7 @@ foreach ($products as $product) {
                 updatePackCostCalc();
             }
             document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
-            if (wizardStep === 2) {
+            if (wizardStep === 2 && !window.matchMedia('(pointer: coarse), (max-width: 900px)').matches) {
                 document.getElementById('create-barcode-input').focus({ preventScroll: true });
             }
         }

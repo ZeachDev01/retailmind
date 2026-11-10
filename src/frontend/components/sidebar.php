@@ -552,6 +552,12 @@ cartWorkspace.bindNavigation();
         var overlay = document.getElementById('sidebarOverlay');
         var collapseStorageKey = 'retailmind_sidebar_collapsed';
 
+        try {
+            if (window.innerWidth > 900 && localStorage.getItem(collapseStorageKey) === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        } catch (_) { /* Navigation remains usable when browser storage is blocked. */ }
+
         function isMobileDrawer() {
             return window.innerWidth <= 900;
         }
