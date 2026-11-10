@@ -1,5 +1,10 @@
 # Hostinger: saved train/test Demo
 
+> **Historical/reference only.** Automatic Hostinger deployment has been removed
+> from this repository; the current deployment path is a fresh localhost
+> installation from a GitHub clone. This page records an earlier hosted Demo
+> procedure and its observed results.
+
 Use a separate Demo website/subdomain and a new empty database. This snapshot
 shows saved training results, predicted-versus-actual sales, stock and experimental
 buying previews. It does not activate Store forecasting.
@@ -44,16 +49,16 @@ Uploading only SQL will not add the replay screen to an older app version.
 
 Use the existing release layout: root `index.php`, `.htaccess`, `.user.ini`,
 `src/.htaccess`, `src/frontend/`, PHP runtime directories under `src/backend/`
-and Composer `vendor/`. See `scripts/build-infinityfree-release.sh` for the
-existing allowlist/package builder; its PHP runtime layout can also be uploaded
-to a Hostinger PHP site. Run `composer install --no-dev --optimize-autoloader`
-before packaging. Keep its access-denial `.htaccess` files and create writable
-backend log/session directories as required by the normal app setup.
+and Composer `vendor/`. The hosted-only `scripts/build-infinityfree-release.sh`
+package builder has been removed; `src/backend/scripts/build_release.sh` still
+builds a generic release ZIP from the current tree. Run
+`composer install --no-dev --optimize-autoloader` before packaging. Keep its
+access-denial `.htaccess` files and create writable backend log/session
+directories as required by the normal app setup.
 
 Use an existing supported PHP version for this app with PDO MySQL, Fileinfo
-and GD enabled. Configure HTTPS. Do not use the repository's automatic Hostinger
-deployment workflow for this separate Demo without configuring its target and
-the Demo environment, including `FORECAST_REPLAY_DATABASE`.
+and GD enabled. Configure HTTPS. The repository's automatic Hostinger deployment
+workflow has been removed.
 
 Create a private `.env` beside root `index.php`, replacing every placeholder:
 
