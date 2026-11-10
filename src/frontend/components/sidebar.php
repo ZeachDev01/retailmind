@@ -232,7 +232,7 @@ $superAdministratorForecastingItems = [
 
 $administratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'User Manager'],
-    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Registers'],
+    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Checkout Stations'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Configuration'],
     ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],

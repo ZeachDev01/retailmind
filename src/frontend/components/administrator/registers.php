@@ -34,26 +34,26 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     try {
         if ($action === 'create') {
             $registers->create($actorId, $actorRole, (string)($_POST['name'] ?? ''), (string)($_POST['paper_width_mm'] ?? '80'));
-            $message = 'Register created. It is now available for new Cashier Shifts.';
+            $message = 'Checkout station created and is available for new cashier shifts.';
             $messageClass = 'tag-success';
         } elseif ($action === 'rename') {
             $registers->rename($actorId, $actorRole, $registerId, (string)($_POST['name'] ?? ''));
-            $message = 'Register renamed. Earlier records keep their original Register identity.';
+            $message = 'Checkout station renamed. Existing records retain their original station identity.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_paper_width') {
             $registers->setPaperWidth($actorId, $actorRole, $registerId, (string)($_POST['paper_width_mm'] ?? ''));
-            $message = 'Register paper width saved. Receipts use this width when printed from its Cashier Shift.';
+            $message = 'Receipt paper width saved. Receipts use this setting for future cashier shifts.';
             $messageClass = 'tag-success';
         } elseif ($action === 'set_status') {
             $status = (string)($_POST['status'] ?? RegisterService::STATUS_ACTIVE);
             $registers->setStatus($actorId, $actorRole, $registerId, $status);
             $message = $status === RegisterService::STATUS_DISABLED
-                ? 'Register disabled. It blocks new Shifts without shutting down or closing existing open Shifts, and earlier history remains available.'
-                : 'Register enabled. It can be selected for new Cashier Shifts again.';
+                ? 'Checkout station disabled. It is unavailable for new shifts; open shifts and past records remain available.'
+                : 'Checkout station enabled and available for new cashier shifts.';
             $messageClass = 'tag-success';
         } elseif ($action === 'delete') {
             $registers->delete($actorId, $actorRole, $registerId);
-            $message = 'Register deleted. It was not used by any operational record.';
+            $message = 'Checkout station deleted.';
             $messageClass = 'tag-success';
         }
     } catch (Throwable $exception) {
@@ -63,7 +63,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $submittedPaperWidth = (string)($_POST['paper_width_mm'] ?? '80');
         $message = OperatorAlert::message(
             $exception,
-            'The Register could not be saved. Check the name and try again. Tell your Administrator if this keeps happening.'
+            'The checkout station could not be saved. Check the details and try again. Contact your administrator if the issue continues.'
         );
         $messageClass = 'tag-warning';
     }
@@ -76,7 +76,7 @@ $allRegisters = $registers->all();
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Registers</title>
+    <title>Checkout Stations</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/registers.css')) ?>">
 </head>
@@ -86,7 +86,7 @@ $allRegisters = $registers->all();
     <main class="main-content">
         <header class="page-heading">
             <div>
-                <h1>Registers</h1>
+                <h1>Checkout Stations</h1>
                 <p class="page-subheading">Manage points of sale, receipt widths, and shift availability.</p>
             </div>
         </header>
@@ -107,31 +107,31 @@ $allRegisters = $registers->all();
         <div class="card-grid" style="margin-bottom: 1.5rem;">
             <article class="stat-card with-icon">
                 <span class="stat-icon"><i class="bi bi-hdd-network" aria-hidden="true"></i></span>
-                <div class="label">Total Registers</div>
+                <div class="label">Total Checkout Stations</div>
                 <div class="value"><?= count($allRegisters) ?></div>
                 <div class="hint">Configured tills</div>
             </article>
             <article class="stat-card with-icon status-healthy">
                 <span class="stat-icon"><i class="bi bi-check-circle" aria-hidden="true"></i></span>
-                <div class="label">Available Registers</div>
+                <div class="label">Available Checkout Stations</div>
                 <div class="value"><?= $activeCount ?></div>
                 <div class="hint">Open for shifts</div>
             </article>
             <article class="stat-card with-icon <?= $disabledCount > 0 ? 'status-warning' : '' ?>">
                 <span class="stat-icon"><i class="bi bi-pause-circle" aria-hidden="true"></i></span>
-                <div class="label">Disabled Registers</div>
+                <div class="label">Disabled Checkout Stations</div>
                 <div class="value"><?= $disabledCount ?></div>
                 <div class="hint">Blocked from shifts</div>
             </article>
         </div>
 
         <section class="dashboard-section" aria-labelledby="add-register-heading">
-            <h2 id="add-register-heading"><i class="bi bi-plus-circle" aria-hidden="true"></i> Add a Register</h2>
+            <h2 id="add-register-heading"><i class="bi bi-plus-circle" aria-hidden="true"></i> Add a Checkout Station</h2>
             <form method="post" class="form-grid">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
                 <div class="form-group">
-                    <label for="register-name">Register name</label>
+                    <label for="register-name">Checkout station name</label>
                     <input id="register-name" type="text" name="name" maxlength="100" autocomplete="off" placeholder="e.g. Front Counter" value="<?= htmlspecialchars($failedAction === 'create' ? $submittedName : '') ?>" <?= $failedAction === 'create' ? 'aria-describedby="register-feedback"' : '' ?> required>
                 </div>
                 <div class="form-group">
@@ -142,20 +142,20 @@ $allRegisters = $registers->all();
                     </select>
                 </div>
                 <div class="form-group">
-                    <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create Register</button>
+                    <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg" aria-hidden="true"></i> Create Checkout Station</button>
                 </div>
             </form>
         </section>
 
         <section class="dashboard-section" aria-labelledby="store-registers-heading">
-            <h2 id="store-registers-heading"><i class="bi bi-hdd-network" aria-hidden="true"></i> Store Registers <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
-            <p class="section-description">Disabling blocks new Shifts while preserving existing open Shifts.</p>
+            <h2 id="store-registers-heading"><i class="bi bi-hdd-network" aria-hidden="true"></i> Store Checkout Stations <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
+            <p class="section-description">Disabled stations cannot be assigned to new shifts. Open shifts remain active.</p>
 
             <?php if ($allRegisters === []): ?>
                 <div class="empty-state">
                     <i class="bi bi-hdd-network" aria-hidden="true"></i>
-                    <strong>No Registers Configured</strong>
-                    <p class="section-description">Add a register above to enable cashier shifts.</p>
+                    <strong>No Checkout Stations Configured</strong>
+                    <p class="section-description">Add a checkout station to make it available for cashier shifts.</p>
                 </div>
             <?php else: ?>
                 <div class="data-table-shell">
@@ -163,7 +163,7 @@ $allRegisters = $registers->all();
                         <table class="data-table">
                     <thead>
                         <tr>
-                            <th scope="col">Register</th>
+                            <th scope="col">Checkout Station</th>
                             <th scope="col">Availability</th>
                             <th scope="col">Receipt paper width</th>
                             <th scope="col">Actions</th>
@@ -179,10 +179,10 @@ $allRegisters = $registers->all();
                             <td class="register-name-cell">
                                 <div class="register-identity">
                                     <strong><?= htmlspecialchars($register['name']) ?></strong>
-                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="<?= $renameFailed ? 'true' : 'false' ?>" aria-controls="rename-form-<?= (int)$register['register_id'] ?>" title="Rename register">
+                                    <button class="register-edit-toggle" type="button" aria-label="Edit <?= htmlspecialchars($register['name']) ?>" aria-expanded="<?= $renameFailed ? 'true' : 'false' ?>" aria-controls="rename-form-<?= (int)$register['register_id'] ?>" title="Rename checkout station">
                                         <i class="bi bi-pencil" aria-hidden="true"></i>
                                     </button>
-                                    <span class="register-id">Register ID #<?= (int)$register['register_id'] ?></span>
+                                    <span class="register-id">Checkout Station ID #<?= (int)$register['register_id'] ?></span>
                                 </div>
                                 <form method="post" class="inline-form register-rename-form" id="rename-form-<?= (int)$register['register_id'] ?>" <?= $renameFailed ? '' : 'hidden' ?>>
                                     <?= csrf_field() ?>
@@ -221,7 +221,7 @@ $allRegisters = $registers->all();
                                     <input type="hidden" name="status" value="<?= $isActive ? RegisterService::STATUS_DISABLED : RegisterService::STATUS_ACTIVE ?>">
                                     <button class="btn btn-secondary" type="submit" aria-label="<?= $isActive ? 'Disable' : 'Enable' ?> <?= htmlspecialchars($register['name']) ?>"><i class="bi <?= $isActive ? 'bi-pause-circle' : 'bi-play-circle' ?>" aria-hidden="true"></i> <?= $isActive ? 'Disable' : 'Enable' ?></button>
                                 </form>
-                                <form method="post" class="inline-form" data-confirm="<?= htmlspecialchars('Permanently delete Register “' . $register['name'] . '”? This cannot be undone.') ?>" data-confirm-title="Delete Register" data-confirm-button="Delete Register" data-confirm-danger="1">
+                                <form method="post" class="inline-form" data-confirm="<?= htmlspecialchars('Permanently delete checkout station “' . $register['name'] . '”? This cannot be undone.') ?>" data-confirm-title="Delete Checkout Station" data-confirm-button="Delete Checkout Station" data-confirm-danger="1">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="register_id" value="<?= (int)$register['register_id'] ?>">
