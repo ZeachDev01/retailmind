@@ -475,6 +475,71 @@ foreach ($products as $product) {
             font-size: 1rem;
         }
 
+        /* Pricing step: three labelled sections instead of one unbroken field grid. */
+        #add-product-modal .pricing-section {
+            display: grid;
+            gap: 0.6rem;
+            padding-bottom: 1.1rem;
+            margin-bottom: 1.1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        #add-product-modal .pricing-section:last-child {
+            padding-bottom: 0;
+            margin-bottom: 0;
+            border-bottom: 0;
+        }
+
+        #add-product-modal .pricing-section-head {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        #add-product-modal .pricing-optional {
+            padding: 0.1rem 0.45rem;
+            border-radius: 999px;
+            background: var(--theme-surface-soft, #f1f5f9);
+            color: var(--muted);
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        #add-product-modal .pricing-note {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        #add-product-modal .pricing-readout {
+            padding: 0.55rem 0.7rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--theme-surface-soft, #f8fafc);
+            color: var(--text, #1f2937);
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        #add-product-modal .pricing-readout:empty {
+            display: none;
+        }
+
+        #add-product-modal .pricing-shortcut {
+            display: grid;
+            gap: 0.6rem;
+            padding: 0.8rem;
+            border-radius: 10px;
+            background: var(--theme-surface-soft, #f8fafc);
+        }
+
+        #add-product-modal .pricing-shortcut .planning-section-title {
+            font-size: 0.92rem;
+        }
+
         #add-product-modal .u-checkbox-label {
             display: flex;
             align-items: center;
@@ -1426,56 +1491,90 @@ foreach ($products as $product) {
                     </section>
 
                     <section class="wizard-panel" data-panel="3">
-                        <div class="form-grid">
-                            <div class="form-group"><label for="cost-price">Cost Price *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
-                            <div class="form-group"><label for="selling-price">Selling Price *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
-                            <div class="form-group">
-                                <label for="product-base-unit">Base Unit</label>
-                                <select id="product-base-unit" data-unit-field="base_unit">
-                                    <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
-                                    <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
-                                    <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
-                                    <option value="">Other…</option>
-                                </select>
-                                <div data-unit-custom hidden>
-                                    <label for="product-base-unit-custom">Custom base unit</label>
-                                    <input name="base_unit" id="product-base-unit-custom" value="piece" placeholder="Enter your unit">
-                                    <small class="field-error">Enter a custom base unit.</small>
+                        <div class="pricing-section">
+                            <h3 class="planning-section-title">Item pricing</h3>
+                            <p class="pricing-note">The price used every time one item is sold at checkout.</p>
+                            <div class="form-grid">
+                                <div class="form-group"><label for="cost-price">Cost Price (₱) *</label><input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required><small class="field-error">Enter a valid cost price.</small></div>
+                                <div class="form-group"><label for="selling-price">Selling Price (₱) *</label><input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required><small class="field-error">Selling price must not be lower than cost.</small></div>
+                            </div>
+                        </div>
+
+                        <div class="pricing-section">
+                            <div class="pricing-section-head">
+                                <h3 class="planning-section-title">Sales pack</h3>
+                                <span class="pricing-optional">Optional</span>
+                            </div>
+                            <p class="pricing-note">Only if this product is also sold as a sealed pack, such as a 6-pack. Leave it blank if you sell single items only.</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="create-pack-size">Items per Sales Pack</label>
+                                    <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
+                                    <small class="field-help">Single items inside one pack.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-pack-price">Sales Pack Price (₱)</label>
+                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="e.g. 100.00">
+                                    <small class="field-help">Must be lower than buying the items separately.</small>
+                                </div>
+                                <div class="form-group full">
+                                    <label for="create-pack-barcode">Sales Pack Barcode</label>
+                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for the pack">
+                                    <small class="field-help">Scanned at checkout to sell the whole pack. Must differ from the item barcode, SKU, and Receiving Package Barcode.</small>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <label for="product-receiving-unit">Receiving Unit</label>
-                                <select id="product-receiving-unit" data-unit-field="receiving_unit">
-                                    <option value="package">Package</option><option value="case">Case</option><option value="box">Box</option><option value="carton">Carton</option>
-                                    <option value="pack">Pack</option><option value="bundle">Bundle</option><option value="bag">Bag</option><option value="sack">Sack</option>
-                                    <option value="tray">Tray</option><option value="crate">Crate</option><option value="ream">Ream</option><option value="pallet">Pallet</option>
-                                    <option value="">Other…</option>
-                                </select>
-                                <div data-unit-custom hidden>
-                                    <label for="product-receiving-unit-custom">Custom receiving unit</label>
-                                    <input name="receiving_unit" id="product-receiving-unit-custom" value="package" placeholder="Enter your unit">
-                                    <small class="field-error">Enter a custom receiving unit.</small>
+                            <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
+                            <div class="pricing-shortcut">
+                                <h4 class="planning-section-title">Fill prices from a pack cost</h4>
+                                <p class="pricing-note">Optional shortcut. The pack cost sets the per-item Cost Price, and the markup sets the Selling Price.</p>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="create-pack-cost">Sales Pack Cost (₱)</label>
+                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost" placeholder="e.g. 120.00">
+                                        <small class="field-help">Total paid for one pack, divided by Items per Sales Pack.</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="create-pack-markup">Markup %</label>
+                                        <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup" placeholder="e.g. 20">
+                                        <small class="field-help">Added on top of the per-item cost.</small>
+                                    </div>
                                 </div>
+                                <p class="pricing-readout" id="pack-price-suggested" aria-live="polite"></p>
                             </div>
-                            <div class="form-group full" style="border-top:1px solid var(--border);padding-top:0.75rem;margin-top:0.5rem;">
-                                <strong style="font-size:0.9rem;display:block;margin-bottom:0.25rem;">Sales Packs — Sold at Checkout (optional)</strong>
-                                <small class="field-help" style="display:block;margin-bottom:0.5rem;">Complete all three fields only if you also sell sealed packs of this item. Otherwise, leave them blank.</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="create-pack-size">Items per Sales Pack</label>
-                                <input type="number" min="2" step="1" name="pack_size" id="create-pack-size" placeholder="e.g. 12">
-                                <small class="field-help">Number of individual items in one sealed pack, e.g. 6 bottles.</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="create-pack-barcode">Sales Pack Barcode</label>
-                                <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Distinct barcode for pack">
-                                <small class="field-help">Scanned at checkout to sell a whole pack. Must differ from the individual item barcode, SKU, and receiving package barcode.</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="create-pack-price">Sales Pack Price (₱)</label>
-                                <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="Bundle price">
-                                <small class="field-help">Price for one whole pack. Must be greater than zero and cheaper than buying its items individually.</small>
-                                <small class="field-help" id="pack-price-calc-preview" aria-live="polite"></small>
+                        </div>
+
+                        <div class="pricing-section">
+                            <h3 class="planning-section-title">Units</h3>
+                            <p class="pricing-note">How stock is counted and how deliveries arrive.</p>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="product-base-unit">Base Unit</label>
+                                    <select id="product-base-unit" data-unit-field="base_unit">
+                                        <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
+                                        <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
+                                        <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
+                                        <option value="">Other…</option>
+                                    </select>
+                                    <div data-unit-custom hidden>
+                                        <label for="product-base-unit-custom">Custom base unit</label>
+                                        <input name="base_unit" id="product-base-unit-custom" value="piece" placeholder="Enter your unit">
+                                        <small class="field-error">Enter a custom base unit.</small>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="product-receiving-unit">Receiving Unit</label>
+                                    <select id="product-receiving-unit" data-unit-field="receiving_unit">
+                                        <option value="package">Package</option><option value="case">Case</option><option value="box">Box</option><option value="carton">Carton</option>
+                                        <option value="pack">Pack</option><option value="bundle">Bundle</option><option value="bag">Bag</option><option value="sack">Sack</option>
+                                        <option value="tray">Tray</option><option value="crate">Crate</option><option value="ream">Ream</option><option value="pallet">Pallet</option>
+                                        <option value="">Other…</option>
+                                    </select>
+                                    <div data-unit-custom hidden>
+                                        <label for="product-receiving-unit-custom">Custom receiving unit</label>
+                                        <input name="receiving_unit" id="product-receiving-unit-custom" value="package" placeholder="Enter your unit">
+                                        <small class="field-error">Enter a custom receiving unit.</small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -2865,6 +2964,49 @@ foreach ($products as $product) {
         }
         ['create-pack-size', 'create-pack-price', 'selling-price'].forEach(id => document.getElementById(id)?.addEventListener('input', updatePackPriceCalc));
 
+        // Sales Pack cost divides into the per-item cost; markup fills the selling price and suggests a pack price.
+        function updatePackCostCalc() {
+            const preview = document.getElementById('pack-price-suggested');
+            if (!preview) return;
+            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
+            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
+            const markup = parseFloat(document.getElementById('create-pack-markup')?.value);
+            if (!(size > 1) || !isFinite(packCost) || packCost <= 0) {
+                preview.textContent = '';
+                return;
+            }
+            const money = value => '₱' + value.toFixed(2);
+            let text = `Cost per item ${money(packCost / size)} × ${size} items = ${money(packCost)}`;
+            if (isFinite(markup) && markup >= 0) {
+                text += ` · +${markup}% markup = ${money(Math.ceil(packCost * (1 + markup / 100) * 100) / 100)} suggested pack price`;
+            }
+            preview.textContent = text;
+        }
+        function applyPackMarkup() {
+            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
+            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
+            const markup = parseFloat(document.getElementById('create-pack-markup')?.value);
+            const selling = document.getElementById('selling-price');
+            if (selling && size > 1 && isFinite(packCost) && packCost > 0 && isFinite(markup) && markup >= 0) {
+                selling.value = (Math.ceil((packCost / size) * (1 + markup / 100) * 100) / 100).toFixed(2);
+                selling.closest('.form-group')?.classList.remove('invalid');
+                updatePackPriceCalc();
+            }
+            updatePackCostCalc();
+        }
+        function syncPackCostDivision() {
+            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
+            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
+            const costPrice = document.getElementById('cost-price');
+            if (costPrice && size > 1 && isFinite(packCost) && packCost > 0) {
+                costPrice.value = (packCost / size).toFixed(2);
+                costPrice.closest('.form-group')?.classList.remove('invalid');
+            }
+            applyPackMarkup();
+        }
+        ['create-pack-size', 'create-pack-cost'].forEach(id => document.getElementById(id)?.addEventListener('input', syncPackCostDivision));
+        document.getElementById('create-pack-markup')?.addEventListener('input', applyPackMarkup);
+
         function setWizardStep(step, saveDraft = true) {
             if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
             wizardStep = Math.max(1, Math.min(5, step));
@@ -2878,7 +3020,10 @@ foreach ($products as $product) {
             saveButton.hidden = wizardStep !== 5;
             if (wizardStep === 5) renderReview();
             if (wizardStep === 4) syncStartingStockFields();
-            if (wizardStep === 3) updatePackPriceCalc();
+            if (wizardStep === 3) {
+                updatePackPriceCalc();
+                updatePackCostCalc();
+            }
             document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
             if (wizardStep === 2) {
                 document.getElementById('create-barcode-input').focus({ preventScroll: true });
@@ -3087,6 +3232,7 @@ foreach ($products as $product) {
                 syncUnitSelects();
                 syncStartingStockFields();
                 updatePackPriceCalc();
+                updatePackCostCalc();
                 setWizardStep(1);
             }
         });

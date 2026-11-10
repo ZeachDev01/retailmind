@@ -125,9 +125,10 @@ const { chromium } = require('playwright');
         const conversionText = await line.locator('[data-field="package_conversion"]').textContent();
         assert.equal(conversionText, 'Accepted: 28 units (2 packs, 4 loose pieces).', 'Conversion text shows accepted packs and loose pieces');
 
-        // 4. Verify delivery summary reflects 28 accepted units and 28 received units
+        // 4. Verify delivery summary reflects 28 accepted units
         assert.equal(await page.locator('#summary_accepted').textContent(), '28', 'Delivery summary shows 28 accepted units');
-        assert.equal(await page.locator('#summary_received').textContent(), '28', 'Delivery summary shows 28 received units');
+        assert.equal(await page.locator('#summary_received').count(), 0, 'Duplicate received-units summary tile is removed');
+        assert.equal(await page.locator('#summary_damaged').count(), 0, 'Damaged-units summary tile is removed');
         await costInput.fill('');
         assert.equal(await page.locator('#summary_cost').textContent(), '₱280.00', 'Blank cost uses product cost for accepted units');
         await page.evaluate(() => renderReview());
@@ -135,40 +136,17 @@ const { chromium } = require('playwright');
         await costInput.fill('7.50');
         assert.equal(await page.locator('#summary_cost').textContent(), '₱210.00', 'Entered cost overrides product cost');
 
-        // 5. Test rejected and damaged fields
-        const damagedPacks = line.locator('[data-field="damaged_packs"]');
-        const rejectedPacks = line.locator('[data-field="rejected_packs"]');
-        await damagedPacks.fill('1');
-        await rejectedPacks.fill('1');
+        // 5. The delivery line records good quantities only
+        for (const name of ['damaged_qty', 'damaged_packs', 'rejected_packs', 'damaged_loose', 'rejected_loose', 'notes']) {
+            assert.equal(await line.locator(`[data-field="${name}"]`).count(), 0, `Delivery line has no ${name} field`);
+        }
+        assert.equal(await page.evaluate(() => validateQuantities()), true, 'Good quantities pass validation');
 
-        const updatedConversion = await line.locator('[data-field="package_conversion"]').textContent();
-        assert.equal(updatedConversion, 'Accepted: 4 units (0 packs, 4 loose pieces).', 'Conversion excludes damaged and rejected packs');
-        assert.equal(await page.locator('#summary_accepted').textContent(), '4', 'Delivery summary reflects 4 accepted units');
-        assert.equal(await page.locator('#summary_damaged').textContent(), '12', 'Delivery summary reflects 12 damaged units');
-
-        // 6. Test validation error when damaged + rejected > received
-        await rejectedPacks.fill('2'); // 1 damaged + 2 rejected = 3 > 2 received
-        const isValidOverPacks = await page.evaluate(() => validateQuantities());
-        assert.equal(isValidOverPacks, false, 'Validation fails when damaged + rejected > received packs');
-        const errorTextPacks = await page.locator('#entry_status').textContent();
-        assert.ok(errorTextPacks.includes('Damaged and rejected packs cannot exceed received packs.'), 'Error message for excessive packs');
-
-        // Reset rejected packs to valid
-        await rejectedPacks.fill('1');
-        assert.equal(await page.evaluate(() => validateQuantities()), true, 'Validation passes when counts are within bounds');
-
-        // Test excessive loose pieces: 1 damaged loose + 4 rejected loose = 5 > 4 received loose
-        const damagedLoose = line.locator('[data-field="damaged_loose"]');
-        const rejectedLoose = line.locator('[data-field="rejected_loose"]');
-        await damagedLoose.fill('1');
-        await rejectedLoose.fill('4');
-        const isValidOverLoose = await page.evaluate(() => validateQuantities());
-        assert.equal(isValidOverLoose, false, 'Validation fails when damaged + rejected > received loose pieces');
-        const errorTextLoose = await page.locator('#entry_status').textContent();
-        assert.ok(errorTextLoose.includes('Damaged and rejected loose pieces cannot exceed received loose pieces.'), 'Error message for excessive loose pieces');
-
-        // Reset loose pieces
-        await rejectedLoose.fill('1');
+        // 6. Whole-number validation still rejects malformed quantities
+        await receivedLoose.fill('1.5');
+        assert.equal(await page.evaluate(() => validateQuantities()), false, 'Validation rejects fractional loose pieces');
+        assert.ok((await page.locator('#entry_status').textContent()).includes('whole number'), 'Fractional loose pieces show a correction message');
+        await receivedLoose.fill('4');
         assert.equal(await page.evaluate(() => validateQuantities()), true, 'Validation passes after correcting loose pieces');
 
         // 7. Test barcode scanning and focus routing

@@ -46,8 +46,10 @@ $receivingHistorySrc = (string)file_get_contents(dirname(__DIR__, 2) . '/fronten
 
 $assert(str_contains($stockReceivingSrc, 'data-field="received_packs"') || str_contains($stockReceivingSrc, 'name="received_packs"'), 'stock_receiving.php includes received_packs field');
 $assert(str_contains($stockReceivingSrc, 'data-field="received_loose"') || str_contains($stockReceivingSrc, 'name="received_loose"'), 'stock_receiving.php includes received_loose field');
-$assert(str_contains($stockReceivingSrc, 'data-field="rejected_packs"') || str_contains($stockReceivingSrc, 'name="rejected_packs"'), 'stock_receiving.php includes rejected_packs field');
-$assert(str_contains($stockReceivingSrc, 'data-field="rejected_loose"') || str_contains($stockReceivingSrc, 'name="rejected_loose"'), 'stock_receiving.php includes rejected_loose field');
+$assert(!str_contains($stockReceivingSrc, 'data-field="rejected_packs"'), 'stock_receiving.php no longer shows a rejected_packs field');
+$assert(!str_contains($stockReceivingSrc, 'data-field="rejected_loose"'), 'stock_receiving.php no longer shows a rejected_loose field');
+$assert(!str_contains($stockReceivingSrc, 'data-field="damaged_packs"'), 'stock_receiving.php no longer shows a damaged_packs field');
+$assert(!str_contains($stockReceivingSrc, 'data-field="damaged_qty"'), 'stock_receiving.php no longer shows a damaged_qty field');
 $assert(str_contains($receivingHistorySrc, 'received_packs'), 'receiving_history.php references received_packs');
 $assert(str_contains($receivingHistorySrc, 'rejected_packs'), 'receiving_history.php references rejected_packs');
 

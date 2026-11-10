@@ -147,17 +147,15 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
         await page.locator('.receiving-extras summary').first().click();
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras disclosure opened on summary click');
-        assert.equal(await page.locator('.receiving-extras').first().locator('textarea').count(), 1, 'one shared field for notes and damage details');
+        assert.equal(await page.locator('.receiving-extras').first().locator('textarea').count(), 0, 'no notes or damage details field remains');
         assert.equal(await page.locator('#cost_price').isVisible(), true);
         assert.equal(await page.locator('#batch_number').isVisible(), true);
         assert.equal(await page.locator('#expiration_date').isVisible(), true);
         await page.locator('#received_qty').fill('12');
-        await page.locator('#damaged_qty').fill('2');
         await page.locator('#cost_price').fill('3.50');
-        assert.equal(await page.locator('#summary_accepted').innerText(), '10');
-        assert.equal(await page.locator('#summary_damaged').innerText(), '2');
-        assert.equal(await page.locator('#summary_cost').innerText(), '₱35.00');
-        assert.equal(await page.locator('#package_conversion').innerText(), '12 units received − 2 damaged = 10 accepted units.');
+        assert.equal(await page.locator('#summary_accepted').innerText(), '12');
+        assert.equal(await page.locator('#summary_cost').innerText(), '₱42.00');
+        assert.equal(await page.locator('#package_conversion').innerText(), 'Accepted: 12 units.');
         assert.equal(await page.locator('#receiving_back').innerText(), 'Add products');
         assert.equal(await page.locator('#receiving_return_products').count(), 0, 'one action returns to products');
 
@@ -178,7 +176,8 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('10');
         await page.locator('#receiving_next').click();
-        assert.match(await page.locator('#receiving_review').innerText(), /10 accepted units/);
+        assert.match(await page.locator('#receiving_review').innerText(), /Accepted/);
+        assert.equal(await page.locator('#receiving_review .receiving-review-quantities dd').first().innerText(), '10 units');
         assert.equal(await page.locator('#receiving_review > p').count(), 0, 'blank receipt details stay out of review');
         assert.doesNotMatch(await page.locator('#receiving_review').innerText(), /Not supplied/);
         assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: unknown; product cost unchanged/);
@@ -251,7 +250,7 @@ function fixture(action) {
         await page.goto(url);
         const measurements = [];
         await page.evaluate(() => addReceivingLine({product_id: 1, discrepancy_notes: 'Damaged packaging', notes: 'Check delivery'}));
-        assert.equal(await page.locator('#notes').inputValue(), 'Damaged packaging\nCheck delivery', 'legacy separate details restore into the shared notes field');
+        assert.equal(await page.locator('#notes').count(), 0, 'legacy notes and damage details have no field to restore into');
         await page.goto(url);
         for (const theme of ['light', 'dark']) {
             await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, theme);
@@ -273,7 +272,6 @@ function fixture(action) {
                             await page.locator('.receiving-extras summary').first().click();
                         }
                         await page.locator('#cost_price').fill('3.50');
-                        await page.locator('#notes').fill('Long note: ' + 'Receiving details 漢字 العربية '.repeat(15));
                         await page.locator('#receiving_next').click();
                     }
                     const layout = await page.evaluate(() => ({
@@ -350,19 +348,16 @@ function fixture(action) {
         await page.locator('#received_qty').fill('invalid inactive units');
         await page.locator('#quantity_mode').selectOption('packages');
         await page.locator('#received_packages').fill('2');
-        await page.locator('#damaged_qty').fill('1');
         await page.locator('.receiving-extras summary').first().click();
         await page.locator('#cost_price').fill('4.50');
         await page.locator('#batch_number').fill('B-99');
         await page.locator('#expiration_date').fill('2028-06-30');
-        await page.locator('#notes').fill('Rejection test note: one damaged unit');
         await page.locator('#supplier').fill('Review test store');
         await page.locator('#invoice_number').fill('REVIEW-123');
         await page.locator('#receiving_next').click();
         assert.equal(await page.locator('#receiving_review > p').innerText(), 'Shopping store: Review test store · Receipt: REVIEW-123');
         assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: ₱4.50 · Batch: B-99 · Expiry: 2028-06-30/);
         assert.match(await page.locator('#receiving_review').innerText(), /B-99/);
-        assert.match(await page.locator('#receiving_review').innerText(), /Rejection test note/);
         await page.getByRole('button', {name: 'Edit line 1'}).click();
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2');
         await page.locator('#receiving_next').click();
@@ -371,11 +366,9 @@ function fixture(action) {
         assert.match(await page.locator('.message.error').innerText(), /cannot be identified/);
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'server rejection restores to Step 2');
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'server rejection retains entered package quantity');
-        assert.equal(await page.locator('#damaged_qty').inputValue(), '1', 'server rejection retains damaged quantity');
         assert.equal(await page.locator('#cost_price').inputValue(), '4.50', 'server rejection retains cost price');
         assert.equal(await page.locator('#batch_number').inputValue(), 'B-99', 'server rejection retains batch number');
         assert.equal(await page.locator('#expiration_date').inputValue(), '2028-06-30', 'server rejection retains expiry date');
-        assert.equal(await page.locator('#notes').inputValue(), 'Rejection test note: one damaged unit', 'server rejection retains combined notes and damage details');
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras auto-expanded on server rejection restoration');
         if (await page.locator('.swal2-confirm').isVisible({timeout: 1000}).catch(() => false)) {
             await page.locator('.swal2-confirm').click();
@@ -385,14 +378,14 @@ function fixture(action) {
             page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/report/stock_receiving.php')),
             page.waitForNavigation(), page.locator('.btn-submit').click()
         ]);
-        assert.match(await page.locator('.message.success').innerText(), /47 accepted units/);
+        assert.match(await page.locator('.message.success').innerText(), /48 accepted units/);
         const state = JSON.parse(fixture('inventory_state'));
-        assert.equal(state.stock_receiving.find(row => Number(row.product_id) === 1).notes, 'Rejection test note: one damaged unit', 'combined notes persist on the receipt');
-        assert.equal(Number(state.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 57, 'package submission updates persisted stock once');
+        assert.ok(!state.stock_receiving.find(row => Number(row.product_id) === 1).notes, 'receipt persists no notes now that the field is removed');
+        assert.equal(Number(state.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 58, 'package submission updates persisted stock once');
         const replay = await page.context().request.post(url, {form:Object.fromEntries(new URLSearchParams(savedRequest.postData()))});
         assert.match(await replay.text(), /cannot be identified/);
         const replayState = JSON.parse(fixture('inventory_state'));
-        assert.equal(Number(replayState.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 57, 'replayed receipt never updates stock twice');
+        assert.equal(Number(replayState.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 58, 'replayed receipt never updates stock twice');
         await page.goto(url);
         await page.locator('.receiving-skip-link').focus();
         await page.keyboard.press('Enter');
@@ -434,7 +427,7 @@ function fixture(action) {
         assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '2', 'oversight advances to Step 2');
         assert.equal(await readonlyPage.locator('#received_qty').isDisabled(), true, 'oversight quantity disabled');
         assert.equal(await readonlyPage.locator('#quantity_mode').isDisabled(), true, 'oversight mode selector disabled');
-        assert.equal(await readonlyPage.locator('#damaged_qty').isDisabled(), true, 'oversight damage disabled');
+        assert.equal(await readonlyPage.locator('#expiration_date').isDisabled(), true, 'oversight expiry date disabled');
         assert.equal(await readonlyPage.locator('#cost_price').isDisabled(), true, 'oversight cost disabled');
         await readonlyPage.locator('#receiving_next').click();
         assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '3', 'oversight advances to Step 3 review');

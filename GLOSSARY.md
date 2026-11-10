@@ -100,6 +100,10 @@ _Avoid_: Gross Sales, Gross Profit, Net Profit, earnings
 Net Sales minus the corresponding cost of products sold, adjusted for returns. Gross Profit excludes operating expenses and is not Net Profit or take-home earnings.
 _Avoid_: Net Sales, Gross Sales, Net Profit, take-home earnings
 
+**Markup**:
+The percentage an Inventory Manager adds on top of a Product's cost while pricing it. It is a pricing aid only: it is not the recorded Gross Profit and not a Gross Profit percentage.
+_Avoid_: Gross margin, profit percentage, gross profit rate
+
 **Promotion**:
 An Administrator-created discount with defined eligibility conditions that a Cashier may explicitly select for a sale. Only one Promotion may apply to a sale.
 _Avoid_: Cashier-created discount, automatic discount
@@ -201,7 +205,7 @@ The read-only audit view used by the Administrator to review Store-wide stock-is
 _Avoid_: Stock issue approval, inventory adjustment (when referring to administrator oversight)
 
 **Stock Receiving**:
-The Inventory Manager's record of goods brought into the Store, including bulk purchases made by the owner at a supermarket. Quantities may be entered as individual units or packs/cases; supplier and receipt details are optional, and no purchase request, purchase order, or Administrator approval is required.
+The Inventory Manager's record of goods brought into the Store, including bulk purchases made by the owner at a supermarket. Quantities may be entered as individual units or packs/cases; supplier and receipt details are optional, and no purchase request, purchase order, or Administrator approval is required. Only good items are recorded: damaged or rejected goods stay with the supplier and enter no stock, and damage found after receiving is reported as a Stock Issue.
 _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 
 **Replenishment Recommendation**:

@@ -53,6 +53,26 @@ const { chromium } = require('playwright');
             assert.ok(await page.locator('#create-pack-price').isVisible(), 'Pack price input is visible');
             assert.equal((await page.locator('#pack-price-calc-preview').textContent()).trim(), '', 'No pack comparison before a pack size is entered');
 
+            // Pack purchase cost divides into the per-item cost; markup fills the selling price and suggests a pack price.
+            assert.ok(await page.locator('#create-pack-cost').isVisible(), 'Pack cost input is visible');
+            await page.locator('#create-pack-size').fill('12');
+            await page.locator('#create-pack-cost').fill('120.00');
+            assert.equal(await page.locator('#cost-price').inputValue(), '10.00', 'Pack cost divides into the per-item cost');
+            await page.locator('#create-pack-markup').fill('25');
+            const costCalc = await page.locator('#pack-price-suggested').textContent();
+            assert.ok(costCalc.includes('₱10.00'), 'Suggested maths shows the per-item cost');
+            assert.ok(costCalc.includes('× 12'), 'Suggested maths shows the items per pack');
+            assert.ok(costCalc.includes('₱150.00'), 'Suggested pack price adds the markup to the pack cost');
+            assert.equal(await page.locator('#selling-price').inputValue(), '12.50', 'Markup fills the per-item selling price');
+            assert.equal(await page.locator('#create-pack-price').inputValue(), '', 'Markup never fills the Sales Pack Price');
+            await page.locator('#cost-price').fill('9.50');
+            await page.locator('#create-pack-markup').fill('20');
+            assert.equal(await page.locator('#cost-price').inputValue(), '9.50', 'Markup never overwrites a manual per-item cost');
+            await page.locator('#cost-price').fill('8.00');
+            await page.locator('#selling-price').fill('10.00');
+            await page.locator('#create-pack-cost').fill('');
+            await page.locator('#create-pack-markup').fill('');
+
             // Test incomplete pack configuration validation: pack size without barcode/price
             await page.locator('#create-pack-size').fill('12');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('12 × ₱10.00 = ₱120.00'), 'Comparison shows the individual-items total');

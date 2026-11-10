@@ -238,7 +238,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
             VALUES (1, 'BIS-01', 'BIS-PC', 12, 'BIS-PK', 100.00, 'Chocolate Biscuit', 10.00, 7.00)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 27)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (1, 1, 'BATCH-01', 27, 27, 2, 3, date('now', '+30 days'))");
+            VALUES (1, 1, 'BATCH-01', 27, 27, 2, 3, date(CURDATE(), '+30 days'))");
 
 // Selling 5 pieces requires opening 1 pack
 $cart = [['product_id' => 1, 'selling_form' => 'piece', 'qty' => 5]];
@@ -316,7 +316,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
             VALUES (2, 'SOAP-01', 'SOAP-PC', 6, 'SOAP-PK', 50.00, 'Laundry Soap', 10.00, 6.00)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 20)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (2, 2, 'BATCH-02', 20, 20, 3, 2, date('now', '+30 days'))");
+            VALUES (2, 2, 'BATCH-02', 20, 20, 3, 2, date(CURDATE(), '+30 days'))");
 
 // Demand 14 pieces: 2 loose available, shortfall is 12 pieces -> exactly 2 packs of 6 needed.
 $cart3 = [['product_id' => 2, 'selling_form' => 'piece', 'qty' => 14]];
@@ -346,7 +346,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
             VALUES (3, 'JUICE-01', 'JUICE-PC', 12, 'JUICE-PK', 100.00, 'Orange Juice', 10.00, 6.00)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 24)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (3, 3, 'BATCH-03', 24, 24, 0, 24, date('now', '+30 days'))");
+            VALUES (3, 3, 'BATCH-03', 24, 24, 0, 24, date(CURDATE(), '+30 days'))");
 
 // Attempt to sell 1 pack when only loose stock exists: MUST FAIL
 $packOnlyCart = [['product_id' => 3, 'selling_form' => 'pack', 'qty' => 1]];
@@ -397,7 +397,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
 // Setup DB state for Order A: [pack, piece]
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 27)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (4, 4, 'BATCH-04', 27, 27, 2, 3, date('now', '+30 days'))");
+            VALUES (4, 4, 'BATCH-04', 27, 27, 2, 3, date(CURDATE(), '+30 days'))");
 
 $cartA = [
     ['product_id' => 4, 'selling_form' => 'pack', 'qty' => 1],
@@ -462,10 +462,10 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (5, 54)");
 // Batch 5A: Expired yesterday, 2 packs, 5 loose pieces
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (51, 5, 'EXP-BATCH', 29, 29, 2, 5, date('now', '-1 day'))");
+            VALUES (51, 5, 'EXP-BATCH', 29, 29, 2, 5, date(CURDATE(), '-1 day'))");
 // Batch 5B: Active, 2 packs, 1 loose piece
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (52, 5, 'ACT-BATCH', 25, 25, 2, 1, date('now', '+10 days'))");
+            VALUES (52, 5, 'ACT-BATCH', 25, 25, 2, 1, date(CURDATE(), '+10 days'))");
 
 // Selling 5 pieces: loose on active batch is 1 piece, shortfall is 4 pieces -> open 1 pack from Batch 5B!
 // Expired Batch 51 cannot be opened or consumed!
@@ -495,7 +495,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
             VALUES (6, 'CRACK-01', 'CRACK-PC', 12, 'CRACK-PK', 100.00, 'Soda Crackers', 10.00, 6.00)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (6, 27)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (6, 6, 'BATCH-06', 27, 27, 2, 3, date('now', '+30 days'))");
+            VALUES (6, 6, 'BATCH-06', 27, 27, 2, 3, date(CURDATE(), '+30 days'))");
 
 // Inject trigger failure on receipt insertion
 $pdo->exec("CREATE TRIGGER fail_receipt_insert BEFORE INSERT ON sale_receipt_details FOR EACH ROW
@@ -645,7 +645,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, pack_size, pack_barc
             VALUES (7, 'RACE-01', 'RACE-PC', 12, 'RACE-PK', 100.00, 'Race Biscuit', 10.00, 6.00)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 24)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, expiration_date)
-            VALUES (7, 7, 'BATCH-07', 24, 24, 2, 0, date('now', '+30 days'))");
+            VALUES (7, 7, 'BATCH-07', 24, 24, 2, 0, date(CURDATE(), '+30 days'))");
 
 // Trigger a race collision: Simulate that another transaction depleted the batch right before applyPackOpenings
 $pdo->exec("CREATE TRIGGER race_collision_deplete BEFORE UPDATE ON product_batches FOR EACH ROW

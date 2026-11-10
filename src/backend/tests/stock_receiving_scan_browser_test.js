@@ -580,25 +580,23 @@ async function main() {
 
         await enterQuantities(page);
         await page.fill('#received_packages', '2');
-        await page.fill('#damaged_qty', '2');
         await page.fill('#invoice_number', 'INV-' + token);
         await page.fill('#batch_number', 'BATCH-' + token);
         await page.fill('#expiration_date', '2027-12-31');
-        await page.fill('#discrepancy_notes', 'Two delivered pieces were damaged.');
         await saveEntry(page);
-        check((await page.locator('.message.success').innerText()).includes('10 accepted units'),
+        check((await page.locator('.message.success').innerText()).includes('12 accepted units'),
             'the controlled form reports only accepted units added');
 
         const finalState = runFixture('--state', '--token', token);
         const finalProduct = finalState.products.find((product) => product.sku === fixture.products.countable.sku);
         const receipt = finalState.receipts.filter((item) => item.sku === fixture.products.countable.sku).at(-1);
-        check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 10,
+        check(Number(finalProduct.quantity_on_hand) === Number(fixture.products.countable.quantity_on_hand) + 12,
             'submission increments stock by accepted units only');
         check(receipt && Number(receipt.received_packages) === 2
             && Number(receipt.units_per_package_used) === 6
-            && Number(receipt.received_qty) === 12 && Number(receipt.accepted_qty) === 10
-            && Number(receipt.damaged_qty) === 2,
-            'the receipt converts explicit packages and records accepted and damaged base units');
+            && Number(receipt.received_qty) === 12 && Number(receipt.accepted_qty) === 12
+            && Number(receipt.damaged_qty) === 0,
+            'the receipt converts explicit packages and records accepted base units');
         check(receipt && receipt.invoice_number === 'INV-' + token
             && receipt.batch_number === 'BATCH-' + token
             && receipt.expiration_date === '2027-12-31',
@@ -629,7 +627,6 @@ async function main() {
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
         await enterQuantities(page);
         await page.fill('#received_qty', '5');
-        await page.fill('#damaged_qty', '2');
         await page.fill('#cost_price', '7.25');
         await page.fill('#batch_number', 'SHOP-UNITS-' + token);
         await page.fill('#expiration_date', '2028-12-31');
@@ -644,8 +641,8 @@ async function main() {
             fixture.products.bulk_pack.product_id), 'case lookup selects the active second line without replacing the first');
         await enterQuantities(page);
         await page.fill('#received_packages_1', '2');
-        check((await page.locator('#package_conversion_1').innerText()).includes('2 × 24 = 48')
-            && (await page.locator('#package_conversion').innerText()).includes('3 accepted units'),
+        check((await page.locator('#package_conversion_1').innerText()).includes('Accepted: 48 units.')
+            && (await page.locator('#package_conversion').innerText()).includes('Accepted: 5 units.'),
             'every line displays its pack basis and actual accepted units before saving');
         check(await page.locator('.receiving-line').nth(1).getByLabel('Product', { exact: true }).inputValue()
             === String(fixture.products.bulk_pack.product_id), 'cloned line labels remain associated with their fields');
@@ -658,7 +655,7 @@ async function main() {
         const tripState = runFixture('--state', '--token', token);
         const tripReceipts = tripState.receipts.filter(item => item.invoice_number === 'SHOP-' + token);
         const tripSuccess = await page.locator('.message.success').innerText();
-        check(tripSuccess.includes(fixture.products.bulk_units.product_name) && tripSuccess.includes('3 accepted units')
+        check(tripSuccess.includes(fixture.products.bulk_units.product_name) && tripSuccess.includes('5 accepted units')
             && tripSuccess.includes(fixture.products.bulk_pack.product_name) && tripSuccess.includes('48 accepted units'),
             'one success summary identifies every product and actual accepted quantity');
         check(tripState.receipts.length === beforeTrip.receipts.length + 2 && tripReceipts.length === 2,
@@ -668,7 +665,7 @@ async function main() {
         check(tripState.receiving_groups.filter(g => Number(g.group_id) === Number(tripReceipts[0].group_id)).length === 1,
             'shopping trip persists exactly one stock receiving group');
         check(Number(tripState.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 56
-            && Number(tripState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 11,
+            && Number(tripState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 13,
             'mixed unit/package lines add accepted units; eight plus two cases of 24 is 56');
         check(tripReceipts.every(item => item.supplier === 'Shopping trip store'
             && Number(item.received_by) === fixture.staff.manager.user_id)
@@ -680,9 +677,9 @@ async function main() {
             'mixed optional costs preserve unknown cost and preferred suppliers');
         const unitBatch = tripState.product_batches.find(item => item.batch_number === 'SHOP-UNITS-' + token);
         const unitPurchase = tripState.purchase_history.filter(item => item.sku === fixture.products.bulk_units.sku).at(-1);
-        check(Number(unitBatch.remaining_quantity) === 3 && unitBatch.expiration_date === '2028-12-31'
-            && Number(unitPurchase.quantity_purchased) === 3 && Number(unitPurchase.cost_price) === 7.25
-            && Number(unitPurchase.total_cost) === 21.75 && tripReceipts.every(item => item.received_at),
+        check(Number(unitBatch.remaining_quantity) === 5 && unitBatch.expiration_date === '2028-12-31'
+            && Number(unitPurchase.quantity_purchased) === 5 && Number(unitPurchase.cost_price) === 7.25
+            && Number(unitPurchase.total_cost) === 36.25 && tripReceipts.every(item => item.received_at),
             'bulk receiving preserves accepted batch quantities, expiry, per-unit costs and recording time');
         check(JSON.stringify(tripState.forecasts) === JSON.stringify(beforeTrip.forecasts)
             && JSON.stringify(tripState.forecast_jobs) === JSON.stringify(beforeTrip.forecast_jobs),
@@ -699,10 +696,10 @@ async function main() {
             && (await packGuidance.innerText()).includes('0 units')
             && (await packGuidance.innerText()).includes('Demand Forecast'),
             'success action reloads forecast guidance using 56 committed units');
-        check((await unitGuidance.innerText()).includes('11 units')
+        check((await unitGuidance.innerText()).includes('13 units')
             && (await unitGuidance.innerText()).includes('0 units')
             && ((await unitGuidance.innerText()).includes('Stock-rule suggestion') || (await unitGuidance.innerText()).includes('Stock rules')),
-            'stock-rule view reflects the actual unplanned quantity and accepted damage');
+            'stock-rule view reflects the actual unplanned quantity of accepted goods');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
             'reviewing refreshed recommendations changes no inventory, purchasing or forecast records');
         await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving180-guidance-desktop.png') });
@@ -802,7 +799,6 @@ async function main() {
         await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
         await enterQuantities(page);
         await page.fill('#received_qty', '7');
-        await page.fill('#damaged_qty', '1');
         await page.fill('#cost_price', '11.25');
         await page.fill('#batch_number', 'RETAIN-FIRST-' + token);
         await page.fill('#expiration_date', '2029-01-31');
@@ -820,7 +816,7 @@ async function main() {
         await Promise.all([page.waitForNavigation(), page.evaluate(() => document.getElementById('receiving_form').submit())]);
         check((await page.locator('.message.error').innerText()).includes('Line 2')
             && await page.inputValue('#received_packages_1') === '1.5'
-            && await page.inputValue('#received_qty') === '7' && await page.inputValue('#damaged_qty') === '1'
+            && await page.inputValue('#received_qty') === '7'
             && await page.inputValue('#cost_price') === '11.25'
             && await page.inputValue('#batch_number_1') === 'RETAIN-SECOND-' + token
             && await page.inputValue('#supplier') === 'Retain trip store'
