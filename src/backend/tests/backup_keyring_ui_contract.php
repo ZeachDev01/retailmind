@@ -147,7 +147,7 @@ $assert(str_contains($banner, 'data-backup-key-dialog') && str_contains($banner,
 $assert(str_contains($banner, "name=\"key_action\" value=\"export\"")
     && str_contains($banner, "name=\"key_fingerprint\" value=\"<?= \$escape(\$recommendedFingerprint) ?>\""),
     'The banner download must export the recommended fingerprint through the shared endpoint');
-$assert(str_contains($banner, 'data-password-authorization'),
+$assert(str_contains($banner, 'data-backup-key-export'),
     'The banner download must require the current login password');
 $assert(substr_count($banner, 'type="password"') === 1,
     'The banner must collect exactly one password field');
@@ -162,9 +162,11 @@ $assert(str_contains($script, 'sessionStorage'), 'The recommendation modal must 
 $assert(str_contains($script, "'retailmind.backup-key-recommendation.'"),
     'The session flag must be scoped to the fingerprint');
 $assert(str_contains($script, 'showModal()'), 'The modal must use the native dialog API');
-$assert(str_contains($script, "'cancel'"), 'The modal must close on Escape/cancel');
-$assert(!str_contains($script, 'fetch(') && !str_contains($script, 'XMLHttpRequest'),
-    'The recommendation script must make no network calls');
+$assert(str_contains($script, "'close'"), 'The modal must clear credentials on close, including Escape');
+$assert(str_contains($script, 'await response.blob()') && str_contains($script, 'download.hidden = true'),
+    'The backup link is consumed only after its complete attachment arrives');
+$assert(str_contains($banner, 'I already have a copy') && !str_contains($banner, '<section'),
+    'The recommendation uses a dismissible modal without the old banner');
 
 $administratorDashboard = $read('src/frontend/components/administrator/dashboard.php');
 $superAdministratorDashboard = $read('src/frontend/components/super_administrator/dashboard.php');

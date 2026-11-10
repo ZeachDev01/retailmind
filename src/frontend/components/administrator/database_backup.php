@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'filename' => (string)$result['filename'],
                     'url' => app_url('components/backup/backup_download.php?token=' . rawurlencode((string)$result['token'])),
                     'size' => (int)$result['size'],
+                    'key_fingerprint' => (string)$result['key_fingerprint'],
                 ];
             }
         } catch (Throwable $e) {

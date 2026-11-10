@@ -83,6 +83,21 @@ try {
     $exact = new DateTimeImmutable('2026-11-08 23:00:00', $manila);
     $after = new DateTimeImmutable('2026-11-08 23:01:00', $manila);
     $nextDay = new DateTimeImmutable('2026-11-09 00:00:00', $manila);
+    // Exercise the page's visibility decision against the same fixed schedule.
+    $page = file_get_contents(__DIR__ . '/../../frontend/components/system_administrator/backup_restore.php');
+    preg_match('/\$missedScheduledBackup = .*?;/s', $page, $visibility);
+    $scheduleNow = $nextDay;
+    $scheduledSchedule = ['next_run_at' => '2026-11-15 23:00:00', 'weekday' => 0, 'time' => '23:00'];
+    foreach (['2026-11-08 23:00:00' => false, '2026-11-01 23:00:00' => true, '' => true] as $success => $expected) {
+        $scheduledSchedule['last_success_at'] = $success ?: null;
+        eval($visibility[0]);
+        $assert($missedScheduledBackup === $expected, 'Catch-up card visibility follows the last successful scheduled backup: ' . $success);
+    }
+    $scheduledSchedule['next_run_at'] = '';
+    eval($visibility[0]);
+    $assert(!$missedScheduledBackup, 'Unavailable schedule must not claim a missed backup');
+    $assert(str_contains($page, '<?php if ($missedScheduledBackup): ?>'), 'Catch-up card must use the schedule visibility decision');
+
     $assert(!ScheduledBackupSettings::isDue($previous, 0, '23:00', $before), 'Not due one minute before the scheduled time');
     $assert(ScheduledBackupSettings::isDue($previous, 0, '23:00', $exact), 'Due at exactly the scheduled time');
     $assert(ScheduledBackupSettings::isDue($previous, 0, '23:00', $after), 'Due one minute after the scheduled time');

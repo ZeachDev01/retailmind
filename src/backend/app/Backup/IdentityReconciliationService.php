@@ -312,6 +312,7 @@ final class IdentityReconciliationService
     {
         $origin = (string)$package['manifest']['origin_id'];
         $nextId = max(array_merge([0], array_map('intval', array_keys($destById))));
+        $reservedUsernames = array_fill_keys(array_map('strtolower', array_column($destById, 'username')), true);
         $users = array_intersect_key($destById, array_flip($result['protected_user_ids']));
         $destinationMemberships = $context['memberships'];
         $memberships = array_values(array_filter($destinationMemberships, static fn(array $row): bool => isset($users[$row['user_id']])));
@@ -343,6 +344,13 @@ final class IdentityReconciliationService
             $record['user_id'] = ++$nextId;
             if ($person['historical']) {
                 $record['username'] = 'rm_h_' . $origin . '_' . $id;
+                // Repeated restores keep separate historical identities without reusing an occupied username.
+                $base = $record['username']; $suffix = 0;
+                while (isset($reservedUsernames[strtolower($record['username'])])) {
+                    $ending = '_' . ++$suffix;
+                    $record['username'] = substr($base, 0, 50 - strlen($ending)) . $ending;
+                }
+                $reservedUsernames[strtolower($record['username'])] = true;
                 $record['email'] = null; $record['password_hash'] = '!'; $record['role_id'] = null;
                 $record['status'] = 'disabled'; $record['is_recovery_account'] = 0;
                 $record['must_change_password'] = 0; $record['session_version'] = 1;

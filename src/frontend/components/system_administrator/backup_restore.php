@@ -76,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'filename' => (string)$result['filename'],
                     'url' => app_url('components/backup/backup_download.php?token=' . rawurlencode((string)$result['token'])),
                     'size' => (int)$result['size'],
+                    'key_fingerprint' => (string)$result['key_fingerprint'],
                 ];
             }
         } catch (Throwable $e) {
@@ -129,6 +130,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$scheduleNow = new DateTimeImmutable();
+$missedScheduledBackup = $scheduledSchedule['next_run_at'] !== '' && (
+    \App\Backup\ScheduledBackupSettings::isDue($scheduledSchedule['last_success_at'], $scheduledSchedule['weekday'], $scheduledSchedule['time'], $scheduleNow)
+    || \App\Backup\ScheduledBackupSettings::isCatchUp($scheduledSchedule['last_success_at'], $scheduleNow)
+);
 $service->cleanupStrandedArtifacts();
 $storageMessage = '';
 try {
@@ -203,6 +209,7 @@ $storePaused = RecoveryStore::isPaused();
                 </div>
             </dl>
 
+            <?php if ($missedScheduledBackup): ?>
             <section class="dashboard-section backup-create" aria-labelledby="backup-schedule-title">
                 <div class="backup-create-main">
                     <div class="backup-create-copy">
@@ -214,6 +221,8 @@ $storePaused = RecoveryStore::isPaused();
                     </form>
                 </div>
             </section>
+
+            <?php endif; ?>
 
             <?php if ($download): ?>
                 <section class="dashboard-section backup-ready" aria-labelledby="backup-ready-title">

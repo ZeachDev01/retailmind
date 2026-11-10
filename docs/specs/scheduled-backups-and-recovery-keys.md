@@ -10,7 +10,7 @@ Restoring a package made on a different database structure fails during review w
 
 A Scheduled Backup runs automatically every week without an operator present, contains the database and referenced uploads, is written to a configurable Backup Destination outside the web document root, and replaces the previous Scheduled Backup only after the new package is verified. The schedule, destination, and next run are visible to the Super Administrator, and a missed run is caught up once when the Store PC returns.
 
-After every backup, the system recommends saving the Recovery Key separately and keeps recommending it until the responsible administrator acknowledges that specific key. The Recovery Key manager becomes a Backup Keyring: importing a key saves it immediately without replacing the Primary Recovery Key, and the administrator can keep both, promote the imported key to primary while archiving the old primary, export any key, or delete a key after an explicit password-confirmed warning.
+After every manual backup download, a modal offers the exact Recovery Key, even when that account has exported it before. The operator can download it with their current password or choose “I already have a copy”. The large persistent banner is removed. Unattended backups retain a once-per-session reminder until that account exports the key. The Recovery Key manager becomes a Backup Keyring: importing a key saves it immediately without replacing the Primary Recovery Key, and the administrator can keep both, promote the imported key to primary while archiving the old primary, export any key, or delete a key after an explicit password-confirmed warning.
 
 Restore accepts packages from known older database structures by upgrading their rows to the current structure, preserves the destination's own migration ledger, and rejects unknown or newer structures with a clear list of what the destination does not understand.
 
@@ -37,11 +37,11 @@ Restore accepts packages from known older database structures by upgrading their
 19. As a Super Administrator, I want each Scheduled Backup to include the database and referenced uploads, so that restoring it returns a complete Store.
 20. As a Super Administrator, I want the new package authenticated and validated before the previous one is removed, so that retention cannot delete a good copy for a damaged one.
 21. As an Administrator, I want a prompt recommending that I download the Recovery Key after a backup, so that I am reminded before I forget.
-22. As an Administrator, I want the prompt on my next sign-in with a persistent banner until handled, so that an unattended Scheduled Backup still reaches a person.
-23. As an Administrator, I want the prompt at most once per session, so that it does not interrupt every page.
+22. As an Administrator, I want a modal prompt on my next sign-in for an unattended backup, so that an unattended Scheduled Backup still reaches a person.
+23. As an Administrator, I want unattended-backup prompts at most once per session, with a fresh prompt after every manual backup download, so that each downloaded package is paired with its key.
 24. As an Administrator, I want downloading the Recovery Key to require my current login password, so that possession of an open session alone is not enough.
 25. As an Administrator, I want the system to acknowledge the specific key only after a successful download, so that a dismissed prompt is not mistaken for a saved key.
-26. As an Administrator, I want the banner to disappear for me after I acknowledge the key, while another administrator who has not saved it still sees the recommendation, so that responsibility is personal.
+26. As an Administrator, I want unattended reminders to stop for me after I export the key, while another administrator who has not saved it still sees the recommendation, so that responsibility is personal.
 27. As a Super Administrator, I want the same recommendation and acknowledgement behavior as an Administrator, so that either role can act.
 28. As an Administrator, I want importing a Recovery Key from another server to save it immediately, so that the package can be opened without another step.
 29. As an Administrator, I want importing to keep the destination's Primary Recovery Key by default, so that existing packages are not stranded.
@@ -81,7 +81,9 @@ Restore accepts packages from known older database structures by upgrading their
 
 - Every completed backup history row records the encryption key fingerprint that the package header already carries.
 - A per-account acknowledgement record ties a user to a key fingerprint and acknowledgement time. The recommendation appears when the newest completed backup's fingerprint has no acknowledgement for that account.
-- The recommendation is a one-time-per-session modal plus a persistent banner. The banner disappears for an account once that account downloads the matching key.
+- The recommendation is a modal, without a persistent banner. Each manual backup download waits for the complete attachment response, hides its consumed download link, then offers the fingerprint captured with that backup. Failed downloads keep the link available and do not open the modal. The browser save action remains the operator’s responsibility.
+- Manual downloads always show the modal, including previously exported keys. “I already have a copy” only dismisses it; it does not record an export acknowledgement. Unattended-backup reminders remain limited to once per session per fingerprint and stop after the account exports that key.
+- The modal exports through the existing password- and CSRF-protected key endpoint. Incorrect passwords remain actionable inside the modal; closing it clears the password.
 - Acknowledgement is recorded only after the download stream completes successfully. Cancelled or failed downloads do not acknowledge.
 - The existing current-password authorization and local-request checks remain in force. The recommendation links to the existing Recovery Key area rather than creating a second download path.
 
@@ -120,7 +122,7 @@ Preferred seams, reusing existing ones:
 2. **Scheduled-run seam** — the new scheduled service with an injected clock and temporary destination. Test due, not-due, catch-up-once, busy-skip, and failed-run behavior.
 3. **Key-management seam** — the key store plus the recovery-key HTTP endpoint. Test additive import, promotion with archive, blocked primary deletion, explicit delete, export by fingerprint, password requirement, and acknowledgement-on-complete-download.
 4. **Restore-compatibility seam** — `SqlBackupFormat` and `DatabaseRestoreService` with generated packages from known older structures. Test current, upgradable, unknown-older, and newer rejection; verify the destination migration ledger survives.
-5. **Browser seam** — authenticated Super Administrator and Administrator pages. Test schedule settings visibility, key manager actions, prompt modal and banner, and the acknowledgement disappearing per account.
+5. **Browser seam** — authenticated Super Administrator and Administrator pages. Test schedule settings visibility, key manager actions, post-download modal ordering, retry after failed downloads, repeated-key prompts, responsive layout, and per-account acknowledgement.
 
 Prior art to follow:
 

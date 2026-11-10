@@ -1,7 +1,7 @@
 'use strict';
 // Recovery-key recommendation + Backup Keyring over real HTTP sessions (#460).
-// Proves the banner follows server acknowledgement per account, the prompt is
-// once per session, exports stream only key bytes under a fingerprint filename,
+// Proves each manual download offers its key, unattended prompts respect acknowledgement,
+// exports stream only key bytes under a fingerprint filename,
 // and key custody changes stay visible without exposing key material.
 const assert = require('node:assert/strict');
 const {spawn, spawnSync} = require('node:child_process');
@@ -20,7 +20,7 @@ const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
 const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-backup-keyring-'));
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(testDirectory, 'recovery')};
-const proofDirectory = path.join(testDirectory, 'proof');
+const proofDirectory = path.resolve('.impeccable/review/backup-key-download');
 const fixture = action => {
     const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], {encoding: 'utf8', env});
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -65,39 +65,41 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         assert.equal((await first.page.goto(adminUrl)).status(), 200);
         assert.equal(await banner.count(), 0, 'No completed fingerprinted backup means no recommendation');
 
-        // Capture a package; the newest completed backup now carries a fingerprint.
+        // No prompt until the manual backup has reached the browser.
         await Promise.all([first.page.waitForNavigation(), first.page.locator('[data-backup-create]').click()]);
-        assert.equal(await banner.count(), 1, 'The recommendation appears after the first fingerprinted backup');
         assert.equal(await prompt.count(), 1);
-        assert.equal(await prompt.evaluate(dialog => dialog.open), true, 'The prompt opens once for this session');
-        await first.page.keyboard.press('Escape');
         assert.equal(await prompt.evaluate(dialog => dialog.open), false);
-        assert.equal(await banner.isVisible(), true, 'Dismissing the prompt keeps the persistent banner');
-        await first.page.screenshot({path: path.join(proofDirectory, 'banner-1440.png'), fullPage: true});
+        assert.equal(await first.page.locator('section.backup-key-recommendation').count(), 0);
+        const backupButton = first.page.locator('[data-backup-download]');
+        await first.page.route('**/backup_download.php?*', route => route.fulfill({status: 503, body: 'Unavailable'}));
+        await backupButton.click();
+        await first.page.getByRole('status').filter({hasText: 'Download unavailable'}).waitFor();
+        assert.equal(await backupButton.isVisible(), true, 'Failed download remains retryable');
+        assert.equal(await prompt.evaluate(dialog => dialog.open), false, 'Failed download never opens the key prompt');
+        await first.page.unroute('**/backup_download.php?*');
+        const [backupDownload] = await Promise.all([first.page.waitForEvent('download'), backupButton.click()]);
+        assert((await backupDownload.path()), 'Backup reaches the browser');
+        await prompt.waitFor({state: 'visible'});
+        assert.equal(await backupButton.isVisible(), false, 'Consumed backup link disappears');
+        for (const width of [1440, 390]) {
+            await first.page.setViewportSize({width, height: 960});
+            const bounds = await prompt.boundingBox();
+            assert(bounds.x >= 0 && bounds.x + bounds.width <= width, 'Key modal fits ' + width + 'px');
+            await first.page.screenshot({path: path.join(proofDirectory, 'key-modal-' + width + '.png')});
+        }
+        await first.page.setViewportSize({width: 1440, height: 960});
 
-        await first.page.reload();
-        assert.equal(await prompt.evaluate(dialog => dialog.open), false, 'Reloading does not reopen the prompt in this session');
-        assert.equal(await banner.isVisible(), true, 'The banner persists until the key is exported');
-
-        // A wrong password neither leaks nor acknowledges.
-        const wrong = await first.context.request.post(keyUrl, {
-            form: {csrf_token: await csrf(first.page), key_action: 'export', key_fingerprint: await banner.getAttribute('data-fingerprint'), key_password: 'wrong-password'},
-            maxRedirects: 0,
-        });
-        assert.equal(wrong.status(), 303);
-        await first.page.goto(adminUrl);
-        assert.equal(await banner.isVisible(), true, 'A failed password leaves the recommendation in place');
-        assert.match(await first.page.locator('body').innerText(), /password is incorrect/i);
-
-        // Export through the banner form: the stream is the only download path.
-        const bannerButton = banner.getByRole('button', {name: 'Download recovery key', exact: true});
-        await bannerButton.click();
-        const authorization = first.page.getByRole('dialog');
-        await authorization.getByLabel('Current login password').fill(data.password);
+        // Wrong passwords stay in the modal and do not acknowledge or expose the key.
+        await prompt.getByLabel('Current login password').fill('wrong-password');
+        await prompt.getByRole('button', {name: 'Download recovery key', exact: true}).click();
+        await prompt.locator('[role="alert"]').waitFor({state: 'visible'});
+        assert.match(await prompt.locator('[role="alert"]').innerText(), /password is incorrect/i);
+        assert.equal(await prompt.getByLabel('Current login password').inputValue(), '');
+        await prompt.getByLabel('Current login password').fill(data.password);
         const [download, exportResponse] = await Promise.all([
             first.page.waitForEvent('download'),
             first.page.waitForResponse(response => response.url() === keyUrl && response.request().method() === 'POST'),
-            authorization.getByRole('button', {name: 'Download recovery key', exact: true}).click(),
+            prompt.getByRole('button', {name: 'Download recovery key', exact: true}).click(),
         ]);
         assert.equal(exportResponse.status(), 200);
         assert.match(exportResponse.headers()['content-type'], /application\/octet-stream/);
@@ -110,11 +112,31 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         assert.match(await banner.getAttribute('data-fingerprint'), new RegExp('^' + primaryFingerprint + '$'));
         await first.page.waitForTimeout(300);
 
-        // The acknowledgement is personal: the exporter loses the banner, the other admin keeps it.
+        await prompt.waitFor({state: 'hidden'});
+        // An acknowledged key is still offered after every new manual backup.
+        await Promise.all([first.page.waitForNavigation(), first.page.locator('[data-backup-create]').click()]);
+        assert.equal(await prompt.evaluate(dialog => dialog.open), false);
+        await Promise.all([first.page.waitForEvent('download'), first.page.locator('[data-backup-download]').click()]);
+        await prompt.waitFor({state: 'visible'});
+        assert.equal(await prompt.getAttribute('data-fingerprint'), primaryFingerprint);
+        await prompt.getByRole('button', {name: 'I already have a copy', exact: true}).click();
+        await prompt.waitFor({state: 'hidden'});
         await first.page.goto(adminUrl);
-        assert.equal(await banner.count(), 0, 'A complete export acknowledges the key for that account');
+        assert.equal(await prompt.count(), 0, 'Successful export suppresses unattended reminders for this account');
         assert.equal((await superAdministrator.page.goto(origin + '/components/system_administrator/backup_restore.php')).status(), 200);
-        assert.equal(await superAdministrator.page.locator('[data-backup-key-recommendation]').count(), 1, 'Another account still sees the recommendation');
+        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').isVisible(), true, 'Another account still gets its reminder');
+        await superAdministrator.page.keyboard.press('Escape');
+        await superAdministrator.page.reload();
+        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').isVisible(), false, 'Unattended reminder appears once per session');
+
+        // The same sequence works for the Super Administrator.
+        await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.locator('[data-backup-create]').click()]);
+        const superPrompt = superAdministrator.page.locator('[data-backup-key-dialog]');
+        assert.equal(await superPrompt.evaluate(dialog => dialog.open), false);
+        await Promise.all([superAdministrator.page.waitForEvent('download'), superAdministrator.page.locator('[data-backup-download]').click()]);
+        await superPrompt.waitFor({state: 'visible'});
+        await superAdministrator.page.keyboard.press('Escape');
+        assert.equal(await superAdministrator.page.locator('[data-backup-download]').isVisible(), false);
 
         // The Keyring lists the primary and protects its deletion.
         await first.page.getByRole('tab', {name: 'Recovery key', exact: true}).click();
@@ -192,7 +214,7 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         assert.equal(getResponse.headers()['allow'], 'POST');
         assert.equal((await first.context.request.post(keyUrl, {form: {key_action: 'export'}, maxRedirects: 0})).status(), 403);
 
-        console.log('Backup keyring browser: passed (banner/modal once per session, per-account ack, additive import, promote/archive, export, guarded delete)');
+        console.log('Backup keyring browser: passed (post-download modal, retry, repeated-key prompt, per-account ack, additive import, promote/archive, export, guarded delete)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

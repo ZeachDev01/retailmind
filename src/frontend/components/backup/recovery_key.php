@@ -116,8 +116,15 @@ try {
         $_SESSION['backup_key_message'] = 'Recovery key removed from the Backup Keyring. Its packages can no longer be opened.';
     }
 } catch (Throwable $exception) {
-    $_SESSION['backup_key_message'] = $exception instanceof DomainException || $exception instanceof RuntimeException
+    $message = $exception instanceof DomainException || $exception instanceof RuntimeException
         ? $exception->getMessage() : 'The recovery key action could not be completed. Try again.';
+    if (str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')) {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['message' => $message], JSON_THROW_ON_ERROR);
+        exit;
+    }
+    $_SESSION['backup_key_message'] = $message;
 }
 $page = (string)current_role() === 'super_admin' ? 'system_administrator/backup_restore.php' : 'administrator/database_backup.php';
 header('Location: ' . app_url('components/' . $page) . '#recovery-key', true, 303);
