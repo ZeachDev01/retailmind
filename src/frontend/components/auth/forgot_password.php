@@ -101,17 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . "This code expires in 15 minutes.\n\n"
                 . "If you did not request a password reset, you can safely ignore this email.";
 
-            $htmlBody = '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;text-align:left;color:#0f172a;">'
-                . '<h2 style="margin:0 0 16px;color:#0f172a;font-size:20px;font-weight:700;letter-spacing:-0.02em;">Password Reset Code</h2>'
-                . '<p style="color:#475569;font-size:14px;line-height:1.5;margin:0 0 16px;">Hello <strong>' . htmlspecialchars($user['display_name'], ENT_QUOTES, 'UTF-8') . '</strong>,</p>'
-                . '<p style="color:#475569;font-size:14px;line-height:1.5;margin:0 0 20px;">Enter this code in RetailMind to reset your password:</p>'
-                . '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:22px 16px;text-align:center;margin:0 0 24px;">'
-                . '<div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#0f172a;font-family:ui-monospace,SFMono-Regular,Consolas,\'Liberation Mono\',Menlo,monospace;line-height:1;padding-left:10px;">' . htmlspecialchars($pinFormatted, ENT_QUOTES, 'UTF-8') . '</div>'
-                . '<div style="font-size:12px;color:#64748b;margin-top:10px;">Expires in <strong>15 minutes</strong></div>'
-                . '</div>'
-                . '<hr style="border:none;border-top:1px solid #f1f5f9;margin:24px 0 16px;">'
-                . '<p style="color:#94a3b8;font-size:12px;line-height:1.5;margin:0;">If you did not request a password reset, you can safely ignore this email.</p>'
-                . '</div>';
+            $htmlBody = password_reset_email_html((string)$user['display_name'], $pinFormatted);
 
             if (!send_email_notification($userEmail, 'RetailMind verification code: ' . $pin, $plainBody, $htmlBody)) {
                 throw new RuntimeException('Failed to deliver verification code email. Please check store email settings.');

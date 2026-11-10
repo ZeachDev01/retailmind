@@ -75,6 +75,54 @@ $assert(
     'change screen must keep the Recovery Account on the offline procedure'
 );
 
+// Field persistence: a rejected submit keeps every accepted field and clears
+// only the field that failed, so the user re-types just that one.
+$assert(
+    str_contains($change, "static fn(string \$field): string => htmlspecialchars((string)(\$remembered[\$field] ?? ''), ENT_QUOTES, 'UTF-8')"),
+    'remembered password values must be escaped and missing values must fall back to empty'
+);
+foreach (['current_password', 'new_password', 'confirm_password'] as $field) {
+    $assert(
+        str_contains($change, "value=\"<?= \$remember('{$field}') ?>\""),
+        "change screen must re-render the remembered {$field} value after a rejected submit"
+    );
+    $assert(
+        str_contains($change, "<?= isset(\$fieldErrors['{$field}']) ? ' aria-invalid=\"true\"' : '' ?>"),
+        "change screen must mark a rejected {$field} field invalid for assistive technology"
+    );
+}
+
+$rejectionBranch = static function (string $message) use ($change): string {
+    $start = strpos($change, $message);
+    if ($start === false) {
+        return '';
+    }
+    $end = strpos($change, '} elseif', $start);
+    return $end === false ? substr($change, $start) : substr($change, $start, $end - $start);
+};
+$clearedFields = static function (string $branch): array {
+    preg_match_all('/\$remembered\[\'(\w+)\'\] = \'\';/', $branch, $matches);
+    $fields = $matches[1];
+    sort($fields);
+    return $fields;
+};
+$assert(
+    $clearedFields($rejectionBranch('The current password is incorrect.')) === ['current_password'],
+    'an incorrect current password must clear only the current-password field'
+);
+$assert(
+    $clearedFields($rejectionBranch('The new passwords do not match.')) === ['confirm_password'],
+    'a confirmation mismatch must clear only the confirmation field'
+);
+$assert(
+    $clearedFields($rejectionBranch('Choose a new password that is different from the current password.')) === ['confirm_password', 'new_password'],
+    'reusing the current password must clear the new and confirmation fields'
+);
+$assert(
+    $clearedFields($rejectionBranch('password_policy_error($newPassword)')) === ['confirm_password', 'new_password'],
+    'a policy rejection must clear the new and confirmation fields'
+);
+
 // Voluntary entry point: reachable from Profile with no blocking of its own.
 $profile = $read('src/frontend/components/auth/user_info.php');
 $assert(

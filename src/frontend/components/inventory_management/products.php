@@ -1395,7 +1395,7 @@ foreach ($products as $product) {
                             <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown name="parent_product_id" id="parent-product-id">
+                            <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown data-search-empty-label name="parent_product_id" id="parent-product-id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>
                             <div class="form-group"><label for="create-variant-label">Variant Label</label><input name="variant_label" id="create-variant-label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
@@ -1475,6 +1475,7 @@ foreach ($products as $product) {
                                 <label for="create-pack-price">Sales Pack Price (₱)</label>
                                 <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price" placeholder="Bundle price">
                                 <small class="field-help">Price for one whole pack. Must be greater than zero and cheaper than buying its items individually.</small>
+                                <small class="field-help" id="pack-price-calc-preview" aria-live="polite"></small>
                             </div>
                         </div>
                     </section>
@@ -1520,7 +1521,7 @@ foreach ($products as $product) {
                         <div class="detail-grid" id="product-review"></div>
                         <div class="u-info-note"><i class="bi bi-info-circle"></i> Starting stock is the number of items you have now. Use Stock Receiving to add future deliveries.</div>
                         <div class="form-grid u-mt-1">
-                            <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" checked>Open printable barcode labels after saving</label>
+                            <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1">Open printable barcode labels after saving</label>
                             <div class="form-group"><label for="create-label-qty">Number of labels</label><input type="number" id="create-label-qty" name="label_quantity" value="1" min="1" max="200"></div>
                         </div>
                     </section>
@@ -2838,6 +2839,32 @@ foreach ($products as $product) {
 
         addProductForm.addEventListener('retailmind:guidance-step', event => setWizardStep(event.detail.step, false));
 
+        // Sales Pack pricing comparison: per-item price, individual total, and pack saving.
+        function updatePackPriceCalc() {
+            const preview = document.getElementById('pack-price-calc-preview');
+            if (!preview) return;
+            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
+            const selling = parseFloat(document.getElementById('selling-price')?.value);
+            const packPrice = parseFloat(document.getElementById('create-pack-price')?.value);
+            if (!(size > 1) || !isFinite(selling) || selling < 0) {
+                preview.textContent = '';
+                return;
+            }
+            const money = value => '₱' + value.toFixed(2);
+            const itemsTotal = size * selling;
+            if (!isFinite(packPrice) || packPrice <= 0) {
+                preview.textContent = `${size} × ${money(selling)} = ${money(itemsTotal)} when the items are sold separately.`;
+                return;
+            }
+            if (packPrice >= itemsTotal) {
+                preview.textContent = `${size} × ${money(selling)} = ${money(itemsTotal)}. Pack price must be below ${money(itemsTotal)} to give a pack discount.`;
+                return;
+            }
+            const discount = itemsTotal > 0 ? `${money(itemsTotal - packPrice)} (${(((itemsTotal - packPrice) / itemsTotal) * 100).toFixed(1)}%)` : money(itemsTotal - packPrice);
+            preview.textContent = `${money(packPrice)} ÷ ${size} = ${money(packPrice / size)} per item · Separate total ${money(itemsTotal)} · Save ${discount}`;
+        }
+        ['create-pack-size', 'create-pack-price', 'selling-price'].forEach(id => document.getElementById(id)?.addEventListener('input', updatePackPriceCalc));
+
         function setWizardStep(step, saveDraft = true) {
             if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
             wizardStep = Math.max(1, Math.min(5, step));
@@ -2851,6 +2878,7 @@ foreach ($products as $product) {
             saveButton.hidden = wizardStep !== 5;
             if (wizardStep === 5) renderReview();
             if (wizardStep === 4) syncStartingStockFields();
+            if (wizardStep === 3) updatePackPriceCalc();
             document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
             if (wizardStep === 2) {
                 document.getElementById('create-barcode-input').focus({ preventScroll: true });
@@ -3058,6 +3086,7 @@ foreach ($products as $product) {
                 addProductForm.reset();
                 syncUnitSelects();
                 syncStartingStockFields();
+                updatePackPriceCalc();
                 setWizardStep(1);
             }
         });

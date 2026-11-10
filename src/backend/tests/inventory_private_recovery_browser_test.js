@@ -253,7 +253,8 @@ function fixture(action) {
         await page.locator('#selling-price').fill('2');
         await page.locator('#wizard-next').click();
         await page.locator('#wizard-next').click();
-        assert(await page.locator('[name="print_after_create"]').isChecked(), 'Default Product flow opens barcode labels');
+        assert.equal(await page.locator('[name="print_after_create"]').isChecked(), false, 'Barcode label printing is opt-in');
+        await page.locator('[name="print_after_create"]').check();
         const productDraftKey = await page.evaluate(() => Object.keys(localStorage).find(key => key.endsWith(':add-product-form')));
         await Promise.all([page.waitForURL(url => url.pathname.endsWith('/print_barcodes.php'), {waitUntil:'domcontentloaded'}), page.locator('#wizard-save').click()]);
         await page.goto(origin + '/components/inventory_management/products.php', {waitUntil:'domcontentloaded'});

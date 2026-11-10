@@ -85,111 +85,120 @@ class StockBriefService
 
         $text .= "Check RetailMind Inventory Dashboard for complete details.\n";
 
-        // Build HTML table version
-        $html = '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05);">'
-            . '<div style="background:#0f172a;color:#ffffff;padding:24px 28px;">'
-            . '<h1 style="margin:0 0 4px;font-size:20px;font-weight:700;letter-spacing:-0.01em;">' . $storeName . '</h1>'
-            . '<p style="margin:0;color:#94a3b8;font-size:13px;">Daily Stock Brief &bull; ' . $dateStr . '</p>'
-            . '</div>'
-            . '<div style="padding:24px 28px;">'
-            // Metric KPI Pills
-            . '<div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">'
-            . '<div style="flex:1;min-width:140px;background:#fef2f2;border:1px solid #fee2e2;border-radius:8px;padding:12px 16px;">'
-            . '<div style="color:#991b1b;font-size:11px;font-weight:700;text-transform:uppercase;">Out of Stock</div>'
-            . '<div style="color:#b91c1c;font-size:24px;font-weight:800;margin-top:2px;">' . $outCount . '</div>'
-            . '</div>'
-            . '<div style="flex:1;min-width:140px;background:#fefce8;border:1px solid #fef08a;border-radius:8px;padding:12px 16px;">'
-            . '<div style="color:#854d0e;font-size:11px;font-weight:700;text-transform:uppercase;">Low Stock</div>'
-            . '<div style="color:#a16207;font-size:24px;font-weight:800;margin-top:2px;">' . $lowCount . '</div>'
-            . '</div>'
-            . '<div style="flex:1;min-width:140px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;">'
-            . '<div style="color:#9a3412;font-size:11px;font-weight:700;text-transform:uppercase;">Expiring / Expired</div>'
-            . '<div style="color:#c2410c;font-size:24px;font-weight:800;margin-top:2px;">' . $expCount . '</div>'
-            . '</div>'
-            . '</div>';
+        // HTML version: table layout and inline styles only, because email
+        // clients drop stylesheets and flexbox.
+        $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+        $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
+        $kpi = static function (string $label, int $count, string $color) use ($font): string {
+            return '<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-family:' . $font . ';">'
+                . '<div class="rm-kpi-label" style="color:#6b7280;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">' . $label . '</div>'
+                . '<div style="color:' . $color . ';font-size:26px;font-weight:800;line-height:1.1;margin-top:6px;">' . $count . '</div>'
+                . '</div>';
+        };
+        $sectionTitle = static function (string $title, int $count, string $color, string $surface) use ($font): string {
+            return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 10px;"><tr>'
+                . '<td style="font-family:' . $font . ';font-size:15px;font-weight:700;color:#0f172a;">' . $title . '</td>'
+                . '<td align="right"><span style="display:inline-block;padding:3px 9px;border-radius:999px;background:' . $surface . ';color:' . $color . ';font-family:' . $font . ';font-size:11px;font-weight:700;">' . $count . '</span></td>'
+                . '</tr></table>';
+        };
+        $headCell = static function (string $label, bool $numeric = false, bool $hideSmall = false) use ($font): string {
+            return '<th' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:0 6px 8px;font-family:' . $font . ';font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e5e7eb;">' . $label . '</th>';
+        };
+        $cell = static function (string $value, string $color = '#374151', bool $numeric = false, bool $monospace = false, bool $hideSmall = false) use ($font, $mono): string {
+            return '<td' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:10px 6px;border-bottom:1px solid #f1f5f9;color:' . $color . ';font-family:' . ($monospace ? $mono : $font) . ';font-size:' . ($monospace ? '11px' : '13px') . ';overflow-wrap:break-word;' . ($numeric ? 'font-variant-numeric:tabular-nums;font-weight:700;' : 'font-weight:600;') . '">' . $value . '</td>';
+        };
+        $moreRow = static function (int $remaining, int $columns) use ($font): string {
+            return '<tr><td colspan="' . $columns . '" style="padding:9px 8px;background:#f8fafc;border-bottom:1px solid #f1f5f9;color:#6b7280;font-family:' . $font . ';font-size:12px;text-align:center;">+ ' . $remaining . ' more in RetailMind</td></tr>';
+        };
+        $tableOpen = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">';
+
+        $html = '<style>.rm-kpi-label{white-space:nowrap;}@media only screen and (max-width:480px){.rm-sm-hide{display:none !important;}.rm-kpi-label{white-space:normal;}}</style>'
+            . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">' . $outCount . ' out of stock, ' . $lowCount . ' low, ' . $expCount . ' expiring.</div>'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
+            . '<tr><td align="center" style="padding:32px 16px;">'
+            . '<!--[if mso]><table role="presentation" width="680" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;">'
+            . '<tr><td style="background:#0f172a;padding:22px 24px;border-radius:13px 13px 0 0;font-family:' . $font . ';">'
+            . '<div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">' . $storeName . '</div>'
+            . '<div style="color:#cbd5e1;font-size:12px;margin-top:4px;">Daily Stock Brief &middot; ' . $dateStr . '</div>'
+            . '</td></tr>'
+            . '<tr><td style="padding:24px 24px 4px;">'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+            . '<td width="33.33%" style="padding:0 5px 0 0;">' . $kpi('Out of Stock', $outCount, '#dc2626') . '</td>'
+            . '<td width="33.33%" style="padding:0 5px;">' . $kpi('Low Stock', $lowCount, '#a16207') . '</td>'
+            . '<td width="33.33%" style="padding:0 0 0 5px;">' . $kpi('Expiring', $expCount, '#c2410c') . '</td>'
+            . '</tr></table>';
 
         // Out of Stock Table
         if ($outCount > 0) {
-            $html .= '<h3 style="margin:20px 0 10px;font-size:15px;color:#991b1b;font-weight:700;display:flex;align-items:center;">'
-                . '<span style="display:inline-block;width:8px;height:8px;background:#dc2626;border-radius:50%;margin-right:8px;"></span>'
-                . 'Out of Stock Items (' . $outCount . ')</h3>'
-                . '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;border:1px solid #f1f5f9;border-radius:6px;overflow:hidden;">'
-                . '<thead><tr style="background:#f8fafc;color:#475569;text-align:left;border-bottom:1px solid #e2e8f0;">'
-                . '<th style="padding:10px 12px;font-weight:600;">Product</th>'
-                . '<th style="padding:10px 12px;font-weight:600;">SKU</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Current</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Reorder At</th>'
-                . '</tr></thead><tbody>';
+            $html .= $sectionTitle('Out of Stock', $outCount, '#991b1b', '#fee2e2')
+                . $tableOpen
+                . '<thead><tr>' . $headCell('Product') . $headCell('SKU') . $headCell('Current', true) . $headCell('Reorder at', true, true) . '</tr></thead><tbody>';
             foreach (array_slice($outOfStock, 0, 20) as $row) {
-                $html .= '<tr style="border-bottom:1px solid #f1f5f9;">'
-                    . '<td style="padding:10px 12px;color:#0f172a;font-weight:500;">' . htmlspecialchars($row['product_name'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#64748b;font-family:monospace;font-size:12px;">' . htmlspecialchars($row['sku'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#dc2626;font-weight:700;text-align:right;">0</td>'
-                    . '<td style="padding:10px 12px;color:#64748b;text-align:right;">' . (int)$row['reorder_level'] . '</td>'
+                $html .= '<tr>'
+                    . $cell(htmlspecialchars($row['product_name'], ENT_QUOTES, 'UTF-8'), '#0f172a')
+                    . $cell(htmlspecialchars($row['sku'], ENT_QUOTES, 'UTF-8'), '#6b7280', false, true)
+                    . $cell('0', '#dc2626', true)
+                    . $cell((string)(int)$row['reorder_level'], '#6b7280', true, false, true)
                     . '</tr>';
             }
             if ($outCount > 20) {
-                $html .= '<tr><td colspan="4" style="padding:8px 12px;color:#64748b;font-size:12px;font-style:italic;background:#f8fafc;text-align:center;">+ ' . ($outCount - 20) . ' more items in RetailMind inventory</td></tr>';
+                $html .= $moreRow($outCount - 20, 4);
             }
             $html .= '</tbody></table>';
         }
 
         // Low Stock Table
         if ($lowCount > 0) {
-            $html .= '<h3 style="margin:20px 0 10px;font-size:15px;color:#854d0e;font-weight:700;display:flex;align-items:center;">'
-                . '<span style="display:inline-block;width:8px;height:8px;background:#eab308;border-radius:50%;margin-right:8px;"></span>'
-                . 'Low Stock Items (' . $lowCount . ')</h3>'
-                . '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;border:1px solid #f1f5f9;border-radius:6px;overflow:hidden;">'
-                . '<thead><tr style="background:#f8fafc;color:#475569;text-align:left;border-bottom:1px solid #e2e8f0;">'
-                . '<th style="padding:10px 12px;font-weight:600;">Product</th>'
-                . '<th style="padding:10px 12px;font-weight:600;">SKU</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Current</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Reorder At</th>'
-                . '</tr></thead><tbody>';
+            $html .= $sectionTitle('Low Stock', $lowCount, '#854d0e', '#fef3c7')
+                . $tableOpen
+                . '<thead><tr>' . $headCell('Product') . $headCell('SKU') . $headCell('Current', true) . $headCell('Reorder at', true, true) . '</tr></thead><tbody>';
             foreach (array_slice($lowStock, 0, 20) as $row) {
-                $html .= '<tr style="border-bottom:1px solid #f1f5f9;">'
-                    . '<td style="padding:10px 12px;color:#0f172a;font-weight:500;">' . htmlspecialchars($row['product_name'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#64748b;font-family:monospace;font-size:12px;">' . htmlspecialchars($row['sku'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#ca8a04;font-weight:700;text-align:right;">' . (int)$row['quantity_on_hand'] . '</td>'
-                    . '<td style="padding:10px 12px;color:#64748b;text-align:right;">' . (int)$row['reorder_level'] . '</td>'
+                $html .= '<tr>'
+                    . $cell(htmlspecialchars($row['product_name'], ENT_QUOTES, 'UTF-8'), '#0f172a')
+                    . $cell(htmlspecialchars($row['sku'], ENT_QUOTES, 'UTF-8'), '#6b7280', false, true)
+                    . $cell((string)(int)$row['quantity_on_hand'], '#a16207', true)
+                    . $cell((string)(int)$row['reorder_level'], '#6b7280', true, false, true)
                     . '</tr>';
             }
             if ($lowCount > 20) {
-                $html .= '<tr><td colspan="4" style="padding:8px 12px;color:#64748b;font-size:12px;font-style:italic;background:#f8fafc;text-align:center;">+ ' . ($lowCount - 20) . ' more items in RetailMind inventory</td></tr>';
+                $html .= $moreRow($lowCount - 20, 4);
             }
             $html .= '</tbody></table>';
         }
 
         // Expiring Batches Table
         if ($expCount > 0) {
-            $html .= '<h3 style="margin:20px 0 10px;font-size:15px;color:#9a3412;font-weight:700;display:flex;align-items:center;">'
-                . '<span style="display:inline-block;width:8px;height:8px;background:#f97316;border-radius:50%;margin-right:8px;"></span>'
-                . 'Expiring / Expired Batches (' . $expCount . ')</h3>'
-                . '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;border:1px solid #f1f5f9;border-radius:6px;overflow:hidden;">'
-                . '<thead><tr style="background:#f8fafc;color:#475569;text-align:left;border-bottom:1px solid #e2e8f0;">'
-                . '<th style="padding:10px 12px;font-weight:600;">Product</th>'
-                . '<th style="padding:10px 12px;font-weight:600;">Batch</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Remaining</th>'
-                . '<th style="padding:10px 12px;font-weight:600;text-align:right;">Expiration</th>'
-                . '</tr></thead><tbody>';
+            $html .= $sectionTitle('Expiring / Expired', $expCount, '#9a3412', '#ffedd5')
+                . $tableOpen
+                . '<thead><tr>' . $headCell('Product') . $headCell('Batch') . $headCell('Remaining', true, true) . $headCell('Expiration', true) . '</tr></thead><tbody>';
             foreach (array_slice($expiringBatches, 0, 15) as $b) {
                 $days = (int)$b['days_remaining'];
                 $statusColor = $days < 0 ? '#b91c1c' : ($days <= 7 ? '#c2410c' : '#854d0e');
-                $statusText = $days < 0 ? 'Expired (' . abs($days) . 'd ago)' : ($days === 0 ? 'Today' : $days . 'd left');
-                $html .= '<tr style="border-bottom:1px solid #f1f5f9;">'
-                    . '<td style="padding:10px 12px;color:#0f172a;font-weight:500;">' . htmlspecialchars($b['product_name'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#64748b;font-family:monospace;font-size:12px;">' . htmlspecialchars($b['batch_number'], ENT_QUOTES, 'UTF-8') . '</td>'
-                    . '<td style="padding:10px 12px;color:#0f172a;font-weight:600;text-align:right;">' . (int)$b['remaining_quantity'] . '</td>'
-                    . '<td style="padding:10px 12px;color:' . $statusColor . ';font-weight:600;text-align:right;">'
-                    . htmlspecialchars($b['expiration_date'], ENT_QUOTES, 'UTF-8') . ' <span style="font-size:11px;">(' . $statusText . ')</span></td>'
+                $statusText = $days < 0 ? 'Expired ' . abs($days) . 'd ago' : ($days === 0 ? 'Today' : $days . 'd left');
+                $html .= '<tr>'
+                    . $cell(htmlspecialchars($b['product_name'], ENT_QUOTES, 'UTF-8'), '#0f172a')
+                    . $cell(htmlspecialchars($b['batch_number'], ENT_QUOTES, 'UTF-8'), '#6b7280', false, true)
+                    . $cell((string)(int)$b['remaining_quantity'], '#0f172a', true, false, true)
+                    . '<td align="right" style="padding:10px 6px;border-bottom:1px solid #f1f5f9;font-family:' . $font . ';font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' . $statusColor . ';">'
+                    . htmlspecialchars($b['expiration_date'], ENT_QUOTES, 'UTF-8')
+                    . '<div style="color:#6b7280;font-size:11px;font-weight:600;margin-top:2px;">' . $statusText . '</div></td>'
                     . '</tr>';
+            }
+            if ($expCount > 15) {
+                $html .= $moreRow($expCount - 15, 4);
             }
             $html .= '</tbody></table>';
         }
 
-        $html .= '<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 16px;">'
-            . '<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">This automated Daily Stock Brief was compiled by RetailMind for store inventory oversight.</p>'
-            . '</div></div>';
+        $html .= '</td></tr>'
+            . '<tr><td style="padding:0 24px 24px;font-family:' . $font . ';">'
+            . '<div style="border-top:1px solid #e5e7eb;padding-top:16px;color:#6b7280;font-size:12px;text-align:center;">Automated Daily Stock Brief from RetailMind</div>'
+            . '</td></tr>'
+            . '</table>'
+            . '<!--[if mso]></td></tr></table><![endif]-->'
+            . '</td></tr>'
+            . '</table>';
 
         return [
             'subject' => $subject,

@@ -168,6 +168,10 @@ sc.exe description $ServiceName "Enables secure persistent remote supervisor acc
 
 # Start the newly installed service
 Write-Host "[INFO] Starting $ServiceName service..." -ForegroundColor Cyan
+$logOffset = 0
+if (Test-Path $LogPath) {
+    $logOffset = ([string](Get-Content -Path $LogPath -Raw -ErrorAction SilentlyContinue)).Length
+}
 sc.exe start $ServiceName | Out-Null
 
 if ($activeToken) {
@@ -188,10 +192,14 @@ if ($activeToken) {
     for ($i = 0; $i -lt 15; $i++) {
         Start-Sleep -Milliseconds 600
         if (Test-Path $LogPath) {
-            $content = Get-Content -Path $LogPath -Raw -ErrorAction SilentlyContinue
-            if ($content -match 'https:\/\/[a-zA-Z0-9.\-]+\.trycloudflare\.com') {
-                $publicUrl = $matches[0].TrimEnd('.')
-                break
+            $content = [string](Get-Content -Path $LogPath -Raw -ErrorAction SilentlyContinue)
+            if ($content.Length -gt $logOffset) {
+                $newContent = $content.Substring($logOffset)
+                $urlMatches = [regex]::Matches($newContent, 'https:\/\/[a-zA-Z0-9.\-]+\.trycloudflare\.com')
+                if ($urlMatches.Count -gt 0) {
+                    $publicUrl = $urlMatches[$urlMatches.Count - 1].Value.TrimEnd('.')
+                    break
+                }
             }
         }
     }

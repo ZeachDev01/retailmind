@@ -100,6 +100,9 @@
         return node;
       })();
     if (stack.parentNode !== target) target.appendChild(stack);
+    // One toast at a time, always upper right: the newest notification
+    // replaces the previous one so two messages never sit side by side.
+    qsa(".rm-toast", stack).forEach((node) => node.remove());
     const kind = type || "info";
     const icons = {
       success: "bi-check-circle-fill",
@@ -380,7 +383,7 @@
     if (flash && flash.dataset.loginSuccess) {
       const message = flash.dataset.loginSuccess;
       delete flash.dataset.loginSuccess;
-      setTimeout(() => RM.toast(message, "success", undefined, 2000).classList.add("rm-toast-centered"), 500);
+      setTimeout(() => RM.toast(message, "success", undefined, 2000), 500);
     }
     const notices = [];
     if (flash) {
@@ -417,8 +420,11 @@
           ? "success"
           : "info";
       node.dataset.rmAlertProcessed = "1";
-      if (kind === "success") node.hidden = true;
-      else setTimeout(() => { node.hidden = true; }, 3000);
+      // The toast is the single surface for routine feedback, so the inline
+      // notice it replaces is hidden at once. Only failure instructions stay
+      // inline for a moment so they outlive the toast.
+      if (kind === "error") setTimeout(() => { node.hidden = true; }, 3000);
+      else node.hidden = true;
       notices.push({ message, kind });
     });
     notices.forEach((notice) => {
@@ -1116,6 +1122,9 @@
       input.setAttribute('role', 'combobox');
       input.setAttribute('aria-autocomplete', 'list');
       input.setAttribute('aria-expanded', 'false');
+      // Touch screens: the first tap lists choices with the soft keyboard closed, the second tap unlocks typing.
+      const tapUnlocksKeyboard = window.matchMedia('(pointer: coarse)').matches;
+      if (tapUnlocksKeyboard) input.readOnly = true;
       const popup = document.createElement('div');
       popup.className = 'rm-search-popup';
       popup.setAttribute('popover', 'manual');
@@ -1137,18 +1146,28 @@
         if (popup.matches(':popover-open')) popup.hidePopover();
         input.setAttribute('aria-expanded', 'false');
         input.removeAttribute('aria-activedescendant');
+        // Re-lock only after focus leaves, or a keyboard-driven resize would dismiss the keyboard mid-search.
+        if (tapUnlocksKeyboard && document.activeElement !== input) input.readOnly = true;
         active = -1;
       }
       function sync() {
         if (isSelect) {
           input.disabled = field.disabled;
-          input.value = field.selectedOptions[0]?.value ? field.selectedOptions[0].textContent.trim() : '';
+          const selected = field.selectedOptions[0];
+          // Optional fields can label their empty option so the default stays visible.
+          input.value = selected?.value ? selected.textContent.trim()
+            : field.hasAttribute('data-search-empty-label') ? (selected?.textContent.trim() || '') : '';
           input.setCustomValidity(required && !field.value ? 'Choose a matching result.' : '');
         }
         close();
       }
       function render(all = false) {
-        const query = input.value.trim().toLocaleLowerCase();
+        let query = input.value.trim().toLocaleLowerCase();
+        if (isSelect && field.hasAttribute('data-search-empty-label')) {
+          // The visible empty-option label is not a search term.
+          const emptyLabel = Array.from(source.options).find(option => option.value === '')?.textContent.trim().toLocaleLowerCase();
+          if (emptyLabel && query === emptyLabel) query = '';
+        }
         const options = Array.from(source.options).filter(option =>
           !option.disabled && !option.closest('optgroup[disabled]') &&
           (!required || option.value) &&
@@ -1172,6 +1191,7 @@
               input.dispatchEvent(new Event('change', {bubbles: true}));
             }
             close();
+            if (tapUnlocksKeyboard) input.readOnly = true;
             input.focus();
           });
           list.append(row);
@@ -1199,7 +1219,7 @@
       }
       input.addEventListener('input', () => {
         if (isSelect) {
-          if (!required && !input.value.trim()) {
+          if (!required && !input.value.trim() && field.value) {
             field.value = '';
             field.dispatchEvent(new Event('change', {bubbles: true}));
           }
@@ -1207,9 +1227,16 @@
         }
         render();
       });
-      input.addEventListener('click', () => render());
+      input.addEventListener('click', () => {
+        if (tapUnlocksKeyboard && input.readOnly && popup.matches(':popover-open')) input.readOnly = false;
+        render();
+      });
       input.addEventListener('blur', event => {
-        if (!popup.contains(event.relatedTarget)) close();
+        if (!popup.contains(event.relatedTarget)) {
+          close();
+          // Restore the empty-option label an optional field shows by default.
+          if (isSelect && field.hasAttribute('data-search-empty-label') && !field.value && !input.value.trim()) sync();
+        }
       });
       popup.addEventListener('mousedown', event => event.preventDefault());
       more.addEventListener('click', () => render(true));

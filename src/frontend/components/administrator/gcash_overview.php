@@ -181,11 +181,6 @@ $isFilteredActivity = $report->isFilteredActivity;
                     </span>
                 </button>
             </div>
-            <button type="button" class="btn btn-secondary gcash-coin-flip-trigger" id="gcash-coin-flip-trigger" aria-label="Flip between Services balance and Activity report" title="Flip view (Press F or click)">
-                <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
-                <span class="gcash-flip-label"><?= $overviewFace === 'balances' ? 'Flip to Activity' : 'Flip to Balances' ?></span>
-                <kbd class="gcash-coin-key-hint" aria-hidden="true">F</kbd>
-            </button>
         </div>
 
         <div class="gcash-coin-deck" id="gcash-coin-deck" data-active-face="<?= gcash_admin_e($overviewFace) ?>">
@@ -195,15 +190,6 @@ $isFilteredActivity = $report->isFilteredActivity;
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/balances.php'; ?>
 
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php'; ?>
-                </div>
-                <div class="gcash-coin-shortcut-bar">
-                    <button type="button" class="gcash-coin-shortcut-btn" data-coin-switch="activity">
-                        <span class="gcash-coin-shortcut-left">
-                            <span class="gcash-coin-shortcut-icon"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span>
-                            <span>Want to check activity report range &amp; completed metrics?</span>
-                        </span>
-                        <span class="gcash-coin-shortcut-action">Switch to Activity <i class="bi bi-arrow-right" aria-hidden="true"></i></span>
-                    </button>
                 </div>
             </div>
 
@@ -262,15 +248,6 @@ $isFilteredActivity = $report->isFilteredActivity;
         </section>
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php'; ?>
 
-                </div>
-                <div class="gcash-coin-shortcut-bar">
-                    <button type="button" class="gcash-coin-shortcut-btn" data-coin-switch="balances">
-                        <span class="gcash-coin-shortcut-left">
-                            <span class="gcash-coin-shortcut-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
-                            <span>Done reviewing activity?</span>
-                        </span>
-                        <span class="gcash-coin-shortcut-action"><i class="bi bi-arrow-left" aria-hidden="true"></i> Return to Services balance</span>
-                    </button>
                 </div>
             </div>
         </div>

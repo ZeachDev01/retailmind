@@ -18,11 +18,18 @@ if ((bool)($_SESSION['is_recovery_account'] ?? false)) {
 $isMandatory = (bool)($_SESSION['must_change_password'] ?? false);
 
 $message = '';
+$fieldErrors = [];  // Fields this submit rejected; only these are cleared.
+$remembered = [];   // Values kept so a rejected submit does not lose accepted fields.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $currentPassword = (string)($_POST['current_password'] ?? '');
     $newPassword = (string)($_POST['new_password'] ?? '');
     $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+    $remembered = [
+        'current_password' => $currentPassword,
+        'new_password' => $newPassword,
+        'confirm_password' => $confirmPassword,
+    ];
 
     $stmt = $pdo->prepare('SELECT password_hash, session_version FROM users WHERE user_id = ? LIMIT 1');
     $stmt->execute([(int)$_SESSION['user_id']]);
@@ -30,12 +37,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$user || !password_verify($currentPassword, (string)$user['password_hash'])) {
         $message = 'The current password is incorrect.';
+        $fieldErrors['current_password'] = true;
+        $remembered['current_password'] = '';
     } elseif ($newPassword !== $confirmPassword) {
         $message = 'The new passwords do not match.';
+        $fieldErrors['confirm_password'] = true;
+        $remembered['confirm_password'] = '';
     } elseif ($newPassword === $currentPassword) {
         $message = 'Choose a new password that is different from the current password.';
+        $fieldErrors['new_password'] = true;
+        $fieldErrors['confirm_password'] = true;
+        $remembered['new_password'] = '';
+        $remembered['confirm_password'] = '';
     } elseif ($policyError = password_policy_error($newPassword)) {
         $message = $policyError;
+        $fieldErrors['new_password'] = true;
+        $fieldErrors['confirm_password'] = true;
+        $remembered['new_password'] = '';
+        $remembered['confirm_password'] = '';
     } else {
         try {
             $newVersion = (int)$user['session_version'] + 1;
@@ -72,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $brandBaseUrl = htmlspecialchars(app_url('assets/img/retailmind-web-assets%20dark%20mode/'), ENT_QUOTES, 'UTF-8');
 $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
+$remember = static fn(string $field): string => htmlspecialchars((string)($remembered[$field] ?? ''), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -816,7 +836,7 @@ $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
                         <i class="bi bi-key-fill" aria-hidden="true"></i> Current password
                     </label>
                     <div class="cp-input-wrap password-input">
-                        <input type="password" id="current_password" name="current_password" required autocomplete="current-password" placeholder="Enter current password">
+                        <input type="password" id="current_password" name="current_password" required autocomplete="current-password" placeholder="Enter current password" value="<?= $remember('current_password') ?>"<?= isset($fieldErrors['current_password']) ? ' aria-invalid="true"' : '' ?>>
                         <button type="button" class="password-toggle" data-password-toggle="current_password" aria-controls="current_password" aria-pressed="false" aria-label="Show current password">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                             <span>Show</span>
@@ -829,7 +849,7 @@ $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
                         <i class="bi bi-lock-fill" aria-hidden="true"></i> New password
                     </label>
                     <div class="cp-input-wrap password-input">
-                        <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password" placeholder="Enter new password" aria-describedby="new_password_help">
+                        <input type="password" id="new_password" name="new_password" required minlength="8" autocomplete="new-password" placeholder="Enter new password" aria-describedby="new_password_help" value="<?= $remember('new_password') ?>"<?= isset($fieldErrors['new_password']) ? ' aria-invalid="true"' : '' ?>>
                         <button type="button" class="password-toggle" data-password-toggle="new_password" aria-controls="new_password" aria-pressed="false" aria-label="Show new password">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                             <span>Show</span>
@@ -865,7 +885,7 @@ $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
                         </span>
                     </div>
                     <div class="cp-input-wrap password-input">
-                        <input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password" placeholder="Re-enter new password">
+                        <input type="password" id="confirm_password" name="confirm_password" required minlength="8" autocomplete="new-password" placeholder="Re-enter new password" value="<?= $remember('confirm_password') ?>"<?= isset($fieldErrors['confirm_password']) ? ' aria-invalid="true"' : '' ?>>
                         <button type="button" class="password-toggle" data-password-toggle="confirm_password" aria-controls="confirm_password" aria-pressed="false" aria-label="Show confirmation password">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                             <span>Show</span>
@@ -1002,6 +1022,10 @@ $brandLogoUrl = $brandBaseUrl . 'logos/light/logo-header.png';
         }
         if (confirmPasswordInput) {
             confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+        }
+        // Remembered values from a rejected submit still drive the meter and match pill.
+        if (newPasswordInput && newPasswordInput.value) {
+            updateStrength();
         }
     </script>
 <?php require __DIR__ . '/session_activity_client.php'; ?>

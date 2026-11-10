@@ -7,7 +7,7 @@
     "check:views": "php src/backend/scripts/audit_views.php",
     "check:smoke": "php src/backend/tests/smoke_checks.php",
     "check": "php src/backend/scripts/build_styles.php --check && php src/backend/scripts/audit_views.php && php src/backend/tests/smoke_checks.php && php src/backend/tests/tunnel_setup_block_contract.php && php src/backend/tests/tunnel_parity_contract.php",
-    "check:contracts": "php src/backend/tests/attention_rules_contract.php && php src/backend/tests/forecasting_notices_contract.php && php src/backend/tests/store_overview_attention_contract.php && php src/backend/tests/failed_sign_in_review_contract.php && php src/backend/tests/hosted_database_config_test.php",
+    "check:contracts": "php src/backend/tests/attention_rules_contract.php && php src/backend/tests/forecasting_notices_contract.php && php src/backend/tests/store_overview_attention_contract.php && php src/backend/tests/failed_sign_in_review_contract.php && php src/backend/tests/hosted_database_config_test.php && php src/backend/tests/superadmin_remote_access_toggle_contract.php && node src/backend/tests/superadmin_remote_access_toggle_test.js",
     "playwright:install": "playwright install chromium",
     "test:e2e": "cross-env RUN_DB_TESTS=1 node src/backend/tests/inventory_counts_scan_browser_test.js && cross-env RUN_DB_TESTS=1 node src/backend/tests/stock_receiving_scan_browser_test.js && cross-env RUN_DB_TESTS=1 node src/backend/tests/stock_receiving_empty_catalog_browser_test.js && cross-env RUN_DB_TESTS=1 node src/backend/tests/forecast_decision_browser_test.js"
   },

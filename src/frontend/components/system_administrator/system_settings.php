@@ -238,17 +238,19 @@ $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
 $tunnelNotifyEnabled = ($settings['tunnel_url_notify_enabled'] ?? '1') !== '0';
 $emailAlertsEnabled = !empty($settings['store_email_alerts_enabled']);
+$remoteTunnelState = (string)($tunnelStatus['status'] ?? 'offline');
 $remoteModeLabel = !empty($tunnelStatus['token_configured'])
     ? 'Custom domain'
-    : (!empty($tunnelStatus['url']) ? 'Quick tunnel' : 'Offline');
+    : ($remoteTunnelState === 'online' ? 'Quick tunnel' : ($remoteTunnelState === 'starting' ? 'Connecting' : 'Offline'));
 $remoteModeClass = !empty($tunnelStatus['token_configured'])
     ? 'is-info'
-    : (!empty($tunnelStatus['url']) ? 'is-on' : 'is-off');
+    : ($remoteTunnelState === 'online' ? 'is-on' : ($remoteTunnelState === 'starting' ? 'is-info' : 'is-off'));
 $remoteModeIcon = !empty($tunnelStatus['token_configured'])
     ? 'bi-globe2'
-    : (!empty($tunnelStatus['url']) ? 'bi-lightning-charge-fill' : 'bi-cloud-slash');
+    : ($remoteTunnelState === 'online' ? 'bi-lightning-charge-fill' : ($remoteTunnelState === 'starting' ? 'bi-arrow-repeat' : 'bi-cloud-slash'));
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform-settings.css') ?: 1;
+$storeSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/store-settings.css') ?: 1;
 $platformSections = [
     'dormancy-policy' => ['Dormancy Policy', 'bi-shield-lock'],
     'scheduled-backup' => ['Scheduled Backup', 'bi-calendar2-week'],
@@ -268,6 +270,7 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . $styleVersion) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/platform-settings.css') . '?v=' . $platformSettingsStyleVersion) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/store-settings.css') . '?v=' . $storeSettingsStyleVersion) ?>">
 </head>
 <body class="platform-settings-page">
 <div class="app-shell">
@@ -427,17 +430,42 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
         <section class="dashboard-section" data-platform-section="remote-access" aria-labelledby="tunnel-heading"<?= $activePlatformSection !== 'remote-access' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="tunnel-heading"><span class="settings-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span> Remote Access</h2>
-                <span class="platform-settings-pill <?= $remoteModeClass ?>"><i class="bi <?= $remoteModeIcon ?>" aria-hidden="true"></i> <?= $remoteModeLabel ?></span>
+                <span id="remote-mode-pill" class="platform-settings-pill <?= $remoteModeClass ?>"><i id="remote-mode-icon" class="bi <?= $remoteModeIcon ?>" aria-hidden="true"></i> <span id="remote-mode-label"><?= $remoteModeLabel ?></span></span>
             </div>
 
             <div class="settings-meta">
                 <div class="settings-meta-item">
                     <span class="settings-meta-label">Public URL</span>
-                    <span class="settings-meta-value"><?= !empty($tunnelStatus['url']) ? htmlspecialchars((string)$tunnelStatus['url']) : 'Tunnel is offline' ?></span>
+                    <span id="tunnel-public-url" class="settings-meta-value"><?= !empty($tunnelStatus['url']) ? htmlspecialchars((string)$tunnelStatus['url']) : 'Tunnel is offline' ?></span>
                 </div>
             </div>
 
-            <form method="post">
+            <div class="remote-switch-panel">
+                <div class="remote-switch-info">
+                    <div class="remote-icon-badge" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <label for="remote-access-toggle" class="remote-toggle-title">Cloudflare Tunnel</label>
+                        <span id="remote-toggle-status-text" class="remote-toggle-sub">
+                            <?= $remoteTunnelState === 'online' ? 'Active &amp; encrypted' : ($remoteTunnelState === 'starting' ? 'Connecting...' : 'Disabled') ?>
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="remote-access-toggle" role="switch" <?= $remoteTunnelState !== 'offline' ? 'checked' : '' ?> aria-checked="<?= $remoteTunnelState !== 'offline' ? 'true' : 'false' ?>" aria-label="Toggle Remote Access Tunnel">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div id="remote-access-feedback" class="remote-feedback" role="status" aria-live="polite"></div>
+
+            <form method="post" class="u-mt-2">
                 <?= csrf_field() ?>
                 <div class="form-grid">
                     <div class="form-group">
@@ -569,5 +597,12 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
     });
 })();
 </script>
+<script type="application/json" id="remote-access-toggle-config"><?= json_encode([
+    'apiUrl' => app_url('components/administrator/remote_access_api.php'),
+    'csrfToken' => csrf_token(),
+    'permanent' => !empty($tunnelStatus['token_configured']),
+    'state' => $remoteTunnelState,
+], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/remote-access-toggle.js')) ?>"></script>
 </body>
 </html>

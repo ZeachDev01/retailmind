@@ -238,3 +238,14 @@ $assert($manualNotice !== false, 'Manual closure notifies Administrators');
 $assert((int)$manualNotice['email_pending'] === 1, 'Manual closure queues the daily Brevo email');
 
 echo "Fiscal period rollover notification contract: passed\n";
+
+// 17. Automatic rollover is owned by the Fiscal Periods page only. Store
+// Settings saving attention thresholds must not reset the stored choice.
+$root = dirname(__DIR__, 3);
+$storeSettings = (string)file_get_contents($root . '/src/frontend/components/administrator/store_settings.php');
+$fiscalPeriods = (string)file_get_contents($root . '/src/frontend/components/system_administrator/fiscal_periods.php');
+$assert(!str_contains($storeSettings, 'fiscal_period_auto_rollover'), 'Store Settings must not offer automatic rollover');
+$assert(str_contains($fiscalPeriods, 'value="set_rollover"'), 'Fiscal Periods page owns the automatic rollover switch');
+$assert(str_contains($fiscalPeriods, 'fiscal_period_auto_rollover'), 'Fiscal Periods page writes the automatic rollover setting');
+
+echo "Fiscal period rollover setting location contract: passed\n";

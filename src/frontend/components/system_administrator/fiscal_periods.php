@@ -308,7 +308,7 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fiscal Periods</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/fiscal-periods.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/fiscal-periods.css')) ?>">
 </head>
 <body class="fiscal-period-page">
     <div class="app-shell">

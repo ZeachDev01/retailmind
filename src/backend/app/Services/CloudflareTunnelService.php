@@ -477,9 +477,10 @@ class CloudflareTunnelService
             return null;
         }
 
-        // Match standard Quick Tunnel URL (https://*.trycloudflare.com)
-        if (preg_match('/https:\/\/[a-zA-Z0-9.\-]+\.trycloudflare\.com/i', $logContent, $matches)) {
-            return rtrim($matches[0], '.');
+        // Match standard Quick Tunnel URL (https://*.trycloudflare.com).
+        // The log is append-only across service restarts, so take the newest.
+        if (preg_match_all('/https:\/\/[a-zA-Z0-9.\-]+\.trycloudflare\.com/i', $logContent, $matches)) {
+            return rtrim((string)end($matches[0]), '.');
         }
 
         return null;

@@ -35,7 +35,8 @@ const { chromium } = require('playwright');
 
             // Panel 1: Name and Category
             await page.locator('#product-name').fill('Chocolate Biscuits 12s');
-            await page.locator('#product-category').selectOption('1');
+            assert.equal(await page.getByRole('combobox', {name: 'Parent Product Family', exact: true}).inputValue(), 'Standalone product', 'Standalone is visible as the default parent family');
+            await page.locator('#product-category').selectOption('1', { force: true });
             await page.locator('#wizard-next').click();
 
             // Panel 2: Barcodes & Identifiers (optional fields, can proceed directly)
@@ -50,20 +51,30 @@ const { chromium } = require('playwright');
             assert.ok(await page.locator('#create-pack-size').isVisible(), 'Pack size input is visible');
             assert.ok(await page.locator('#create-pack-barcode').isVisible(), 'Pack barcode input is visible');
             assert.ok(await page.locator('#create-pack-price').isVisible(), 'Pack price input is visible');
+            assert.equal((await page.locator('#pack-price-calc-preview').textContent()).trim(), '', 'No pack comparison before a pack size is entered');
 
             // Test incomplete pack configuration validation: pack size without barcode/price
             await page.locator('#create-pack-size').fill('12');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('12 × ₱10.00 = ₱120.00'), 'Comparison shows the individual-items total');
             await page.locator('#wizard-next').click();
             assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Incomplete pack configuration blocks step 3 advance');
 
             // Fill barcode, but invalid price (pack price >= pack_size * selling_price: 12 * 10 = 120)
             await page.locator('#create-pack-barcode').fill('BISCUIT-12PK');
             await page.locator('#create-pack-price').fill('125.00');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('must be below ₱120.00'), 'Comparison warns when the pack price kills the discount');
             await page.locator('#wizard-next').click();
             assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Excessive pack price blocks step 3 advance');
 
             // Valid pack price: 100.00 (< 120.00)
             await page.locator('#create-pack-price').fill('100.00');
+            const packCalc = await page.locator('#pack-price-calc-preview').textContent();
+            assert.ok(packCalc.includes('₱8.33'), 'Comparison shows the pack price per piece');
+            assert.ok(packCalc.includes('₱20.00'), 'Comparison shows the pack saving');
+            assert.ok(packCalc.includes('16.7%'), 'Comparison shows the pack discount percentage');
+            await page.locator('#selling-price').fill('12.00');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('₱144.00'), 'Comparison follows a change in the selling price');
+            await page.locator('#selling-price').fill('10.00');
             await page.locator('#wizard-next').click();
 
             // Panel 4: starting stock follows Sales Pack configuration automatically.
@@ -130,6 +141,7 @@ const { chromium } = require('playwright');
             // Advance to Panel 5: Review
             await page.locator('#wizard-next').click();
             assert.ok(await page.locator('[data-panel="5"]').evaluate(p => p.classList.contains('active')), 'Step 5 review is active');
+            assert.equal(await page.locator('[name="print_after_create"]').isChecked(), false, 'Barcode labels stay closed by default');
 
             // Intercept form submit and assert payload
             await page.evaluate(() => {
@@ -149,8 +161,13 @@ const { chromium } = require('playwright');
             assert.equal(submitted.starting_packs, '5');
             assert.equal(submitted.starting_loose, '3');
             assert.equal(submitted.initial_stock_quantity, '63');
+            assert.equal(submitted.print_after_create, undefined, 'Unchecked label printing is not submitted');
 
-            await page.evaluate(() => clearFormState());
+            await page.evaluate(() => {
+                document.getElementById('add-product-form').reset();
+                syncStartingStockFields();
+                updatePackPriceCalc();
+            });
             await page.evaluate(() => setWizardStep(4));
             assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '0', 'Reset returns to piece-only entry');
 

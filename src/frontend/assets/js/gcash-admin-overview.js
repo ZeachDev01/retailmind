@@ -54,15 +54,10 @@
     // Overview Coin View Controller (Balances <-> Activity & Completed)
     const coinDeck = document.getElementById('gcash-coin-deck');
     const coinPills = [...workspace.querySelectorAll('[data-coin-face]')];
-    const coinFlipTrigger = document.getElementById('gcash-coin-flip-trigger');
-    const flipLabel = coinFlipTrigger?.querySelector('.gcash-flip-label');
 
     function switchCoinFace(targetFace, animate = true) {
         if (!coinDeck) return;
-        const currentFace = coinDeck.dataset.activeFace;
-        const nextFace = targetFace === 'toggle'
-            ? (currentFace === 'balances' ? 'activity' : 'balances')
-            : targetFace;
+        const nextFace = targetFace;
 
         if (nextFace !== 'balances' && nextFace !== 'activity') return;
 
@@ -89,15 +84,6 @@
             }
         }
 
-        if (flipLabel) {
-            flipLabel.textContent = nextFace === 'balances' ? 'Flip to Activity' : 'Flip to Balances';
-        }
-
-        if (coinFlipTrigger && animate) {
-            coinFlipTrigger.classList.add('gcash-flip-spinning');
-            setTimeout(() => coinFlipTrigger.classList.remove('gcash-flip-spinning'), 300);
-        }
-
         try {
             sessionStorage.setItem('gcash_overview_face', nextFace);
         } catch (_) {}
@@ -105,29 +91,6 @@
 
     coinPills.forEach(pill => {
         pill.addEventListener('click', () => switchCoinFace(pill.dataset.coinFace, true));
-    });
-
-    coinFlipTrigger?.addEventListener('click', () => {
-        switchCoinFace('toggle', true);
-    });
-
-    workspace.addEventListener('click', event => {
-        const shortcut = event.target.closest('[data-coin-switch]');
-        if (shortcut) {
-            switchCoinFace(shortcut.dataset.coinSwitch, true);
-        }
-    });
-
-    window.addEventListener('keydown', event => {
-        if (event.key.toLowerCase() === 'f' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-            const tag = (document.activeElement?.tagName || '').toLowerCase();
-            const isInput = tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable;
-            const overviewTabSelected = workspace.querySelector('#gcash-tab-overview')?.getAttribute('aria-selected') === 'true';
-            if (!isInput && overviewTabSelected && coinDeck) {
-                event.preventDefault();
-                switchCoinFace('toggle', true);
-            }
-        }
     });
 
     try {

@@ -61,8 +61,9 @@ const { chromium } = require('playwright');
       await page.setViewportSize(viewport);
       const bounds = await page.locator('.rm-toast').boundingBox();
       const visibleWidth = await page.evaluate(() => document.documentElement.clientWidth);
-      assert.ok(Math.abs(bounds.x + bounds.width / 2 - visibleWidth / 2) < 1, 'Welcome is horizontally centered');
-      assert.ok(Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2) < 1, 'Welcome is vertically centered');
+      const inset = visibleWidth <= 480 ? 11.2 : 16;
+      assert.ok(Math.abs(bounds.x + bounds.width - (visibleWidth - inset)) < 1, 'Welcome sits at the right edge');
+      assert.ok(Math.abs(bounds.y - inset) < 1, 'Welcome sits at the top');
     }
     await page.clock.runFor(1699);
     assert.equal(await page.locator('.rm-toast.show').count(), 1, 'Welcome stays visible for two seconds');

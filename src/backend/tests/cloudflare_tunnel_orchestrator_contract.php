@@ -71,6 +71,14 @@ LOG;
     $extracted2 = $service->extractPublicUrl($sampleLog2);
     $assert($extracted2 === 'https://quiet-river-99.trycloudflare.com', "Extracts trycloudflare.com URL from json-formatted log line");
 
+    $sampleLogReused = <<<'LOG'
+2026-11-08T00:00:02Z INF |  https://first-tunnel.trycloudflare.com |
+2026-11-08T01:00:02Z INF Tunnel server stopped
+2026-11-08T01:00:04Z INF |  https://second-tunnel.trycloudflare.com |
+LOG;
+    $extractedReused = $service->extractPublicUrl($sampleLogReused);
+    $assert($extractedReused === 'https://second-tunnel.trycloudflare.com', "Returns the newest URL when the log holds several Quick Tunnel restarts");
+
     $sampleLogEmpty = "2026-11-08T00:00:01Z INF Connecting to edge network...\n";
     $extractedEmpty = $service->extractPublicUrl($sampleLogEmpty);
     $assert($extractedEmpty === null, "Returns null when no public URL is present in the log yet");

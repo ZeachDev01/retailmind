@@ -278,8 +278,8 @@ $checks = [
     ],
     'Dedicated fiscal periods page present' => [
         'file' => 'src/frontend/components/system_administrator/fiscal_periods.php',
-        'needles' => ['Fiscal Periods', 'fiscal-period-form-grid', 'fiscal-period-card-grid', "\$action === 'create'", "\$action === 'close'", "\$action === 'lock'", "\$action === 'generate'", 'Generate periods'],
-        'forbidden' => ['embed=1', 'data-embedded-close', 'fiscal-periods-embedded'],
+        'needles' => ['Fiscal Periods', 'fiscal-period-form-grid', 'fiscal-period-card-grid', "\$action === 'create'", "\$action === 'close'", "\$action === 'lock'", "\$action === 'generate'", 'Generate periods', "theme_url('assets/css/fiscal-periods.css')"],
+        'forbidden' => ['embed=1', 'data-embedded-close', 'fiscal-periods-embedded', "app_url('assets/css/fiscal-periods.css')"],
     ],
     'Fiscal periods use direct sidebar navigation' => [
         'file' => 'src/frontend/components/sidebar.php',

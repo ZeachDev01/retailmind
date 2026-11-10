@@ -31,26 +31,25 @@ const source = fs.readFileSync('src/frontend/components/cashier/pos.php', 'utf8'
             for (const type of ['success', 'error', 'warning', 'info']) showCartMessage(type + ' message', type);
         });
         await page.waitForTimeout(300);
-        assert.equal(await page.locator('.rm-toast').count(), 4);
+        assert.equal(await page.locator('.rm-toast').count(), 1, 'Only the newest notification is shown');
+        assert.equal(await page.locator('.rm-toast .rm-toast-copy > span').textContent(), 'info message', 'The newest notification replaces the earlier ones');
         assert.equal(await page.locator('#products').evaluate(node => node.getBoundingClientRect().top), originalTop, 'toasts do not move products');
         assert.equal(await page.locator('#scan').evaluate(node => node === document.activeElement), true, 'toasts do not steal scanner focus');
         for (const width of [1440, 768, 375]) {
             await page.setViewportSize({ width, height: 900 });
+            const inset = width <= 480 ? 11.2 : 16;
             const stack = await page.locator('.rm-toast-stack').boundingBox();
             assert.ok(stack.x >= 0 && stack.x + stack.width <= width, 'stack stays within screen');
-            assert.ok(Math.abs(stack.y + stack.height - 884) < 2, 'stack is at bottom');
-            const boxes = await page.locator('.rm-toast').all();
-            for (let i = 1; i < boxes.length; i++) {
-                const previous = await boxes[i - 1].boundingBox(), current = await boxes[i].boundingBox();
-                assert.ok(current.y > previous.y + previous.height, 'toasts stack with spacing');
-            }
+            assert.ok(Math.abs(stack.y - inset) < 2, 'stack is at the top');
+            assert.ok(Math.abs(stack.x + stack.width - (width - inset)) < 2, 'stack is at the right edge');
         }
         await page.locator('.rm-toast-close').first().click();
         await page.waitForTimeout(300);
-        assert.equal(await page.locator('.rm-toast').count(), 3, 'dismiss removes one toast');
+        assert.equal(await page.locator('.rm-toast').count(), 0, 'dismiss removes the toast');
+        await page.evaluate(() => showCartMessage('final message', 'success'));
         await page.waitForFunction(() => document.querySelectorAll('.rm-toast').length === 0, { timeout: 4500 });
         assert.ok(!source.includes('id="cart-message"'), 'inline search notification is removed');
-        console.log('POS toasts: passed (desktop, tablet, mobile, stacking, dismissal, expiry, focus)');
+        console.log('POS toasts: passed (desktop, tablet, mobile, top-right position, dismissal, expiry, focus)');
     } finally {
         await browser.close();
     }

@@ -51,6 +51,20 @@ $storeSettings = get_store_settings($pdo);
 $storeEmailEnabled = !empty($storeSettings['store_email_alerts_enabled']);
 $storeEmailTypes = ['low_stock', 'expiring_stock', 'expired_stock'];
 
+// Remote-access URL notice is separate from stock alerts. This daily catch-up
+// covers admins created after the tunnel started and retries failed sends.
+if (!$emailDeliveryDisabled) {
+    require_once dirname(__DIR__) . '/app/Services/CloudflareTunnelService.php';
+    try {
+        $tunnelStatus = (new \App\Services\CloudflareTunnelService())->getStatus();
+        if (!empty($tunnelStatus['url'])) {
+            notify_tunnel_url_change($pdo, (string)$tunnelStatus['url']);
+        }
+    } catch (Throwable $tunnelError) {
+        error_log('Remote access URL notice failed: ' . $tunnelError->getMessage());
+    }
+}
+
 // Individual per-product stock emails are replaced by the consolidated Daily Stock Brief.
 $pdo->exec("UPDATE notifications SET email_pending = 0 WHERE email_pending = 1 AND type IN ('low_stock', 'expiring_stock', 'expired_stock')");
 

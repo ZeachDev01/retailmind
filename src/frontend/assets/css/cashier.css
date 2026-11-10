@@ -656,17 +656,6 @@
     font-weight: 850;
 }
 
-.cashier-pos-page .rm-toast-stack {
-    top: auto;
-    bottom: max(1rem, env(safe-area-inset-bottom));
-    right: max(1rem, env(safe-area-inset-right));
-    width: min(360px, calc(100vw - 2rem));
-    max-height: calc(100dvh - 2rem);
-    overflow: auto;
-    z-index: 20010;
-    pointer-events: none;
-}
-
 .cashier-pos-page .rm-toast {
     color: var(--text);
     background: var(--card-bg);

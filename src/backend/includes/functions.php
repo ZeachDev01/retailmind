@@ -586,6 +586,40 @@ function get_store_brevo_settings(PDO $pdo): array
     return $settings;
 }
 
+/**
+ * HTML body for the password reset code email. Table layout and inline
+ * styles only, because email clients drop stylesheets and flexbox.
+ */
+function password_reset_email_html(string $displayName, string $formattedPin): string
+{
+    $name = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
+    $code = htmlspecialchars($formattedPin, ENT_QUOTES, 'UTF-8');
+    $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
+
+    return '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your RetailMind reset code expires in 15 minutes.</div>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
+        . '<tr><td align="center" style="padding:32px 16px;">'
+        . '<!--[if mso]><table role="presentation" width="520" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;">'
+        . '<tr><td style="background:#0f172a;padding:18px 28px;border-radius:13px 13px 0 0;font-family:' . $font . ';">'
+        . '<span style="color:#ffffff;font-size:15px;font-weight:700;letter-spacing:-0.01em;">RetailMind</span>'
+        . '</td></tr>'
+        . '<tr><td style="padding:32px 28px 28px;font-family:' . $font . ';">'
+        . '<div style="color:#0f172a;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;">Reset your password</div>'
+        . '<p style="margin:10px 0 24px;color:#6b7280;font-size:14px;line-height:1.5;">Hi ' . $name . ', use this code to continue.</p>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;">'
+        . '<tr><td align="center" style="padding:22px 16px 6px;font-family:' . $mono . ';font-size:34px;font-weight:700;letter-spacing:5px;color:#0f172a;padding-left:21px;">' . $code . '</td></tr>'
+        . '<tr><td align="center" style="padding:0 16px 20px;font-family:' . $font . ';color:#6b7280;font-size:12px;">Expires in 15 minutes</td></tr>'
+        . '</table>'
+        . '<p style="margin:24px 0 0;color:#6b7280;font-size:12px;line-height:1.5;">If you did not request this, you can ignore this email.</p>'
+        . '</td></tr>'
+        . '</table>'
+        . '<!--[if mso]></td></tr></table><![endif]-->'
+        . '</td></tr>'
+        . '</table>';
+}
+
 /** Send all application email through the Brevo API. */
 function send_email_notification(string $email, string $subject, string $message, ?string $htmlContent = null): bool
 {
@@ -656,9 +690,43 @@ function tunnel_notify_recipients(PDO $pdo): array
 }
 
 /**
- * Email active admin and super admin users when the remote-access tunnel URL
- * changes (a quick-tunnel domain is rotated on restart). Dedupes against the
- * last notified URL so restarts do not re-email the same address.
+ * True when this recipient already received the same subject on this Manila day.
+ * Reuses the email delivery log so a partial failure retries only the missing
+ * recipients instead of emailing everyone twice.
+ */
+function tunnel_notice_already_sent(PDO $pdo, string $recipient, string $subject, string $day): bool
+{
+    $start = new DateTimeImmutable($day . ' 00:00:00', new DateTimeZone('Asia/Manila'));
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT 1 FROM email_delivery_log
+             WHERE recipient = ? AND subject = ? AND status = 'sent'
+               AND created_at >= ? AND created_at < ? LIMIT 1"
+        );
+        $stmt->execute([
+            $recipient,
+            $subject,
+            $start->format('Y-m-d H:i:s'),
+            $start->modify('+1 day')->format('Y-m-d H:i:s'),
+        ]);
+        return (bool)$stmt->fetchColumn();
+    } catch (PDOException $exception) {
+        // The log table is created lazily by send_email_notification().
+        $missingTable = (string)$exception->getCode() === '42S02'
+            || str_contains($exception->getMessage(), 'no such table');
+        if ($missingTable) {
+            return false;
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * Email active admin and super admin users the current remote-access URL at
+ * most once per Manila day. The daily notification job calls this as a
+ * catch-up, so an account created after the tunnel started still receives it.
+ * The day marker is saved only after every recipient succeeds, so failed
+ * deliveries are retried without re-emailing the ones already sent.
  */
 function notify_tunnel_url_change(PDO $pdo, string $newUrl): bool
 {
@@ -672,8 +740,9 @@ function notify_tunnel_url_change(PDO $pdo, string $newUrl): bool
     if (($settings['tunnel_url_notify_enabled'] ?? '1') === '0') {
         return false;
     }
-    $lastNotified = trim((string)($settings['tunnel_last_notified_url'] ?? ''));
-    if ($lastNotified === $newUrl) {
+
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+    if (trim((string)($settings['tunnel_last_notified_date'] ?? '')) === $today) {
         return false;
     }
 
@@ -682,21 +751,54 @@ function notify_tunnel_url_change(PDO $pdo, string $newUrl): bool
         return false;
     }
 
-    // Record before sending so a failed send does not loop on every status poll.
-    save_key_value_settings($pdo, 'store_settings', ['tunnel_last_notified_url' => $newUrl], null);
-
-    $storeName = trim((string)($settings['store_name'] ?? 'RetailMind'));
-    $sent = false;
-    foreach ($recipients as $recipient) {
-        if (send_email_notification(
-            $recipient,
-            $storeName . ' remote access URL updated',
-            "The remote access URL has changed.\n\nNew URL: " . $newUrl . "\n\nUse this address to keep monitoring the system and store operations remotely."
-        )) {
-            $sent = true;
+    // Web polls and the daily CLI job are separate connections, so serialize
+    // them or both can pass the day check before either writes the marker.
+    $locked = true;
+    if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+        $locked = (int)$pdo->query("SELECT GET_LOCK('retailmind_tunnel_notice', 0)")->fetchColumn() === 1;
+        if (!$locked) {
+            return false;
         }
     }
-    return $sent;
+
+    try {
+        // Another worker may have finished while this one waited for the lock.
+        $settings = get_store_settings($pdo);
+        if (trim((string)($settings['tunnel_last_notified_date'] ?? '')) === $today) {
+            return false;
+        }
+
+        $storeName = trim((string)($settings['store_name'] ?? 'RetailMind'));
+        $subject = $storeName . ' remote access URL updated';
+        $allDone = true;
+        $sent = false;
+        foreach ($recipients as $recipient) {
+            if (tunnel_notice_already_sent($pdo, $recipient, $subject, $today)) {
+                continue;
+            }
+            if (send_email_notification(
+                $recipient,
+                $subject,
+                "The remote access URL is active.\n\nCurrent URL: " . $newUrl . "\n\nUse this address to keep monitoring the system and store operations remotely."
+            )) {
+                $sent = true;
+            } else {
+                $allDone = false;
+            }
+        }
+
+        if ($allDone) {
+            save_key_value_settings($pdo, 'store_settings', [
+                'tunnel_last_notified_url' => $newUrl,
+                'tunnel_last_notified_date' => $today,
+            ], null);
+        }
+        return $sent;
+    } finally {
+        if ($locked && $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->query("SELECT RELEASE_LOCK('retailmind_tunnel_notice')");
+        }
+    }
 }
 
 function validate_calendar_date(mixed $rawDate): ?string
