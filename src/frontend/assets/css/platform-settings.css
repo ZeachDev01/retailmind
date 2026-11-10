@@ -55,12 +55,6 @@ body.platform-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-co
     line-height: 1.2;
 }
 
-.platform-settings-page .platform-settings-subtitle {
-    margin: .45rem 0 0;
-    color: var(--muted);
-    line-height: 1.55;
-}
-
 .platform-settings-page .platform-settings-content > .alert {
     max-width: 1480px;
     margin: 0 auto 1rem;
@@ -285,45 +279,131 @@ body.platform-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-co
     resize: vertical;
 }
 
-.remote-access-section .remote-field-label { display: block; margin-bottom: .3rem; color: var(--muted); font-size: .95rem; font-weight: 600; }
-.remote-access-section .remote-connection-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-bottom: 1rem; }
-.remote-access-section #remote-active-provider { display: block; font-size: 1.05rem; }
-.remote-access-section .remote-enable-control { display: inline-flex; align-items: center; gap: .75rem; font-size: .95rem; font-weight: 600; }
-.remote-access-section .remote-public-link { padding: 1rem 0; border-top: 1px solid var(--border); }
-.remote-access-section .remote-link-row { display: flex; align-items: center; gap: 1rem; }
-.remote-access-section #tunnel-public-url { flex: 1; min-width: 0; color: var(--primary); font-weight: 600; overflow-wrap: anywhere; text-underline-offset: .2em; }
+/* Remote Access: installed-provider console, provider setup, and status motion. */
+.remote-access-section .remote-eyebrow {
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.remote-access-section .remote-section-header { align-items: center; }
+.remote-access-section .remote-status-dot { position: relative; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.remote-access-section #remote-mode-icon { display: none; }
+.remote-access-section .platform-settings-pill.is-on .remote-status-dot::after {
+    content: "";
+    position: absolute;
+    inset: -.3rem;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    animation: remote-signal 2.4s cubic-bezier(.16, 1, .3, 1) infinite;
+}
+.remote-access-section .platform-settings-pill.is-info .remote-status-dot { animation: remote-breathe 1.4s ease-in-out infinite; }
+@keyframes remote-signal {
+    0% { transform: scale(.35); opacity: .65; }
+    70%, 100% { transform: scale(1.15); opacity: 0; }
+}
+@keyframes remote-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+}
+
+.remote-access-section .remote-console { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.remote-access-section .remote-console-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+}
+.remote-access-section .remote-identity { display: flex; align-items: center; min-width: 0; }
+.remote-access-section .remote-mark { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.remote-access-section .remote-mark svg { display: block; width: auto; height: 20px; }
+.remote-access-section .remote-mark[data-mark="ngrok"] svg { height: 18px; }
+.remote-access-section .remote-mark[data-mark="ngrok"] svg path { fill: #1f1e37; }
+.remote-access-section .remote-mark[data-mark="cloudflare"] svg path { fill: #f38020; }
+html[data-theme="dark"] .remote-access-section .remote-mark[data-mark="ngrok"] svg path { fill: #e5edf8; }
+.remote-access-section .remote-identity-copy { min-width: 0; }
+.remote-access-section #remote-active-provider { display: block; font-size: 1.05rem; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.remote-access-section .remote-identity-state { display: block; margin-top: .1rem; color: var(--muted); font-size: .9rem; }
+.remote-access-section .remote-enable-control { display: inline-flex; align-items: center; gap: .7rem; font-size: .95rem; font-weight: 600; }
+
+.remote-access-section .remote-link-block { padding: 1rem 1.1rem; border-top: 1px solid var(--border); }
+.remote-access-section .remote-link-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem 1rem; }
+.remote-access-section .remote-link-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.remote-access-section .remote-test-form { margin: 0; }
+.remote-access-section .remote-link-row { display: flex; align-items: center; gap: .75rem; margin-top: .45rem; min-height: 2rem; }
+.remote-access-section #tunnel-public-url { flex: 1; min-width: 0; color: var(--primary); font-weight: 600; overflow-wrap: anywhere; text-underline-offset: .22em; }
 .remote-access-section #remote-link-empty { flex: 1; color: var(--muted); }
-.remote-access-section #remote-copy-link { flex: 0 0 auto; }
-.remote-access-section .remote-help { margin: .5rem 0; color: var(--muted); font-size: .95rem; line-height: 1.5; max-width: 75ch; }
-.remote-access-section .remote-test-row { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
+.remote-access-section .remote-link-note { margin: .35rem 0 0; color: var(--theme-warning-text, #92400e); font-size: .85rem; font-weight: 600; }
+.remote-access-section .remote-feedback { padding: 0 1.1rem 1rem; }
 .remote-access-section .remote-feedback:empty { display: none; }
-.remote-access-section .remote-provider-tabs { display: flex; gap: .5rem; margin: 1.5rem 0 .5rem; border-bottom: 1px solid var(--border); }
-.remote-access-section .remote-provider-tabs button { min-height: 44px; padding: .7rem 1rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; transition: background-color .15s ease; }
-.remote-access-section .remote-provider-tabs button[aria-pressed="true"] { border-bottom-color: var(--primary); color: var(--primary); }
-.remote-access-section .remote-provider-tabs button:hover { background: var(--surface-soft); }
+
+.remote-access-section .remote-provider-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: 1.15rem 0 0; }
+.remote-access-section .remote-provider-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    min-height: 56px;
+    padding: .55rem .9rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .18s ease, color .18s ease, background-color .18s ease;
+}
+.remote-access-section .remote-provider-tab:hover { background: var(--surface-soft); color: var(--text); }
+.remote-access-section .remote-provider-tab[aria-pressed="true"] { border-color: var(--primary); background: rgba(37, 99, 235, .08); color: var(--text); box-shadow: inset 0 0 0 1px var(--primary); }
+.remote-access-section .remote-provider-tab .remote-mark { width: auto; }
+
+.remote-access-section [data-remote-provider-panel] { padding-top: 1.2rem; animation: remote-panel-in .22s cubic-bezier(.16, 1, .3, 1); }
 .remote-access-section [data-remote-provider-panel][hidden] { display: none !important; }
-.remote-access-section .remote-panel-title { margin: 1.2rem 0 .4rem; font-size: 1.05rem; }
-.remote-access-section .remote-provider-form { margin-top: 1rem; }
-.remote-access-section .form-actions { margin-top: .85rem; }
+@keyframes remote-panel-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+.remote-access-section .remote-panel-title .remote-mark svg { height: 24px; }
+.remote-access-section .remote-panel-title .remote-mark[data-mark="ngrok"] svg { height: 22px; }
+.remote-access-section .remote-panel-title { display: flex; align-items: center; gap: .5rem; margin: 0 0 .9rem; font-size: 1.05rem; letter-spacing: -.015em; }
+.remote-access-section .remote-provider-form { margin-top: 0; }
+.remote-access-section .form-actions { margin-top: .9rem; }
 .remote-access-section .remote-generate-cloudflare { margin-top: .8rem; }
 .remote-access-section .remote-details { margin-top: .75rem; }
 .remote-access-section .remote-details summary { min-height: 44px; padding: .65rem 0; color: var(--text); font-size: .95rem; font-weight: 600; cursor: pointer; }
 .remote-access-section .remote-details summary:focus-visible,
-.remote-access-section .remote-provider-tabs button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
-.remote-access-section .remote-operating-note { margin: 1.25rem 0 .5rem; color: var(--muted); font-size: .95rem; line-height: 1.5; }
+.remote-access-section .remote-provider-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.remote-access-section .tunnel-checklist { margin: 0 0 .4rem; }
+.remote-access-section .remote-token-warning { display: flex; align-items: center; gap: .4rem; margin: 0 0 .55rem; color: var(--theme-warning-text, #92400e); font-size: .85rem; font-weight: 600; }
+.remote-access-section .remote-operating-note { margin: 1.25rem 0 .35rem; color: var(--muted); font-size: .9rem; }
 .remote-access-section .remote-maintenance { border-top: 1px solid var(--border); }
 .remote-access-section .remote-maintenance .settings-check { display: flex; align-items: center; gap: .55rem; font-size: .95rem; }
 .remote-access-section .remote-maintenance .settings-check input { width: 1rem; height: 1rem; min-height: 0; }
 .remote-access-section .remote-removal-form { margin-top: 1rem; }
 .remote-copy-buffer { position: fixed; left: -10000px; }
 @media (max-width: 640px) {
-    .remote-access-section .remote-connection-row { align-items: flex-start; flex-wrap: wrap; }
-    .remote-access-section .remote-link-row { flex-wrap: wrap; }
-    .remote-access-section #tunnel-public-url, .remote-access-section #remote-link-empty { flex-basis: 100%; }
-    .remote-access-section .remote-provider-tabs button { flex: 1; }
+    .remote-access-section .remote-console-head { align-items: flex-start; }
+    .remote-access-section .remote-enable-control { justify-content: space-between; width: 100%; }
+    .remote-access-section .remote-provider-tabs { grid-template-columns: minmax(0, 1fr); }
+    .remote-access-section .remote-link-block { display: flex; flex-direction: column; gap: .55rem; }
+    .remote-access-section .remote-link-head { display: contents; }
+    .remote-access-section .remote-link-head .remote-eyebrow { order: 1; }
+    .remote-access-section .remote-link-row { order: 2; flex-wrap: wrap; margin-top: 0; }
+    .remote-access-section .remote-link-actions { order: 3; }
+    .remote-access-section .remote-link-note { order: 4; margin-top: 0; }
+    .remote-access-section #tunnel-public-url,
+    .remote-access-section #remote-link-empty { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .remote-access-section .remote-provider-tabs button { transition: none; }
+    .remote-access-section .platform-settings-pill.is-on .remote-status-dot::after,
+    .remote-access-section .platform-settings-pill.is-info .remote-status-dot,
+    .remote-access-section [data-remote-provider-panel] { animation: none; }
+    .remote-access-section .remote-provider-tab { transition: none; }
 }
 
 @media (max-width: 900px) {

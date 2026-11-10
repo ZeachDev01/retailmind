@@ -352,7 +352,6 @@ class CloudflareTunnelService
                         CURLOPT_USERAGENT => 'RetailMind-CloudflareTunnel/1.0',
                     ]);
                     $success = curl_exec($ch);
-                    curl_close($ch);
                     fclose($fp);
                     if ($success && filesize($tempFile) > 0) {
                         $renamed = @rename($tempFile, $this->binPath);
@@ -604,7 +603,6 @@ class CloudflareTunnelService
             $body = curl_exec($ch);
             $reachable = curl_getinfo($ch, CURLINFO_RESPONSE_CODE) === 200
                 && is_string($body) && hash_equals('RetailMind:' . $marker, trim($body));
-            curl_close($ch);
         }
         @file_put_contents($cachePath, json_encode(['url' => $url . $path, 'reachable' => $reachable, 'checked_at' => time()]), LOCK_EX);
         return $reachable;

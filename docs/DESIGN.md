@@ -110,6 +110,8 @@ components:
 
 Remote Access now uses separate ngrok Free and Cloudflare setup views beneath a persistent installed-provider, status and public-link area. Guides and maintenance use native disclosures; setup view selection does not switch the running provider. See the [Remote Access surface brief](../.impeccable/surfaces/remote-access.md) for verification and remaining deployment checks. Existing visual identity and global tokens are unchanged.
 
+The 2026-11-10 clarification pass removed the page subtitle and the section's explanatory subtext, moved decision-critical facts into the existing disclosures, and replaced the flat status rows with one bordered connection console. Provider identity appears as inline vendor marks in the setup panel titles, and state motion (Online radar ring, Connecting breathe, setup-panel rise) stays scoped to the section and stops under reduced motion. No tokens or dependencies were added.
+
 ## Overview
 
 **Creative North Star: "The Working Stockroom"**
@@ -283,3 +285,9 @@ Forecast screens prioritize expected sales, on-hand stock and required action. R
 Backup & Restore copy was simplified on 2026-11-03: retain essential replacement and key-security warnings, use concise upload limits, and avoid repeating labels in helper paragraphs. The [Backup & Restore surface brief](../.impeccable/surfaces/s-system-administrator-backup-restore-php-24753d25.md) records scope and verification. Existing layout and tokens remain unchanged.
 
 Identity review now leads with each backup person and shows only the fields for their selected account path. Server-account references and preservation details use native disclosures; final access and restore consent remain visible. Scope and verification are recorded in the [Identity reconciliation surface brief](../.impeccable/surfaces/administrator-identity-reconciliation-php-60878ea8.md).
+
+## Landing page — living store record — 2026-11-10
+
+The public entrance now shows one sale moving through the existing four-stage record panel: the active row carries a blue node, a filling meter and the header state (Scanning, Updating stock, Reading demand, Receiving), and a scanner pass crosses the hero photograph during the Sale stage. The photograph drifts slightly over the first 620px of scroll; capability, workflow, access and heading blocks reveal with CSS scroll-driven timelines and stay static where unsupported. A faint ledger grid and a compact kicker sit behind and above the hero copy.
+
+Switching light, dark or system on the landing page floods the new theme out from the chosen control as an organic water front over 1050 ms. It runs on same-document View Transitions with a `circle()` CSS fallback, keeps the instant swap under reduced motion, and leaves authenticated workspaces unchanged. No tokens, dependencies or image assets were added. Scope and verification are recorded in the [Landing page surface brief](../.impeccable/surfaces/landing-page.md).

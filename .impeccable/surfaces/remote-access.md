@@ -18,3 +18,13 @@ No new global tokens, imagery, libraries, provider selection side effects, or se
 Validation: `npm run check`, `npm run check:contracts`, focused state tests and the rendered production-section browser test. Browser checks cover 1440/1024/768/390px, light/dark, keyboard provider navigation, clipboard fallback, preserved provider/link while offline, recovery, and overflow. The real installed ngrok route also passed the XAMPP PHP HTTPS health test. Screenshots are in `.impeccable/review/remote-access/`. Full authenticated Chrome access was unavailable through Computer Use, so the browser test rendered the real section with isolated API responses and did not mutate the live service.
 
 Design detector: no deterministic findings after a narrow `sfmono-regular` exception for the existing literal PowerShell textarea. Existing surrounding stylesheet advisory drift was left outside this task; no blanket rule or file suppression was added. Rendered views were inspected. Verdict: ready for user review; authenticated mobile-data login and reboot acceptance are separate deployment checks.
+
+## Revision — clarify + distill, provider marks, status motion
+
+The page heading subtitle was removed; the navigation already names every section. The Remote Access section now leads with one bordered connection console: installed provider name, live state, enable switch, and the public link with Copy and Test actions. The page-level subtitle, the "Installed provider" field label, the provider-tab hint, the "status refreshes automatically" note, both setup introductions, the free-plan and verification paragraphs, and the online link note are gone. Facts that change a decision moved into the existing disclosures: ngrok quota and browser warning, and Cloudflare's pre-switch verification.
+
+Provider marks are inline SVG: the ngrok wordmark and the Cloudflare cloud, drawn in the panel title beside "Free setup" and "Custom domain". Marks use the vendor colors `#1f1e37` (white in dark theme) and `#f38020`; no palette token was added. Provider tabs stay text-only so the brand never repeats its own name in the same row.
+
+Motion is scoped and authored once per state: a radar ring on the Online status dot, a breathe on Connecting, and a 220 ms panel rise when the selected setup view changes. Every animation stops under `prefers-reduced-motion: reduce`. Copy and the existing IDs, actions, and CSRF gates are unchanged.
+
+Validation: `npm run check`, `npm run check:contracts`, and `remote_access_setup_browser_test.js` passed after the revision; screenshots were re-inspected at 1440/1024/768/390px in light and dark.

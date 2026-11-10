@@ -35,6 +35,10 @@ if (file_exists($serviceFile)) {
     require_once $serviceFile;
 }
 $assert(class_exists($serviceClass), "Class {$serviceClass} exists");
+if (file_exists($serviceFile)) {
+    // PHP 8.5 deprecates curl_close(); the notice prints before JSON and breaks the status API.
+    $assert(!str_contains((string)file_get_contents($serviceFile), 'curl_close('), "CloudflareTunnelService.php emits no curl_close() deprecation into JSON responses");
+}
 
 echo "\n=== 2. Path Resolution and Zero Machine Coupling ===\n";
 

@@ -4,19 +4,6 @@
     gap: 1rem;
 }
 
-.registers-page .page-subheading {
-    color: var(--muted);
-    font-size: 0.92rem;
-    margin: 0.35rem 0 0;
-}
-
-.registers-page .form-hint {
-    display: block;
-    color: var(--muted);
-    font-size: 0.78rem;
-    margin-top: 0.35rem;
-}
-
 .registers-page .form-grid > .form-group { margin: 0; min-width: 0; }
 .registers-page .form-grid :is(input:not([type="hidden"]), select, .btn) { height: 46px; }
 .registers-page .data-table { min-width: 900px; table-layout: fixed; }

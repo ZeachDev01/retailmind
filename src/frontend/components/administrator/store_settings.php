@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Store settings update', 'Store Settings', null, null, $updates);
             });
             $message = isset($updates['store_email_alerts_enabled'])
-                ? 'Store and receipt settings saved. Store email alerts were disabled because the Store email changed. Ask your Super Administrator to send a test email from Platform Settings to re-enable them.'
+                ? 'Store and receipt settings saved. Email alerts turned off because the Store email changed.'
                 : 'Store and receipt settings saved.';
         } elseif ($action === 'save_receipt_logo' || $action === 'remove_receipt_logo') {
             if ($action === 'remove_receipt_logo' && trim((string)($settings['store_name'] ?? '')) === '') {
@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($messageClass === '') $messageClass = 'tag-success';
     } catch (Throwable $exception) {
-        $message = \App\Support\OperatorAlert::message($exception, 'The Store Setting could not be saved. Check the values and try again. Tell your Administrator if this keeps happening.');
+        $message = \App\Support\OperatorAlert::message($exception, 'The Store Setting could not be saved. Check the values and try again.');
         $messageClass = 'tag-warning';
     }
 }
@@ -174,9 +174,15 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
     <main class="main-content">
         <nav class="settings-sidebar" aria-label="Store configuration sections">
             <?php foreach ($settingsSections as $section => [$label, $icon]): ?>
+                <?php $navState = $section === 'remote-access' ? (string)($tunnelStatus['status'] ?? 'offline') : ''; ?>
                 <a href="?section=<?= htmlspecialchars($section) ?>"<?= $activeSection === $section ? ' class="active" aria-current="page"' : '' ?>>
                     <img src="<?= htmlspecialchars(theme_url('assets/img/navigation/' . $icon . '.svg')) ?>" alt="" aria-hidden="true" width="22" height="22">
-                    <span><?= htmlspecialchars($label) ?></span>
+                    <span class="settings-nav-copy">
+                        <span class="settings-nav-label"><?= htmlspecialchars($label) ?></span>
+                        <?php if ($section === 'remote-access'): ?>
+                            <span class="settings-nav-state is-<?= $navState === 'online' ? 'online' : ($navState === 'starting' ? 'starting' : 'offline') ?>"><?= $navState === 'online' ? 'Online' : ($navState === 'starting' ? 'Connecting' : 'Offline') ?></span>
+                        <?php endif; ?>
+                    </span>
                 </a>
             <?php endforeach; ?>
         </nav>
@@ -184,7 +190,6 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
         <header class="page-heading">
             <div>
                 <h1>Store Configuration</h1>
-                <p class="page-subtitle">Maintain Store identity, customer receipts, and operational attention thresholds.</p>
             </div>
         </header>
         <?php if ($message): ?>
@@ -192,8 +197,10 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
         <?php endif; ?>
         <section class="dashboard-section" data-settings-section="store-receipts" aria-labelledby="heading-store"<?= $activeSection !== 'store-receipts' ? ' hidden' : '' ?>>
             <div class="section-header">
-                <h2 id="heading-store">Store &amp; receipts</h2>
-                <p class="section-description">Store identity, regional defaults, and customer receipt text.</p>
+                <div>
+                    <h2 id="heading-store">Store &amp; receipts</h2>
+                    <p class="section-description">Store identity, regional defaults, and receipt text.</p>
+                </div>
             </div>
             <form method="post">
                 <?= csrf_field() ?>
@@ -234,15 +241,16 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     <?php endforeach; ?>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button type="submit" class="btn btn-primary">Save store settings</button>
+                    <button type="submit" class="btn btn-primary">Save store details</button>
                 </div>
             </form>
             <form method="post" enctype="multipart/form-data" class="receipt-logo-form">
                 <?= csrf_field() ?>
+                <h3 class="settings-subheading">Receipt logo</h3>
                 <div class="form-group">
-                    <label for="receipt_logo">Receipt logo</label>
+                    <label for="receipt_logo">Logo file</label>
                     <input type="file" id="receipt_logo" name="receipt_logo" accept="image/jpeg,image/png" aria-describedby="receipt-logo-help">
-                    <small class="field-help" id="receipt-logo-help"><strong>Recommended size: 384 × 192 px (wide) or 192 × 192 px (square).</strong><br>JPG or PNG, up to 2 MB and 4 million pixels. Automatically fits 58/80 mm receipts in black and white and trims blank edges. Use a simple, high-contrast logo. Existing receipts keep their original logo. Remove it to print the Store name only.</small>
+                    <small class="field-help" id="receipt-logo-help"><strong>384 × 192 px (wide) or 192 × 192 px (square).</strong> JPG or PNG, up to 2 MB. Prints black and white on 58 or 80 mm receipts.</small>
                     <?php if ($receiptLogo !== ''): ?>
                         <img id="receipt-logo-preview" class="receipt-logo-preview" src="<?= htmlspecialchars($receiptLogo, ENT_QUOTES, 'UTF-8') ?>" alt="Saved receipt logo" width="192" height="96" loading="lazy">
                     <?php else: ?>
@@ -262,7 +270,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
             <div class="section-header">
                 <div>
                     <h2 id="thresholds-heading">Attention thresholds</h2>
-                    <p class="section-description">Operational thresholds trigger automated system reviews and supervisory warnings.</p>
+                    <p class="section-description">Values that trigger operator warnings and supervisor review.</p>
                 </div>
             </div>
             <form method="post">
@@ -281,7 +289,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     <?php endforeach; ?>
                 </div>
                 <div class="form-actions u-mt-1">
-                    <button class="btn btn-primary" type="submit">Save attention settings</button>
+                    <button class="btn btn-primary" type="submit">Save thresholds</button>
                 </div>
             </form>
         </section>
@@ -315,7 +323,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                             </svg>
                         </div>
                         <div>
-                            <label for="remote-access-toggle" class="remote-toggle-title">Cloudflare Tunnel</label>
+                            <label for="remote-access-toggle" class="remote-toggle-title">Remote access tunnel</label>
                             <span id="remote-toggle-status-text" class="remote-toggle-sub">
                                 <?= !empty($tunnelStatus['online']) ? 'Active &amp; encrypted' : 'Disabled' ?>
                             </span>
@@ -523,6 +531,12 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
     const serviceCmdText = document.getElementById('service-cmd-text');
 
     function setBadge(state, text) {
+        const navState = document.querySelector('.settings-nav-state');
+        const navTone = state === 'online' ? 'online' : (state === 'starting' ? 'starting' : 'offline');
+        if (navState) {
+            navState.className = 'settings-nav-state is-' + navTone;
+            navState.textContent = navTone === 'online' ? 'Online' : (navTone === 'starting' ? 'Connecting' : 'Offline');
+        }
         if (!badge) return;
         badge.className = 'remote-status-pill';
         if (state === 'online') {

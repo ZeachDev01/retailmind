@@ -89,9 +89,11 @@
         if (linkValue) linkValue.value = savedUrl;
         if (copyLink) copyLink.disabled = !savedUrl;
         if (linkEmpty) linkEmpty.hidden = Boolean(savedUrl);
-        if (linkNote) linkNote.textContent = state === 'online'
-            ? 'Open this link from another device and sign in to RetailMind.'
-            : (savedUrl ? 'Saved link. Public access has not been verified.' : 'Use ngrok Free now, or Cloudflare with your own domain.');
+        if (linkNote) {
+            const note = state === 'online' ? '' : (savedUrl ? 'Public access has not been verified.' : '');
+            linkNote.textContent = note;
+            linkNote.hidden = note === '';
+        }
     }
 
     function setFeedback(message, isError) {

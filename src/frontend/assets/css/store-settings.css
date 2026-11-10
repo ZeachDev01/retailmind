@@ -12,13 +12,6 @@
     line-height: 1.2;
 }
 
-.store-settings-page .page-subtitle {
-    max-width: 65ch;
-    margin: .45rem 0 0;
-    color: var(--muted);
-    line-height: 1.55;
-}
-
 .store-settings-page .dashboard-section {
     padding: clamp(1.15rem, 2vw, 1.75rem);
     border-radius: 16px;
@@ -65,6 +58,7 @@
 }
 
 .store-settings-page .receipt-logo-form { margin-top: 1.5rem; }
+.store-settings-page .settings-subheading { margin: 0 0 .9rem; font-size: .95rem; letter-spacing: -.01em; }
 .store-settings-page .receipt-logo-preview { display: block; max-width: 100%; width: auto; max-height: 192px; margin-top: .75rem; background: #fff; }
 
 /* Remote Access Management Card Styles */
@@ -780,11 +774,45 @@
     text-decoration: none;
 }
 
-.store-settings-page .settings-sidebar a:hover,
-.store-settings-page .settings-sidebar a.active {
-    background: rgba(37, 99, 235, .16);
-    color: var(--theme-text, #fff);
+.store-settings-page .settings-sidebar a:hover {
+    background: var(--surface-soft, #f1f5f9);
+    color: var(--text);
 }
+
+.store-settings-page .settings-sidebar a.active {
+    background: rgba(37, 99, 235, .1);
+    color: var(--primary, #2563eb);
+    font-weight: 600;
+}
+
+.store-settings-page .settings-nav-copy {
+    display: grid;
+    gap: .1rem;
+    min-width: 0;
+}
+
+.store-settings-page .settings-nav-label { white-space: nowrap; }
+
+.store-settings-page .settings-nav-state {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .7rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.store-settings-page .settings-nav-state::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.store-settings-page .settings-nav-state.is-online { color: var(--success, #16a34a); }
+.store-settings-page .settings-nav-state.is-starting { color: var(--warning, #d97706); }
+.store-settings-page .settings-nav-state.is-offline { color: var(--muted, #6b7280); }
 
 .store-settings-page .settings-sidebar a img { flex: 0 0 22px; }
 .store-settings-page .settings-sidebar a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
