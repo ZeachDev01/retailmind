@@ -7,7 +7,7 @@ use Throwable;
 
 final class DatabaseAttentionSignalSource
 {
-    public function __construct(private PDO $pdo, private Clock $clock)
+    public function __construct(private PDO $pdo, private Clock $clock, private ?string $storageDir = null)
     {
     }
 
@@ -196,7 +196,7 @@ final class DatabaseAttentionSignalSource
             }
 
             // Check for preserved local diagnostics during database outage
-            $logFile = dirname(__DIR__, 2) . '/storage/logs/forecasting_diagnostics.json';
+            $logFile = ($this->storageDir ?: dirname(__DIR__, 2) . '/storage/logs') . '/forecasting_diagnostics.json';
             if (file_exists($logFile) && $failureValue === 0) {
                 $content = @file_get_contents($logFile);
                 $diagEntries = json_decode((string)$content, true) ?: [];

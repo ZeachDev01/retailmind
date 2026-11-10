@@ -172,7 +172,7 @@ try {
     // =========================================================================
     // 3. Local Diagnostic Emission and Visibility After Recovery
     // =========================================================================
-    $storageLogsDir = dirname(__DIR__) . '/storage/logs';
+    $storageLogsDir = sys_get_temp_dir() . '/retailmind_forecasting_runner_' . getmypid();
     if (!is_dir($storageLogsDir)) {
         @mkdir($storageLogsDir, 0777, true);
     }
@@ -182,7 +182,8 @@ try {
     // Record persistent diagnostic
     ForecastingSchedulerService::recordLocalDiagnostic(
         'Database service unavailable after startup retries: connection refused',
-        'DB_STARTUP_TIMEOUT'
+        'DB_STARTUP_TIMEOUT',
+        $storageLogsDir
     );
     assert_true(file_exists($diagFile), 'Local diagnostic file must be created on persistent failure');
     $diags = json_decode((string)file_get_contents($diagFile), true);
@@ -202,7 +203,7 @@ try {
     $memoryDb->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, completed_at) VALUES (1, 'forecast_generation', 'succeeded', '2026-11-01 01:00:00')");
 
     $clock = new TestRunnerClock(new DateTimeImmutable('2026-11-02 07:05:00'));
-    $signalSource = new DatabaseAttentionSignalSource($memoryDb, $clock);
+    $signalSource = new DatabaseAttentionSignalSource($memoryDb, $clock, $storageLogsDir);
     $signals = $signalSource->store();
 
     assert_same(1, $signals['forecasting_failure']['value'] ?? 0, 'Preserved startup diagnostic makes system visibly unhealthy after recovery');
@@ -215,6 +216,7 @@ try {
     assert_same(0, $signalsAfter['forecasting_failure']['value'] ?? 0, 'Signal resolves once subsequent job succeeds');
 
     @unlink($diagFile);
+    @rmdir($storageLogsDir);
     echo "  ok - Persistent failure surfaces visibly and recovers on subsequent success\n";
 
     // =========================================================================

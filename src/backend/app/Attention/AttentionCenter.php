@@ -16,12 +16,13 @@ final class AttentionCenter
     public function __construct(
         PDO $pdo,
         ?Clock $clock = null,
-        ?AttentionSettingsService $settings = null
+        ?AttentionSettingsService $settings = null,
+        ?string $storageDir = null
     ) {
         $this->pdo = $pdo;
         $this->clock = $clock ?? new SystemClock();
         $this->settings = $settings ?? new AttentionSettingsService($this->pdo, $this->clock);
-        $this->signals = new DatabaseAttentionSignalSource($this->pdo, $this->clock);
+        $this->signals = new DatabaseAttentionSignalSource($this->pdo, $this->clock, $storageDir);
         $this->rules = new AttentionRuleService($this->settings, $this->clock);
         $this->notifications = new AttentionNotificationService($this->pdo, $this->clock);
     }
