@@ -42,6 +42,7 @@ relative to the repository root unless stated otherwise.
 - [Architecture decisions](adr) — numbered decisions; later decisions may supersede earlier ones.
 - [Specifications](specs) — agreed scope and acceptance scenarios.
 - [Research](research) — findings from a particular investigation; check the current code before treating them as current behavior.
+- Preserved research sources: [capstone adjustments](research/capstone-adjustments-2026-11-04), [capstone paste-ready](research/capstone-paste-ready-2026-11-04), and the [codebase deepening plan](research/codebase-deepening-plan-2026-11-07.md).
 - [Legacy feature notes](research/legacy-feature-notes.md)
 
 Design and policy discussions:
@@ -63,6 +64,7 @@ Design and policy discussions:
 - [Responsive UI verification](verification/responsive-ui-verification.md)
 - Workspace audits: [Administrator](verification/admin-ui-audit.md), [Super Administrator](verification/superadmin-ui-audit.md), [Cashier](verification/cashier-ui-audit.md), [Inventory Manager](verification/inventory-manager-ui-audit.md).
 - Workflow audits: [audit logs](verification/audit-logs-ui-audit.md), [notifications](verification/notifications-ui-audit.md), [Receipt History](verification/receipt-history-audit.md), [Registers](verification/registers-ui-audit.md).
+- [Local codebase cleanup verification, 2026-11-10](verification/local-cleanup-verification-20261110.md) — measured reduction, retained checks, and shallow-clone proof.
 
 These notes record their original checks, not proof that the current revision passes.
 

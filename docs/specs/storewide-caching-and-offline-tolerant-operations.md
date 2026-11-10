@@ -123,6 +123,6 @@ A cohesive, prioritized caching architecture that keeps daily store operations f
 - Offline caching for administrative mutation forms (User Manager account edits, Fiscal Period state updates).
 
 ## Further Notes
-- Fully conforms to [ADR 0012: Store-wide caching and offline-tolerant operations](file:///c:/laragon/www/retailmind/docs/adr/0012-storewide-caching-and-offline-tolerant-operations.md).
-- Adheres to single-store operational boundaries and canonical language defined in [GLOSSARY.md](file:///c:/laragon/www/retailmind/GLOSSARY.md).
+- Fully conforms to [ADR 0012: Store-wide caching and offline-tolerant operations](../adr/0012-storewide-caching-and-offline-tolerant-operations.md).
+- Adheres to single-store operational boundaries and canonical language defined in [GLOSSARY.md](../../GLOSSARY.md).
 
