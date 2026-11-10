@@ -19,9 +19,10 @@
 
 ```bash
 php src/backend/scripts/migrate.php
-python src/backend/legacy/demandForcasting/train_model.py
 bash src/backend/tests/run_all.sh
 ```
+
+Historical note: the legacy Python forecasting pipeline was removed. Current local install guidance is `docs/guides/WINDOWS_LOCALHOST_INSTALL.md`.
 
 ## Verification completed in this release
 

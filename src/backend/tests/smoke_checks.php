@@ -320,7 +320,7 @@ $checks = [
     ],
     'Release cleanup covers runtime files' => [
         'file' => 'src/backend/scripts/build_release.sh',
-        'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/legacy/demandForcasting/models/*'],
+        'needles' => ['src/backend/storage/sessions/*', 'src/backend/storage/imports/*', 'src/backend/storage/backups/*'],
     ],
     'Cashier navigation offers one direct Report Stock Issue destination' => [
         'file' => 'src/frontend/components/sidebar.php',

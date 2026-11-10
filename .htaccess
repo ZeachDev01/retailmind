@@ -47,7 +47,7 @@ Options -Indexes
     RewriteRule ^backend(?:/|$) - [F,L]
     RewriteRule ^src/(?:backend|vendor|storage)(?:/|$) - [F,L]
     RewriteRule ^assets/bootstrap(?:/|$) - [F,L]
-    RewriteRule ^(?:app|config|database|includes|demandForcasting|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
+    RewriteRule ^(?:app|config|database|includes|legacy|scripts|sql|storage|tests|vendor)(?:/|$) - [F,L]
     RewriteRule (?:^|/)(?:storage/backups|backups|database/backups)(?:/|$) - [F,L]
     RewriteRule (?:^|/)(?:tests?|phpunit|.*_test\.php|.*Test\.php)(?:/|$|\?) - [F,NC,L]
     RewriteRule \.(?:sql|env|log|bak|dump|sqlite|db|joblib|pyc|rmpkg)(?:$|\?) - [F,NC,L]

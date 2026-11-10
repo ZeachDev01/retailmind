@@ -149,10 +149,12 @@ final class OperationalDataResetService
                 throw $e;
             }
             $warnings = [];
-            foreach (['demand_model.joblib', 'model_metrics.json'] as $filename) {
-                $path = ($this->modelDirectory ?? dirname(__DIR__, 2) . '/legacy/demandForcasting') . '/' . $filename;
-                if (is_file($path) && !unlink($path)) {
-                    $warnings[] = 'An old model file could not be removed. It has been invalidated and cannot be used.';
+            if ($this->modelDirectory !== null) {
+                foreach (['demand_model.joblib', 'model_metrics.json'] as $filename) {
+                    $path = $this->modelDirectory . '/' . $filename;
+                    if (is_file($path) && !unlink($path)) {
+                        $warnings[] = 'An old model file could not be removed. It has been invalidated and cannot be used.';
+                    }
                 }
             }
             return ['backup' => $backup, 'removed' => $before, 'warnings' => array_unique($warnings)];
