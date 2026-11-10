@@ -60,3 +60,9 @@ The user's next run completed public verification. Read-only checks confirmed ng
 ## Provider setup views and persistent public link
 
 Following the user's UI feedback, Remote Access separates ngrok Free and Cloudflare setup, keeps the installed provider visible independently of Online/Offline, and preserves the saved application link for copying/opening even when reachability is temporarily unverified. Tabs navigate setup only and never switch the service. Secondary instructions and maintenance actions use native disclosures; the setup controller uses the existing versioned asset helper to avoid stale cached behavior. A verified public health response can now establish Online even when the web process cannot query the Windows service. Browser tests isolate provider-navigation, clipboard, status recovery and viewport/theme behavior from the real Store service. See the [surface brief](../../.impeccable/surfaces/remote-access.md).
+
+## Apache-specific cURL load failure
+
+The user still saw Connecting after the CLI probe passed. A temporary localhost-only HTTP probe reproduced the actual Apache context: `apache2handler`, PHP 8.5.12, no loaded cURL extension. Apache's startup log reported that `php_curl.dll` could not load even though the file existed. Import inspection identified the PHP dependency DLLs; Apache's PHP config did not preload `brotlicommon.dll`, `brotlidec.dll`, `nghttp2.dll`, or `libssh2.dll` from the PHP directory.
+
+The machine's `C:/xampp/apache/conf/extra/httpd-xampp.conf` was backed up as `httpd-xampp.conf.retailmind-curl-backup`. Four `LoadFile` lines were added before `LoadModule php_module`, `httpd.exe -t` passed, and Apache was restarted. ngrok was not restarted. The same real HTTP probe then reported Online, HTTP 200, cURL error 0, and the expected health body. The diagnostic file was removed. This confirms the Apache runtime fix rather than relying on a CLI-only pass; no application security check was disabled.
