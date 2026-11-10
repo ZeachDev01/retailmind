@@ -249,6 +249,14 @@ $remoteModeIcon = !empty($tunnelStatus['token_configured'])
     : (!empty($tunnelStatus['url']) ? 'bi-lightning-charge-fill' : 'bi-cloud-slash');
 $styleVersion = @filemtime(__DIR__ . '/../../assets/css/style.css') ?: 1;
 $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform-settings.css') ?: 1;
+$platformSections = [
+    'dormancy-policy' => ['Dormancy Policy', 'bi-shield-lock'],
+    'scheduled-backup' => ['Scheduled Backup', 'bi-calendar2-week'],
+    'email' => ['Email (Brevo)', 'bi-envelope-paper'],
+    'remote-access' => ['Remote Access', 'bi-cloud-arrow-up'],
+];
+$activePlatformSection = (string)($_GET['section'] ?? 'dormancy-policy');
+if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 'dormancy-policy';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -265,9 +273,19 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
+        <nav class="platform-settings-nav" aria-label="Platform settings sections">
+            <?php foreach ($platformSections as $section => [$label, $icon]): ?>
+                <a href="?section=<?= htmlspecialchars($section) ?>"<?= $activePlatformSection === $section ? ' class="active" aria-current="page"' : '' ?>>
+                    <i class="bi <?= htmlspecialchars($icon) ?>" aria-hidden="true"></i>
+                    <span><?= htmlspecialchars($label) ?></span>
+                </a>
+            <?php endforeach; ?>
+        </nav>
+        <div class="platform-settings-content">
         <header class="page-heading">
             <div>
                 <h1>Platform Settings</h1>
+                <p class="platform-settings-subtitle">Manage account policies, scheduled backups, email alerts, and remote access.</p>
             </div>
         </header>
 
@@ -278,7 +296,7 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
             </div>
         <?php endif; ?>
 
-        <section class="dashboard-section" aria-labelledby="heading-dormancy">
+        <section class="dashboard-section" data-platform-section="dormancy-policy" aria-labelledby="heading-dormancy"<?= $activePlatformSection !== 'dormancy-policy' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="heading-dormancy"><span class="settings-icon"><i class="bi bi-shield-lock" aria-hidden="true"></i></span> Dormancy Policy</h2>
             </div>
@@ -325,7 +343,7 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
             </form>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="heading-backup-schedule">
+        <section class="dashboard-section" data-platform-section="scheduled-backup" aria-labelledby="heading-backup-schedule"<?= $activePlatformSection !== 'scheduled-backup' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="heading-backup-schedule"><span class="settings-icon"><i class="bi bi-calendar2-week" aria-hidden="true"></i></span> Scheduled Backup</h2>
             </div>
@@ -371,7 +389,7 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
             </form>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="email-heading">
+        <section class="dashboard-section" data-platform-section="email" aria-labelledby="email-heading"<?= $activePlatformSection !== 'email' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="email-heading"><span class="settings-icon"><i class="bi bi-envelope-paper" aria-hidden="true"></i></span> Email (Brevo)</h2>
                 <span class="platform-settings-pill <?= $brevoConfigured ? 'is-on' : 'is-off' ?>"><?= $brevoConfigured ? 'Configured' : 'Not configured' ?></span>
@@ -406,7 +424,7 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
             </form>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="tunnel-heading">
+        <section class="dashboard-section" data-platform-section="remote-access" aria-labelledby="tunnel-heading"<?= $activePlatformSection !== 'remote-access' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="tunnel-heading"><span class="settings-icon"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></span> Remote Access</h2>
                 <span class="platform-settings-pill <?= $remoteModeClass ?>"><i class="bi <?= $remoteModeIcon ?>" aria-hidden="true"></i> <?= $remoteModeLabel ?></span>
@@ -511,8 +529,19 @@ $platformSettingsStyleVersion = @filemtime(__DIR__ . '/../../assets/css/platform
             </div>
         </section>
 
+        </div>
     </main>
 </div>
+<script>
+(() => {
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.innerWidth > 900 && !document.body.classList.contains('sidebar-collapsed')) {
+            document.getElementById('sidebarBrandToggle')?.click();
+        }
+        document.querySelector('.platform-settings-nav a[aria-current="page"]')?.addEventListener('click', event => event.preventDefault());
+    });
+})();
+</script>
 <script>
 (() => {
     document.querySelectorAll('[data-copy-target]').forEach((button) => {
