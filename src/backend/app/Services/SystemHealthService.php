@@ -142,8 +142,19 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 
     private function modelArtifactCheck(): array
     {
-        $paths = glob($this->backendPath . '/storage/ml_models/*') ?: [];
-        $files = array_values(array_filter($paths, 'is_file'));
+        // Artifacts are nested per dataset: ml_models/<demo|store>/<identity hash>/*.joblib.
+        $files = [];
+        $root = $this->backendPath . '/storage/ml_models';
+        if (is_dir($root)) {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
+            );
+            foreach ($iterator as $file) {
+                if ($file->isFile() && $file->getExtension() === 'joblib') {
+                    $files[] = $file->getPathname();
+                }
+            }
+        }
         if (!$files) {
             return $this->result('Forecast model artifact', 'warning', 'No trained model artifact was found.', 'Forecasting');
         }

@@ -228,407 +228,329 @@ $isTakeover = !empty($session) && empty($session['is_initiator']);
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Database Recovery - RetailMind</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/backup.css')) ?>">
+    <link rel="stylesheet" href="<?= $escape(theme_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/recovery.css')) ?>">
 </head>
 <body class="recovery-console">
-<div class="recovery-shell">
-    <header class="mb-6 border-b border-slate-200 pb-4 flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-900">Database Recovery</h1>
+<main class="rc-main">
+    <div class="rc-glow rc-glow-top" aria-hidden="true"></div>
+    <div class="rc-glow rc-glow-bottom" aria-hidden="true"></div>
+    <div class="rc-grid-bg" aria-hidden="true"></div>
+
+    <div class="rc-brand">
+        <img class="rc-brand-logo" src="<?= $escape(app_url('assets/img/retailmind-web-assets%20dark%20mode/logos/light/logo-header.png')) ?>" data-brand-base="<?= $escape(app_url('assets/img/retailmind-web-assets%20dark%20mode/')) ?>" data-brand-variant="logos/STYLE/logo-header.png" alt="RetailMind" height="44">
+    </div>
+
+    <?php if ($error !== ''): ?>
+        <div class="rc-alert rc-alert-error" role="alert" data-recovery-alert="error">
+            <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+            <span><?= $escape($error) ?></span>
         </div>
-        <div>
-            <?php if ($isPaused): ?>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800" data-recovery-status="paused">
-                    Maintenance Active
-                </span>
-            <?php else: ?>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800" data-recovery-status="online">
-                    Store Online
-                </span>
+    <?php endif; ?>
+
+    <?php if ($notice !== ''): ?>
+        <div class="rc-alert rc-alert-notice" role="status" data-recovery-alert="notice">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span><?= $escape($notice) ?></span>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!$isPaused): ?>
+        <section class="rc-card rc-card--narrow" data-recovery-card="idle" aria-labelledby="recovery-title-idle">
+            <div class="rc-head">
+                <div class="rc-icon" aria-hidden="true"><i class="bi bi-shield-check"></i></div>
+                <span class="rc-badge rc-badge-online" data-recovery-status="online"><span class="rc-dot"></span>Store online</span>
+            </div>
+
+            <h1 id="recovery-title-idle" class="rc-title">No recovery needed</h1>
+            <p class="rc-sub">Store access is open.</p>
+
+            <?php if ($reopenedRecord): ?>
+                <details class="rc-disclosure" data-recovery-reopened-evidence>
+                    <summary>Last reopening</summary>
+                    <dl class="rc-facts">
+                        <div><dt>Reopened at</dt><dd><?= $escape($reopenedRecord['reopened_at'] ?? 'unknown') ?></dd></div>
+                        <div><dt>Reopened by</dt><dd><?= $escape($reopenedRecord['reopened_by']['username'] ?? 'unknown') ?> (<?= $escape($reopenedRecord['reopened_by']['role'] ?? '') ?><?= !empty($reopenedRecord['reopened_by']['is_initiator']) ? ', Initiator' : '' ?>)</dd></div>
+                        <div><dt>Path completed</dt><dd><?= $escape($reopenedRecord['path_completed'] ?? 'unknown') ?></dd></div>
+                        <div><dt>One active Store</dt><dd>Verified (dual active Stores prohibited)</dd></div>
+                        <div><dt>Session epoch</dt><dd><?= $escape(substr((string)($reopenedRecord['session_epoch'] ?? ''), 0, 16)) ?>...</dd></div>
+                    </dl>
+                </details>
             <?php endif; ?>
-        </div>
-    </header>
 
-    <main class="space-y-6">
-        <?php if ($error !== ''): ?>
-            <div class="p-4 rounded-md bg-rose-50 border border-rose-200 text-rose-800 text-sm" role="alert" data-recovery-alert="error">
-                <?= $escape($error) ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if ($notice !== ''): ?>
-            <div class="p-4 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm" role="status" data-recovery-alert="notice">
-                <?= $escape($notice) ?>
-            </div>
-        <?php endif; ?>
-
-        <?php if (!$isPaused): ?>
-            <section class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4" data-recovery-card="idle">
-                <h2 class="text-lg font-semibold text-slate-900">No recovery needed</h2>
-                <p class="text-slate-600 text-sm">Store access is open.</p>
-
-                <?php if ($reopenedRecord): ?>
-                    <details class="text-xs space-y-1 text-slate-700" data-recovery-reopened-evidence>
-                        <summary>Last reopening details</summary>
-                        <div><strong>Reopened At:</strong> <?= $escape($reopenedRecord['reopened_at'] ?? 'unknown') ?></div>
-                        <div><strong>Reopened By:</strong> <?= $escape($reopenedRecord['reopened_by']['username'] ?? 'unknown') ?> (<?= $escape($reopenedRecord['reopened_by']['role'] ?? '') ?><?= !empty($reopenedRecord['reopened_by']['is_initiator']) ? ', Initiator' : '' ?>)</div>
-                        <div><strong>Path Completed:</strong> <?= $escape($reopenedRecord['path_completed'] ?? 'unknown') ?></div>
-                        <div><strong>One Active Store:</strong> Verified (Dual active stores prohibited)</div>
-                        <div><strong>Session Epoch:</strong> <?= $escape(substr((string)($reopenedRecord['session_epoch'] ?? ''), 0, 16)) ?>...</div>
-                    </details>
-                <?php endif; ?>
-
-                <a href="<?= $escape(app_url('components/system_administrator/backup_restore.php')) ?>" class="inline-flex items-center px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50">
-                    Return to Backup &amp; Restore
+            <div class="rc-actions">
+                <a href="<?= $escape(app_url('components/system_administrator/backup_restore.php')) ?>" class="rc-btn rc-btn-quiet">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i> Back to Backup &amp; Restore
                 </a>
-            </section>
-        <?php elseif (!$session): ?>
-            <section class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-4" data-recovery-card="login">
+            </div>
+        </section>
+    <?php elseif (!$session): ?>
+        <section class="rc-card rc-card--narrow" data-recovery-card="login" aria-labelledby="recovery-title-login">
+            <div class="rc-head">
+                <div class="rc-icon" aria-hidden="true"><i class="bi bi-shield-lock-fill"></i></div>
+                <span class="rc-badge rc-badge-paused" data-recovery-status="paused"><span class="rc-dot"></span>Maintenance active</span>
+            </div>
+
+            <h1 id="recovery-title-login" class="rc-title">Sign in to recovery</h1>
+            <p class="rc-sub">Use this server's administrator credentials from before the restore.</p>
+
+            <form method="post" class="rc-form" data-recovery-form="auth">
+                <input type="hidden" name="action" value="authenticate">
+                <input type="hidden" name="csrf_token" value="<?= $escape($_SESSION['_recovery_login_csrf']) ?>">
+
+                <label class="rc-label" for="recovery-username">Username</label>
+                <input class="rc-input" id="recovery-username" name="username" type="text" required autocomplete="username">
+
+                <label class="rc-label" for="recovery-password">Password</label>
+                <input class="rc-input" id="recovery-password" name="password" type="password" required autocomplete="current-password">
+
+                <button type="submit" class="rc-btn rc-btn-primary rc-btn-block" data-recovery-submit="login">
+                    <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Sign in
+                </button>
+            </form>
+
+            <details class="rc-disclosure" data-recovery-login-details>
+                <summary>Recovery details</summary>
+                <dl class="rc-facts">
+                    <div><dt>Stage</dt><dd><span data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>"><?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?></span></dd></div>
+                    <div><dt>Next action</dt><dd><span data-recovery-next-action><?= $escape($viewData['next_permitted_action'] ?? '') ?></span></dd></div>
+                    <div><dt>Operation ID</dt><dd><?= $escape($viewData['operation_id']) ?></dd></div>
+                </dl>
+                <p class="rc-note">Sealed Recovery Accounts must be unsealed separately and cannot sign in here.</p>
+            </details>
+        </section>
+    <?php else: ?>
+        <section class="rc-card" data-recovery-card="authenticated" aria-labelledby="recovery-title-auth">
+            <div class="rc-head">
+                <div class="rc-icon" aria-hidden="true"><i class="bi bi-shield-check"></i></div>
+                <span class="rc-badge rc-badge-paused" data-recovery-status="paused"><span class="rc-dot"></span>Maintenance active</span>
+            </div>
+
+            <div class="rc-title-row">
                 <div>
-                    <h2 class="text-lg font-semibold text-slate-900">Sign in to recovery</h2>
-                    <p class="text-slate-600 text-sm">
-                        Use this server’s administrator credentials from before the restore. Store access remains paused.
-                    </p>
+                    <h1 id="recovery-title-auth" class="rc-title">Recovery review</h1>
+                    <p class="rc-sub"><?= $escape($session['username']) ?> · <?= $escape(str_replace('_', ' ', $session['role'])) ?></p>
                 </div>
-
-                <form method="post" class="space-y-4" data-recovery-form="auth">
-                    <input type="hidden" name="action" value="authenticate">
-                    <input type="hidden" name="csrf_token" value="<?= $escape($_SESSION['_recovery_login_csrf']) ?>">
-
-                    <div>
-                        <label for="recovery-username" class="block text-sm font-medium text-slate-700 mb-1">Username</label>
-                        <input id="recovery-username" name="username" type="text" required autocomplete="username" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                    </div>
-
-                    <div>
-                        <label for="recovery-password" class="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                        <input id="recovery-password" name="password" type="password" required autocomplete="current-password" class="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                    </div>
-
-                    <button type="submit" data-recovery-submit="login" class="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-md shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        Sign in to recovery
+                <form method="post" data-recovery-form="logout">
+                    <input type="hidden" name="action" value="logout">
+                    <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                    <button type="submit" class="rc-btn rc-btn-quiet rc-btn-sm btn-quiet" data-recovery-submit="logout">
+                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out
                     </button>
                 </form>
-                <details class="space-y-1 text-sm" data-recovery-login-details>
-                    <summary>Recovery details</summary>
-                    <div><strong>Stage:</strong> <span data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>"><?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?></span></div>
-                    <div><strong>Next action:</strong> <span data-recovery-next-action><?= $escape($viewData['next_permitted_action'] ?? '') ?></span></div>
-                    <div><strong>Operation ID:</strong> <?= $escape($viewData['operation_id']) ?></div>
-                    <p>Sealed Recovery Accounts must be unsealed separately and cannot sign in here.</p>
-                </details>
-            </section>
-        <?php else: ?>
-            <section class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 space-y-6" data-recovery-card="authenticated">
-                <div class="flex items-center justify-between border-b border-slate-100 pb-4">
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-900">Recovery review</h2>
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800">
-                            <?= $escape($session['username']) ?> · <?= $escape(str_replace('_', ' ', $session['role'])) ?>
-                        </span>
-                    </div>
-                    <form method="post" data-recovery-form="logout">
-                        <input type="hidden" name="action" value="logout">
-                        <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-                        <button type="submit" data-recovery-submit="logout" class="btn-secondary text-xs text-slate-600 hover:text-slate-900 underline">
-                            Sign out
-                        </button>
-                    </form>
-                </div>
+            </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div class="bg-slate-50 p-3 rounded">
-                        <div class="text-xs text-slate-500 uppercase font-semibold">Recovery stage</div>
-                        <div class="text-base font-bold text-slate-900 mt-1" data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>">
-                            <?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="font-semibold text-indigo-900">Next action</div>
-                        <div class="mt-0.5 text-indigo-800" data-recovery-next-action><?= $escape($nextAction) ?></div>
-                    </div>
+            <div class="rc-meta">
+                <div>
+                    <div class="rc-meta-label">Stage</div>
+                    <div class="rc-meta-value" data-recovery-stage="<?= $escape($viewData['stage']) ?>" data-recovery-current-stage="<?= $escape($viewData['workflow_stage'] ?? '') ?>"><?= $escape($viewData['workflow_stage_label'] ?? $viewData['stage']) ?></div>
                 </div>
+                <div>
+                    <div class="rc-meta-label">Next action</div>
+                    <div class="rc-meta-value" data-recovery-next-action><?= $escape($nextAction) ?></div>
+                </div>
+            </div>
 
-                <!-- Ticket #313: Controlled Verification Checks & Previews -->
-                <?php if ($viewData['stage'] === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
-                    <div class="border-t border-slate-200 pt-6 space-y-6" data-recovery-card="review">
-                        <details data-recovery-results <?= !$readiness['ready'] ? 'open' : '' ?>>
+            <?php if ($viewData['stage'] === RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
+                <div class="rc-block" data-recovery-card="review">
+                    <details class="rc-disclosure rc-disclosure--flush" data-recovery-results <?= !$readiness['ready'] ? 'open' : '' ?>>
                         <summary>Verification results</summary>
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-base font-bold text-slate-900">Automated checks</h3>
-                            </div>
+
+                        <div class="rc-check-head">
+                            <h2 class="rc-h3">Automated checks</h2>
                             <form method="post">
                                 <input type="hidden" name="action" value="run_verification">
                                 <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-                                <button type="submit" data-recovery-submit="rerun-checks" class="btn-secondary px-3 py-1.5 border border-slate-300 rounded text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 shadow-sm">
-                                    Run checks again
-                                </button>
+                                <button type="submit" class="rc-btn rc-btn-quiet rc-btn-sm btn-quiet" data-recovery-submit="rerun-checks">Run checks again</button>
                             </form>
                         </div>
 
-                        <!-- Controlled Read-Only Previews Grid -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- 1. Stock Check -->
-                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="stock">
-                                <div class="flex items-center justify-between font-semibold text-slate-800">
-                                    <span>Stock &amp; Batch Integrity</span>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['stock']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
-                                        <?= strtoupper($escape($automatedChecks['stock']['status'] ?? 'pending')) ?>
-                                    </span>
+                        <?php
+                        $reviewCheckLabels = [
+                            'stock' => 'Stock & Batch Integrity',
+                            'receipt' => 'Receipt & Subtotal Verification',
+                            'upload' => 'Upload & Image Assets',
+                            'attribution' => 'Identity & Attribution',
+                        ];
+                        ?>
+                        <div class="rc-checks">
+                            <?php foreach ($reviewCheckLabels as $checkKey => $checkLabel): ?>
+                                <?php $checkPassed = ($automatedChecks[$checkKey]['status'] ?? '') === 'passed'; ?>
+                                <div class="rc-check" data-recovery-check="<?= $escape($checkKey) ?>">
+                                    <div class="rc-check-top">
+                                        <span><?= $escape($checkLabel) ?></span>
+                                        <span class="rc-chip<?= $checkPassed ? ' rc-chip-pass' : '' ?>"><?= strtoupper($escape($automatedChecks[$checkKey]['status'] ?? 'pending')) ?></span>
+                                    </div>
+                                    <p><?= $escape($automatedChecks[$checkKey]['details'] ?? 'Pending check execution.') ?></p>
                                 </div>
-                                <p class="text-slate-600"><?= $escape($automatedChecks['stock']['details'] ?? 'Pending check execution.') ?></p>
-                            </div>
-
-                            <!-- 2. Receipt Lookup -->
-                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="receipt">
-                                <div class="flex items-center justify-between font-semibold text-slate-800">
-                                    <span>Receipt &amp; Subtotal Verification</span>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['receipt']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
-                                        <?= strtoupper($escape($automatedChecks['receipt']['status'] ?? 'pending')) ?>
-                                    </span>
-                                </div>
-                                <p class="text-slate-600"><?= $escape($automatedChecks['receipt']['details'] ?? 'Pending check execution.') ?></p>
-                            </div>
-
-                            <!-- 3. Upload Assets Preview -->
-                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="upload">
-                                <div class="flex items-center justify-between font-semibold text-slate-800">
-                                    <span>Upload &amp; Image Assets</span>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['upload']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
-                                        <?= strtoupper($escape($automatedChecks['upload']['status'] ?? 'pending')) ?>
-                                    </span>
-                                </div>
-                                <p class="text-slate-600"><?= $escape($automatedChecks['upload']['details'] ?? 'Pending check execution.') ?></p>
-                            </div>
-
-                            <!-- 4. Attribution Check -->
-                            <div class="p-3 bg-slate-50 rounded border border-slate-200 text-xs space-y-1.5" data-recovery-check="attribution">
-                                <div class="flex items-center justify-between font-semibold text-slate-800">
-                                    <span>Identity &amp; Attribution</span>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold <?= ($automatedChecks['attribution']['status'] ?? '') === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' ?>">
-                                        <?= strtoupper($escape($automatedChecks['attribution']['status'] ?? 'pending')) ?>
-                                    </span>
-                                </div>
-                                <p class="text-slate-600"><?= $escape($automatedChecks['attribution']['details'] ?? 'Pending check execution.') ?></p>
-                            </div>
+                            <?php endforeach; ?>
                         </div>
 
-                        <!-- Previews: Sign-in & Summary Report -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- Sign-in Preview -->
-                        <div class="p-3 bg-white rounded border border-slate-200 text-xs space-y-2" data-recovery-preview="signin">
-                                <div class="font-semibold text-slate-800">Active accounts</div>
+                        <div class="rc-checks">
+                            <div class="rc-check rc-check--plain" data-recovery-preview="signin">
+                                <div class="rc-check-top"><span>Active accounts</span></div>
                                 <?php if (!empty($automatedChecks['signin_preview']['accounts'])): ?>
-                                    <div class="flex flex-wrap gap-1 mt-1">
+                                    <div class="rc-tags">
                                         <?php foreach ($automatedChecks['signin_preview']['accounts'] as $acc): ?>
-                                            <span class="px-2 py-0.5 bg-slate-100 rounded text-[11px] font-mono text-slate-700">
-                                                <?= $escape($acc['username']) ?> (<?= $escape($acc['role_name']) ?>)
-                                            </span>
+                                            <span class="rc-tag"><?= $escape($acc['username']) ?> (<?= $escape($acc['role_name']) ?>)</span>
                                         <?php endforeach; ?>
                                     </div>
+                                <?php else: ?>
+                                    <p>No active accounts.</p>
                                 <?php endif; ?>
                             </div>
 
-                            <!-- Report Summary -->
-                            <div class="p-3 bg-white rounded border border-slate-200 text-xs space-y-2" data-recovery-preview="report">
-                                <div class="font-semibold text-slate-800">Store summary</div>
-                                <?php if (empty($automatedChecks['report']['metrics'])): ?><p>No summary available.</p><?php endif; ?>
+                            <div class="rc-check rc-check--plain" data-recovery-preview="report">
+                                <div class="rc-check-top"><span>Store summary</span></div>
                                 <?php if (!empty($automatedChecks['report']['metrics'])): ?>
-                                    <div class="grid grid-cols-2 gap-2 mt-1 text-[11px]">
-                                        <div class="bg-slate-50 p-1.5 rounded">Sales Count: <strong><?= (int)($automatedChecks['report']['metrics']['sales_count'] ?? 0) ?></strong></div>
-                                        <div class="bg-slate-50 p-1.5 rounded">Sales Total: <strong><?= number_format((float)($automatedChecks['report']['metrics']['total_revenue'] ?? 0), 2) ?></strong></div>
-                                        <div class="bg-slate-50 p-1.5 rounded col-span-2">Products: <strong><?= (int)($automatedChecks['report']['metrics']['products_count'] ?? 0) ?></strong></div>
-                                    </div>
+                                    <dl class="rc-facts">
+                                        <div><dt>Sales</dt><dd><?= (int)($automatedChecks['report']['metrics']['sales_count'] ?? 0) ?></dd></div>
+                                        <div><dt>Total</dt><dd><?= number_format((float)($automatedChecks['report']['metrics']['total_revenue'] ?? 0), 2) ?></dd></div>
+                                        <div><dt>Products</dt><dd><?= (int)($automatedChecks['report']['metrics']['products_count'] ?? 0) ?></dd></div>
+                                    </dl>
+                                <?php else: ?>
+                                    <p>No summary available.</p>
                                 <?php endif; ?>
                             </div>
                         </div>
-                        </details>
+                    </details>
 
-                        <!-- Human Checklist Confirmation Form -->
-                        <details class="space-y-3" data-recovery-card="checklist" <?= !$checklistComplete ? 'open' : '' ?>>
-                            <summary>Review checklist · <?= $confirmedCount ?> of 4 saved<?= $checklistComplete ? ' — complete' : '' ?></summary>
-                            <form method="post" class="space-y-3" data-recovery-form="checklist">
-                                <input type="hidden" name="action" value="confirm_checklist">
-                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                    <details class="rc-disclosure" data-recovery-card="checklist" <?= !$checklistComplete ? 'open' : '' ?>>
+                        <summary>Review checklist · <?= $confirmedCount ?> of 4 saved<?= $checklistComplete ? ' — complete' : '' ?></summary>
+                        <form method="post" class="rc-form rc-form--tight" data-recovery-form="checklist">
+                            <input type="hidden" name="action" value="confirm_checklist">
+                            <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
 
-                                <div class="space-y-2 text-xs">
-                                    <label class="flex items-start space-x-2.5">
-                                        <input type="checkbox" name="confirm_stock" value="1" data-recovery-confirm="stock" <?= !empty($humanChecks['stock']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                        <span class="text-slate-700">Stock counts and batches reviewed; no negative stock.</span>
-                                    </label>
+                            <label class="rc-check-item">
+                                <input type="checkbox" name="confirm_stock" value="1" data-recovery-confirm="stock" <?= !empty($humanChecks['stock']['confirmed']) ? 'checked' : '' ?>>
+                                <span>Stock counts and batches reviewed; no negative stock.</span>
+                            </label>
+                            <label class="rc-check-item">
+                                <input type="checkbox" name="confirm_receipt" value="1" data-recovery-confirm="receipt" <?= !empty($humanChecks['receipt']['confirmed']) ? 'checked' : '' ?>>
+                                <span>Receipt subtotals match recorded sales.</span>
+                            </label>
+                            <label class="rc-check-item">
+                                <input type="checkbox" name="confirm_upload" value="1" data-recovery-confirm="upload" <?= !empty($humanChecks['upload']['confirmed']) ? 'checked' : '' ?>>
+                                <span>Product and profile images reviewed.</span>
+                            </label>
+                            <label class="rc-check-item">
+                                <input type="checkbox" name="confirm_attribution" value="1" data-recovery-confirm="attribution" <?= !empty($humanChecks['attribution']['confirmed']) ? 'checked' : '' ?>>
+                                <span>Active accounts and record attribution reviewed.</span>
+                            </label>
 
-                                    <label class="flex items-start space-x-2.5">
-                                        <input type="checkbox" name="confirm_receipt" value="1" data-recovery-confirm="receipt" <?= !empty($humanChecks['receipt']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                        <span class="text-slate-700">Receipt subtotals match recorded sales.</span>
-                                    </label>
+                            <button type="submit" class="rc-btn rc-btn-primary" data-recovery-submit="checklist">Save checklist</button>
+                        </form>
+                    </details>
 
-                                    <label class="flex items-start space-x-2.5">
-                                        <input type="checkbox" name="confirm_upload" value="1" data-recovery-confirm="upload" <?= !empty($humanChecks['upload']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                        <span class="text-slate-700">Product and profile images reviewed.</span>
-                                    </label>
+                    <div class="rc-panel rc-panel--warning" data-recovery-card="reopen">
+                        <h2 class="rc-h3">Reopen Store access</h2>
+                        <p class="rc-note">Resumes Store activity and signs out existing sessions.</p>
 
-                                    <label class="flex items-start space-x-2.5">
-                                        <input type="checkbox" name="confirm_attribution" value="1" data-recovery-confirm="attribution" <?= !empty($humanChecks['attribution']['confirmed']) ? 'checked' : '' ?> class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500">
-                                        <span class="text-slate-700">Active accounts and record attribution reviewed.</span>
-                                    </label>
-                                </div>
-
-                                <button type="submit" data-recovery-submit="checklist" class="px-4 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">
-                                    Save checklist
-                                </button>
-                            </form>
-                        </details>
-
-                        <!-- Ticket #313: Explicit Reopening Section -->
-                        <div class="p-5 border-2 border-amber-300 bg-amber-50 rounded-lg space-y-4" data-recovery-card="reopen">
-                            <div>
-                                <h4 class="text-sm font-bold text-amber-950">Reopen Store access</h4>
-                                <p class="text-xs text-amber-900 mt-1">
-                                    Resumes Store activity and signs out existing sessions.
-                                </p>
-                            </div>
-
-                            <?php if (!$readiness['ready']): ?>
-                                <div class="p-3 bg-white border border-amber-200 rounded text-xs text-amber-900 space-y-1" role="alert" data-recovery-alert="guidance">
-                                    <p>Save all four confirmations. Automated checks must pass within the last 15 minutes.</p>
-                                    <details>
+                        <?php if (!$readiness['ready']): ?>
+                            <div class="rc-guidance" role="alert" data-recovery-alert="guidance">
+                                <p>Save all four confirmations. Automated checks must pass within the last 15 minutes.</p>
+                                <details class="rc-disclosure rc-disclosure--flush">
                                     <summary>Pending checks</summary>
-                                    <ul class="list-disc list-inside space-y-0.5 text-slate-700">
+                                    <ul class="rc-list">
                                         <?php foreach ($readiness['missing'] as $miss): ?>
                                             <li><?= $escape($miss) ?></li>
                                         <?php endforeach; ?>
                                     </ul>
-                                    </details>
-                                </div>
-                            <?php endif; ?>
-
-                            <?php if ($canReopen): ?>
-                                <?php if ($isTakeover): ?>
-                                    <div class="p-3 bg-amber-100 border border-amber-300 rounded text-xs text-amber-950 font-medium" data-recovery-takeover-banner>
-                                        <strong>Authenticated Takeover:</strong> Initiating administrator is unavailable. You are authorized as <?= $escape($session['role']) ?> (<?= $escape($session['username']) ?>) to take over and complete reopening with your own verified password and takeover attribution.
-                                    </div>
-                                <?php endif; ?>
-                                <form method="post" class="space-y-4" data-recovery-form="reopen" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');">
-                                    <input type="hidden" name="action" value="reopen">
-                                    <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-                                    <input type="hidden" name="operation_id" value="<?= $escape($viewData['operation_id']) ?>">
-
-                                    <div>
-                                        <label for="reopen-operator-password" class="block text-xs font-semibold text-slate-800 mb-1">
-                                            Your password on this server
-                                        </label>
-                                        <input id="reopen-operator-password" name="operator_password" type="password" required autocomplete="current-password" class="w-full sm:w-80 px-3 py-1.5 border border-slate-300 rounded text-xs focus:ring-amber-500 focus:border-amber-500">
-                                    </div>
-
-                                    <div>
-                                        <label class="flex items-start space-x-2 text-xs text-amber-950 font-medium">
-                                            <input id="confirm-one-active" type="checkbox" name="confirm_one_active" value="1" required class="mt-0.5 rounded text-amber-600 focus:ring-amber-500">
-                                            <span>Recovery is complete. This is the only active Store.</span>
-                                        </label>
-                                    </div>
-
-                                    <button type="submit" data-recovery-submit="reopen" class="px-5 py-2.5 bg-amber-700 text-white font-semibold text-xs rounded shadow hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-600">
-                                        Reopen Store Access
-                                    </button>
-                                </form>
-                            <?php else: ?>
-                                <p class="text-xs text-amber-800">
-                                    Only an authorized Administrator or destination Super Administrator can reopen the Store.
-                                </p>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Recovery Actions (Rollback Safety / Restart Incoming) -->
-                <details class="border-t border-slate-100 pt-4 space-y-4" data-recovery-actions <?= $viewData['stage'] !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING ? 'open' : '' ?>>
-                    <summary>Other recovery options</summary>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Action 1: Complete Safety Recovery -->
-                        <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-recovery-card="safety">
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-900">Restore safety copy</h4>
-                                <p class="text-xs text-slate-600 mt-1">
-                                    Replaces current data with this server’s pre-restore copy.
-                                </p>
+                                </details>
                             </div>
-                            <form method="post" class="space-y-3" data-recovery-form="safety">
-                                <input type="hidden" name="action" value="recover_safety">
-                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-
-                                <button type="submit" data-recovery-submit="safety" class="btn-secondary w-full px-3 py-2 bg-slate-800 text-white font-medium text-xs rounded hover:bg-slate-900">
-                                    Restore safety copy
-                                </button>
-                            </form>
-                        </div>
-
-                        <!-- Action 2: Restart Approved Incoming Replacement -->
-                        <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-3" data-recovery-card="incoming">
-                            <div>
-                                <h4 class="text-sm font-bold text-slate-900">Restart incoming restore</h4>
-                                <p class="text-xs text-slate-600 mt-1">
-                                    Replaces current data using the approved package and mappings.
-                                </p>
-                            </div>
-                            <form method="post" enctype="multipart/form-data" class="space-y-3" data-recovery-form="incoming">
-                                <input type="hidden" name="action" value="restart_incoming">
-                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
-
-                                <div>
-                                    <label for="incoming-file" class="block text-xs font-medium text-slate-700 mb-1">Approved Package (.rmpkg)</label>
-                                    <input id="incoming-file" name="package_file" type="file" accept=".rmpkg" required class="w-full text-xs">
-                                </div>
-
-                                <button type="submit" data-recovery-submit="incoming" class="btn-secondary w-full px-3 py-2 bg-indigo-600 text-white font-medium text-xs rounded hover:bg-indigo-700">
-                                    Restart incoming restore
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </details>
-
-                <details class="border-t border-slate-100 pt-4">
-                    <summary>Recovery history &amp; operation ID</summary>
-                    <div data-recovery-opid="<?= $escape($viewData['operation_id']) ?>"><?= $escape($viewData['operation_id']) ?></div>
-                    <ol data-recovery-timeline>
-                        <?php foreach ($viewData['stages'] as $step): ?>
-                            <li><span><?= $escape($step['stage']) ?></span> <span><?= $escape($step['time']) ?></span></li>
-                        <?php endforeach; ?>
-                    </ol>
-                </details>
-
-                <?php if ($session['role'] === 'super_admin'): ?>
-                    <details class="border-t border-slate-100 pt-4 space-y-4 max-w-full overflow-hidden" data-recovery-super-evidence>
-                        <summary>Security &amp; recovery details</summary>
-                        <div class="bg-slate-50 p-3 rounded text-xs font-mono space-y-1 text-slate-700 max-w-full" style="overflow-wrap:anywhere;word-break:break-all;">
-                            <div style="overflow-wrap:anywhere;word-break:break-all;"><strong>Watermark:</strong> <?= $escape($viewData['destination_watermark']) ?></div>
-                            <div style="overflow-wrap:anywhere;word-break:break-all;"><strong>Safety Op ID:</strong> <?= $escape($viewData['safety_operation_id']) ?></div>
-                            <div style="overflow-wrap:anywhere;word-break:break-all;"><strong>Approved Package ID:</strong> <?= $escape($viewData['package_id']) ?></div>
-                        </div>
-
-                        <?php if (!empty($viewData['append_log'])): ?>
-                            <details class="text-xs max-w-full">
-                                <summary class="cursor-pointer text-indigo-600 hover:text-indigo-800 font-medium">View Append-Only Operation Outcomes (<?= count($viewData['append_log']) ?>)</summary>
-                                <pre class="mt-2 bg-slate-900 text-slate-100 p-3 rounded text-xs max-w-full" style="overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;" data-recovery-append-log><?= $escape(json_encode($viewData['append_log'], JSON_PRETTY_PRINT)) ?></pre>
-                            </details>
                         <?php endif; ?>
 
-                    </details>
-                    <?php if ($viewData['stage'] !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
-                        <div class="bg-amber-50 border border-amber-200 p-4 rounded-md text-amber-900 text-xs space-y-3">
-                            <p>Complete a recovery option above before reviewing and reopening Store access.</p>
-                        </div>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </section>
-        <?php endif; ?>
-    </main>
+                        <?php if ($canReopen): ?>
+                            <?php if ($isTakeover): ?>
+                                <p class="rc-note rc-note--strong" data-recovery-takeover-banner>
+                                    Initiating administrator unavailable. You are signed in as <?= $escape($session['role']) ?> (<?= $escape($session['username']) ?>); reopening is attributed to you.
+                                </p>
+                            <?php endif; ?>
+                            <form method="post" class="rc-form" data-recovery-form="reopen" onsubmit="return confirm('Explicitly complete recovery and reopen Store access to all users?');">
+                                <input type="hidden" name="action" value="reopen">
+                                <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                                <input type="hidden" name="operation_id" value="<?= $escape($viewData['operation_id']) ?>">
 
-    <footer class="mt-8 pt-4 border-t border-slate-200 text-center text-xs text-slate-400">
-        RetailMind &copy; <?= date('Y') ?>
-    </footer>
-</div>
+                                <label class="rc-label" for="reopen-operator-password">Your password on this server</label>
+                                <input class="rc-input rc-input--short" id="reopen-operator-password" name="operator_password" type="password" required autocomplete="current-password">
+
+                                <label class="rc-check-item">
+                                    <input id="confirm-one-active" type="checkbox" name="confirm_one_active" value="1" required>
+                                    <span>Recovery is complete. This is the only active Store.</span>
+                                </label>
+
+                                <button type="submit" class="rc-btn rc-btn-warning" data-recovery-submit="reopen">
+                                    <i class="bi bi-unlock" aria-hidden="true"></i> Reopen Store access
+                                </button>
+                            </form>
+                        <?php else: ?>
+                            <p class="rc-note">Only an authorized Administrator or destination Super Administrator can reopen the Store.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <details class="rc-disclosure" data-recovery-actions <?= $viewData['stage'] !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING ? 'open' : '' ?>>
+                <summary>Other recovery options</summary>
+                <div class="rc-panels">
+                    <div class="rc-panel" data-recovery-card="safety">
+                        <h2 class="rc-h3">Restore safety copy</h2>
+                        <p class="rc-note">Replaces current data with this server's pre-restore copy.</p>
+                        <form method="post" class="rc-form rc-form--tight" data-recovery-form="safety">
+                            <input type="hidden" name="action" value="recover_safety">
+                            <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                            <button type="submit" class="rc-btn rc-btn-quiet btn-quiet" data-recovery-submit="safety">Restore safety copy</button>
+                        </form>
+                    </div>
+
+                    <div class="rc-panel" data-recovery-card="incoming">
+                        <h2 class="rc-h3">Restart incoming restore</h2>
+                        <p class="rc-note">Replaces current data using the approved package and mappings.</p>
+                        <form method="post" enctype="multipart/form-data" class="rc-form rc-form--tight" data-recovery-form="incoming">
+                            <input type="hidden" name="action" value="restart_incoming">
+                            <input type="hidden" name="recovery_csrf" value="<?= $escape($session['csrf_token']) ?>">
+                            <label class="rc-label" for="incoming-file">Approved package (.rmpkg)</label>
+                            <input class="rc-input rc-input--file" id="incoming-file" name="package_file" type="file" accept=".rmpkg" required>
+                            <button type="submit" class="rc-btn rc-btn-quiet btn-quiet" data-recovery-submit="incoming">Restart incoming restore</button>
+                        </form>
+                    </div>
+                </div>
+            </details>
+
+            <details class="rc-disclosure">
+                <summary>Recovery history &amp; operation ID</summary>
+                <p class="rc-code" data-recovery-opid="<?= $escape($viewData['operation_id']) ?>"><?= $escape($viewData['operation_id']) ?></p>
+                <ol class="rc-timeline" data-recovery-timeline>
+                    <?php foreach ($viewData['stages'] as $step): ?>
+                        <li><span><?= $escape($step['stage']) ?></span><span><?= $escape($step['time']) ?></span></li>
+                    <?php endforeach; ?>
+                </ol>
+            </details>
+
+            <?php if ($session['role'] === 'super_admin'): ?>
+                <details class="rc-disclosure" data-recovery-super-evidence>
+                    <summary>Security &amp; recovery details</summary>
+                    <dl class="rc-facts rc-facts--code">
+                        <div><dt>Watermark</dt><dd><?= $escape($viewData['destination_watermark']) ?></dd></div>
+                        <div><dt>Safety operation ID</dt><dd><?= $escape($viewData['safety_operation_id']) ?></dd></div>
+                        <div><dt>Approved package ID</dt><dd><?= $escape($viewData['package_id']) ?></dd></div>
+                    </dl>
+
+                    <?php if (!empty($viewData['append_log'])): ?>
+                        <details class="rc-disclosure rc-disclosure--nested">
+                            <summary>Operation outcomes (<?= count($viewData['append_log']) ?>)</summary>
+                            <pre class="rc-pre" data-recovery-append-log><?= $escape(json_encode($viewData['append_log'], JSON_PRETTY_PRINT)) ?></pre>
+                        </details>
+                    <?php endif; ?>
+                </details>
+                <?php if ($viewData['stage'] !== RecoveryStore::STAGE_OPERATOR_REVIEW_PENDING): ?>
+                    <p class="rc-note rc-note--warning">Complete a recovery option above before reviewing and reopening Store access.</p>
+                <?php endif; ?>
+            <?php endif; ?>
+        </section>
+    <?php endif; ?>
+
+    <footer class="rc-foot">RetailMind &copy; <?= date('Y') ?></footer>
+</main>
 </body>
 </html>
