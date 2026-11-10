@@ -254,6 +254,8 @@ final class TestContractClock implements Clock
 }
 
 $clock = new TestContractClock(new DateTimeImmutable('2026-11-01 10:00:00'));
+// Keep the contract isolated from real forecasting diagnostics left by an outage.
+$storageDir = sys_get_temp_dir() . '/retailmind_forecasting_notices_' . getmypid();
 
 echo "Starting actionable forecasting notices contract...\n\n";
 
@@ -265,8 +267,8 @@ $pdo->exec("INSERT INTO platform_settings (setting_key, setting_value) VALUES
     ('ml_approved_model_version', 'rf_prod_v1')");
 
 $settingsService = new AttentionSettingsService($pdo, $clock);
-$attentionCenter = new AttentionCenter($pdo, $clock, $settingsService);
-$notificationService = new NotificationService($pdo, $clock);
+$attentionCenter = new AttentionCenter($pdo, $clock, $settingsService, $storageDir);
+$notificationService = new NotificationService($pdo, $clock, $storageDir);
 
 // --- Phase 1: Clean initial state with routine success ---
 // Insert a routine successful forecast run
@@ -331,10 +333,10 @@ $assert($state['resolved_at'] !== null, 'Resolved timestamp recorded on resoluti
 // 4a. Candidate with failing quality gates does NOT notify
 $pdo->exec("INSERT INTO model_training_runs (training_run_id, model_version, status, started_at, completed_at) VALUES
     (1, 'rf_candidate_v2', 'completed', '2026-11-01 07:00:00', '2026-11-01 07:30:00')");
-$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, candidate_gate_outcome) VALUES
-    ('rf_candidate_v2', 7, 55.0, 'failed'),
-    ('rf_candidate_v2', 14, 60.0, 'failed'),
-    ('rf_candidate_v2', 28, 65.0, 'failed')");
+$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape, candidate_gate_outcome) VALUES
+    ('rf_candidate_v2', 7, 55.0, 50.0, 'failed'),
+    ('rf_candidate_v2', 14, 60.0, 55.0, 'failed'),
+    ('rf_candidate_v2', 28, 65.0, 60.0, 'failed')");
 
 $items = $attentionCenter->getAttention(0, 'admin');
 $keys = array_map(static fn($item): string => $item->key, $items);
@@ -343,10 +345,10 @@ $assert(!in_array('store.forecasting.candidate-review', $keys, true), 'Candidate
 // 4b. Demo artifact does NOT notify even if passed
 $pdo->exec("INSERT INTO model_training_runs (training_run_id, model_version, status, started_at, completed_at) VALUES
     (2, 'demo_candidate_v1', 'completed', '2026-11-01 08:00:00', '2026-11-01 08:30:00')");
-$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, candidate_gate_outcome) VALUES
-    ('demo_candidate_v1', 7, 20.0, 'passed'),
-    ('demo_candidate_v1', 14, 25.0, 'passed'),
-    ('demo_candidate_v1', 28, 30.0, 'passed')");
+$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape, candidate_gate_outcome) VALUES
+    ('demo_candidate_v1', 7, 20.0, 40.0, 'passed'),
+    ('demo_candidate_v1', 14, 25.0, 45.0, 'passed'),
+    ('demo_candidate_v1', 28, 30.0, 50.0, 'passed')");
 
 $items = $attentionCenter->getAttention(0, 'admin');
 $keys = array_map(static fn($item): string => $item->key, $items);
@@ -355,10 +357,10 @@ $assert(!in_array('store.forecasting.candidate-review', $keys, true), 'Demo cand
 // 4c. Qualified production candidate awaiting review DOES notify
 $pdo->exec("INSERT INTO model_training_runs (training_run_id, model_version, status, started_at, completed_at) VALUES
     (3, 'rf_candidate_v3', 'completed', '2026-11-01 09:00:00', '2026-11-01 09:30:00')");
-$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, candidate_gate_outcome) VALUES
-    ('rf_candidate_v3', 7, 22.0, 'passed'),
-    ('rf_candidate_v3', 14, 28.0, 'passed'),
-    ('rf_candidate_v3', 28, 33.0, 'passed')");
+$pdo->exec("INSERT INTO ml_model_evaluations (model_version, horizon_days, wape, baseline_wape, candidate_gate_outcome) VALUES
+    ('rf_candidate_v3', 7, 22.0, 40.0, 'passed'),
+    ('rf_candidate_v3', 14, 28.0, 45.0, 'passed'),
+    ('rf_candidate_v3', 28, 33.0, 50.0, 'passed')");
 
 $items = $attentionCenter->getAttention(0, 'admin');
 $reviewItem = null;
@@ -428,7 +430,7 @@ $assert(in_array('Forecasting failure', $dashboardExceptionTitles, true), 'Admin
 
 // --- Phase 7: Ticket #361 Notice Extensions ---
 // 7a. Model retraining failure notifies Administrator
-$signalSource = new \App\Attention\DatabaseAttentionSignalSource($pdo, $clock);
+$signalSource = new \App\Attention\DatabaseAttentionSignalSource($pdo, $clock, $storageDir);
 $pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts, operator_message, diagnostic_reference) VALUES
     (5, 'model_retraining', 'failed', '2026-11-01 10:30:00', '2026-11-01 10:35:00', 3, 'Model candidate training failed on cross-validation.', 'EXHAUSTED:CVException')");
 $signals = $signalSource->store();
@@ -451,7 +453,7 @@ $assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Persistent backg
 $assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'inactive or stalled'), 'Signal explains background worker inactivity');
 
 // 7c. Preserved local diagnostics during database outage surfaced after recovery
-$logDir = dirname(__DIR__) . '/storage/logs';
+$logDir = $storageDir;
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0777, true);
 }
@@ -473,6 +475,7 @@ $assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Preserved local 
 $assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'connection refused'), 'Signal explanation contains preserved outage diagnostic');
 
 @unlink($diagFile);
+@rmdir($logDir);
 
 if ($failures) {
     fwrite(STDERR, "\nForecasting notices contract failed (" . count($failures) . " errors):\n- " . implode("\n- ", $failures) . "\n");

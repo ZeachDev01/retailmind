@@ -63,6 +63,8 @@ try {
     )');
 
     $clock = new AttentionContractClock(new DateTimeImmutable('2026-09-18 09:30:00'));
+    // Keep the contract isolated from real forecasting diagnostics left by an outage.
+    $storageDir = sys_get_temp_dir() . '/retailmind_attention_contract_' . getmypid();
     $settings = new AttentionSettingsService($pdo, $clock);
 
     try {
@@ -84,8 +86,8 @@ try {
     $assert($storeThresholds['cash_variance_amount'] === 500.0, 'Store cash threshold should be capped by the Platform safety limit');
     $assert($storeThresholds['inventory_overdue_hours'] === 24.0, 'Store overdue hours threshold should be Administrator-owned');
 
-    $notifications = new AttentionCenter($pdo, $clock, $settings);
-    $center = new AttentionCenter($pdo, $clock, $settings);
+    $notifications = new AttentionCenter($pdo, $clock, $settings, $storageDir);
+    $center = new AttentionCenter($pdo, $clock, $settings, $storageDir);
 
     $pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, status TEXT, locked_until TEXT);
         CREATE TABLE login_attempts (attempt_id INTEGER PRIMARY KEY, was_successful INTEGER, attempted_at TEXT);
@@ -358,7 +360,7 @@ try {
         'A createInApp=false required condition must override the optional in-app preference'
     );
     // --- Deepened AttentionCenter interface tests ---
-    $deepCenter = new AttentionCenter($pdo, $clock, $settings);
+    $deepCenter = new AttentionCenter($pdo, $clock, $settings, $storageDir);
     $assert($deepCenter->getAttention(1, 'cashier') === [], 'Deep AttentionCenter must short-circuit cashier to empty array');
     $assert($deepCenter->getAttention(1, 'inventory_manager') === [], 'Deep AttentionCenter must short-circuit inventory manager to empty array');
 

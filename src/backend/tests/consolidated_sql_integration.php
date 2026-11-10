@@ -128,8 +128,8 @@ try {
         $db->exec("UPDATE registers SET is_enabled=IF(status='active',1,0)");
         $db->exec('ALTER TABLE registers DROP INDEX idx_registers_status, DROP COLUMN status');
         $db->exec("ALTER TABLE held_sales MODIFY status ENUM('held','resumed','cancelled','expired') NOT NULL DEFAULT 'held'");
-        $db->exec("INSERT INTO held_sales (cashier_id,reference_no,cart_json,status)
-            SELECT user_id,'SQL-LEGACY-CART','{}','cancelled' FROM users WHERE is_recovery_account=0 ORDER BY user_id LIMIT 1");
+        $db->exec("INSERT INTO held_sales (cashier_id,reference_no,status)
+            SELECT user_id,'SQL-LEGACY-CART','cancelled' FROM users WHERE is_recovery_account=0 ORDER BY user_id LIMIT 1");
 
         // Both snapshots must participate in audit classification, including legacy role IDs.
         $db->exec("ALTER TABLE activity_log MODIFY category ENUM('store_operation','security','recovery','platform_setting','recovery_account') NULL");
@@ -164,8 +164,9 @@ try {
     $assert($inventory === $records($sql, 'inventory'), 'Update changed inventory');
     $assert($sales === $records($sql, 'sales'), 'Update changed sales');
     // Added backup metadata is nullable; existing fields retain their exact values.
-    $oldBackup = array_map('json_decode', $backupHistory);
-    $newBackup = array_map(static fn(string $row) => array_diff_key(json_decode($row, true), array_flip(['snapshot_at', 'envelope_version', 'cipher', 'requested_by_role', 'key_fingerprint', 'artifact_path', 'trigger_source', 'verified_at', 'removed_at'])), $records($sql, 'backup_history'));
+    $addedBackup = array_flip(['snapshot_at', 'envelope_version', 'cipher', 'requested_by_role', 'key_fingerprint', 'artifact_path', 'trigger_source', 'verified_at', 'removed_at']);
+    $oldBackup = array_map(static fn(string $row) => array_diff_key(json_decode($row, true), $addedBackup), $backupHistory);
+    $newBackup = array_map(static fn(string $row) => array_diff_key(json_decode($row, true), $addedBackup), $records($sql, 'backup_history'));
     $assert(json_encode($oldBackup) === json_encode($newBackup), 'Update changed backup history');
     $assert($sql->query("SELECT status FROM held_sales WHERE reference_no='SQL-LEGACY-CART'")->fetchColumn() === 'discarded', 'Legacy cart was not retained as discarded');
     $assert($sql->query("SELECT status FROM registers WHERE name='Migration till'")->fetchColumn() === 'disabled', 'Legacy Register availability changed');

@@ -5,11 +5,13 @@ class NotificationService
 {
     private PDO $pdo;
     private \App\Attention\Clock $clock;
+    private ?string $storageDir;
 
-    public function __construct(PDO $pdo, ?\App\Attention\Clock $clock = null)
+    public function __construct(PDO $pdo, ?\App\Attention\Clock $clock = null, ?string $storageDir = null)
     {
         $this->pdo = $pdo;
         $this->clock = $clock ?? new \App\Attention\SystemClock();
+        $this->storageDir = $storageDir;
     }
 
     /** Assigned roles are authoritative; legacy accounts without mappings use their primary role. */
@@ -119,7 +121,7 @@ class NotificationService
 
     private function synchronize(array $user, array $items, bool $inApp, string $scope): void
     {
-        (new \App\Attention\AttentionCenter($this->pdo, $this->clock))
+        (new \App\Attention\AttentionCenter($this->pdo, $this->clock, null, $this->storageDir))
             ->synchronizeItems((int)$user['user_id'], $items, $inApp, $scope);
     }
 
@@ -165,7 +167,7 @@ class NotificationService
                 null, false, 'system', (int)$spike['product_id'], 'product'
             );
         }
-        $conditionNotifications = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
+        $conditionNotifications = new \App\Attention\AttentionCenter($this->pdo, $this->clock, null, $this->storageDir);
         foreach ($this->recipients('inventory_manager') as $recipient) {
             $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $demandItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'inventory.demand.');
@@ -236,7 +238,7 @@ class NotificationService
             $conditionNotifications->synchronizeItems((int)$recipient['user_id'], $trainingItems,
                 (bool)($recipient['notify_inapp'] ?? true), 'platform-training.');
         }
-        $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock);
+        $attentionCenter = new \App\Attention\AttentionCenter($this->pdo, $this->clock, null, $this->storageDir);
         $adminForecastingItems = array_values(array_filter(
             $attentionCenter->getAttention(0, 'admin'),
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')

@@ -218,6 +218,14 @@ _Avoid_: Damage report, damage claim, reopen an approval
 A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.
 _Avoid_: Cashier Shift, work session, branch fiscal period
 
+**Scheduled Period**:
+A Fiscal Period whose dates are reserved in advance but which accepts no sales or stock movements until it is opened. A range that covers the current date becomes open when no other period is open; every later range stays scheduled.
+_Avoid_: Closed period, draft period, automatic period
+
+**Period Schedule**:
+A contiguous set of calendar-aligned Fiscal Periods created together, monthly or quarterly, so future reporting windows are reserved without gaps.
+_Avoid_: Fiscal year, automatic period creation, Cashier Shift schedule
+
 **Platform Setting**:
 A technical configuration affecting platform security, recovery, integrations, demand-forecasting model operation, or their attention thresholds. It is governed exclusively by the Super Administrator and may impose safety limits on Store Settings.
 _Avoid_: Store setting, admin setting
