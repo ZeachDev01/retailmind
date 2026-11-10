@@ -152,6 +152,13 @@ $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
 $qrService = new \App\Services\QrCodeService();
 $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? $qrService->generateSvg($tunnelStatus['url'], 220) : '';
+$settingsSections = [
+    'store-receipts' => ['Store & receipts', 'shop'],
+    'attention-thresholds' => ['Attention thresholds', 'high_priority'],
+    'remote-access' => ['Remote Access', 'deployment'],
+];
+$activeSection = (string)($_GET['section'] ?? 'store-receipts');
+if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -166,6 +173,15 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
+        <nav class="settings-sidebar" aria-label="Store configuration sections">
+            <?php foreach ($settingsSections as $section => [$label, $icon]): ?>
+                <a href="?section=<?= htmlspecialchars($section) ?>"<?= $activeSection === $section ? ' class="active" aria-current="page"' : '' ?>>
+                    <img src="<?= htmlspecialchars(theme_url('assets/img/navigation/' . $icon . '.svg')) ?>" alt="" aria-hidden="true" width="22" height="22">
+                    <span><?= htmlspecialchars($label) ?></span>
+                </a>
+            <?php endforeach; ?>
+        </nav>
+        <div class="settings-content">
         <header class="page-heading">
             <div>
                 <h1>Store Configuration</h1>
@@ -175,7 +191,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
         <?php if ($message): ?>
             <div class="alert <?= htmlspecialchars($messageClass) ?>" role="<?= $messageClass === 'tag-success' ? 'status' : 'alert' ?>" aria-live="polite"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
-        <section class="dashboard-section" aria-labelledby="heading-store">
+        <section class="dashboard-section" data-settings-section="store-receipts" aria-labelledby="heading-store"<?= $activeSection !== 'store-receipts' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <h2 id="heading-store">Store &amp; receipts</h2>
                 <p class="section-description">Store identity, regional defaults, and customer receipt text.</p>
@@ -243,7 +259,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
             </form>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="thresholds-heading">
+        <section class="dashboard-section" data-settings-section="attention-thresholds" aria-labelledby="thresholds-heading"<?= $activeSection !== 'attention-thresholds' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <div>
                     <h2 id="thresholds-heading">Attention thresholds</h2>
@@ -277,7 +293,7 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 </div>
             </form>
         </section>
-        <section class="dashboard-section" id="remote-access-card" aria-labelledby="remote-access-heading">
+        <section class="dashboard-section" data-settings-section="remote-access" id="remote-access-card" aria-labelledby="remote-access-heading"<?= $activeSection !== 'remote-access' ? ' hidden' : '' ?>>
             <div class="section-header">
                 <div class="remote-access-header-wrap">
                     <div>
@@ -395,10 +411,21 @@ $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])
                 </div>
             </div>
         </div>
+        </div>
     </main>
 </div>
 
 <script src="<?= htmlspecialchars(theme_url('assets/vendor/qrcode/qrcode.min.js')) ?>"></script>
+<script>
+(function() {
+    if (window.innerWidth > 900 && !document.body.classList.contains('sidebar-collapsed')) {
+        document.getElementById('sidebarBrandToggle')?.click();
+    }
+    document.querySelectorAll('.settings-sidebar a[aria-current="page"]').forEach(function(link) {
+        link.addEventListener('click', function(event) { event.preventDefault(); });
+    });
+})();
+</script>
 <script>
 (function() {
     const toggle = document.getElementById('remote-access-toggle');

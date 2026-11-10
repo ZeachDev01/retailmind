@@ -167,7 +167,7 @@ function sidebar_render_remote_access_pill(string $idSuffix = 'desktop', ?string
         : 'Remote monitoring is offline. Local Store PC checkout and operations run normally.';
     $apiUrl = app_url('components/administrator/remote_access_api.php');
     $canManage = in_array($role, ['admin', 'super_admin'], true);
-    $settingsUrl = app_url('components/administrator/store_settings.php#remote-access-card');
+    $settingsUrl = app_url('components/administrator/store_settings.php?section=remote-access');
 
     $html = '<div class="remote-pill-wrapper" data-remote-access-wrapper data-remote-api="' . sidebar_e($apiUrl) . '">';
     $html .= '<button type="button" class="remote-status-pill ' . ($isOnline ? 'is-online' : 'is-offline') . '" id="remoteStatusPill-' . sidebar_e($idSuffix) . '" data-remote-pill-trigger aria-expanded="false" aria-haspopup="true" aria-label="Remote Access: ' . $statusText . '" title="Remote Access: ' . $statusText . '">';
