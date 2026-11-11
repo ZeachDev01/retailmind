@@ -485,13 +485,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
 require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 
-// Ticket #91: the fixed set of reasons a held sale can be discarded for. The
-// dialog offers exactly these, and the service accepts exactly these, so the
-// page cannot drift into offering a reason the audit record would not
-// understand. Read straight off the service the way this page already reads
-// CashierShiftService::LOCKED_MESSAGE — no second instance is built to read it.
-$heldSaleDiscardReasons = \App\Services\HeldSaleService::DISCARD_REASONS;
-
 require_once __DIR__ . '/../../../backend/app/Services/PhilippineTime.php';
 $todayManila = \App\Services\PhilippineTime::today();
 $quickProductRows = ($posShiftOpen && !$posRegisterLocked) ? $loadCatalogProducts() : [];
@@ -835,19 +828,12 @@ $quickCategoryIcon = static function (string $categoryName): string {
         <div class="checkout-dialog-header">
             <div>
                 <h3 id="discard-title">Discard unfinished sale</h3>
-                <p>The reason is recorded in the audit log. Discarding moves no cash.</p>
+                <p>Discarding moves no cash.</p>
             </div>
             <button type="button" class="modal-close" onclick="closeDiscardModal()" aria-label="Close discard dialog"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
         </div>
         <div class="checkout-dialog-body">
-            <label class="pos-field-label" for="discard-reason">Reason for discarding</label>
-            <select id="discard-reason" class="pos-select">
-                <?php foreach ($heldSaleDiscardReasons as $discardReasonKey => $discardReasonLabel): ?>
-                    <option value="<?= htmlspecialchars($discardReasonKey) ?>"><?= htmlspecialchars($discardReasonLabel) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <label class="pos-field-label" for="discard-note">Note (required when the reason is Other)</label>
-            <textarea class="void-reason" id="discard-note" placeholder="Example: Customer collected their items another way"></textarea>
+            <p>Discard this unfinished sale? This cannot be undone.</p>
         </div>
         <div class="checkout-dialog-actions">
             <button type="button" class="btn btn-secondary" onclick="closeDiscardModal()">Keep working</button>
@@ -901,8 +887,6 @@ const checkoutSummary = document.getElementById('checkout-summary');
 const voidModal = document.getElementById('void-modal');
 const voidReason = document.getElementById('void-reason');
 const discardModal = document.getElementById('discard-modal');
-const discardReason = document.getElementById('discard-reason');
-const discardNote = document.getElementById('discard-note');
 const stockConflictModal = document.getElementById('stock-conflict-modal');
 let discardingHeldSaleId = 0;
 const checkoutButton = document.getElementById('checkout-button');
@@ -1005,7 +989,7 @@ function updateQuickProductAvailability() {
                     <button type="button" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" aria-label="Add piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                 </div>`;
             } else {
-                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i>Piece</button>`;
+                pieceHtml = `<button type="button" class="quick-product-add" data-quick-add="${Number(product.product_id)}" data-selling-form="piece" ${remainingBase <= 0 ? 'disabled' : ''}><i class="bi bi-plus-lg" aria-hidden="true"></i>Add to Cart</button>`;
             }
 
             let packHtml = '';
@@ -2146,7 +2130,7 @@ async function holdCurrentSale() {
     if (!cartChangesAllowed()) return;
     if (Object.keys(cart).length === 0) { showCartMessage('Cart is empty. Add items before holding a sale.', 'error'); return; }
     if (!posShiftOpen) { showCartMessage('Open a Cashier Shift before holding a sale.', 'error'); return; }
-    if (resumedHeldSaleId) { showCartMessage('This sale is already held. Complete checkout or discard it from Held sales before holding another sale.', 'error'); return; }
+    if (resumedHeldSaleId) { showCartMessage('Complete checkout or discard the current sale before holding another sale.', 'error'); return; }
     holdSaleButton.disabled = true;
     try {
         const data = await cartWorkspace.exclusive(() => cartWorkspace.holdRequested(cart));
@@ -2179,22 +2163,15 @@ async function resumeHeldSale(id) {
         const reviewed = await cartWorkspace.acceptReview(data.review);
         if (reviewed === null) { cartReviewUnresolved = true; persistCart(); showCartMessage('Held sale remains unresolved. Requested lines are preserved; review again before checkout.', 'error'); return; }
         cart = reviewed; cartReviewUnresolved = false; renderCart();
-        showCartMessage('Held sale resumed. Complete checkout or discard it with a reason to finish it.', 'success'); skuInput.focus();
+        showCartMessage('Held sale moved to the current sale. Complete checkout or discard it to finish.', 'success'); skuInput.focus();
     } catch (error) { showCartMessage(error.message, 'error'); } finally { cartWorkspace.busy = false; }
 }
 
-// Ticket #91: a held sale cannot be dropped from the list. It has to be either
-// paid for — which completes it — or discarded with a reason, which is recorded.
-// The note is only demanded for the one reason that genuinely needs words, and
-// the service refuses an empty one there, so this is a courtesy rather than the
-// rule: posting around it would simply be rejected.
 function openDiscardModal(id) {
     if (!cartChangesAllowed()) return;
     discardingHeldSaleId = Number(id) || 0;
-    discardReason.value = 'customer_cancelled';
-    discardNote.value = '';
     RetailMindUI.openOverlay(discardModal);
-    setTimeout(() => discardReason.focus(), 50);
+    setTimeout(() => document.getElementById('confirm-discard-sale').focus(), 50);
 }
 
 function closeDiscardModal() {
@@ -2205,17 +2182,9 @@ function closeDiscardModal() {
 
 async function confirmDiscardHeldSale() {
     if (!cartChangesAllowed()) return;
-    const reason = discardReason.value;
-    const note = discardNote.value.trim();
-    if (reason === 'other' && note === '') {
-        showCartMessage('Add a note explaining why this sale is being cleared.', 'error');
-        discardNote.focus();
-        return;
-    }
-
     try {
         cartWorkspace.busy = true;
-        const data = await apiHeldSale(discardingHeldSaleId ? 'discard' : 'discard_cart', {id: discardingHeldSaleId, cart, discard_reason: reason, discard_note: note});
+        const data = await apiHeldSale(discardingHeldSaleId ? 'discard' : 'discard_cart', {id: discardingHeldSaleId, cart});
         heldSales = data.held_sales || [];
         // Discarding the cart currently on the till leaves nothing to complete.
         if (resumedHeldSaleId === discardingHeldSaleId) {
@@ -2233,15 +2202,12 @@ async function confirmDiscardHeldSale() {
 }
 
 function renderHeldSales() {
-    document.getElementById('held-count').textContent = heldSales.length;
-    if (heldSales.length === 0) { holdList.innerHTML = '<div class="search-empty u-empty-min-72">No held sales.</div>'; return; }
-    holdList.innerHTML = heldSales.map(held => {
+    const pendingSales = heldSales.filter(held => Number(held.id) !== resumedHeldSaleId);
+    document.getElementById('held-count').textContent = pendingSales.length;
+    if (pendingSales.length === 0) { holdList.innerHTML = '<div class="search-empty u-empty-min-72">No held sales.</div>'; return; }
+    holdList.innerHTML = pendingSales.map(held => {
         const id = Number(held.id);
-        // A resumed cart is already on the till but is not finished: it still has
-        // to be paid for, and it still holds this shift open. Saying so is the
-        // difference between "held" and "done".
-        const state = held.status === 'resumed' ? ' &middot; on the till' : '';
-        return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}${state}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" data-resume-held-sale="${id}">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
+        return `<div class="hold-item"><div><strong>${escapeHtml(held.reference_no || held.created_at)}</strong><br><small>${Number(held.item_count || 0)} item(s) &middot; &#8369;${money(held.total_amount)}</small></div><div class="pos-toolbar"><button type="button" class="btn btn-small" data-resume-held-sale="${id}">Resume</button><button type="button" class="btn btn-small btn-secondary" onclick="openDiscardModal(${id})">Discard</button></div></div>`;
     }).join('');
 }
 

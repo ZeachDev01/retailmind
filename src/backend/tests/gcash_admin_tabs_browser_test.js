@@ -63,6 +63,14 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         assert.equal(await page.evaluate(() => window.scrollY), 0, 'Opening overview keeps the page title visible');
         assert.equal(await page.locator('#gcash-coin-flip-trigger').count(), 0, 'Overview view toggle needs no separate flip control');
         assert.equal(await page.locator('[data-coin-switch]').count(), 0, 'Overview needs no duplicate view-switch shortcut');
+        assert.equal(await page.locator('[data-coin-face]').count(), 0, 'Overview has one navigation level');
+        for (const panel of ['[data-fragment="balances"]', '#gcash-outstanding-reviews', '#gcash-reporting-scope', '#gcash-completed-activity']) {
+            assert.equal(await page.locator(panel).isVisible(), true, panel + ' is available without switching views');
+        }
+        assert.equal(await page.locator('#gcash-tab-overview').evaluate(tab => {
+            const style = getComputedStyle(tab);
+            return tab.classList.contains('active') && style.borderBottomWidth === '2px' && style.borderRadius === '0px';
+        }), true, 'Administrator uses the shared GCash underline tabs');
         if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#gcash-completed-activity').isVisible()) {
             await page.locator('#coin-tab-activity').click();
         }

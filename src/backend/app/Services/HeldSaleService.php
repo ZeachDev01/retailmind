@@ -30,14 +30,14 @@ require_once __DIR__ . '/SalesWorkflowService.php';
  * their own user id matches.
  *
  * A held sale stays unresolved from the moment it is held until it becomes one of
- * two things — a sale, or an explained abandonment. Resuming does not resolve it,
+ * two things — a sale, or a confirmed discard. Resuming does not resolve it,
  * because a Cashier who resumes a cart and then walks away has not finished
  * anything, and a shift must not close over a cart that is still held at the
  * till. That is why the closure invariant in CashierShiftService counts 'held'
  * and 'resumed' alike.
  *
- * Discarding is deliberate: a reason from a fixed set, a note when the reason is
- * Other, a Protected Audit Record naming both the actor and the cart, and no cash
+ * Discarding is deliberate: a confirmation, an optional legacy reason,
+ * a Protected Audit Record naming both the actor and the cart, and no cash
  * effect whatsoever. Nothing about a discard touches the drawer, because a cart
  * that was never paid for has no money to give back.
  */
@@ -51,7 +51,7 @@ class HeldSaleService
      * The statuses that mean "this held sale is still owed a decision".
      *
      * 'resumed' is in here on purpose. Resuming hands the cart back to the till,
-     * it does not finish it; only a completed sale or an explained discard does.
+     * it does not finish it; only a completed sale or a confirmed discard does.
      */
     public const UNRESOLVED_STATUSES = ['held', 'resumed'];
 
@@ -59,7 +59,7 @@ class HeldSaleService
     public const RESUMED_STATUS = 'resumed';
 
     /**
-     * The fixed initial set of reasons a cart can be discarded for.
+     * Legacy reasons remain accepted for older callers and audit history.
      *
      * A free-text reason explains nothing nine months later, because every Cashier
      * writes it differently. A fixed set is comparable, and 'other' carries the
@@ -217,7 +217,7 @@ class HeldSaleService
     }
 
     /**
-     * Abandons a held cart, with a reason, for good.
+     * Abandons a held cart for good; legacy reasons remain optional.
      *
      * A discard is a sensitive non-sale action, so it is recorded: a Cashier
      * silently dropping a cart is exactly the kind of thing a Store owner asks
@@ -226,7 +226,7 @@ class HeldSaleService
      * back — which is also why nothing here touches the drawer or the shift's
      * expected cash.
      */
-    public function discard(int $cashierId, string $actorRole, int $heldSaleId, string $reason, ?string $note = null): void
+    public function discard(int $cashierId, string $actorRole, int $heldSaleId, string $reason = '', ?string $note = null): void
     {
         $this->transaction(function () use ($cashierId, $actorRole, $heldSaleId, $reason, $note): void {
             $this->requireCashierWorkspace($actorRole, 'discard a held sale');
@@ -246,7 +246,7 @@ class HeldSaleService
                  SET status = 'discarded', resolved_at = NOW(), discard_reason = ?, discard_note = ?, discarded_by = ?
                  WHERE held_sale_id = ?"
             )->execute([
-                $reason,
+                $reason !== '' ? $reason : null,
                 $note !== '' ? $note : null,
                 $cashierId,
                 (int)$heldSale['held_sale_id'],
@@ -254,8 +254,8 @@ class HeldSaleService
 
             $this->audit($cashierId, (int)$heldSale['held_sale_id'], (int)$heldSale['shift_id'], [
                 'reference_no' => (string)$heldSale['reference_no'],
-                'discard_reason' => $reason,
-                'discard_reason_label' => self::DISCARD_REASONS[$reason],
+                'discard_reason' => $reason !== '' ? $reason : null,
+                'discard_reason_label' => self::DISCARD_REASONS[$reason] ?? null,
                 'discard_note' => $note !== '' ? $note : null,
                 'item_count' => (int)$heldSale['item_count'],
                 'total_amount' => round((float)$heldSale['total_amount'], 2),
@@ -553,7 +553,7 @@ class HeldSaleService
     private function requireDiscardReason(string $reason): string
     {
         $reason = trim($reason);
-        if ($reason === '' || !array_key_exists($reason, self::DISCARD_REASONS)) {
+        if ($reason !== '' && !array_key_exists($reason, self::DISCARD_REASONS)) {
             throw new DomainException('Choose a reason for discarding this held sale.');
         }
 
@@ -777,7 +777,7 @@ class HeldSaleService
         });
     }
 
-    public function discardCart(int $cashierId, string $actorRole, array $cart, string $reason, ?string $note = null): void
+    public function discardCart(int $cashierId, string $actorRole, array $cart, string $reason = '', ?string $note = null): void
     {
         $this->transaction(function () use ($cashierId, $actorRole, $cart, $reason, $note): void {
             $this->requireCashierWorkspace($actorRole, 'discard a cart');
@@ -786,7 +786,7 @@ class HeldSaleService
             $note = trim($note ?? '');
             if (($reason === 'other' && $note === '') || mb_strlen($note) > 255) throw new DomainException('Add a discard note of at most 255 characters.');
             $review = $this->reviewCart($cart);
-            $this->audit($cashierId, 0, (int)$shift['shift_id'], ['ordinary_cart' => $review['requested_cart'], 'discard_reason' => $reason, 'discard_note' => $note]);
+            $this->audit($cashierId, 0, (int)$shift['shift_id'], ['ordinary_cart' => $review['requested_cart'], 'discard_reason' => $reason !== '' ? $reason : null, 'discard_note' => $note !== '' ? $note : null]);
         });
     }
 

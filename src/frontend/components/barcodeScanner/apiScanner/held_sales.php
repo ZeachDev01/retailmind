@@ -5,7 +5,7 @@
 // which JSON shape the till already expects; it holds no rule of its own, because
 // a rule kept here is a rule the Cashier Shift page and the closing form cannot
 // see. In particular it writes no held sale and no Protected Audit Record: the
-// discard reason, its note, and the record that they happened are all settled
+// optional legacy reason, its note, and the audit record are all settled
 // where they cannot be skipped.
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../../../backend/includes/auth.php';
@@ -101,9 +101,8 @@ try {
         $respond(['success' => true, 'id' => $resumed['held_sale_id'], 'shift_id' => $resumed['shift_id'], 'cart' => $resumed['cart'], 'review' => $resumed['review']]);
     }
 
-    // Ticket #91: the discard replaced the bare cancel. There is no way to drop a
-    // held sale without saying why, and one with no shift behind it cannot
-    // be dropped this way at all — that residue is the sweep's, not the Cashier's.
+    // A confirmed discard is audited even without a reason; ownership and shift
+    // checks remain in the service.
     if ($action === 'discard') {
         $heldService->discard(
             $userId,

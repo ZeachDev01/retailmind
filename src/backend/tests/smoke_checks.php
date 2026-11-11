@@ -573,7 +573,7 @@ $checks = [
         // held_sale_shift_contract.php; asserted here so a reintroduction is loud.
         'forbidden' => ["\$_SESSION", "\$_POST['shift_id']", "\$_GET['shift_id']"],
     ],
-    'A held sale is discarded with a reason, and only for a reason' => [
+    'A held sale discard is audited with an optional legacy reason' => [
         'file' => 'src/backend/app/Services/HeldSaleService.php',
         'needles' => [
             'const DISCARD_REASONS',
@@ -634,20 +634,16 @@ $checks = [
             'CONSTRAINT `fk_held_sales_sale` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`sale_id`) ON DELETE SET NULL',
         ],
     ],
-    'The point of sale discards a held sale with a reason, not a bare cancel' => [
+    'The point of sale confirms a discard without requiring a reason' => [
         'file' => 'src/frontend/components/cashier/pos.php',
         'needles' => [
-            'HeldSaleService::DISCARD_REASONS',
             'id="discard-modal"',
-            'id="discard-reason"',
-            'discard_reason: reason',
+            'Discard this unfinished sale? This cannot be undone.',
             'confirmDiscardHeldSale()',
             'id="held-sale-id-input"',
             'resumedHeldSaleId',
         ],
-        // There is no way to drop a parked cart without saying why, and no free
-        // text standing in for the fixed set of reasons.
-        'forbidden' => ["apiHeldSale('cancel'", 'removeHeldSale('],
+        'forbidden' => ["apiHeldSale('cancel'", 'removeHeldSale(', 'id="discard-reason"', 'id="discard-note"'],
     ],
     'The closing form names the held sales that are in the way' => [
         'file' => 'src/frontend/components/cashier/shifts.php',

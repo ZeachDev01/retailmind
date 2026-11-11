@@ -423,14 +423,15 @@ const fixture = action => {
                     assert.equal(await page.locator('#checkout-summary').innerText(),reviewed);
                     await contrast(page.locator('#review-cash')); await gateControl();
                     await page.getByRole('button',{name:'Review cart',exact:true}).click(); await select('dark');
-                    await page.locator('#void-sale-btn').click(); await page.locator('#discard-note').fill('Unsubmitted cart discard reason');
+                    await page.locator('#void-sale-btn').click();
                     await select('light'); await select('dark'); await gateControl();
-                    assert.equal(await page.locator('#discard-note').inputValue(),'Unsubmitted cart discard reason');
+                    assert.equal(await page.locator('#discard-modal.open').count(),1);
+                    assert.equal(await page.locator('#discard-modal select, #discard-modal textarea').count(),0);
                     await page.getByRole('button',{name:'Keep working',exact:true}).click();
                     await page.locator('#hold-list').getByRole('button',{name:'Discard',exact:true}).click();
-                    await page.locator('#discard-note').fill('Unsubmitted discard reason');
                     await select('light'); await select('dark'); await gateControl();
-                    assert.equal(await page.locator('#discard-note').inputValue(),'Unsubmitted discard reason');
+                    assert.equal(await page.locator('#discard-modal.open').count(),1);
+                    assert.equal(await page.locator('#discard-modal select, #discard-modal textarea').count(),0);
                     await page.getByRole('button',{name:'Keep working',exact:true}).click();
                     assert.equal(await page.getByRole('spinbutton',{name:'Theme Test Item quantity',exact:true}).inputValue(),'2');
                 }

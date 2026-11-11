@@ -42,7 +42,10 @@ require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/transactions_summary.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/transactions_type_pills.php';
+// Keep tbody intact when the browser parses this fragment as an HTML document.
+echo '<table>';
 require __DIR__ . '/../../../backend/app/Views/gcash/transactions_body.php';
+echo '</table>';
 require __DIR__ . '/../../../backend/app/Views/gcash/transactions_pagination.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/reconciliation_panel.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/unresolved_panel.php';

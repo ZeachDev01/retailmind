@@ -524,7 +524,7 @@ $cartWorkspaceContext = [
     'cashier' => (int)$_SESSION['user_id'], 'shift' => (int)($cartRecoveryShift['shift_id'] ?? 0),
     'workspace' => $role, 'locked' => !empty($cartRecoveryShift['locked_at']),
     'endpoint' => app_url('components/barcodeScanner/apiScanner/held_sales.php'),
-    'csrf' => csrf_token(), 'reasons' => \App\Services\HeldSaleService::DISCARD_REASONS,
+    'csrf' => csrf_token(),
 ];
 $GLOBALS['rm_navigation_cart'] = $cartWorkspaceContext;
 ?>

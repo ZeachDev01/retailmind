@@ -4,7 +4,7 @@
 // A held sale is suspended work that belongs to a Cashier and to the Cashier
 // Shift that was open when it was held. It is not a floating cart: the shift is
 // the only place it can live, only its owner can list or resume it, and the shift
-// cannot close while one is unresolved. Discarding it is a deliberate, explained
+// cannot close while one is unresolved. Discarding it is a deliberate, audited
 // act with no cash effect, and completing it carries the shift attribution
 // through checkout.
 //
@@ -309,10 +309,10 @@ try {
     // Match the held-sales endpoint: no checkout service preloaded before discard.
     $pdo->beginTransaction();
     $auditCount = (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn();
-    $held->discardCart($alex, 'cashier', $cart, 'customer_cancelled');
+    $held->discardCart($alex, 'cashier', $cart);
     $assert(
         (int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === $auditCount + 1,
-        'discarding an ordinary cart loads its dependencies and records the reason'
+        'discarding an ordinary cart without a reason still records the action'
     );
     $pdo->rollBack();
     $sales = new SalesWorkflowService($pdo);
@@ -438,12 +438,7 @@ try {
         'the closing form is told which carts are in the way, not merely that some are'
     );
 
-    // --- AC 3: discarding needs a structured reason, and moves no cash ------
-
-    $expectRefusal(
-        static fn() => $held->discard($casey, 'cashier', $caseyHeldId, ''),
-        'discarding without a reason is refused'
-    );
+    // --- AC 3: optional legacy reasons stay validated; discarding moves no cash --
     $expectRefusal(
         static fn() => $held->discard($casey, 'cashier', $caseyHeldId, 'because_i_said_so'),
         'discarding with a reason outside the fixed set is refused'
@@ -513,7 +508,11 @@ try {
     );
 
     // Discarding the last unresolved held sale releases the shift for closure.
-    $held->discard($casey, 'cashier', $secondCaseyHeldId, 'entered_in_error');
+    $held->discard($casey, 'cashier', $secondCaseyHeldId);
+    $assert(
+        $pdo->query("SELECT discard_reason FROM held_sales WHERE held_sale_id = {$secondCaseyHeldId}")->fetchColumn() === null,
+        'a confirmed held-sale discard requires no reason and invents none'
+    );
     $assert(
         $shifts->unresolvedHeldSales($caseyShiftId) === [],
         'a shift with no unresolved held sale may close'

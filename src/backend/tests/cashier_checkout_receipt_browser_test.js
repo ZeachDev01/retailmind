@@ -52,6 +52,45 @@ const fixture = action => {
         await page.goto(origin + '/components/cashier/pos.php');
         await page.locator('#sku-input').fill('CASHIER-101');
         await page.locator('#add-code-btn').click();
+        const holdResponse = page.waitForResponse(response => response.url().includes('/held_sales.php')
+            && response.request().postDataJSON()?.action === 'hold');
+        await page.locator('#hold-sale-btn').click();
+        const held = await (await holdResponse).json();
+        assert.equal(held.success, true);
+        const resume = page.locator(`[data-resume-held-sale="${held.id}"]`);
+        await resume.waitFor();
+        const heldCount = Number(await page.locator('#held-count').innerText());
+        await resume.click();
+        await page.waitForFunction(id => document.querySelector('#held-sale-id-input').value === String(id), held.id);
+        assert.equal(await resume.count(), 0, 'Resumed cart leaves the held list');
+        assert.equal(Number(await page.locator('#held-count').innerText()), heldCount - 1);
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1');
+        await page.reload();
+        await page.waitForFunction(count => Number(document.querySelector('#held-count').textContent) === count, heldCount - 1);
+        assert.equal(await resume.count(), 0, 'Reload keeps resumed cart in the current sale');
+        assert.equal(await page.locator('#held-sale-id-input').inputValue(), String(held.id));
+        await page.locator('#void-sale-btn').click();
+        await page.locator('#discard-modal.open').waitFor();
+        assert.equal(await page.locator('#discard-modal select, #discard-modal textarea').count(), 0);
+        for (const width of [390, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            await page.waitForTimeout(250);
+            assert.equal(await page.locator('#confirm-discard-sale').isVisible(), true);
+            assert.equal(await page.locator('#discard-modal').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
+            await page.screenshot({path: path.join(output, `discard-sale-${width}.png`)});
+        }
+        await page.getByRole('button', {name: 'Keep working', exact: true}).click();
+        assert.equal(await page.locator('#cart-item-count').innerText(), '1', 'Cancelling discard preserves the current sale');
+        await page.locator('#void-sale-btn').click();
+        const discardResponse = page.waitForResponse(response => response.url().includes('/held_sales.php')
+            && response.request().postDataJSON()?.action === 'discard');
+        await page.locator('#confirm-discard-sale').click();
+        const discarded = await discardResponse;
+        assert.equal(discarded.request().postDataJSON().discard_reason, undefined);
+        assert.equal((await discarded.json()).success, true);
+        await page.waitForFunction(() => document.querySelector('#cart-item-count').textContent === '0');
+        await page.locator('#sku-input').fill('CASHIER-101');
+        await page.locator('#add-code-btn').click();
         await page.locator('#checkout-button').click();
         await page.locator('#review-cash').fill('50');
         assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).isChecked(), false);
@@ -65,6 +104,7 @@ const fixture = action => {
         const receiptUrl = page.url();
         assert.equal(await page.locator('#receiptsTable').count(), 0, 'Checkout does not show Receipt History');
         await page.getByRole('button', {name: 'Close Sale Receipt'}).click();
+        await page.waitForURL(url => !url.searchParams.has('sale_id'));
         assert.equal(await page.locator('#receiptModal[open]').count(), 0);
         assert.equal(await page.locator('#sku-input').evaluate(el => document.activeElement === el), true, 'Closing receipt returns focus to cashier scanner');
         assert.equal(await page.locator('#cart-item-count').innerText(), '0', 'Paid cart is cleared');

@@ -67,7 +67,7 @@ class CartWorkspace {
             return false;
         }
         const choice = await Swal.fire({title: 'Preserve unfinished work?',
-            text: 'Hold the requested cart without reserving stock or prices, or discard it with a reason.',
+            text: 'Hold the requested cart without reserving stock or prices, or discard it.',
             showDenyButton: true, showCancelButton: true, confirmButtonText: 'Hold sale', denyButtonText: 'Discard sale', cancelButtonText: 'Keep working'});
         if (choice.isConfirmed) {
             if (!state.heldSaleId && !await this.holdRequested(state.cart)) return false;
@@ -75,20 +75,9 @@ class CartWorkspace {
             return true;
         }
         if (!choice.isDenied) return false;
-        const reasons = this.context.reasons;
-        const reason = await Swal.fire({title: 'Discard unfinished work', input: 'select', inputOptions: reasons,
-            inputPlaceholder: 'Choose a reason', showCancelButton: true, confirmButtonText: 'Continue',
-            inputValidator: value => value ? undefined : 'Choose a reason.'});
-        if (!reason.isConfirmed) return false;
-        let note = '';
-        if (reason.value === 'other') {
-            const detail = await Swal.fire({title: 'Explain the discard', input: 'textarea', inputAttributes: {maxlength: '255'},
-                showCancelButton: true, confirmButtonText: 'Discard sale', inputValidator: value => value.trim() ? undefined : 'Add a note.'});
-            if (!detail.isConfirmed) return false;
-            note = detail.value;
-        }
-        await this.request(state.heldSaleId ? 'discard' : 'discard_cart', {id: state.heldSaleId, cart: state.cart,
-            discard_reason: reason.value, discard_note: note});
+        if (!await RetailMindUI.confirm({title: 'Discard unfinished sale',
+            message: 'Discard this unfinished sale? This cannot be undone.', confirmText: 'Discard sale'})) return false;
+        await this.request(state.heldSaleId ? 'discard' : 'discard_cart', {id: state.heldSaleId, cart: state.cart});
         this.clear();
         return true;
     }

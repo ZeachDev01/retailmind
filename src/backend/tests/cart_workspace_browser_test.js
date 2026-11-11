@@ -50,12 +50,16 @@ const source = fs.readFileSync('src/frontend/assets/js/cart-workspace.js', 'utf8
         await page.click('a'); await page.waitForFunction(() => messages.length > 0);
         assert.equal(await page.evaluate(() => workspace.state.cart[1].qty), 5, 'lock-race refusal keeps cart');
         locked = false;
-        await page.evaluate(() => answers.push({isDenied:true}, {isConfirmed:true,value:'other'}, {isConfirmed:true,value:'Customer left'}));
+        await page.evaluate(() => answers.push({isDenied:true}, false));
+        assert.equal(await page.evaluate(() => workspace.resolveWork()), false, 'cancel discard preserves work');
+        assert.equal(await page.evaluate(() => workspace.state.cart[1].qty), 5);
+        await page.evaluate(() => answers.push({isDenied:true}, true));
         assert.equal(await page.evaluate(() => workspace.resolveWork()), true);
         assert.equal(requests.at(-1).action, 'discard_cart');
         assert.equal(requests.at(-1).cashier_context, 1);
         assert.equal(requests.at(-1).shift_context, 11);
-        assert.equal(requests.at(-1).discard_note, 'Customer left');
+        assert.equal(requests.at(-1).discard_reason, undefined, 'confirmed discard requires no reason');
+        assert.equal(requests.at(-1).discard_note, undefined, 'confirmed discard requires no note');
         assert.equal(await page.evaluate(() => workspace.state), null);
         await page.evaluate(() => {workspace.save({1:{qty:5}}, 42); answers.push({isConfirmed:true});});
         const count = requests.length;

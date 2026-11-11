@@ -21,7 +21,7 @@
 #gcash-admin-workspace .btn:disabled { cursor: not-allowed; opacity: .6; }
 #gcash-admin-workspace .gcash-topbar-actions .btn { flex: 0 1 auto; width: auto; padding-inline: .875rem; }
 #gcash-session-status { flex: 0 0 auto; }
-#gcash-admin-workspace .gcash-section-nav { margin-bottom: 1rem; scrollbar-color: var(--muted) var(--surface-soft); }
+#gcash-admin-workspace .gcash-section-nav { margin-bottom: 1rem; padding-right: .25rem; scrollbar-color: var(--muted) var(--surface-soft); }
 #gcash-admin-workspace .gcash-tab { flex: 0 0 auto; min-height: 44px; font-family: inherit; }
 #gcash-admin-workspace .gcash-tab.active .gcash-badge { color: var(--primary); background: var(--theme-info-surface, #eff6ff); }
 #gcash-admin-workspace .gcash-session-logo { width: 72px; padding-right: .875rem; border-right: 1px solid var(--border); }
@@ -313,11 +313,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #gcash-session-status.gcash-status-completed::before { animation: none !important; }
     #gcash-admin-workspace .btn,
     #gcash-admin-workspace .gcash-card,
     #gcash-admin-workspace .gcash-review-card-btn,
-    #gcash-admin-workspace .gcash-view-tx-btn i,
+    #gcash-admin-workspace .gcash-view-tx-btn i {
         transition: none !important;
         transform: none !important;
         animation: none !important;
