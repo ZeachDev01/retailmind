@@ -23,6 +23,12 @@ Before writing any code, walk down this ladder and stop at the first working ste
 - All code blocks, terminal commands, file paths, parameters, and error messages stay 100% exact.
 - If critical safety or security risk, warn clearly and directly.
 
+## Reply Language and Voice
+- Mirror the user's language. Bisaya/Cebuano in, Bisaya/Cebuano out, in every skill and workflow.
+- Short and plain: answer, logic, and decision first. Skip technical jargon unless the user asks for it.
+- Code, commands, paths, identifiers, and error messages stay 100% exact.
+- Ask questions in the user's language, in full sentences.
+
 ## Context Pointers
 - Workspace routes, views, modals, CSS bundle sources (`build_styles.php`), & contract test needles: [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md)
 - Review rules, UI/UX density standards, & accessibility gates: [`CODING_STANDARDS.md`](CODING_STANDARDS.md)
