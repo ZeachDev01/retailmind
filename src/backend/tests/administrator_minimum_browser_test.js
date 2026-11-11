@@ -51,8 +51,7 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         assert.equal(await page.locator('#drawerRoles input[data-role="admin"]').count(), 0,
             'Super Administrator does not edit an Administrator role assignment');
         assert(await page.locator('#drawerStatus option[value="disabled"]').isDisabled());
-        assert(await page.locator('#drawerDeleteButton').isDisabled());
-        assert.match(await page.locator('#drawerDeleteHelp').textContent(), /Keep at least one active ordinary account with Administrator access/);
+        assert.equal(await page.locator('#drawerDeleteButton').count(), 0);
         const before = JSON.parse(fixture('state'));
         const token = await page.locator('#userDrawerForm input[name="csrf_token"]').inputValue();
         for (const form of [

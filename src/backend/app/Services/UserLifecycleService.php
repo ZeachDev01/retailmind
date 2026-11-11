@@ -12,9 +12,7 @@ use Throwable;
 
 final class UserLifecycleService
 {
-    public const DELETION_HISTORY_MESSAGE = 'This account has retained business or audit history and cannot be permanently deleted. Disable it instead where permitted.';
-    private const DISPOSABLE_USER_TABLES = ['user_roles', 'password_reset_tokens', 'notification_preferences', 'notifications', 'attention_states', 'workspace_guidance'];
-    private ?array $identityReferences = null;
+    public const DELETION_DISABLED_MESSAGE = 'Accounts cannot be deleted. Deactivate the account instead where permitted.';
 
     public function __construct(
         private PDO $pdo,
@@ -129,10 +127,6 @@ final class UserLifecycleService
 
     public function update(int $actorId, string $actorRole, int $userId, array $account): array
     {
-        if ($actorRole === 'super_admin' && $actorId !== $userId) {
-            throw new DomainException('Super Administrators cannot edit staff profiles, passwords, or role assignments.');
-        }
-
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $account): array {
             $minimum = new AdministratorAccessMinimum($this->pdo);
             $minimum->lock();
@@ -144,6 +138,12 @@ final class UserLifecycleService
                 // Platform governance is one workspace; store workspaces are never assigned to it.
                 $targetRole = 'super_admin';
                 $targetRoles = ['super_admin'];
+            } elseif ($actorRole === 'super_admin') {
+                if ((array)$targetRoles !== $before['roles']) {
+                    throw new DomainException('Super Administrators cannot change assigned Workspaces.');
+                }
+                $targetRoles = $before['roles'];
+                $targetRole = $before['role_name'];
             } else {
                 $targetRoles = $this->requireAssignableRoles($actorRole, $targetRoles);
                 $targetRole = $targetRoles[0];
@@ -200,9 +200,6 @@ final class UserLifecycleService
         if (!in_array($status, ['active', 'disabled'], true)) {
             throw new InvalidArgumentException('Invalid account status.');
         }
-        if ($actorRole === 'super_admin' && $status === 'active') {
-            throw new DomainException('Super Administrators cannot re-enable staff accounts.');
-        }
 
         return $this->transaction(function () use ($actorId, $actorRole, $userId, $status): array {
             $minimum = new AdministratorAccessMinimum($this->pdo);
@@ -244,9 +241,6 @@ final class UserLifecycleService
     {
         if ($passwordHash === '') {
             throw new InvalidArgumentException('A password is required.');
-        }
-        if ($actorRole === 'super_admin' && $actorId !== $userId) {
-            throw new DomainException('Super Administrators cannot reset staff passwords.');
         }
         $this->transaction(function () use ($actorId, $actorRole, $userId, $passwordHash): void {
             $before = $this->get($userId);
@@ -335,130 +329,9 @@ final class UserLifecycleService
         ];
     }
 
-    public function deletionRestriction(int $actorId, string $actorRole, int $userId): ?string
-    {
-        try {
-            if ($actorId === $userId) throw new DomainException('You cannot permanently delete your own account.');
-            $target = $this->get($userId);
-            $this->requireDeletionActor($actorId, $actorRole);
-            $this->requireManageable($actorId, $actorRole, $target, false);
-            (new AdministratorAccessMinimum($this->pdo))->requireRemovable($userId);
-            return $this->hasRetainedHistory($target, false) ? self::DELETION_HISTORY_MESSAGE : null;
-        } catch (DomainException $exception) {
-            return $exception->getMessage();
-        }
-    }
-
     public function delete(int $actorId, string $actorRole, int $userId, bool $confirmed = false): void
     {
-        if (!$confirmed) throw new DomainException('Confirm permanent account deletion first.');
-        $outerTransaction = $this->pdo->inTransaction();
-        if ($outerTransaction) $this->pdo->exec('SAVEPOINT user_deletion');
-        try {
-            $this->transaction(function () use ($actorId, $actorRole, $userId): void {
-                $minimum = new AdministratorAccessMinimum($this->pdo);
-                $minimum->lock();
-                $this->requireDeletionActor($actorId, $actorRole, true);
-                if ($actorId === $userId) throw new DomainException('You cannot permanently delete your own account.');
-                $before = $this->get($userId, true);
-                $this->requireManageable($actorId, $actorRole, $before, false);
-                $minimum->requireRemovable($userId);
-                if ($this->hasRetainedHistory($before, true)) throw new DomainException(self::DELETION_HISTORY_MESSAGE);
-                foreach (self::DISPOSABLE_USER_TABLES as $table) {
-                    $this->pdo->prepare("DELETE FROM `{$table}` WHERE user_id = ?")->execute([$userId]);
-                }
-                $this->pdo->prepare('DELETE FROM users WHERE user_id = ?')->execute([$userId]);
-                $snapshot = $this->auditSnapshot($before);
-                $snapshot['display_name'] = (string)$before['display_name'];
-                $snapshot['email'] = $before['email'];
-                $this->audit($actorId, $actorRole, 'User permanently deleted', $userId, $snapshot, ['sessions_revoked' => true]);
-            });
-            if ($outerTransaction) $this->pdo->exec('RELEASE SAVEPOINT user_deletion');
-        } catch (Throwable $exception) {
-            if ($outerTransaction && $this->pdo->inTransaction()) {
-                $this->pdo->exec('ROLLBACK TO SAVEPOINT user_deletion');
-            }
-            throw $exception;
-        }
-    }
-
-    private function requireDeletionActor(int $actorId, string $actorRole, bool $lock = false): void
-    {
-        $actor = $this->get($actorId, $lock);
-        if ($actor['status'] !== 'active' || (bool)$actor['is_recovery_account']
-            || !in_array($actorRole, array_merge([$actor['role_name']], $actor['roles']), true)
-            || !$this->policy->allows($actorRole, RoleCapabilityPolicy::MANAGE_USERS)) {
-            throw new DomainException('Your active Workspace cannot permanently delete accounts.');
-        }
-    }
-
-    private function hasRetainedHistory(array $target, bool $lock): bool
-    {
-        $suffix = $lock ? ' FOR UPDATE' : '';
-        if ($this->identityReferences === null) {
-            // Include SET NULL and CASCADE relations: neither makes business history disposable.
-            $this->identityReferences = $this->pdo->query("SELECT DISTINCT TABLE_NAME, COLUMN_NAME
-                FROM information_schema.KEY_COLUMN_USAGE
-                WHERE TABLE_SCHEMA = DATABASE() AND REFERENCED_TABLE_NAME = 'users' AND REFERENCED_COLUMN_NAME = 'user_id'
-                UNION SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE() AND (
-                    (TABLE_NAME = 'sales' AND COLUMN_NAME = 'discount_authorized_by') OR
-                    (TABLE_NAME = 'inventory_adjustment_revisions' AND COLUMN_NAME = 'actor_id') OR
-                    (TABLE_NAME = 'backup_operations' AND COLUMN_NAME = 'requested_by') OR
-                    (TABLE_NAME = 'store_write_gate' AND COLUMN_NAME = 'paused_by'))")->fetchAll(PDO::FETCH_ASSOC);
-        }
-        foreach ($this->identityReferences as $reference) {
-            $table = $reference['TABLE_NAME'];
-            if (in_array($table, self::DISPOSABLE_USER_TABLES, true)) continue;
-            $table = str_replace('`', '``', $table);
-            $column = str_replace('`', '``', $reference['COLUMN_NAME']);
-            $statement = $this->pdo->prepare("SELECT 1 FROM `{$table}` WHERE `{$column}` = ? LIMIT 1{$suffix}");
-            $statement->execute([(int)$target['user_id']]);
-            if ($statement->fetchColumn() !== false) return true;
-        }
-        // Audit payloads contain logical identities, including nested shift/GCash actors.
-        $idPattern = '"([a-z_]*(user_id|cashier_id|actor_id)|created_by|updated_by|reported_by|approved_by|reviewed_by|recorded_by|requested_by|assigned_to|decided_by|received_by|counted_by|moved_by|pulled_by|performed_by|verified_by|closed_by|discarded_by|[a-z_]*authorized_by|waived_by|activated_by|rolled_back_by|suspended_by)"[[:space:]]*:[[:space:]]*"?'
-            . (int)$target['user_id'] . '"?([,}[:space:]]|$)';
-        $identityPatterns = [];
-        foreach (array_filter([$target['username'], $target['email']]) as $identity) {
-            $identityPatterns[] = '"(username|email)"[[:space:]]*:[[:space:]]*' . preg_quote(json_encode($identity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), '~');
-        }
-        $pattern = $idPattern . '|"identity"[[:space:]]*:[[:space:]]*"user:' . (int)$target['user_id'] . '"|' . implode('|', $identityPatterns);
-        $statement = $this->pdo->prepare("SELECT 1 FROM activity_log
-            WHERE ((module IN ('User Access', 'Users', 'Recovery Account')
-                    OR (module = 'Authentication' AND action IN ('Login success', 'Login failure'))) AND record_id = ?)
-                OR previous_value REGEXP ? OR new_value REGEXP ? OR metadata REGEXP ? LIMIT 1{$suffix}");
-        $statement->execute([(int)$target['user_id'], $pattern, $pattern, $pattern]);
-        if ($statement->fetchColumn() !== false) return true;
-        $statement = $this->pdo->prepare("SELECT 1 FROM platform_settings WHERE setting_value REGEXP ? LIMIT 1{$suffix}");
-        $statement->execute([$pattern]);
-        if ($statement->fetchColumn() !== false) return true;
-        $statement = $this->pdo->prepare("SELECT 1 FROM inventory_adjustment_revisions WHERE old_values REGEXP ? OR new_values REGEXP ? LIMIT 1{$suffix}");
-        $statement->execute([$pattern, $pattern]);
-        if ($statement->fetchColumn() !== false) return true;
-        $statement = $this->pdo->prepare("SELECT 1 FROM login_attempts WHERE LOWER(TRIM(username)) IN (LOWER(?), LOWER(?), ?, LOWER(?), LOWER(?)) LIMIT 1{$suffix}");
-        $statement->execute([$target['username'], $target['email'], 'user:' . $target['user_id'], 'unknown:' . $target['username'], $target['email'] ? 'unknown:' . $target['email'] : null]);
-        if ($statement->fetchColumn() !== false) return true;
-        $statement = $this->pdo->prepare("SELECT 1 FROM email_delivery_log WHERE LOWER(TRIM(recipient)) = LOWER(?) LIMIT 1{$suffix}");
-        $statement->execute([$target['email']]);
-        if ($statement->fetchColumn() !== false) return true;
-        if (!\App\Backup\RecoveryStore::isAvailable()) {
-            throw new DomainException('Recovery audit history cannot be checked on this hosting plan. Permanent deletion is unavailable.');
-        }
-        foreach (['restore-log.jsonl', 'restore-state.json'] as $name) {
-            $path = \App\Backup\RecoveryStore::path($name);
-            if (!is_file($path)) continue;
-            $handle = fopen($path, 'rb');
-            if ($handle === false) throw new DomainException('Recovery audit history cannot be checked. Try again later.');
-            try {
-                while (($line = fgets($handle)) !== false) {
-                    $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
-                    if ((int)($record['actor_id'] ?? 0) === (int)$target['user_id']) return true;
-                }
-                if (!feof($handle)) throw new DomainException('Recovery audit history cannot be checked. Try again later.');
-            } finally { fclose($handle); }
-        }
-        return false;
+        throw new DomainException(self::DELETION_DISABLED_MESSAGE);
     }
 
     private function requireAssignableRole(string $actorRole, string $targetRole): string

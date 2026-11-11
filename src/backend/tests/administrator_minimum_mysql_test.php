@@ -18,8 +18,7 @@ try {
     $config = require __DIR__ . '/../config/database.php';
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $base = 98;
-    foreach ([['disable', 'disable'], ['demote', 'demote'], ['dormancy', 'dormancy'], ['disable', 'demote'], ['disable', 'dormancy'], ['demote', 'dormancy'],
-        ['delete', 'disable'], ['delete', 'demote'], ['delete', 'delete'], ['delete', 'dormancy']] as [$first, $second]) {
+    foreach ([['disable', 'disable'], ['demote', 'demote'], ['dormancy', 'dormancy'], ['disable', 'demote'], ['disable', 'dormancy'], ['demote', 'dormancy']] as [$first, $second]) {
         $base += 2; $next = $base + 1;
         $command('administrator_minimum_fixture.php', 'seed', $base);
         $historyBefore = $pdo->query('SELECT * FROM activity_log ORDER BY log_id')->fetchAll(PDO::FETCH_ASSOC);

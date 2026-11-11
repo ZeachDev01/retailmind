@@ -57,7 +57,7 @@
                     </div>
                 <?php endif; ?>
                 <small class="field-help" id="createRolesHelp"><?= $actorRole === 'super_admin'
-                    ? "Super Administrators create Administrator accounts. Add Cashier or Inventory workspaces later from the account's edit drawer."
+                    ? "Super Administrators create Administrator accounts. Administrators manage staff Workspaces."
                     : 'Select every workspace this user can access. The first selected role becomes the default workspace.' ?></small>
             </div>
             <div class="modal-actions">

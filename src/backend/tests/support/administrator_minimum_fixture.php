@@ -59,8 +59,7 @@ if ($argv[1] === 'seed') {
     try {
         $id = (int)($argv[3] ?? 100);
         if ($argv[1] === 'disable') $service->setStatus(2, 'super_admin', $id, 'disabled');
-        elseif ($argv[1] === 'delete') $service->delete(2, 'super_admin', $id, true);
-        elseif ($argv[1] === 'demote') $service->update(2, 'super_admin', $id, array_replace($service->get($id), ['roles' => ['cashier']]));
+        elseif ($argv[1] === 'demote') $service->update($id % 2 === 0 ? $id + 1 : $id - 1, 'admin', $id, array_replace($service->get($id), ['roles' => ['cashier']]));
         elseif ($argv[1] === 'dormancy') {
             $clock = new class implements Clock {
                 public function now(): DateTimeImmutable { return new DateTimeImmutable('2026-10-25 12:00:00'); }

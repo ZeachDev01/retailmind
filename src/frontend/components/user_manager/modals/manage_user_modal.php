@@ -216,21 +216,7 @@
                         </div>
                     </div>
 
-                    <div class="drawer-card drawer-card-danger">
-                        <div class="drawer-card-header drawer-card-header-danger">
-                            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-                            <span>Danger Zone</span>
-                        </div>
-                        <div class="drawer-action-row">
-                            <div class="drawer-action-info">
-                                <strong>Delete Account</strong>
-                                <p class="field-help drawer-danger-help" id="drawerDeleteHelp"></p>
-                            </div>
-                            <button type="submit" form="drawerDeleteForm" class="btn btn-danger btn-small" id="drawerDeleteButton" aria-describedby="drawerDeleteHelp" disabled>
-                                <i class="bi bi-trash3" aria-hidden="true"></i> Permanently Delete Account
-                            </button>
-                        </div>
-                    </div>
+
                 </div>
             </div>
 
@@ -247,11 +233,6 @@
             <input type="hidden" name="action" value="revoke_sessions">
             <input type="hidden" name="user_id" id="drawerRevokeUserId">
         </form>
-        <form method="POST" class="drawer-modal-actions visually-hidden" id="drawerDeleteForm">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="user_id" id="drawerDeleteUserId">
-            <input type="hidden" name="confirm_delete" id="drawerDeleteConfirmed" value="">
-        </form>
+
     </aside>
 </div>

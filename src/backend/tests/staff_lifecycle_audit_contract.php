@@ -37,7 +37,9 @@ try {
     $pdo->exec('CREATE TABLE roles (role_id INTEGER PRIMARY KEY AUTOINCREMENT, role_name TEXT NOT NULL UNIQUE)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        first_name TEXT NOT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         profile_image TEXT NULL,
@@ -104,7 +106,7 @@ try {
     };
 
     $insertUser = static function (string $name, string $role, array $roles = [], int $isRecovery = 0) use ($pdo, $roleId, $storeId): int {
-        $stmt = $pdo->prepare('INSERT INTO users (full_name, username, email, password_hash, role_id, must_change_password, branch_id, is_recovery_account) VALUES (?, ?, ?, ?, ?, 0, ?, ?)');
+        $stmt = $pdo->prepare('INSERT INTO users (first_name, username, email, password_hash, role_id, must_change_password, branch_id, is_recovery_account) VALUES (?, ?, ?, ?, ?, 0, ?, ?)');
         $username = strtolower(str_replace(' ', '_', $name));
         $stmt->execute([$name, $username, $username . '@example.test', password_hash('Pass123456!', PASSWORD_DEFAULT), $roleId($role), $storeId, $isRecovery]);
         $uid = (int)$pdo->lastInsertId();
@@ -163,7 +165,7 @@ try {
     $sessionVerBeforeRemoval = (int)$beforeRoleUpdate['session_version'];
     // Remove cashier role, keep only inventory_manager
     $updatedRoles = $service->update($adminId, 'admin', $cashierId, [
-        'full_name' => $beforeRoleUpdate['full_name'],
+        'first_name' => $beforeRoleUpdate['first_name'],
         'username' => $beforeRoleUpdate['username'],
         'roles' => ['inventory_manager'],
     ]);
@@ -181,7 +183,7 @@ try {
     // =========================================================================
     // 3a. Super Admin can create ordinary Administrator
     $newAdminId = $service->create($superId, 'super_admin', [
-        'full_name' => 'Ordinary Admin Two',
+        'first_name' => 'Ordinary Admin Two',
         'username' => 'ordinary_admin_two',
         'email' => 'admin2@example.test',
         'password_hash' => password_hash('Pass123456!', PASSWORD_DEFAULT),
@@ -191,7 +193,7 @@ try {
 
     // 3b. Super Admin cannot create Cashier or Inventory Manager
     $expectDenied(fn() => $service->create($superId, 'super_admin', [
-        'full_name' => 'Cashier by Super',
+        'first_name' => 'Cashier by Super',
         'username' => 'cashier_by_super',
         'email' => 'cashiersuper@example.test',
         'password_hash' => password_hash('Pass123456!', PASSWORD_DEFAULT),
@@ -199,7 +201,7 @@ try {
     ]), 'Super Administrator must not create Cashier accounts');
 
     $expectDenied(fn() => $service->create($superId, 'super_admin', [
-        'full_name' => 'Manager by Super',
+        'first_name' => 'Manager by Super',
         'username' => 'manager_by_super',
         'email' => 'managersuper@example.test',
         'password_hash' => password_hash('Pass123456!', PASSWORD_DEFAULT),
@@ -216,23 +218,13 @@ try {
         'Super Administrator must not disable accounts without Administrator access'
     );
 
-    // 3e. Super Admin CANNOT re-enable staff accounts
-    $expectDenied(
-        fn() => $service->setStatus($superId, 'super_admin', $newAdminId, 'active'),
-        'Super Administrator must not re-enable staff accounts'
-    );
-
-    // 3f. Super Admin CANNOT edit other staff profiles/passwords/roles
-    $expectDenied(fn() => $service->update($superId, 'super_admin', $newAdminId, [
-        'full_name' => 'Tampered Admin',
-        'username' => 'ordinary_admin_two',
-        'roles' => ['admin'],
-    ]), 'Super Administrator must not edit staff profiles');
-
-    $expectDenied(
-        fn() => $service->resetPassword($superId, 'super_admin', $newAdminId, password_hash('NewPass123!', PASSWORD_DEFAULT)),
-        'Super Administrator must not reset staff passwords'
-    );
+    $enabledAdmin = $service->setStatus($superId, 'super_admin', $newAdminId, 'active');
+    $assert($enabledAdmin['status'] === 'active', 'Super Administrator can reactivate ordinary Administrators');
+    $updatedAdmin = $service->update($superId, 'super_admin', $newAdminId,
+        array_replace($enabledAdmin, ['first_name' => 'Updated Admin']));
+    $assert($updatedAdmin['first_name'] === 'Updated Admin', 'Super Administrator can edit ordinary Administrator information');
+    $service->resetPassword($superId, 'super_admin', $newAdminId, password_hash('NewPass123!', PASSWORD_DEFAULT));
+    $assert((int)$service->get($newAdminId)['must_change_password'] === 1, 'Super Administrator reset requires password replacement');
 
     $expectDenied(
         fn() => $service->revokeSessions($superId, 'super_admin', $pureCashierId),

@@ -1,5 +1,7 @@
 # Administrator account management and minimum active Administrator protection
 
+> Updated decision, 2026-11-11: account deletion is prohibited in both Administrator and Super Administrator user management, including direct requests. The deletion requirements below are historical and superseded by [the confirmed account-management discussion](../discussions/super-administrator-account-management.md) and [ADR-0026](../adr/0026-super-administrator-creates-administrators-only.md). Activation/deactivation retains account identity and history; other lifecycle protections remain in force.
+
 Published as [GitHub issue #298](https://github.com/ZeachDev01/retailmind/issues/298), labelled `ready-for-agent`.
 
 ## Problem Statement

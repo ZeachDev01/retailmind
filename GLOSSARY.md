@@ -5,7 +5,7 @@ Core domain model and language for RetailMind single-store retail operations and
 ## Language
 
 **Super Administrator**:
-The single platform-governance account that creates Administrator accounts. It holds one Workspace and never takes store operational Workspaces.
+The single platform-governance account responsible for creating and maintaining ordinary Administrator accounts. It holds one Workspace and never takes store operational Workspaces.
 _Avoid_: Super admin, main admin, owner account
 
 **Administrator**:

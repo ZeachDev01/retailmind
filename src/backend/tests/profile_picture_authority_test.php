@@ -20,14 +20,14 @@ $pdo = new class('sqlite::memory:') extends PDO {
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $pdo->exec("CREATE TABLE roles (role_id INTEGER, role_name TEXT);
     INSERT INTO roles VALUES (1, 'cashier'), (2, 'inventory_manager'), (3, 'admin'), (4, 'super_admin');
-    CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, email TEXT, profile_image TEXT,
+    CREATE TABLE users (user_id INTEGER PRIMARY KEY, first_name TEXT, last_name TEXT, display_name TEXT, username TEXT, email TEXT, profile_image TEXT,
         password_hash TEXT, status TEXT, disabled_at TEXT, session_version INTEGER, must_change_password INTEGER,
         is_recovery_account INTEGER, role_id INTEGER, branch_id INTEGER);
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER);
     CREATE TABLE activity_log (user_id INTEGER, action TEXT, category TEXT, module TEXT, record_id INTEGER,
         previous_value TEXT, new_value TEXT, ip_address TEXT)");
 foreach ([1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 4, 6 => 4, 7 => 1, 8 => 1] as $id => $roleId) {
-    $pdo->prepare("INSERT INTO users VALUES (?, 'Test Person', ?, NULL, NULL, 'hash', 'active', NULL, 1, 0, ?, ?, 1)")
+    $pdo->prepare("INSERT INTO users VALUES (?, 'Test', 'Person', 'Test Person', ?, NULL, NULL, 'hash', 'active', NULL, 1, 0, ?, ?, 1)")
         ->execute([$id, 'user' . $id, (int)($id === 6), $roleId]);
 }
 // Secondary privileged assignments and a primary privilege missing from mapping.

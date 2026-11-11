@@ -237,6 +237,11 @@ try {
     $assert($promoted['roles'] === ['cashier', 'admin'], 'Administrator promotes staff through additional access');
     $assert((int)$promoted['session_version'] === (int)$beforeAdditional['session_version'] + 1,
         'Adding Administrator access revokes existing sessions even when the primary role stays Cashier');
+    $superEdited = $service->update($superId, 'super_admin', $cashierId,
+        array_replace($promoted, ['first_name' => 'Additional Administrator']));
+    $assert($superEdited['role_name'] === 'cashier' && $superEdited['roles'] === ['cashier', 'admin']
+        && $superEdited['session_version'] === $promoted['session_version'],
+        'Super Administrator edits additional Administrators without changing primary Workspace, assignments or sessions');
     $service->resetPassword($adminId, 'admin', $cashierId, password_hash('AdminResetPassword123', PASSWORD_DEFAULT));
     $resetAudit = $pdo->query("SELECT category FROM activity_log WHERE action = 'Password reset' ORDER BY log_id DESC LIMIT 1")->fetchColumn();
     $assert($resetAudit === 'store_operation', 'Additional Administrator password resets belong to Store operations');
@@ -277,14 +282,45 @@ try {
         'password_hash' => password_hash('PrivilegedPassword123', PASSWORD_DEFAULT),
         'role' => 'admin',
     ]);
-    $expectDenied(fn() => $service->update($superId, 'super_admin', $privilegedId, [
+    $service->update($superId, 'super_admin', $privilegedId, [
         'first_name' => 'Privileged Administrator',
         'username' => 'privileged_admin',
         'email' => 'privileged@example.test',
         'role' => 'admin',
-    ]), 'Super Administrator must not edit staff profiles');
+    ]);
+    $assert($service->get($privilegedId)['display_name'] === 'Privileged Administrator', 'Super Administrator edits ordinary Administrator profiles');
     $expectDenied(fn() => $service->revokeSessions($superId, 'super_admin', $managerId), 'Super Administrator must not revoke sessions for store staff');
     $service->setStatus($superId, 'super_admin', $privilegedId, 'disabled');
+    $disabled = $service->get($privilegedId);
+    $service->resetPassword($superId, 'super_admin', $privilegedId, password_hash('SuperReset123', PASSWORD_DEFAULT));
+    $enabled = $service->setStatus($superId, 'super_admin', $privilegedId, 'active');
+    $assert($enabled['status'] === 'active' && $enabled['disabled_at'] === null
+        && $enabled['roles'] === $disabled['roles'] && (int)$enabled['must_change_password'] === 1
+        && password_verify('SuperReset123', $enabled['password_hash'])
+        && (int)$enabled['session_version'] === (int)$disabled['session_version'] + 2,
+        'Super Administrator resets and reactivates without restoring sessions or clearing the mandatory password change');
+    $service->revokeSessions($superId, 'super_admin', $privilegedId);
+    $revoked = $service->get($privilegedId);
+    $assert($revoked['status'] === 'active' && $revoked['roles'] === $enabled['roles']
+        && (int)$revoked['session_version'] === (int)$enabled['session_version'] + 1,
+        'Revoke ends sessions while preserving status and Workspaces');
+    foreach ([['admin', 'cashier'], ['cashier']] as $roles) {
+        $expectDenied(fn() => $service->update($superId, 'super_admin', $privilegedId,
+            array_replace($revoked, ['roles' => $roles])), 'Super Administrator cannot change Workspaces');
+        $assert($service->get($privilegedId) === $revoked, 'Denied Workspace change preserves profile, roles and sessions');
+    }
+    foreach (['super_admin' => $superId, 'admin' => $adminId] as $workspace => $actor) {
+        foreach ([false, true] as $confirmed) {
+            $expectDenied(fn() => $service->delete($actor, $workspace, $privilegedId, $confirmed), 'Account deletion is always denied');
+            $assert($service->get($privilegedId) === $revoked, 'Rejected deletion preserves the complete account');
+        }
+    }
+    foreach (['active', 'disabled'] as $status) {
+        $expectDenied(fn() => $service->setStatus($superId, 'super_admin', $managerId, $status), 'Staff-only status remains protected');
+    }
+    $expectDenied(fn() => $service->resetPassword($superId, 'super_admin', $managerId, 'unused'), 'Staff-only password remains protected');
+    $service->setStatus($superId, 'super_admin', $privilegedId, 'disabled');
+
 
     $auditRows = $pdo->query("SELECT action, category, new_value FROM activity_log WHERE module = 'User Access' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC);
     $auditActions = array_column($auditRows, 'action');

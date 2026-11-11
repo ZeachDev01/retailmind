@@ -49,77 +49,60 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
         await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(route);
         const state = () => JSON.parse(fixture('state'));
-        const csrf = await page.locator('#drawerDeleteForm input[name="csrf_token"]').inputValue();
         const open = async name => {
             await page.getByRole('button', {name: 'Manage ' + name, exact: true}).click();
             await page.locator('#drawerFirstName').waitFor({state: 'visible'});
         };
-        assert(await page.locator('tr').filter({hasText: 'Theme Test super_admin'}).getByText('Protected', {exact: true}).isVisible());
-        await open('Theme Test admin');
-        assert(await page.locator('#drawerDeleteButton').isDisabled());
-        assert.match(await page.locator('#drawerDeleteHelp').textContent(), /own account/);
-        await page.locator('#closeUserDrawer').click();
+        for (const username of ['theme_admin', 'theme_super_admin']) {
+            if (username === 'theme_super_admin') {
+                await context.clearCookies();
+                await page.goto('/?login=1');
+                await page.locator('#landing-login-username').fill(username);
+                await page.locator('#landing-login-password').fill(password);
+                await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+                await page.goto(route);
+            }
+            assert.equal(await page.locator('#drawerDeleteButton, #drawerDeleteForm').count(), 0);
+            const csrf = await page.locator('#userDrawerForm input[name="csrf_token"]').inputValue();
+            const before = state();
+            const response = await context.request.post(route, {form: {action: 'delete', user_id: '100', confirm_delete: '1', csrf_token: csrf}});
+            assert.match(await response.text(), /Accounts cannot be deleted/);
+            assert.deepEqual(state(), before);
+        }
+        await page.goto(route);
         await open('Minimum Primary');
-        assert(await page.locator('#drawerDeleteButton').isEnabled(), 'Ordinary Administrator target is eligible');
-        const before = state();
-        await page.locator('#drawerUsername').fill('unsaved_other_identity');
-        page.once('dialog', async dialog => { assert.match(dialog.message(), /minimum_primary_100/); assert.doesNotMatch(dialog.message(), /unsaved_other_identity/); await dialog.dismiss(); });
-        await page.locator('#drawerDeleteButton').click();
-        assert.deepEqual(state(), before, 'Cancelling deletion preserves account and audits');
-        for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {
-            await page.setViewportSize(viewport);
-            await page.locator('#drawerDeleteButton').scrollIntoViewIfNeeded();
-            assert(await page.locator('#drawerDeleteButton').isVisible());
-            assert(await page.locator('#drawerDeleteHelp').isVisible());
-            await page.screenshot({path: path.join(os.tmpdir(), 'retailmind-delete-' + viewport.width + '.png')});
-        }
-        const unconfirmed = await context.request.post(route, {form: {action: 'delete', user_id: '100', csrf_token: csrf}});
-        assert.match(await unconfirmed.text(), /Confirm permanent account deletion first/);
-        assert.deepEqual(state(), before);
-        page.once('dialog', dialog => dialog.accept());
-        await Promise.all([page.waitForNavigation(), page.locator('#drawerDeleteButton').click()]);
-        assert(await page.getByText('User permanently deleted. Credentials and access have been removed.', {exact: true}).isVisible());
-        assert.equal(await page.getByRole('button', {name: 'Manage Minimum Primary', exact: true}).count(), 0);
-        const deniedSession = await legacy.request.get(route, {maxRedirects: 0});
-        assert.equal(deniedSession.status(), 302);
-        assert.match(deniedSession.headers().location, /session=invalid/, 'Existing session loses access immediately');
-        const reset = await legacy.request.get('/components/auth/reset_password.php?token=imported-reset-token');
-        assert.match(await reset.text(), /invalid|expired/i, 'Deleted password reset credential cannot be used');
-        const login = await legacy.newPage();
-        await login.goto('/?login=1');
-        await login.locator('#landing-login-username').fill('minimum_primary_100');
-        await login.locator('#landing-login-password').fill('ImportedPassword123');
-        await Promise.all([login.waitForNavigation(), login.getByRole('button', {name: 'Log in', exact: true}).click()]);
-        assert.match(await login.content(), /Invalid username or password/i, 'Deleted credentials cannot authenticate');
-        await legacy.close();
-        await open('Minimum Additional');
-        assert(await page.locator('#drawerDeleteButton').isEnabled(), 'Disabled account can be deleted');
-        page.once('dialog', dialog => dialog.accept());
-        await Promise.all([page.waitForNavigation(), page.locator('#drawerDeleteButton').click()]);
-        assert.equal(state().users.length, 0);
-        await page.locator('#openUserModal').click();
-        await page.locator('#createFirstName').fill('History');
-        await page.locator('#createLastName').fill('Linked');
-        await page.locator('#createUsernameInput').fill('history_linked');
-        await page.locator('#createUserPassword').fill('CreatedPassword123');
-        await page.locator('#createUserForm input[name="role_ids[]"][value="4"]').check();
-        await Promise.all([page.waitForNavigation(), page.locator('#createUserSubmit').click()]);
-        await open('History Linked');
-        assert(await page.locator('#drawerDeleteButton').isDisabled());
-        assert.match(await page.locator('#drawerDeleteHelp').textContent(), /retained business or audit history.*Disable it instead/);
-        const historyId = await page.locator('#drawerDeleteUserId').inputValue();
-        const rejected = await context.request.post(route, {form: {action: 'delete', user_id: historyId, confirm_delete: '1', csrf_token: csrf}});
-        assert.match(await rejected.text(), /retained business or audit history/);
-        await page.locator('#drawerTabStatus').click();
-        assert(await page.locator('#drawerStatus').isEnabled(), 'History-linked account can still be disabled');
-        await page.locator('#drawerStatus').selectOption('disabled');
+        assert(await page.locator('#drawerFirstName').isEnabled());
+        assert(await page.locator('#drawerProfileImage').isEnabled());
+        await page.locator('#drawerFirstName').fill('Edited Administrator');
         await Promise.all([page.waitForNavigation(), page.locator('#drawerStatusButton').click()]);
-        assert(await page.getByText('User account updated successfully.', {exact: true}).isVisible());
-        for (const target of ['1', '2']) {
-            const response = await context.request.post(route, {form: {action: 'delete', user_id: target, confirm_delete: '1', csrf_token: csrf}});
-            assert.doesNotMatch(await response.text(), /User permanently deleted\. Credentials/);
+        assert.equal(state().users[0].first_name, 'Edited Administrator');
+        await open('Edited Administrator');
+        await page.locator('#drawerTabSecurity').click();
+        assert(await page.locator('#drawerPassword').isEnabled());
+        await page.locator('#drawerPassword').fill('ReplacementPassword123');
+        await Promise.all([page.waitForNavigation(), page.locator('#drawerStatusButton').click()]);
+        assert.equal(Number(state().users[0].must_change_password), 1);
+        await open('Edited Administrator');
+        await page.locator('#drawerTabSecurity').click();
+        const beforeRevoke = Number(state().users[0].session_version);
+        await Promise.all([page.waitForNavigation(), page.locator('#drawerRevokeButton').click()]);
+        assert.equal(Number(state().users[0].session_version), beforeRevoke + 1);
+        for (const status of ['disabled', 'active']) {
+            await open('Edited Administrator');
+            await page.locator('#drawerTabStatus').click();
+            await page.locator('#drawerStatus').selectOption(status);
+            await Promise.all([page.waitForNavigation(), page.locator('#drawerStatusButton').click()]);
+            assert.equal(state().users[0].status, status);
+            assert.equal(Number(state().users[0].must_change_password), 1);
         }
-        console.log('User deletion browser/HTTP: passed');
+        for (const viewport of [{width: 390, height: 844}, {width: 1280, height: 800}]) {
+            await page.setViewportSize(viewport);
+            await open('Edited Administrator');
+            assert(await page.locator('#drawerStatusButton').isVisible());
+            assert.equal(await page.locator('#drawerDeleteButton').count(), 0);
+            await page.locator('#cancelUserDrawer').click();
+        }
+        console.log('Super Administrator management and no-delete browser/HTTP: passed');
     } finally {
         if (browser) await browser.close();
         if (server) { server.kill(); await new Promise(resolve => server.once('exit', resolve)); }
