@@ -599,7 +599,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <input class="pos-input" id="gcash-funding-password" name="approver_password" type="password" required autocomplete="new-password">
                     </div>
                 </fieldset>
-                <label class="gcash-confirm"><input type="checkbox" id="gcash-funding-receipt" name="receipt_confirmed" required> Funds were physically received or handed over.</label>
+                <label class="gcash-confirm"><input type="checkbox" id="gcash-funding-receipt" name="receipt_confirmed" required> I confirm the cash or wallet funds have been received or sent.</label>
                 <div class="gcash-actions">
                     <button class="btn btn-primary" type="submit" id="gcash-funding-submit">Record Movement</button>
                     <button class="btn btn-secondary" type="button" id="gcash-funding-cancel">Cancel</button>
