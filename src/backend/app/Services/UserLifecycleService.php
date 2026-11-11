@@ -168,13 +168,12 @@ final class UserLifecycleService
                 throw new InvalidArgumentException($shapeError);
             }
 
-            $parts = ['first_name = ?', 'last_name = ?', 'display_name = ?', 'username = ?', 'email = ?', 'role_id = ?'];
+            $parts = ['first_name = ?', 'last_name = ?', 'display_name = ?', 'username = ?', 'role_id = ?'];
             $params = [
                 $firstName,
                 $lastName,
                 $displayName,
                 $username,
-                $this->nullableString($account['email'] ?? null),
                 $this->roleId($targetRole),
             ];
             if (array_key_exists('profile_image', $account)) {

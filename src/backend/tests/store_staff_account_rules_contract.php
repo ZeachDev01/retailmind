@@ -10,11 +10,10 @@
 // - Usernames with letters, numbers, `.`, `_`, `-` keep working.
 // - Email stays optional (empty means NULL, never collides); email-less
 //   accounts are unaffected.
-// - Email stays unique on create and update (duplicate rejected, no second
-//   account); the availability seam keeps backing live duplicate notices.
-// - Changing a staff email invalidates the old address immediately (old
-//   address no longer stored, reports free; new address stored, reports
-//   taken). No schema change, no backfill, no verified-only gate.
+// - Email stays unique on create (duplicate rejected, no second account);
+//   the availability seam keeps backing live duplicate notices.
+// - Email is fixed after creation: an Administrator update never replaces a
+//   stored email, and the edit dialog makes that rule visible.
 require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Authorization\RoleCapabilityPolicy;
@@ -186,26 +185,24 @@ try {
     $assert($countUsers() === $beforeDuplicate, 'rejected duplicate email must not create a second account');
     $assert($service->availability('admin', '', 'unique@example.test')['email_taken'] === true, 'live duplicate notice seam must keep reporting the taken email');
 
-    // Email stays unique on update: taking another account's address fails.
-    $expectUniqueRejected(
-        fn() => $service->update($adminId, 'admin', $editableId, [
-            'first_name' => 'Contract Staff', 'username' => 'editable.cashier_01',
-            'email' => 'unique@example.test', 'role' => 'cashier',
-        ]),
-        'update to a duplicate email must be rejected'
-    );
-    $assert($service->get($editableId)['email'] === 'editable@example.test', 'rejected update must leave the stored email unchanged');
+    // Email is fixed after creation: an update cannot take another account's
+    // address, and the stored email stays exactly as created.
+    $service->update($adminId, 'admin', $editableId, [
+        'first_name' => 'Contract Staff', 'username' => 'editable.cashier_01',
+        'email' => 'unique@example.test', 'role' => 'cashier',
+    ]);
+    $assert($service->get($editableId)['email'] === 'editable@example.test', 'update must not replace the stored email with another account address');
+    $assert($service->get($holderId)['email'] === 'unique@example.test', 'update must not take another account email');
 
-    // Changing a staff email immediately invalidates the old address: the old
-    // value is gone from storage and reports free, the new value is stored.
+    // A new, currently free address is still ignored on update; the offered
+    // address reports free because nothing stored it.
     $service->update($adminId, 'admin', $holderId, [
         'first_name' => 'Contract Staff', 'username' => 'email.holder',
         'email' => 'rotated@example.test', 'role' => 'cashier',
     ]);
-    $assert($service->get($holderId)['email'] === 'rotated@example.test', 'changed email must be stored immediately');
-    $assert((int)$pdo->query("SELECT COUNT(*) FROM users WHERE email = 'unique@example.test'")->fetchColumn() === 0, 'old email must no longer resolve to any account after the change');
-    $assert($service->availability('admin', '', 'unique@example.test')['email_taken'] === false, 'old email must report free for live notices after the change');
-    $assert($service->availability('admin', '', 'rotated@example.test')['email_taken'] === true, 'new email must report taken for live notices after the change');
+    $assert($service->get($holderId)['email'] === 'unique@example.test', 'email supplied on update must be ignored');
+    $assert($service->availability('admin', '', 'unique@example.test')['email_taken'] === true, 'stored email must stay taken after an update');
+    $assert($service->availability('admin', '', 'rotated@example.test')['email_taken'] === false, 'ignored email must report free');
 
     // Page wiring: creation and update surfaces carry the same easy inline
     // rule next to the Username field; the submit-time duplicate fallback and
@@ -221,6 +218,11 @@ try {
     foreach (['add dialog' => $addModal, 'edit dialog' => $editModal] as $label => $modal) {
         $assert(str_contains($modal, 'cannot contain @'), "{$label} must carry the easy Username shape rule inline");
     }
+    $assert(
+        preg_match('/id="drawerEmail"[^>]*readonly/', $editModal) === 1,
+        'edit dialog must render the email field read-only'
+    );
+    $assert(str_contains($editModal, 'cannot be changed'), 'edit dialog must explain the email is fixed after creation');
     $assert(str_contains($page, 'Username or email may already exist'), 'submit-time duplicate rejection must remain as the enforcing fallback');
     $assert(str_contains($script, 'username_taken') && str_contains($script, 'email_taken'), 'live duplicate notices must keep reading both taken flags');
     $assert(str_contains($script, 'disabled'), 'live duplicate notices must keep blocking submit on duplicates');

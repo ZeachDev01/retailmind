@@ -66,7 +66,8 @@
                         </div>
                         <div class="form-group">
                             <label for="drawerEmail">Email</label>
-                            <input type="email" id="drawerEmail" name="email" autocomplete="email" spellcheck="false" placeholder="user@store.com">
+                            <input type="email" id="drawerEmail" name="email" autocomplete="email" spellcheck="false" placeholder="user@store.com" readonly aria-describedby="drawerEmailHelp">
+                            <small class="field-help" id="drawerEmailHelp">Email cannot be changed after the account is created.</small>
                         </div>
                     </div>
 
