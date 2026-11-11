@@ -384,6 +384,7 @@ $GLOBALS['rm_navigation_shell'] = [
     </div>
 </div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
+<div class="sidebar-tip" id="rmSidebarTip" role="tooltip" aria-hidden="true"></div>
 <div class="sidebar" id="appSidebar">
     <button type="button" class="sidebar-brand" id="sidebarBrandToggle" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar">
         <span class="brand-icon" aria-hidden="true"><img src="<?= sidebar_e($sidebarBrandIconUrl) ?>" data-brand-base="<?= sidebar_e($sidebarBrandBaseUrl) ?>" data-brand-variant="icons/STYLE/icon-64.png" alt=""></span>
@@ -400,7 +401,7 @@ $GLOBALS['rm_navigation_shell'] = [
     </nav>
 
     <div class="sidebar-footer">
-        <button type="button" class="sidebar-profile" id="sidebarProfile" data-account-menu-open aria-expanded="false" aria-controls="sidebarAccountMenu">
+        <button type="button" class="sidebar-profile" id="sidebarProfile" data-account-menu-open aria-expanded="false" aria-controls="sidebarAccountMenu" aria-label="<?= sidebar_e($sidebarUserName . ', ' . $sidebarRoleLabel) ?>" title="<?= sidebar_e($sidebarUserName . ' · ' . $sidebarRoleLabel) ?>">
             <?= profile_avatar_html((int)($_SESSION['user_id'] ?? 0), $sidebarUserName, $sidebarProfileImage, 'sidebar-avatar') ?>
             <span class="sidebar-profile-copy">
                 <strong><?= sidebar_e($sidebarUserName) ?></strong>
@@ -605,6 +606,8 @@ cartWorkspace.bindNavigation();
             try { localStorage.setItem(collapseStorageKey, isCollapsed ? '1' : '0'); }
             catch (_) { /* Navigation still works without browser storage. */ }
             updateBrandState();
+            closeSidebarDropdowns();
+            hideNavTip();
         }
 
         function toggleBrandSidebar() {
@@ -653,6 +656,162 @@ cartWorkspace.bindNavigation();
         }
         updateBrandState();
 
+        var sidebarTip = document.getElementById('rmSidebarTip');
+        var tipTarget = null;
+        var tipSelector = '.sidebar a[href], .sidebar .dropbtn, .sidebar .sidebar-profile';
+
+        function hideNavTip() {
+            if (tipTarget && tipTarget.dataset.rmTipTitle) {
+                tipTarget.setAttribute('title', tipTarget.dataset.rmTipTitle);
+                delete tipTarget.dataset.rmTipTitle;
+            }
+            tipTarget = null;
+            if (sidebarTip) {
+                sidebarTip.classList.remove('visible');
+                sidebarTip.setAttribute('aria-hidden', 'true');
+            }
+        }
+
+        function showNavTip(target, replaceTitle) {
+            if (!sidebarTip || !document.body.classList.contains('sidebar-collapsed') || isMobileDrawer()) {
+                return;
+            }
+            if (target.closest('.dropdown-content')) {
+                return;
+            }
+            var label = target.dataset.rmTipTitle || target.getAttribute('title');
+            if (!label) {
+                return;
+            }
+            hideNavTip();
+            // Hover shows the card, so the native tooltip would duplicate it. Focus keeps title as the accessible name.
+            if (replaceTitle) {
+                target.dataset.rmTipTitle = label;
+                target.removeAttribute('title');
+            }
+            tipTarget = target;
+
+            sidebarTip.textContent = label;
+            var rect = target.getBoundingClientRect();
+            var railRight = sidebar ? sidebar.getBoundingClientRect().right : rect.right;
+            sidebarTip.style.left = (Math.max(rect.right, railRight) + 10) + 'px';
+            sidebarTip.style.top = (rect.top + rect.height / 2) + 'px';
+            sidebarTip.classList.add('visible');
+            sidebarTip.setAttribute('aria-hidden', 'false');
+
+            var tipRect = sidebarTip.getBoundingClientRect();
+            var shift = 0;
+            if (tipRect.top < 8) {
+                shift = 8 - tipRect.top;
+            }
+            if (tipRect.bottom + shift > window.innerHeight - 8) {
+                shift -= tipRect.bottom + shift - (window.innerHeight - 8);
+            }
+            if (shift) {
+                sidebarTip.style.top = (rect.top + rect.height / 2 + shift) + 'px';
+            }
+        }
+
+        function closeSidebarDropdowns(except) {
+            document.querySelectorAll('.sidebar .dropdown.open').forEach(function(openDropdown) {
+                if (openDropdown === except) {
+                    return;
+                }
+
+                openDropdown.classList.remove('open');
+                var openButton = openDropdown.querySelector('.dropbtn');
+                if (openButton) {
+                    openButton.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        function placeSidebarFlyout(dropdown) {
+            if (isMobileDrawer() || !document.body.classList.contains('sidebar-collapsed')) {
+                return;
+            }
+            var button = dropdown.querySelector('.dropbtn');
+            var panel = dropdown.querySelector('.dropdown-content');
+            if (!button || !panel) {
+                return;
+            }
+            var rect = button.getBoundingClientRect();
+            var top = Math.min(Math.max(8, rect.top), Math.max(8, window.innerHeight - panel.offsetHeight - 8));
+            panel.style.setProperty('--rm-flyout-top', top + 'px');
+            var railRight = sidebar ? sidebar.getBoundingClientRect().right : rect.right;
+            panel.style.setProperty('--rm-flyout-left', (railRight + 8) + 'px');
+        }
+
+        function positionOpenFlyouts() {
+            if (isMobileDrawer() || !document.body.classList.contains('sidebar-collapsed')) {
+                return;
+            }
+            document.querySelectorAll('.sidebar .dropdown.open').forEach(placeSidebarFlyout);
+        }
+
+        if (sidebar) {
+            sidebar.addEventListener('mouseover', function(event) {
+                var target = event.target.closest(tipSelector);
+                if (target) {
+                    showNavTip(target, true);
+                }
+            });
+            sidebar.addEventListener('mouseout', function(event) {
+                var target = event.target.closest(tipSelector);
+                if (target && !target.contains(event.relatedTarget)) {
+                    hideNavTip();
+                }
+            });
+            sidebar.addEventListener('focusin', function(event) {
+                var target = event.target.closest(tipSelector);
+                if (target) {
+                    showNavTip(target, false);
+                }
+            });
+            sidebar.addEventListener('focusout', function(event) {
+                var target = event.target.closest(tipSelector);
+                if (target) {
+                    hideNavTip();
+                }
+            });
+            sidebar.addEventListener('scroll', function() {
+                closeSidebarDropdowns();
+                hideNavTip();
+            }, { passive: true });
+        }
+
+        document.addEventListener('click', function(event) {
+            if (!document.body.classList.contains('sidebar-collapsed')) {
+                return;
+            }
+            if (event.target.closest('.sidebar .dropdown')) {
+                return;
+            }
+            closeSidebarDropdowns();
+        });
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape' || event.defaultPrevented) {
+                return;
+            }
+            var focusedDropdown = document.activeElement ? document.activeElement.closest('.sidebar .dropdown') : null;
+            closeSidebarDropdowns();
+            hideNavTip();
+            if (focusedDropdown) {
+                var ownerButton = focusedDropdown.querySelector('.dropbtn');
+                if (ownerButton) {
+                    ownerButton.focus();
+                }
+            }
+        });
+        window.addEventListener('resize', function() {
+            if (isMobileDrawer()) {
+                closeSidebarDropdowns();
+            } else {
+                positionOpenFlyouts();
+            }
+            hideNavTip();
+        });
+
         document.querySelectorAll('.sidebar .dropdown').forEach(function(dropdown) {
             var button = dropdown.querySelector('.dropbtn');
             if (!button) {
@@ -660,22 +819,18 @@ cartWorkspace.bindNavigation();
             }
 
             button.addEventListener('click', function() {
-                document.querySelectorAll('.sidebar .dropdown.open').forEach(function(openDropdown) {
-                    if (openDropdown === dropdown) {
-                        return;
-                    }
-
-                    openDropdown.classList.remove('open');
-                    var openButton = openDropdown.querySelector('.dropbtn');
-                    if (openButton) {
-                        openButton.setAttribute('aria-expanded', 'false');
-                    }
-                });
+                closeSidebarDropdowns(dropdown);
 
                 dropdown.classList.toggle('open');
                 button.setAttribute('aria-expanded', dropdown.classList.contains('open') ? 'true' : 'false');
+                if (dropdown.classList.contains('open')) {
+                    hideNavTip();
+                    placeSidebarFlyout(dropdown);
+                }
             });
         });
+
+        positionOpenFlyouts();
     });
 </script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sw-register.js'), ENT_QUOTES, 'UTF-8') ?>" data-sw="<?= htmlspecialchars(app_url('sw.js'), ENT_QUOTES, 'UTF-8') ?>" data-scope="<?= htmlspecialchars(app_url('/'), ENT_QUOTES, 'UTF-8') ?>" defer></script>

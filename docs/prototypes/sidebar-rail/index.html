@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sidebar icon guide — comparison</title>
+<style>
+  :root {
+    --rail: 78px;
+    --rail-wide: 270px;
+    --navy: #111827;
+    --navy-line: rgba(255,255,255,.08);
+    --text: #d1d5db;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --blue: #2563eb;
+    --card: #fff;
+    --page: #eef2f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+  header { padding: 28px 32px 8px; max-width: 1180px; margin: 0 auto; }
+  header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.02em; }
+  header p { margin: 0; color: var(--muted); max-width: 760px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px 32px 64px; display: grid; gap: 20px; }
+  .card { background: var(--card); border: 1px solid #dbe3ee; border-radius: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #e6ecf5; }
+  .tag { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; background: #e2e8f0; color: #334155; }
+  .tag.now { background: #fee2e2; color: #b91c1c; }
+  .tag.pick { background: #dcfce7; color: #166534; }
+  .card-head h2 { margin: 0; font-size: 16px; }
+  .card-head small { margin-left: auto; color: var(--muted); font-size: 12.5px; }
+  .stage { display: flex; min-height: 360px; background: #f8fafc; }
+  .stage .fake-content { flex: 1; padding: 18px 22px; }
+  .fake-content h3 { margin: 4px 0 10px; font-size: 22px; }
+  .bars { display: grid; gap: 8px; max-width: 560px; }
+  .bars i { display: block; height: 10px; border-radius: 6px; background: #e2e8f0; }
+  .bars i:nth-child(2) { width: 82%; }
+  .bars i:nth-child(3) { width: 64%; }
+  .note { margin: 0; padding: 12px 18px; border-top: 1px solid #e6ecf5; font-size: 13.5px; color: #475569; }
+  .note b { color: var(--ink); }
+
+  /* ---------- shared rail ---------- */
+  .rail { position: relative; flex: 0 0 var(--rail); width: var(--rail); background: var(--navy); color: var(--text); padding: 14px 9px; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
+  .rail .brand { display: grid; place-items: center; padding: 4px 0 12px; border-bottom: 1px solid var(--navy-line); margin-bottom: 8px; }
+  .rail .brand img { width: 32px; height: 32px; border-radius: 8px; }
+  .rail a, .rail button.navbtn { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text); text-decoration: none; font: inherit; cursor: pointer; width: 100%; }
+  .rail :is(a, button.navbtn):hover, .rail :is(a, button.navbtn):focus-visible { background: rgba(37,99,235,.16); color: #fff; outline: none; }
+  .rail :is(a, button.navbtn).active { background: rgba(37,99,235,.16); color: #fff; box-shadow: inset 3px 0 0 #60a5fa; }
+  .rail img.ico { width: 22px; height: 22px; flex: 0 0 22px; object-fit: contain; }
+  .rail .label { display: none; }
+  .rail .spacer { height: 4px; }
+  .rail .avatar { margin-top: auto; display: grid; place-items: center; }
+  .rail .avatar span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 800; font-size: 12px; }
+
+  /* ---------- V1: native tooltip only ---------- */
+  .v1-hint { margin: 18px 0 0; background: #fef9c3; border: 1px solid #fde047; color: #713f12; font-size: 13px; padding: 10px 12px; border-radius: 8px; max-width: 430px; }
+  .v1-hint b { display: block; }
+
+  /* ---------- V2/V3: hover label card ---------- */
+  .tip { position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%) translateX(-4px); background: #0b1220; color: #f8fafc; padding: 9px 12px; border-radius: 9px; box-shadow: 0 10px 24px rgba(15,23,42,.28); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s ease, transform .12s ease; z-index: 30; }
+  .tip::before { content: ""; position: absolute; left: -5px; top: 50%; width: 10px; height: 10px; background: #0b1220; transform: translateY(-50%) rotate(45deg); }
+  .tip strong { display: block; font-size: 13px; }
+  .tip small { display: block; font-size: 11.5px; color: #94a3b8; margin-top: 1px; }
+  .rail a:hover .tip, .rail a:focus-visible .tip, .rail button.navbtn:hover .tip, .rail button.navbtn:focus-visible .tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+  /* V3: group flyout */
+  .flyout { position: absolute; left: calc(100% + 10px); top: 0; width: 226px; background: var(--navy); border: 1px solid #1f2a3d; border-radius: 12px; padding: 10px; box-shadow: 0 16px 32px rgba(15,23,42,.3); display: none; z-index: 40; }
+  .flyout.open { display: block; }
+  .flyout .fly-title { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #94a3b8; padding: 4px 8px 8px; }
+  .flyout a { justify-content: flex-start; min-height: 40px; padding: 0 8px; }
+  .flyout a span { display: inline; }
+  .flyout a img { width: 20px; height: 20px; }
+  .flyout .tip { display: none; }
+
+  /* V4: caption under icon */
+  .v4 .rail { --rail: 88px; padding: 12px 7px; }
+  .v4 .rail a, .v4 .rail button.navbtn { flex-direction: column; gap: 4px; min-height: 62px; padding: 8px 2px; }
+  .v4 .rail .cap { display: block; font-size: 10.5px; line-height: 1.15; text-align: center; color: #cbd5e1; max-width: 74px; }
+  .v4 .rail :is(a, button.navbtn).active .cap { color: #fff; }
+
+  /* V5: auto expand on hover */
+  .v5 .rail { transition: width .18s ease, flex-basis .18s ease; }
+  .v5 .rail:hover, .v5 .rail:focus-within { flex-basis: var(--rail-wide); width: var(--rail-wide); }
+  .v5 .rail img.ico { margin: 0; }
+  .v5 .rail a, .v5 .rail button.navbtn { justify-content: flex-start; gap: 12px; padding: 0 10px; }
+  .v5 .rail .label { display: none; }
+  .v5 .rail:hover .label, .v5 .rail:focus-within .label { display: block; white-space: nowrap; }
+
+  /* V6: expanded default */
+  .v6 .rail { flex-basis: var(--rail-wide); width: var(--rail-wide); padding: 14px 12px; }
+  .v6 .rail .brand { justify-content: flex-start; gap: 10px; padding: 4px 4px 14px; }
+  .v6 .rail .brand b { color: #f9fafb; font-size: 16px; }
+  .v6 .rail .brand small { display: block; color: #94a3b8; font-size: 11px; font-weight: 400; }
+  .v6 .rail a, .v6 .rail button.navbtn { justify-content: flex-start; gap: 11px; padding: 0 10px; }
+  .v6 .rail .label { display: block; white-space: nowrap; font-size: 14px; }
+  .v6 .rail .ghost { display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,.14); background: transparent; cursor: pointer; }
+  .v6 .rail .ghost img { width: 16px; height: 16px; opacity: .7; }
+
+  /* legend + table */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 0 18px 14px; font-size: 13px; color: #475569; }
+  .legend b { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #e6ecf5; vertical-align: top; }
+  th { background: #f8fafc; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #475569; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+  .yes { color: #15803d; font-weight: 700; }
+  .no { color: #b91c1c; font-weight: 700; }
+  .maybe { color: #a16207; font-weight: 700; }
+  @media (max-width: 760px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    table { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sidebar icon guide — comparison</h1>
+  <p>Pito ka bersyon sa icon-only rail. I-hover o pislita ang mga icon aron makita ang kalainan. Ang mga icon ug label tinuod gikan sa app (<code>assets/img/navigation</code>).</p>
+</header>
+<main>
+
+  <!-- ============ 1. current ============ -->
+  <section class="card">
+    <div class="card-head">
+      <span class="tag now">Karon</span>
+      <h2>1 · Icon-only + browser tooltip</h2>
+      <small>wala hilabti</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: karon">
+        <div class="brand"><img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""></div>
+        <a href="#" class="active" title="Products"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="label">Products</span></a>
+        <a href="#" title="Stock Overview"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="label">Stock Overview</span></a>
+        <a href="#" title="Replenishment Recommendations"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="label">Replenishment Recommendations</span></a>
+        <a href="#" title="Stock Receiving"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="label">Stock Receiving</span></a>
+        <a href="#" title="Receiving History"><img class="ico" src="../../../src/frontend/assets/img/navigation/filing_cabinet.svg" alt=""><span class="label">Receiving History</span></a>
+        <span class="spacer"></span>
+        <button class="navbtn" type="button" title="Inventory Control"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="label">Inventory Control</span></button>
+        <button class="navbtn" type="button" title="Reports"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="label">Reports</span></button>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p class="v1-hint"><b>Native title tooltip: hinay mugawas (1–2s)</b> I-hover ang icon. Motungha ang ngalan sa kilid sa cursor, apan mawala kung mo-move ka, ug dili makita sa touch o keyboard.</p>
+      </div>
+    </div>
+    <p class="note"><b>Problema:</b> walay ngalan nga makita sa screen. Ang tooltip hinay mugawas, mawala kung mo-move ang cursor, ug dili makita sa touch o keyboard.</p>
+  </section>
+
+  <!-- ============ 2. hover label card ============ -->
+  <section class="card">
+    <div class="card-head">
+      <span class="tag pick">Pili A</span>
+      <h2>2 · Hover / focus label card</h2>
+      <small>78px gihapon</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: hover label">
+        <div class="brand"><img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""></div>
+        <a href="#" class="active" title="Products"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="label">Products</span><span class="tip"><strong>Products</strong><small>Product catalog</small></span></a>
+        <a href="#" title="Stock Overview"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="label">Stock Overview</span><span class="tip"><strong>Stock Overview</strong><small>Stock health</small></span></a>
+        <a href="#" title="Replenishment Recommendations"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="label">Replenishment</span><span class="tip"><strong>Replenishment</strong><small>Recommended re-orders</small></span></a>
+        <a href="#" title="Stock Receiving"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="label">Stock Receiving</span><span class="tip"><strong>Stock Receiving</strong><small>Deliveries in</small></span></a>
+        <a href="#" title="Receiving History"><img class="ico" src="../../../src/frontend/assets/img/navigation/filing_cabinet.svg" alt=""><span class="label">Receiving History</span><span class="tip"><strong>Receiving History</strong><small>Past deliveries</small></span></a>
+        <span class="spacer"></span>
+        <button class="navbtn" type="button" title="Inventory Control"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="label">Inventory Control</span><span class="tip"><strong>Inventory Control</strong><small>Group · 3 pages</small></span></button>
+        <button class="navbtn" type="button" title="Reports"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="label">Reports</span><span class="tip"><strong>Reports</strong><small>Group · 4 pages</small></span></button>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p style="color:#64748b;font-size:13.5px;max-width:520px">Pasagdi ang cursor sa icon. Ang label mugawas sa tuo 120ms lang, ug mawala dayon kung mobiya. Keyboard focus parehas og resulta.</p>
+      </div>
+    </div>
+    <p class="note"><b>Maayo:</b> dili mokaon og width, klaro ang ngalan, dali i-implementar. <b>Limitasyon:</b> kung wala ka kahibalo unsa ang icon, kinahanglan gihapon i-hover ang tagsa-tagsa.</p>
+  </section>
+
+  <!-- ============ 3. hover label + group flyout ============ -->
+  <section class="card">
+    <div class="card-head">
+      <span class="tag pick">Pili A + grupo</span>
+      <h2>3 · Hover label + group flyout</h2>
+      <small>pislita ang gear ug chart</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: hover label plus group flyout">
+        <div class="brand"><img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""></div>
+        <a href="#" class="active"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="label">Products</span><span class="tip"><strong>Products</strong><small>Product catalog</small></span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="label">Stock Overview</span><span class="tip"><strong>Stock Overview</strong><small>Stock health</small></span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="label">Replenishment</span><span class="tip"><strong>Replenishment</strong><small>Recommended re-orders</small></span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="label">Stock Receiving</span><span class="tip"><strong>Stock Receiving</strong><small>Deliveries in</small></span></a>
+        <span class="spacer"></span>
+        <div style="position:relative">
+          <button class="navbtn" type="button" data-flyout="ic" aria-expanded="false"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="label">Inventory Control</span><span class="tip"><strong>Inventory Control</strong><small>Group · click to open</small></span></button>
+          <div class="flyout" id="ic" role="menu">
+            <div class="fly-title">Inventory Control</div>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/survey.svg" alt=""><span>Inventory Counts</span></a>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/high_priority.svg" alt=""><span>Stock Issue Reviews</span></a>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/export.svg" alt=""><span>Supplier Pullouts</span></a>
+          </div>
+        </div>
+        <div style="position:relative">
+          <button class="navbtn" type="button" data-flyout="rp" aria-expanded="false"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="label">Reports</span><span class="tip"><strong>Reports</strong><small>Group · click to open</small></span></button>
+          <div class="flyout" id="rp" role="menu">
+            <div class="fly-title">Reports</div>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/positive_dynamic.svg" alt=""><span>Demand Forecast</span></a>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/idea.svg" alt=""><span>Insights &amp; Risk</span></a>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/document.svg" alt=""><span>Receipt History</span></a>
+            <a href="#"><img src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span>Generate Report</span></a>
+          </div>
+        </div>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p style="color:#64748b;font-size:13.5px;max-width:520px">Pislita ang <b>gear</b> o <b>chart</b>: mugawas ang panel sa tuo nga naay tanang anak nga ngalan. Ikaduha nga pislit o <kbd>Esc</kbd> aron sirad-an.</p>
+      </div>
+    </div>
+    <p class="note"><b>Maayo:</b> usa ka pagtan-aw makita ang tibuok grupo, wala nay inline nga motubo sa ilalom. <b>Risgo:</b> dugang gamay nga JS ug kinahanglan maayo ang focus handling.</p>
+  </section>
+
+  <!-- ============ 4. caption under icon ============ -->
+  <section class="card v4">
+    <div class="card-head">
+      <span class="tag">Pili B</span>
+      <h2>4 · Permanenteng gamay nga caption</h2>
+      <small>88px, walay hover</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: caption">
+        <div class="brand"><img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""></div>
+        <a href="#" class="active"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="cap">Products</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="cap">Stock</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="cap">Replenish</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="cap">Receiving</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/filing_cabinet.svg" alt=""><span class="cap">History</span></a>
+        <span class="spacer"></span>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="cap">Control</span></button>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="cap">Reports</span></button>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p style="color:#64748b;font-size:13.5px;max-width:520px">Walay hover. Makita tanan ngalan sa tanan nga oras. Ang mga tag-as nga ngalan maputol o mabahin sa duha ka linya.</p>
+      </div>
+    </div>
+    <p class="note"><b>Maayo:</b> zero hover, klaro sa touch. <b>Bati:</b> mokaon og vertical space, gagmay kaayo ang text, ug maglisod ang tag-as nga label sama sa “Replenishment Recommendations”.</p>
+  </section>
+
+  <!-- ============ 5. auto expand ============ -->
+  <section class="card v5">
+    <div class="card-head">
+      <span class="tag">Pili C</span>
+      <h2>5 · Mo-expand kung i-hover</h2>
+      <small>78px → 270px</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: auto expand">
+        <div class="brand"><img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""></div>
+        <a href="#" class="active"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="label">Products</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="label">Stock Overview</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="label">Replenishment</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="label">Stock Receiving</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/filing_cabinet.svg" alt=""><span class="label">Receiving History</span></a>
+        <span class="spacer"></span>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="label">Inventory Control</span></button>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="label">Reports</span></button>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p style="color:#64748b;font-size:13.5px;max-width:520px">I-hover ang rail. Motubo kini ug mugawas ang mga ngalan, dayon mobalik sa 78px kung mobiya ang cursor.</p>
+      </div>
+    </div>
+    <p class="note"><b>Maayo:</b> makita ang tanan nga ngalan nga wala ka pislit. <b>Bati:</b> moalsa ang content matag hover, ug kung malabyan lang ang cursor mobalik-balik ang layout (samok sa POS).</p>
+  </section>
+
+  <!-- ============ 6. expanded default ============ -->
+  <section class="card v6">
+    <div class="card-head">
+      <span class="tag">Pili D</span>
+      <h2>6 · Expanded pirmi, collapse kung gusto</h2>
+      <small>270px</small>
+    </div>
+    <div class="stage">
+      <nav class="rail" aria-label="Demo: expanded">
+        <div class="brand">
+          <img src="../../../src/frontend/assets/img/retailmind-web-assets%20dark%20mode/icons/light/icon-64.png" alt=""><b>RetailMind<small>Inventory &amp; Forecasting</small></b>
+          <button class="ghost" type="button" title="Collapse sidebar"><img src="../../../src/frontend/assets/img/navigation/collapse.svg" alt=""></button>
+        </div>
+        <a href="#" class="active"><img class="ico" src="../../../src/frontend/assets/img/navigation/package.svg" alt=""><span class="label">Products</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/deployment.svg" alt=""><span class="label">Stock Overview</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/workflow.svg" alt=""><span class="label">Replenishment Recommendations</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/shipped.svg" alt=""><span class="label">Stock Receiving</span></a>
+        <a href="#"><img class="ico" src="../../../src/frontend/assets/img/navigation/filing_cabinet.svg" alt=""><span class="label">Receiving History</span></a>
+        <span class="spacer"></span>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/settings.svg" alt=""><span class="label">Inventory Control</span></button>
+        <button class="navbtn" type="button"><img class="ico" src="../../../src/frontend/assets/img/navigation/statistics.svg" alt=""><span class="label">Reports</span></button>
+        <span class="avatar"><span>MS</span></span>
+      </nav>
+      <div class="fake-content">
+        <h3>Product Catalog</h3>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <p style="color:#64748b;font-size:13.5px;max-width:460px">Walay hover. Klaro ang tanan, apan 270px ang gigamit sa sidebar bisan wala ka mag-navigate.</p>
+      </div>
+    </div>
+    <p class="note"><b>Maayo:</b> pinakasayon sabton, walay bag-ong code sa sulod. <b>Bati:</b> makuhaan og 192px ang lamesa sa Product Catalog — importante sa POS ug sa mga report.</p>
+  </section>
+
+  <!-- ============ compare table ============ -->
+  <section class="card">
+    <div class="card-head"><h2>Kalainan sa tulo ka sukod</h2></div>
+    <table>
+      <thead>
+        <tr><th>Bersyon</th><th>Klaridad</th><th>Width nga gikaon</th><th>Kalidad sa hover</th><th>Buhatonon</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1 Karon</td><td class="no">Ubos</td><td class="yes">78px</td><td class="no">Hinay, mawala</td><td class="yes">Wala</td></tr>
+        <tr><td>2 Hover label</td><td class="maybe">Maayo</td><td class="yes">78px</td><td class="yes">Dali</td><td class="maybe">CSS + gamay JS</td></tr>
+        <tr><td>3 Label + flyout</td><td class="yes">Labing maayo</td><td class="yes">78px</td><td class="yes">Dali</td><td class="maybe">CSS + JS focus</td></tr>
+        <tr><td>4 Caption</td><td class="maybe">Maayo</td><td class="maybe">88px</td><td class="yes">Walay hover</td><td class="maybe">CSS ra</td></tr>
+        <tr><td>5 Auto expand</td><td class="yes">Maayo</td><td class="no">Mobalhin</td><td class="no">Makasamok</td><td class="maybe">CSS ra</td></tr>
+        <tr><td>6 Expanded</td><td class="yes">Labing maayo</td><td class="no">270px</td><td class="yes">Walay hover</td><td class="yes">Usba default</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><b>Rekomendasyon:</b> bersyon 3 — hover label card para sa mga solo nga icon, ug flyout panel para sa mga grupo. Bersyon 2 lang kung gusto nimo og pinakagamay nga kausaban; ang flyout ipalahi na lang nga trabaho.</p>
+  </section>
+
+</main>
+<script>
+  // Group flyout: click to toggle, Esc to close, click outside to close.
+  document.querySelectorAll('[data-flyout]').forEach(function (button) {
+    var panel = document.getElementById(button.dataset.flyout);
+    if (!panel) return;
+    function close() {
+      panel.classList.remove('open');
+      button.setAttribute('aria-expanded', 'false');
+    }
+    button.addEventListener('click', function () {
+      var willOpen = !panel.classList.contains('open');
+      document.querySelectorAll('.flyout.open').forEach(function (open) { open.classList.remove('open'); });
+      document.querySelectorAll('[data-flyout][aria-expanded="true"]').forEach(function (other) {
+        if (other !== button) other.setAttribute('aria-expanded', 'false');
+      });
+      panel.classList.toggle('open', willOpen);
+      button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+    button.parentElement.addEventListener('mouseleave', function () {
+      if (!panel.contains(document.activeElement)) close();
+    });
+    panel.addEventListener('mouseleave', function () {
+      if (!panel.contains(document.activeElement)) close();
+    });
+    document.addEventListener('click', function (event) {
+      if (!button.parentElement.contains(event.target)) close();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') close();
+    });
+  });
+</script>
+</body>
+</html>
