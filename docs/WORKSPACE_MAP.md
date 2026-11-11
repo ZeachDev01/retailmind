@@ -25,6 +25,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Backing JS: `cart-workspace.js`, `checkout-attempt.js`, `checkout-quote.js`, `cash-drawer-counter.js`, `sale-receipt.js`, `sale-receipt-dialog.js`, `page-navigation.js`
   - Backend Services: `SalesWorkflowService`, `CashierShiftService`, `HeldSaleService`
 - **GCash Portal**: `components/cashier/gcash.php` (API: `gcash_api.php`, Receipt: `gcash_receipt.php`)
+  - **Service Fund Movements** tab: own recorded movements across sessions (`gcash_api.php?action=fund_movements`); Administrator GCash Overview uses the same label for all recorders, with All money history available for exchanges/corrections.
+  - Verification: `gcash_funding_receipt_contract.php`, `gcash_money_history_contract.php`, `gcash_fund_movements_browser_test.js`, `gcash_fund_movements_integration_browser_test.js`.
   - Partials: `src/backend/app/Views/gcash_receipt_dialog.php`, `gcash_receipt.php`
   - Backing JS: `gcash.js`, `gcash-reference.js`
   - Backend Services: `App\Services\GCashTransactionService`
@@ -41,6 +43,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 
 ### Inventory Manager (`inventory_manager`)
 - **Stock Overview**: `components/inventory_management/inventory_overview.php`
+  - Recent Stock Movements appear below the summary by default: latest 10 additions/receiving and corrections, excluding sales and returns; sortable column headers and five rows per page.
+  - Verification: `inventory_recent_movements_test.php`, `inventory_overview_clarity_browser_test.js`
   - Modals: `components/modals/product_overview/` (`expiredStock.php`, `expringSoon.php`, `lowOfStack.php`, `outOfStack.php`, `viewBatches.php`)
   - Backing JS: `inventory-drafts.js`
   - Backend Services: `App\Services\InventoryService`, `BatchInventoryLedger`
@@ -73,6 +77,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Store Configuration: `components/administrator/store_settings.php` (`App\Store\StoreSetupConfirmations`)
   - Fiscal Periods: `components/system_administrator/fiscal_periods.php` (Modal: `components/modals/fiscal_periods.php`, `App\Services\FiscalPeriodGuardService`)
   - Operational Audit: `components/system_administrator/audit_logs.php`
+  - Shared audit history uses Category (Super Administrator), Module, and Action selectors. Choices respect audit permissions; changing Category narrows Modules, and changing Module narrows Actions.
+  - Verification: `audit_modules_test.php`, `audit_history_filters_browser_test.js`
 - **Forecasting & Approvals**: `components/administrator/model_review.php`, `components/report/predictions.php`, `forecast_exceptions.php`
   - Backing JS: `forecast-notices.js`
   - Backend Services: `App\Forecasting\StoreModelGovernanceService`, `CandidateEvaluationService`

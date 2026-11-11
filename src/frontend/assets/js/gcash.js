@@ -150,11 +150,13 @@
             const result = await request({action: 'session_status'});
             currentSession = result.session;
             lastClosedSession = result.last_closed_session || null;
+            el('open-session-btn').disabled = result.has_open_shift !== true;
             renderSessionStatus();
             el('session-panel').hidden = false;
             await loadFollowUp();
         } catch (e) {
             currentSession = null;
+            el('open-session-btn').disabled = true;
             renderSessionStatus();
             el('balances-message').textContent = 'Balances unavailable. Reload to try again.';
             el('session-panel').hidden = true;
@@ -733,8 +735,14 @@
     const panelHistory = document.getElementById('panel-history');
     const tabs = [
         { id: 'new-transaction', btn: tabNewTx, panel: panelNewTx },
-        { id: 'history', btn: tabHistory, panel: panelHistory }
+        { id: 'history', btn: tabHistory, panel: panelHistory },
+        { id: 'funds', btn: document.getElementById('tab-funds'), panel: document.getElementById('panel-funds') }
     ];
+    const alignSelectedTab = () => {
+        const button = tabs.find(tab => tab.btn?.getAttribute('aria-selected') === 'true')?.btn;
+        if (button) button.parentElement.scrollLeft += button.getBoundingClientRect().left - button.parentElement.getBoundingClientRect().left;
+    };
+    window.addEventListener('resize', alignSelectedTab);
 
     function switchTab(targetId, focusTarget = false) {
         tabs.forEach(t => {
@@ -746,7 +754,34 @@
             t.panel.hidden = !isTarget;
             if (isTarget && focusTarget) t.btn.focus();
         });
+        alignSelectedTab();
         if (targetId === 'history') loadHistory();
+        if (targetId === 'funds') loadFundMovements();
+    }
+
+    let fundHistoryRequest = 0;
+    async function loadFundMovements() {
+        const requestId = ++fundHistoryRequest;
+        const status = el('funds-status');
+        const body = el('funds-body');
+        status.textContent = 'Loading service fund movements…';
+        body.replaceChildren();
+        try {
+            const data = await request({action: 'fund_movements'});
+            if (requestId !== fundHistoryRequest) return;
+            for (const movement of data.movements) {
+                const row = body.insertRow();
+                cell(row, movement.created_at);
+                cell(row, movement.movement_type.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase()));
+                cell(row, (movement.fund_type === 'cash' ? 'Service Cash' : 'Service Wallet') + ' ' + (movement.direction === 'in' ? '+' : '−') + phpFormatter.format(movement.amount));
+                cell(row, '#' + movement.session_id);
+                cell(row, movement.recorder_name + ' / Approved: ' + (movement.authorizer_name || 'Not recorded'));
+                cell(row, [movement.evidence, movement.reason].filter(Boolean).join(' · ') || '—');
+            }
+            status.textContent = data.movements.length ? '' : 'No service fund movements recorded yet.';
+        } catch (error) {
+            if (requestId === fundHistoryRequest) status.textContent = error.message;
+        }
     }
 
     tabs.forEach((t, idx) => {
@@ -1262,8 +1297,24 @@
     }
 
     if (el('funding-btn')) {
+        const updateFundingFields = () => {
+            const cash = el('funding-fund-type').value === 'cash';
+            const type = el('funding-type').value;
+            const special = ['product_drawer_transfer', 'shortage_recovery'].includes(type);
+            el('funding-reason').required = special;
+            el('funding-reason-label').textContent = special ? 'Reason' : 'Reason (optional)';
+            el('funding-reason').placeholder = special ? 'Minimum 5 characters' : 'Add details if needed';
+            el('funding-evidence').required = !cash || ['owner_capital', 'product_drawer_transfer'].includes(type);
+            el('funding-evidence').placeholder = el('funding-evidence').required ? 'Transaction reference, transfer slip, or receipt' : 'Optional slip or receipt number';
+            el('funding-source').parentElement.hidden = !cash || special;
+            el('funding-source').disabled = !cash || special;
+            el('funding-source').required = cash && !special;
+            el('funding-source-label').textContent = el('funding-direction').value === 'in' ? 'Cash source' : 'Cash destination';
+        };
+        for (const field of ['funding-type', 'funding-fund-type', 'funding-direction']) el(field).addEventListener('change', updateFundingFields);
         el('funding-btn').addEventListener('click', () => {
             el('funding-form').reset();
+            updateFundingFields();
             el('funding-dialog').showModal();
         });
         el('funding-cancel')?.addEventListener('click', () => el('funding-dialog').close());
@@ -1279,6 +1330,7 @@
                     movement_type: form.movement_type.value,
                     fund_type: form.fund_type.value,
                     direction: form.direction.value,
+                    source_destination: form.source_destination.disabled ? '' : form.source_destination.value,
                     amount: form.amount.value,
                     evidence_reference: form.evidence_reference.value,
                     reason: form.reason.value,
@@ -1287,9 +1339,9 @@
                 };
                 const res = await request(null, body);
                 el('funding-dialog').close();
-                notify('Funding movement #' + res.movement_id + ' recorded.', 'success');
+                notify('Service fund movement #' + res.movement_id + ' recorded.', 'success');
                 await loadSessionStatus();
-                await loadHistory();
+                await loadFundMovements();
             } catch (err) {
                 notify(err.message, 'error');
             } finally {

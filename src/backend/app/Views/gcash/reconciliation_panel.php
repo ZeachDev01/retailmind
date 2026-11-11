@@ -1,7 +1,6 @@
 <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-diff-title" data-fragment="reconciliation">
     <div class="pos-panel-header">
         <div class="pos-panel-title">
-            <div class="pos-panel-icon gcash-icon-alert"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i></div>
             <div>
                 <h2 id="gcash-admin-diff-title">Closing checks</h2>
             </div>

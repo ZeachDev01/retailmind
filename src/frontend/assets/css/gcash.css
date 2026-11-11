@@ -680,6 +680,7 @@ html[data-theme="dark"] .gcash-workspace-balances .gcash-icon-wallet {
 #gcash-workspace .btn,
 #gcash-workspace .gcash-tab {
     min-height: 44px;
+    flex-shrink: 0;
 }
 
 #gcash-scan-status:empty,

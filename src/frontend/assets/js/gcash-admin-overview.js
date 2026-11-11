@@ -9,12 +9,17 @@
         tabs.forEach(item => {
             const selected = item === tab;
             item.setAttribute('aria-selected', String(selected));
+            item.classList.toggle('active', selected);
             item.tabIndex = selected ? 0 : -1;
             document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
         });
         tab.parentElement.scrollLeft += tab.getBoundingClientRect().left - tab.parentElement.getBoundingClientRect().left;
         const url = new URL(location.href);
         url.searchParams.set('tab', tab.getAttribute('aria-controls').replace('tab-', ''));
+        if (target === 'tab-money' && document.getElementById(target).dataset.loaded !== 'true' && focus) {
+            url.searchParams.delete('session_id');
+            url.searchParams.delete('movement_scope');
+        }
         history.replaceState(null, '', url);
         const tabInput = document.querySelector('#gcash-admin-filter-form [name="tab"]');
         if (tabInput) tabInput.value = url.searchParams.get('tab');
@@ -23,7 +28,7 @@
             tab.focus({preventScroll: true});
             tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
         }
-        if (target === 'tab-money' && document.getElementById(target).dataset.loaded !== 'true' && focus) window.location.assign(url);
+        if (target === 'tab-money' && focus) window.location.assign(url);
     }
     tabs.forEach((tab, index) => {
         tab.addEventListener('click', () => {
@@ -39,71 +44,19 @@
     selectTab(tabs.find(tab => tab.getAttribute('aria-selected') === 'true'));
 
     // Browser scroll restoration runs after initialization on reload.
-    window.addEventListener('pageshow', () => {
+    const alignSelectedTab = () => {
         const tab = tabs.find(item => item.getAttribute('aria-selected') === 'true');
         requestAnimationFrame(() => {
             tab.parentElement.scrollLeft += tab.getBoundingClientRect().left - tab.parentElement.getBoundingClientRect().left;
         });
-    });
+    };
+    window.addEventListener('pageshow', alignSelectedTab);
+    window.addEventListener('resize', alignSelectedTab);
 
     workspace.addEventListener('click', event => {
         const review = event.target.closest('[data-review-tab]');
         if (review) selectTab(document.getElementById('gcash-tab-' + review.dataset.reviewTab), true);
     });
-
-    // Overview Coin View Controller (Balances <-> Activity & Completed)
-    const coinDeck = document.getElementById('gcash-coin-deck');
-    const coinPills = [...workspace.querySelectorAll('[data-coin-face]')];
-
-    function switchCoinFace(targetFace, animate = true) {
-        if (!coinDeck) return;
-        const nextFace = targetFace;
-
-        if (nextFace !== 'balances' && nextFace !== 'activity') return;
-
-        coinDeck.dataset.activeFace = nextFace;
-
-        coinPills.forEach(pill => {
-            const isMatch = pill.dataset.coinFace === nextFace;
-            pill.classList.toggle('active', isMatch);
-            pill.setAttribute('aria-pressed', String(isMatch));
-        });
-
-        const balancesFace = document.getElementById('gcash-face-balances');
-        const activityFace = document.getElementById('gcash-face-activity');
-
-        if (balancesFace && activityFace) {
-            balancesFace.hidden = (nextFace !== 'balances');
-            activityFace.hidden = (nextFace !== 'activity');
-
-            const activeFaceEl = nextFace === 'balances' ? balancesFace : activityFace;
-            if (animate) {
-                activeFaceEl.classList.remove('gcash-face-entering');
-                void activeFaceEl.offsetWidth;
-                activeFaceEl.classList.add('gcash-face-entering');
-            }
-        }
-
-        try {
-            sessionStorage.setItem('gcash_overview_face', nextFace);
-        } catch (_) {}
-    }
-
-    coinPills.forEach(pill => {
-        pill.addEventListener('click', () => switchCoinFace(pill.dataset.coinFace, true));
-    });
-
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const hasCustomPeriod = urlParams.has('period') && urlParams.get('period') !== 'today';
-        const hasDateFilters = urlParams.has('start_date') || urlParams.has('end_date') || urlParams.get('face') === 'activity';
-        if (!hasCustomPeriod && !hasDateFilters) {
-            const savedFace = sessionStorage.getItem('gcash_overview_face');
-            if (savedFace && (savedFace === 'balances' || savedFace === 'activity') && coinDeck.dataset.activeFace !== savedFace) {
-                switchCoinFace(savedFace, false);
-            }
-        }
-    } catch (_) {}
 
     function swapFragments(html) {
         for (const incoming of html.querySelectorAll('[data-fragment]')) {

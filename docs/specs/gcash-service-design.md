@@ -101,6 +101,7 @@ Operational policies settled on 2026-10-19 for implementation (#237):
 - **Cashier handoff**: The responsible Cashier may request replenishment when service cash or wallet balances run low, and must confirm actual receipt upon physical cash or wallet handover.
 - **Cross-fund transfers**: Any transfer between Service Cash and the Product cash drawer requires explicit Administrator authorization, logged with reason, amount, timestamp, movement type, and authorization credentials.
 - **Owner injection/withdrawal**: Owner capital additions or withdrawals must be recorded with external documentation (bank deposit reference, transfer slip, or acknowledgment receipt).
+- **Movement form and history (2026-11-11)**: Apply the movement-details and Service Fund Movements history policies in `gcash-service-spec.md`: routine reasons are optional, cash source/destination remains recorded, special explanations and applicable evidence remain required, Administrator sees all recorders and Cashier only their own recorded movements across sessions. Keep customer exchanges distinct and preserve access to the complete money timeline.
 - **Audit trail**: Every actual money movement must be logged immediately so expected balances continuously match physical and wallet realities.
 
 ### 2. Exceptions, adjustments, and emergency handover

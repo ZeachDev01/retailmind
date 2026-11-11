@@ -48,8 +48,8 @@ $recentStmt = $pdo->prepare(
      FROM stock_movements sm
      JOIN products p ON sm.product_id = p.product_id
      LEFT JOIN users u ON sm.moved_by = u.user_id
-    WHERE 1 = 1{$scopeSql}
-     ORDER BY sm.moved_at DESC
+    WHERE (sm.reason IN ('purchase', 'adjustment') OR sm.reason LIKE 'Physical reconciliation:%'){$scopeSql}
+     ORDER BY sm.moved_at DESC, sm.movement_id DESC
      LIMIT 10"
 );
 $recentStmt->execute($scopeParams);
@@ -372,7 +372,7 @@ $chartDataJson = json_encode([
             </nav>
         </section>
 
-        <div id="overview-default-view" class="overview-tab-card" hidden>
+        <div id="overview-default-view" class="overview-tab-card">
         <div class="overview-tabs" role="tablist" aria-label="Inventory overview sections">
             <button type="button" class="overview-tab is-active" id="overview-tab-movements" role="tab" aria-selected="true" aria-controls="overview-panel-movements" data-overview-tab="movements">Recent Stock Movements</button>
             <button type="button" class="overview-tab" id="overview-tab-fefo" role="tab" aria-selected="false" aria-controls="overview-panel-fefo" data-overview-tab="fefo" tabindex="-1">FEFO Pick Recommendations</button>
@@ -384,15 +384,19 @@ $chartDataJson = json_encode([
             </header>
             <div class="overview-table-shell">
                 <table class="overview-table">
-                    <thead><tr><th>Product</th><th>Change</th><th>Reason</th><th>Recorded by</th><th>Date</th></tr></thead>
+                    <thead><tr>
+                        <?php foreach (['Product', 'Change', 'Reason', 'Recorded by', 'Date'] as $column => $label): ?>
+                        <th scope="col" aria-sort="<?= $column === 4 ? 'descending' : 'none' ?>"><button type="button" data-movement-sort="<?= $column ?>"><?= $label ?> <i class="bi <?= $column === 4 ? 'bi-arrow-down' : 'bi-arrow-down-up' ?>" aria-hidden="true"></i></button></th>
+                        <?php endforeach; ?>
+                    </tr></thead>
                     <tbody>
                     <?php foreach ($recent_movements as $movement): ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars($movement['product_name']) ?></strong><small><?= htmlspecialchars($movement['sku']) ?></small></td>
+                        <td data-sort-value="<?= htmlspecialchars($movement['product_name']) ?>"><strong><?= htmlspecialchars($movement['product_name']) ?></strong><small><?= htmlspecialchars($movement['sku']) ?></small></td>
                         <td><span class="movement-change <?= (int)$movement['change_qty'] >= 0 ? 'movement-change--in' : 'movement-change--out' ?>"><?= (int)$movement['change_qty'] > 0 ? '+' : '' ?><?= (int)$movement['change_qty'] ?></span></td>
                         <td><?= htmlspecialchars($movement['reason']) ?></td>
                         <td><?= htmlspecialchars($movement['moved_by_name'] ?? 'System') ?></td>
-                        <td><?= htmlspecialchars(format_display_datetime($movement['moved_at'])) ?></td>
+                        <td data-sort-value="<?= htmlspecialchars($movement['moved_at']) ?>"><?= htmlspecialchars(format_display_datetime($movement['moved_at'])) ?></td>
                     </tr>
                     <?php endforeach; ?>
                     <?php if (!$recent_movements): ?>
@@ -746,6 +750,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const movementNextButton = document.getElementById('movement-page-next');
     const movementPageSize = 5;
     let movementPage = 1;
+    let movementSortColumn = 4;
+    let movementSortDirection = -1;
+    const movementSortButtons = Array.from(document.querySelectorAll('[data-movement-sort]'));
+    const movementCollator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+    movementSortButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+            const column = Number(button.dataset.movementSort);
+            movementSortDirection = movementSortColumn === column ? -movementSortDirection : 1;
+            movementSortColumn = column;
+            movementRows.sort(function (a, b) {
+                const left = a.cells[column].dataset.sortValue ?? a.cells[column].textContent.trim();
+                const right = b.cells[column].dataset.sortValue ?? b.cells[column].textContent.trim();
+                return movementSortDirection * (column === 1 ? Number(left) - Number(right) : movementCollator.compare(left, right));
+            });
+            document.querySelector('#overview-panel-movements tbody').append(...movementRows);
+            movementSortButtons.forEach(function (sortButton) {
+                const active = sortButton === button;
+                sortButton.closest('th').setAttribute('aria-sort', active ? (movementSortDirection === 1 ? 'ascending' : 'descending') : 'none');
+                sortButton.querySelector('i').className = active ? (movementSortDirection === 1 ? 'bi bi-arrow-up' : 'bi bi-arrow-down') : 'bi bi-arrow-down-up';
+            });
+            movementPage = 1;
+            renderMovementPage();
+        });
+    });
 
     function renderMovementPage() {
         const pageCount = Math.max(1, Math.ceil(movementRows.length / movementPageSize));
@@ -881,7 +909,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showOverviewSummary() {
         productView.hidden = true;
-        defaultView.hidden = true;
+        defaultView.hidden = false;
         document.getElementById('overview-metrics').hidden = false;
         document.getElementById('overview-forecast').hidden = false;
         document.getElementById('overview-charts').hidden = false;
@@ -897,16 +925,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('overview-back').addEventListener('click', function () {
-        productView.hidden = true;
-        defaultView.hidden = false;
-        document.getElementById('overview-metrics').hidden = false;
-        document.getElementById('overview-forecast').hidden = false;
-        document.getElementById('overview-charts').hidden = false;
-        document.querySelectorAll('[data-overview-view]').forEach(function (button) {
-            button.classList.remove('is-active');
-        });
-        setOverviewTab('summary');
-        document.querySelector('.overview-tab.is-active').focus({preventScroll: true});
+        showOverviewSummary();
+        defaultView.querySelector('.overview-tab.is-active').focus({preventScroll: true});
     });
 
     function renderProductPage() {

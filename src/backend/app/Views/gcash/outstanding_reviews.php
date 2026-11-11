@@ -1,7 +1,6 @@
 <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-outstanding-title" id="gcash-outstanding-reviews" data-fragment="outstanding-reviews">
     <div class="pos-panel-header">
         <div class="pos-panel-title">
-            <div class="pos-panel-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></div>
             <div>
                 <h2 id="gcash-outstanding-title">Needs review</h2>
             </div>

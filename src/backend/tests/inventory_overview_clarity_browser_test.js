@@ -9,6 +9,7 @@ const source = fs.readFileSync(path.join(frontend, 'components/inventory_managem
 const template = source.slice(source.indexOf('<body')).replace(/<\?php include[^?]+\?>/g, '');
 const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8', input: `<?php
     function app_url($path) { return $path; }
+    function format_display_datetime($value) { return $value; }
     $products = [];
     foreach ([20, 2, 0] as $id => $quantity) {
         $products[] = ['product_id' => $id + 1, 'product_name' => ['Rice', 'Coffee', 'Milk'][$id],
@@ -21,6 +22,10 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
     $low_stock = [$products[1], $products[2]]; $lowStockProductIds = [2 => true, 3 => true];
     $expiring_batches = $expired_batches = $expiredProductIds = $expiringProductIds = [];
     $forecastProducts = $topForecastProducts = $recent_movements = $fefo_recommendations = [];
+    foreach (['Rice', 'Coffee', 'Milk', 'Soap', 'Oil', 'Biscuits'] as $i => $name) {
+        $recent_movements[] = ['product_name' => $name, 'sku' => 'SKU-' . $i, 'change_qty' => 3 - $i,
+            'reason' => 'adjustment', 'moved_by_name' => 'Inventory Manager', 'moved_at' => sprintf('2026-11-%02d 10:00:00', 11 - $i)];
+    }
     $productCategories = ['Food']; $chartDataJson = '{}';
 ?>${template}`});
 
@@ -40,23 +45,33 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             // The shared shell normally loads this before the page script.
             await page.evaluate(() => { window.RetailMindUI = {}; });
             await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
+            assert.equal(await page.locator('#overview-panel-movements').isVisible(), true, 'Movements are visible on first entry');
+            assert.ok((await page.locator('#overview-default-view').boundingBox()).y > (await page.locator('#overview-charts').boundingBox()).y, 'Movements appear below the overview');
+            await page.locator('[data-movement-sort="0"]').click();
+            assert.match(await page.locator('#overview-panel-movements tbody tr:visible').first().innerText(), /Biscuits/);
+            await page.locator('[data-movement-sort="1"]').click();
+            assert.equal(await page.locator('#overview-panel-movements tbody tr:visible').first().locator('td').nth(1).innerText(), '-2', 'Quantity sorting is numeric');
+            await page.locator('#movement-page-next').click();
+            await page.locator('[data-movement-sort="1"]').click();
+            assert.equal(await page.locator('#movement-page-status').innerText(), 'Page 1 of 2', 'Sorting resets pagination');
+            assert.equal(await page.locator('[data-movement-sort="1"]').evaluate(button => button.closest('th').getAttribute('aria-sort')), 'descending');
+            await page.locator('.overview-metric[data-overview-view="all"]').click();
             assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 3);
             const search = page.getByLabel('Search products', {exact: true});
             assert.equal(await page.locator('button.overview-metric').count(), 7, 'Original summary cards remain');
             assert.equal(await page.locator('.overview-metric-icon').count(), 7, 'Original card icons remain');
             assert.equal(await page.locator('.page-subtitle, .overview-chart-header p, .overview-section-header p, .overview-chart-badge').count(), 0, 'Redundant subtext and counts are removed');
-            assert.ok((await page.locator('.overview-charts-grid').boundingBox()).y < (await search.boundingBox()).y, 'Original chart-first layout remains');
             await search.fill('Coffee');
             assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 1);
             await search.fill('No matching barcode');
             assert.equal(await page.locator('#overview-product-empty').isVisible(), true);
             await search.fill('');
-            await page.locator('.overview-metric[data-overview-view="out"]').click();
+            await page.locator('#overview-filter-select').selectOption('out');
             assert.equal(await page.locator('[data-overview-product-row]:visible').innerText().then(text => text.includes('Milk')), true);
             await page.locator('#overview-filter-select').selectOption('missing-exp');
             assert.equal(await page.locator('.overview-col-undated').first().isVisible(), true);
             assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 1);
-            await page.getByRole('button', {name: 'View stock movements', exact: true}).click();
+            await page.getByRole('button', {name: 'Return to Stock Overview', exact: true}).click();
             assert.equal(await page.locator('#overview-default-view').isVisible(), true);
             assert.equal(await page.evaluate(() => document.activeElement.id), 'overview-tab-movements');
             await page.getByRole('tab', {name: 'Recent Stock Movements', exact: true}).press('ArrowRight');
@@ -64,6 +79,9 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.locator('.overview-metric[data-overview-view="all"]').click();
             assert.equal(await page.locator('#overview-product-view').isVisible(), true);
             assert.equal(await page.locator('#overview-filter-select').inputValue(), 'all');
+            await page.locator('#overview-back').click();
+            await page.getByRole('tab', {name: 'Recent Stock Movements', exact: true}).click();
+            assert.equal(await page.locator('#overview-panel-movements').isVisible(), true, 'Summary returns with movements visible');
             for (const theme of ['light', 'dark']) {
                 await page.locator('html').evaluate((el, theme) => { el.dataset.theme = theme; }, theme);
                 await page.evaluate(() => window.scrollTo(0, 0));

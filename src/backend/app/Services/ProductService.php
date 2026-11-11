@@ -1364,6 +1364,10 @@ class ProductService
                 }
             }
 
+            $this->pdo->prepare(
+                'UPDATE product_batches SET sealed_quantity = 0, loose_quantity = 0 WHERE product_id = ? AND remaining_quantity = 0'
+            )->execute([$productId]);
+
             $batchStmt = $this->pdo->prepare(
                 "SELECT batch_id, remaining_quantity, sealed_quantity, loose_quantity
                  FROM product_batches

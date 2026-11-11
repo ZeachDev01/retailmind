@@ -17,8 +17,8 @@ const { chromium } = require('playwright');
             const page = await browser.newPage({ viewport: { width, height: 900 } });
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
-            await page.route('http://product.test/', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><style>${css}</style></head><body>${markup}</body></html>` }));
-            await page.goto('http://product.test/');
+            await page.route('http://localhost/products.php', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><style>${css}</style></head><body>${markup}</body></html>` }));
+            await page.goto('http://localhost/products.php');
             await page.addScriptTag({ path: path.join(frontend, 'assets/js/ui.js') });
             await page.evaluate(() => {
                 window.existingProductNames = new Set();
@@ -37,7 +37,16 @@ const { chromium } = require('playwright');
             await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('add-product-modal')));
             assert.equal(await page.locator('[name="csrf_token"]').inputValue(), 'current-session-token', 'Restoring old draft must preserve current security token');
             assert.equal(await page.locator('[name="action"]').inputValue(), 'create', 'Draft must preserve create action');
-            assert.equal(await page.locator('#product-name').inputValue(), 'Draft product', 'Draft product details are restored');
+            assert.equal(await page.locator('#product-name').inputValue(), '', 'Unowned legacy drafts cannot restore product values');
+            await page.addScriptTag({ path: path.join(frontend, 'assets/js/inventory-drafts.js') });
+            await page.evaluate(() => {
+                RetailMindInventoryDrafts.start({key:btoa(String.fromCharCode(...new Uint8Array(32))), user:'1', confirmed:false});
+                document.dispatchEvent(new Event('DOMContentLoaded'));
+            });
+            await page.waitForFunction(() => document.querySelector('[name="operation_token"]'));
+            await page.locator('#product-name').fill('Draft product');
+            await page.locator('#cost-price').evaluate(field => { field.value = '30'; });
+            await page.locator('#selling-price').evaluate(field => { field.value = '45'; });
             await page.evaluate(() => setWizardStep(3));
             for (const [label, choices, selected] of [
                 ['Base Unit', ['piece', 'bottle', 'can', 'sachet', 'stick', 'pack', 'bag', 'box', 'jar', 'tube', 'roll', 'pair'], 'bottle'],
@@ -50,9 +59,18 @@ const { chromium } = require('playwright');
                 await field.selectOption(selected);
             }
             await page.locator('#add-product-modal [data-close-modal]').first().click();
-            const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('retail_mind_add_product_state')));
-            assert.equal('csrf_token' in saved, false, 'Draft must exclude security token');
-            assert.equal('product_image' in saved, false, 'Draft must exclude file input');
+            const saved = await page.evaluate(async () => {
+                await RetailMindInventoryDrafts.keep(document.getElementById('add-product-form'));
+                await RetailMindInventoryDrafts.flush();
+                const storageKey = Object.keys(localStorage).find(key => key.endsWith(':add-product-form'));
+                const stored = JSON.parse(localStorage.getItem(storageKey));
+                const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
+                const key = await crypto.subtle.importKey('raw', new Uint8Array(32), 'AES-GCM', false, ['decrypt']);
+                const plain = await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(stored.iv)}, key, decode(stored.ciphertext));
+                return JSON.parse(new TextDecoder().decode(plain));
+            });
+            assert.equal(saved.values.some(item => item.name === 'csrf_token'), false, 'Private draft excludes security token');
+            assert.equal(saved.context.step, 3, 'Private draft captures the current wizard step');
             await page.evaluate(() => {
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
                 setWizardStep(4);
@@ -97,6 +115,7 @@ const { chromium } = require('playwright');
                 });
             });
             await page.locator('#wizard-save').click();
+            await page.waitForFunction(() => window.submittedProduct);
             const submitted = await page.evaluate(() => window.submittedProduct);
             assert.equal(submitted.csrf_token, 'current-session-token');
             assert.equal(submitted.action, 'create');
@@ -106,7 +125,7 @@ const { chromium } = require('playwright');
             assert.equal(submitted.initial_stock_quantity, '74', 'Submitted form payload contains calculated 74 pieces');
             assert.equal(submitted.starting_packs, undefined, 'Piece-only product omits inactive pack fields');
             assert.equal(submitted.expiration_date, '2027-02-28', 'Starting expiration is submitted for the Opening Batch');
-            await page.evaluate(() => clearFormState());
+            await page.evaluate(() => document.getElementById('add-product-form').reset());
             assert.equal(await page.locator('[name="base_unit"]').inputValue(), 'piece', 'Reset restores default base unit');
             assert.equal(await page.locator('[name="receiving_unit"]').inputValue(), 'package', 'Reset restores default receiving unit');
             await page.evaluate(() => setWizardStep(4));
@@ -117,6 +136,68 @@ const { chromium } = require('playwright');
             assert.equal(await page.getByLabel('Receiving Unit', { exact: true }).inputValue(), 'package');
             assert.equal(await page.getByLabel('Custom base unit', { exact: true }).isVisible(), false);
             assert.equal(await page.getByLabel('Custom receiving unit', { exact: true }).isVisible(), false);
+            // Resume a real encrypted draft, including inactive fields and explicit stock forms.
+            await page.evaluate(() => { delete document.getElementById('add-product-form').dataset.inventorySubmissionKind; });
+            await page.locator('[data-cost-mode="pack"]').click();
+            await page.locator('#create-pack-cost').fill('120');
+            await page.locator('#create-purchase-pack-size').fill('12');
+            await page.locator('#selling-price').fill('15');
+            await page.locator('#create-sell-packs').check();
+            await page.locator('#create-pack-size').fill('6');
+            await page.locator('#create-pack-price').fill('85');
+            await page.locator('#create-pack-barcode').fill('PACK-DRAFT-6');
+            await page.evaluate(() => setWizardStep(4));
+            await page.locator('#starting-packs-count').fill('5');
+            await page.locator('#starting-pack-loose-count').fill('3');
+            for (const enabled of [true, false]) {
+                if (!enabled) {
+                    await page.evaluate(() => setWizardStep(3));
+                    await page.locator('#create-sell-packs').uncheck();
+                    await page.locator('[data-cost-mode="piece"]').click();
+                    await page.locator('#cost-price').fill('11');
+                    await page.evaluate(() => setWizardStep(4));
+                    await page.locator('#initial-stock-quantity').fill('80');
+                }
+                await page.evaluate(async () => {
+                    await RetailMindInventoryDrafts.keep(document.getElementById('add-product-form'));
+                    await RetailMindInventoryDrafts.flush();
+                });
+                await page.reload();
+                await page.addScriptTag({ path:path.join(frontend,'assets/js/ui.js') });
+                await page.evaluate(() => {
+                    window.existingProductNames = new Set(); window.existingBarcodes = new Set();
+                    window.formatMoney = value => Number(value).toFixed(2);
+                    document.getElementById('product-category').innerHTML = '<option value="1">Groceries</option>';
+                });
+                await page.addScriptTag({content:wizard});
+                await page.addScriptTag({path:path.join(frontend,'assets/js/inventory-drafts.js')});
+                await page.evaluate(() => {
+                    RetailMindInventoryDrafts.start({key:btoa(String.fromCharCode(...new Uint8Array(32))),user:'1',confirmed:false});
+                    document.dispatchEvent(new Event('DOMContentLoaded'));
+                });
+                await page.getByRole('button',{name:'Resume',exact:true}).click();
+                await page.waitForFunction(() => document.querySelector('[data-panel="4"]').classList.contains('active'));
+                assert.equal(await page.locator('#create-cost-mode').inputValue(), enabled ? 'pack' : 'piece');
+                assert.equal(await page.locator('#cost-price').inputValue(), enabled ? '10.00' : '11');
+                assert.equal(await page.locator('#selling-price').inputValue(), '15');
+                assert.equal(await page.locator('#create-sell-packs').isChecked(), enabled);
+                assert.equal(await page.locator('#create-pack-size').inputValue(), '6');
+                assert.equal(await page.locator('#create-purchase-pack-size').inputValue(), '12');
+                assert.equal(await page.locator('#initial-stock-quantity').inputValue(), enabled ? '33' : '80', 'Inactive restored pack counts cannot replace piece stock');
+                if (enabled) {
+                    assert.equal(await page.locator('#starting-packs-count').inputValue(), '5');
+                    assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '3');
+                }
+            }
+            await page.evaluate(() => {
+                const form = document.getElementById('add-product-form');
+                form.elements.pack_size.value = '6';
+                form.elements.cost_price.value = '11';
+                document.dispatchEvent(new CustomEvent('inventorydraft:restored', {detail:{form,draft:{context:{step:3},values:[{name:'pack_size',value:'6'},{name:'cost_price',value:'11'}]}}}));
+            });
+            assert.equal(await page.locator('#create-sell-packs').isChecked(), true, 'Older private pack drafts infer sealed selling');
+            assert.equal(await page.locator('#create-cost-mode').inputValue(), 'piece', 'Older drafts keep their explicitly entered unit cost');
+            assert.equal(await page.locator('#cost-price').inputValue(), '11');
             assert.deepEqual(errors, []);
             await page.close();
         }

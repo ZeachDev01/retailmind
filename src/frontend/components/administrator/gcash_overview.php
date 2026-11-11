@@ -42,9 +42,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $moneyHistory = null;
+$moneyHistoryError = '';
+$allMoneyHistory = ($_GET['movement_scope'] ?? '') === 'all';
 $eligibleCashiers = [];
 try {
-    if (($_GET['tab'] ?? '') === 'money') $moneyHistory = $service->getMoneyHistory(['session_id' => $_GET['session_id'] ?? null]);
+    if (($_GET['tab'] ?? '') === 'money') {
+        try {
+            $moneyHistory = $service->getMoneyHistory(['session_id' => $_GET['session_id'] ?? null, 'funding_only' => !$allMoneyHistory]);
+        } catch (Throwable $e) {
+            $moneyHistoryError = \App\Support\OperatorAlert::message($e, 'Service fund movements are unavailable. Reload or ask your Administrator to check the records.');
+        }
+    }
     if ($canMutate) $eligibleCashiers = $service->eligibleHandoverRecipients();
 } catch (Throwable $e) {
     error_log((string)$e);
@@ -120,6 +128,7 @@ $isFilteredActivity = $report->isFilteredActivity;
     <main class="main-content" id="gcash-admin-workspace" data-api="<?= gcash_admin_e(app_url('components/administrator/gcash_overview_api.php')) ?>" data-fragments="<?= gcash_admin_e(app_url('components/administrator/gcash_overview_fragments.php')) ?>" data-csrf="<?= gcash_admin_e(csrf_token()) ?>">
         <header class="topbar">
             <div>
+                <img class="gcash-session-logo" src="<?= gcash_admin_e(theme_url('assets/img/gcash-logo.svg')) ?>" alt="GCash" width="88" height="28">
                 <h1>GCash Overview</h1>
 
                 <?php require __DIR__ . '/../../../backend/app/Views/gcash/session_status.php'; ?>
@@ -148,9 +157,9 @@ $isFilteredActivity = $report->isFilteredActivity;
             </form>
         </details>
         <?php endif; ?>
-        <nav class="gcash-section-nav" role="tablist" aria-label="GCash overview sections">
-            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'reconciliation' => 'Closing checks', 'unresolved' => 'Unresolved exchanges', 'money' => 'Money history'] as $key => $label): ?>
-                <button type="button" role="tab" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
+        <nav class="gcash-section-nav gcash-tablist" role="tablist" aria-label="GCash overview sections">
+            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'reconciliation' => 'Closing checks', 'unresolved' => 'Unresolved exchanges', 'money' => 'Service Fund Movements'] as $key => $label): ?>
+                <button type="button" role="tab" class="gcash-tab <?= $key === $activeTab ? 'active' : '' ?>" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
                     <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'unresolved' => 'bi-clock-history', 'money' => 'bi-journal-text'][$key] ?>" aria-hidden="true"></i>
                     <?= $label ?>
                     <?php if ($key === 'transactions'): ?><span class="gcash-badge" data-fragment="transactions-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></span><?php endif; ?>
@@ -163,43 +172,14 @@ $isFilteredActivity = $report->isFilteredActivity;
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/filter_error.php'; ?>
 
         <div id="tab-overview" role="tabpanel" aria-labelledby="gcash-tab-overview" tabindex="0" <?= $activeTab !== 'overview' ? 'hidden' : '' ?>>
-        <!-- Coin Switcher Toolbar: Toggle between Services Balance and Activity & Report Range -->
-        <div class="gcash-coin-toolbar" role="region" aria-label="Overview view toggle">
-            <div class="gcash-coin-segmented" role="group" aria-label="Overview views">
-                <button type="button" id="coin-tab-balances" class="gcash-coin-pill <?= $overviewFace === 'balances' ? 'active' : '' ?>" aria-pressed="<?= $overviewFace === 'balances' ? 'true' : 'false' ?>" data-coin-face="balances">
-                    <span class="gcash-coin-pill-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></span>
-                    <span class="gcash-coin-pill-label">
-                        <strong>Services balance</strong>
-                        <span class="gcash-coin-pill-sub">Drawer &amp; GCash funds</span>
-                    </span>
-                </button>
-                <button type="button" id="coin-tab-activity" class="gcash-coin-pill <?= $overviewFace === 'activity' ? 'active' : '' ?>" aria-pressed="<?= $overviewFace === 'activity' ? 'true' : 'false' ?>" data-coin-face="activity">
-                    <span class="gcash-coin-pill-icon"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></span>
-                    <span class="gcash-coin-pill-label">
-                        <strong>Activity &amp; Completed</strong>
-                        <span class="gcash-coin-pill-sub">Report range &amp; metrics</span>
-                    </span>
-                </button>
-            </div>
+        <div class="gcash-balances-row">
+            <?php require __DIR__ . '/../../../backend/app/Views/gcash/balances.php'; ?>
+            <?php require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php'; ?>
         </div>
-
-        <div class="gcash-coin-deck" id="gcash-coin-deck" data-active-face="<?= gcash_admin_e($overviewFace) ?>">
-            <!-- FACE 1: Services Balance & Custody (Default) -->
-            <div class="gcash-coin-face gcash-face-balances" id="gcash-face-balances" <?= $overviewFace !== 'balances' ? 'hidden' : '' ?>>
-                <div class="gcash-balances-row">
-        <?php require __DIR__ . '/../../../backend/app/Views/gcash/balances.php'; ?>
-
-        <?php require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php'; ?>
-                </div>
-            </div>
-
-            <!-- FACE 2: Activity Report Range & Completed Activity -->
-            <div class="gcash-coin-face gcash-face-activity" id="gcash-face-activity" <?= $overviewFace !== 'activity' ? 'hidden' : '' ?>>
-                <div class="gcash-activity-row">
+        <div class="gcash-activity-row">
         <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-labelledby="gcash-reporting-title" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-calendar3" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-reporting-title">Activity report range</h2>
                     </div>
@@ -248,10 +228,7 @@ $isFilteredActivity = $report->isFilteredActivity;
         </section>
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php'; ?>
 
-                </div>
-            </div>
         </div>
-
         </div>
 
         <div id="tab-transactions" role="tabpanel" aria-labelledby="gcash-tab-transactions" tabindex="0" <?= $activeTab !== 'transactions' ? 'hidden' : '' ?>>
@@ -259,7 +236,6 @@ $isFilteredActivity = $report->isFilteredActivity;
         <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-history-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-list-columns-reverse" aria-hidden="true"></i></div>
                     <div>
                         <h2 id="gcash-admin-history-title">Transaction history</h2>
                     </div>
@@ -346,20 +322,20 @@ $isFilteredActivity = $report->isFilteredActivity;
             <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-money-title">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
-                    <div class="pos-panel-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
                     <div>
-                        <h2 id="gcash-money-title">Money history</h2>
+                        <h2 id="gcash-money-title">Service Fund Movements</h2>
                     </div>
                 </div>
             </div>
             <form method="get" class="gcash-money-filters">
                 <input type="hidden" name="tab" value="money">
+                <div class="gcash-field"><label for="gcash-money-scope">Records</label><select class="form-control" id="gcash-money-scope" name="movement_scope"><option value="funds" <?= !$allMoneyHistory ? 'selected' : '' ?>>Service fund movements</option><option value="all" <?= $allMoneyHistory ? 'selected' : '' ?>>All money history</option></select></div>
                 <div class="gcash-field"><label for="gcash-money-session"><i class="bi bi-hash" aria-hidden="true"></i> Session ID</label><input class="form-control" id="gcash-money-session" type="number" name="session_id" min="1" autocomplete="off" placeholder="All sessions (e.g. 1042)" value="<?= gcash_admin_e($_GET['session_id'] ?? '') ?>"></div>
-                <button class="btn btn-primary" type="submit">Load money history</button>
-                <a class="btn btn-secondary" href="?tab=money">All sessions</a>
+                <button class="btn btn-primary" type="submit">Load movements</button>
+                <a class="btn btn-secondary" href="?tab=money<?= $allMoneyHistory ? '&amp;movement_scope=all' : '' ?>">All sessions</a>
             </form>
             <details class="gcash-history-help"><summary>Timestamp &amp; correction rules</summary><p>Finished exchanges use completion time; unfinished use start time; corrections use recorded time.</p></details>
-            <?php if ($moneyHistory === null): ?><p role="status">Open or reload Money history to load movements.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><h3>No movements recorded</h3><p>Session funding, exchanges, and corrections appear here.</p></div><?php else: ?>
+            <?php if ($moneyHistoryError !== ''): ?><p role="alert"><?= gcash_admin_e($moneyHistoryError) ?></p><?php elseif ($moneyHistory === null): ?><p role="status">Open or reload Service Fund Movements to load records.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><h3>No movements recorded</h3><p>No records match this selection. Choose All sessions to include closed sessions.</p></div><?php else: ?>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash money history"><table class="gcash-table" id="gcash-money-table"><thead><tr><th scope="col">Date / time</th><th scope="col">Movement</th><th scope="col">Session / exchange</th><th scope="col">Cash / wallet effect</th><th scope="col">Recorded / approved by</th><th scope="col">Evidence / reason</th></tr></thead><tbody>
             <?php foreach ($moneyHistory as $movement): ?><tr>
                 <td><?= gcash_admin_e($movement['created_at']) ?></td><td><span class="gcash-type-badge gcash-movement-badge"><?= gcash_admin_e(ucfirst(str_replace('_', ' ', $movement['movement_type']))) ?></span><?php if (empty($movement['is_actual_movement'])): ?><small class="gcash-cell-meta">Recording correction · no current money moved</small><?php endif; ?></td>

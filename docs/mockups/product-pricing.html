@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Add Product · Pricing preview · RetailMind</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1f2937;background:#f4f6f9;font-size:16px;--blue:#2563eb;--line:#e5e7eb;--muted:#586476}
+*{box-sizing:border-box}body{margin:0;padding:28px 20px 44px}button,input{font:inherit}button{cursor:pointer}button,input{transition:border-color .15s,background-color .15s}button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #93b4ff;outline-offset:3px}input{caret-color:var(--blue)}::selection{background:#dbeafe;color:#172554}[hidden]{display:none!important}
+.preview-note{max-width:760px;margin:0 auto 16px;display:flex;justify-content:space-between;gap:12px;font-size:.75rem;color:var(--muted)}.preview-note strong{color:#334155;font-weight:650}
+.sheet{max-width:760px;margin:auto;background:#fff;border-radius:18px;box-shadow:0 12px 44px #0f172a14;overflow:hidden}.header{padding:26px 32px 22px;border-bottom:1px solid var(--line)}h1{font-size:1.375rem;line-height:1.3;letter-spacing:-.025em;margin:0 0 6px;font-weight:700}.header p{font-size:.875rem;color:var(--muted);margin:0;line-height:1.5}
+.steps{display:flex;list-style:none;padding:20px 32px;margin:0;gap:0;border-bottom:1px solid var(--line)}.steps li{flex:1;display:flex;align-items:center;gap:8px;font-size:.75rem;color:var(--muted);position:relative}.steps li:not(:last-child):after{content:"";height:1px;background:var(--line);flex:1;margin:0 12px 0 4px}.step-number{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:#f1f5f9;font-weight:650;font-variant-numeric:tabular-nums}.complete .step-number{color:#1d4ed8;background:#eff6ff}.steps [aria-current] {color:#1d4ed8;font-weight:650}.steps [aria-current] .step-number{background:var(--blue);color:#fff}.step-number svg{width:13px;height:13px}
+.content{padding:28px 32px 24px}.section-heading{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}h2{font-size:1.05rem;letter-spacing:-.015em;margin:0;line-height:1.4}.section-heading span{font-size:.75rem;color:var(--muted)}.mode-switch{display:flex;border:1px solid #d3dce8;padding:4px;border-radius:12px;gap:4px;margin-bottom:24px;background:#f8fafc}.mode-switch button{flex:1;display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid transparent;border-radius:8px;background:transparent;color:#475569;min-height:68px}.mode-switch button[aria-pressed="true"]{background:#fff;border-color:#2563eb;color:#1d4ed8}.mode-switch button:hover{background:#eff6ff}.mode-switch svg{width:22px;height:22px;flex-shrink:0}.mode-switch strong{display:block;font-size:.875rem;font-weight:650}.mode-switch small{display:block;font-size:.75rem;color:var(--muted);margin-top:4px}.mode-switch .selected-dot{margin-left:auto;width:16px;height:16px;border:1px solid #a2aebf;border-radius:50%;flex-shrink:0}.mode-switch [aria-pressed="true"] .selected-dot{border:5px solid var(--blue)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.package-inputs{padding-bottom:22px;margin-bottom:22px;border-bottom:1px solid var(--line)}label,.field-label{display:block;font-size:.8125rem;font-weight:600;margin-bottom:8px}.required{color:var(--muted);font-weight:400}.input-wrap{display:flex;align-items:center;border:1px solid #cbd5e1;border-radius:10px;background:#fff;overflow:hidden}.input-wrap:focus-within{border-color:var(--blue);outline:3px solid #dbeafe}.prefix{padding-left:14px;color:var(--muted);font-size:.95rem}.input-wrap input{min-width:0;width:100%;border:0;background:transparent;padding:12px 14px 12px 9px;color:#1f2937;font-size:1rem;font-variant-numeric:tabular-nums;outline:none!important;min-height:46px}.plain-input{width:100%;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;min-height:46px;color:#1f2937}.input-wrap:has(input[readonly]){background:#f8fafc;border-color:var(--line)}input[readonly]{font-weight:650}.help{font-size:.75rem;color:var(--muted);line-height:1.5;margin:8px 0 0}.formula{color:#1d4ed8;font-variant-numeric:tabular-nums}.computed-tag{font-size:.6875rem;color:#475569;background:#f1f5f9;padding:2px 6px;border-radius:4px;float:right;font-weight:500}.difference{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);margin-top:22px;padding-top:14px;font-size:.8125rem;color:var(--muted)}.difference output{font-weight:650;color:#334155;font-variant-numeric:tabular-nums}.difference output.negative{color:#b91c1c}
+details{margin-top:18px}summary{font-size:.8125rem;color:#475569;cursor:pointer;width:fit-content;line-height:1.5}summary:hover{color:#1d4ed8}.markup-row{display:flex;gap:10px;align-items:flex-end;margin-top:12px}.markup-field{max-width:180px}.markup-row .suffix{padding-right:14px;color:var(--muted)}.button{padding:11px 16px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:.8125rem;font-weight:600;color:#334155;min-height:44px}.button:hover{background:#f1f5f9}.button:active{background:#e2e8f0}.button.primary{background:var(--blue);border-color:var(--blue);color:#fff}.button.primary:hover{background:#1d4ed8}.button:disabled{cursor:not-allowed;background:#e5e7eb;color:#586476;border-color:#e5e7eb}.status{font-size:.75rem;min-height:18px;margin:8px 0 0;color:#1d4ed8}
+.pack-section{border-top:1px solid var(--line);margin-top:24px;padding-top:22px}.check-row{display:flex;align-items:flex-start;gap:12px;margin:0;cursor:pointer}.check-row input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--blue);flex-shrink:0}.check-row strong{font-size:.875rem;font-weight:600}.check-row small{display:block;font-weight:400;font-size:.75rem;color:var(--muted);margin-top:5px;line-height:1.5}.pack-fields{margin-top:20px}.pack-fields .full{grid-column:1/-1}.footer{padding:18px 32px;display:flex;justify-content:space-between;align-items:center;gap:16px;border-top:1px solid var(--line);background:#f8fafc}.footer-note{font-size:.75rem;color:var(--muted)}.footer-actions{display:flex;gap:10px}.error{font-size:.8125rem;color:#b91c1c;background:#fef2f2;padding:12px 14px;border-radius:8px;margin:20px 0 0;line-height:1.5}.invalid{border-color:#dc2626!important}
+dialog{border:0;border-radius:18px;max-width:460px;width:calc(100% - 32px);padding:28px;box-shadow:0 18px 60px #0f172a30;color:#1f2937}dialog::backdrop{background:#0f172a66}dialog h2{font-size:1.2rem;margin-bottom:8px}dialog p{font-size:.8125rem;color:var(--muted);line-height:1.5}dl{margin:24px 0}dl div{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--line);font-size:.875rem}dt{color:var(--muted)}dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}dialog .button{width:100%}
+@media(max-width:600px){body{padding:16px 10px 24px}.preview-note{font-size:.6875rem;flex-wrap:wrap;gap:4px}.header{padding:22px 20px 18px}.steps{padding:16px 20px;justify-content:space-between;gap:8px}.steps li{flex:0;gap:5px;flex-direction:column;font-size:.75rem}.steps li:not(:last-child):after{display:none}.step-number{width:24px;height:24px}.content{padding:24px 20px}.section-heading{align-items:baseline}.section-heading span{font-size:.6875rem}.mode-switch button{gap:8px;padding:10px 8px;min-height:72px}.mode-switch svg{width:18px;height:18px}.mode-switch .selected-dot{display:none}.mode-switch small{font-size:.6875rem;line-height:1.4}.grid{grid-template-columns:1fr;gap:18px}.footer{padding:16px 20px;align-items:stretch;flex-direction:column;gap:12px}.footer-actions{display:grid;grid-template-columns:1fr 1fr}.footer-note{text-align:center}.difference{margin-top:18px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="preview-note"><strong>RetailMind · Layout preview</strong><span>Sample values only. No products are saved.</span></div>
+<main class="sheet">
+ <header class="header"><h1>Add Product</h1><p>Complete the product details and enter any starting stock.</p></header>
+ <ol class="steps" aria-label="Product creation steps">
+  <li class="complete"><span class="step-number"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></span>Basic</li>
+  <li class="complete"><span class="step-number"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg></span>Barcode</li>
+  <li aria-current="step"><span class="step-number">3</span>Pricing</li><li><span class="step-number">4</span>Planning</li><li><span class="step-number">5</span>Review</li>
+ </ol>
+ <form id="pricing-form" novalidate>
+ <div class="content">
+  <div class="section-heading"><h2>Cost &amp; selling price</h2><span>Prices in PHP (₱)</span></div>
+  <div class="mode-switch" role="group" aria-label="Cost entry mode">
+   <button type="button" data-mode="piece" aria-pressed="true" aria-controls="purchase-package"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z M4 7.5l8 4.5 8-4.5 M12 12v9"/></svg><span><strong>By piece</strong><small>Enter individual cost</small></span><span class="selected-dot" aria-hidden="true"></span></button>
+   <button type="button" data-mode="pack" aria-pressed="false" aria-controls="purchase-package"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 6h18v5H3z M5 11v10h14V11 M9 6V3h6v3 M9 15h6"/></svg><span><strong>By pack</strong><small>Calculate individual cost</small></span><span class="selected-dot" aria-hidden="true"></span></button>
+  </div>
+  <div id="purchase-package" class="grid package-inputs" hidden>
+   <div><label for="purchase-cost">Purchase pack cost <span class="required">*</span></label><div class="input-wrap"><span class="prefix">₱</span><input id="purchase-cost" type="number" min="0.01" max="99999999.99" step="0.01" value="120.00" inputmode="decimal"></div></div>
+   <div><label for="purchase-count">Pieces per purchase pack <span class="required">*</span></label><input class="plain-input" id="purchase-count" type="number" min="2" max="2147483647" step="1" value="12" inputmode="numeric"></div>
+  </div>
+  <div class="grid">
+   <div><label for="piece-cost">Cost Price per Piece <span class="required">*</span><span id="computed-tag" class="computed-tag" hidden>Computed</span></label><div class="input-wrap"><span class="prefix">₱</span><input id="piece-cost" type="number" min="0" max="99999999.99" step="0.01" value="10.00" inputmode="decimal" required aria-describedby="cost-help"></div><p id="cost-help" class="help">Your purchase cost for one piece.</p></div>
+   <div><label for="piece-price">Selling Price per Piece <span class="required">*</span></label><div class="input-wrap"><span class="prefix">₱</span><input id="piece-price" type="number" min="0.01" max="99999999.99" step="0.01" value="15.00" inputmode="decimal" required aria-describedby="selling-help"></div><p id="selling-help" class="help">What the customer pays for one piece.</p></div>
+  </div>
+  <details id="markup-tools"><summary>Calculate selling price with markup</summary><div class="markup-row"><div class="markup-field"><label for="markup">Markup <span class="required">(optional)</span></label><div class="input-wrap"><input id="markup" type="number" min="0" step="0.1" placeholder="e.g. 50" inputmode="decimal"><span class="suffix">%</span></div></div><button class="button" type="button" id="apply-markup">Apply markup</button></div><p id="markup-status" class="status" role="status"></p></details>
+  <div class="difference"><span>Selling price minus cost, per piece</span><output id="difference" aria-live="polite">₱5.00</output></div>
+  <section class="pack-section" aria-label="Sealed pack selling">
+   <label class="check-row" for="sell-packs"><input type="checkbox" id="sell-packs" aria-controls="sales-pack-fields"><span><strong>Sell sealed packs</strong><small>Add a separate pack price and barcode for customer purchases.</small></span></label>
+   <div id="sales-pack-fields" class="grid pack-fields" hidden>
+    <div><label for="sales-count">Pieces per Sales Pack <span class="required">*</span></label><input class="plain-input" id="sales-count" type="number" min="2" max="2147483647" step="1" inputmode="numeric" placeholder="e.g. 6"></div>
+    <div><label for="sales-price">Sales Pack Price <span class="required">*</span></label><div class="input-wrap"><span class="prefix">₱</span><input id="sales-price" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" placeholder="e.g. 85.00"></div></div>
+    <div class="full"><label for="sales-barcode">Sales Pack Barcode <span class="required">*</span></label><input class="plain-input" id="sales-barcode" maxlength="50" placeholder="Scan or enter the pack barcode" autocomplete="off"><p id="pack-help" class="help">The pack price must be lower than buying its pieces separately.</p></div>
+   </div>
+  </section>
+  <p id="form-error" class="error" role="alert" hidden></p>
+ </div>
+ <footer class="footer"><span class="footer-note">Step 3 of 5 · Pricing</span><div class="footer-actions"><button class="button" type="reset">Reset example</button><button class="button primary" type="submit">Review pricing</button></div></footer>
+ </form>
+</main>
+<dialog id="review" aria-labelledby="review-title"><h2 id="review-title">Pricing preview</h2><p>This preview checks your prices. It does not save a product.</p><dl id="review-values"></dl><button type="button" class="button primary" id="close-review">Back to pricing</button></dialog>
+<script>
+const $ = id => document.getElementById(id);
+const form = $('pricing-form');
+const money = value => new Intl.NumberFormat('en-PH', {style:'currency',currency:'PHP'}).format(value);
+let mode = 'piece';
+const value = id => $(id).value === '' ? NaN : Number($(id).value);
+function usable(id) { return $(id).value !== '' && $(id).validity.valid && Number.isFinite(value(id)); }
+function refresh() {
+ if (mode === 'pack') {
+  const valid = usable('purchase-cost') && usable('purchase-count');
+  const cost = value('purchase-cost') / value('purchase-count');
+  $('piece-cost').value = valid ? cost.toFixed(2) : '';
+  $('cost-help').textContent = valid ? `${money(value('purchase-cost'))} ÷ ${value('purchase-count')} pieces = ${money(Number(cost.toFixed(2)))} per piece` : 'Enter the pack cost and a whole-number piece count.';
+ } else $('cost-help').textContent = 'Your purchase cost for one piece.';
+ const valid = usable('piece-cost') && usable('piece-price');
+ const difference = value('piece-price') - value('piece-cost');
+ $('difference').textContent = valid ? money(difference) : '—';
+ $('difference').classList.toggle('negative', valid && difference < 0);
+ $('apply-markup').disabled = !usable('piece-cost');
+ if ($('sell-packs').checked && usable('sales-count') && usable('piece-price')) {
+  $('pack-help').textContent = `${value('sales-count')} pieces separately cost ${money(value('sales-count') * value('piece-price'))}. Set a lower Sales Pack price.`;
+ } else $('pack-help').textContent = 'The pack price must be lower than buying its pieces separately.';
+}
+function setMode(next) {
+ mode = next;
+ document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+ $('purchase-package').hidden = mode !== 'pack';
+ $('computed-tag').hidden = mode !== 'pack';
+ $('piece-cost').readOnly = mode === 'pack';
+ $('cost-help').classList.toggle('formula', mode === 'pack');
+ ['purchase-cost','purchase-count'].forEach(id => $(id).disabled = mode !== 'pack');
+ $('markup-status').textContent = '';
+ clearError(); refresh();
+}
+function setPackSelling() {
+ const enabled = $('sell-packs').checked;
+ $('sales-pack-fields').hidden = !enabled;
+ ['sales-count','sales-price','sales-barcode'].forEach(id => { $(id).disabled = !enabled; $(id).required = enabled; });
+ clearError(); refresh();
+}
+function clearError() { $('form-error').hidden = true; document.querySelectorAll('.invalid').forEach(field => field.classList.remove('invalid')); }
+function fail(id, message) { const field = $(id); $('form-error').textContent = message; $('form-error').hidden = false; (field.closest('.input-wrap') || field).classList.add('invalid'); field.focus(); }
+document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
+form.addEventListener('input', () => { clearError(); $('markup-status').textContent = ''; refresh(); });
+$('sell-packs').addEventListener('change', setPackSelling);
+$('apply-markup').addEventListener('click', () => {
+ if (!usable('markup')) { $('markup-status').textContent = 'Enter a markup of 0% or more, then apply.'; $('markup').focus(); return; }
+ const price = Math.ceil(value('piece-cost') * (1 + value('markup') / 100) * 100) / 100;
+ if (!Number.isFinite(price) || price <= 0 || price > 99999999.99) { $('markup-status').textContent = 'The calculated selling price must be between ₱0.01 and ₱99,999,999.99.'; return; }
+ $('piece-price').value = price.toFixed(2); clearError(); refresh(); $('markup-status').textContent = `Applied ${value('markup')}% markup. Selling price is ${money(price)}.`;
+});
+form.addEventListener('reset', () => { requestAnimationFrame(() => { $('markup-tools').open = false; setMode('piece'); setPackSelling(); }); });
+form.addEventListener('submit', event => {
+ event.preventDefault(); clearError(); refresh();
+ const fields = [...(mode === 'pack' ? ['purchase-cost','purchase-count'] : []),'piece-cost','piece-price',...($('sell-packs').checked ? ['sales-count','sales-price','sales-barcode'] : [])];
+ for (const id of fields) {
+  const field = $(id);
+  if (field.value.trim() === '' || !field.validity.valid) { fail(id, `Check ${document.querySelector(`label[for="${id}"]`).childNodes[0].textContent.trim()}. Enter a valid value within the allowed range.`); return; }
+ }
+ if (value('piece-price') < value('piece-cost')) { fail('piece-price', 'Selling price must not be lower than cost. Increase the selling price or correct the cost.'); return; }
+ if ($('sell-packs').checked && value('sales-price') >= value('sales-count') * value('piece-price')) { fail('sales-price', 'Sales Pack price must be lower than buying its pieces separately.'); return; }
+ const rows = [['Cost entry',mode === 'pack' ? 'By pack' : 'By piece'],['Cost per piece',money(value('piece-cost'))],['Selling price per piece',money(value('piece-price'))],['Sealed pack selling',$('sell-packs').checked ? `${value('sales-count')} pieces · ${money(value('sales-price'))}` : 'Not enabled']];
+ $('review-values').replaceChildren(...rows.map(([label,text]) => { const row = document.createElement('div'); const dt = document.createElement('dt'); const dd = document.createElement('dd'); dt.textContent = label; dd.textContent = text; row.append(dt,dd); return row; }));
+ $('review').showModal();
+});
+$('close-review').addEventListener('click', () => $('review').close());
+setMode('piece'); setPackSelling();
+</script>
+</body>
+</html>

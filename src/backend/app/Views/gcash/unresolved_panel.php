@@ -1,7 +1,6 @@
 <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-admin-nc-title" data-fragment="unresolved">
     <div class="pos-panel-header">
         <div class="pos-panel-title">
-            <div class="pos-panel-icon gcash-icon-alert"><i class="bi bi-clock-history" aria-hidden="true"></i></div>
             <div>
                 <h2 id="gcash-admin-nc-title">Unresolved exchanges</h2>
             </div>

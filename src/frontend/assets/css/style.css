@@ -5032,6 +5032,31 @@ body.system-health-open {
 
 /* products.css */
 .data-table .product-cell { min-width: 250px; }
+
+/* Add Product keeps purchase costing separate from sealed-pack selling. */
+#add-product-modal .pricing-mode-switch { display: flex; gap: 4px; padding: 4px; margin: .4rem 0 .8rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
+#add-product-modal .pricing-mode-switch button { display: flex; flex: 1; gap: 12px; align-items: center; min-width: 0; min-height: 68px; padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+#add-product-modal .pricing-mode-switch button:hover { background: var(--theme-hover, #eff6ff); }
+#add-product-modal .pricing-mode-switch button[aria-pressed="true"] { border-color: var(--primary); background: var(--theme-surface, #fff); color: var(--primary); }
+#add-product-modal .pricing-mode-switch button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+#add-product-modal .pricing-mode-switch strong { display: block; font-size: .875rem; }
+#add-product-modal .pricing-mode-switch small { display: block; margin-top: 3px; color: var(--muted); font-size: .75rem; line-height: 1.4; }
+#add-product-modal .pricing-mode-switch i { font-size: 1.25rem; }
+#add-product-modal #purchase-pack-fields { margin-bottom: .6rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+#add-product-modal #cost-price[readonly] { background: var(--theme-surface-soft, #f8fafc); font-weight: 650; }
+#add-product-modal .pricing-markup { margin-top: .5rem; }
+#add-product-modal .pricing-markup summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: .82rem; }
+#add-product-modal .pricing-markup summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+#add-product-modal .pricing-markup-row { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+#add-product-modal .pricing-markup-row .form-group { flex: 0 1 180px; min-width: 0; }
+#add-product-modal .pricing-markup-row .btn { margin-top: 28px; min-height: 44px; }
+#add-product-modal #purchase-pack-fields[hidden], #add-product-modal #sales-pack-fields[hidden] { display: none; }
+
+@media (max-width: 640px) {
+    #add-product-modal .pricing-mode-switch button { gap: 8px; padding: 10px 8px; }
+    #add-product-modal .pricing-mode-switch small { font-size: .75rem; }
+    #add-product-modal .wizard-step-indicator { font-size: .75rem; }
+}
 .product-name-line { display: flex; align-items: center; gap: .7rem; }
 .product-thumb { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 10px; overflow: hidden; background: var(--theme-surface-soft, #e2e8f0); color: var(--theme-muted, #64748b); }
 .product-thumb img { width: 100%; height: 100%; object-fit: cover; }

@@ -48,41 +48,80 @@ const { chromium } = require('playwright');
             await page.locator('#cost-price').fill('8.00');
             await page.locator('#selling-price').fill('10.00');
 
-            assert.ok(await page.locator('#create-pack-size').isVisible(), 'Pack size input is visible');
-            assert.ok(await page.locator('#create-pack-barcode').isVisible(), 'Pack barcode input is visible');
-            assert.ok(await page.locator('#create-pack-price').isVisible(), 'Pack price input is visible');
+            assert.equal(await page.locator('[data-cost-mode="piece"]').getAttribute('aria-pressed'), 'true');
+            assert.equal(await page.locator('#create-pack-size').isVisible(), false, 'Sealed-pack fields start hidden');
+            assert.equal(await page.locator('#create-pack-cost').isVisible(), false, 'Piece mode hides purchase-pack fields');
             assert.equal((await page.locator('#pack-price-calc-preview').textContent()).trim(), '', 'No pack comparison before a pack size is entered');
 
-            // Pack purchase cost divides into the per-item cost; markup fills the selling price and suggests a pack price.
-            assert.ok(await page.locator('#create-pack-cost').isVisible(), 'Pack cost input is visible');
-            await page.locator('#create-pack-size').fill('12');
+            const capture = async name => {
+                if (!process.env.IMPECCABLE_REVIEW_DIR) return;
+                fs.mkdirSync(process.env.IMPECCABLE_REVIEW_DIR, {recursive:true});
+                if (name === 'sealed') await page.locator('label[for="create-sell-packs"]').evaluate(el => el.scrollIntoView({block:'start'}));
+                else await page.locator('#add-product-modal .rm-modal-body').evaluate(el => { el.scrollTop = 0; });
+                await page.screenshot({path:path.join(process.env.IMPECCABLE_REVIEW_DIR, `product-pricing-${width}-${name}.png`),fullPage:true});
+            };
+            await capture('piece');
+            await page.locator('[data-cost-mode="pack"]').click();
+            await page.locator('#create-purchase-pack-size').fill('12');
             await page.locator('#create-pack-cost').fill('120.00');
             assert.equal(await page.locator('#cost-price').inputValue(), '10.00', 'Pack cost divides into the per-item cost');
+            assert.equal(await page.locator('#cost-price').getAttribute('readonly'), '', 'Computed cost is read-only');
+            assert.equal(await page.locator('#selling-price').inputValue(), '10.00', 'Pack costing preserves manually entered selling price');
+            assert.equal(await page.evaluate(() => new FormData(document.getElementById('add-product-form')).has('pack_size')), false, 'Purchase cost does not enable Sales Packs');
+            await page.locator('#wizard-next').click();
+            assert.equal(await page.locator('#stock-sales-packs-wrapper').isVisible(), false, 'Purchase packs alone do not enable sealed stock');
+            await page.evaluate(() => setWizardStep(3));
+            await capture('pack');
+            await page.locator('#create-markup-tools summary').click();
             await page.locator('#create-pack-markup').fill('25');
+            assert.equal(await page.locator('#selling-price').inputValue(), '10.00', 'Typing markup does not replace selling price');
+            await page.locator('#apply-pack-markup').click();
             const costCalc = await page.locator('#pack-price-suggested').textContent();
             assert.ok(costCalc.includes('₱10.00'), 'Suggested maths shows the per-item cost');
-            assert.ok(costCalc.includes('× 12'), 'Suggested maths shows the items per pack');
-            assert.ok(costCalc.includes('₱150.00'), 'Suggested pack price adds the markup to the pack cost');
+            assert.ok(costCalc.includes('÷ 12'), 'Suggested maths uses the purchase pack count');
             assert.equal(await page.locator('#selling-price').inputValue(), '12.50', 'Markup fills the per-item selling price');
             assert.equal(await page.locator('#create-pack-price').inputValue(), '', 'Markup never fills the Sales Pack Price');
+            await page.locator('#create-pack-cost').fill('144.00');
+            assert.equal(await page.locator('#cost-price').inputValue(), '12.00');
+            assert.equal(await page.locator('#selling-price').inputValue(), '12.50', 'Cost edits do not reapply markup');
+            await page.locator('[data-cost-mode="piece"]').click();
+            assert.equal(await page.locator('#cost-price').inputValue(), '12.00', 'Computed cost carries into By piece');
             await page.locator('#cost-price').fill('9.50');
             await page.locator('#create-pack-markup').fill('20');
             assert.equal(await page.locator('#cost-price').inputValue(), '9.50', 'Markup never overwrites a manual per-item cost');
-            await page.locator('#cost-price').fill('8.00');
+            await page.locator('[data-cost-mode="pack"]').click();
+            assert.equal(await page.locator('#create-pack-cost').inputValue(), '144.00', 'Purchase values survive mode changes');
+            assert.equal(await page.locator('#cost-price').inputValue(), '12.00', 'Returning By pack recomputes from its inputs');
+            for (const invalid of ['', '0', '1.5', '2147483648']) {
+                await page.locator('#create-purchase-pack-size').fill(invalid);
+                await page.locator('#wizard-next').click();
+                assert.ok(await page.locator('[data-panel="3"]').evaluate(panel => panel.classList.contains('active')), 'Invalid purchase count blocks progress');
+            }
+            await page.locator('#create-purchase-pack-size').fill('12');
+            await page.locator('#create-pack-cost').fill('96.00');
             await page.locator('#selling-price').fill('10.00');
-            await page.locator('#create-pack-cost').fill('');
             await page.locator('#create-pack-markup').fill('');
+            await page.locator('#create-markup-tools summary').click();
+            await page.locator('#create-sell-packs').check();
+            assert.equal(await page.locator('#create-pack-size').inputValue(), '12', 'Sales Pack count prefills from purchase packaging');
+            await page.locator('#create-pack-size').fill('6');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Pack cost: ₱48.00'), 'Pack cost follows the actual Sales Pack count');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Sold individually: ₱60.00'), 'Discount guide uses selling price, not cost');
+            await page.locator('#create-purchase-pack-size').fill('24');
+            assert.equal(await page.locator('#create-pack-size').inputValue(), '6', 'Purchase edits never replace an explicit Sales Pack count');
+            await page.locator('#create-purchase-pack-size').fill('12');
 
             // Test incomplete pack configuration validation: pack size without barcode/price
             await page.locator('#create-pack-size').fill('12');
-            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('12 × ₱10.00 = ₱120.00'), 'Comparison shows the individual-items total');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Sold individually: ₱120.00'), 'Comparison shows the individual selling total');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Pack cost: ₱96.00'), 'Purchase cost remains visible beside the discount guide');
             await page.locator('#wizard-next').click();
             assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Incomplete pack configuration blocks step 3 advance');
 
             // Fill barcode, but invalid price (pack price >= pack_size * selling_price: 12 * 10 = 120)
             await page.locator('#create-pack-barcode').fill('BISCUIT-12PK');
             await page.locator('#create-pack-price').fill('125.00');
-            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('must be below ₱120.00'), 'Comparison warns when the pack price kills the discount');
+            assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('below ₱120.00'), 'Comparison warns when the pack price kills the discount');
             await page.locator('#wizard-next').click();
             assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Excessive pack price blocks step 3 advance');
 
@@ -95,6 +134,7 @@ const { chromium } = require('playwright');
             await page.locator('#selling-price').fill('12.00');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('₱144.00'), 'Comparison follows a change in the selling price');
             await page.locator('#selling-price').fill('10.00');
+            await capture('sealed');
             await page.locator('#wizard-next').click();
 
             // Panel 4: starting stock follows Sales Pack configuration automatically.
@@ -143,15 +183,13 @@ const { chromium } = require('playwright');
 
             // Removing the pack configuration keeps the total as pieces; enabling it never invents sealed stock.
             await page.evaluate(() => setWizardStep(3));
-            await page.locator('#create-pack-size').fill('');
-            await page.locator('#create-pack-barcode').fill('');
-            await page.locator('#create-pack-price').fill('');
+            await page.locator('#create-sell-packs').uncheck();
+            assert.equal(await page.evaluate(() => new FormData(document.getElementById('add-product-form')).has('pack_size')), false, 'Disabled Sales Pack values are omitted from saving');
             await page.locator('#wizard-next').click();
             assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '63');
             await page.evaluate(() => setWizardStep(3));
-            await page.locator('#create-pack-size').fill('12');
-            await page.locator('#create-pack-barcode').fill('BISCUIT-12PK');
-            await page.locator('#create-pack-price').fill('100.00');
+            await page.locator('#create-sell-packs').check();
+            assert.equal(await page.locator('#create-pack-size').inputValue(), '12', 'Re-enabling preserves the entered Sales Pack');
             await page.locator('#wizard-next').click();
             assert.equal(await page.locator('#starting-packs-count').inputValue(), '0');
             assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '63');
@@ -190,6 +228,8 @@ const { chromium } = require('playwright');
             });
             await page.evaluate(() => setWizardStep(4));
             assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '0', 'Reset returns to piece-only entry');
+            assert.equal(await page.locator('#create-cost-mode').inputValue(), 'piece', 'Reset returns to By piece');
+            assert.equal(await page.locator('#create-sell-packs').isChecked(), false);
 
             assert.deepEqual(errors, []);
             await page.close();

@@ -128,6 +128,10 @@ _Avoid_: Product-sale cash, wallet balance
 The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
 _Avoid_: Personal wallet, product-payment account
 
+**Service Fund Movement**:
+A recorded addition to or withdrawal from GCash Service Cash or the GCash Service Wallet, such as replenishment, owner capital, a product-drawer transfer, or shortage recovery. It is separate from a customer's Cash-In or Cash-Out exchange.
+_Avoid_: Customer transaction, Cash-In (when referring to replenishment)
+
 **GCash Live Custody**:
 The physical cash in the service cash box and digital balance in the GCash merchant app for the active shift session. It reflects real-time operational money currently held by the store and is unaffected by historical date range filters.
 _Avoid_: Filtered balance, historical balance, period balance
@@ -276,9 +280,21 @@ _Avoid_: Selling unit, retail unit, loose unit
 The bulk commercial container or package used when purchasing goods from suppliers or supermarkets (e.g. case, box, ream, carton, pack).
 _Avoid_: Bulk unit, supplier unit, container
 
+**Cost Price per Piece**:
+The purchase cost of one Base Unit, entered directly or calculated from the purchase package cost divided by its number of Base Units. It does not imply that the Product is sold as a Sales Pack.
+_Avoid_: Pack selling price, selling price
+
+**Selling Price per Piece**:
+The price charged to a customer for one Base Unit. Markup may help determine it, but the Inventory Manager chooses the price.
+_Avoid_: Cost price, Sales Pack price
+
 **Sales Pack**:
 A sealed package containing a fixed number of a Product's Base Units, sold at a dedicated price cheaper than buying that number individually. It may have a barcode distinct from the individual piece barcode; unopened Sales Packs and loose pieces are counted separately within the same Product's stock.
 _Avoid_: Receiving Unit (when referring to a customer purchase)
+
+**Stock Count Correction**:
+A correction of a Product's recorded stock to its verified physical count, including unopened Sales Packs and loose pieces where applicable. It covers incorrect starting quantities and differences found during inventory checks, with a recorded reason.
+_Avoid_: Emergency Stock Adjustment, Physical Sales Pack Reconciliation
 
 **Pack Opening**:
 The conversion of an unopened Sales Pack into its fixed number of loose Base Units for individual sale. It changes the form of the stock without changing the total quantity of goods.

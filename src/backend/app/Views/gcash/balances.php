@@ -2,7 +2,6 @@
 <section class="pos-panel gcash-overview-section gcash-funds-panel" aria-labelledby="gcash-admin-balances-title" data-fragment="balances">
     <div class="pos-panel-header">
         <div class="pos-panel-title">
-            <div class="pos-panel-icon"><i class="bi bi-wallet2" aria-hidden="true"></i></div>
             <div>
                 <h2 id="gcash-admin-balances-title">Service balances</h2>
             </div>

@@ -13,6 +13,8 @@ try {
     if ($method === 'GET') {
         if (in_array(($_GET['action'] ?? ''), ['overview', 'follow_up'], true)) {
             $result = $service->cashierOverview((int)$_SESSION['user_id']);
+        } elseif (($_GET['action'] ?? '') === 'fund_movements') {
+            $result = ['movements' => $service->getMoneyHistory(['funding_only' => true, 'recorded_by' => (int)$_SESSION['user_id']])];
         } elseif (($_GET['action'] ?? '') === 'session_status') {
             $session = $service->getCurrentSession();
             if ($session) {
@@ -21,7 +23,8 @@ try {
                 $session['expected_wallet_balance'] = $expected['expected_wallet_balance'];
                 $session['is_controlling_cashier'] = (int)$session['cashier_id'] === (int)$_SESSION['user_id'];
             }
-            $result = ['session' => $session, 'last_closed_session' => $service->lastClosedSession()];
+            $hasOpenShift = (new \App\Services\CashierShiftService($pdo))->getOpenShift((int)$_SESSION['user_id']) !== null;
+            $result = ['session' => $session, 'last_closed_session' => $service->lastClosedSession(), 'has_open_shift' => $hasOpenShift];
         } elseif (($_GET['action'] ?? '') === 'preview' || (isset($_GET['principal']) && !isset($_GET['reference']) && !isset($_GET['page']))) {
             $type = (string)($_GET['type'] ?? '');
             $principal = (string)($_GET['principal'] ?? '');
@@ -44,7 +47,7 @@ try {
         if (strlen($raw) > 4096) { throw new DomainException('Request too large.'); }
         $input = json_decode($raw, true);
         if (!is_array($input)) { throw new DomainException('Invalid request.'); }
-        foreach (['action', 'reference', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome', 'movement_type', 'fund_type', 'direction', 'evidence_reference', 'evidence', 'approver_username', 'approver_password', 'resolve_action', 'waiver_notes'] as $key) {
+        foreach (['action', 'reference', 'type', 'status', 'note', 'notes', 'fee_method', 'reason', 'outcome', 'movement_type', 'fund_type', 'direction', 'source_destination', 'evidence_reference', 'evidence', 'approver_username', 'approver_password', 'resolve_action', 'waiver_notes'] as $key) {
             if (isset($input[$key]) && !is_string($input[$key]) && !($key === 'reference' && $input[$key] === null)) { throw new DomainException('Invalid field: ' . $key); }
         }
         if (isset($input['amount']) && !is_string($input['amount']) && !is_int($input['amount']) && !is_float($input['amount'])) {

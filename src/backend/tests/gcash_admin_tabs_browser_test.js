@@ -111,7 +111,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         fs.mkdirSync('.impeccable/review', {recursive: true});
         for (const width of [1440, 390]) {
             await page.setViewportSize({width, height: 900});
-            for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Money history', 'money']]) {
+            for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Service Fund Movements', 'money']]) {
                 await page.getByRole('tab', {name}).click();
                 await page.locator('#tab-' + panel).waitFor({state: 'visible'});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, panel + ' fits ' + width);

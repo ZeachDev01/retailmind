@@ -70,7 +70,7 @@ window.RetailMindInventoryDrafts = (() => {
         if (form.id === 'receiving_form') return 'receiving';
         if (location.pathname.endsWith('/inventory_counts.php')) return ({record:'count', approve:'approveCount', reject:'rejectCount'})[action] || '';
         if (location.pathname.endsWith('/stock_issues.php')) return ({approve:'approveReport', reject:'rejectReport', return:'returnReport'})[action] || '';
-        if (location.pathname.endsWith('/products.php')) return ({create:'createProduct', adjust:'adjustStock', reconcile_sales_pack_stock:'reconcileStock'})[action] || '';
+        if (location.pathname.endsWith('/products.php')) return ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '';
         if (form.id === 'pullout-form') return 'pullout';
         return '';
     }

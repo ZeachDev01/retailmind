@@ -288,27 +288,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($action === 'adjust') {
-        csrf_verify();
-        try {
-            $productService->adjustStock([
-                'operation_token' => $_POST['operation_token'] ?? '',
-                'qty_change' => (int)($_POST['qty_change'] ?? 0),
-                'product_id' => (int)($_POST['product_id'] ?? 0),
-                'adjustment_reason' => trim((string)($_POST['adjustment_reason'] ?? '')),
-            ], (int)$_SESSION['user_id']);
-            redirect_products('success', 'Emergency inventory adjustment recorded.');
-        } catch (Throwable $e) {
-            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The stock adjustment could not be saved. Check the quantity and try again. Tell your Administrator if this keeps happening.'));
-        }
-    }
-
     if ($action === 'reconcile_sales_pack_stock') {
         csrf_verify();
         try {
             $productId = (int)($_POST['product_id'] ?? 0);
-            $sealedPacks = (int)($_POST['sealed_packs'] ?? 0);
-            $loosePieces = (int)($_POST['loose_pieces'] ?? 0);
+            $sealedPacks = filter_var($_POST['sealed_packs'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
+            $loosePieces = filter_var($_POST['loose_pieces'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
+            if ($sealedPacks === false || $loosePieces === false) {
+                throw new RuntimeException('Enter whole non-negative stock counts.');
+            }
             $reason = trim((string)($_POST['reconciliation_reason'] ?? ''));
 
             $result = $productService->reconcilePhysicalStock($productId, $sealedPacks, $loosePieces, $reason, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
@@ -321,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => true, 'product' => $result]);
                 exit;
             }
-            redirect_products('success', 'Physical stock reconciled successfully.');
+            redirect_products('success', 'Stock count corrected.');
         } catch (Throwable $e) {
             $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
                 || (isset($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));
@@ -582,7 +570,7 @@ foreach ($products as $product) {
             }
 
             #add-product-modal .wizard-step-indicator {
-                font-size: 11px;
+                font-size: 12px;
             }
 
             #add-product-modal .form-grid,
@@ -837,36 +825,6 @@ foreach ($products as $product) {
             background: #f8fafc;
         }
 
-        #stock-adjust-modal .catalog-search {
-            flex: none;
-            min-width: 0;
-        }
-
-        #adjust-product-search {
-            min-height: 48px;
-            padding-left: 2.5rem;
-            border-radius: 10px;
-            background: var(--theme-surface, #fff);
-        }
-
-        #adjust-product-search:focus {
-            outline: 2px solid var(--primary);
-            outline-offset: -2px;
-            box-shadow: none;
-        }
-
-        #adjust-product-search::-webkit-search-cancel-button {
-            display: none;
-        }
-
-        #adjust-product-status {
-            display: block;
-            margin-top: .5rem;
-            color: var(--muted);
-            font-size: .875rem;
-            line-height: 1.5;
-            overflow-wrap: anywhere;
-        }
 
         .catalog-field {
             display: grid;
@@ -1503,50 +1461,73 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="3">
                         <div class="pricing-section">
-                            <h3 class="planning-section-title">Pack &amp; cost breakdown</h3>
-                            <div class="pricing-cost-breakdown">
+                            <h3 class="planning-section-title">Cost &amp; selling price</h3>
+                            <input type="hidden" name="cost_entry_mode" id="create-cost-mode" value="piece">
+                            <div class="pricing-mode-switch" role="group" aria-label="Cost entry mode">
+                                <button type="button" data-cost-mode="piece" aria-pressed="true" aria-controls="purchase-pack-fields"><i class="bi bi-box" aria-hidden="true"></i><span><strong>By piece</strong><small>Enter individual cost</small></span></button>
+                                <button type="button" data-cost-mode="pack" aria-pressed="false" aria-controls="purchase-pack-fields"><i class="bi bi-box-seam" aria-hidden="true"></i><span><strong>By pack</strong><small>Calculate individual cost</small></span></button>
+                            </div>
+                            <div id="purchase-pack-fields" hidden>
                                 <div class="form-grid">
                                     <div class="form-group">
-                                        <label for="create-pack-cost">Sales Pack Cost (&#8369;)</label>
-                                        <input type="number" step="0.01" min="0" name="pack_cost" id="create-pack-cost">
+                                        <label for="create-pack-cost">Purchase Pack Cost (&#8369;) *</label>
+                                        <input type="number" step="0.01" min="0.01" max="99999999.99" name="pack_cost" id="create-pack-cost" disabled>
+                                        <small class="field-error">Enter a purchase pack cost greater than zero.</small>
                                     </div>
                                     <div class="form-group">
-                                        <label for="create-pack-size">Items per Sales Pack</label>
-                                        <input type="number" min="2" step="1" name="pack_size" id="create-pack-size">
+                                        <label for="create-purchase-pack-size">Pieces per Purchase Pack *</label>
+                                        <input type="number" min="2" max="2147483647" step="1" name="purchase_pack_size" id="create-purchase-pack-size" disabled>
+                                        <small class="field-error">Enter a whole-number count of at least 2.</small>
                                     </div>
                                 </div>
-                                <p class="pricing-readout" id="pack-price-suggested" aria-live="polite"></p>
                             </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="cost-price">Cost Price per Piece (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" required aria-describedby="pack-price-suggested">
+                                    <small class="field-error">Enter a valid cost price.</small>
+                                    <small class="field-help" id="pack-price-suggested" aria-live="polite">Your purchase cost for one piece.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="selling-price">Selling Price per Piece (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="selling_price" id="selling-price" required>
+                                    <small class="field-error">Selling price must not be lower than cost.</small>
+                                    <small class="field-help">What the customer pays for one piece.</small>
+                                </div>
+                            </div>
+                            <details class="pricing-markup" id="create-markup-tools">
+                                <summary>Calculate selling price with markup</summary>
+                                <div class="pricing-markup-row">
+                                    <div class="form-group"><label for="create-pack-markup">Markup % (optional)</label><input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup"><small class="field-error">Enter a markup of zero or more.</small></div>
+                                    <button type="button" class="btn btn-quiet" id="apply-pack-markup">Apply markup</button>
+                                </div>
+                                <p class="field-help" id="create-markup-status" role="status"></p>
+                            </details>
                         </div>
 
                         <div class="pricing-section">
-                            <h3 class="planning-section-title">Retail pricing &amp; selling</h3>
+                            <label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Sell sealed packs</label>
+                            <p class="pricing-note">Add a separate pack price and barcode for customer purchases.</p>
+                            <div id="sales-pack-fields" hidden>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="create-pack-markup">Markup %</label>
-                                    <input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup">
+                                    <label for="create-pack-size">Pieces per Sales Pack *</label>
+                                    <input type="number" min="2" max="2147483647" step="1" name="pack_size" id="create-pack-size" disabled>
+                                    <small class="field-error">Enter a whole-number count of at least 2.</small>
                                 </div>
                                 <div class="form-group">
-                                    <label for="selling-price">Item Selling Price (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0" name="selling_price" id="selling-price" required>
-                                    <small class="field-error">Selling price must not be lower than cost.</small>
+                                    <label for="create-pack-price">Sales Pack Price (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="pack_price" id="create-pack-price" disabled aria-describedby="pack-price-calc-preview">
+                                    <small class="field-error">Enter a pack price lower than buying its pieces separately.</small>
                                 </div>
                                 <div class="form-group full">
-                                    <label for="cost-price">Cost Price per Item (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0" name="cost_price" id="cost-price" required>
-                                    <small class="field-error">Enter a valid cost price.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="create-pack-price">Sales Pack Price (&#8369;)</label>
-                                    <input type="number" step="0.01" min="0.01" name="pack_price" id="create-pack-price">
-                                    <small class="field-help">Must be lower than buying the items separately.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="create-pack-barcode">Sales Pack Barcode (Optional)</label>
-                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Enter pack barcode">
+                                    <label for="create-pack-barcode">Sales Pack Barcode *</label>
+                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Scan or enter the pack barcode" disabled>
+                                    <small class="field-error">Enter a unique Sales Pack barcode.</small>
                                 </div>
                             </div>
                             <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
+                            </div>
                         </div>
 
                         <div class="pricing-section">
@@ -1654,56 +1635,26 @@ foreach ($products as $product) {
     </div>
 
     <?php if ($canDirectAdjust): ?>
-        <div class="rm-modal-overlay" id="stock-adjust-modal" aria-hidden="true">
-            <section class="rm-modal u-modal-form" role="dialog" aria-modal="true" aria-labelledby="adjust-title">
-                <header class="rm-modal-header">
-                    <div>
-                        <h2 id="adjust-title">Emergency Stock Adjustment</h2>
-                        <p>Use only after a verified count. The reason is recorded in the audit log.</p>
-                    </div><button type="button" class="rm-close" data-close-modal aria-label="Close emergency adjustment"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-                </header>
-                <form method="POST" data-confirm="This will directly change the current stock quantity and create an audit record." data-confirm-title="Confirm emergency adjustment" data-confirm-button="Apply adjustment" data-confirm-danger="1">
-                    <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="adjust">
-                        <div class="form-group">
-                            <label for="adjust-product-search">Scan barcode or search products</label>
-                            <div class="catalog-search">
-                                <i class="bi bi-upc-scan" aria-hidden="true"></i>
-                                <input type="search" id="adjust-product-search" list="adjust-product-options" required autocomplete="off" placeholder="Barcode, product name or SKU" aria-describedby="adjust-product-status">
-                            </div>
-                            <input type="hidden" name="product_id" id="adjust-product-id">
-                            <datalist id="adjust-product-options">
-                                <?php foreach ($activeProducts as $product): ?><option value="<?= htmlspecialchars($product['sku'] . ' — ' . $product['product_name'] . ' (' . (int)$product['quantity_on_hand'] . ' on hand)', ENT_QUOTES) ?>" data-product-id="<?= (int)$product['product_id'] ?>" data-sku="<?= htmlspecialchars($product['sku'], ENT_QUOTES) ?>" data-barcode="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>" label="<?= htmlspecialchars($product['barcode'] ?? '', ENT_QUOTES) ?>"></option><?php endforeach; ?>
-                            </datalist>
-                            <small id="adjust-product-status" role="status">Scan into this field or type to find a product.</small>
-                        </div>
-                        <div class="form-group"><label for="adjust-qty-change">Quantity Change</label><input type="number" id="adjust-qty-change" name="qty_change" required placeholder="Use 5 to add or -3 to remove"></div>
-                        <div class="form-group"><label for="adjust-reason">Specific Approved Reason</label><input id="adjust-reason" name="adjustment_reason" minlength="8" required placeholder="Example: Verified physical-count correction"></div>
-                    </div>
-                    <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-danger" type="submit">Apply Adjustment</button></footer>
-                </form>
-            </section>
-        </div>
-
         <div class="rm-modal-overlay" id="pack-reconcile-modal" aria-hidden="true">
             <section class="rm-modal u-modal-form" role="dialog" aria-modal="true" aria-labelledby="reconcile-title">
                 <header class="rm-modal-header">
                     <div>
-                        <h2 id="reconcile-title">Physical Sales Pack Reconciliation</h2>
-                        <p>Record verified physical counts of sealed packs and loose pieces.</p>
-                    </div><button type="button" class="rm-close" data-close-modal aria-label="Close pack reconciliation"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                        <h2 id="reconcile-title">Correct Stock Count</h2>
+                        <p>Enter the verified count to correct initial stock or a physical-count difference.</p>
+                    </div><button type="button" class="rm-close" data-close-modal aria-label="Close stock count correction"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                 </header>
-                <form method="POST" id="pack-reconcile-form" data-confirm="This will reconcile batch balances to match verified physical pack counts." data-confirm-title="Confirm pack reconciliation" data-confirm-button="Apply reconciliation">
+                <form method="POST" id="pack-reconcile-form">
                     <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="reconcile_sales_pack_stock">
                         <input type="hidden" name="product_id" id="reconcile-product-id">
                         <div class="form-group"><label for="reconcile-product-name">Product</label><input type="text" id="reconcile-product-name" readonly class="form-input"></div>
-                        <div class="form-grid">
-                            <div class="form-group"><label for="reconcile-sealed-packs">Physical Sealed Packs</label><input type="number" min="0" step="1" name="sealed_packs" id="reconcile-sealed-packs" required value="0"></div>
+                        <div class="form-grid" id="reconcile-count-fields">
+                            <div class="form-group" id="reconcile-sealed-group"><label for="reconcile-sealed-packs">Physical Sealed Packs</label><input type="number" min="0" step="1" name="sealed_packs" id="reconcile-sealed-packs" required value="0"></div>
                             <div class="form-group"><label for="reconcile-loose-pieces">Physical Loose Pieces</label><input type="number" min="0" step="1" name="loose_pieces" id="reconcile-loose-pieces" required value="0"></div>
                         </div>
-                        <p id="reconcile-calc-preview" style="font-weight:600;color:var(--primary);margin:0.25rem 0 0.75rem;"></p>
-                        <div class="form-group"><label for="reconcile-reason">Specific Approved Reason *</label><input name="reconciliation_reason" id="reconcile-reason" minlength="8" required placeholder="Example: Verified shelf count reconciliation"></div>
+                        <p id="reconcile-calc-preview" role="status" aria-live="polite"></p>
+                        <div class="form-group"><label for="reconcile-reason">Reason for correction *</label><input name="reconciliation_reason" id="reconcile-reason" minlength="8" required placeholder="Example: Corrected initial stock after recounting"></div>
                     </div>
-                    <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-primary" type="submit">Apply Reconciliation</button></footer>
+                    <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-primary" type="submit">Save corrected count</button></footer>
                 </form>
             </section>
         </div>
@@ -1775,44 +1726,6 @@ foreach ($products as $product) {
         let sortKey = 'name';
         let sortDirection = 1;
         const selectedIds = new Set();
-
-        const adjustmentModal = document.getElementById('stock-adjust-modal');
-        if (adjustmentModal) {
-            const search = document.getElementById('adjust-product-search');
-            const selectedProduct = document.getElementById('adjust-product-id');
-            const status = document.getElementById('adjust-product-status');
-            const options = Array.from(document.getElementById('adjust-product-options').options);
-            function searchAdjustmentProducts() {
-                const term = search.value.trim().toLowerCase();
-                const exact = term ? options.filter(option => [option.value, option.dataset.sku, option.dataset.barcode]
-                    .some(code => code.toLowerCase() === term)) : [];
-                const matches = exact.length ? exact : options.filter(option =>
-                    `${option.value} ${option.dataset.barcode}`.toLowerCase().includes(term));
-                selectedProduct.value = term && matches.length === 1 ? matches[0].dataset.productId : '';
-                search.setCustomValidity(selectedProduct.value ? '' : 'Choose a matching product from the suggestions.');
-                status.textContent = !term ? 'Scan into this field or type to find a product.'
-                    : !matches.length ? 'No matching product. Try another barcode, name or SKU.'
-                    : matches.length === 1 ? `${matches[0].value} selected.`
-                    : `${matches.length} matching products. Choose a suggestion or keep typing.`;
-            }
-            search.addEventListener('input', searchAdjustmentProducts);
-            search.addEventListener('keydown', event => {
-                if (event.key !== 'Enter' || event.isComposing) return;
-                event.preventDefault();
-                searchAdjustmentProducts();
-                search.select();
-            });
-            function showAdjustmentProduct() {
-                search.value = options.find(option => option.dataset.productId === selectedProduct.value)?.value || '';
-                searchAdjustmentProducts();
-            }
-            selectedProduct.addEventListener('change', showAdjustmentProduct);
-            adjustmentModal.addEventListener('retailmind:overlayopen', () => {
-                showAdjustmentProduct();
-                search.focus();
-                search.select();
-            });
-        }
 
         function openModal(id) {
             RetailMindUI.openOverlay(document.getElementById(id));
@@ -2139,13 +2052,7 @@ foreach ($products as $product) {
             const threshold = Math.max(Number(product.reorder_level || 0), Number(product.safety_stock || 0));
             const stockLabel = quantity <= 0 ? 'Out of stock' : quantity <= threshold ? 'Low stock' : 'Available';
             const hasPackConfig = product.pack_size && Number(product.pack_size) > 1;
-            let actionsHtml = '';
-            if (canDirectAdjust) {
-                actionsHtml += `<button type="button" class="btn btn-icon" id="drawer-adjust-stock"><i class="bi bi-sliders" aria-hidden="true"></i>Adjust Stock</button>`;
-                if (hasPackConfig) {
-                    actionsHtml += `<button type="button" class="btn btn-secondary btn-icon" id="drawer-reconcile-pack"><i class="bi bi-box-seam" aria-hidden="true"></i>Reconcile Stock</button>`;
-                }
-            }
+            const actionsHtml = canDirectAdjust ? `<button type="button" class="btn btn-secondary btn-icon" id="drawer-reconcile-pack"><i class="bi bi-sliders" aria-hidden="true"></i>Correct Stock Count</button>` : '';
             const quantityActions = actionsHtml ? `<div class="product-quantity-actions">${actionsHtml}</div>` : '';
 
             let packGridItems = '';
@@ -2167,33 +2074,28 @@ foreach ($products as $product) {
         <div class="detail-item"><span>MOQ / Units per Case</span><strong>${Number(product.minimum_order_quantity || 1)} / ${Number(product.units_per_package || 1)}</strong></div><div class="detail-item"><span>Units</span><strong>${escapeHtml(safe(product.base_unit))} / ${escapeHtml(safe(product.receiving_unit))}</strong></div>
         <div class="detail-item"><span>Lead Time</span><strong>${Number(product.supplier_lead_time_days || 0)} day(s)</strong></div><div class="detail-item"><span>Preferred Supplier</span><strong>${escapeHtml(safe(product.preferred_supplier || product.supplier))}</strong></div>
     </div>${quantityActions}`;
-                const drawerAdjustButton = document.getElementById('drawer-adjust-stock');
-                if (drawerAdjustButton) drawerAdjustButton.addEventListener('click', () => {
-                    const productSelect = document.getElementById('adjust-product-id');
-                    RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
-                    openModal('stock-adjust-modal');
-                    if (productSelect) {
-                        productSelect.value = String(product.product_id);
-                        productSelect.dispatchEvent(new Event('change'));
-                    }
-                    document.querySelector('#stock-adjust-modal [name="qty_change"]')?.focus();
-                });
                 const drawerReconcileButton = document.getElementById('drawer-reconcile-pack');
                 if (drawerReconcileButton) drawerReconcileButton.addEventListener('click', () => {
                     const form = document.getElementById('pack-reconcile-form');
-                    if (form) form.dataset.packSize = String(product.pack_size || 1);
+                    if (form) {
+                        form.dataset.packSize = String(hasPackConfig ? product.pack_size : 1);
+                        form.dataset.currentStock = String(quantity);
+                    }
+                    document.getElementById('reconcile-sealed-group').hidden = !hasPackConfig;
+                    document.getElementById('reconcile-count-fields').classList.toggle('form-grid', Boolean(hasPackConfig));
+                    document.querySelector('label[for="reconcile-loose-pieces"]').textContent = hasPackConfig ? 'Physical Loose Pieces' : 'Physical Pieces';
                     const prodIdInput = document.getElementById('reconcile-product-id');
                     const prodNameInput = document.getElementById('reconcile-product-name');
                     const sealedInput = document.getElementById('reconcile-sealed-packs');
                     const looseInput = document.getElementById('reconcile-loose-pieces');
                     if (prodIdInput) prodIdInput.value = String(product.product_id);
                     if (prodNameInput) prodNameInput.value = `${safe(product.sku)} — ${product.product_name}`;
-                    if (sealedInput) sealedInput.value = String(Number(product.physical_sealed_packs || 0));
-                    if (looseInput) looseInput.value = String(Number(product.physical_loose_pieces || 0));
+                    if (sealedInput) sealedInput.value = String(hasPackConfig ? Number(product.physical_sealed_packs || 0) : 0);
+                    if (looseInput) looseInput.value = String(hasPackConfig ? Number(product.physical_loose_pieces || 0) : quantity);
                     updateReconcilePreview();
                     RetailMindUI.closeOverlay(document.getElementById('product-drawer'));
                     openModal('pack-reconcile-modal');
-                    sealedInput?.focus();
+                    (hasPackConfig ? sealedInput : looseInput)?.focus();
                 });
             }
             const actionsPanel = document.getElementById('product-panel-actions');
@@ -2667,7 +2569,9 @@ foreach ($products as $product) {
             const total = (sealed * packSize) + loose;
             const preview = document.getElementById('reconcile-calc-preview');
             if (preview) {
-                preview.textContent = `Calculated total: ${sealed} pack(s) of ${packSize} + ${loose} loose = ${total.toLocaleString()} Base Unit(s)`;
+                const current = Number(form.dataset.currentStock || 0);
+                const difference = total - current;
+                preview.textContent = `Current stock: ${current.toLocaleString()} · Counted total: ${total.toLocaleString()} · Change: ${difference > 0 ? '+' : ''}${difference.toLocaleString()} piece(s)`;
             }
         }
 
@@ -2680,13 +2584,13 @@ foreach ($products as $product) {
                 event.preventDefault();
                 const reason = (document.getElementById('reconcile-reason')?.value || '').trim();
                 if (reason.length < 8) {
-                    RetailMindUI.toast('Enter a specific approved reason of at least 8 characters.', 'error');
+                    RetailMindUI.toast('Enter a reason for correction of at least 8 characters.', 'error');
                     return;
                 }
                 const confirmed = await RetailMindUI.confirm({
-                    title: 'Confirm pack reconciliation',
-                    message: 'This will reconcile batch balances to match verified physical pack counts.',
-                    confirmText: 'Apply reconciliation',
+                    title: 'Confirm stock count correction',
+                    message: `${document.getElementById('reconcile-calc-preview').textContent}. This replaces the recorded stock and records your reason.`,
+                    confirmText: 'Save corrected count',
                     danger: false
                 });
                 if (!confirmed) return;
@@ -2718,16 +2622,16 @@ foreach ($products as $product) {
                             renderProductDrawerReadOnly(prod);
                         }
                         RetailMindUI.closeOverlay(document.getElementById('pack-reconcile-modal'));
-                        RetailMindUI.toast('Physical stock reconciled successfully.', 'success');
+                        RetailMindUI.toast('Stock count corrected.', 'success');
                     } else {
-                        RetailMindUI.toast(result.error || 'Reconciliation failed.', 'error');
+                        RetailMindUI.toast(result.error || 'Stock count could not be corrected.', 'error');
                     }
                 } catch (e) {
-                    RetailMindUI.toast(e.message || 'Network error during reconciliation.', 'error');
+                    RetailMindUI.toast(e.message || 'Stock count could not be saved. Check your connection and try again.', 'error');
                 } finally {
                     if (submitBtn) {
                         submitBtn.disabled = false;
-                        submitBtn.textContent = 'Apply Reconciliation';
+                        submitBtn.textContent = 'Save corrected count';
                     }
                 }
             });
@@ -2917,6 +2821,13 @@ foreach ($products as $product) {
         const backButton = document.getElementById('wizard-back');
         const saveButton = document.getElementById('wizard-save');
         const unitSelects = addProductForm.querySelectorAll('[data-unit-field]');
+        const costEntryMode = document.getElementById('create-cost-mode');
+        const purchasePackCost = document.getElementById('create-pack-cost');
+        const purchasePackSize = document.getElementById('create-purchase-pack-size');
+        const sellSealedPacks = document.getElementById('create-sell-packs');
+        addProductForm.querySelector('[data-panel="3"]').addEventListener('input', event => {
+            event.target.closest('.form-group')?.classList.remove('invalid');
+        });
 
         function syncUnitSelects() {
             unitSelects.forEach(select => {
@@ -2944,71 +2855,92 @@ foreach ($products as $product) {
 
         addProductForm.addEventListener('retailmind:guidance-step', event => setWizardStep(event.detail.step, false));
 
-        // Sales Pack pricing comparison: per-item price, individual total, and pack saving.
         function updatePackPriceCalc() {
             const preview = document.getElementById('pack-price-calc-preview');
             if (!preview) return;
-            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
+            const size = Number(document.getElementById('create-pack-size').value);
             const selling = parseFloat(document.getElementById('selling-price')?.value);
             const packPrice = parseFloat(document.getElementById('create-pack-price')?.value);
-            if (!(size > 1) || !isFinite(selling) || selling < 0) {
+            const cost = parseFloat(document.getElementById('cost-price').value);
+            if (!sellSealedPacks.checked || !Number.isInteger(size) || size < 2 || !isFinite(selling) || selling <= 0) {
                 preview.textContent = '';
                 return;
             }
             const money = value => '₱' + value.toFixed(2);
             const itemsTotal = size * selling;
-            if (!isFinite(packPrice) || packPrice <= 0) {
-                preview.textContent = `${size} × ${money(selling)} = ${money(itemsTotal)} when the items are sold separately.`;
-                return;
-            }
-            if (packPrice >= itemsTotal) {
-                preview.textContent = `${size} × ${money(selling)} = ${money(itemsTotal)}. Pack price must be below ${money(itemsTotal)} to give a pack discount.`;
+            const packCost = isFinite(cost) && cost >= 0 ? `Pack cost: ${money(cost * size)} · ` : '';
+            const comparison = `${packCost}Sold individually: ${money(itemsTotal)} (${size} × ${money(selling)}).`;
+            if (!isFinite(packPrice) || packPrice <= 0 || packPrice >= itemsTotal) {
+                preview.textContent = `${comparison} Set a pack price below ${money(itemsTotal)}.`;
                 return;
             }
             const discount = itemsTotal > 0 ? `${money(itemsTotal - packPrice)} (${(((itemsTotal - packPrice) / itemsTotal) * 100).toFixed(1)}%)` : money(itemsTotal - packPrice);
-            preview.textContent = `${money(packPrice)} ÷ ${size} = ${money(packPrice / size)} per item · Separate total ${money(itemsTotal)} · Save ${discount}`;
+            preview.textContent = `${comparison} Save ${discount} · ${money(packPrice / size)} per piece in the pack.`;
         }
-        ['create-pack-size', 'create-pack-price', 'selling-price'].forEach(id => document.getElementById(id)?.addEventListener('input', updatePackPriceCalc));
+        ['create-pack-size', 'create-pack-price', 'selling-price', 'cost-price'].forEach(id => document.getElementById(id)?.addEventListener('input', updatePackPriceCalc));
 
-        // Sales Pack cost divides into the per-item cost; markup fills the selling price and suggests a pack price.
         function updatePackCostCalc() {
             const preview = document.getElementById('pack-price-suggested');
-            if (!preview) return;
-            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
-            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
-            const markup = parseFloat(document.getElementById('create-pack-markup')?.value);
-            if (!(size > 1) || !isFinite(packCost) || packCost <= 0) {
-                preview.textContent = '';
+            const costPrice = document.getElementById('cost-price');
+            if (costEntryMode.value !== 'pack') {
+                preview.textContent = 'Your purchase cost for one piece.';
                 return;
             }
-            const money = value => '₱' + value.toFixed(2);
-            const text = `Calculated Cost per Item: \u20B1${(packCost / size).toFixed(2)}`;
-            preview.textContent = text;
+            const valid = purchasePackCost.value !== '' && purchasePackCost.validity.valid && purchasePackSize.value !== '' && purchasePackSize.validity.valid;
+            costPrice.value = valid ? (Number(purchasePackCost.value) / Number(purchasePackSize.value)).toFixed(2) : '';
+            preview.textContent = valid ? `₱${Number(purchasePackCost.value).toFixed(2)} ÷ ${purchasePackSize.value} pieces = ₱${costPrice.value} per piece (computed).` : 'Enter the purchase pack cost and a whole-number piece count.';
+            if (valid) costPrice.closest('.form-group').classList.remove('invalid');
         }
         function applyPackMarkup() {
-            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
-            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
-            const markup = parseFloat(document.getElementById('create-pack-markup')?.value);
+            const markup = document.getElementById('create-pack-markup');
+            const cost = document.getElementById('cost-price');
             const selling = document.getElementById('selling-price');
-            if (selling && size > 1 && isFinite(packCost) && packCost > 0 && isFinite(markup) && markup >= 0) {
-                selling.value = (Math.ceil((packCost / size) * (1 + markup / 100) * 100) / 100).toFixed(2);
-                selling.closest('.form-group')?.classList.remove('invalid');
-                updatePackPriceCalc();
+            const status = document.getElementById('create-markup-status');
+            const valid = markup.value !== '' && markup.validity.valid;
+            markup.closest('.form-group').classList.toggle('invalid', !valid);
+            if (!valid || cost.value === '' || !cost.validity.valid) {
+                status.textContent = 'Enter a valid cost and markup, then apply.';
+                return;
+            }
+            const price = Math.ceil(Number(cost.value) * (1 + Number(markup.value) / 100) * 100) / 100;
+            if (!Number.isFinite(price) || price <= 0 || price > Number(selling.max)) {
+                status.textContent = 'The calculated selling price must be between ₱0.01 and ₱99,999,999.99.';
+                return;
+            }
+            selling.value = price.toFixed(2);
+            selling.closest('.form-group').classList.remove('invalid');
+            status.textContent = `Applied ${markup.value}% markup. Selling price: ₱${selling.value}.`;
+            selling.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+        function syncPricingFields(prefill = false) {
+            const byPack = costEntryMode.value === 'pack';
+            document.getElementById('purchase-pack-fields').hidden = !byPack;
+            document.getElementById('cost-price').readOnly = byPack;
+            [purchasePackCost, purchasePackSize].forEach(field => { field.disabled = !byPack; field.required = byPack; });
+            addProductForm.querySelectorAll('[data-cost-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.costMode === costEntryMode.value)));
+            document.getElementById('sales-pack-fields').hidden = !sellSealedPacks.checked;
+            ['create-pack-size', 'create-pack-price', 'create-pack-barcode'].forEach(id => {
+                const field = document.getElementById(id);
+                field.disabled = !sellSealedPacks.checked;
+                field.required = sellSealedPacks.checked;
+                if (field.disabled) field.closest('.form-group').classList.remove('invalid');
+            });
+            const salesSize = document.getElementById('create-pack-size');
+            if (prefill && byPack && sellSealedPacks.checked && !salesSize.value && purchasePackSize.value && purchasePackSize.validity.valid) {
+                salesSize.value = purchasePackSize.value;
             }
             updatePackCostCalc();
+            updatePackPriceCalc();
+            syncStartingStockFields();
         }
-        function syncPackCostDivision() {
-            const size = parseInt(document.getElementById('create-pack-size')?.value, 10);
-            const packCost = parseFloat(document.getElementById('create-pack-cost')?.value);
-            const costPrice = document.getElementById('cost-price');
-            if (costPrice && size > 1 && isFinite(packCost) && packCost > 0) {
-                costPrice.value = (packCost / size).toFixed(2);
-                costPrice.closest('.form-group')?.classList.remove('invalid');
-            }
-            applyPackMarkup();
-        }
-        ['create-pack-size', 'create-pack-cost'].forEach(id => document.getElementById(id)?.addEventListener('input', syncPackCostDivision));
-        document.getElementById('create-pack-markup')?.addEventListener('input', applyPackMarkup);
+        addProductForm.querySelectorAll('[data-cost-mode]').forEach(button => button.addEventListener('click', () => {
+            costEntryMode.value = button.dataset.costMode;
+            syncPricingFields();
+            costEntryMode.dispatchEvent(new Event('input', {bubbles: true}));
+        }));
+        sellSealedPacks.addEventListener('change', () => syncPricingFields(true));
+        [purchasePackCost, purchasePackSize].forEach(field => field.addEventListener('input', () => { updatePackCostCalc(); updatePackPriceCalc(); }));
+        document.getElementById('apply-pack-markup').addEventListener('click', applyPackMarkup);
 
         function setWizardStep(step, saveDraft = true) {
             if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
@@ -3065,6 +2997,15 @@ foreach ($products as $product) {
                 }
             }
             if (step === 3) {
+                updatePackCostCalc();
+                if (costEntryMode.value === 'pack') {
+                    [purchasePackCost, purchasePackSize].forEach(field => {
+                        if (!field.value || !field.validity.valid) {
+                            field.closest('.form-group').classList.add('invalid');
+                            valid = false;
+                        }
+                    });
+                }
                 unitSelects.forEach(select => {
                     const input = addProductForm.elements[select.dataset.unitField];
                     if (!select.value && !input.value.trim()) {
@@ -3074,31 +3015,31 @@ foreach ($products as $product) {
                 });
                 const cost = document.getElementById('cost-price');
                 const selling = document.getElementById('selling-price');
-                if (cost.value === '' || Number(cost.value) < 0) {
+                if (cost.value === '' || !cost.validity.valid || Number(cost.value) < 0) {
                     cost.closest('.form-group').classList.add('invalid');
                     valid = false;
                 }
-                if (selling.value === '' || Number(selling.value) < Number(cost.value)) {
+                if (selling.value === '' || !selling.validity.valid || Number(selling.value) < Number(cost.value)) {
                     selling.closest('.form-group').classList.add('invalid');
                     valid = false;
                 }
                 const packSize = document.getElementById('create-pack-size');
                 const packBarcode = document.getElementById('create-pack-barcode');
                 const packPrice = document.getElementById('create-pack-price');
-                const hasPack = (packSize && packSize.value.trim() !== '') || (packBarcode && packBarcode.value.trim() !== '') || (packPrice && packPrice.value.trim() !== '');
-                if (hasPack) {
-                    const pSizeVal = parseInt(packSize.value, 10);
+                if (sellSealedPacks.checked) {
+                    const pSizeVal = Number(packSize.value);
                     const pPriceVal = parseFloat(packPrice.value);
                     const sellingVal = parseFloat(selling.value);
-                    if (isNaN(pSizeVal) || pSizeVal < 2) {
+                    if (!packSize.validity.valid || !Number.isInteger(pSizeVal) || pSizeVal < 2) {
                         packSize.closest('.form-group').classList.add('invalid');
                         valid = false;
                     }
-                    if (!packBarcode.value.trim() || existingBarcodes.has(packBarcode.value.trim().toLowerCase())) {
+                    const barcode = packBarcode.value.trim().toLowerCase();
+                    if (!barcode || !packBarcode.validity.valid || existingBarcodes.has(barcode) || ['create-barcode-input', 'create-receiving-barcode'].some(id => document.getElementById(id).value.trim().toLowerCase() === barcode)) {
                         packBarcode.closest('.form-group').classList.add('invalid');
                         valid = false;
                     }
-                    if (isNaN(pPriceVal) || pPriceVal <= 0 || (!isNaN(sellingVal) && !isNaN(pSizeVal) && pPriceVal >= (pSizeVal * sellingVal))) {
+                    if (!packPrice.validity.valid || isNaN(pPriceVal) || pPriceVal <= 0 || (!isNaN(sellingVal) && !isNaN(pSizeVal) && pPriceVal >= (pSizeVal * sellingVal))) {
                         packPrice.closest('.form-group').classList.add('invalid');
                         valid = false;
                     }
@@ -3155,6 +3096,7 @@ foreach ($products as $product) {
         updateStartingStockExpirationVisibility();
 
         function updateSalesPackStockCalc() {
+            if (startingPacksCount.disabled || startingPackLooseCount.disabled) return;
             const psize = Math.max(1, parseInt(packSizeInput?.value, 10) || 1);
             const pks = Math.max(0, parseInt(startingPacksCount?.value, 10) || 0);
             const loose = Math.max(0, parseInt(startingPackLooseCount?.value, 10) || 0);
@@ -3173,7 +3115,7 @@ foreach ($products as $product) {
         }
 
         function syncStartingStockFields() {
-            const isPacks = Number(packSizeInput.value) > 1;
+            const isPacks = sellSealedPacks.checked && !packSizeInput.disabled && Number(packSizeInput.value) > 1;
             const wasPacks = !stockSalesPacksWrapper.hidden;
             const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
             stockPiecesWrapper.hidden = isPacks;
@@ -3197,6 +3139,15 @@ foreach ($products as $product) {
         startingPacksCount?.addEventListener('input', updateSalesPackStockCalc);
         startingPackLooseCount?.addEventListener('input', updateSalesPackStockCalc);
         packSizeInput?.addEventListener('input', syncStartingStockFields);
+        syncPricingFields();
+        addProductForm.addEventListener('reset', () => queueMicrotask(() => {
+            costEntryMode.value = 'piece';
+            syncUnitSelects();
+            syncPricingFields();
+            document.getElementById('create-markup-tools').open = false;
+            document.getElementById('create-markup-status').textContent = '';
+            addProductForm.querySelectorAll('.invalid').forEach(group => group.classList.remove('invalid'));
+        }));
 
         function renderReview() {
             const data = new FormData(addProductForm);
@@ -3213,6 +3164,10 @@ foreach ($products as $product) {
                 ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`],
                 ['Supplier', data.get('preferred_supplier') || '—']
             ];
+            if (costEntryMode.value === 'pack') {
+                items.push(['Purchase Pack Cost', formatMoney(data.get('pack_cost'))]);
+                items.push(['Pieces per Purchase Pack', data.get('purchase_pack_size')]);
+            }
             const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
             if (data.get('pack_size') && parseInt(data.get('pack_size'), 10) > 1) {
                 items.push(['Starting Stock', `${data.get('starting_packs')} Sales Packs + ${data.get('starting_loose')} loose pieces`]);
@@ -3233,9 +3188,7 @@ foreach ($products as $product) {
                 RetailMindInventoryDrafts.discard(addProductForm);
                 addProductForm.reset();
                 syncUnitSelects();
-                syncStartingStockFields();
-                updatePackPriceCalc();
-                updatePackCostCalc();
+                syncPricingFields();
                 setWizardStep(1);
             }
         });
@@ -3249,6 +3202,9 @@ foreach ($products as $product) {
             if (draft.formId === 'add-product-form') {
                 RetailMindUI.openOverlay(productModalOverlay);
                 setWizardStep(draft.context.step || 1);
+            } else if (draft.formId === 'pack-reconcile-form') {
+                openProductDrawer(draft.context.productId);
+                document.getElementById('drawer-reconcile-pack')?.click();
             } else if (draft.formId === 'product-edit-form') {
                 event.detail.waitUntil(Promise.resolve(openProductDrawer(draft.context.productId)).then(() => enterProductEditMode()));
             } else {
@@ -3259,9 +3215,18 @@ foreach ($products as $product) {
             }
         });
         document.addEventListener('inventorydraft:restored', event => {
+            if (event.detail.form.id === 'pack-reconcile-form') updateReconcilePreview();
             if (event.detail.form === addProductForm) {
+                const values = event.detail.draft.values;
+                if (!values.some(item => item.name === 'sell_sealed_packs')) sellSealedPacks.checked = Number(packSizeInput.value) > 1;
+                if (!values.some(item => item.name === 'cost_entry_mode')) {
+                    costEntryMode.value = 'piece';
+                    if (Number(purchasePackCost.value) > 0 && Number(packSizeInput.value) > 1) purchasePackSize.value = packSizeInput.value;
+                }
+                // Explicit draft counts must survive showing the sealed-stock fields.
+                stockSalesPacksWrapper.hidden = !sellSealedPacks.checked;
                 syncUnitSelects();
-                syncStartingStockFields();
+                syncPricingFields();
                 setWizardStep(event.detail.draft.context.step || 1);
             }
         });

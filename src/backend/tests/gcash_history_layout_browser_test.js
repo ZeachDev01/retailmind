@@ -37,7 +37,7 @@ const {chromium} = require('playwright');
                 verification_status: 'Completed', session_id: 1, has_receipt: true, notes: 'Checked <reference>'}];
             await loadHistory();
         });
-        const row = page.locator('#gcash-history-body tr');
+        const row = page.locator('#gcash-history-body tr:not(.table-ghost-row)');
         assert.equal(await row.locator('td').count(), 7);
         assert.equal(await row.locator('td').nth(3).textContent(), '₱184.00');
         assert.equal(await row.locator('td').nth(4).textContent(), '₱5.00');

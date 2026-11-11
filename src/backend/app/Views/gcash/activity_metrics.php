@@ -1,7 +1,6 @@
 <section class="pos-panel gcash-overview-section" id="gcash-completed-activity" aria-labelledby="gcash-admin-metrics-title" data-fragment="activity-metrics">
     <div class="pos-panel-header">
         <div class="pos-panel-title">
-            <div class="pos-panel-icon"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i></div>
             <div>
                 <h2 id="gcash-admin-metrics-title">Completed activity</h2>
             </div>

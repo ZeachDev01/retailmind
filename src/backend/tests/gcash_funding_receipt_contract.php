@@ -254,4 +254,24 @@ $assert((int)$danRow['recorded_by'] === 3, 'Recorded by Dan');
 $assert((int)$danRow['received_by'] === 3, 'Received by Dan');
 $assert((int)$danRow['receipt_confirmed'] === 1, 'Receipt confirmed by Dan');
 
+$routine = [
+    'movement_type' => 'replenishment', 'fund_type' => 'wallet', 'direction' => 'in', 'amount' => 100,
+    'evidence_reference' => 'WALLET-REF-100', 'reason' => '', 'receipt_confirmed' => true,
+    'approver_username' => 'dan_admin_cashier', 'approver_password' => 'DanPass@123',
+];
+$routineId = $service->recordFundingMovement(3, 'cashier', $routine);
+$routineHistory = $service->getMoneyHistory(['funding_only' => true, 'recorded_by' => 3]);
+$routineRow = array_values(array_filter($routineHistory, fn($row) => $row['id'] === $routineId))[0];
+$assert($routineRow['reason'] === '', 'Routine wallet movement permits an optional reason');
+$cashRoutine = array_replace($routine, ['fund_type' => 'cash', 'evidence_reference' => '']);
+$refuse(fn() => $service->recordFundingMovement(3, 'cashier', $cashRoutine), '/source|destination/i');
+$cashId = $service->recordFundingMovement(3, 'cashier', $cashRoutine + ['source_destination' => 'Store safe']);
+$cashHistory = $service->getMoneyHistory(['funding_only' => true, 'recorded_by' => 3]);
+$cashRow = array_values(array_filter($cashHistory, fn($row) => $row['id'] === $cashId))[0];
+$assert($cashRow['reason'] === 'From: Store safe', 'Cash source is retained in movement history without an optional reason or invented reference');
+$refuse(fn() => $service->recordFundingMovement(3, 'cashier', array_replace($routine, ['evidence_reference' => ''])), '/evidence/i');
+foreach (['product_drawer_transfer', 'shortage_recovery'] as $specialType) {
+    $refuse(fn() => $service->recordFundingMovement(3, 'cashier', array_replace($routine, ['movement_type' => $specialType, 'source_destination' => 'Store safe'])), '/reason/i');
+}
+
 echo "Confirmed receipt for GCash funding contract: passed\n";

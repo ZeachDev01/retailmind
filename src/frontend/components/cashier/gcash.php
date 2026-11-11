@@ -28,7 +28,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <span id="gcash-session-status" class="gcash-status">Checking…</span>
                 </div>
                 <div class="gcash-session-header-actions">
-                    <button class="btn btn-primary" type="button" id="gcash-open-session-btn" hidden><i class="bi bi-unlock" aria-hidden="true"></i>Open GCash</button>
+                    <button class="btn btn-primary" type="button" id="gcash-open-session-btn" disabled hidden><i class="bi bi-unlock" aria-hidden="true"></i>Open GCash</button>
                     <button class="btn btn-secondary" type="button" id="gcash-funding-btn" hidden><i class="bi bi-arrow-left-right" aria-hidden="true"></i>Move funds</button>
                     <button class="btn btn-secondary" type="button" id="gcash-handover-session-btn" hidden><i class="bi bi-person-check" aria-hidden="true"></i>Hand over</button>
                     <button class="btn btn-secondary" type="button" id="gcash-close-session-btn" hidden><i class="bi bi-check2-square" aria-hidden="true"></i>Reconcile &amp; Close</button>
@@ -55,6 +55,9 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </button>
                 <button type="button" role="tab" id="tab-history" class="gcash-tab" aria-selected="false" aria-controls="panel-history" tabindex="-1">
                     <i class="bi bi-clock-history" aria-hidden="true"></i>History
+                </button>
+                <button type="button" role="tab" id="tab-funds" class="gcash-tab" aria-selected="false" aria-controls="panel-funds" tabindex="-1">
+                    <i class="bi bi-arrow-left-right" aria-hidden="true"></i>Service Fund Movements
                 </button>
             </nav>
         </div>
@@ -276,6 +279,19 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <button type="button" class="btn btn-secondary" id="gcash-prev" disabled>Previous</button>
                     <span id="gcash-page">Page 1</span>
                     <button type="button" class="btn btn-secondary" id="gcash-next" disabled>Next</button>
+                </div>
+            </section>
+        </div>
+
+        <div role="tabpanel" id="panel-funds" aria-labelledby="tab-funds" tabindex="0" class="gcash-tabpanel" hidden>
+            <section class="pos-panel gcash-history" aria-labelledby="gcash-funds-title">
+                <div class="pos-panel-header gcash-panel-header"><div class="pos-panel-title"><h2 id="gcash-funds-title">Service Fund Movements</h2></div></div>
+                <p id="gcash-funds-status" class="gcash-history-status" role="status" aria-live="polite">Your recorded service fund movements appear here.</p>
+                <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Your service fund movements">
+                    <table data-no-smart-table>
+                        <thead><tr><th scope="col">Date / time</th><th scope="col">Movement</th><th scope="col">Fund / amount</th><th scope="col">Session</th><th scope="col">Recorded / approved by</th><th scope="col">Evidence / details</th></tr></thead>
+                        <tbody id="gcash-funds-body"></tbody>
+                    </table>
                 </div>
             </section>
         </div>
@@ -581,12 +597,16 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                 </div>
                 <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-funding-source" id="gcash-funding-source-label">Cash source</label>
+                    <input class="pos-input" id="gcash-funding-source" name="source_destination" type="text" maxlength="100" required placeholder="e.g. Store safe or owner" autocomplete="off">
+                </div>
+                <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-funding-evidence">Evidence reference</label>
                     <input class="pos-input" id="gcash-funding-evidence" name="evidence_reference" type="text" maxlength="120" placeholder="Required for wallet, transfer, or owner capital" autocomplete="off">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-funding-reason">Reason</label>
-                    <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" required placeholder="Minimum 5 characters" autocomplete="off">
+                    <label class="pos-field-label" for="gcash-funding-reason" id="gcash-funding-reason-label">Reason (optional)</label>
+                    <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" placeholder="Add details if needed" autocomplete="off">
                 </div>
                 <fieldset class="gcash-correction-approval">
                     <legend>Administrator approval</legend>

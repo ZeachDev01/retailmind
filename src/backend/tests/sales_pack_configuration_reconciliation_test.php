@@ -233,6 +233,18 @@ $pdo->exec("
     );
 ");
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
+
+$pdo->exec('CREATE TABLE scheduled_demand_drivers (
+    driver_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    driver_type TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    scheduled_at TEXT NOT NULL,
+    details_json TEXT NOT NULL
+)');
+
 // Mock active inventory manager session
 $_SESSION['user_id'] = 1;
 $_SESSION['role'] = 'inventory_manager';
@@ -740,6 +752,27 @@ $assert((int)$mvt['moved_by'] === 1, 'Stock movement moved_by is user 1');
 // Check activity log
 $act = $pdo->query("SELECT * FROM activity_log WHERE user_id = 1 AND action = 'Physical stock reconciliation' ORDER BY log_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $assert($act !== false, 'Activity log recorded for physical stock reconciliation');
+
+// The same correction handles incorrect starting quantities and later piece-only counts.
+$pieceCountId = $productService->createProduct([
+    'barcode' => 'COUNT-PIECES',
+    'product_name' => 'Piece-only count correction',
+    'unit_price' => 10.00,
+    'initial_stock_quantity' => 40,
+], 1);
+foreach ([34, 45, 0] as $counted) {
+    $corrected = $productService->reconcilePhysicalStock($pieceCountId, 0, $counted, 'Verified physical count correction', 1);
+    $assert((int)$corrected['quantity_on_hand'] === $counted, "Piece-only correction replaces stock with {$counted}");
+    $forms = $pdo->query("SELECT SUM(sealed_quantity) AS sealed, SUM(loose_quantity) AS loose FROM product_batches WHERE product_id = {$pieceCountId}")->fetch(PDO::FETCH_ASSOC);
+    $assert((int)$forms['sealed'] === 0 && (int)$forms['loose'] === $counted, 'Piece-only correction keeps batch forms consistent');
+}
+try {
+    $productService->reconcilePhysicalStock($pieceCountId, 1, 0, 'Verified physical count correction', 1);
+    $assert(false, 'Piece-only correction must reject sealed packs');
+} catch (RuntimeException $e) {
+    $assert(str_contains($e->getMessage(), 'without a Sales Pack configuration'), 'Piece-only products cannot gain sealed packs');
+}
+$assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$pieceCountId}")->fetchColumn() === 0, 'Rejected correction preserves the stock');
 
 // 18. Blank starting_loose on a pack product means zero, never the auto-computed total.
 echo "Testing blank starting loose with starting packs...\n";

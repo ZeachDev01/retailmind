@@ -728,9 +728,11 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-funding-fund-type').selectOption('cash');
         await page.locator('#gcash-funding-direction').selectOption('in');
         await page.locator('#gcash-funding-amount').fill('500');
+        await page.locator('#gcash-funding-source').fill('Store safe');
         await page.locator('#gcash-funding-reason').fill('Replenish service cash drawer');
         await page.locator('#gcash-funding-approver').fill('theme_admin');
         await page.locator('#gcash-funding-password').fill(data.password);
+        await page.locator('#gcash-funding-receipt').check();
         await page.locator('#gcash-funding-submit').click();
         await page.locator('#gcash-funding-dialog').waitFor({state: 'hidden'});
 

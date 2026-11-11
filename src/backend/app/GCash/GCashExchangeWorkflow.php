@@ -650,11 +650,19 @@ final class GCashExchangeWorkflow
                 LEFT JOIN users u ON fm.recorded_by = u.user_id
                 LEFT JOIN users au ON fm.authorized_by = au.user_id";
         $params = [];
+        $conditions = [];
         if ($sessionId) {
-            $sql .= " WHERE fm.session_id = ?";
+            $conditions[] = 'fm.session_id = ?';
             $params[] = $sessionId;
         }
-        $sql .= " ORDER BY fm.movement_id DESC";
+        if (isset($filters['recorded_by'])) {
+            $recorder = filter_var($filters['recorded_by'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($recorder === false) throw new DomainException('Choose a valid movement recorder.');
+            $conditions[] = 'fm.recorded_by = ?';
+            $params[] = $recorder;
+        }
+        if ($conditions) $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        $sql .= " ORDER BY fm.created_at DESC, fm.movement_id DESC";
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute($params);
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -676,6 +684,8 @@ final class GCashExchangeWorkflow
                 'created_at' => $r['created_at'],
             ];
         }
+
+        if (!empty($filters['funding_only'])) return $items;
 
         // 2. Adjustments / Corrections
         $hasRecorder = in_array('recorded_by', $this->adjustmentColumns(), true);
@@ -750,8 +760,18 @@ final class GCashExchangeWorkflow
         $amount = round($amount, 2);
 
         $reason = trim((string)($data['reason'] ?? ''));
-        if (mb_strlen($reason) < 5 || mb_strlen($reason) > 255) {
+        $requiresReason = in_array($type, ['product_drawer_transfer', 'shortage_recovery'], true);
+        if (($requiresReason || $reason !== '') && (mb_strlen($reason) < 5 || mb_strlen($reason) > 255)) {
             throw new DomainException('Enter a reason between 5 and 255 characters.');
+        }
+        $source = trim((string)($data['source_destination'] ?? ''));
+        if (mb_strlen($source) > 100) throw new DomainException('Source or destination must be 100 characters or fewer.');
+        if ($fundType === 'cash' && !$requiresReason && $source === '' && $reason === '') {
+            throw new DomainException('Enter where the cash came from or where it is going. A source or destination is required.');
+        }
+        if ($source !== '') {
+            $reason = ($direction === 'in' ? 'From: ' : 'To: ') . $source . ($reason !== '' ? ' · ' . $reason : '');
+            if (mb_strlen($reason) > 255) throw new DomainException('Source or destination and reason together must be 255 characters or fewer.');
         }
 
         $evidence = trim((string)($data['evidence_reference'] ?? $data['evidence'] ?? ''));

@@ -287,4 +287,13 @@ $refuse(fn() => $service->recordShortageRecovery(2, [
     'approver_username' => 'admin_bob', 'approver_password' => 'AdminPass@123',
 ]), '/remaining|exceeds/i');
 
+$pdo->exec("INSERT INTO gcash_funding_movements (session_id,movement_type,fund_type,amount,direction,reason,authorized_by,recorded_by) VALUES (1,'replenishment','cash',75,'in','Other cashier funding',1,3)");
+$allFunding = $service->getMoneyHistory(['funding_only' => true]);
+$assert(count(array_filter($allFunding, fn($row) => $row['kind'] !== 'funding_movement')) === 0, 'Service fund history excludes customer exchanges and corrections');
+$ownFunding = $service->getMoneyHistory(['funding_only' => true, 'recorded_by' => 2]);
+$assert(count($allFunding) === count($ownFunding) + 1, 'Administrator sees funding by every recorder; Cashier sees only own records');
+$assert(!in_array(75.0, array_column($ownFunding, 'amount'), true), 'Cashier history excludes another recorder even in a shared session');
+$pdo->exec("UPDATE gcash_service_sessions SET status='closed'");
+$assert($service->getMoneyHistory(['funding_only' => true, 'recorded_by' => 2]) === $ownFunding, 'Own funding history remains available after session closure');
+
 echo "GCash Money history and linked shortage recovery contract: passed\n";

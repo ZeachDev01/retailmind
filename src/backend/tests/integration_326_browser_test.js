@@ -93,9 +93,9 @@ const fixture = action => run('src/backend/tests/support/integration_326_fixture
         await login(page, 'cashier');
         await page.goto(origin + '/components/cashier/gcash.php');
         await page.getByRole('button', {name: 'Review / record return'}).waitFor();
-        await page.getByRole('button', {name: 'Move service funds', exact: true}).click();
+        await page.locator('#gcash-funding-btn').click();
         await page.getByLabel('Amount (PHP)', {exact: true}).fill('50');
-        await page.getByLabel('Reason (min 5 characters)').fill('Actual owner funding received');
+        await page.getByLabel('Cash source', {exact: true}).fill('Owner');
         await page.locator('#gcash-funding-form [name="approver_username"]').fill('theme_admin');
         await page.locator('#gcash-funding-form [name="approver_password"]').fill(data.password);
         assert.equal(await page.locator('#gcash-funding-form').evaluate(form => form.checkValidity()), false, 'Receipt confirmation cannot be skipped');

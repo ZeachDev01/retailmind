@@ -296,7 +296,11 @@ $pendingSignInCount = $actorRole === 'super_admin' ? $signInReviews->pendingCoun
 
 $matchingRecordCount = $protectedAuditRecords->count($actorRole, $auditFilters);
 $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
-$modules = $protectedAuditRecords->modules($actorRole);
+$modules = $protectedAuditRecords->modules($actorRole, ['category' => $categoryFilter]);
+$actions = $protectedAuditRecords->actions($actorRole, ['category' => $categoryFilter, 'module' => $moduleFilter]);
+if ($actionFilter !== '' && !in_array($actionFilter, $actions, true)) {
+    array_unshift($actions, $actionFilter);
+}
 $canViewPlatformAudit = has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT);
 $pageTitle = $canViewPlatformAudit ? 'Protected Audit Records' : 'Operational Audit';
 $emptyTableCopy = $canViewPlatformAudit
@@ -455,6 +459,42 @@ if ($dateTo !== '') {
                 <div class="section-header">
                     <h2 id="audit-table-title"><i class="bi bi-journal-text" aria-hidden="true"></i> Record History</h2>
                 </div>
+                <form method="GET" class="audit-history-filters" id="auditHistoryFilters" aria-label="Filter record history">
+                    <?php foreach (['user_id' => $userFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo] as $name => $value): ?>
+                        <?php if ($value !== ''): ?><input type="hidden" name="<?= $name ?>" value="<?= htmlspecialchars($value) ?>"><?php endif; ?>
+                    <?php endforeach; ?>
+                    <?php if ($canViewPlatformAudit): ?>
+                    <div class="form-group">
+                        <label for="audit-history-category">Category</label>
+                        <select id="audit-history-category" name="category">
+                            <option value="">All categories</option>
+                            <?php foreach (\App\Audit\AuditRecordCategory::ALL as $category): ?>
+                            <option value="<?= htmlspecialchars($category) ?>" <?= $categoryFilter === $category ? 'selected' : '' ?>><?= htmlspecialchars(ucwords(str_replace('_', ' ', $category))) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php endif; ?>
+                    <div class="form-group">
+                        <label for="audit-history-module">Module</label>
+                        <select id="audit-history-module" name="module">
+                            <option value="">All modules</option>
+                            <?php foreach ($modules as $module): ?>
+                            <option value="<?= htmlspecialchars($module) ?>" <?= $moduleFilter === $module ? 'selected' : '' ?>><?= htmlspecialchars($module) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="audit-history-action">Action</label>
+                        <select id="audit-history-action" name="action">
+                            <option value="">All actions</option>
+                            <?php foreach ($actions as $action): ?>
+                            <option value="<?= htmlspecialchars($action) ?>" <?= $actionFilter === $action ? 'selected' : '' ?>><?= htmlspecialchars($action) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-quiet">Show records</button>
+                    <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">Clear</a>
+                </form>
                 <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
                 <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
@@ -496,6 +536,12 @@ if ($dateTo !== '') {
     <script defer src="<?= htmlspecialchars(app_url('assets/js/audit-log-drawer.js')) ?>"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            var historyFilters = document.getElementById('auditHistoryFilters');
+            historyFilters.addEventListener('change', function(event) {
+                if (event.target.name === 'category') historyFilters.elements.module.value = '';
+                if (event.target.name !== 'action') historyFilters.elements.action.value = '';
+                historyFilters.requestSubmit();
+            });
             var reviewForm = document.getElementById('signInReviewForm');
             if (reviewForm) {
                 reviewForm.addEventListener('submit', function() {

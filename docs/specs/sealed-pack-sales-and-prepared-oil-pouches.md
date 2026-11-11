@@ -6,6 +6,8 @@ The Store sells the same biscuit or other Product individually and in sealed pac
 
 Total piece counts cannot establish whether a sealed pack is physically available. Inventory staff need simple starting-stock and Stock Receiving entries for unopened packs and loose pieces. Prepared oil pouches also need straightforward stock counts: 250 mL (1/4 litre) sells for PHP 20, and 500 mL (1/2 litre) sells for PHP 40. The owner does not want bulk-oil tracking or pouch-production accounting.
 
+Product Catalog provides one **Correct Stock Count** action for incorrect starting quantities and differences verified during inventory checks. It replaces Emergency Stock Adjustment and the separate Physical Sales Pack Reconciliation action. Inventory Managers enter the final physical count: pieces for piece-only Products, or sealed packs and loose pieces for Products configured for Sales Packs. Show current stock, counted total, and the difference before confirmation; retain a required reason, stock-movement history, and audit history. This corrects existing stock; deliveries continue through Stock Receiving.
+
 Existing exact code lookup distinguishes unit and case barcodes, but checkout normalizes cart lines by Product alone and uses one selling price. Current receiving converts packages into base-unit totals without retaining the sealed-versus-loose distinction needed for sales.
 
 ## Solution

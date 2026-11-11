@@ -131,12 +131,23 @@ final class ProtectedAuditRecordService
         return $this->records($actorRole, $filters);
     }
 
-    public function modules(string $actorRole): array
+    public function modules(string $actorRole, array $filters = []): array
     {
-        [$whereSql, $params] = $this->where($actorRole, []);
+        [$whereSql, $params] = $this->where($actorRole, $filters);
         $moduleCondition = $whereSql === '' ? 'WHERE' : $whereSql . ' AND';
         $statement = $this->pdo->prepare(
             "SELECT DISTINCT al.module FROM activity_log al LEFT JOIN users u ON al.user_id = u.user_id {$moduleCondition} al.module IS NOT NULL AND al.module <> '' ORDER BY al.module"
+        );
+        $statement->execute($params);
+        return $statement->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    public function actions(string $actorRole, array $filters = []): array
+    {
+        [$whereSql, $params] = $this->where($actorRole, $filters);
+        $actionCondition = $whereSql === '' ? 'WHERE' : $whereSql . ' AND';
+        $statement = $this->pdo->prepare(
+            "SELECT DISTINCT al.action FROM activity_log al LEFT JOIN users u ON al.user_id = u.user_id {$actionCondition} al.action IS NOT NULL AND al.action <> '' ORDER BY al.action"
         );
         $statement->execute($params);
         return $statement->fetchAll(PDO::FETCH_COLUMN);

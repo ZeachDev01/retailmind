@@ -506,7 +506,7 @@ const csvRows = bytes => {
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' ' + suffix + ' has no page overflow');
                 await capture(name + '-' + suffix);
             }
-            await page.getByRole('tab', {name: 'Money history'}).click();
+            await page.getByRole('tab', {name: 'Service Fund Movements'}).click();
             await page.locator('#tab-money').waitFor({state: 'visible'});
             assert.equal(await page.getByLabel('Session ID', {exact: true}).isVisible(), true);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' money history has no page overflow');
