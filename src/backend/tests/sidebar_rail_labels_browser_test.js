@@ -54,6 +54,21 @@ const fixture = action => {
             await page.waitForTimeout(260);
             assert(await page.locator('body').evaluate(node => node.classList.contains('sidebar-collapsed')), role + ' collapsed');
 
+            if (role === 'admin') {
+                await page.goto('/components/administrator/store_settings.php');
+                for (const section of ['remote-access', 'attention-thresholds', 'store-receipts']) {
+                    await page.locator('.settings-sidebar a[href="?section=' + section + '"]').click();
+                    await page.waitForURL('**/store_settings.php?section=' + section);
+                    await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+                    assert.equal(await page.locator('.sidebar .dropdown.open').count(), 0,
+                        'Switching Store Configuration sections must not open a collapsed sidebar flyout');
+                    assert.equal(await page.locator('.sidebar .dropbtn[aria-expanded="true"]').count(), 0);
+                }
+                await page.reload();
+                assert.equal(await page.locator('.sidebar .dropdown.open').count(), 0, 'Reload keeps collapsed flyouts closed');
+                await page.screenshot({path: path.join(shots, 'admin-settings-closed.png')});
+            }
+
             const firstLink = page.locator('.sidebar-nav a[href]').first();
             const expectedLabel = await firstLink.getAttribute('title');
             await firstLink.hover();
@@ -66,7 +81,7 @@ const fixture = action => {
             assert.equal(await firstLink.getAttribute('title'), null, role + ' native title suppressed while the card shows');
             await page.screenshot({path: path.join(shots, role + '-label.png')});
             await page.mouse.move(700, 12);
-            await page.waitForTimeout(150);
+            await page.waitForFunction(() => getComputedStyle(document.querySelector('#rmSidebarTip')).opacity === '0');
             assert.equal(await firstLink.getAttribute('title'), expectedLabel, role + ' title restored after hover');
             assert.equal(await tip.evaluate(node => getComputedStyle(node).opacity), '0', role + ' tooltip hides after hover');
 
@@ -104,6 +119,53 @@ const fixture = action => {
                 await page.keyboard.press('Escape');
                 await page.waitForTimeout(100);
                 assert(!(await panel.isVisible()), role + ' Escape closes flyout');
+                await group.click();
+                await page.locator('.main-content h1').first().click();
+                assert(!(await panel.isVisible()), role + ' outside click closes flyout');
+
+                if (role === 'admin') {
+                    await page.evaluate(() => {
+                        window.railSnapshots = [];
+                        const start = document.startViewTransition.bind(document);
+                        document.startViewTransition = callback => {
+                            const rail = document.querySelector('#appSidebar').getBoundingClientRect();
+                            railSnapshots.push({open: document.querySelectorAll('.sidebar .dropdown.open').length, left: rail.left, width: rail.width});
+                            return start(callback);
+                        };
+                    });
+                    const railBefore = await page.locator('#appSidebar').boundingBox();
+                    for (const index of [0, 1, 2]) {
+                        await group.click();
+                        const link = panel.locator('a[href]').nth(index);
+                        const destination = await link.getAttribute('href');
+                        let release;
+                        const pending = new Promise(resolve => { release = resolve; });
+                        await page.route(destination, async route => { await pending; await route.continue(); });
+                        let closedAtStart;
+                        try {
+                            await link.click();
+                            await page.waitForFunction(() => document.querySelector('.main-content').getAttribute('aria-busy') === 'true');
+                            closedAtStart = !(await panel.isVisible());
+                        } finally { release(); }
+                        await page.waitForFunction(() => document.querySelector('.main-content').getAttribute('aria-busy') !== 'true');
+                        await page.unroute(destination);
+                        assert(closedAtStart, 'Flyout closes before loading and transition snapshots');
+                        assert(!(await panel.isVisible()), 'Flyout stays closed after navigation');
+                    }
+                    const snapshots = await page.evaluate(() => railSnapshots);
+                    assert.equal(snapshots.length, 3, 'All three page switches use the existing transition');
+                    assert(snapshots.every(state => state.open === 0), 'No open flyout is captured in page-transition snapshots');
+                    assert(snapshots.every(state => state.left === railBefore.x && state.width === railBefore.width), 'Rail stays in place through page transitions');
+                    await page.screenshot({path: path.join(shots, 'admin-after-navigation.png'), animations: 'disabled'});
+                }
+
+                await page.setViewportSize({width: 390, height: 844});
+                await page.locator('#menuToggle').click();
+                await group.click();
+                assert(await panel.isVisible(), role + ' mobile submenu opens');
+                await page.setViewportSize({width: 1440, height: 1000});
+                await page.waitForFunction(() => !document.querySelector('#appSidebar').classList.contains('open'));
+                assert(!(await panel.isVisible()), role + ' mobile submenu must not become a desktop flyout on resize');
             }
 
             await page.locator('#sidebarBrandToggle').click();

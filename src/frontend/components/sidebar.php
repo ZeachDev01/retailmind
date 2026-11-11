@@ -780,6 +780,13 @@ cartWorkspace.bindNavigation();
             }, { passive: true });
         }
 
+        window.addEventListener('retailmind:navigationstart', function() {
+            if (!isMobileDrawer() && document.body.classList.contains('sidebar-collapsed')) {
+                closeSidebarDropdowns();
+                hideNavTip();
+            }
+        });
+
         document.addEventListener('click', function(event) {
             if (!document.body.classList.contains('sidebar-collapsed')) {
                 return;
@@ -803,12 +810,14 @@ cartWorkspace.bindNavigation();
                 }
             }
         });
+        var wasMobileDrawer = isMobileDrawer();
         window.addEventListener('resize', function() {
-            if (isMobileDrawer()) {
+            if (isMobileDrawer() || wasMobileDrawer) {
                 closeSidebarDropdowns();
             } else {
                 positionOpenFlyouts();
             }
+            wasMobileDrawer = isMobileDrawer();
             hideNavTip();
         });
 
@@ -830,7 +839,10 @@ cartWorkspace.bindNavigation();
             });
         });
 
-        positionOpenFlyouts();
+        // Active-page groups start expanded in PHP; collapsed flyouts require an explicit click.
+        if (!isMobileDrawer() && document.body.classList.contains('sidebar-collapsed')) {
+            closeSidebarDropdowns();
+        }
     });
 </script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sw-register.js'), ENT_QUOTES, 'UTF-8') ?>" data-sw="<?= htmlspecialchars(app_url('sw.js'), ENT_QUOTES, 'UTF-8') ?>" data-scope="<?= htmlspecialchars(app_url('/'), ENT_QUOTES, 'UTF-8') ?>" defer></script>

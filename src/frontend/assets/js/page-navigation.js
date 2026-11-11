@@ -112,14 +112,21 @@
             !/\/auth\/(?:logout|login|change_password|reset_password|forgot_password)\.php$/.test(url.pathname);
     }
     function activeMenu(url) {
+        const collapsed = innerWidth > 900 && document.body.classList.contains('sidebar-collapsed');
+        if (collapsed) document.querySelectorAll('#appSidebar .dropdown.open').forEach(dropdown => {
+            dropdown.classList.remove('open');
+            dropdown.querySelector('.dropbtn')?.setAttribute('aria-expanded', 'false');
+        });
         document.querySelectorAll('#appSidebar a[href]').forEach(link => {
             const active = new URL(link.href).pathname === url.pathname;
             link.classList.toggle('active', active);
             if (active) {
                 link.setAttribute('aria-current', 'page');
                 const dropdown = link.closest('.dropdown');
-                dropdown?.classList.add('open');
-                dropdown?.querySelector('.dropbtn')?.setAttribute('aria-expanded', 'true');
+                if (!collapsed) {
+                    dropdown?.classList.add('open');
+                    dropdown?.querySelector('.dropbtn')?.setAttribute('aria-expanded', 'true');
+                }
             } else link.removeAttribute('aria-current');
         });
     }
@@ -214,6 +221,8 @@
         pending?.abort();
         pending = new AbortController();
         const request = ++sequence;
+        // Dismiss transient shell UI before the outgoing page is captured for animation.
+        window.dispatchEvent(new CustomEvent('retailmind:navigationstart'));
         startProgress();
         status(content);
         let committed = false;

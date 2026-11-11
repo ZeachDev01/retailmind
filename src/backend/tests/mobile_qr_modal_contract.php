@@ -132,8 +132,8 @@ if (file_exists($storeSettingsFile)) {
     $assert(str_contains($content, 'execCommand'), "Script includes fallback copy mechanism");
 
     // Modal keyboard accessibility (Escape key to dismiss with scoped listener lifecycle)
-    $assert(str_contains($content, 'Escape') || str_contains($content, 'keyCode === 27'), "Modal closes on Escape key press");
-    $assert(str_contains($content, "removeEventListener('keydown', handleModalEscape)"), "Modal Escape key listener detaches on close");
+    $assert(str_contains($content, 'rm-modal-overlay qr-modal-backdrop'), "QR modal uses shared Escape handling and focus trap");
+    $assert(str_contains($content, 'RetailMindUI.openOverlay(modal)') && str_contains($content, 'RetailMindUI.closeOverlay(modal)'), "QR modal uses shared overlay lifecycle");
     $assert(!preg_match('/document\.addEventListener\(\s*[\'"]keydown[\'"]\s*,\s*function/', $content), "Store settings does not attach unbounded global Escape key listener");
 
     // DOM node stacking guardrail

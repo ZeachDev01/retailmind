@@ -386,8 +386,12 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
             </div>
         </section>
 
+        </div>
+    </main>
+</div>
+
         <!-- Dedicated Mobile QR Code Modal -->
-        <div id="qr-code-modal" class="qr-modal-backdrop u-hidden" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" tabindex="-1">
+        <div id="qr-code-modal" class="rm-modal-overlay qr-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="qr-modal-title" tabindex="-1">
             <div class="qr-modal-dialog">
                 <div class="qr-modal-header">
                     <h3 id="qr-modal-title">Mobile Access</h3>
@@ -399,7 +403,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                         <?= !empty($initialQrSvg) ? $initialQrSvg : '' ?>
                     </div>
                     <div class="qr-modal-url-wrap">
-                        <input type="text" id="modal-remote-url" class="remote-url-input" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
+                        <input type="text" id="modal-remote-url" class="remote-url-input" aria-label="Remote access URL" readonly spellcheck="false" value="<?= htmlspecialchars((string)($tunnelStatus['url'] ?? '')) ?>" placeholder="Tunnel is offline">
                         <button type="button" id="modal-copy-url-btn" class="btn btn-secondary" title="Copy active URL">
                             <span id="modal-copy-btn-text">Copy URL</span>
                         </button>
@@ -411,10 +415,6 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                 </div>
             </div>
         </div>
-        </div>
-    </main>
-</div>
-
 <script src="<?= htmlspecialchars(theme_url('assets/vendor/qrcode/qrcode.min.js')) ?>"></script>
 <script>
 (function() {
@@ -480,12 +480,6 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
         }
     }
 
-    function handleModalEscape(e) {
-        if (e.key === 'Escape') {
-            closeQrModal();
-        }
-    }
-
     function openQrModal() {
         const url = (urlInput ? urlInput.value.trim() : '');
         if (!url) return;
@@ -494,17 +488,14 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
             renderQrCode(url);
         }
         if (modal) {
-            modal.classList.remove('u-hidden');
+            RetailMindUI.openOverlay(modal);
             if (modalCloseBtn) modalCloseBtn.focus();
-            document.addEventListener('keydown', handleModalEscape);
         }
     }
 
     function closeQrModal() {
         if (modal) {
-            modal.classList.add('u-hidden');
-            document.removeEventListener('keydown', handleModalEscape);
-            if (showQrBtn) showQrBtn.focus();
+            RetailMindUI.closeOverlay(modal);
         }
     }
 
