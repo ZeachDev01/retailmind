@@ -1489,7 +1489,7 @@ body.sidebar-collapsed .global-topbar { left: var(--sidebar-collapsed-width); }
 
 /* Administrator Store-operations workspace */
 .administrator-workspace .section-header h2 { margin-bottom: 0; }
-.store-operations-headlines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.store-operations-headlines { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
 .store-operations-headlines .stat-card { margin: 0; }
 .store-operations-headlines .value { font-size: clamp(1.15rem, 1.7vw, 1.6rem); }
 .period-comparison { margin-bottom: 1.5rem; }

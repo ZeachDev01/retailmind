@@ -39,6 +39,10 @@ $effectiveJobId = $coverage['effective_job_id'];
 $isGenerating = $coverage['is_updating'];
 $latestJobStatus = $coverage['latest_attempt_status'];
 $latestJob = $coverage['latest_job'];
+// A blocked prerequisite is waiting for setup, not a failed attempt.
+$latestJobLabel = $latestJob && str_starts_with((string)($latestJob['diagnostic_reference'] ?? ''), 'BLOCKED:')
+    ? 'waiting for setup'
+    : (string)$latestJobStatus;
 
 // Forecast origin
 $forecastOrigin = null;
@@ -238,6 +242,8 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 $issueTitle = match($issue['category'] ?? '') {
                     'paused' => 'Buying suggestions paused',
                     'blocked_recovery' => 'Forecast update blocked',
+                    'blocked_setup_collecting' => 'Forecasting is collecting sales history',
+                    'blocked_setup_ready' => 'Sales history ready; no model approved',
                     'exhausted_recovery' => 'Forecast update needs support',
                     'retry_scheduled' => 'Forecast update will retry',
                     'empty_store' => 'No active products',
@@ -390,7 +396,7 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
         <details class="forecast-details forecast-performance">
             <summary>Forecast performance &amp; model details</summary>
             <p class="muted forecast-model-line">Model: <?= htmlspecialchars($displayedForecastModel ?? 'None approved') ?> · <?= $coverage['is_observation_mode'] ? 'Observation only' : ($coverage['is_recommendations_suspended'] ? 'Buying suggestions paused' : 'Check product coverage above') ?></p>
-            <p class="muted forecast-model-line">Usable results: <?= $effectiveJobId ? 'Job #' . (int)$effectiveJobId : 'None' ?><?= $latestJob ? ' · Latest attempt: #' . (int)$latestJob['job_id'] . ' ' . htmlspecialchars($latestJobStatus) : '' ?></p>
+            <p class="muted forecast-model-line">Usable results: <?= $effectiveJobId ? 'Job #' . (int)$effectiveJobId : 'None' ?><?= $latestJob ? ' · Latest attempt: #' . (int)$latestJob['job_id'] . ' ' . htmlspecialchars($latestJobLabel) : '' ?></p>
         <section aria-labelledby="heading-performance">
             <div class="forecast-section-header">
                 <h2 id="heading-performance">Forecast performance</h2>

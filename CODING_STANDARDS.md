@@ -21,6 +21,9 @@ These standards govern code review and architecture consistency across the Retai
 - **Stylesheet Bundle**: `src/frontend/assets/css/style.css` is a generated bundle. Edit the 9 source files (`global.css`, `forms.css`, `utilities.css`, `sidebar.css`, `dashboard.css`, `tables.css`, `modals.css`, `products.css`, `responsive.css`) and run `npm run build:styles` (`php src/backend/scripts/build_styles.php`). Verify with `npm run check:styles`.
 - **Glanceable UI Copy**: Keep forms, drawers, and modals self-explanatory at a glance. Avoid verbose helper subtext or redundant descriptions unless required by a contract test.
 - **Contract Needles**: Before restructuring markup in views/modals, check mapped contract tests in [`docs/WORKSPACE_MAP.md`](docs/WORKSPACE_MAP.md) and run `npm run check` after changes to ensure required DOM IDs, `data-*` attributes, and required copy needles remain intact.
+- **Fixture Isolation**: Contract tests build their own state. Never read developer files such as `src/backend/storage/logs/*`; isolate them with a `src/backend/tests/support/` helper (see `forecasting_diagnostics_isolation.php`) or inject a temp path.
+- **Fixture Schema**: Reuse `src/backend/tests/support/` helpers (`notification_schema.php` for notifications/attention) instead of re-declaring app tables. Hand-written copies drift, then a suite fails on a missing column.
+- **Bootstrapping**: Load `bootstrap/app.php` so the `App\` autoloader resolves new classes. Hand-requiring each `App\` file breaks when a new dependency is added. Global-namespace classes (`NotificationService`, `includes/functions.php`) still need an explicit `require_once`.
 
 ## 5. Engineering Minimalism (Ponytail Discipline)
 - Before creating a new helper, class, or service, check [`src/backend/includes/`](src/backend/includes/) and [`src/backend/app/Services/`](src/backend/app/Services/).

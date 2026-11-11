@@ -139,25 +139,11 @@ $formatUnits = static function ($val): string {
             </div>
         </header>
         <?php forecast_workflow('review'); ?>
-        <?php
-        $failedChecks = array_filter($summary['required_checks'] ?? [], static fn(array $check): bool => empty($check['passed']));
-        $firstFailedCheck = $failedChecks ? reset($failedChecks) : null;
-        forecast_status_summary(
-            !empty($summary['is_current_approved']) ? 'This model is already approved' : (!empty($summary['can_approve']) ? 'Model is ready for your approval' : 'Model approval is blocked'),
-            $firstFailedCheck['label'] ?? (empty($summary['has_candidate']) ? 'No completed model is available to review.' : (!empty($summary['can_approve']) ? 'None of the required checks.' : 'Review the checks below for the remaining requirements.')),
-            !empty($summary['is_current_approved'])
-                ? 'Check product coverage and current forecasts before buying.'
-                : (!empty($summary['can_approve']) ? 'Review the evidence below before approving or rejecting.' : 'Check the failed requirements below. Training completion alone does not allow approval.'),
-            !empty($summary['is_current_approved']) ? app_url('components/report/predictions.php') : null,
-            'View forecasts'
-        );
-        ?>
 
         <?php if ($message): ?>
             <div id="review-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>
 
-        <details class="forecast-details"><summary>Model versions &amp; observation</summary>
         <div class="card-grid" style="margin-bottom: 1.5rem;">
             <article class="stat-card with-icon">
                 <span class="stat-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
@@ -187,7 +173,6 @@ $formatUnits = static function ($val): string {
                 <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Check Demand Forecast for current Product coverage' : 'Stock rules in effect until model approved') ?></div>
             </article>
         </div>
-        </details>
 
         <!-- Candidate Qualification & Status Banner -->
             <details class="forecast-details"><summary id="status-heading">Approval status details</summary>

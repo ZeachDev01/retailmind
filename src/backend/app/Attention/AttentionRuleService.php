@@ -28,6 +28,7 @@ final class AttentionRuleService
         ['key' => 'store.fiscal-period.overdue', 'signal' => 'fiscal_period_overdue_count', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'fiscal_period', 'title' => 'Fiscal Period action is overdue', 'destination' => 'components/system_administrator/fiscal_periods.php'],
         ['key' => 'store.forecasting.candidate-review', 'signal' => 'forecasting_candidate_review', 'fixed_threshold' => 1.0, 'severity' => 'warning', 'category' => 'forecasting', 'title' => 'Qualified forecast model awaiting review', 'destination' => 'components/administrator/model_review.php'],
         ['key' => 'store.forecasting.failure', 'signal' => 'forecasting_failure', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'forecasting', 'title' => 'Demand forecast generation failed', 'destination' => 'components/report/predictions.php'],
+        ['key' => 'store.forecasting.setup-due', 'signal' => 'forecasting_setup_due', 'fixed_threshold' => 1.0, 'severity' => 'warning', 'category' => 'forecasting', 'title' => 'Sales history is ready; no model approved', 'destination' => 'components/administrator/model_review.php'],
     ];
 
     public function __construct(private AttentionSettingsService $settings, private Clock $clock)

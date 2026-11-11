@@ -45,6 +45,10 @@ node_modules/
 /tmp/
 /output/
 
+# Recovery storage created when a test runs inside a worktree (dirname() of the
+# worktree project lands in this repo); the install default is a sibling folder.
+/retailmind-private-*/
+
 # Design review captures (surface briefs stay tracked)
 /.impeccable/review/
 /.impeccable/build/

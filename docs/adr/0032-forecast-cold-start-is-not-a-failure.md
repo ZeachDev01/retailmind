@@ -1,0 +1,7 @@
+# Treat the Forecast Cold Start as a waiting state, not a failure
+
+A new Store needs about 140 usable history days per Product before a candidate model can be trained, so every Store begins with no approved model and no forecasts. The scheduler already records those days as `BLOCKED:MISSING_APPROVED_MODEL` jobs, and the System Health check already reads that marker as paused work. The attention center did not: it raised a critical "Forecasting failure" on the dashboard and a "technical support required" check on the Forecast page, every day, for months.
+
+Blocked jobs no longer raise a forecasting failure. While no model is approved and no Product has met Store Training Eligibility, the Store Overview shows one quiet Store status card — "Forecasting · N of M ready" — and the Forecast page shows an informational notice. Operator acknowledgement was rejected: it hides a condition that should never have been an alert, and the signal returns the next day. Once at least one Product is eligible, the same blocked state becomes a single warning that stays until a model is approved; real failures (exhausted retries, a stalled worker, a recorded outage) keep their critical alerts throughout.
+
+The trade-off is silence during the cold start: an Administrator is not prompted to act until the history requirement is met. This is deliberate, because no action is available before then, and the setup state remains visible in Store status and on the Forecast page.

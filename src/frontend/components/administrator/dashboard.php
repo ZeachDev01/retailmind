@@ -74,6 +74,7 @@ $history = $dashboard['financial_history'] ?? null;
 $headlineOrder = [
     'sales_cash_exceptions' => ['Cash variances', 'bi-cash-coin', ['View cash variances' => 'components/administrator/shift_report.php']],
     'inventory_risks' => ['Pending Stock Issues', 'bi-box-seam', ['View Stock Issues' => 'components/administrator/stock_issues.php']],
+    'forecasting' => ['Forecasting', 'bi-graph-up-arrow', ['View Data Readiness' => 'components/report/data_readiness.php']],
     'fiscal_period' => ['Current Fiscal Period', 'bi-calendar-check', ['View Fiscal Periods' => 'components/system_administrator/fiscal_periods.php']],
 ];
 $currentUrl = app_url('components/administrator/dashboard.php') . '?range=' . $selectedRange . '&period=' . $selectedPeriod;
@@ -171,7 +172,7 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                         </div>
                     </div>
                     <div class="card-grid store-operations-headlines">
-                        <?php foreach ($headlineOrder as $key => [$label, $icon, $destinations]): $item = $dashboard['headline'][$key]; ?>
+                        <?php foreach ($headlineOrder as $key => [$label, $icon, $destinations]): $item = $dashboard['headline'][$key] ?? null; if (!is_array($item)) continue; ?>
                             <article class="stat-card with-icon status-<?= $escape($item['status']) ?>">
                                 <span class="stat-icon"><i class="bi <?= $escape($icon) ?>" aria-hidden="true"></i></span>
                                 <div class="label"><?= $escape($label) ?></div>

@@ -7,6 +7,7 @@ require_once __DIR__ . '/StoreModelGovernanceService.php';
 require_once __DIR__ . '/CandidateEvaluationService.php';
 require_once __DIR__ . '/ForecastingSchedulerService.php';
 require_once __DIR__ . '/ForecastAggregateReader.php';
+require_once __DIR__ . '/ForecastSetupStatus.php';
 
 use PDO;
 use InvalidArgumentException;
@@ -419,19 +420,19 @@ class DemandForecastService
         if ($scopeCount === 0) {
             $summaryText = 'No active products available in catalog.';
         } elseif ($latestAttemptStatus === 'failed') {
-            $recoveryText = ($this->canRetry)($latestJob)
-                ? 'Automatic retry scheduled; no action needed.'
-                : 'Automatic recovery is blocked or exhausted. Super Administrator: inspect the failure before retrying.';
-            if ($forecastBackedCount > 0) {
-                $summaryText = sprintf(
-                    'Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. %s',
-                    $forecastBackedCount, $scopeCount, $stockRuleCount, $recoveryText
-                );
+            $blockedLatest = str_starts_with((string)($latestJob['diagnostic_reference'] ?? ''), 'BLOCKED:');
+            if ($blockedLatest) {
+                $summaryText = (string)($approvedVersion ?? '') === ''
+                    ? sprintf('Forecasting has not started: the Store is still collecting sales history. All %d products use stock rules.', $scopeCount)
+                    : sprintf('Forecasting is blocked by a missing prerequisite. All %d products use stock rules.', $scopeCount);
+            } elseif (($this->canRetry)($latestJob)) {
+                $summaryText = $forecastBackedCount > 0
+                    ? sprintf('Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. Automatic retry scheduled; no action needed.', $forecastBackedCount, $scopeCount, $stockRuleCount)
+                    : sprintf('Forecast update failed. Buying suggestions are using stock rules for all %d products. Automatic retry scheduled; no action needed.', $scopeCount);
             } else {
-                $summaryText = sprintf(
-                    'Forecast update failed. Buying suggestions are using stock rules for all %d products. %s',
-                    $scopeCount, $recoveryText
-                );
+                $summaryText = $forecastBackedCount > 0
+                    ? sprintf('Forecast update failed. Preserving valid guidance for %d of %d products; %d use stock rules. Automatic recovery is blocked or exhausted. Super Administrator: inspect the failure before retrying.', $forecastBackedCount, $scopeCount, $stockRuleCount)
+                    : sprintf('Forecast update failed. Buying suggestions are using stock rules for all %d products. Automatic recovery is blocked or exhausted. Super Administrator: inspect the failure before retrying.', $scopeCount);
             }
         } elseif ($isUpdating) {
             if ($forecastBackedCount > 0) {
@@ -584,7 +585,39 @@ class DemandForecastService
                 (int)($coverage['forecast_backed_count'] ?? 0), (int)($coverage['scope_count'] ?? 0),
                 (int)($coverage['stock_rule_count'] ?? 0));
 
-            if ($isExhausted) {
+            if ($isBlocked) {
+                // A missing prerequisite is a waiting state, not a failed run.
+                $setup = ForecastSetupStatus::snapshot($this->pdo);
+                if ($setup['state'] === 'ready') {
+                    $actionUrl = $urlHelper('components/administrator/model_review.php');
+                    $actionLabel = 'Open Model Review';
+                    if ($actorRole === 'super_admin') {
+                        $actionUrl = $urlHelper('components/system_administrator/ml_settings.php');
+                        $actionLabel = 'Train a Candidate Model';
+                    }
+                    $issues[] = [
+                        'priority' => 1,
+                        'severity' => 'warning',
+                        'category' => 'blocked_setup_ready',
+                        'condition' => 'Sales history is ready, but no forecasting model is approved.',
+                        'effect' => $guidanceEffect . ' Forecasts start after a candidate model is trained and approved.',
+                        'responsible_role' => 'Administrator',
+                        'action_label' => $actionLabel,
+                        'action_url' => $actionUrl,
+                    ];
+                } else {
+                    $issues[] = [
+                        'priority' => 1,
+                        'severity' => 'info',
+                        'category' => 'blocked_setup_collecting',
+                        'condition' => 'Forecasting has not started: the Store is still collecting sales history.',
+                        'effect' => sprintf('%d of %d Products meet Store Training Eligibility. Buying suggestions use stock rules until a model is approved.', (int)$setup['ready_products'], (int)$setup['total_products']),
+                        'responsible_role' => 'Automatic System',
+                        'action_label' => 'Review Data Readiness',
+                        'action_url' => $urlHelper('components/report/data_readiness.php'),
+                    ];
+                }
+            } elseif ($isExhausted) {
                 $actionUrl = null;
                 $actionLabel = 'Technical Support Required (Super Administrator)';
                 if ($actorRole === 'super_admin') {
@@ -594,8 +627,8 @@ class DemandForecastService
                 $issues[] = [
                     'priority' => 1,
                     'severity' => 'critical',
-                    'category' => $isBlocked ? 'blocked_recovery' : 'exhausted_recovery',
-                    'condition' => $isBlocked ? 'Forecast update is blocked by missing prerequisites; automatic retry is unavailable.' : sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
+                    'category' => 'exhausted_recovery',
+                    'condition' => sprintf('Forecast update failed and automatic recovery is exhausted (%d attempts failed).', $attempts),
                     'effect' => $guidanceEffect . ' Technical support required to inspect background worker logs.',
                     'responsible_role' => 'Super Administrator',
                     'action_label' => $actionLabel,

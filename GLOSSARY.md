@@ -236,6 +236,14 @@ _Avoid_: Eligible Product, approved model
 An operational notice explaining whether Store Products are ready for model training, including when no Product currently satisfies Store Training Eligibility.
 _Avoid_: Training failure, model approval notice
 
+**Forecast Cold Start**:
+The period when the Store has no approved forecasting model and no Product yet satisfies Store Training Eligibility. Forecasting has not failed; it has not started, and no alert is raised.
+_Avoid_: Forecasting failure, cold start error, setup failure
+
+**Blocked Forecast Job**:
+A recorded forecast or model-training attempt that could not start because a prerequisite is missing. It records a waiting condition, not a failed run, and never raises a Forecasting Failure.
+_Avoid_: Failed forecast, retry failure, exhausted job
+
 **Stockout Day**:
 A Store trading day when a Product was unavailable for sale during part or all of the day. Recorded sales remain valid, but do not reveal how many additional units customers might have bought.
 _Avoid_: Zero demand, complete demand observation

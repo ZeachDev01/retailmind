@@ -24,21 +24,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../app/Core/Database.php';
-require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
-require_once __DIR__ . '/../app/Store/StoreCalendar.php';
-require_once __DIR__ . '/../app/Store/ScheduledDemandDriverService.php';
-require_once __DIR__ . '/../app/Forecasting/DemandHistoryService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreTrainingEligibilityService.php';
-require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
-require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
-require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
-require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
-require_once __DIR__ . '/../app/Forecasting/ForecastingSchedulerService.php';
-require_once __DIR__ . '/../app/Services/MlJobService.php';
 require_once __DIR__ . '/../app/Services/NotificationService.php';
-require_once __DIR__ . '/../app/Attention/AttentionCenter.php';
-require_once __DIR__ . '/../app/Attention/AttentionSettingsService.php';
+require_once __DIR__ . '/support/notification_schema.php';
+require_once __DIR__ . '/support/forecasting_diagnostics_isolation.php';
 
 use App\Core\Database;
 use App\Authorization\RoleCapabilityPolicy;
@@ -364,6 +352,12 @@ $pdo->exec("
     );
 ");
 
+// Bring the fixture up to the current notification persistence contract
+// (notifications.resolved_at and friends) so attention resolution paths run.
+notification_test_schema($pdo);
+// AttentionCentre reads the real outage log by default; keep this run isolated.
+isolate_forecasting_diagnostics();
+
 // Populate initial seeds
 $pdo->exec("
     INSERT INTO roles (role_id, role_name) VALUES (1, 'super_admin'), (2, 'admin'), (3, 'cashier'), (4, 'inventory_manager');
@@ -381,7 +375,9 @@ $pdo->exec("
 echo "\n--- Section 1: Service Configuration & Database Delay Recovery ---\n";
 
 // 1.1 Configuration retention contract in forecasting_runner.json
-$configDir = dirname(__DIR__) . '/config';
+// Keep the fixture config out of src/backend/config: that path holds the machine's
+// installed runner configuration on a developer box.
+$configDir = sys_get_temp_dir() . '/retailmind-forecasting-config-' . getmypid();
 if (!is_dir($configDir)) {
     mkdir($configDir, 0777, true);
 }
@@ -395,10 +391,11 @@ $testConfig = [
     'installed_at' => '2026-11-02 07:00:00',
 ];
 file_put_contents($configPath, json_encode($testConfig, JSON_PRETTY_PRINT));
-register_shutdown_function(function() use ($configPath) {
+register_shutdown_function(function() use ($configPath, $configDir) {
     if (file_exists($configPath)) {
         @unlink($configPath);
     }
+    @rmdir($configDir);
 });
 $savedConfig = json_decode((string)file_get_contents($configPath), true);
 assert_same('C:\\xampp\\php\\php.exe', $savedConfig['php_binary'], 'Retained PHP binary configuration');
@@ -1118,23 +1115,47 @@ foreach ($recsMismatch as $r) {
 assert_same('Stock-rule suggestion', $p2Mismatch['basis'], 'Mismatched model version falls back to Stock-rule suggestion');
 assert_same(false, $p2Mismatch['is_forecast_backed'], 'Mismatched product not marked as forecast backed');
 
-// 12.4 Stale forecast output (origin older than yesterday)
+// 12.4 Out-of-date run output: a newer usable run exists, so asking for this older
+// run reports it as superseded. 12.4b below covers the stale-origin case.
 $pdo->exec("
     INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff, queued_at, completed_at)
-        VALUES (501, 'forecast_generation', 'succeeded', '2026-10-25', '2026-10-26 01:00:00', '2026-10-26 01:05:00');
+        VALUES (600, 'forecast_generation', 'succeeded', '2026-10-25', '2026-10-26 01:00:00', '2026-10-26 01:05:00');
 ");
 for ($h = 1; $h <= 28; $h++) {
     $tDate = date('Y-m-d', strtotime("2026-10-25 +$h days"));
     $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level)
-        VALUES (501, 1, '2026-10-25', ?, ?, 8, '{$candidateVersion1}', 'High')")->execute([$tDate, $h]);
+        VALUES (600, 1, '2026-10-25', ?, ?, 8, '{$candidateVersion1}', 'High')")->execute([$tDate, $h]);
 }
-$recsStale = $queueService->getRecommendations(501, '2026-11-02');
+$recsStale = $queueService->getRecommendations(600, '2026-11-02');
 $p1Stale = null;
 foreach ($recsStale as $r) {
     if ($r['product_id'] === 1) { $p1Stale = $r; break; }
 }
-assert_same('Stock-rule suggestion', $p1Stale['basis'], 'Stale forecast falls back to Stock-rule suggestion');
-assert_true(str_contains((string)$p1Stale['forecast_status'], 'Stale forecast'), 'Stale forecast labeled with origin date');
+assert_same('Stock-rule suggestion', $p1Stale['basis'], 'Out-of-date run falls back to Stock-rule suggestion');
+// Superseded outranks stale: job 160 is the latest usable run, so an older run is
+// reported by its run number instead of by its stale origin.
+assert_true(
+    str_contains((string)$p1Stale['forecast_status'], 'Superseded forecast: run #600'),
+    'Out-of-date run is labelled with its run number'
+);
+
+// 12.4b Genuinely stale latest run: run 700 is usable for the Store because Product 2
+// carries the accepted origin, while Product 1 carries older evidence.
+$pdo->exec("INSERT INTO ml_jobs (job_id, trigger_type, status, evidence_cutoff, queued_at, completed_at)
+    VALUES (700, 'forecast_generation', 'succeeded', '2026-11-01', '2026-11-02 22:55:00', '2026-11-02 23:00:00')");
+$insertForecast = $pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version, readiness_level)
+    VALUES (700, ?, ?, ?, ?, 8, '{$candidateVersion1}', 'High')");
+for ($h = 1; $h <= 28; $h++) {
+    $insertForecast->execute([2, '2026-11-01', date('Y-m-d', strtotime("2026-11-01 +$h days")), $h]);
+    $insertForecast->execute([1, '2026-10-20', date('Y-m-d', strtotime("2026-10-20 +$h days")), $h]);
+}
+$recsStaleOrigin = $queueService->getRecommendations(700, '2026-11-02');
+$p1StaleOrigin = null;
+foreach ($recsStaleOrigin as $r) {
+    if ($r['product_id'] === 1) { $p1StaleOrigin = $r; break; }
+}
+assert_same('Stock-rule suggestion', $p1StaleOrigin['basis'], 'Stale-origin product falls back to Stock-rule suggestion');
+assert_true(str_contains((string)$p1StaleOrigin['forecast_status'], 'Stale forecast: 2026-10-20'), 'Stale forecast labelled with its origin date');
 
 // 12.5 Observation-only output restriction
 $activationService->setObservationMode(true, 1);

@@ -9,7 +9,6 @@ $rows = get_forecasting_readiness($pdo);
 $historyReadyCount = count(array_filter($rows, static fn(array $row): bool => (int)$row['accumulated_usable_days'] >= (int)$row['required_usable_days']));
 $recentReadyCount = count(array_filter($rows, static fn(array $row): bool => !empty($row['has_feature_window'])));
 $testingReadyCount = count(array_filter($rows, static fn(array $row): bool => !empty($row['has_holdout_coverage'])));
-$trainingReadyCount = count(array_filter($rows, static fn(array $row): bool => !empty($row['training_eligible'])));
 $isHistoricalDemo = !empty(get_key_value_settings($pdo, 'platform_settings', ['demo_import_metadata' => ''])['demo_import_metadata']);
 
 $counts = [
@@ -179,23 +178,6 @@ function build_query(array $params): string {
         </header>
 
         <?php forecast_workflow('data'); ?>
-        <?php
-        $blockedRows = array_values(array_filter($rows, static fn(array $row): bool => empty($row['training_eligible'])));
-        $firstBlocker = $blockedRows ? forecast_readiness_state($blockedRows[0]) : null;
-        forecast_status_summary(
-            $rows ? "{$trainingReadyCount} of " . count($rows) . ' products ready to train' : 'No product readiness results',
-            $firstBlocker ? $firstBlocker['reason'] . (count($blockedRows) > 1 ? ' Check the product rows for other blockers.' : '') : ($rows ? 'None in the sales data checks. Model quality and approval are separate.' : 'No product history is available to check.'),
-            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
-                ? ($firstBlocker ? $firstBlocker['next'] : ($rows ? 'Sales data is ready. Review training before starting a new model.' : 'Add products and record or import their daily sales.'))
-                : 'The Super Administrator handles training data. Use current forecasts or stock rules for Store work.',
-            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
-                ? app_url('components/system_administrator/' . ($firstBlocker || !$rows ? 'forecast_import.php' : 'ml_settings.php'))
-                : app_url('components/report/predictions.php'),
-            has_capability(RoleCapabilityPolicy::CONFIGURE_MODELS)
-                ? ($firstBlocker || !$rows ? 'Import sales history' : 'Review training')
-                : 'View forecasts'
-        );
-        ?>
         <?php if ($isHistoricalDemo): ?>
             <p class="forecast-notice"><strong>Historical demo.</strong> Old records can test past predictions; they do not fill today’s missing dates. <a href="forecast_replay.php">See the historical comparison</a>.</p>
         <?php endif; ?>

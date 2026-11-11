@@ -39,6 +39,7 @@ final class StoreOperationsDashboardWorkspace
 
     public static function invalidateCache(?string $role = null, ?int $days = null): void
     {
+        \App\Forecasting\ForecastSetupStatus::forget();
         if ($role !== null && $days !== null) {
             unset(self::$memoryCache["{$role}_{$days}"]);
             $file = self::cacheFilePath($role, $days);
@@ -235,6 +236,7 @@ final class StoreOperationsDashboardWorkspace
         return [
             'sales_cash_exceptions' => $this->headlineItem('Cash variances', $cashVariances, $cashVariances > 0 ? 'warning' : 'healthy', 'Unreviewed Cashier Shift cash differences.'),
             'inventory_risks' => $this->headlineItem('Pending Stock Issues', $inventoryRisks, $inventoryRisks > 0 ? 'warning' : 'healthy', 'Waiting for Inventory Manager; Administrator oversight is read-only.'),
+            'forecasting' => $this->forecastHeadline(),
             'fiscal_period' => [
                 'label' => 'Current Fiscal Period',
                 'value' => $period['period_name'] ?? 'Not configured',
@@ -572,6 +574,14 @@ final class StoreOperationsDashboardWorkspace
                         $attentionItem->detectedAt->format('Y-m-d H:i:s'),
                         'components/administrator/model_review.php'
                     );
+                } elseif ($attentionItem->key === 'store.forecasting.setup-due') {
+                    $items[] = $this->exception(
+                        'warning',
+                        'Forecast model not approved',
+                        $attentionItem->explanation,
+                        $attentionItem->detectedAt->format('Y-m-d H:i:s'),
+                        'components/administrator/model_review.php'
+                    );
                 }
             }
         } catch (\Throwable) {}
@@ -694,6 +704,37 @@ final class StoreOperationsDashboardWorkspace
     private function headlineItem(string $label, int $value, string $status, string $detail): array
     {
         return compact('label', 'value', 'status', 'detail');
+    }
+
+    /**
+     * Forecast setup is a waiting condition, not a failure: show progress instead
+     * of an attention alert while the Store is still collecting sales history.
+     */
+    private function forecastHeadline(): array
+    {
+        $setup = ['state' => 'collecting', 'ready_products' => 0, 'total_products' => 0, 'required_days' => 0];
+        try {
+            $setup = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo);
+        } catch (\Throwable) {
+        }
+
+        if ($setup['state'] === 'active') {
+            return [
+                'label' => 'Forecasting',
+                'value' => 'Active',
+                'status' => 'healthy',
+                'detail' => 'An approved model is generating forecasts.',
+            ];
+        }
+
+        return [
+            'label' => 'Forecasting',
+            'value' => $setup['ready_products'] . ' of ' . $setup['total_products'] . ' ready',
+            'status' => $setup['state'] === 'ready' ? 'warning' : 'healthy',
+            'detail' => $setup['state'] === 'ready'
+                ? 'Sales history is ready; no model is approved yet.'
+                : 'Collecting sales history: each Product needs ' . (int)$setup['required_days'] . ' usable days.',
+        ];
     }
 
     private function comparisonItem(float|int $current, float|int $previous): array

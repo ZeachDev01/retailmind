@@ -76,6 +76,9 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 - **Forecasting & Approvals**: `components/administrator/model_review.php`, `components/report/predictions.php`, `forecast_exceptions.php`
   - Backing JS: `forecast-notices.js`
   - Backend Services: `App\Forecasting\StoreModelGovernanceService`, `CandidateEvaluationService`
+  - Status derivation: `App\Attention\DatabaseAttentionSignalSource` (signals) → `AttentionRuleService` (keys, severity) → `StoreOperationsDashboardWorkspace` (Store status card, dashboard exceptions) → `DemandForecastService::getOperationalIssues` (Predictions page notices)
+  - Setup state: `App\Forecasting\ForecastSetupStatus` (`collecting` / `ready` / `active`)
+  - Contract Tests: `forecasting_notices_contract.php`, `store_forecasting_operational_workflow_test.php`
 - **Reports**: `components/administrator/shift_report.php`, `receiving_history.php`, `sales.php`, `report_generation.php`
   - Backend Services: `App\Services\StoreShiftReportService`, `ReportAccessService`, `GrossProfitService`
 - **Stock Issue Oversight**: `components/administrator/stock_issues.php`

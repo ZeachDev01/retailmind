@@ -119,6 +119,7 @@ final class DatabaseAttentionSignalSource
             'fiscal_period_overdue_count' => $this->signal($fiscalOverdue, (int)$fiscalOverdue),
             'forecasting_candidate_review' => $forecast['forecasting_candidate_review'],
             'forecasting_failure' => $forecast['forecasting_failure'],
+            'forecasting_setup_due' => $forecast['forecasting_setup_due'],
         ];
     }
 
@@ -131,6 +132,10 @@ final class DatabaseAttentionSignalSource
         $failureValue = 0;
         $failureExplanation = null;
         $failureDetectedAt = null;
+
+        $setupValue = 0;
+        $setupExplanation = null;
+        $setupDetectedAt = null;
 
         try {
             $candidateRun = $this->row(
@@ -170,9 +175,12 @@ final class DatabaseAttentionSignalSource
 
         try {
             $latestJob = $this->row(
-                "SELECT job_id, trigger_type, status, attempts, operator_message, queued_at, completed_at FROM ml_jobs WHERE trigger_type IN ('forecast_generation', 'model_retraining') ORDER BY job_id DESC LIMIT 1"
+                "SELECT job_id, trigger_type, status, attempts, operator_message, diagnostic_reference, queued_at, completed_at FROM ml_jobs WHERE trigger_type IN ('forecast_generation', 'model_retraining') ORDER BY job_id DESC LIMIT 1"
             );
-            if ($latestJob && ($latestJob['status'] ?? '') === 'failed') {
+            // BLOCKED: marks a missing prerequisite (for example no approved model yet),
+            // not a failed run. Those conditions surface as setup notices instead.
+            $latestBlocked = str_starts_with((string)($latestJob['diagnostic_reference'] ?? ''), 'BLOCKED:');
+            if ($latestJob && ($latestJob['status'] ?? '') === 'failed' && !$latestBlocked) {
                 $failureValue = 1;
                 $msg = !empty($latestJob['operator_message'])
                     ? (string)$latestJob['operator_message']
@@ -195,22 +203,37 @@ final class DatabaseAttentionSignalSource
                 }
             }
 
-            // Check for preserved local diagnostics during database outage
+            // Check for preserved local diagnostics during database outage.
+            // Only an entry from the last day describes a current outage: older
+            // entries stay in the log as history and must not alert forever.
             $logFile = ($this->storageDir ?: dirname(__DIR__, 2) . '/storage/logs') . '/forecasting_diagnostics.json';
             if (file_exists($logFile) && $failureValue === 0) {
                 $content = @file_get_contents($logFile);
                 $diagEntries = json_decode((string)$content, true) ?: [];
+                $recentCutoff = $this->clock->now()->modify('-24 hours')->format('Y-m-d H:i:s');
                 if (!empty($diagEntries)) {
                     $lastDiag = end($diagEntries);
-                    $diagTime = $lastDiag['timestamp'] ?? '';
+                    $diagTime = (string)($lastDiag['timestamp'] ?? '');
                     $latestSuccessRow = $this->row("SELECT completed_at FROM ml_jobs WHERE status = 'succeeded' ORDER BY job_id DESC LIMIT 1");
-                    $latestSuccessTime = $latestSuccessRow['completed_at'] ?? '';
-                    if ($diagTime > $latestSuccessTime) {
+                    $latestSuccessTime = (string)($latestSuccessRow['completed_at'] ?? '');
+                    if ($diagTime >= $recentCutoff && $diagTime > $latestSuccessTime) {
                         $failureValue = 1;
                         $failureExplanation = 'Forecasting outage recorded: ' . ($lastDiag['error'] ?? 'Local database outage');
                         $failureDetectedAt = $diagTime;
                     }
                 }
+            }
+        } catch (\Throwable) {}
+
+        // Sales history ready but no approved model: a notice, not a failure.
+        try {
+            $setup = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo);
+            if ($setup['state'] === 'ready') {
+                $setupValue = 1;
+                $setupExplanation = 'Sales history is ready for ' . $setup['ready_products'] . ' of '
+                    . $setup['total_products'] . ' Products, but no forecasting model is approved. '
+                    . 'Train a candidate model, then approve it to start forecasting.';
+                $setupDetectedAt = $this->now();
             }
         } catch (\Throwable) {}
 
@@ -230,9 +253,18 @@ final class DatabaseAttentionSignalSource
             $failSignal['detected_at'] = $failureDetectedAt;
         }
 
+        $setupSignal = $this->signal($setupValue, $setupValue);
+        if ($setupExplanation !== null) {
+            $setupSignal['explanation'] = $setupExplanation;
+        }
+        if ($setupDetectedAt !== null) {
+            $setupSignal['detected_at'] = $setupDetectedAt;
+        }
+
         return [
             'forecasting_candidate_review' => $candSignal,
             'forecasting_failure' => $failSignal,
+            'forecasting_setup_due' => $setupSignal,
         ];
     }
 

@@ -26,6 +26,7 @@ require_once __DIR__ . '/../app/Attention/AttentionSettingsService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
 require_once __DIR__ . '/../app/Dashboard/StoreOperationsDashboardWorkspace.php';
 require_once __DIR__ . '/../app/Authorization/RoleCapabilityPolicy.php';
+require_once __DIR__ . '/support/forecasting_diagnostics_isolation.php';
 
 use App\Attention\AttentionCenter;
 use App\Attention\AttentionSettingsService;
@@ -255,6 +256,7 @@ final class TestContractClock implements Clock
 
 $clock = new TestContractClock(new DateTimeImmutable('2026-11-01 10:00:00'));
 // Keep the contract isolated from real forecasting diagnostics left by an outage.
+isolate_forecasting_diagnostics();
 $storageDir = sys_get_temp_dir() . '/retailmind_forecasting_notices_' . getmypid();
 
 echo "Starting actionable forecasting notices contract...\n\n";
@@ -474,8 +476,54 @@ $signals = $signalSource->store();
 $assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Preserved local diagnostic from database outage produces failure signal');
 $assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'connection refused'), 'Signal explanation contains preserved outage diagnostic');
 
+// 7d. A preserved diagnostic older than a day is history, not a current outage.
+file_put_contents($diagFile, json_encode([[
+    'timestamp' => '2026-10-28 09:30:00',
+    'error' => 'Database service unavailable after startup retries',
+    'diagnostic_reference' => 'DB_STARTUP_TIMEOUT',
+]]));
+$signals = $signalSource->store();
+$assert(($signals['forecasting_failure']['value'] ?? 1) === 0, 'Stale preserved diagnostic does not raise a current failure signal');
+
 @unlink($diagFile);
 @rmdir($logDir);
+
+// --- Phase 8: Cold start is a waiting state, not a failure ---
+// Store has no approved model and the scheduler records a BLOCKED job each day.
+$pdo->exec("DELETE FROM ml_jobs;
+    UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_approved_model_version';
+    INSERT INTO ml_jobs (job_id, trigger_type, status, queued_at, completed_at, attempts, operator_message, diagnostic_reference) VALUES
+    (8, 'forecast_generation', 'failed', '2026-11-01 10:00:00', '2026-11-01 10:00:00', 1, 'No approved forecasting model version configured.', 'BLOCKED:MISSING_APPROVED_MODEL')");
+
+$signals = $signalSource->store();
+$assert(($signals['forecasting_failure']['value'] ?? 1) === 0, 'Blocked prerequisite does not produce a failure signal');
+$assert(($signals['forecasting_setup_due']['value'] ?? 1) === 0, 'Cold start does not produce a setup notice before history is ready');
+
+$items = $attentionCenter->getAttention(0, 'admin');
+$keys = array_map(static fn($item): string => $item->key, $items);
+$assert(!in_array('store.forecasting.failure', $keys, true), 'Cold start produces no forecasting failure attention item');
+$assert(!in_array('store.forecasting.setup-due', $keys, true), 'Cold start produces no setup attention item');
+
+$coldCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key IN ('store.forecasting.failure', 'store.forecasting.setup-due')")->fetchColumn();
+$notificationService->checkAndNotifyForecasts();
+$coldCountAfter = (int)$pdo->query("SELECT COUNT(*) FROM notifications WHERE attention_key IN ('store.forecasting.failure', 'store.forecasting.setup-due')")->fetchColumn();
+$assert($coldCountBefore === $coldCountAfter, 'Cold start sends no forecasting notification');
+
+StoreOperationsDashboardWorkspace::invalidateCache();
+$coldDashboard = (new StoreOperationsDashboardWorkspace($pdo, $clock, new RoleCapabilityPolicy()))->load('admin', 30);
+$coldTitles = array_column($coldDashboard['exceptions'] ?? [], 'title');
+$assert(!in_array('Forecasting failure', $coldTitles, true), 'Cold start leaves the dashboard attention queue clear');
+$assert(!in_array('Forecast model not approved', $coldTitles, true), 'Cold start adds no forecast setup exception');
+$assert(isset($coldDashboard['headline']['forecasting']), 'Store status shows a Forecasting headline during cold start');
+$assert(str_contains((string)($coldDashboard['headline']['forecasting']['value'] ?? ''), 'ready'), 'Forecasting headline reports Products ready instead of an alert');
+
+// Setup state ladder stays mutually exclusive.
+$assert(\App\Forecasting\ForecastSetupStatus::state('', 0) === 'collecting', 'No model and no eligible Products means collecting');
+$assert(\App\Forecasting\ForecastSetupStatus::state('', 2) === 'ready', 'No model with eligible Products means ready');
+$assert(\App\Forecasting\ForecastSetupStatus::state('rf_prod_v1', 0) === 'active', 'Approved model means active');
+
+// 8b. Once history is ready, the same BLOCKED job becomes a setup warning.
+$pdo->exec("UPDATE platform_settings SET setting_value = 'rf_prod_v1' WHERE setting_key = 'ml_approved_model_version'");
 
 if ($failures) {
     fwrite(STDERR, "\nForecasting notices contract failed (" . count($failures) . " errors):\n- " . implode("\n- ", $failures) . "\n");
