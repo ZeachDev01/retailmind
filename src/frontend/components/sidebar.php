@@ -364,7 +364,7 @@ $GLOBALS['rm_navigation_shell'] = [
         if (link) link.removeAttribute('data-rm-page-asset');
     })();
 </script>
-<div class="admin-mobile-topbar" aria-label="Mobile navigation">
+<div class="admin-mobile-topbar" data-workspace="<?= sidebar_e((string)$role) ?>" aria-label="Mobile navigation">
     <div class="admin-mobile-brand">
         <button type="button" class="admin-mobile-menu" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="appSidebar">
             <?= sidebar_icon('menu') ?>
@@ -498,7 +498,7 @@ $GLOBALS['rm_navigation_shell'] = [
     <section class="command-dialog" role="dialog" aria-modal="true" aria-label="Search RetailMind">
         <div class="command-search-row">
             <?= sidebar_icon('search', 'bi-search') ?>
-            <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products, reports, settings, and pages…" autocomplete="off">
+            <input type="search" id="commandSearch" aria-label="Search RetailMind" placeholder="Search products or pages…" autocomplete="off">
             <button type="button" class="command-close" data-command-close aria-label="Close search"><?= sidebar_icon('close', 'bi-x-lg') ?></button>
         </div>
         <div class="command-results" id="commandResults"></div>

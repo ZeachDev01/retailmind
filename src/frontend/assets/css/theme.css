@@ -88,6 +88,17 @@
 @media(max-width:360px) {
     .admin-mobile-topbar:has(.header-display-tools) .admin-mobile-logo-image { display:none; }
 }
+@media(max-width:900px) {
+    [data-workspace="admin"].admin-mobile-topbar:has(.header-display-tools) { height:60px; flex-wrap:nowrap; gap:.25rem; }
+    [data-workspace="admin"] .header-display-tools { order:2; gap:.25rem; }
+    [data-workspace="admin"].admin-mobile-topbar .mobile-header-search { order:1; flex:0 0 44px; width:44px; padding:0; justify-content:center; }
+    [data-workspace="admin"] .mobile-header-search > span { display:none; }
+    body:has([data-workspace="admin"] .header-display-tools) .main-content { padding-top:5rem; }
+}
+@media(max-width:480px) {
+    [data-workspace="admin"] .admin-mobile-logo-copy small { display:none; }
+    [data-workspace="admin"].admin-mobile-topbar .admin-mobile-logo-image { display:none; }
+}
 @media(max-width:480px) {
     .admin-mobile-topbar:has(.theme-mobile-menu) .admin-mobile-logo-image { display:none; }
 }

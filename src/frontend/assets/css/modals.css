@@ -2005,11 +2005,12 @@ body.system-health-open {
   transform: none;
 }
 .command-search-row {
+  flex-shrink: 0;
   position: relative;
   padding: 0.85rem;
   border-bottom: 1px solid var(--border);
 }
-.command-search-row i {
+.command-search-row > :is(i, .navigation-icon) {
   position: absolute;
   left: 1.7rem;
   top: 50%;
@@ -2017,6 +2018,7 @@ body.system-health-open {
   color: var(--muted);
 }
 .command-search-row input {
+  min-width: 0;
   width: 100%;
   padding: 0.9rem 3.2rem 0.9rem 2.7rem;
   border: 1px solid var(--border);
@@ -2024,8 +2026,12 @@ body.system-health-open {
   background: var(--theme-surface-soft, #f8fafc);
 }
 .command-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   position: absolute;
-  right: 1.5rem;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
   border: 0;
@@ -2034,6 +2040,8 @@ body.system-health-open {
   cursor: pointer;
 }
 .command-results {
+  min-height: 0;
+  overscroll-behavior: contain;
   padding: 0.55rem;
   overflow-y: auto;
 }

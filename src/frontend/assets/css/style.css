@@ -2218,6 +2218,13 @@ body.admin-dashboard-page.administrator-workspace ::selection { background: var(
 }
 @media (max-width: 640px) {
     body.admin-dashboard-page.administrator-workspace .dashboard-section { padding: 1rem; }
+    body.admin-dashboard-page.administrator-workspace .store-attention-queue .section-title-row { flex-direction: row; align-items: center; justify-content: space-between; width: 100%; }
+    body.admin-dashboard-page.administrator-workspace .store-attention-queue .section-title-row > * { width: auto; }
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines .stat-card { min-height: 0; padding: .85rem; }
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines .stat-card .label { padding-right: 0; font-size: .75rem; text-transform: none; letter-spacing: 0; }
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines .stat-icon { display: none; }
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines .value { padding-right: 0; overflow-wrap: anywhere; }
+    body.admin-dashboard-page.administrator-workspace .store-status-links a { padding-inline: .4rem; font-size: .8rem; }
     body.admin-dashboard-page.administrator-workspace .control-center-heading { flex-wrap: wrap; }
     body.admin-dashboard-page.administrator-workspace .page-heading-actions { width: auto; overflow: visible; }
     body.admin-dashboard-page.administrator-workspace .page-heading-actions .btn { min-height: 44px; }
@@ -2236,6 +2243,9 @@ body.admin-dashboard-page.administrator-workspace ::selection { background: var(
     body.admin-dashboard-page.administrator-workspace .net-sales-table-wrap .net-sales-table { min-width: 340px; }
     body.admin-dashboard-page.administrator-workspace .period-controls { width: 100%; }
     body.admin-dashboard-page.administrator-workspace .period-btn { flex: 1; padding-inline: .4rem; }
+}
+@media (min-width: 360px) and (max-width: 640px) {
+    body.admin-dashboard-page.administrator-workspace .store-operations-headlines.card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: .65rem; }
 }
 
 body.super-administrator-workspace {
@@ -4734,11 +4744,12 @@ body.system-health-open {
   transform: none;
 }
 .command-search-row {
+  flex-shrink: 0;
   position: relative;
   padding: 0.85rem;
   border-bottom: 1px solid var(--border);
 }
-.command-search-row i {
+.command-search-row > :is(i, .navigation-icon) {
   position: absolute;
   left: 1.7rem;
   top: 50%;
@@ -4746,6 +4757,7 @@ body.system-health-open {
   color: var(--muted);
 }
 .command-search-row input {
+  min-width: 0;
   width: 100%;
   padding: 0.9rem 3.2rem 0.9rem 2.7rem;
   border: 1px solid var(--border);
@@ -4753,8 +4765,12 @@ body.system-health-open {
   background: var(--theme-surface-soft, #f8fafc);
 }
 .command-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   position: absolute;
-  right: 1.5rem;
+  right: 1rem;
   top: 50%;
   transform: translateY(-50%);
   border: 0;
@@ -4763,6 +4779,8 @@ body.system-health-open {
   cursor: pointer;
 }
 .command-results {
+  min-height: 0;
+  overscroll-behavior: contain;
   padding: 0.55rem;
   overflow-y: auto;
 }
@@ -5151,7 +5169,8 @@ body.system-health-open {
         top: 0;
         left: 0;
         right: auto;
-        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
         width: 260px;
         max-width: 80vw;
         transform: translateX(-100%);
@@ -5557,11 +5576,10 @@ body.products-page .products-quick-action strong {
 
     .command-overlay {
         padding: .75rem;
-        padding-top: 4.75rem;
     }
 
     .command-dialog {
-        max-height: calc(100svh - 5.5rem);
+        max-height: calc(100dvh - 1.5rem);
         border-radius: 14px;
     }
 
