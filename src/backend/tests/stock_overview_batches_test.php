@@ -59,6 +59,7 @@ $pdo->exec("CREATE TABLE categories (
 $pdo->exec("INSERT INTO categories (category_id, category_name) VALUES (1, 'Bakery'), (2, 'Dairy'), (3, 'Dry Goods')");
 
 $pdo->exec("CREATE TABLE products (
+    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
     branch_id INTEGER NOT NULL DEFAULT 1,
     sku TEXT NOT NULL,
@@ -94,6 +95,8 @@ $pdo->exec("CREATE TABLE product_batches (
     batch_number TEXT NULL,
     quantity INTEGER NOT NULL,
     remaining_quantity INTEGER NOT NULL,
+    sealed_quantity INTEGER NOT NULL DEFAULT 0,
+    loose_quantity INTEGER NOT NULL DEFAULT 0,
     expiration_date TEXT NULL,
     date_received TEXT NOT NULL,
     supplier TEXT NULL,
@@ -104,6 +107,7 @@ $pdo->exec("CREATE TABLE stock_receiving (
     receiving_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
     accepted_qty INTEGER NOT NULL,
+    cost_price REAL NULL,
     supplier TEXT NULL,
     batch_number TEXT NULL,
     expiration_date TEXT NULL,
@@ -291,6 +295,10 @@ $pdo->exec("INSERT INTO product_batches (batch_id, product_id, receiving_id, bat
 $p8Summary = array_values(array_filter($inventoryService->getProductsWithBatchSummaries($today), fn($p) => $p['product_id'] === 8))[0];
 $assert($p8Summary['next_expiration'] === null, 'Product 8 with only expired batches has next_expiration = null (never displays product-level 2026-12-31)');
 $assert((int)$p8Summary['expired_quantity'] === 5, 'Product 8 expired quantity is 5');
+
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 0 WHERE product_id = 7');
+$ordinary = $inventoryService->getProductBatches(7, $today);
+$assert(array_filter($ordinary, fn($batch) => $batch['return_to_supplier_url'] !== null) === [], 'Ineligible batches have no supplier collection action');
 
 // --- Final Results ---
 if ($failures) {

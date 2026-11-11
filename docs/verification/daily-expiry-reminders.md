@@ -14,7 +14,7 @@ Red/green checks reproduced and corrected:
 
 The integration test covers two- and five-day warning boundaries, defaults beyond 30 days, global settings, later Product setting changes, separate batches, repeated daily and overlapping transaction checks, undated/depleted exclusions, Administrator oversight, inactive/Cashier exclusions, preferences, expiration day and the next Manila midnight, unchanged batch/total stock, and a forced operational failure returning nonzero. It checks email attempts through the existing delivery log with outbound mail disabled; it does not claim SMTP delivery.
 
-Expired wording is `Expired stock—waiting for supplier collection` for every Product, following the user's implementation clarification. No bread classifier is added.
+The November 12 eligibility clarification supersedes the earlier generic-stock wording: explicitly eligible Products use `Expired bread—waiting for supplier collection`; ineligible Products retain ordinary expiry warnings and Stock Issue review. No bread classifier or eligibility backfill is added.
 
 The final review also caught a same-day email regression for recipients using both delivery channels. A failing repeated-run integration assertion reproduced it. The daily path now reuses `email_delivery_log` to suppress the same recipient/subject on the same Manila date, preserving the former scheduled guard without creating another in-app notification. Coverage verifies the next day's email still runs and the preexisting email-only repeated-invocation behavior remains unchanged.
 

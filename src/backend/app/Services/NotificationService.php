@@ -108,9 +108,11 @@ class NotificationService
                     $items[] = new \App\Attention\AttentionItem(
                         ($role === 'admin' ? 'oversight' : 'inventory') . '.expiry.' . $reminder['batch_id'],
                         $reminder['type'] === 'expired_stock' ? 'critical' : 'warning', 'inventory',
-                        ($role === 'admin' ? 'Overdue Supplier Pullout: ' . $reminder['product_name'] : $reminder['title']),
+                        ($role === 'admin' && $reminder['supplier_pullout_eligible'] ? 'Overdue Supplier Pullout: ' . $reminder['product_name'] : $reminder['title']),
                         $reminder['message'], $this->clock->now(),
-                        'components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]),
+                        ($reminder['supplier_pullout_eligible']
+                            ? 'components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']])
+                            : 'components/' . ($role === 'admin' ? 'administrator' : 'inventory_management') . '/stock_issues.php'),
                         null, $role === 'admin', $reminder['type'], (int)$reminder['batch_id'], $reminder['reference_type']
                     );
                 }
@@ -313,7 +315,7 @@ class NotificationService
         $threshold = max($this->getExpiryAlertThresholds(30));
         $stmt = $this->pdo->prepare(
             "SELECT DISTINCT pb.batch_id, pb.product_id, pb.batch_number, pb.expiration_date,
-                    pb.remaining_quantity, p.product_name, p.sku, p.warning_lead_time_days
+                    pb.remaining_quantity, p.product_name, p.sku, p.warning_lead_time_days, p.supplier_pullout_eligible
              FROM notifications n
              JOIN product_batches pb ON pb.batch_id = n.reference_id
              JOIN products p ON p.product_id = pb.product_id
@@ -331,7 +333,8 @@ class NotificationService
             $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
                 && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
             $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
-                ? 'Expired stock—waiting for supplier collection: ' : 'Prepare for supplier collection: ') . $batch['product_name'];
+                ? ($batch['supplier_pullout_eligible'] ? 'Expired bread—waiting for supplier collection: ' : 'Expired Stock Alert: ')
+                : ($batch['supplier_pullout_eligible'] ? 'Prepare for supplier collection: ' : 'Expiry Alert: ')) . $batch['product_name'];
             $batch['message'] = "Batch {$batch['batch_number']} (#{$batch['batch_id']}) of {$batch['product_name']} ({$batch['sku']}). Expiration: "
                 . ($expiration ?? 'Not recorded') . ". Remaining: {$batch['remaining_quantity']}.";
             $reminders[(int)$batch['batch_id']] = $batch;

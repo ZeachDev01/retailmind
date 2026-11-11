@@ -80,6 +80,7 @@ $pdo->exec("CREATE TABLE products (
     barcode TEXT NOT NULL DEFAULT '',
     product_name TEXT NOT NULL,
     reorder_level INTEGER NOT NULL DEFAULT 0,
+    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
     warning_lead_time_days INTEGER NULL,
     status TEXT NOT NULL DEFAULT 'active'
 )");

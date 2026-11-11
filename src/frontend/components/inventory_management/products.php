@@ -237,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'product_image' => $productImage,
                 'status' => $_POST['status'] ?? 'active',
                 'initial_stock_quantity' => $initialQuantity,
+                'supplier_pullout_eligible' => $_POST['supplier_pullout_eligible'] ?? 0,
                 'warning_lead_time_days' => trim((string)($_POST['warning_lead_time_days'] ?? '')) === '' ? null : $_POST['warning_lead_time_days'],
                 'pack_size' => !empty($_POST['pack_size']) ? $_POST['pack_size'] : null,
                 'pack_barcode' => !empty($_POST['pack_barcode']) ? $_POST['pack_barcode'] : null,
@@ -1597,6 +1598,7 @@ foreach ($products as $product) {
                             <div class="form-group"><label for="create-reorder-level">Reorder Level</label><input type="number" min="0" id="create-reorder-level" name="reorder_level" value="10"></div>
                             <div class="form-group"><label for="create-safety-stock">Safety Stock</label><input type="number" min="0" id="create-safety-stock" name="safety_stock" value="0"></div>
                             <div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
+                            <div class="form-group full"><label class="u-checkbox-label" for="supplier-pullout-eligible"><input type="checkbox" id="supplier-pullout-eligible" name="supplier_pullout_eligible" value="1" aria-describedby="supplier-pullout-help"> Supplier Pullout Eligibility</label><small class="field-help" id="supplier-pullout-help">Enable only when the supplier accepts this Product for collection.</small></div>
                             <h3 class="full planning-section-title">Supplier</h3>
                             <div class="form-group full"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
                             <div class="form-group full"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>

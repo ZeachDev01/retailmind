@@ -76,6 +76,15 @@ const { chromium } = require('playwright');
                 setWizardStep(4);
             });
             assert.equal(await page.getByLabel('Starting Stock Expiration', { exact: true }).isVisible(), false, 'Zero starting stock hides its optional expiration');
+            const eligibility = page.getByLabel('Supplier Pullout Eligibility', {exact: true});
+            assert.equal(await eligibility.isChecked(), false, 'Supplier Pullout defaults off');
+            assert.equal(await eligibility.isVisible(), true, 'Eligibility stays beside expiry settings');
+            assert.equal(await eligibility.evaluate(el => el.form.id), 'add-product-form');
+            await eligibility.check();
+            assert.equal(await eligibility.evaluate(el => new FormData(el.form).get('supplier_pullout_eligible')), '1');
+            await eligibility.uncheck();
+            assert.equal(await eligibility.evaluate(el => new FormData(el.form).has('supplier_pullout_eligible')), false);
+
             await page.evaluate(() => {
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
                 setWizardStep(4);

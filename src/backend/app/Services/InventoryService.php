@@ -256,6 +256,10 @@ class InventoryService
 
         $today = $todayDate ?? \App\Services\PhilippineTime::today();
 
+        $eligibility = $this->pdo->prepare('SELECT supplier_pullout_eligible FROM products WHERE product_id = ?');
+        $eligibility->execute([$productId]);
+        $supplierPulloutEligible = (bool)$eligibility->fetchColumn();
+
         $hasReceivingTable = true;
         $hasPulloutId = true;
         try {
@@ -384,7 +388,7 @@ class InventoryService
             }
 
             $returnUrl = null;
-            if ($remaining > 0) {
+            if ($remaining > 0 && $supplierPulloutEligible) {
                 $relUrl = 'components/inventory_management/supplier_pullouts.php?product_id=' . $productId . '&batch_id=' . $batchId;
                 $returnUrl = function_exists('app_url') ? app_url($relUrl) : $relUrl;
             }

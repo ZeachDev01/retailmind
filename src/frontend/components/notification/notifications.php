@@ -134,7 +134,9 @@ $active_batch_reminders = $inventory_workspace
                                     <div class="min-h-0 overflow-hidden">
                                         <div class="notification-description space-y-4 p-5 sm:p-6">
                                             <p><?= htmlspecialchars($reminder['message']) ?></p>
-                                            <?php if (current_role() === 'inventory_manager'): ?>
+                                            <?php if (!$reminder['supplier_pullout_eligible']): ?>
+                                                <a class="mark-all-btn" href="<?= htmlspecialchars(app_url('components/inventory_management/stock_issues.php')) ?>">Review Stock Issues</a>
+                                            <?php elseif (current_role() === 'inventory_manager'): ?>
                                                 <a class="mark-all-btn" href="<?= htmlspecialchars(app_url('components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]))) ?>">Record Supplier Pullout</a>
                                             <?php else: ?>
                                                 <a class="mark-all-btn" href="<?= htmlspecialchars(app_url('components/inventory_management/supplier_pullouts.php?' . http_build_query(['product_id' => $reminder['product_id'], 'batch_id' => $reminder['batch_id']]))) ?>">View Supplier Pullout History</a>

@@ -91,10 +91,11 @@ class ProductService
         $status = ($data['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
         $initialStock = $this->validateStockSetting($data['initial_stock_quantity'] ?? 0, 'Starting quantity', 0);
         $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
+        $supplierPulloutEligible = in_array($data['supplier_pullout_eligible'] ?? 0, [1, '1', true], true);
         $warningLeadTimeDays = $this->validateWarningLeadTime($data['warning_lead_time_days'] ?? null);
-        if ($warningLeadTimeDays !== null || $initialStock > 0) {
+        if ($supplierPulloutEligible || $warningLeadTimeDays !== null || $initialStock > 0) {
             $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
-            if ($role !== null && $role !== 'inventory_manager') {
+            if ($role !== 'inventory_manager' && ($supplierPulloutEligible || $role !== null)) {
                 throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
             }
         }
@@ -180,9 +181,9 @@ class ProductService
 
         $productExpirationDate = ($initialStock > 0) ? $expirationDate : null;
         $warningLeadTimeDays = $this->validateWarningLeadTime($data['warning_lead_time_days'] ?? null);
-        if ($warningLeadTimeDays !== null || $initialStock > 0) {
+        if ($supplierPulloutEligible || $warningLeadTimeDays !== null || $initialStock > 0) {
             $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
-            if ($role !== null && $role !== 'inventory_manager') {
+            if ($role !== 'inventory_manager' && ($supplierPulloutEligible || $role !== null)) {
                 throw new RuntimeException('Only the active Inventory Manager workspace can mutate stock or warning overrides.');
             }
         }
@@ -218,8 +219,8 @@ class ProductService
                     parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    warning_lead_time_days, product_image, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    warning_lead_time_days, supplier_pullout_eligible, product_image, status, created_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $sku,
@@ -248,6 +249,7 @@ class ProductService
                 $receivingUnit,
                 $productExpirationDate,
                 $warningLeadTimeDays,
+                (int)$supplierPulloutEligible,
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,

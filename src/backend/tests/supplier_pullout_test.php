@@ -223,6 +223,20 @@ $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, qua
 $pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; UPDATE users SET display_name = full_name");
 
 $pulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager');
+$pdo->exec("ALTER TABLE notifications ADD COLUMN workspace TEXT DEFAULT ''; ALTER TABLE notifications ADD COLUMN attention_destination TEXT");
+$eligibilityMigration = require __DIR__ . '/../database/migrations/202611120001_supplier_pullout_eligibility.php';
+$pdo->exec("INSERT INTO notifications (user_id,type,title,message,reference_id,reference_type,workspace,attention_destination) VALUES ({$managerId},'expired_stock','Expired stock waiting for supplier collection','Legacy alert',2,'product_batch','inventory_manager','components/inventory_management/supplier_pullouts.php')");
+$eligibilityMigration['up']($pdo);
+$eligibilityMigration['up']($pdo);
+$legacyAlert = $pdo->query('SELECT title,attention_destination FROM notifications ORDER BY notification_id DESC LIMIT 1')->fetch();
+$assert($legacyAlert['title'] === 'Expired Stock Alert: Sliced Bread' && !str_contains($legacyAlert['attention_destination'], 'supplier_pullouts'), 'Upgrade keeps legacy alert history without supplier wording or action');
+$assert($pulloutService->getEligibleBatches(1) === [], 'Legacy bread is excluded without explicit eligibility');
+$assert($pulloutService->getBatchForPullout(1) === null, 'Ineligible bread cannot prefill a pullout');
+$assertThrows(fn() => $pulloutService->recordPullout([
+    'product_id' => 1, 'batch_id' => 1, 'quantity' => 1, 'reason' => 'Collection',
+], $managerId), RuntimeException::class, 'Direct recording rejects ineligible bread', 'not eligible');
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 1');
+
 
 // ==========================================
 // Test 1: Atomic batch and inventory deduction
@@ -507,6 +521,8 @@ $pdo->exec('ALTER TABLE products ADD COLUMN warning_lead_time_days INTEGER NULL'
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, warning_lead_time_days) VALUES (3, 'BREAD-REMINDER', '10003', 'Reminder Bread', 2)");
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (3, 10)');
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date) VALUES (4, 3, 'COLLECT-10', 10, 10, '2026-10-25')");
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 1 WHERE product_id = 3');
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 0 WHERE product_id = 2');
 $clock = new class implements \App\Attention\Clock {
     public function now(): DateTimeImmutable { return new DateTimeImmutable('2026-10-23T00:00:00+08:00'); }
 };
@@ -517,7 +533,8 @@ $assert(isset($reminders[4]) && $reminders[4]['active'] && (int)$reminders[4]['r
 $assert($reminders[4]['title'] === 'Prepare for supplier collection: Reminder Bread', 'Expiration day is not expired');
 $pdo->exec('UPDATE notifications SET is_read = 1 WHERE reference_id = 4');
 $reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
-$assert($reminders[4]['active'] && $reminders[4]['title'] === 'Expired stock—waiting for supplier collection: Reminder Bread', 'Read reminder remains active after Manila expiration day');
+$assert(!str_contains($reminders[3]['title'], 'supplier collection'), 'Ineligible expired stock keeps ordinary expiry wording');
+$assert($reminders[4]['active'] && $reminders[4]['title'] === 'Expired bread—waiting for supplier collection: Reminder Bread', 'Read reminder remains active after Manila expiration day');
 $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id = 3')->fetchColumn() === 10, 'Checks, reading and date transition leave physical stock unchanged');
 $partial = $pulloutService->recordPullout(['product_id' => 3, 'batch_id' => 4, 'quantity' => 8, 'reason' => 'Supplier collection'], $managerId);
 $reminders = $notifications->getBatchReminders($managerId, '2026-10-26');
@@ -552,6 +569,7 @@ echo "\n--- Test 9: Ticket #249 Stock Forms in Supplier Pullouts ---\n";
 $packPulloutService = new SupplierPulloutService($pdo, null, "inventory_manager");
 
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, pack_size, status) VALUES (10, 'PACK-PROD-10', '90010', 'Instant Noodles 6-Pack', 6, 'active')");
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 1 WHERE product_id = 10');
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (10, 44)");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (10, 10, 'NOODLE-ACT', 29, 29, 4, 5, 14.50, '2026-12-01', 'NoodleCorp')");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (11, 10, 'NOODLE-EXP', 15, 15, 2, 3, 13.75, '2026-10-01', 'NoodleCorp')");
@@ -671,6 +689,10 @@ $assert($stockFormMig['key'] === '202610200005_supplier_movements_stock_forms', 
 $assert(str_contains($schemaSql, 'pulled_packs') && str_contains($schemaSql, 'pulled_loose') && str_contains($schemaSql, 'pack_size_used'), 'schema.sql defines pulled_packs, pulled_loose, and pack_size_used on supplier_pullouts');
 
 // Summary
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 0 WHERE product_id = 1');
+$assert($pulloutService->getPullout((int)$res1['pullout_id']) !== null, 'Historical completed pullouts remain readable for ineligible Products');
+$assert($pulloutService->getEligibleBatches(1) === [], 'Historical pullouts do not grant eligibility');
+
 if (!empty($failures)) {
     echo "\nFailed assertions (" . count($failures) . "):\n";
     foreach ($failures as $failure) {
