@@ -142,38 +142,43 @@ $guard->closePeriod($decemberId, 1, '2027-01-01');
 
 echo "Fiscal period scheduling contract: passed\n";
 
-// 14. A generated set is continuous, calendar-aligned and opens the first due range.
+// 14. A generated set covers one fiscal year and opens the first due range.
+$historyBefore = $pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id')->fetchAll(PDO::FETCH_ASSOC);
 $pdo->exec("UPDATE attention_settings SET setting_value = '0' WHERE setting_scope = 'store' AND setting_key = 'fiscal_period_auto_rollover'");
-$generated = $guard->generatePeriodSchedule('monthly', 3, '', 1, '2027-01-05');
-$assert(count($generated['periods']) === 3, 'Three monthly periods generated');
-$assert(array_column($generated['periods'], 'period_name') === ['2027-01', '2027-02', '2027-03'], 'Monthly names follow the calendar');
-$assert($generated['start_date'] === '2027-01-01' && $generated['end_date'] === '2027-03-31', 'Generated set covers the full quarter');
-$assert(array_column($generated['periods'], 'status') === ['open', 'scheduled', 'scheduled'], 'The first covering range opens, the rest stay scheduled');
+$generated = $guard->generatePeriodSchedule(12, '', 1, '2027-01-05');
+$assert(count($generated['periods']) === 12, 'Twelve monthly periods generated');
+$assert($generated['periods'][0]['period_name'] === 'FY2027 P1' && $generated['periods'][11]['period_name'] === 'FY2027 P12', 'Monthly names number the fiscal year');
+$assert($generated['start_date'] === '2027-01-01' && $generated['end_date'] === '2027-12-31', 'Generated set covers the full year');
+$assert(array_column($generated['periods'], 'status') === array_merge(['open'], array_fill(0, 11, 'scheduled')), 'The first covering range opens, the rest stay scheduled');
 $assert($generated['auto_rollover_enabled'] === true, 'Scheduling future periods turns automatic rollover on');
 $assert((float)$pdo->query("SELECT setting_value FROM attention_settings WHERE setting_scope = 'store' AND setting_key = 'fiscal_period_auto_rollover'")->fetchColumn() === 1.0, 'Automatic rollover setting persisted');
 
-$monthlyRows = $pdo->query("SELECT start_date, end_date FROM fiscal_periods WHERE period_name LIKE '2027-0%' ORDER BY start_date")->fetchAll(PDO::FETCH_ASSOC);
+$monthlyRows = $generated['periods'];
 for ($i = 1; $i < count($monthlyRows); $i++) {
     $assert(date('Y-m-d', strtotime($monthlyRows[$i - 1]['end_date'] . ' +1 day')) === $monthlyRows[$i]['start_date'], 'Generated months are contiguous');
 }
 
-// 15. Quarterly generation aligns to calendar quarters and honours the prefix.
-$quarterly = $guard->generatePeriodSchedule('quarterly', 2, 'FY', 1, '2027-01-05');
-$assert(array_column($quarterly['periods'], 'period_name') === ['FY Q2 2027', 'FY Q3 2027'], 'Quarterly names carry the prefix and quarter');
-$assert($quarterly['start_date'] === '2027-04-01' && $quarterly['end_date'] === '2027-09-30', 'Quarters cover complete calendar quarters');
-$assert(array_column($quarterly['periods'], 'status') === ['scheduled', 'scheduled'], 'Later generated quarters stay scheduled');
+// 15. The next fiscal year restarts numbering and honours the prefix.
+$quarterly = $guard->generatePeriodSchedule(4, 'Store', 1, '2027-01-05');
+$assert(array_column($quarterly['periods'], 'period_name') === ['Store FY2028 Q1', 'Store FY2028 Q2', 'Store FY2028 Q3', 'Store FY2028 Q4'], 'Quarterly names carry the prefix and fiscal year');
+$assert($quarterly['start_date'] === '2028-01-01' && $quarterly['end_date'] === '2028-12-31', 'Quarters cover one full fiscal year');
+$assert(array_column($quarterly['periods'], 'status') === array_fill(0, 4, 'scheduled'), 'Later generated quarters stay scheduled');
 
 // 16. A duplicate generated name aborts the whole batch.
-$outOfSequenceId = $guard->createPeriod('2027-12', '2027-10-01', '2027-10-31', 1, '2027-01-05');
+$outOfSequenceId = $guard->createPeriod('FY2029 P3', '2029-01-01', '2029-01-31', 1, '2027-01-05');
 $before = (int)$pdo->query('SELECT COUNT(*) FROM fiscal_periods')->fetchColumn();
-$expectError(fn() => $guard->generatePeriodSchedule('monthly', 4, '', 1, '2027-01-05'), 'already exists');
+$expectError(fn() => $guard->generatePeriodSchedule(6, '', 1, '2027-01-05'), 'already exists');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM fiscal_periods')->fetchColumn() === $before, 'Nothing is inserted when one generated name collides');
 $assert($pdo->query("SELECT status FROM fiscal_periods WHERE period_id = {$outOfSequenceId}")->fetchColumn() === 'scheduled', 'The colliding existing period is untouched');
 
-// 17. Invalid cadence and counts are refused before writing anything.
-$expectError(fn() => $guard->generatePeriodSchedule('weekly', 2, '', 1, '2027-01-05'), 'monthly or quarterly');
-$expectError(fn() => $guard->generatePeriodSchedule('monthly', 0, '', 1, '2027-01-05'), 'between 1 and 24');
-$expectError(fn() => $guard->generatePeriodSchedule('monthly', 25, '', 1, '2027-01-05'), 'between 1 and 24');
+// 17. Only counts that divide twelve months are accepted.
+foreach ([0, 5, 7, 24, 25] as $invalidCount) {
+    $expectError(fn() => $guard->generatePeriodSchedule($invalidCount, '', 1, '2027-01-05'), 'periods per year');
+}
+$expectError(fn() => $guard->generatePeriodSchedule(4, str_repeat('x', 21), 1, '2027-01-05'), '20 characters');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM fiscal_periods')->fetchColumn() === $before, 'Invalid input leaves existing periods unchanged');
+$historyAfter = $pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id LIMIT ' . count($historyBefore))->fetchAll(PDO::FETCH_ASSOC);
+$assert($historyAfter === $historyBefore, 'Generating schedules preserves every existing period');
 
 echo "Fiscal period generation contract: passed\n";
 
@@ -249,3 +254,53 @@ $assert(str_contains($fiscalPeriods, 'value="set_rollover"'), 'Fiscal Periods pa
 $assert(str_contains($fiscalPeriods, 'fiscal_period_auto_rollover'), 'Fiscal Periods page writes the automatic rollover setting');
 
 echo "Fiscal period rollover setting location contract: passed\n";
+
+// Every supported count divides the same twelve-month span, independent of calendar quarters.
+$expectedStarts = [
+    1 => ['2026-11-12'],
+    2 => ['2026-11-12', '2027-05-12'],
+    3 => ['2026-11-12', '2027-03-12', '2027-07-12'],
+    4 => ['2026-11-12', '2027-02-12', '2027-05-12', '2027-08-12'],
+    6 => ['2026-11-12', '2027-01-12', '2027-03-12', '2027-05-12', '2027-07-12', '2027-09-12'],
+    12 => ['2026-11-12', '2026-12-12', '2027-01-12', '2027-02-12', '2027-03-12', '2027-04-12', '2027-05-12', '2027-06-12', '2027-07-12', '2027-08-12', '2027-09-12', '2027-10-12'],
+];
+foreach ($expectedStarts as $count => $starts) {
+    $pdo->exec('DELETE FROM fiscal_periods');
+    $schedule = $guard->generatePeriodSchedule($count, '', 1, '2026-11-12');
+    $assert(array_column($schedule['periods'], 'start_date') === $starts, "{$count} divisions have the expected starts");
+    $assert($schedule['end_date'] === '2027-11-11', "{$count} divisions cover exactly one fiscal year");
+    $assert($schedule['periods'][0]['status'] === 'open', 'Initial generation opens the period covering today');
+    $assert(count(array_filter($schedule['periods'], fn(array $period): bool => $period['status'] === 'scheduled')) === $count - 1, 'Every later period stays scheduled');
+    foreach ($schedule['periods'] as $index => $period) {
+        $expectedName = 'FY2026 ' . ($count === 4 ? 'Q' : 'P') . ($index + 1);
+        $assert($period['period_name'] === $expectedName, 'Names use sequence and the starting fiscal year');
+        if (isset($starts[$index + 1])) {
+            $assert((new DateTimeImmutable($period['end_date']))->modify('+1 day')->format('Y-m-d') === $starts[$index + 1], 'Periods have no gap or overlap');
+        }
+    }
+}
+
+// Month-end clamping never drifts later boundaries; leap years keep real February dates.
+foreach ([
+    ['2027-01-31', 12, ['2027-01-31', '2027-02-28', '2027-03-31', '2027-04-30'], '2028-01-30'],
+    ['2028-01-31', 12, ['2028-01-31', '2028-02-29', '2028-03-31', '2028-04-30'], '2029-01-30'],
+    ['2028-02-29', 4, ['2028-02-29', '2028-05-29', '2028-08-29', '2028-11-29'], '2029-02-27'],
+    ['2027-04-01', 4, ['2027-04-01', '2027-07-01', '2027-10-01', '2028-01-01'], '2028-03-31'],
+] as [$start, $count, $starts, $end]) {
+    $pdo->exec('DELETE FROM fiscal_periods');
+    $schedule = $guard->generatePeriodSchedule($count, 'Store', 1, $start);
+    $assert(array_slice(array_column($schedule['periods'], 'start_date'), 0, count($starts)) === $starts, "Boundaries stay anchored for {$start}");
+    $assert($schedule['end_date'] === $end, "Fiscal year ends correctly for {$start}");
+    $assert($schedule['periods'][0]['period_name'] === 'Store FY' . substr($start, 0, 4) . ' ' . ($count === 4 ? 'Q1' : 'P1'), 'Optional prefix remains supported');
+}
+
+// An existing chain can start the generated fiscal year mid-month, without history edits.
+$pdo->exec('DELETE FROM fiscal_periods');
+$guard->createPeriod('Existing November', '2026-11-01', '2026-11-11', 1, '2026-11-05');
+$existing = $pdo->query('SELECT * FROM fiscal_periods')->fetchAll(PDO::FETCH_ASSOC);
+$schedule = $guard->generatePeriodSchedule(4, '', 1, '2026-11-05');
+$assert($schedule['start_date'] === '2026-11-12' && $schedule['end_date'] === '2027-11-11', 'Continued fiscal year preserves the exact next day');
+$assert(array_column($schedule['periods'], 'status') === array_fill(0, 4, 'scheduled'), 'Existing open period stays the only open period');
+$assert($pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id LIMIT 1')->fetchAll(PDO::FETCH_ASSOC) === $existing, 'Mid-month generation leaves existing history unchanged');
+
+echo "Fiscal-year divisions and month boundaries: passed\n";

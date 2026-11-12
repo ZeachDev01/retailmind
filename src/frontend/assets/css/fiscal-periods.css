@@ -344,6 +344,10 @@
     margin: 0;
 }
 
+.fiscal-generate-form .fiscal-period-form-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
 .fiscal-caret {
     font-size: 0.68rem;
     transition: transform 0.16s ease;

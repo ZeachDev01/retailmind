@@ -317,12 +317,36 @@ const fixture = (action, extra) => {
 
         // Fiscal Periods actions redirect after POST so the dock cannot return on refresh.
         await page.goto(origin + '/components/system_administrator/fiscal_periods.php');
-        await page.locator('#prefix').fill('FY');
-        await page.locator('#count').fill('2');
-        await page.getByRole('button', {name: /Generate periods/i}).click();
-        await page.waitForURL(u => u.pathname.endsWith('/fiscal_periods.php') && u.search === '');
-        assert.match(await page.locator('.message.success').innerText(), /Generated 2 monthly fiscal periods/i);
+        assert.equal(await page.locator('#cadence').count(), 0, 'Fiscal year divisions replace cadence');
+        assert.deepEqual(await page.locator('#count option').evaluateAll(options => options.map(option => option.value)), ['1', '2', '3', '4', '6', '12']);
+        await page.locator('#prefix').fill('Store');
+        await page.locator('#count').selectOption('4');
+        await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: /Generate periods/i}).click()]);
+        assert.match(await page.locator('.message.success').innerText(), /Generated 4 fiscal periods for one fiscal year/i);
+        assert.equal(await page.locator('.fiscal-period-title h3').filter({hasText: /^Store FY\d{4} Q1$/}).count(), 1, 'Quarter numbering starts at Q1');
+        assert.equal(await page.locator('.fiscal-period-title h3').filter({hasText: /^Store FY\d{4} Q4$/}).count(), 1, 'Four quarters are generated');
         assert.equal(await page.locator('#guidance-dock').count(), 0, 'Generated schedule does not reopen the guidance dock');
+
+        await page.locator('#count').selectOption('2');
+        await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: /Generate periods/i}).click()]);
+        assert.match(await page.locator('.message.success').innerText(), /Generated 2 fiscal periods for one fiscal year/i);
+        assert.equal(await page.locator('.fiscal-period-title h3').filter({hasText: /^FY\d{4} P1$/}).count(), 1, 'Non-quarter divisions use P1');
+        assert.equal(await page.locator('.fiscal-period-title h3').filter({hasText: /^FY\d{4} P2$/}).count(), 1, 'Two half-year periods are generated');
+
+        const invalidGeneration = await page.request.post(page.url(), {
+            form: {action: 'generate', csrf_token: await page.locator('input[name="csrf_token"]').first().inputValue(), count: '5'},
+        });
+        assert.match(await invalidGeneration.text(), /Choose 1, 2, 3, 4, 6, or 12 fiscal periods per year/);
+
+        for (const width of [1440, 390]) {
+            await page.setViewportSize({width, height: 900});
+            const boxes = await page.locator('.fiscal-generate-form select, .fiscal-generate-form input[type="text"], .fiscal-generate-form button[type="submit"]').evaluateAll(elements => elements.map(element => {
+                const box = element.getBoundingClientRect();
+                return {left: box.left, right: box.right, height: box.height};
+            }));
+            assert.ok(boxes.every(box => box.left >= 0 && box.right <= width && box.height >= 40), 'Schedule controls fit viewport ' + width);
+        }
+        await page.setViewportSize({width: 1280, height: 900});
 
         // 6. Non-admin isolation
         await page.goto(origin + '/components/auth/logout.php');

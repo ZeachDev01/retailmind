@@ -216,6 +216,10 @@ _Avoid_: Counted cash, sales income, actual cash
 The recorded Product sales, issued Cash Refunds and Drawer Movements attributed to a Cashier Shift. A Cash Refund remains an activity even when the original sale occurred in an earlier Shift or used a non-cash payment method.
 _Avoid_: Transactions (when referring only to sales), cash-only activity
 
+**Fiscal Year**:
+A twelve-month reporting cycle for the Store, measured from its fiscal-year start rather than necessarily January. It is divided into 1, 2, 3, 4, 6, or 12 consecutive Fiscal Periods.
+_Avoid_: Calendar year (unless the cycle starts on January 1)
+
 **Fiscal Period**:
 A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.
 _Avoid_: Cashier Shift, work session, branch fiscal period
@@ -225,7 +229,7 @@ A Fiscal Period whose dates are reserved in advance but which accepts no transac
 _Avoid_: Draft period, upcoming period, pending period
 
 **Period Schedule**:
-A contiguous, calendar-aligned set of Fiscal Periods generated together from the day after the latest period ends. Generating a set is a single all-or-nothing Administrator action and does not create, skip, or invent ranges by itself.
+A contiguous set of Fiscal Periods spanning one Fiscal Year, generated together from the day after the latest period ends or from today when no periods exist. Generating a set is a single all-or-nothing Administrator action.
 _Avoid_: Recurring period, auto-generated periods, fiscal calendar
 
 **Automatic Rollover**:

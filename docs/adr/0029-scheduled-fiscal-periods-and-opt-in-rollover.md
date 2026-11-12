@@ -20,3 +20,7 @@ The Store owner asked for a way to add "a set of Fiscal Periods" at once, becaus
 - **Manual closure notices**: closing an open period by hand writes the same `fiscal_period` notification and daily email as a rollover, so a closure is visible outside the page that performed it.
 - **Guidance interaction**: completing a walkthrough topic no longer reopens its dock when the Fiscal Periods form is submitted; the page now posts, redirects, and renders flash messages, and a completed topic is only reopened through Help's Replay.
 
+## Amendment 2026-11-12: Fiscal-year divisions
+
+The Store owner chose to generate one twelve-month Fiscal Year divided into 1, 2, 3, 4, 6, or 12 periods instead of appending an arbitrary number of calendar months or quarters. Continue after the latest period, or start today for a new Store, preserving historical ranges; January alignment was rejected because it could overlap the existing chain. Four divisions use Q1–Q4 relative to the fiscal-year start; other counts use P1–Pn, and all labels use the starting fiscal year. Calculate boundaries from the original start, clamp nonexistent days to month end without carrying that adjustment forward, and end each period immediately before the next boundary. The [confirmed discussion](../discussions/fiscal-year-period-schedule.md) records the implemented scope. Existing dates and names are unchanged; these rules apply to newly generated schedules.
+

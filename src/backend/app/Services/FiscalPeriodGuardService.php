@@ -183,25 +183,20 @@ class FiscalPeriodGuardService
     }
 
     /**
-     * Create a contiguous set of calendar-aligned periods in one transaction.
+     * Divide one fiscal year into contiguous periods in one transaction.
      *
      * The chain always continues from the day after the last period (or starts
      * today when the Store has none), so no day is left without fiscal
      * coverage. Any invalid or duplicate name aborts the whole batch.
      */
     public function generatePeriodSchedule(
-        string $cadence,
         int $count,
         string $prefix,
         int $actorId,
         ?string $today = null
     ): array {
-        $cadence = strtolower(trim($cadence));
-        if (!in_array($cadence, ['monthly', 'quarterly'], true)) {
-            throw new InvalidArgumentException('Choose monthly or quarterly periods.');
-        }
-        if ($count < 1 || $count > 24) {
-            throw new InvalidArgumentException('Generate between 1 and 24 fiscal periods.');
+        if (!in_array($count, [1, 2, 3, 4, 6, 12], true)) {
+            throw new InvalidArgumentException('Choose 1, 2, 3, 4, 6, or 12 fiscal periods per year.');
         }
         $prefix = trim($prefix);
         if (mb_strlen($prefix) > 20) {
@@ -237,17 +232,21 @@ class FiscalPeriodGuardService
                     : $today
             );
 
+            $yearStart = $cursor;
+            $startDay = (int)$yearStart->format('j');
+            $firstMonth = $yearStart->modify('first day of this month');
+            $monthsPerPeriod = intdiv(12, $count);
             $ranges = [];
             for ($i = 0; $i < $count; $i++) {
-                if ($cadence === 'monthly') {
-                    $rangeEnd = $cursor->modify('last day of this month');
-                    $label = $cursor->format('Y-m');
-                } else {
-                    $quarter = intdiv((int)$cursor->format('n') - 1, 3) + 1;
-                    $rangeEnd = $cursor->setDate((int)$cursor->format('Y'), $quarter * 3, 1)
-                        ->modify('last day of this month');
-                    $label = 'Q' . $quarter . ' ' . $cursor->format('Y');
-                }
+                // Anchor every boundary to the original day so February cannot shift later periods.
+                $nextMonth = $firstMonth->modify('+' . (($i + 1) * $monthsPerPeriod) . ' months');
+                $nextStart = $nextMonth->setDate(
+                    (int)$nextMonth->format('Y'),
+                    (int)$nextMonth->format('n'),
+                    min($startDay, (int)$nextMonth->format('t'))
+                );
+                $rangeEnd = $nextStart->modify('-1 day');
+                $label = 'FY' . $yearStart->format('Y') . ' ' . ($count === 4 ? 'Q' : 'P') . ($i + 1);
                 $name = $prefix === '' ? $label : $prefix . ' ' . $label;
                 $nameKey = mb_strtolower($name);
                 if (isset($takenNames[$nameKey])) {

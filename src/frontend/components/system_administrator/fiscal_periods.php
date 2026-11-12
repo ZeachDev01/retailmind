@@ -190,16 +190,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         try {
             $generated = $guard->generatePeriodSchedule(
-                (string)($_POST['cadence'] ?? ''),
-                (int)($_POST['count'] ?? 0),
+                filter_var($_POST['count'] ?? null, FILTER_VALIDATE_INT) ?: 0,
                 (string)($_POST['prefix'] ?? ''),
                 $actorId
             );
             $periodCount = count($generated['periods']);
             $message = sprintf(
-                'Generated %d %s fiscal period%s: %s to %s.%s',
+                'Generated %d fiscal period%s for one fiscal year: %s to %s.%s',
                 $periodCount,
-                (string)($_POST['cadence'] ?? ''),
                 $periodCount === 1 ? '' : 's',
                 date('M j, Y', strtotime((string)$generated['start_date'])),
                 date('M j, Y', strtotime((string)$generated['end_date'])),
@@ -404,7 +402,7 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                         <h3><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate a schedule</h3>
                         <span class="info-tooltip">
                             <button class="info-tooltip-trigger" type="button" aria-label="About schedule generation" aria-describedby="generate-period-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
-                            <span class="tooltip-box" id="generate-period-help" role="tooltip">Creates a continuous run of calendar-aligned periods starting the day after the latest period ends. The whole set is created together, or nothing is created if a name already exists.</span>
+                            <span class="tooltip-box" id="generate-period-help" role="tooltip">Divides 12 months into periods, starting after the latest period or today if none exist. Four periods use Q1–Q4; other counts use P1 onward. Names use the fiscal year's starting year. All periods are created together, or none if a name already exists.</span>
                         </span>
                     </div>
                     <form method="POST" class="fiscal-period-form fiscal-generate-form">
@@ -412,19 +410,19 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
                         <input type="hidden" name="action" value="generate">
                         <div class="fiscal-period-form-grid">
                             <div class="form-group">
-                                <label for="cadence">Cadence</label>
-                                <select id="cadence" name="cadence">
-                                    <option value="monthly">Monthly</option>
-                                    <option value="quarterly">Quarterly</option>
+                                <label for="count">Periods per fiscal year</label>
+                                <select id="count" name="count" required aria-required="true">
+                                    <option value="1">1 period · 12 months</option>
+                                    <option value="2">2 periods · 6 months each</option>
+                                    <option value="3">3 periods · 4 months each</option>
+                                    <option value="4" selected>4 quarters · 3 months each</option>
+                                    <option value="6">6 periods · 2 months each</option>
+                                    <option value="12">12 periods · 1 month each</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="count">Periods to generate</label>
-                                <input type="number" id="count" name="count" min="1" max="24" value="12" required aria-required="true">
-                            </div>
-                            <div class="form-group">
                                 <label for="prefix">Name prefix (optional)</label>
-                                <input type="text" id="prefix" name="prefix" maxlength="20" placeholder="e.g. FY" autocomplete="off">
+                                <input type="text" id="prefix" name="prefix" maxlength="20" placeholder="e.g. Store" autocomplete="off">
                             </div>
                             <button type="submit" class="btn btn-secondary fiscal-create-button"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate periods</button>
                         </div>

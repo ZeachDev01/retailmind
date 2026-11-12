@@ -22,3 +22,5 @@ Confirmed on 2026-10-22:
 - All GCash sessions must be closed and reconciled before a Fiscal Period closes. Session closure remains available when transactions are blocked.
 
 The design interview has no remaining policy questions. Before implementation, inspect actual existing period conflicts and verify every affected money and stock write path, including settlement during shift and GCash session closure.
+
+Revision 2026-11-12: generated Period Schedules cover one twelve-month Fiscal Year split into 1, 2, 3, 4, 6, or 12 periods, continuing the existing chain or starting today when none exist. Four divisions use Q1–Q4 from the fiscal-year start; other counts use P1–Pn. Existing periods remain unchanged. See [ADR-0029](../adr/0029-scheduled-fiscal-periods-and-opt-in-rollover.md) for month-boundary and naming rules.
