@@ -45,3 +45,17 @@ The implementation passed `npm run check`, `npm run check:contracts`, and the ex
 Add Product and Supplier Pullout browser checks passed. `RUN_DB_TESTS=1 BREAD_ELIGIBILITY_ONLY=1 node src/backend/tests/notification_list_browser_test.js` passed the focused reminder workflow, including reading, partial collection, full removal, ineligible wording and Stock Issue navigation, picker exclusion, and direct batch lookup. Desktop/mobile checks and a 320px visual inspection were completed using isolated fixtures.
 
 The full notification browser suite still stops before reminder coverage at an unrelated stale empty-state assertion expecting `You're all caught up`. The focused mode exercises this feature independently; a passing focused run does not claim the entire notification browser suite passes. No live schema upgrade, code deployment, scheduler reconfiguration, or SMTP delivery test was performed.
+
+### Final review and connected-fixture audit
+
+Standards and Spec reviews passed after correcting test schemas to default Supplier Pullout Eligibility to `0` and explicitly enabling only pullout-case Products. An audit of all 20 connected Product, Inventory, and Supplier Pullout service caller files found three more fixtures missing the new column; those fixtures now match production defaults. The disposable MySQL batch-receiving test passed with `RUN_DB_TESTS=1`, and scheduled demand evidence plus the other runnable connected checks passed.
+
+These remaining failures were also reproduced on clean pre-feature commit `ae3e511c`; they are not repaired in this feature:
+
+- `batch_product_creation_receiving_test.php`, `cross_workflow_batch_verification_test.php`, `sales_pack_receiving_test.php`: missing `scheduled_demand_drivers` fixture table.
+- `product_drawer_edit_contract.php`, `product_price_edit_contract.php`: missing `pack_size` fixture column.
+- `product_stock_settings_contract.php`, `product_status_toggle_contract.php`: missing `warning_lead_time_days` fixture column and stale UI assertions.
+- `inventory_load_contract.php`: existing Store-scope predicate, batch ordering, totals, and preflight-cache assertions.
+- `prepared_oil_pouches_test.php`: fixture inserts removed `users.full_name` column.
+
+These failures and the full notification browser limitation above prevent claiming a completely green historical test suite. Feature-focused checks pass. No runtime changes were needed for the final review fixes.
