@@ -361,6 +361,17 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('#closeUserModal, #cancelUserModal').forEach(button => button.addEventListener('click', () => setOpen(addOverlay, false)));
     document.querySelectorAll('#closeUserDrawer, #cancelUserDrawer').forEach(button => button.addEventListener('click', () => setOpen(drawerOverlay, false)));
 
+    const createProfileImage = document.getElementById('createProfileImage');
+    const createRemoveProfileImage = document.getElementById('createRemoveProfileImage');
+    createProfileImage.addEventListener('change', () => {
+        createRemoveProfileImage.hidden = createProfileImage.files.length === 0;
+    });
+    createRemoveProfileImage.addEventListener('click', () => {
+        createProfileImage.value = '';
+        createRemoveProfileImage.hidden = true;
+        createProfileImage.focus();
+    });
+
     const drawerTabs = Array.from(document.querySelectorAll('[data-user-drawer-tab]'));
     const drawerPanels = Array.from(document.querySelectorAll('[data-user-drawer-panel]'));
     let activeUserTabIndex = 0;

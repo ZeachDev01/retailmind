@@ -2,17 +2,20 @@
 // Shared Store setup checklist
 $confirmations = \App\Store\StoreSetupConfirmations::all($pdo);
 $tasks = \App\Store\StoreSetupConfirmations::TASKS;
+$currentRole = current_role();
+if ($currentRole === 'inventory_manager') {
+    $tasks = array_filter($tasks, static fn(array $task): bool => $task['role'] === 'inventory_manager');
+}
 $totalTasks = count($tasks);
-$confirmedCount = count($confirmations);
+$confirmedCount = count(array_intersect_key($confirmations, $tasks));
 $percent = (int)round(($confirmedCount / $totalTasks) * 100);
 $allDone = $confirmedCount >= $totalTasks;
-$currentRole = current_role();
 ?>
 <div class="store-setup-checklist" aria-labelledby="store-setup-checklist-title">
     <div class="store-setup-checklist-header">
         <h3 id="store-setup-checklist-title">Store setup checklist</h3>
         <span class="setup-progress-badge <?= $allDone ? 'tag-success' : 'tag-neutral' ?>">
-            <?= $confirmedCount ?> of <?= $totalTasks ?> tasks confirmed<?= $allDone ? ' &middot; Setup complete' : '' ?>
+            <?= $confirmedCount ?> of <?= $totalTasks ?> tasks confirmed<?= $allDone ? ' &middot; ' . ($currentRole === 'inventory_manager' ? 'Your tasks complete' : 'Setup complete') : '' ?>
         </span>
     </div>
     <div class="setup-progress-track" role="progressbar" aria-valuenow="<?= $confirmedCount ?>" aria-valuemin="0" aria-valuemax="<?= $totalTasks ?>" aria-label="Store setup progress">

@@ -72,9 +72,14 @@ const fixture = action => {
         const guidanceBanner = page.locator('#workspace-guidance');
         await guidanceBanner.waitFor();
 
-        // Check contextual heading and copy on landing (Stock monitoring)
+        // Inventory invitation opens Help without starting a walkthrough.
         assert.match(await guidanceBanner.locator('h2').innerText(), /Inventory Manager Workspace/);
-        assert.match(await guidanceBanner.locator('h2').innerText(), /Stock monitoring/);
+        assert.doesNotMatch(await guidanceBanner.locator('h2').innerText(), /Stock monitoring/);
+        await guidanceBanner.getByRole('link', {name: 'View guidance'}).click();
+        await page.waitForURL('**/auth/help.php');
+        assert.equal(await page.locator('.walkthrough-topic-card').count() > 0, true);
+        await page.getByRole('link', {name: 'Back to workspace'}).click();
+        await guidanceBanner.waitFor();
 
         // Check Store setup checklist presence
         const checklist = guidanceBanner.locator('.store-setup-checklist');
@@ -83,22 +88,21 @@ const fixture = action => {
 
         // Inventory Manager sees:
         // - Products task: owned by Inventory Manager, has link and button "Confirm product setup"
-        // - Calendar task: owned by Administrator, awaiting Administrator (no button)
+        // - Calendar review is omitted from this Workspace.
         const productTask = checklist.locator('.setup-task-item', {hasText: 'Products and opening stock'});
         assert.match(await productTask.innerText(), /Inventory Manager/);
         assert.equal(await productTask.getByRole('link', {name: 'Set up Products', exact: true}).count(), 1);
         assert.equal(await productTask.getByRole('button', {name: 'Confirm product setup', exact: true}).count(), 1);
 
         const calendarTask = checklist.locator('.setup-task-item', {hasText: 'Store calendar review'});
-        assert.match(await calendarTask.innerText(), /Administrator/);
-        assert.equal(await calendarTask.getByRole('button', {name: 'Confirm calendar review'}).count(), 0);
-        assert.match(await calendarTask.innerText(), /Awaiting Administrator/);
+        assert.equal(await calendarTask.count(), 0);
 
         // Visual screenshot of inventory landing guidance
         for (const theme of ['light', 'dark']) {
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                assert.equal(await guidanceBanner.getByRole('link', {name: 'View guidance'}).evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'Guidance action retains contrasting text');
                 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal overflow at ' + width + 'px');
                 await page.screenshot({animations: 'disabled', path: path.join(screenshots, `overview-${theme}-${width}.png`)});
             }
@@ -110,7 +114,7 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
         const prodGuidance = page.locator('#workspace-guidance');
         await prodGuidance.waitFor();
-        assert.match(await prodGuidance.locator('h2').innerText(), /Product setup/);
+        assert.match(await prodGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
         assert.equal(await page.locator('#add-product-btn').count(), 1, 'Existing Add Product button is present');
 
         // 3. Replenishment Recommendations workflow (replenishment_queue.php)
@@ -119,7 +123,7 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
         const replGuidance = page.locator('#workspace-guidance');
         await replGuidance.waitFor();
-        assert.match(await replGuidance.locator('h2').innerText(), /Replenishment recommendations/);
+        assert.match(await replGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
 
         // Inspect buying advice in the table
         const table = page.locator('.queue-list table');
@@ -145,7 +149,7 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
         const rcvGuidance = page.locator('#workspace-guidance');
         await rcvGuidance.waitFor();
-        assert.match(await rcvGuidance.locator('h2').innerText(), /Stock Receiving/);
+        assert.match(await rcvGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
 
         // Record actual goods arrival through Stock Receiving
         const csrfToken = await page.locator('#receiving_form input[name="csrf_token"]').inputValue();
@@ -184,17 +188,17 @@ const fixture = action => {
         await page.waitForLoadState('domcontentloaded');
         const countsGuidance = page.locator('#workspace-guidance');
         await countsGuidance.waitFor();
-        assert.match(await countsGuidance.locator('h2').innerText(), /Inventory counts/);
+        assert.match(await countsGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
 
         // 6. Stock Issue review workflow (stock_issues.php)
         await page.goto(origin + '/components/inventory_management/stock_issues.php');
         await page.waitForLoadState('domcontentloaded');
         const issuesGuidance = page.locator('#workspace-guidance');
         await issuesGuidance.waitFor();
-        assert.match(await issuesGuidance.locator('h2').innerText(), /Stock Issue review/);
+        assert.match(await issuesGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
 
-        // 7. Skip guidance and verify persisted state
-        const skipBtn = issuesGuidance.getByRole('button', {name: 'Skip guidance', exact: true});
+        // 7. Defer guidance and verify persisted state
+        const skipBtn = issuesGuidance.getByRole('button', {name: 'Not now', exact: true});
         await skipBtn.focus();
         assert.equal(await skipBtn.evaluate(el => document.activeElement === el), true);
         assert.notEqual(await skipBtn.evaluate(el => getComputedStyle(el).outlineStyle), 'none');
@@ -203,11 +207,12 @@ const fixture = action => {
             page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/auth/help.php')),
             skipBtn.click(),
         ]);
+        await page.getByRole('button', {name: 'Okay', exact: true}).click();
         await page.waitForLoadState('domcontentloaded');
 
         // Verify guidance state in DB
         const guidanceRows = JSON.parse(fixture('guidance_state'));
-        assert.equal(guidanceRows.some(r => r.user_id === 3 && r.workspace === 'inventory_manager' && r.status === 'skipped'), true);
+        assert.equal(guidanceRows.some(r => r.user_id === 3 && r.workspace === 'inventory_manager' && r.status === 'deferred'), true);
 
         // Verify setup confirmations were NOT completed by skipping
         const setupRows = JSON.parse(fixture('setup_state'));

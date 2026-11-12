@@ -16,6 +16,7 @@
                 <label for="createProfileImage">Profile Picture <span class="optional-label">Optional</span></label>
                 <input type="hidden" name="MAX_FILE_SIZE" value="<?= \App\Services\ProfileImageStorage::MAX_FILE_SIZE ?>">
                 <input type="file" id="createProfileImage" name="profile_image" accept="<?= \App\Services\ProfileImageStorage::ACCEPT ?>" aria-describedby="createProfileImageHelp">
+                <button type="button" id="createRemoveProfileImage" class="btn btn-secondary btn-small" hidden>Remove picture</button>
                 <small class="field-help" id="createProfileImageHelp"><?= \App\Services\ProfileImageStorage::HELP ?></small>
             </div>
             <div class="form-group">

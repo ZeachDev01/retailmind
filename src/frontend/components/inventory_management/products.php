@@ -1462,11 +1462,11 @@ foreach ($products as $product) {
 
                     <section class="wizard-panel" data-panel="3">
                         <div class="pricing-section">
-                            <h3 class="planning-section-title">Cost &amp; selling price</h3>
+                            <h3 class="planning-section-title">Purchase cost</h3>
                             <input type="hidden" name="cost_entry_mode" id="create-cost-mode" value="piece">
                             <div class="pricing-mode-switch" role="group" aria-label="Cost entry mode">
-                                <button type="button" data-cost-mode="piece" aria-pressed="true" aria-controls="purchase-pack-fields"><i class="bi bi-box" aria-hidden="true"></i><span><strong>By piece</strong><small>Enter individual cost</small></span></button>
-                                <button type="button" data-cost-mode="pack" aria-pressed="false" aria-controls="purchase-pack-fields"><i class="bi bi-box-seam" aria-hidden="true"></i><span><strong>By pack</strong><small>Calculate individual cost</small></span></button>
+                                <button type="button" data-cost-mode="piece" aria-pressed="true" aria-controls="purchase-pack-fields"><i class="bi bi-pencil-square" aria-hidden="true"></i><span><strong>Enter cost per piece</strong></span></button>
+                                <button type="button" data-cost-mode="pack" aria-pressed="false" aria-controls="purchase-pack-fields"><i class="bi bi-calculator" aria-hidden="true"></i><span><strong>Calculate from purchase pack</strong></span></button>
                             </div>
                             <div id="purchase-pack-fields" hidden>
                                 <div class="form-grid">
@@ -1482,6 +1482,10 @@ foreach ($products as $product) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="pricing-section">
+                            <h3 class="planning-section-title">Piece pricing</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="cost-price">Cost Price per Piece (&#8369;) *</label>
@@ -1504,11 +1508,8 @@ foreach ($products as $product) {
                                 </div>
                                 <p class="field-help" id="create-markup-status" role="status"></p>
                             </details>
-                        </div>
-
-                        <div class="pricing-section">
-                            <label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Sell sealed packs</label>
-                            <p class="pricing-note">Add a separate pack price and barcode for customer purchases.</p>
+                            <label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label>
+                            <p class="pricing-note">Set a pack price cheaper than buying the same pieces individually.</p>
                             <div id="sales-pack-fields" hidden>
                             <div class="form-grid">
                                 <div class="form-group">

@@ -200,11 +200,9 @@ const fixture = action => {
         await invChecklist.waitFor();
 
         // 6. Role-specific view in Inventory Workspace
-        // - Calendar task: NO link to store_calendar.php! Shows Administrator note and Awaiting Administrator
+        // Calendar review belongs only to the Administrator checklist.
         const invCalendarTask = invChecklist.locator('.setup-task-item', {hasText: 'Store calendar review'});
-        assert.equal(await invCalendarTask.getByRole('link', {name: 'Review Store calendar'}).count(), 0, 'Inventory Manager has NO link to store_calendar.php');
-        assert.match(await invCalendarTask.locator('.setup-task-owner').innerText(), /^Administrator$/);
-        assert.match(await invCalendarTask.innerText(), /Awaiting Administrator/);
+        assert.equal(await invCalendarTask.count(), 0, 'Inventory Manager does not see calendar review');
 
         // In Inventory workspace, attempting calendar fails with 403
         const invCsrf = await page.locator('.setup-task-confirm-form input[name="csrf_token"]').inputValue();
@@ -227,9 +225,9 @@ const fixture = action => {
         // Observe updated progress in Inventory Workspace
         const updatedInvTask = page.locator('#workspace-guidance .setup-task-item', {hasText: 'Products and opening stock'});
         await updatedInvTask.locator('.setup-task-status:has-text("Confirmed")').waitFor();
-        assert.match(await page.locator('#workspace-guidance .store-setup-checklist').innerText(), /1 of 2 tasks confirmed/);
+        assert.match(await page.locator('#workspace-guidance .store-setup-checklist').innerText(), /1 of 1 tasks confirmed/);
         assert.match(await updatedInvTask.innerText(), /Confirmed/);
-        assert.match(await page.locator('#workspace-guidance .setup-task-item', {hasText: 'Store calendar review'}).innerText(), /Awaiting Administrator/);
+        assert.equal(await page.locator('#workspace-guidance .setup-task-item', {hasText: 'Store calendar review'}).count(), 0);
 
         // Verify DB persistence
         setupRows = JSON.parse(fixture('setup_state'));

@@ -23,6 +23,14 @@ Previously, Step 3 put pack fields before individual pricing and separated the i
 - The Sales Pack discount guide compares Sales Pack price with Pieces per Sales Pack multiplied by Selling Price per Piece, not Cost Price per Piece. For example, 12 pieces at PHP 15 each have a separate selling total of PHP 180.
 - Show Pack cost (saved, rounded Cost Price per Piece × Pieces per Sales Pack) and Sold individually (Selling Price per Piece × Pieces per Sales Pack) together in the discount guide. The cost uses the customer Sales Pack count, which can differ from the purchase package count.
 
+## Pricing clarity follow-up — 2026-11-12
+
+The user reconfirmed the owner's requirement: the same Product may be sold individually and as a sealed Sales Pack, with the Sales Pack cheaper than buying the same number of pieces individually. This preserves the existing Sales Pack definition and pricing rule.
+
+The previous By piece / By pack cost-entry labels were confusing because they could be read as customer selling choices. The user approved separating Purchase cost (Enter cost per piece / Calculate from purchase pack) from Selling prices (Selling Price per Piece and optional Also sell sealed packs). The existing cost calculations and Sales Pack discount rules remain unchanged.
+
+Implemented in Step 3. `npm run check` and `sales_pack_browser_test.js` passed, including desktop 1440px and mobile 390px pricing, pack validation, starting stock and submission checks. Mobile piece-mode and desktop sealed-pack captures were visually inspected. Browser verification uses the extracted wizard fixture; authenticated live rendering was not checked.
+
 ## Final confirmation
 
 User approved implementation on 2026-11-11, then explicitly approved the editable Sales Pack count prefill and the combined Pack cost / Sold individually guide. No interview decisions remain open.

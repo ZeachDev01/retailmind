@@ -1332,7 +1332,7 @@ html[data-theme="dark"] .landing-footer__links a:hover {
     top: 50%;
     bottom: auto;
     right: .5rem;
-    transform: translateY(-50%);
+    translate: 0 -50%;
     margin: 0;
     margin-block: 0;
     height: 32px;

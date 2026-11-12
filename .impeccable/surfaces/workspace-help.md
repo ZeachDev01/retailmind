@@ -7,6 +7,12 @@ related_targets: ["src/frontend/components/auth/workspace_overview.php", "src/fr
 
 # Workspace Help
 
+## Inventory invitation — 2026-11-12
+
+Inventory Manager first-visit guidance now reuses the Administrator invitation styling and a stable welcome heading. View guidance opens Workspace Help directly; Not now retains the existing saved preference. Product setup confirmation remains available. Calendar review is hidden from Inventory Managers, and checklist progress counts only their visible task; global Store completion still requires both products and calendar. Administrator guidance is unchanged.
+
+Verification: the SQLite-backed `inventory_guidance_test.php` passes role visibility, Help destination, visible progress and global-completion checks. `npm run check` passes. The inventory browser suite passes Help navigation and banner checks in light/dark at 1440, 390 and 320px, including overflow and primary-link text color; desktop light and narrow dark captures were inspected. The broader workflow run stops later at its existing `.queue-details` expectation on Replenishment Recommendations. No dependencies or global tokens added.
+
 ## Guidance dismissal — 2026-11-02
 
 Overview actions save in place, then replace the preferences footer (or automatic workspace overview) with a persistent success message: “Need help later? Open your profile menu and choose Help.” Focus moves to the message. Reuse the existing success palette and focus treatment, with 2rem above the Help confirmation.

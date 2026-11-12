@@ -3,7 +3,6 @@
     padding: 1.25rem 1.5rem;
     margin-bottom: 1.5rem;
     border: 1px solid var(--border);
-    border-top: 3px solid var(--primary, #2563eb);
     border-radius: 14px;
     background: var(--card-bg, #ffffff);
     color: var(--text, #0f172a);
@@ -229,6 +228,7 @@ html[data-theme="dark"] .workspace-guidance-chips a.is-current {
 .workspace-guidance-links li { margin-top: 1.2rem; }
 .workspace-workflow-heading { display: block; margin: .35rem 0 .15rem; font-size: .95rem; }
 .workspace-guidance a { display: inline-flex; align-items: center; min-height: 44px; color: var(--primary); text-underline-offset: .2em; }
+.workspace-guidance-actions a.btn-primary { color: #fff; gap: .35rem; }
 .workspace-guidance :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 
 .store-setup-completion {
