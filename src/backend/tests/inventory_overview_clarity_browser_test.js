@@ -6,7 +6,11 @@ const {chromium} = require('playwright');
 
 const frontend = path.resolve(__dirname, '../../frontend');
 const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/inventory_overview.php'), 'utf8');
-const template = source.slice(source.indexOf('<body')).replace(/<\?php include[^?]+\?>/g, '');
+const riskView = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_risk.php'), 'utf8');
+const template = source.slice(source.indexOf('<body'))
+    .replace("<?php include __DIR__ . '/stock_risk.php'; ?>", riskView)
+    .replace(/<\?php include[^?]+\?>/g, '')
+    .replace(/^<script src=.*stock-risk\.js.*<\/script>\r?$/gm, '');
 const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8', input: `<?php
     function app_url($path) { return $path; }
     function format_display_datetime($value) { return $value; }
@@ -27,6 +31,16 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             'reason' => 'adjustment', 'moved_by_name' => 'Inventory Manager', 'moved_at' => sprintf('2026-11-%02d 10:00:00', 11 - $i)];
     }
     $productCategories = ['Food']; $chartDataJson = '{}';
+    $riskRows = [];
+    foreach (range(1, 13) as $i) {
+        $riskRows[] = ['product_id' => 100 + $i, 'product_name' => 'Risk Product ' . $i, 'sku' => 'RISK-' . $i,
+            'category_name' => $i % 2 ? 'Personal Care' : 'Beverages', 'quantity_on_hand' => $i * 10,
+            'units30' => $i, 'units90' => $i * 3, 'days_of_stock' => $i === 2 ? null : 300,
+            'saleable_stock' => $i * 10, 'flags' => [$i === 2 ? 'limited' : 'excess'],
+            'risk_kind' => $i === 2 ? 'limited' : 'excess', 'risk_label' => $i === 2 ? 'Limited history' : 'Possible excess',
+            'suggested_action' => 'Review stock before buying more.', 'history_note' => 'Recorded history.',
+            'opening_balance' => $i * 10 + 2, 'stock_in90' => 8, 'stock_out90' => 10, 'expired_quantity' => 0, 'expiring_quantity' => 0];
+    }
 ?>${template}`});
 
 (async () => {
@@ -39,9 +53,13 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
             await page.setContent('<!doctype html><html><head></head>' + html);
-            for (const file of ['theme.css', 'style.css', 'inventory.css']) {
+            for (const file of ['theme.css', 'style.css', 'inventory.css', 'stock-risk.css']) {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
             }
+            const iconCss = fs.readFileSync(path.join(frontend, 'assets/vendor/bootstrap-icons/bootstrap-icons.min.css'), 'utf8');
+            const iconFont = fs.readFileSync(path.join(frontend, 'assets/vendor/bootstrap-icons/fonts/bootstrap-icons.woff2')).toString('base64');
+            await page.addStyleTag({content: iconCss + `\n@font-face{font-family:bootstrap-icons;src:url(data:font/woff2;base64,${iconFont}) format('woff2')}`});
+            await page.addScriptTag({path: path.join(frontend, 'assets/js/stock-risk.js')});
             // The shared shell normally loads this before the page script.
             await page.evaluate(() => { window.RetailMindUI = {}; });
             await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
@@ -82,6 +100,41 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.locator('#overview-back').click();
             await page.getByRole('tab', {name: 'Recent Stock Movements', exact: true}).click();
             assert.equal(await page.locator('#overview-panel-movements').isVisible(), true, 'Summary returns with movements visible');
+            await page.getByRole('tab', {name: 'Stock Risk', exact: true}).click();
+            assert.equal(await page.locator('#overview-risk').isVisible(), true);
+            for (const id of ['overview-metrics', 'overview-charts', 'overview-forecast', 'overview-default-view', 'overview-product-view']) {
+                assert.equal(await page.locator('#' + id).isVisible(), false, id + ' hides while comparing Stock Risk');
+            }
+            assert.equal(await page.locator('[data-risk-row]:visible').count(), 10);
+            await page.getByRole('button', {name:'Next Stock Risk page', exact:true}).click();
+            assert.equal(await page.locator('[data-risk-row]:visible').count(), 3);
+            await page.getByRole('button', {name:/Limited history/}).click();
+            assert.equal(await page.locator('[data-risk-row]:visible').count(), 1);
+            await page.getByRole('button', {name:'View details for Risk Product 2',exact:true}).click();
+            assert.equal(await page.locator('#risk-detail-102').isVisible(), true);
+            await page.getByLabel('Search Stock Risk products', {exact:true}).fill('missing');
+            assert.equal(await page.locator('#risk-empty').isVisible(),true);
+            await page.getByLabel('Search Stock Risk products', {exact:true}).fill('');
+            await page.getByRole('button', {name:/All products/}).click();
+            if (width < 640) {
+                await page.getByLabel('Sort products',{exact:true}).selectOption('stock');
+            } else {
+                await page.getByRole('button', {name:'Recorded stock',exact:true}).click();
+                await page.getByRole('button', {name:'Recorded stock',exact:true}).click();
+            }
+            assert.equal(await page.locator('[data-risk-row]:visible').first().getAttribute('data-stock'),'130');
+            assert.equal(await page.locator('[data-risk-sort="stock"]').evaluate(el=>el.closest('th').getAttribute('aria-sort')),'descending');
+            for (const theme of ['light','dark']) {
+                await page.locator('html').evaluate((el, value)=>{el.dataset.theme=value;},theme);
+                await page.evaluate(()=>window.scrollTo(0,0));
+                await page.locator('.sr-table-scroll').evaluate(el=>{el.scrollLeft=0;});
+                assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),'Stock Risk has no page overflow');
+                await page.screenshot({path:path.join(output, `stock-risk-${theme}-${width}.png`),fullPage:true});
+            }
+            await page.getByRole('tab', {name:'Stock Risk',exact:true}).focus();
+            await page.keyboard.press('Home');
+            assert.equal(await page.getByRole('tab',{name:'Stock Overview',exact:true}).getAttribute('aria-selected'),'true');
+            assert.equal(await page.locator('#overview-risk').isVisible(),false);
             for (const theme of ['light', 'dark']) {
                 await page.locator('html').evaluate((el, theme) => { el.dataset.theme = theme; }, theme);
                 await page.evaluate(() => window.scrollTo(0, 0));

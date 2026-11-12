@@ -115,7 +115,6 @@ try {
     $easyLines = [
         'receiving' => ['The receiving record could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.', $receiving],
         'count save' => ['The inventory count could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.', $counts],
-        'cycle schedule' => ['The cycle-count schedule could not be generated. Refresh the page and try again. Tell your Administrator if this keeps happening.', $insights],
         'promotion save' => ['The promotion could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.', $promotions],
         'barcode generate' => ['The barcode could not be generated. Try again. Tell your Administrator if this keeps happening.', $print],
         'csv row import' => ['This row could not be imported. Check the row values and try again. Tell your Administrator if this keeps happening.', $csv],
@@ -130,7 +129,6 @@ try {
     $redContainers = [
         'receiving' => $receiving,
         'inventory counts' => $counts,
-        'inventory insights' => $insights,
         'promotions' => $promotions,
         'csv import' => $csv,
         'print barcodes' => $print,
@@ -145,7 +143,6 @@ try {
 
     // No raw getMessage output reaches the Inventory Manager.
     foreach ([
-        'inventory insights' => $insights,
         'promotions' => $promotions,
         'print barcodes' => $print,
         'csv import' => $csv,

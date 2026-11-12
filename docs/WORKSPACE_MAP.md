@@ -49,6 +49,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 
 ### Inventory Manager (`inventory_manager`)
 - **Stock Overview**: `components/inventory_management/inventory_overview.php`
+  - **Stock Risk** tab (`?tab=risk`): compares recorded stock, 30-day sales, historical coverage and expiry/slow-stock concerns, with search, risk filters, sortable columns, pagination and stock-in/out details. Backend: `App\Inventory\StockRiskReader`; view: `stock_risk.php`; assets: `stock-risk.css`, `stock-risk.js`. Replaces Insights & Risk; `inventory_insights.php` redirects here and no longer generates cycle-count schedules. Existing schedule records and manual Physical Counts are preserved.
   - Recent Stock Movements appear below the summary by default: latest 10 additions/receiving and corrections, excluding sales and returns; sortable column headers and five rows per page.
   - Verification: `inventory_recent_movements_test.php`, `inventory_overview_clarity_browser_test.js`
   - Modals: `components/modals/product_overview/` (`expiredStock.php`, `expringSoon.php`, `lowOfStack.php`, `outOfStack.php`, `viewBatches.php`)
@@ -67,7 +68,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Physical Counts: `components/inventory_management/inventory_counts.php` (`App\Services\InventoryCountService`)
   - Stock Issue Reviews: `components/inventory_management/stock_issues.php` (`App\Services\StockIssueService`)
   - Supplier Pullouts: `components/inventory_management/supplier_pullouts.php` (`App\Services\SupplierPulloutService`)
-- **Investigation & Predictions**: `components/inventory_management/product_investigation.php`, `inventory_insights.php`, `components/report/predictions.php`
+- **Investigation & Predictions**: `components/inventory_management/product_investigation.php`, `components/report/predictions.php`
   - Backing JS: `forecast-notices.js`
   - Backend Services: `App\Forecasting\DemandForecastService`
 

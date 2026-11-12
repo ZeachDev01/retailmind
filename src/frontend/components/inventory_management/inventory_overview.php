@@ -137,6 +137,14 @@ $chartDataJson = json_encode([
         'units' => $total_units,
     ],
 ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+
+$riskRows = [];
+$riskError = '';
+try {
+    $riskRows = \App\Inventory\StockRiskReader::read($pdo, $products, $expiring_batches);
+} catch (Throwable $e) {
+    $riskError = \App\Support\OperatorAlert::message($e, 'Stock Risk could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -146,6 +154,8 @@ $chartDataJson = json_encode([
 <title>Stock Overview</title>
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-risk.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-risk.css')) ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/vendor/chartjs/chart.umd.min.js') . '?v=' . filemtime(__DIR__ . '/../../assets/vendor/chartjs/chart.umd.min.js')) ?>" defer></script>
 </head>
 <body class="inventory-overview-page">
@@ -157,8 +167,12 @@ $chartDataJson = json_encode([
             <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
+                <button type="button" class="overview-tab" id="overview-risk-tab" role="tab" aria-selected="false" aria-controls="overview-risk" data-overview-page-tab="risk" tabindex="-1"><i class="bi bi-shield-check" aria-hidden="true"></i>Stock Risk</button>
             </div>
         </div></header>
+        <section id="overview-risk" role="tabpanel" aria-labelledby="overview-risk-tab" hidden>
+            <?php include __DIR__ . '/stock_risk.php'; ?>
+        </section>
         <section class="overview-metrics" id="overview-metrics" aria-label="Inventory summary">
             <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
@@ -471,6 +485,7 @@ $chartDataJson = json_encode([
 <?php include __DIR__ . '/../modals/product_overview/expiredStock.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/viewBatches.php'; ?>
+<script src="<?= htmlspecialchars(app_url('assets/js/stock-risk.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/stock-risk.js')) ?>"></script>
 <script>
 window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 
@@ -899,6 +914,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setOverviewTab(view) {
+        document.getElementById('overview-risk').hidden = view !== 'risk';
         document.querySelectorAll('#overview-product-tabs [data-overview-page-tab]').forEach(function (tab) {
             const active = tab.dataset.overviewPageTab === view;
             tab.classList.toggle('is-active', active);
@@ -923,6 +939,23 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('overview-products-tab').addEventListener('click', function () {
         showProductView(activeProductView);
     });
+    function showStockRisk() {
+        productView.hidden = true;
+        defaultView.hidden = true;
+        ['overview-metrics', 'overview-forecast', 'overview-charts'].forEach(id => { document.getElementById(id).hidden = true; });
+        document.documentElement.classList.remove('overview-fefo-active');
+        setOverviewTab('risk');
+    }
+    document.getElementById('overview-risk-tab').addEventListener('click', showStockRisk);
+    const pageTabs = Array.from(document.querySelectorAll('#overview-product-tabs [data-overview-page-tab]'));
+    pageTabs.forEach((tab, index) => tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? pageTabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + pageTabs.length) % pageTabs.length;
+        pageTabs[next].click();
+        pageTabs[next].focus();
+    }));
+    if (new URL(location.href).searchParams.get('tab') === 'risk' || location.hash === '#stock-risk') showStockRisk();
 
     document.getElementById('overview-back').addEventListener('click', function () {
         showOverviewSummary();

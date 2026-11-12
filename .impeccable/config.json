@@ -8,6 +8,15 @@
         "value": "sfmono-regular",
         "createdAt": "2026-11-10T13:23:15.680Z",
         "reason": "Agent: existing PowerShell setup textarea displays literal code using a monospace fallback; interface typography remains the RetailMind system font."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "bootstrap-icons",
+        "files": [
+          "src/backend/tests/inventory_overview_clarity_browser_test.js"
+        ],
+        "createdAt": "2026-11-12T07:15:57.965Z",
+        "reason": "Existing Bootstrap icon library is embedded in the isolated browser fixture; this is icon glyph rendering, not a new UI font."
       }
     ]
   }

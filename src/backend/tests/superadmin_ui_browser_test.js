@@ -430,10 +430,8 @@ const fixture = action => {
                     assert.equal(await page.locator('#overview-product-view').isVisible(), false);
                 }
                 if (inventory && screen === 'inventory_management/inventory_insights') {
-                    await page.locator('#tab-cycle-counts').tap();
-                    assert.equal(await page.locator('#tab-cycle-counts').getAttribute('aria-selected'), 'true');
-                    await page.keyboard.press('ArrowLeft');
-                    assert.equal(await page.locator('#tab-product-risk').getAttribute('aria-selected'), 'true');
+                    assert.equal(await page.locator('#overview-risk-tab').getAttribute('aria-selected'), 'true');
+                    assert.equal(await page.locator('#stock-risk').isVisible(), true);
                 }
                 if (inventory && screen === 'inventory_management/products') {
                     await page.locator('#product-add-trigger').tap();

@@ -256,6 +256,10 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
 
+**Stock Risk**:
+An indication that stock may tie up the Store's money or become a loss because it sells slowly, exceeds likely needs, or approaches expiration. It calls for review rather than declaring goods unsellable or requiring a purchase or disposal.
+_Avoid_: Dead stock (when only absence of recorded sales is established)
+
 **Forecast Quantity**:
 The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
 _Avoid_: Suggested purchase quantity, guaranteed sales, stock quantity
