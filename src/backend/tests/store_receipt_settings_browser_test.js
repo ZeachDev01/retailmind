@@ -26,7 +26,7 @@ const route = '/components/administrator/store_settings.php';
 const values = {
     store_name: 'Updated Store <test>', business_identifier: 'TIN-385', store_email: 'store@example.test',
     store_phone: '09123456789', store_address: '385 Store Street', currency_symbol: '₱',
-    timezone: 'Asia/Manila', expiry_alert_days: '30,14,7', receipt_footer: 'Thank you <customer> & welcome.',
+    timezone: 'Asia/Manila', receipt_footer: 'Thank you <customer> & welcome.',
 };
 (async () => {
     let server, browser;
@@ -61,6 +61,7 @@ const values = {
         assert.equal((await context.request.get(platform)).status(), 403);
         assert.equal((await context.request.post(platform, {form: {action: 'save_dormancy', disable_days: '1'}})).status(), 403);
         await page.goto(route);
+        assert.equal(await page.locator('[name="expiry_alert_days"]').count(), 0, 'Expiry lead time belongs to Add/Edit Product');
         for (const key of Object.keys(values)) assert.equal(await page.locator('[name="' + key + '"]').count(), 1, key + ' is editable');
         const token = await page.locator('[name="csrf_token"]').first().inputValue();
         const response = await context.request.post(route, {form: {action: 'save_receipts', csrf_token: token, ...values}});
@@ -78,7 +79,7 @@ const values = {
         assert.match(await (await post({action: 'save_attention', ...thresholds, store_name: 'Forged threshold Store'})).text(), /Store attention thresholds saved/);
         assert.deepEqual(state().store, saved.store, 'Threshold save preserves receipt fields');
         const attention = state().attention;
-        assert.match(await (await post({action: 'save_receipts', ...values, cash_variance_amount: '999', dormancy_disable_days: '1', arbitrary_key: 'injected'})).text(), /Store and receipt settings saved/);
+        assert.match(await (await post({action: 'save_receipts', ...values, expiry_alert_days: '90,60,30', cash_variance_amount: '999', dormancy_disable_days: '1', arbitrary_key: 'injected'})).text(), /Store and receipt settings saved/);
         assert.deepEqual(state().attention, attention, 'Receipt save preserves thresholds');
         assert.deepEqual(state().platform, saved.platform, 'Receipt save cannot change platform settings');
         assert.deepEqual(state().store, saved.store, 'Extra keys are not persisted');
@@ -166,9 +167,10 @@ const values = {
             await page.setViewportSize({width, height: 1000});
             await page.goto(route);
             assert(await page.locator('#store_name').isVisible());
-            assert(await page.locator('#cash_variance_amount').isVisible());
             assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
             await page.screenshot({path: path.join(output, 'settings-' + width + '.png'), fullPage: true});
+            await page.getByRole('link', {name: 'Attention thresholds', exact: true}).click();
+            await page.locator('#cash_variance_amount').waitFor({state: 'visible'});
         }
         for (const role of ['cashier', 'inventory_manager', 'super_admin']) {
             await login(role);
@@ -185,14 +187,12 @@ const values = {
         assert.deepEqual(state(), stable, 'Former platform save cannot write Store settings');
         assert.match(await (await platformPost({action: 'save_dormancy', disable_days: '60', warn_days: '30', ...values, store_name: 'Forged dormancy Store'})).text(), /Dormancy Policy thresholds saved/);
         assert.deepEqual(state().store, stable.store);
-        assert.match(await (await platformPost({action: 'test_email', test_email: 'invalid'})).text(), /valid recipient email/);
+        assert.match(await (await platformPost({action: 'test_brevo', brevo_api_key: 'fixture-key', brevo_sender_email: 'sender@example.test', test_recipient: 'invalid'})).text(), /valid test recipient email/);
+        stable = state();
         await page.goto('/components/auth/workspace.php');
         const workspaceToken = await page.locator('[name="csrf_token"]').first().inputValue();
-        assert.equal((await context.request.post('/components/auth/workspace.php', {form: {csrf_token: workspaceToken, workspace: 'admin'}, maxRedirects: 0})).status(), 302);
-        await page.goto(route);
-        const switchedToken = await page.locator('[name="csrf_token"]').first().inputValue();
-        assert.match(await (await context.request.post(route, {form: {csrf_token: switchedToken, action: 'save_receipts', ...values}})).text(), /Store and receipt settings saved/);
-        assert.equal(state().audit.at(-1).user_id, 2, 'Multi-role actor saves only after switching to Administrator');
+        assert.equal((await context.request.post('/components/auth/workspace.php', {form: {csrf_token: workspaceToken, workspace: 'admin'}, maxRedirects: 0})).status(), 403);
+        assert.deepEqual(state(), stable, 'Super Administrator has only its technical Workspace');
         console.log('Store receipt settings: passed');
     } finally {
         if (browser) await browser.close();

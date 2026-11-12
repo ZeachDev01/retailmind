@@ -76,14 +76,14 @@ try {
         (1006,100,'DEPLETED',0,0,'2026-10-25'),(1007,100,'UNDATED-POSITIVE',10,10,NULL)");
     $pdo->exec('UPDATE inventory SET quantity_on_hand=30 WHERE product_id=100');
     $daily('2026-10-21T12:00:00+08:00');
-    $assert($active('2026-10-21') === [1003,1004], 'Unset Product override retains default 60-day milestone beyond the removed fixed 30-day window');
+    $assert($active('2026-10-21') === [1003], 'Unset Product lead time does not warn beyond 30 days');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 0,
         'No individual stock emails are sent on repeated daily checks');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 0,
         'Email-only recipients receive no individual stock email');
     $pdo->exec("INSERT INTO store_settings (setting_key,setting_value) VALUES ('expiry_alert_days','7,3') ON DUPLICATE KEY UPDATE setting_value='7,3'");
     $daily('2026-10-22T12:00:00+08:00');
-    $assert($active('2026-10-22') === [1003], 'Global governance applies only to unset overrides; two-day Product is still before its boundary');
+    $assert($active('2026-10-22') === [1003], 'Legacy Store milestones are ignored; two-day Product is still before its boundary');
     $assert((int)$pdo->query("SELECT COUNT(*) FROM email_delivery_log WHERE recipient='email-only@example.test' AND subject='Expiry 5-Day Alert: Five-day Bread'")->fetchColumn() === 0,
         'An unchanged condition does not create another daily email');
     $daily('2026-10-23T12:00:00+08:00');

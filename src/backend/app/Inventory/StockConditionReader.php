@@ -8,7 +8,6 @@ use App\Attention\Clock;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
-use Throwable;
 
 /**
  * Canonical stock-condition fact queries for slice-1 parity refactors.
@@ -39,49 +38,13 @@ final class StockConditionReader
         return $pdo->query($stockSql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /** @return array<int, int> */
-    public static function expiryAlertThresholds(PDO $pdo, int $fallbackDays = 30): array
-    {
-        $value = '';
-        try {
-            $stmt = $pdo->prepare("SELECT setting_value FROM store_settings WHERE setting_key='expiry_alert_days'");
-            $stmt->execute();
-            $value = (string)($stmt->fetchColumn() ?: '');
-        } catch (Throwable $e) {
-            $value = '';
-        }
-        $thresholds = array_values(array_unique(array_filter(array_map(
-            static fn(string $part): int => max(0, min(365, (int)trim($part))),
-            explode(',', $value !== '' ? $value : '90,60,30,14,7')
-        ), static fn(int $day): bool => $day > 0)));
-        if (!$thresholds) {
-            $thresholds = [max(1, $fallbackDays)];
-        }
-        rsort($thresholds, SORT_NUMERIC);
-        return $thresholds;
-    }
-
     /** @return array<int, array<string, mixed>> */
     public static function eligibleExpiryReminders(PDO $pdo, Clock $clock, int $days = 30): array
     {
-        $thresholds = self::expiryAlertThresholds($pdo, $days);
-        $maxDays = max($thresholds);
         $reminders = [];
-        foreach (self::expiringStockBatchesForAlerts($pdo, $clock, $maxDays) as $batch) {
+        foreach (self::expiringStockBatchesForAlerts($pdo, $clock, $days) as $batch) {
             $daysRemaining = (int)$batch['days_remaining'];
-            $leadTime = $batch['warning_lead_time_days'];
-            if ($leadTime !== null && $leadTime !== '') {
-                if ($daysRemaining > (int)$leadTime) {
-                    continue;
-                }
-                $threshold = (int)$leadTime;
-            } else {
-                $eligible = array_filter($thresholds, static fn(int $threshold): bool => $daysRemaining <= $threshold);
-                if (!$eligible) {
-                    continue;
-                }
-                $threshold = min($eligible);
-            }
+            $threshold = (int)($batch['warning_lead_time_days'] ?? $days);
             $reminders[] = $batch + [
                 'type' => 'expiring_stock',
                 'threshold' => $threshold,

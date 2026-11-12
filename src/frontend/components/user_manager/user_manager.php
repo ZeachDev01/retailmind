@@ -107,6 +107,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             }
             $message = 'User created successfully in the Store.';
             $messageClass = 'tag-success';
+            if ($actorRole === 'super_admin') {
+                try {
+                    $emailSent = send_email_notification(
+                        $createFormValues['email'],
+                        'Your RetailMind Administrator account is ready',
+                        "Hi {$firstName},\n\nYour Super Administrator has created your RetailMind Administrator account.\n\nUsername: {$createFormValues['username']}\nTemporary password: {$password}\n\nSign in using the Store link provided by your Super Administrator. You must change this temporary password at your first sign-in before you can access RetailMind.\n\nKeep these details private. If you were not expecting this account, contact your Super Administrator.",
+                        administrator_welcome_email_html($firstName, $createFormValues['username'], $password)
+                    );
+                } catch (Throwable $exception) {
+                    $emailSent = false;
+                }
+                $message = $emailSent
+                    ? 'Administrator account created. Welcome email submitted for delivery.'
+                    : 'Administrator account created, but the welcome email could not be sent. Check Brevo settings and share the temporary sign-in details securely. Do not create the account again.';
+                $messageClass = $emailSent ? 'tag-success' : 'tag-warning';
+            }
             $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
         } elseif ($action === 'update') {
             $pdo->beginTransaction();

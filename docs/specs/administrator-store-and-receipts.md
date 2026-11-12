@@ -2,6 +2,8 @@
 
 Confirmed scope and testing approach, 2026-11-02 Philippine time.
 
+Expiry policy update, 2026-11-12 Philippine time: remove Expiry alert lead time from Store Configuration and its save allowlist. Inventory Managers maintain Expiry Warning Lead Time in Add/Edit Product; blank uses 30 days for expiry warnings and notifications. Legacy Store notification milestones no longer apply. This supersedes the expiry-field retention decisions below; other Store settings remain unchanged.
+
 ## Problem Statement
 
 The Administrator is responsible for Store operations but must currently depend on the Super Administrator to maintain Store identity and customer receipt settings. The Store & receipts section is grouped into Platform Settings with unrelated technical controls. This makes routine Store setup depend on platform-governance intervention.

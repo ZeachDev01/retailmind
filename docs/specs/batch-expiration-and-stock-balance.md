@@ -1,5 +1,7 @@
 # Batch expiration, supplier replacements, and consistent stock balances
 
+Expiry policy update, 2026-11-12 Philippine time: expiry notifications now use the Product lead time, defaulting to 30 days when blank. Remove the Store-wide expiry setting; ignore previously saved notification milestones and preserve notification history. This supersedes global-setting retention below. The existing seven-day FEFO urgency fallback remains unchanged.
+
 ## Problem Statement
 
 The same Product can arrive in several batches with different expiration dates. Recording the latest received expiration on the Product can hide older stock that expires sooner. Bread with a one-week shelf life also needs a short warning period: a 30-day warning marks every delivery immediately.

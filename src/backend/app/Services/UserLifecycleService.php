@@ -92,6 +92,9 @@ final class UserLifecycleService
         $displayName = trim($firstName . ' ' . $lastName);
         $username = trim((string)($account['username'] ?? ''));
         $passwordHash = (string)($account['password_hash'] ?? '');
+        if ($actorRole === 'super_admin' && !filter_var(trim((string)($account['email'] ?? '')), FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('A valid email address is required for the Administrator welcome email.');
+        }
         if (mb_strlen($firstName, 'UTF-8') > 50 || mb_strlen($lastName, 'UTF-8') > 50 || mb_strlen($displayName, 'UTF-8') > 100) {
             throw new InvalidArgumentException('Keep each name part under 51 characters and the full display name under 101 characters.');
         }

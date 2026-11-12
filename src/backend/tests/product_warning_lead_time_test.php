@@ -454,6 +454,8 @@ echo "Testing Products without override preserve 30-day default and 7-day FEFO u
 // 8 days out:  2026-10-26 -> FEFO not urgent (> 7 days)
 // 6 days out:  2026-10-24 -> FEFO urgent (<= 7 days)
 $insertBatch->execute([$milkId, 'MILK-35DAYS', 10, 10, '2026-11-22', '2026-10-15']);
+$insertBatch->execute([$milkId, 'MILK-31DAYS', 10, 10, '2026-11-18', '2026-10-15']);
+$insertBatch->execute([$milkId, 'MILK-30DAYS', 10, 10, '2026-11-17', '2026-10-15']);
 $insertBatch->execute([$milkId, 'MILK-25DAYS', 10, 10, '2026-11-12', '2026-10-15']);
 $insertBatch->execute([$milkId, 'MILK-8DAYS',  10, 10, '2026-10-26', '2026-10-15']);
 $insertBatch->execute([$milkId, 'MILK-6DAYS',  10, 10, '2026-10-24', '2026-10-15']);
@@ -494,8 +496,7 @@ $pdo->exec("DELETE FROM notifications");
 // BREAD-3DAYS: days_remaining = 3 -> NOT eligible (no alert)
 // BREAD-2DAYS: days_remaining = 2 -> eligible under milestone 2
 // Product without override (Milk, lead time = null):
-// MILK-25DAYS: days_remaining = 25 -> eligible under global milestone 30
-// MILK-6DAYS:  days_remaining = 6 -> eligible under global milestone 7
+// Unset Product lead time uses 30 days, ignoring legacy Store milestones.
 
 $notificationService->checkAndNotifyExpiringStock(30);
 
@@ -511,12 +512,14 @@ $assert(!in_array('product_batch_expiry_30', $breadRefTypes, true), 'Bread did N
 $assert(!in_array('product_batch_expiry_60', $breadRefTypes, true), 'Bread did NOT generate milestone 60 alert');
 $assert(!in_array('product_batch_expiry_90', $breadRefTypes, true), 'Bread did NOT generate milestone 90 alert');
 
-// Check Milk notifications (no override -> global milestones 30, 7)
+// Check Milk notifications (no override -> default 30 days)
 $milkAlerts = array_values(array_filter($notifications, static fn($n) => str_contains($n['title'], 'Fresh Milk')));
 $milkRefTypes = array_column($milkAlerts, 'reference_type');
 
-$assert(in_array('product_batch_expiry_30', $milkRefTypes, true), 'Milk generated global milestone 30 alert');
-$assert(in_array('product_batch_expiry_7', $milkRefTypes, true), 'Milk generated global milestone 7 alert');
+$assert(array_values(array_unique($milkRefTypes)) === ['product_batch_expiry_30'], 'Milk uses only the 30-day default despite legacy Store milestones');
+$milkMessages = implode('\n', array_column($milkAlerts, 'message'));
+$assert(str_contains($milkMessages, 'MILK-30DAYS'), 'Unset lead time warns at exactly 30 days');
+$assert(!str_contains($milkMessages, 'MILK-31DAYS') && !str_contains($milkMessages, 'MILK-35DAYS'), 'Unset lead time does not warn before the 30-day boundary');
 
 // Check expired stock notification:
 $expiredAlerts = array_values(array_filter($notifications, static fn($n) => $n['type'] === 'expired_stock'));
@@ -533,9 +536,9 @@ $notificationClock->instant = '2026-11-06T00:00:00+08:00';
 $notificationService->checkAndNotifyExpiringStock();
 $currentReminders = $notificationService->getBatchReminders(1);
 $milk25 = array_values(array_filter($currentReminders, static fn(array $row): bool => $row['batch_number'] === 'MILK-25DAYS'));
-$assert(count($milk25) === 1 && $milk25[0]['active'], 'Later global milestone presents one current condition for the same batch');
+$assert(count($milk25) === 1 && $milk25[0]['active'], 'Default warning remains active as expiration approaches');
 $milestones = $pdo->query("SELECT reference_type FROM notifications WHERE user_id = 1 AND reference_id = " . (int)$milk25[0]['batch_id'])->fetchAll(PDO::FETCH_COLUMN);
-$assert(in_array('product_batch_expiry_30', $milestones, true) && in_array('product_batch_expiry_7', $milestones, true), 'Current condition retains applicable default milestone history');
+$assert($milestones === ['product_batch_expiry_30'], 'Approaching expiration does not create extra default milestones');
 $notificationClock->instant = '2026-10-18T00:00:00+08:00';
 
 

@@ -22,6 +22,19 @@ try {
     $assert(str_contains($reset, '<!--[if mso]>'), 'Reset email must pin a fixed width for Outlook');
     $assert(!str_contains($reset, 'display:flex') && !str_contains($reset, 'display:grid'), 'Reset email must avoid flex and grid');
 
+    $temporaryPassword = 'Temp<>&"\'Password123';
+    $welcome = administrator_welcome_email_html('<b>Ana</b>', 'admin<one>', $temporaryPassword);
+    foreach (['<b>Ana</b>', 'admin<one>', $temporaryPassword] as $value) {
+        $assert(str_contains($welcome, htmlspecialchars($value, ENT_QUOTES, 'UTF-8')), 'Welcome email must preserve and escape each account detail');
+        $assert(!str_contains($welcome, $value), 'Welcome email must not inject account details as markup');
+    }
+    $assert(str_contains($welcome, 'Temporary password'), 'Welcome email must label the password as temporary');
+    $assert(str_contains($welcome, 'Change your password at first sign-in'), 'Welcome email must clearly require password replacement');
+    $assert(str_contains($welcome, 'before you can access your workspace'), 'Welcome email must explain the mandatory gate');
+    $assert(str_contains($welcome, 'Keep these details private'), 'Welcome email must explain credential privacy');
+    $assert(substr_count($welcome, '<table') >= 3 && str_contains($welcome, '<!--[if mso]>'), 'Welcome email must keep email-client-compatible table layout');
+    $assert(!preg_match('/<script|<link|<style|display:(flex|grid)/i', $welcome), 'Welcome email must use inline styles without scripts or external assets');
+
     $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec("CREATE TABLE store_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT);
 CREATE TABLE products (product_id INTEGER PRIMARY KEY, product_name TEXT, sku TEXT, reorder_level INTEGER, warning_lead_time_days INTEGER);

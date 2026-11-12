@@ -275,6 +275,20 @@ try {
     }
     $expectDenied(fn() => $service->setStatus($adminId, 'admin', $superId, 'disabled'), 'Administrator must not manage the Super Administrator');
 
+    foreach ([null, '', '   ', 'invalid-email'] as $invalidEmail) {
+        $usersBefore = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        try {
+            $service->create($superId, 'super_admin', [
+                'first_name' => 'Invalid Email', 'username' => 'invalid_email_admin', 'email' => $invalidEmail,
+                'password_hash' => password_hash('TemporaryPassword123', PASSWORD_DEFAULT), 'role' => 'admin',
+            ]);
+            $assert(false, 'Super Administrator creation must reject missing or invalid email');
+        } catch (InvalidArgumentException $exception) {
+            $assert(str_contains($exception->getMessage(), 'valid email'), 'Rejection must explain the required email');
+        }
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() === $usersBefore, 'Invalid email must not create an account');
+    }
+
     $privilegedId = $service->create($superId, 'super_admin', [
         'first_name' => 'Privileged Admin',
         'username' => 'privileged_admin',

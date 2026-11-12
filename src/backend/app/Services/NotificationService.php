@@ -312,7 +312,6 @@ class NotificationService
     public function getBatchReminders(int $userId, ?string $todayDate = null): array
     {
         $today = $todayDate ?? $this->clock->now()->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d');
-        $threshold = max($this->getExpiryAlertThresholds(30));
         $stmt = $this->pdo->prepare(
             "SELECT DISTINCT pb.batch_id, pb.product_id, pb.batch_number, pb.expiration_date,
                     pb.remaining_quantity, p.product_name, p.sku, p.warning_lead_time_days, p.supplier_pullout_eligible
@@ -331,7 +330,7 @@ class NotificationService
             $daysRemaining = $expiration === null ? null : (int)(new DateTimeImmutable($today, new DateTimeZone('Asia/Manila')))
                 ->diff(new DateTimeImmutable($expiration, new DateTimeZone('Asia/Manila')))->format('%r%a');
             $batch['active'] = $daysRemaining !== null && (int)$batch['remaining_quantity'] > 0
-                && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? $threshold);
+                && $daysRemaining <= (int)($batch['warning_lead_time_days'] ?? 30);
             $batch['title'] = ($daysRemaining !== null && $daysRemaining < 0
                 ? ($batch['supplier_pullout_eligible'] ? 'Expired bread—waiting for supplier collection: ' : 'Expired Stock Alert: ')
                 : ($batch['supplier_pullout_eligible'] ? 'Prepare for supplier collection: ' : 'Expiry Alert: ')) . $batch['product_name'];
@@ -340,11 +339,6 @@ class NotificationService
             $reminders[(int)$batch['batch_id']] = $batch;
         }
         return $reminders;
-    }
-
-    private function getExpiryAlertThresholds(int $fallbackDays): array
-    {
-        return \App\Inventory\StockConditionReader::expiryAlertThresholds($this->pdo, $fallbackDays);
     }
 
     /** Optional-delivery preferences never suppress required-action in-app alerts. */

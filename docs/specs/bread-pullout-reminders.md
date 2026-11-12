@@ -1,5 +1,7 @@
 ## Problem Statement
 
+Expiry policy update, 2026-11-12 Philippine time: Add/Edit Product is the only expiry lead-time control. A blank Product lead time uses 30 days for expiry notifications; legacy Store milestones no longer apply. This supersedes the global-default retention below; supplier collection and expired-stock handling remain unchanged.
+
 Inventory Managers need to know which supplier-returnable bread batches to prepare for collection before they expire, and which expired batches still await removal. Expiry alone does not establish Supplier Pullout Eligibility: ordinary wholesale purchases must not fill the Supplier Pullout workflow or be labelled as awaiting supplier collection. Existing expiry notifications do not reliably provide the continuing task for eligible stock: transaction-triggered checks honor product warning settings, while the separate scheduled check uses a fixed 30-day window. Reading an alert or recording a partial collection must not hide stock that still needs attention.
 
 ## Solution

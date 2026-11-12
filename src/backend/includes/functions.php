@@ -272,7 +272,6 @@ function get_store_settings(PDO $pdo): array
         'receipt_footer' => 'Thank you for shopping with us.',
         'currency_symbol' => '₱',
         'timezone' => 'Asia/Manila',
-        'expiry_alert_days' => '90,60,30,14,7',
     ]);
 }
 
@@ -618,6 +617,37 @@ function password_reset_email_html(string $displayName, string $formattedPin): s
         . '<!--[if mso]></td></tr></table><![endif]-->'
         . '</td></tr>'
         . '</table>';
+}
+
+function administrator_welcome_email_html(string $displayName, string $username, string $temporaryPassword): string
+{
+    $name = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
+    $login = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
+    $password = htmlspecialchars($temporaryPassword, ENT_QUOTES, 'UTF-8');
+    $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
+
+    return '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your Administrator account is ready. Change your temporary password at your first sign-in.</div>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
+        . '<tr><td align="center" style="padding:32px 16px;">'
+        . '<!--[if mso]><table role="presentation" width="520" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;table-layout:fixed;">'
+        . '<tr><td style="background:#0f172a;padding:18px 24px;border-radius:13px 13px 0 0;font-family:' . $font . ';color:#ffffff;font-size:16px;font-weight:700;">RetailMind</td></tr>'
+        . '<tr><td style="padding:28px 24px;font-family:' . $font . ';color:#1f2937;">'
+        . '<h1 style="margin:0;color:#0f172a;font-size:24px;line-height:1.25;letter-spacing:-0.02em;">Your Administrator account is ready</h1>'
+        . '<p style="margin:16px 0 24px;font-size:16px;line-height:1.5;overflow-wrap:anywhere;">Hi ' . $name . ', your Super Administrator has created your RetailMind account.</p>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;table-layout:fixed;">'
+        . '<tr><td style="padding:18px 20px 6px;color:#4b5563;font-size:13px;line-height:1.5;">Username</td></tr>'
+        . '<tr><td style="padding:0 20px 18px;font-family:' . $mono . ';font-size:16px;line-height:1.5;word-break:break-all;overflow-wrap:anywhere;">' . $login . '</td></tr>'
+        . '<tr><td style="padding:16px 20px 6px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:13px;line-height:1.5;">Temporary password</td></tr>'
+        . '<tr><td style="padding:0 20px 18px;font-family:' . $mono . ';font-size:16px;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' . $password . '</td></tr>'
+        . '</table>'
+        . '<h2 style="margin:24px 0 8px;color:#0f172a;font-size:18px;line-height:1.4;">Change your password at first sign-in</h2>'
+        . '<p style="margin:0;font-size:16px;line-height:1.5;">Open RetailMind using the Store link provided by your Super Administrator. Sign in with the details above, then choose a new password before you can access your workspace.</p>'
+        . '<p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:13px;line-height:1.5;">Keep these details private. If you were not expecting this account, contact your Super Administrator.</p>'
+        . '</td></tr></table>'
+        . '<!--[if mso]></td></tr></table><![endif]-->'
+        . '</td></tr></table>';
 }
 
 /** Send all application email through the Brevo API. */

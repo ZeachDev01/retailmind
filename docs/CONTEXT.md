@@ -13,7 +13,7 @@ A Stock Batch representing stock already on hand when a Product is first entered
 _Avoid_: Default stock, default expiration
 
 **Expiry Warning Lead Time**:
-The number of calendar days before a Stock Batch's expiration when it should receive an expiring-soon warning. It describes when attention is needed, not how long the goods last.
+The number of calendar days before a Stock Batch's expiration when it should receive an expiring-soon warning, chosen for its Product. It describes when attention is needed, not how long the goods last.
 _Avoid_: Shelf life, expiration date
 
 **Supplier Pullout**:

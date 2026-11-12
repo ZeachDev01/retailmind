@@ -13,7 +13,6 @@ $receiptFields = [
     'store_address' => 'Store address',
     'currency_symbol' => 'Currency symbol',
     'timezone' => 'Timezone (IANA)',
-    'expiry_alert_days' => 'Expiry alert lead time (days)',
     'receipt_footer' => 'Receipt footer',
 ];
 $fieldMeta = [
@@ -46,10 +45,6 @@ $fieldMeta = [
         'maxlength' => '8',
     ],
     'timezone' => [
-        'type' => 'text',
-        'autocomplete' => 'off',
-    ],
-    'expiry_alert_days' => [
         'type' => 'text',
         'autocomplete' => 'off',
     ],
