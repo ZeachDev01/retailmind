@@ -8,7 +8,7 @@ Cashiers can complete GCash Cash-In and Cash-Out exchanges but cannot give custo
 
 ## Solution
 
-Show a saved GCash Service Receipt after each completed exchange, using the existing POS receipt modal's appearance and centered thermal-paper preview. Center a barcode of the saved GCash reference with the reference digits beneath it. Support the existing Register's 58 mm or 80 mm paper width, manual printing, and an unchecked per-transaction automatic-print option. Cashiers can reprint their own receipts; Administrators can reprint Store-wide receipts through GCash Overview.
+Show a saved GCash Service Receipt after each completed exchange, using the existing POS receipt modal's appearance and centered thermal-paper preview. Center a barcode of the saved GCash reference with the reference digits beneath it. Support the existing Register's 58 mm or 80 mm paper width, manual printing through the receipt’s Print button. Cashiers can reprint their own receipts; Administrators can reprint Store-wide receipts through GCash Overview.
 
 ## User Stories
 
@@ -28,7 +28,7 @@ Show a saved GCash Service Receipt after each completed exchange, using the exis
 14. As a customer, I want cash collected, cash paid out, and wallet transfers labeled accurately, so that I can check what changed hands.
 15. As a Cashier, I want the customer copy to omit internal notes and Store balances, so that operational information stays private.
 16. As a Cashier, I want a manual Print Receipt button, so that I can print or retry when needed.
-17. As a Cashier, I want an unchecked Print receipt automatically option for each completion review, so that printing starts only when I request it.
+17. As a Cashier, I want printing to start only when I click Print Receipt on the saved receipt.
 18. As a Cashier, I want failed completions never to print, so that an unsuccessful operation cannot produce proof of completion.
 19. As a Cashier, I want canceling or failing printing to leave the exchange saved, so that I can retry printing without repeating money movements.
 20. As a Cashier, I want refreshes and reprints not to print automatically, so that reopening a receipt does not create unexpected copies.
@@ -52,7 +52,7 @@ Show a saved GCash Service Receipt after each completed exchange, using the exis
 - Label the financial amounts by their actual purpose rather than an ambiguous total. For PHP 1,000 principal and PHP 10 fee: Cash-In collects PHP 1,010 cash and sends PHP 1,000 by wallet; Cash-Out with wallet fee receives PHP 1,010 by wallet and pays PHP 1,000 cash; Cash-Out with cash fee receives PHP 1,000 by wallet, collects PHP 10 cash, and pays PHP 1,000 cash. Do not substitute net Store balance deltas for these customer-facing amounts.
 - Exclude internal notes, service cash/wallet balances, reconciliation details, and new customer name/phone collection.
 - Extend successful completion responses with a saved-receipt locator suitable for opening the shared modal. Render and retrieve only persisted Completed exchange receipts. Reopening and printing are read-only and must never invoke completion or repost financial movements.
-- Add an unchecked Print receipt automatically choice to each completion confirmation, including later resolution to Completed. After successful persistence, open the receipt and request printing once only if selected. Failed operations never print. Refresh, history retrieval, and reopening never automatically print. Manual Print remains available after cancellation or failure.
+- After successful persistence, including later resolution to Completed, open the saved receipt without printing. Only Print Receipt starts printing. Failed operations, refresh, history retrieval, and reopening never automatically print. Manual Print remains available after cancellation or failure.
 - Use the current printing Register's configured 58 mm or 80 mm width, with the existing 80 mm fallback when no current Register resolves. Browser and installed driver handle the printer, margins, feed, and cutting. The application does not confirm physical paper output.
 - Add receipt actions to Cashier GCash History and Administrator GCash Overview. Preserve own-only Cashier access and Store-wide Administrator access, enforced on the server for direct receipt requests as well as visible actions. Receipt retrieval does not require replaying a financial write.
 - Preserve existing authentication, workspace, shift/write checks, CSRF protection for writes, protected audit behavior, duplicate-reference protections, and exact monetary handling. Receipt integration must not change fees, balances, exchange state rules, or correction authority.
@@ -67,7 +67,7 @@ Show a saved GCash Service Receipt after each completed exchange, using the exis
 - Cover direct completion, Needs checking without a receipt, and later resolution to Completed with a receipt. Verify failed completion and audit rollback leave neither a receipt nor partial money posting; retries do not create duplicate receipt snapshots or financial effects.
 - Verify Cashier own-only retrieval and Administrator Store-wide retrieval, including direct endpoint requests for another Cashier's exchange.
 - Change Store settings, Cashier display details, Register name, and fee settings after completion and verify saved receipt content remains stable. Record a linked audited correction and verify the original receipt is unchanged.
-- Exercise centered modal presentation, keyboard focus/Close behavior, manual Print, unchecked defaults for every confirmation, selected automatic printing exactly once, and no automatic print on refresh or history reopen.
+- Exercise centered modal presentation, keyboard focus/Close behavior, manual Print, no automatic-print choices, and no printing on completion, refresh, or history reopen.
 - Verify barcode payload and readable digits preserve the complete reference and leading zeroes. Check preview and print layout at 58/80 mm with maximum configured reference length, long Store details, and long Cashier/Register names; no clipped amounts or reference digits.
 - Use existing receipt presentation fixtures and disposable database integration patterns. Verify schema setup and backup retention for added receipt data through existing project checks.
 - Browser checks do not establish physical scan reliability. When hardware is available, print and scan both widths, especially the longest supported references, and check driver scaling and margins. Do not claim hardware compatibility without that check.
@@ -85,5 +85,5 @@ Show a saved GCash Service Receipt after each completed exchange, using the exis
 
 - The user confirmed centered reference barcode/digits and the existing POS receipt modal appearance using a screenshot.
 - The user confirmed all reprint, preservation, and later-completion decisions, and explicitly waived legacy handling because the project is in development.
-- Related specifications: [GCash service](gcash-service-spec.md), [thermal customer receipts](thermal-customer-receipts.md), and [opt-in receipt printing](opt-in-receipt-printing.md).
+- Related specifications: [GCash service](gcash-service-spec.md), [thermal customer receipts](thermal-customer-receipts.md), and [manual receipt printing](opt-in-receipt-printing.md).
 - Specification only. No application implementation or runtime tests are part of this task.

@@ -405,7 +405,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
 <script src="<?= htmlspecialchars(app_url('assets/js/cashier-overview.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/cashier-overview.js')) ?>"></script>
 <?php
 $selected_sale = $selected_sale ?? null;
-$autoPrintSale = $autoPrintSale ?? false;
 $selected_items = $selected_items ?? [];
 $canStartSale = $canStartSale ?? true;
 require __DIR__ . '/../../../backend/app/Views/sale_receipt_dialog.php';

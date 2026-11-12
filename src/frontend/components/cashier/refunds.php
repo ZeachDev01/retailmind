@@ -85,10 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'username'=>(string)($_POST['approver_username'] ?? ''), 'password'=>(string)($_POST['approver_password'] ?? '')]
         );
         $receiptUrl = app_url('components/cashier/refunds.php?refund_id=' . $refundId);
-        if (($_POST['auto_print_receipt'] ?? '') === '1') {
-            $_SESSION['auto_print_refund'] = $refundId;
-            $receiptUrl .= '&print_receipt=1';
-        }
         // A refresh or canceled print revisits a GET, never another payout.
         header('Location: ' . $receiptUrl, true, 303);
         exit;
@@ -121,9 +117,6 @@ $paginationFilters = array_filter($paginationFilters, static fn($value): bool =>
 $url = static fn(array $params): string => app_url('components/cashier/refunds.php?' . http_build_query($params + $paginationFilters + ['length' => $pageSize])) . '#refund-history';
 $receiptId = (int)($_GET['refund_id'] ?? 0);
 $receipt = $receiptId > 0 ? (new \App\Receipts\ReceiptEngine($pdo))->fetchRefundForCashier($receiptId, $actorId, $storeId) : null;
-$autoPrintRefund = $receipt !== null && (int)($_SESSION['auto_print_refund'] ?? 0) === $receiptId;
-if ($autoPrintRefund) unset($_SESSION['auto_print_refund']);
-$autoPrintRefund = $autoPrintRefund && ($_GET['print_receipt'] ?? '') === '1';
 $paperWidthMm = (new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth($actorId, $actorRole);
 if ($receiptId > 0 && $receipt === null) {
     // Missing and unauthorized receipts share one response, without exposing ownership.
@@ -175,7 +168,7 @@ if ($receiptId > 0 && $receipt === null) {
 
             <?php if ($receipt !== null): ?>
             <dialog id="receiptModal" class="sale-receipt-dialog" aria-labelledby="saleReceiptTitle"
-                data-receipt-param="refund_id" data-initial-receipt="1" data-auto-print="<?= $autoPrintRefund ? '1' : '0' ?>">
+                data-receipt-param="refund_id" data-initial-receipt="1">
                 <div class="sale-receipt-dialog-header">
                     <h2 id="saleReceiptTitle" tabindex="-1">Refund Receipt #<?= (int)$receipt['refund']['refund_id'] ?></h2>
                     <button type="button" class="btn btn-secondary" data-close-receipt aria-label="Close Refund Receipt">Close</button>
@@ -268,7 +261,6 @@ if ($receiptId > 0 && $receipt === null) {
                         <div class="message warning" role="status">This payment method cannot be refunded here. Ask your Administrator for help.</div>
                     <?php else: ?>
                         <form method="POST" class="refund-form" data-confirm="Record this refund on the original payment method? Only Restockable items return to available inventory. Do not report damaged returns as Stock Issues. An exchange needs a separate paid sale." data-confirm-title="Record refund" data-confirm-button="Record refund">
-                            <input type="hidden" name="auto_print_receipt" value="0">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                             <input type="hidden" name="sale_id" value="<?= (int)$sale['sale_id'] ?>">
                             <?php if ($exceptionToken !== ''): ?>

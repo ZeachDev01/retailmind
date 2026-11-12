@@ -425,16 +425,15 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.setViewportSize({width: 1440, height: 900});
 
 
-        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Automatic printing defaults unchecked');
-        assert.ok((await page.locator('#gcash-print-receipt').boundingBox()).y > (await page.locator('#gcash-confirm-cash').boundingBox()).y,
-            'Print receipt option appears below the cash confirmation');
+        assert.equal(await page.locator('#gcash-print-receipt').count(), 0, 'Automatic print option removed');
         await page.evaluate(() => { window.receiptPrints = 0; window.print = () => { window.receiptPrints++; throw new Error('Printer unavailable'); }; });
-        await page.locator('#gcash-print-receipt').check();
         const completionResponse = page.waitForResponse(response => response.url().includes('gcash_api.php') && response.request().method() === 'POST');
         await completeBtn.click();
         const completedReceiptId = (await (await completionResponse).json()).receipt_id;
         assert.ok(completedReceiptId, 'Completion returns saved-receipt locator');
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 0, 'Completion never prints before clicking Print Receipt');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         await page.waitForFunction(() => window.receiptPrints === 1);
         const savedPaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
         assert.match(savedPaper, /Cash collected\s+₱1,010.00/);
@@ -453,7 +452,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
         await page.keyboard.press('Escape');
         assert.equal(await page.locator('#gcash-amount').evaluate(el => el === document.activeElement), true, 'Close returns focus to ready GCash input');
-        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next completion starts unchecked');
+        assert.equal(await page.locator('#gcash-print-receipt').count(), 0, 'Automatic print option removed');
         const exchangeBeforeReopen = await (await context.request.get(api + '?action=overview')).json();
         await tabHistory.click();
         const historyReceipt = page.locator('#gcash-history-body tr', {hasText: '0012345678910'}).getByRole('button', {name: 'Receipt', exact: true});
@@ -554,13 +553,14 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-confirm-cash').check();
         assert.equal(await completeOutBtn.isDisabled(), false);
 
-        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Cash-Out print option starts unchecked');
-        await page.locator('#gcash-print-receipt').check();
+        assert.equal(await page.locator('#gcash-print-receipt').count(), 0, 'Automatic print option removed');
         const cashOutResponse = page.waitForResponse(response => response.url().includes('gcash_api.php') && response.request().method() === 'POST');
         await completeOutBtn.click();
         const cashOutReceiptId = (await (await cashOutResponse).json()).receipt_id;
         assert.ok(cashOutReceiptId, 'Cash-Out returns saved-receipt locator');
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Completion never prints before clicking Print Receipt');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         await page.waitForFunction(() => window.receiptPrints === 3);
         const walletFeePaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
         assert.match(walletFeePaper, /Wallet received from customer\s+₱1,010.00/);
@@ -570,7 +570,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.doesNotMatch(walletFeePaper, /Cash collected|Change due|Service cash|Wallet balance|notes/i);
         await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
         await page.keyboard.press('Escape');
-        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Next Cash-Out starts unchecked');
+        assert.equal(await page.locator('#gcash-print-receipt').count(), 0, 'Automatic print option removed');
         await tabHistory.click();
         const coGkRow = page.locator('#gcash-history-body tr', {hasText: '0012345678920'});
         await coGkRow.waitFor();
@@ -598,7 +598,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         await page.locator('#gcash-confirm-wallet').check();
         await page.locator('#gcash-confirm-cash').check();
-        assert.equal(await page.locator('#gcash-print-receipt').isChecked(), false, 'Cash fee completion starts unchecked');
+        assert.equal(await page.locator('#gcash-print-receipt').count(), 0, 'Automatic print option removed');
         await completeOutBtn.click();
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
         const cashFeePaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
@@ -781,8 +781,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         // Resolve Needs checking via dialog -> complete
         await s2NcRow.getByRole('button', {name: 'Resolve', exact: true}).click();
         await page.locator('#gcash-resolve-dialog').waitFor();
-        assert.equal(await page.locator('#gcash-resolve-dialog').getByLabel('Print receipt automatically', {exact: true}).isChecked(), false, 'Resolution print defaults unchecked');
-        await page.locator('#gcash-resolve-dialog').getByLabel('Print receipt automatically', {exact: true}).check();
+        assert.equal(await page.locator('#gcash-resolve-dialog').getByLabel('Print receipt automatically', {exact: true}).count(), 0, 'Automatic print option removed');
         await page.locator('#gcash-resolve-action').selectOption('complete');
         await page.locator('#gcash-resolve-reference').fill('0012345678999');
         await page.locator('#gcash-resolve-notes').fill('Wallet transfer confirmed in terminal');
@@ -795,6 +794,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-resolve-dialog').waitFor({state: 'hidden'});
         await s2NcRow.locator('.gcash-status-completed').waitFor();
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 4, 'Completion never prints before clicking Print Receipt');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         await page.waitForFunction(() => window.receiptPrints === 5);
         assert.match(await page.locator('#receiptModal').innerText(), /0012345678999/);
         const laterPaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
@@ -807,8 +808,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
 
         await page.locator('#gcash-history-body').getByRole('button', {name: 'Resolve', exact: true}).first().click();
-        assert.equal(await page.locator('#gcash-resolve-print-receipt').isChecked(), false, 'Next Cashier resolution resets printing');
-        await page.locator('#gcash-resolve-print-receipt').check();
+        assert.equal(await page.locator('#gcash-resolve-print-receipt').count(), 0, 'Automatic print option removed');
         await page.locator('#gcash-resolve-cancel').click();
         assert.equal(await page.evaluate(() => window.receiptPrints), 5, 'Canceling resolution never prints');
 

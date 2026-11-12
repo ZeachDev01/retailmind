@@ -234,10 +234,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                                 <input type="checkbox" id="gcash-confirm-cash" name="confirmed_cash">
                                 <span id="gcash-confirm-cash-text">Confirmed physical cash at counter</span>
                             </label>
-                            <label class="receipt-auto-print">
-                                <input type="checkbox" id="gcash-print-receipt">
-                                <span>Print receipt automatically</span>
-                            </label>
                         </div>
                     </div>
 
@@ -686,7 +682,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         </div>
                     </div>
                 </div>
-                <label class="gcash-confirm" id="gcash-resolve-print-choice"><input type="checkbox" id="gcash-resolve-print-receipt"> Print receipt automatically</label>
                 <div class="gcash-actions">
                     <button class="btn btn-primary" type="submit" id="gcash-resolve-submit">Confirm</button>
                     <button class="btn btn-secondary" type="button" id="gcash-resolve-cancel">Cancel</button>

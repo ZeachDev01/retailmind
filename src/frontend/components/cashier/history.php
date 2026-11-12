@@ -400,7 +400,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
         }, 240);
     };
 
-    const loadReceiptHtml = async (saleId, autoPrint = false) => {
+    const loadReceiptHtml = async (saleId) => {
         if (pendingFetch) {
             pendingFetch.abort();
             pendingFetch = null;
@@ -424,14 +424,6 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
             if (pendingFetch !== controller) return;
             receiptLoading.hidden = true;
             receiptContent.innerHTML = html;
-            if (autoPrint) {
-                requestAnimationFrame(() => {
-                    const printBtn = receiptContent.querySelector('.receipt-actions button');
-                    if (printBtn && typeof window.printReceiptSection === 'function') {
-                        window.printReceiptSection(printBtn);
-                    }
-                });
-            }
         } catch (err) {
             if (err.name === 'AbortError') return;
             receiptLoading.hidden = true;
@@ -499,7 +491,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
         if (!drawer.open) drawer.showModal();
     };
 
-    const openReceiptView = (saleId, trigger, autoPrint = false) => {
+    const openReceiptView = (saleId, trigger) => {
         if (!saleId) return;
         activeSaleId = Number(saleId);
         lastTrigger = trigger || lastTrigger || null;
@@ -516,7 +508,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
         if (typeBadgeEl) typeBadgeEl.textContent = 'Sale Receipt';
         if (titleEl) titleEl.textContent = `Sale Receipt #${activeSaleId}`;
 
-        loadReceiptHtml(activeSaleId, autoPrint);
+        loadReceiptHtml(activeSaleId);
     };
 
     const returnToDetails = () => {
@@ -571,8 +563,8 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
         const btn = event.target.closest('[data-view-receipt]');
         if (btn && window.viewReceipt) window.viewReceipt(Number(btn.dataset.viewReceipt), btn);
     });
-    window.viewReceipt = (saleId, trigger, autoPrint = false) => {
-        openReceiptView(saleId, trigger, autoPrint);
+    window.viewReceipt = (saleId, trigger) => {
+        openReceiptView(saleId, trigger);
     };
 })();
 </script>

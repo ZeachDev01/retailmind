@@ -6,11 +6,11 @@
 - Cashier device: Windows, Chrome or Edge.
 - Initial connection: USB. Bluetooth can be tested separately.
 - Default flow: complete checkout or refund, review the saved receipt, and print manually.
-- Optional flow: select **Print receipt automatically** before confirming payment
-  or recording a refund. Both checkboxes start unchecked for every transaction.
+- Sales, refunds, and GCash never print automatically. Click the saved receipt’s
+  Print button to print.
 
 This uses the existing receipt flow and Register paper-width setting, with no direct
-device integration. See [opt-in receipt printing](../specs/opt-in-receipt-printing.md).
+device integration. See [manual receipt printing](../specs/opt-in-receipt-printing.md).
 
 ## Seamless printing on this cashier PC
 
@@ -38,10 +38,10 @@ reports a custom page with 48 mm width, so inspect the actual result before chan
 the existing paper calibration. No driver or Register settings were changed.
 
 Test first by opening an existing saved receipt in the shortcut and clicking Print;
-this prints paper without creating a new sale. Then, during a normal sale/refund,
-check **Print receipt automatically** before confirming. The saved receipt opens
-and printing starts once. Unchecked transactions do not print. Refresh/history do
-not print again. A brief print-preview flash can occur.
+this prints paper without creating a new sale. The click should send one job
+to the Windows default printer without another confirmation. Completing a sale,
+refund, or GCash exchange only opens the saved receipt; click Print when needed.
+Refresh/history do not print. A brief print-preview flash can occur.
 
 To return to print confirmation, close the dedicated POS window and use normal
 Chrome, or remove `--kiosk-printing` from the shortcut's Properties before reopening
@@ -71,8 +71,13 @@ For Bluetooth, first verify that the particular unit supports it and can print a
 
 ## Verification status
 
-Automated checks cover unchecked defaults, opted-in sale/refund printing, manual
-retry, refresh/history, failed refunds, and 58/80 mm receipt layouts. The shortcut's
-saved target and launch options were read back and verified. Physical receipt
-output, silent-mode behavior in the installed browser, driver calibration, and
-Bluetooth operation still require a device test.
+Automated checks cover manual-only sale/refund/GCash printing, manual retry,
+refresh/history, failed operations, and 58/80 mm receipt layouts. The shortcut's
+saved target and launch options were read back and verified. On 2026-11-12,
+the user confirmed that clicking Print Receipt through the dedicated RetailMind
+POS shortcut works with silent printing. Detailed driver calibration and
+Bluetooth operation remain unverified.
+
+On 2026-11-12, the Desktop shortcut flags were read back and Xprinter XP-58 was
+still the Windows default printer, with WorkOffline false. Browser automation was
+unavailable; the successful device test was performed and confirmed by the user.

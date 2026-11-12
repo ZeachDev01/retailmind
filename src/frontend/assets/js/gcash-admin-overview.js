@@ -296,7 +296,6 @@
         button.disabled = true;
         const originalBtnText = button.textContent;
         button.textContent = 'Verifying…';
-        const autoPrint = document.getElementById('gcash-verify-print-receipt').checked;
         try {
             const response = await fetch(api, {
                 method: 'POST',
@@ -316,7 +315,7 @@
             if (!response.ok || result.error) throw new Error(result.error || 'Unable to verify the exchange. Try again.');
             verifyDialog.close();
             await filterTransactions();
-            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('gcash-tab-unresolved'), autoPrint);
+            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('gcash-tab-unresolved'));
             button.disabled = false;
             button.textContent = originalBtnText;
         } catch (error) {

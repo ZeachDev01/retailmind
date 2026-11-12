@@ -1,17 +1,4 @@
 /* The customer paper is shared by checkout, history, and receipt dialogs. */
-.receipt-auto-print, .checkout-summary-card .receipt-auto-print {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    min-height: 44px;
-    margin-top: 1rem;
-}
-.receipt-auto-print input[type="checkbox"] {
-    flex: none;
-    width: 1.15rem;
-    height: 1.15rem;
-    accent-color: var(--primary, #2563eb);
-}
 .sale-receipt {
     box-sizing: border-box;
     /* Compensate for 80% content scaling to keep the configured roll width. */

@@ -51,7 +51,7 @@
             if (window.location.protocol.startsWith('http')) history.replaceState(null, '', url);
         });
         window.closeReceiptModal = close;
-        window.viewReceipt = async function (saleId, trigger, autoPrint = false) {
+        window.viewReceipt = async function (saleId, trigger) {
             pending?.abort();
             pending = new AbortController();
             const request = pending;
@@ -71,14 +71,6 @@
                 const html = await response.text();
                 if (pending !== request || !dialog.open) return;
                 content.innerHTML = html;
-                if (autoPrint) {
-                    autoPrint = false;
-                    requestAnimationFrame(() => {
-                        if (pending !== request || !dialog.open) return;
-                        try { window.printReceiptSection(content.querySelector('.receipt-actions button')); }
-                        catch (error) { window.RetailMindUI?.toast('Receipt saved. Printing could not start. Use Print Receipt to try again.', 'error'); }
-                    });
-                }
             } catch (error) {
                 if (error.name === 'AbortError') return;
                 console.error('Error fetching receipt:', error);

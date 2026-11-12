@@ -404,8 +404,7 @@ const csvRows = bytes => {
         const resolve = page.getByRole('dialog', {name: 'Verify & Clear Exchange'});
         await resolve.waitFor();
         assert.ok((await resolve.textContent()).includes('only the remaining movements'));
-        assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).isChecked(), false);
-        await resolve.getByLabel('Print receipt automatically', {exact: true}).check();
+        assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).count(), 0, 'Automatic print option removed');
         await page.evaluate(() => { window.receiptPrints = 0; window.print = () => { window.receiptPrints++; throw new Error('Printer unavailable'); }; });
         await resolve.getByLabel('GCash reference number').fill('9999999999988');
         await resolve.getByLabel('Wallet transfer confirmed in the GCash app').check();
@@ -421,6 +420,8 @@ const csvRows = bytes => {
         await page.waitForFunction(previous => Number(document.getElementById('admin-nc-count').textContent) < previous, pendingBefore);
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), pendingBefore - 1);
         await page.locator('#receiptModal .gcash-service-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.receiptPrints), 0, 'Completion never prints before clicking Print Receipt');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         await page.waitForFunction(() => window.receiptPrints === 1);
         const resolvedPaper = await page.locator('#receiptModal .gcash-service-receipt').innerText();
         assert.match(resolvedPaper, /9999999999988/);
@@ -449,7 +450,7 @@ const csvRows = bytes => {
         const remainingVerify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await remainingVerify.click();
         await resolve.waitFor();
-        assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).isChecked(), false, 'Each Administrator review resets printing');
+        assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).count(), 0, 'Automatic print option removed');
         await page.keyboard.press('Escape');
         await page.route('**/gcash_overview_fragments.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
         await page.getByRole('tab', {name: 'Transactions'}).click();

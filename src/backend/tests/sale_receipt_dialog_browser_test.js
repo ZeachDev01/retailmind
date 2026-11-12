@@ -64,12 +64,14 @@ const { chromium } = require('playwright');
         for (const order of [['sale-receipt', 'sale-receipt-dialog'], ['sale-receipt-dialog', 'sale-receipt']]) {
             const page = await browser.newPage();
             const dialog = execFileSync(process.env.PHP_BINARY || 'php', [path.join(__dirname, 'support/sale_receipt_dialog_fixture.php'), 'long', '58'], {encoding: 'utf8'});
-            await page.setContent(dialog.replace('data-initial-receipt="1"', 'data-initial-receipt="1" data-auto-print="1"'));
+            await page.setContent(dialog);
             await page.evaluate(() => { window.printCalls = 0; window.print = () => window.printCalls++; });
             await page.addScriptTag({content: fs.readFileSync(path.join(root, `src/frontend/assets/js/${order[0]}.js`), 'utf8')});
             // Yield two frames so printing cannot depend on scripts arriving together.
             await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
             await page.addScriptTag({content: fs.readFileSync(path.join(root, `src/frontend/assets/js/${order[1]}.js`), 'utf8')});
+            assert.equal(await page.evaluate(() => window.printCalls), 0, 'script load order never starts printing');
+            await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
             await page.waitForFunction(() => window.printCalls === 1);
             await page.evaluate(() => {
                 window.dispatchEvent(new Event('afterprint'));

@@ -946,16 +946,6 @@ html[data-theme="dark"] .gcash-workspace-balances .gcash-icon-wallet {
     outline-offset: 2px;
 }
 
-.receipt-auto-print {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    padding: 0.25rem 0.15rem;
-    font-size: 0.95rem;
-    color: var(--muted);
-    cursor: pointer;
-}
-
 /* Submit Actions Footer */
 .gcash-actions {
     display: flex;

@@ -299,7 +299,6 @@ $isFilteredActivity = $report->isFilteredActivity;
                 <div class="gcash-field"><label for="gcash-verify-cash-finding">Cash check evidence &amp; finding</label><input class="form-control" id="gcash-verify-cash-finding" name="cash_finding" autocomplete="off" required placeholder="Describe physical service cash check and finding…" value="Physical service cash verified"></div>
                 <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-cash" name="confirmed_cash" required> Physical service cash exchange confirmed</label>
                 <div class="gcash-field"><label for="gcash-verify-wallet-finding">Wallet check evidence &amp; finding</label><input class="form-control" id="gcash-verify-wallet-finding" name="wallet_finding" autocomplete="off" required placeholder="Describe GCash app wallet check and finding…" value="Wallet transfer verified in GCash app"></div>
-                <label class="gcash-confirmation"><input type="checkbox" id="gcash-verify-print-receipt" name="print_receipt"> Print receipt automatically</label>
                 <p id="gcash-verify-error" role="alert"></p>
                 <div class="gcash-actions"><button type="button" class="btn btn-secondary" data-close-dialog>Cancel</button><button type="submit" class="btn btn-primary">Verify &amp; Clear</button></div>
             </form>

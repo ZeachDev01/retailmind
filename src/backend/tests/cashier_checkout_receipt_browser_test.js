@@ -93,13 +93,13 @@ const fixture = action => {
         await page.locator('#add-code-btn').click();
         await page.locator('#checkout-button').click();
         await page.locator('#review-cash').fill('50');
-        assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).isChecked(), false);
+        assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).count(), 0);
         const paymentRequest = page.waitForRequest(request => request.method() === 'POST' && request.postData()?.includes('checkout_attempt='));
         await Promise.all([page.waitForNavigation(), page.locator('#confirm-checkout-button').click()]);
         const attempt = new URLSearchParams((await paymentRequest).postData()).get('checkout_attempt');
         assert.equal(new URL(page.url()).pathname, '/components/cashier/pos.php', 'Payment stays in cashier POS');
         await page.locator('#receiptModal[open] .sale-receipt').waitFor();
-        assert.equal(await page.evaluate(() => window.printCalls), 0, 'unchecked checkout does not print');
+        assert.equal(await page.evaluate(() => window.printCalls), 0, 'checkout waits for Print Receipt');
         assert.match(await page.locator('#receiptModal').innerText(), /Payment completed/);
         const receiptUrl = page.url();
         assert.equal(await page.locator('#receiptsTable').count(), 0, 'Checkout does not show Receipt History');
@@ -124,16 +124,16 @@ const fixture = action => {
         await page.locator('#add-code-btn').click();
         await page.locator('#checkout-button').click();
         await page.locator('#review-cash').fill('50');
-        const autoPrint = page.getByRole('checkbox', {name: 'Print receipt automatically'});
-        assert.equal(await autoPrint.isChecked(), false, 'new sale starts unchecked');
-        await autoPrint.check();
+        assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).count(), 0);
         for (const width of [1440, 390]) {
             await page.setViewportSize({width, height: 900});
-            await page.screenshot({path: path.join(output, `auto-print-sale-${width}.png`)});
-            assert.equal(await autoPrint.isVisible(), true);
+            await page.screenshot({path: path.join(output, `manual-print-sale-${width}.png`)});
             assert.equal(await page.locator('#checkout-modal').evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
         }
         await Promise.all([page.waitForNavigation(), page.locator('#confirm-checkout-button').click()]);
+        await page.locator('#receiptModal[open] .sale-receipt').waitFor();
+        assert.equal(await page.evaluate(() => window.printCalls), 0, 'completion waits for Print Receipt');
+        await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         await page.waitForFunction(() => window.printCalls === 1);
         assert.equal(await page.locator('.receipt-print-root .receipt-print-area').getAttribute('data-paper-width-mm'), '80');
         await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
@@ -144,7 +144,7 @@ const fixture = action => {
         await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
         assert.equal(await page.evaluate(() => window.printCalls), 1, 'manual retry remains available');
         console.log('Cashier payment → saved receipt on POS → close/reload: passed');
-        console.log('Sale opt-in auto-print, unchecked default, refresh and manual retry: passed; screenshots: ' + output);
+        console.log('Sale manual printing, refresh and manual retry: passed; screenshots: ' + output);
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

@@ -53,22 +53,10 @@ const { chromium } = require('playwright');
             await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
             assert.ok(await page.evaluate(() => window.scrollY) > 0, 'refund form is scrolled before submit');
             await form.getByRole('button', { name: 'Record refund', exact: true }).click();
-            const printOption = page.getByRole('checkbox', {name: 'Print receipt automatically'});
-            assert.equal(await printOption.isChecked(), false, 'each refund confirmation starts unchecked');
-            const automaticPrints = refundIds.length === 1 ? 1 : 0;
-            if (refundIds.length === 0) {
-                await printOption.check();
-                await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-cancel').click();
-                await page.locator('[data-rm-confirm]').waitFor({state: 'detached'});
-                await form.getByRole('button', { name: 'Record refund', exact: true }).click();
-                assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).isChecked(), false,
-                    'canceling confirmation discards print choice');
-            }
-            if (automaticPrints) await printOption.check();
+            assert.equal(await page.getByRole('checkbox', {name: 'Print receipt automatically'}).count(), 0);
             for (const viewport of [1440, 390]) {
                 await page.setViewportSize({width: viewport, height: 900});
-                if (refundIds.length === 0) await page.screenshot({path: path.join(output, `auto-print-refund-${viewport}.png`)});
-                assert.equal(await printOption.isVisible(), true);
+                if (refundIds.length === 0) await page.screenshot({path: path.join(output, `manual-print-refund-${viewport}.png`)});
                 assert.equal(await page.locator('[data-rm-confirm] .rm-modal').last().evaluate(el => el.scrollWidth > el.clientWidth + 1), false);
             }
             await page.locator('.rm-modal-overlay[data-rm-confirm] .rm-accept').click();
@@ -107,12 +95,7 @@ const { chromium } = require('playwright');
             }
             assert.equal(await preview.getAttribute('data-paper-width-mm'), String(width));
             assert.ok(Math.abs(await preview.evaluate(el => el.getBoundingClientRect().width) - width * 96 / 25.4) < 1);
-            await page.waitForFunction(expected => window.printCalls === expected, automaticPrints);
-            assert.equal(await page.evaluate(() => window.printCalls), automaticPrints, 'only opted-in completion prints');
-            if (automaticPrints) {
-                assert.equal(await page.locator('.receipt-print-root .receipt-print-area').getAttribute('data-paper-width-mm'), String(width));
-                await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
-            }
+            assert.equal(await page.evaluate(() => window.printCalls), 0, 'completion waits for Print Refund Receipt');
             if (refundIds.length === 1) {
                 for (const viewport of [1440, 390]) {
                     await page.setViewportSize({ width: viewport, height: 900 });
@@ -124,7 +107,7 @@ const { chromium } = require('playwright');
             }
             for (let attempt = 1; attempt <= 2; attempt++) {
                 await receipt.getByRole('button', { name: 'Print Refund Receipt', exact: true }).click();
-                assert.equal(await page.evaluate(() => window.printCalls), automaticPrints + attempt, 'clicking Print invokes the browser print action');
+                assert.equal(await page.evaluate(() => window.printCalls), attempt, 'clicking Print invokes the browser print action');
                 assert.equal(await page.locator('.receipt-print-root .receipt-print-area')
                     .getAttribute('data-paper-width-mm'), String(width), 'printed copy uses the configured paper width');
                 // Browser afterprint fires on dismissal, including cancellation.

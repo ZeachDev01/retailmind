@@ -61,7 +61,6 @@
         if (el('fee-method')) el('fee-method').disabled = disabled;
         if (el('confirm-wallet')) el('confirm-wallet').disabled = disabled;
         if (el('confirm-cash')) el('confirm-cash').disabled = disabled;
-        if (el('print-receipt')) el('print-receipt').disabled = disabled;
         el('camera-open').disabled = disabled;
         el('photo-open').disabled = disabled;
         updateSave();
@@ -370,7 +369,6 @@
         renderBalances();
         el('confirm-wallet').checked = false;
         el('confirm-cash').checked = false;
-        if (el('print-receipt')) el('print-receipt').checked = false;
         const type = el('type')?.value || 'Cash-In';
         const feeMethodGroup = el('fee-method-group');
         const isCashOut = type === 'Cash-Out';
@@ -496,7 +494,6 @@
                     preview_counter_collect: preview.counterCollect,
                     preview_wallet_transfer: preview.walletTransfer,
                 };
-                const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
                 const data = await request(null, body);
                 el('form').reset();
@@ -506,7 +503,7 @@
                 duplicate = false;
                 scanStatus('Cash-In completed successfully.');
                 notify('GCash Cash-In #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'), autoPrint);
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'));
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
@@ -559,7 +556,6 @@
                     net_service_cash: preview.netServiceCash,
                     net_wallet: preview.netWallet,
                 };
-                const autoPrint = el('print-receipt')?.checked === true;
                 for (const input of el('form').elements) input.disabled = true;
                 const data = await request(null, body);
                 el('form').reset();
@@ -569,7 +565,7 @@
                 duplicate = false;
                 scanStatus('Cash-Out completed successfully.');
                 notify('GCash Cash-Out #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'), autoPrint);
+                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'));
                 page = 1;
                 await loadHistory();
                 await loadSessionStatus();
@@ -1356,7 +1352,6 @@
         el('resolve-form').reset();
         el('resolve-summary').textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} (Cash delta: ${tx.service_cash_delta}, Wallet delta: ${tx.wallet_delta})`;
         el('resolve-ref-group').hidden = false;
-        el('resolve-print-choice').hidden = false;
         el('resolve-auth-group').hidden = true;
         const hasReturns = Boolean(tx.has_returns || tx.adjustments?.some(adjustment => Number(adjustment.service_cash_delta) !== 0 || Number(adjustment.wallet_delta) !== 0));
         el('resolve-action').querySelector('[value="complete"]').disabled = hasReturns;
@@ -1370,7 +1365,6 @@
         const returning = action === 'return';
         const hadMoney = resolveTx && (Number(resolveTx.service_cash_delta || 0) !== 0 || Number(resolveTx.wallet_delta || 0) !== 0);
         el('resolve-ref-group').hidden = action !== 'complete';
-        el('resolve-print-choice').hidden = action !== 'complete';
         el('return-fields').hidden = !returning;
         el('resolve-form').elements.evidence.required = returning;
         const needsApproval = returning || (action === 'cancel' && hadMoney);
@@ -1402,13 +1396,12 @@
                 approver_username: form.approver_username.value,
                 approver_password: form.approver_password.value,
             };
-            const autoPrint = el('resolve-print-receipt').checked;
             const result = await request(null, body);
             el('resolve-dialog').close();
             notify(result.completed === false ? 'Partial return recorded. The exchange remains pending.' : 'Transaction #' + resolveTx.transaction_id + ' updated.', 'success');
             await loadSessionStatus();
             await loadHistory();
-            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('tab-history'), autoPrint);
+            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('tab-history'));
         } catch (err) {
             notify(err.message, 'error');
         } finally {

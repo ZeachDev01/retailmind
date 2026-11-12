@@ -425,18 +425,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         // not the account's stored role, decides who may sell.
         $result = $salesWorkflowService->checkout($cart, $cashierId, $actorRole, $payment_method, $paymentDetails);
         $_SESSION['completed_checkout_sale'] = (int)$result['sale_id'];
-        if (($_POST['auto_print_receipt'] ?? '') === '1') {
-            if (function_exists('is_remote_request') && is_remote_request()) {
-                http_response_code(403);
-                header('Content-Type: application/json; charset=utf-8');
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'Thermal receipt printing is restricted to local store premises.',
-                ]);
-                exit;
-            }
-            $_SESSION['auto_print_sale'] = (int)$result['sale_id'];
-        }
         $receiptUrl = app_url('components/cashier/pos.php?sale_id=' . $result['sale_id'] . '&checkout=complete');
 
         $isJson = (stripos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
@@ -692,7 +680,6 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <input type="hidden" name="checkout_attempt_id" id="checkout-attempt-id-input">
                     <input type="hidden" name="quote_token" id="quote-token-input">
                     <input type="hidden" name="payment_verified" value="0">
-                    <input type="hidden" name="auto_print_receipt" value="0">
                     <input type="hidden" name="cart" id="cart-input">
                     <input type="hidden" name="held_sale_id" id="held-sale-id-input" value="">
                     <div class="payment-breakdown" aria-label="Drawer preview">
@@ -1890,7 +1877,6 @@ async function checkoutNow() {
         </div>
         <div class="review-total" role="group" aria-label="Total due"><span>Total due: </span><strong>₱${money(quote.total)}</strong></div>
         ${paymentLine}
-        <label class="receipt-auto-print"><input type="checkbox" id="review-auto-print"> Print receipt automatically</label>
     `;
     RetailMindUI.openOverlay(checkoutModal);
     updateReviewedPayment();
@@ -1939,7 +1925,6 @@ async function submitConfirmedCheckout() {
         return;
     }
     checkoutSubmitting = true;
-    checkoutForm.elements.auto_print_receipt.value = document.getElementById('review-auto-print')?.checked ? '1' : '0';
     checkoutForm.elements.payment_verified.value = paymentMethod.value === 'cash' || document.getElementById('review-verified')?.checked ? '1' : '0';
     checkoutConfirmed = true;
     confirmCheckoutButton.disabled = true;
