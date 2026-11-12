@@ -80,7 +80,7 @@ $pdo->exec("CREATE TABLE products (
     barcode TEXT NOT NULL DEFAULT '',
     product_name TEXT NOT NULL,
     reorder_level INTEGER NOT NULL DEFAULT 0,
-    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
+    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
     warning_lead_time_days INTEGER NULL,
     status TEXT NOT NULL DEFAULT 'active'
 )");
@@ -88,6 +88,7 @@ $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, reorde
     (1, 'LOW-1', '10001', 'Routine Low Stock', 5),
     (2, 'ZERO-1', '10002', 'Out Of Stock Item', 5),
     (3, 'EXP-1', '10003', 'Expiring Batch Item', 0)");
+$pdo->exec('UPDATE products SET supplier_pullout_eligible = 1 WHERE product_id = 3');
 
 $pdo->exec('CREATE TABLE inventory (product_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER NOT NULL DEFAULT 0)');
 $pdo->exec('INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 3), (2, 0), (3, 50)');

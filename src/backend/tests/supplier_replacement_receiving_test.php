@@ -99,7 +99,7 @@ $pdo->exec("
     INSERT INTO categories (category_id, category_name) VALUES (1, 'Bakery');
 
     CREATE TABLE products (
-        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
+        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
         product_id INTEGER PRIMARY KEY AUTOINCREMENT,
         branch_id INTEGER NOT NULL DEFAULT 1,
         sku TEXT NOT NULL,
@@ -286,7 +286,7 @@ $inventoryService = new InventoryService($pdo);
 
 echo "\n--- Scenario 1: Spec Line 107 - Pullout 8 of 20, Receive 30 Fresh Linked Replacement ---\n";
 // Insert product: Loaf Bread
-$pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, units_per_package, cost_price, status) VALUES (1, 'BREAD-01', '10001', 'Loaf Bread', 1, 50.00, 'active')")->execute();
+$pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, units_per_package, cost_price, status, supplier_pullout_eligible) VALUES (1, 'BREAD-01', '10001', 'Loaf Bread', 1, 50.00, 'active', 1)")->execute();
 $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (1, 20)")->execute();
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date, supplier) VALUES (1, 1, 'BATCH-OLD', 20, 20, '2026-10-20', 'Gardenia')")->execute();
 require_once __DIR__ . '/support/notification_schema.php';
@@ -372,7 +372,7 @@ $assert((int)$receivingRow['accepted_qty'] === 30, "stock_receiving accepted_qty
 
 echo "\n--- Scenario 2: Partial & Delayed Replacement (Pullout 10, receive 4, then receive 8) ---\n";
 // Insert Product 2: Milk
-$pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, units_per_package, cost_price, status) VALUES (2, 'MILK-01', '10002', 'Fresh Milk 1L', 1, 80.00, 'active')")->execute();
+$pdo->prepare("INSERT INTO products (product_id, sku, barcode, product_name, units_per_package, cost_price, status, supplier_pullout_eligible) VALUES (2, 'MILK-01', '10002', 'Fresh Milk 1L', 1, 80.00, 'active', 1)")->execute();
 $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (2, 50)")->execute();
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, expiration_date, supplier) VALUES (10, 2, 'MILK-BATCH-1', 50, 50, '2026-10-19', 'DairyCorp')")->execute();
 
@@ -535,7 +535,7 @@ $packPulloutService = new SupplierPulloutService($pdo, null, 'inventory_manager'
 $packInventoryService = new InventoryService($pdo);
 
 // Product 4: Canned Sardines with Sales Pack of 6
-$pdo->prepare("INSERT INTO products (product_id, sku, barcode, pack_barcode, product_name, units_per_package, pack_size, cost_price, status) VALUES (4, 'SARD-06', '10004', '20004', 'Canned Sardines 6-Pack', 6, 6, 12.00, 'active')")->execute();
+$pdo->prepare("INSERT INTO products (product_id, sku, barcode, pack_barcode, product_name, units_per_package, pack_size, cost_price, status, supplier_pullout_eligible) VALUES (4, 'SARD-06', '10004', '20004', 'Canned Sardines 6-Pack', 6, 6, 12.00, 'active', 1)")->execute();
 $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (4, 34)")->execute();
 // Source batch 40: 5 sealed packs (30) + 4 loose pieces (4) = 34 base units, cost 12.00, exp 2026-10-18
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, batch_number, quantity, remaining_quantity, sealed_quantity, loose_quantity, cost_price, expiration_date, supplier) VALUES (40, 4, 'SARD-SRC-40', 34, 34, 5, 4, 12.00, '2026-10-18', 'OceanFoods')")->execute();

@@ -59,7 +59,7 @@ $pdo->exec("CREATE TABLE categories (
 $pdo->exec("INSERT INTO categories (category_id, category_name) VALUES (1, 'Bakery'), (2, 'Dairy'), (3, 'Dry Goods')");
 
 $pdo->exec("CREATE TABLE products (
-    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
+    supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
     branch_id INTEGER NOT NULL DEFAULT 1,
     sku TEXT NOT NULL,
@@ -189,7 +189,7 @@ $pdo->exec("INSERT INTO product_batches (batch_id, product_id, receiving_id, bat
 // Batch 703: 8 remaining, expired (2026-10-05) -> Status: Expired, has return_to_supplier_url
 // Batch 704: 0 remaining, depleted (2026-09-01) -> Status: Depleted, return_to_supplier_url is null
 // Total on hand: 30
-$pdo->exec("INSERT INTO products (product_id, sku, product_name, category_id, expiration_date) VALUES (7, 'SKU-SRC-07', 'Special Sauce', 3, '2026-10-01')");
+$pdo->exec("INSERT INTO products (product_id, sku, product_name, category_id, expiration_date, supplier_pullout_eligible) VALUES (7, 'SKU-SRC-07', 'Special Sauce', 3, '2026-10-01', 1)");
 $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (7, 30)");
 $pdo->exec("INSERT INTO stock_receiving (receiving_id, product_id, accepted_qty, discrepancy_type, notes) VALUES (6, 7, 10, 'replacement', 'Supplier replacement delivery')");
 $pdo->exec("INSERT INTO product_batches (batch_id, product_id, receiving_id, batch_number, quantity, remaining_quantity, expiration_date, date_received) VALUES
@@ -296,9 +296,8 @@ $p8Summary = array_values(array_filter($inventoryService->getProductsWithBatchSu
 $assert($p8Summary['next_expiration'] === null, 'Product 8 with only expired batches has next_expiration = null (never displays product-level 2026-12-31)');
 $assert((int)$p8Summary['expired_quantity'] === 5, 'Product 8 expired quantity is 5');
 
-$pdo->exec('UPDATE products SET supplier_pullout_eligible = 0 WHERE product_id = 7');
-$ordinary = $inventoryService->getProductBatches(7, $today);
-$assert(array_filter($ordinary, fn($batch) => $batch['return_to_supplier_url'] !== null) === [], 'Ineligible batches have no supplier collection action');
+$ordinary = $inventoryService->getProductBatches(8, $today);
+$assert(array_filter($ordinary, fn($batch) => $batch['return_to_supplier_url'] !== null) === [], 'Products without explicit eligibility have no supplier collection action');
 
 // --- Final Results ---
 if ($failures) {
