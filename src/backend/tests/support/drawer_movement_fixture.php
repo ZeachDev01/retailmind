@@ -12,8 +12,21 @@ $message = $error = '';
 $ownRegisterLocked = false;
 $countPreview = $closedSummary = null;
 $openShift = ['shift_id'=>20, 'register_name'=>'Fixture Till', 'opened_at'=>'2026-10-01 08:00:00'];
-$summary = ['sale_count'=>1];
+$summary = ['opening_cash'=>50, 'sale_count'=>1, 'refund_count'=>0, 'cash_sales'=>50, 'cash_in'=>100, 'safe_drop'=>50, 'calculated_expected_cash'=>150];
+if (($argv[1] ?? '') === '--refund') {
+    $summary = ['opening_cash'=>0, 'sale_count'=>1, 'refund_count'=>2, 'cash_sales'=>71, 'cash_in'=>100, 'cash_refunds'=>60, 'ewallet_refunds'=>25, 'calculated_expected_cash'=>111];
+}
+$movementToken = 'fixture-movement';
 $movements = $unresolvedHeldSales = $recent = $availableRegisters = [];
+$movements = [
+    ['created_at'=>'2026-11-12 09:00:00', 'movement_type'=>'cash_in', 'amount'=>100, 'reason'=>'additional_float', 'note'=>'From: Owner <cash box>', 'full_name'=>'Fixture Cashier'],
+    ['created_at'=>'2026-11-12 10:00:00', 'movement_type'=>'safe_drop', 'amount'=>50, 'reason'=>'excess_cash', 'note'=>'To: Store safe', 'full_name'=>'Fixture Cashier'],
+];
+if (($argv[1] ?? '') === '--refund') $movements = [$movements[0]];
+if (($argv[1] ?? '') === '--empty') {
+    $summary = App\Services\ShiftReconciliationCalculator::defaultSummary();
+    $movements = [];
+}
 $path = __DIR__ . '/../../../frontend/components/cashier/shifts.php';
 $source = file_get_contents($path);
 $source = substr($source, strpos($source, '<!DOCTYPE html>'));

@@ -45,15 +45,16 @@ try {
     $assert(count($tables[0]) > 0, 'Production schema parsed');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0'); foreach ($tables[0] as $ddl) $pdo->exec($ddl); $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     $migration = require __DIR__ . '/../database/migrations/202609260001_shared_database_backups.php'; $migration['up']($pdo);
-    $pdo->exec("INSERT INTO branches (branch_id, branch_name, branch_code) VALUES (1,'Fixture Store','TEST')");
     $pdo->exec("INSERT INTO roles (role_id,role_name) VALUES (1,'admin'),(2,'cashier'),(3,'inventory_manager')");
     $password = password_hash('fixture-password', PASSWORD_DEFAULT);
-    $stmt = $pdo->prepare("INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id) VALUES (1,'Assigned Administrator','fixture-admin',?,1,1),(2,'Other Cashier','fixture-other',?,2,1),(3,'Reviewer','fixture-reviewer',?,3,1)"); $stmt->execute([$password,$password,$password]);
+    $stmt = $pdo->prepare("INSERT INTO users (user_id,display_name,username,password_hash,role_id) VALUES (1,'Assigned Administrator','fixture-admin',?,1),(2,'Other Cashier','fixture-other',?,2),(3,'Reviewer','fixture-reviewer',?,3)"); $stmt->execute([$password,$password,$password]);
     $pdo->exec('UPDATE users SET must_change_password=0');
     $pdo->exec('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (1,1,1),(1,2,0),(2,2,1),(3,3,1)');
     $pdo->exec("INSERT INTO registers (register_id,name) VALUES (1,'Fixture Till')");
-    $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'TEST','TEST','Fixture Item',25,10,1)");
+    $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Fixture period','2020-01-01','2099-12-31','open',1)");
+    $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (1,'TEST','TEST','Fixture Item',25,10)");
     $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,10)');
+    $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity) VALUES (1,'FIXTURE',10,10)");
     $shifts = new CashierShiftService($pdo); $held = new HeldSaleService($pdo,$shifts);
     $shiftId = $shifts->openShift(1,'cashier',1,100);
     $reporter = new StockIssueService($pdo,null,'cashier');
@@ -69,7 +70,7 @@ try {
     $shiftEndpoint = var_export(realpath(__DIR__ . '/../../frontend/components/cashier/shifts.php'), true);
     $fixtureDatabase = var_export($database, true);
     $routerCode = '<?php require ' . $bootstrap . '; $_ENV["DB_NAME"]=' . $fixtureDatabase . ';'
-        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; if ($_SERVER["REQUEST_URI"]==="/pos") require ' . $posEndpoint . '; elseif ($_SERVER["REQUEST_URI"]==="/shifts") require ' . $shiftEndpoint . '; else require ' . $endpoint . ';';
+        . ' App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()] + array_intersect_key($_SESSION,array_flip(["drawer_movement_submission","drawer_movement_message"])); if (parse_url($_SERVER["REQUEST_URI"],PHP_URL_PATH)==="/pos") require ' . $posEndpoint . '; elseif (parse_url($_SERVER["REQUEST_URI"],PHP_URL_PATH)==="/shifts") require ' . $shiftEndpoint . '; else require ' . $endpoint . ';';
     file_put_contents($router, $routerCode);
     $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
     $assert(is_resource($socket), 'Reserve local HTTP port');
@@ -79,26 +80,73 @@ try {
     $ready = false;
     for ($attempt=0;$attempt<100;$attempt++) { $probe=@stream_socket_client('tcp://'.$address,$errno,$error,0.1); if ($probe) { fclose($probe);$ready=true;break; } usleep(20000); }
     $assert($ready, 'Private HTTP server ready');
-    $request = static function (int $user, string $workspace, array $fields, string $route = '/stock-issues') use ($address): array {
-        $context=stream_context_create(['http'=>['method'=>'POST','ignore_errors'=>true,'follow_location'=>0,'header'=>"Content-Type: application/x-www-form-urlencoded\r\nX-Fixture-User: {$user}\r\nX-Fixture-Workspace: {$workspace}\r\n",'content'=>http_build_query($fields),'timeout'=>10]]);
+    $cookie = '';
+    $request = static function (int $user, string $workspace, array $fields, string $route = '/stock-issues') use ($address, &$cookie): array {
+        $context=stream_context_create(['http'=>['method'=>$fields ? 'POST' : 'GET','ignore_errors'=>true,'follow_location'=>0,'header'=>"Content-Type: application/x-www-form-urlencoded\r\nCookie: {$cookie}\r\nX-Fixture-User: {$user}\r\nX-Fixture-Workspace: {$workspace}\r\n",'content'=>http_build_query($fields),'timeout'=>10]]);
         $body=file_get_contents('http://'.$address.$route,false,$context);
+        foreach ($http_response_header as $header) {
+            if (preg_match('/^Set-Cookie: ([^;]+)/i', $header, $match)) $cookie=$match[1];
+        }
         return [$http_response_header[0]??'',(string)$body];
     };
     $post=['csrf_token'=>'fixture-csrf','product_id'=>1,'category'=>'damaged','quantity'=>1,'explanation'=>'HTTP packaging defect','cashier_id'=>2,'shift_id'=>999,'role'=>'admin'];
     $movement=['csrf_token'=>'fixture-csrf','action'=>'movement','movement_type'=>'cash_out','amount'=>10,'reason'=>'petty_cash','approved_by'=>1,'shift_id'=>999,'cashier_id'=>2];
     [$status,$body]=$request(1,'cashier',$movement,'/shifts');
     $assert(str_contains($status,'200') && str_contains($body,'Record drawer cash'),'Drawer form renders after rejected movement');
+    $assert((bool)preg_match('/name="movement_token" value="([a-f0-9]+)"/', $body, $match), 'Current Shift issues a movement token');
+    $movement['movement_token']=$match[1];
+    $movement['source_destination']='Owner cash box';
+    $request(1,'cashier',$movement,'/shifts');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'Forged approver identity cannot authorize spending');
     $movement['approver_username']='fixture-admin';$movement['approver_password']='fixture-password';
-    $request(1,'cashier',$movement,'/shifts');
+    $missingSource=$movement; unset($missingSource['source_destination']);
+    $request(1,'cashier',$missingSource,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'HTTP source/destination is required');
+    $other=$movement; $other['reason']='other';
+    $request(1,'cashier',$other,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'Source/destination cannot substitute for Other explanation');
+    $tooLong=$movement; $tooLong['source_destination']=str_repeat('x',256);
+    $request(1,'cashier',$tooLong,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===0,'Oversized combined details are refused');
+    [$status]=$request(1,'cashier',$movement,'/shifts');
+    $assert(str_contains($status,'303'),'Successful movement redirects to history');
     $row=$pdo->query('SELECT * FROM cash_drawer_movements')->fetch(PDO::FETCH_ASSOC);
     $assert((int)$row['cashier_id']===1 && (int)$row['shift_id']===$shiftId,'HTTP spending binds authenticated Cashier and current shift');
+    $assert($row['note']==='To: Owner cash box','Destination is preserved in movement history');
+    $request(1,'cashier',$movement,'/shifts');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===1,'Retry of successful form cannot double-record cash');
+    [$status,$body]=$request(1,'cashier',[],'/shifts?tab=current');
+    $assert((bool)preg_match('/id="shift-tab-current"[^>]+aria-selected="true"/', $body), 'Movement redirect opens its history tab');
+    $assert(str_contains($body,'To: Owner cash box') && str_contains($body,'−₱10.00'),'Movement and signed drawer effect visible before counting');
+    $assert(str_contains($body,'₱90.00') && str_contains($body,'Expected drawer'),'Expected cash updates before closing');
+    preg_match('/name="movement_token" value="([a-f0-9]+)"/', $body, $match);
+    $movement['movement_token']=$match[1];
     $movement['amount']=1000;$request(1,'cashier',$movement,'/shifts');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===1,'HTTP excess spending refused despite valid approval');
     $request(1,'admin',$movement,'/shifts');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===1,'Administrator workspace cannot bypass Cashier movement boundary');
     // Restore the fixture float through the real ledger, rather than erase spending.
     $shifts->addDrawerMovement(1,'cashier','cash_in',10,'additional_float');
+    if (($argv[1] ?? '') === '--drawer-only') {
+        $shifts->closeShift(1,100,'');
+        $newShift=$shifts->openShift(1,'cashier',1,100);
+        $movement['amount']=10;
+        [$status,$body]=$request(1,'cashier',$movement,'/shifts');
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM cash_drawer_movements')->fetchColumn()===2,'Old Shift form cannot post into the new Shift');
+        preg_match('/name="movement_token" value="([a-f0-9]+)"/', $body, $match);
+        $movement['movement_token']=$match[1];
+        $movement['movement_type']='cash_in'; $movement['reason']='additional_float';
+        $movement['source_destination']='Owner'; $movement['note']='Change float';
+        [$status]=$request(1,'cashier',$movement,'/shifts');
+        $assert(str_contains($status,'303'),'New Shift permits a fresh cash addition');
+        $newRow=$pdo->query('SELECT * FROM cash_drawer_movements ORDER BY drawer_movement_id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+        $assert((int)$newRow['shift_id']===$newShift && $newRow['note']==='From: Owner | Change float','Source and explanation retain new Shift attribution');
+        $history=(new App\Services\CashierOperationalHistoryService($pdo))->page('movements',1);
+        $assert(count($history)===3 && $history[0]['note']==='From: Owner | Change float','My History retains movements across closed and open Shifts');
+        $closed=$shifts->closeShift(1,110,'');
+        $assert((float)$closed['expected_cash']===110.0 && (float)$closed['cash_variance']===0.0,'Movement affects final reconciliation exactly once');
+        echo "Drawer movement HTTP integration: passed (validation, approval, replay, old Shift, visibility, history and reconciliation)\n";
+    } else {
     [$status,$body]=$request(1,'cashier',$post);
     $assert(str_contains($status,'200'), 'Assigned Administrator HTTP request authorized: '.$status);
     $assert((int)$pdo->query('SELECT reported_by FROM inventory_adjustments ORDER BY adjustment_id DESC LIMIT 1')->fetchColumn()===1,'HTTP ignores forged actor and shift');
@@ -189,6 +237,7 @@ try {
         }
     }
     echo "Cashier operation serialization: passed (ownership, assigned Administrator, lock/closed guards, terminal review, hold/close and hold/lock races)\n";
+    }
 } catch (Throwable $e) { fwrite(STDERR,'Cashier operation serialization failed: '.$e->getMessage()."\n");$failed=true; }
 finally { if(is_resource($httpServer)){proc_terminate($httpServer);proc_close($httpServer);} foreach($httpFiles as $file)if(is_file($file))unlink($file); foreach ($workers as [$process,$pipes]) { foreach ($pipes as $pipe) if(is_resource($pipe))fclose($pipe);proc_terminate($process);proc_close($process); } if($created)$server->exec("DROP DATABASE `{$database}`"); }
 exit(isset($failed)?1:0);

@@ -153,12 +153,14 @@ $check($calc101['cash_in'] === 70.00, 'single shift cash in matches (including p
 $check($calc101['cash_out'] === 25.00, 'single shift cash out matches (including pay_out alias)');
 $check($calc101['safe_drop'] === 30.00, 'single shift safe drop matches');
 $check($calc101['cash_refunds'] === 12.50, 'single shift cash refunds matches');
+$check(($calc101['refund_count'] ?? null) === 2, 'refund count includes cash and card refund events');
 $check($calc101['reversal_cash'] === 8.25, 'single shift approved cash reversal matches');
 $check($calc101['calculated_expected_cash'] === 270.00, 'single shift expected cash matches authoritative calculation');
 
 // Empty shift calculation
 $calc102 = $calculator->calculateForShift(102, 200.00);
 $check($calc102['sale_count'] === 0 && $calc102['cash_sales'] === 0.0, 'empty shift has 0 sales');
+$check(($calc102['refund_count'] ?? null) === 0, 'empty shift has no refunds');
 $check($calc102['calculated_expected_cash'] === 200.00, 'empty shift expected cash matches opening cash');
 
 // Batch calculation across multiple shifts
@@ -167,6 +169,7 @@ $batch = $calculator->calculateBatch([101, 102], [101 => 150.00, 102 => 200.00])
 $check($pdo->queries === 4, 'batched calculation runs exactly 4 aggregate queries regardless of shift count');
 $check(isset($batch[101]) && isset($batch[102]), 'batch result contains both shifts');
 $check($batch[101]['calculated_expected_cash'] === 270.00, 'batch shift 101 expected cash matches single shift');
+$check(($batch[101]['refund_count'] ?? null) === 2, 'batched refund count matches single shift');
 $check($batch[102]['calculated_expected_cash'] === 200.00, 'batch shift 102 expected cash matches single shift');
 
 // 2. Integration with CashierShiftService (preview & closing)
@@ -219,6 +222,12 @@ $check($closedRow101['Expected Cash'] === '270.00', 'closed shift continues disp
 $check($closedRow101['Counted Cash'] === '260.00', 'closed shift displays counted cash');
 $check($closedRow101['Variance'] === '-10.00', 'closed shift displays recorded variance');
 $check($closedRow101['Variance Explanation'] === 'Shortage: PHP 10.00 short', 'closed shift displays variance explanation');
+
+$pdo->exec("INSERT INTO cash_refunds (refund_id,shift_id,refund_amount,payment_method) VALUES (3,102,5,'ewallet')");
+$refundOnly = $calculator->calculateForShift(102, 200.00);
+$check($refundOnly['sale_count'] === 0 && ($refundOnly['refund_count'] ?? null) === 1,
+    'a shift with no sales still counts a refund it issued');
+$check($refundOnly['calculated_expected_cash'] === 200.00, 'an e-wallet refund is counted without reducing drawer cash');
 
 if ($failures) {
     fwrite(STDERR, "Shift Reconciliation Calculator contract failed:\n- " . implode("\n- ", $failures) . "\n");

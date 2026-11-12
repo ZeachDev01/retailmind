@@ -13,12 +13,26 @@ final class CashierOperationalHistoryService
 {
     public const PAGE_SIZE = 10;
 
+    private const REFUND_STATUS_SQL = "CASE WHEN
+        (SELECT ROUND(SUM(refund_amount), 2) FROM cash_refunds WHERE sale_id = r.sale_id)
+        >= (SELECT total_amount FROM sales WHERE sale_id = r.sale_id)
+        THEN 'full' ELSE 'partial' END";
+
+    public static function categoryOptions(string $type): array
+    {
+        return match ($type) {
+            'refunds' => ['partial' => 'Partially refunded', 'full' => 'Fully refunded'],
+            'movements' => ['cash_in' => 'Cash in', 'cash_out' => 'Cash out', 'safe_drop' => 'Safe drop'],
+            default => [],
+        };
+    }
+
     /** @return array<string, array{label: string, id: string, columns: array<string, string>}> */
     public static function types(): array
     {
         return [
             'sales' => ['label' => 'Sales', 'id' => 'sale_id', 'columns' => ['sale_id' => 'Sale', 'shift_id' => 'Shift', 'sale_date' => 'Date', 'total_amount' => 'Amount', 'payment_method' => 'Payment', 'cash_received' => 'Cash received', 'change_due' => 'Change']],
-            'refunds' => ['label' => 'Cash Refunds', 'id' => 'refund_id', 'columns' => ['refund_id' => 'Refund', 'sale_id' => 'Sale', 'shift_id' => 'Shift', 'created_at' => 'Date', 'refund_amount' => 'Amount', 'payment_method' => 'Payment', 'reason' => 'Reason', 'note' => 'Note']],
+            'refunds' => ['label' => 'Cash Refunds', 'id' => 'refund_id', 'columns' => ['refund_id' => 'Refund', 'sale_id' => 'Sale', 'shift_id' => 'Shift', 'created_at' => 'Date', 'refund_amount' => 'Amount', 'refund_status' => 'Sale refund status', 'payment_method' => 'Payment', 'reason' => 'Reason', 'note' => 'Note']],
             'movements' => ['label' => 'Drawer Movements', 'id' => 'drawer_movement_id', 'columns' => ['drawer_movement_id' => 'Movement', 'shift_id' => 'Shift', 'created_at' => 'Date', 'movement_type' => 'Type', 'amount' => 'Amount', 'reason' => 'Reason', 'note' => 'Note']],
             'shifts' => ['label' => 'Cashier Shifts', 'id' => 'shift_id', 'columns' => ['shift_id' => 'Shift', 'register_id' => 'Register', 'opened_at' => 'Opened', 'closed_at' => 'Closed', 'status' => 'Status', 'opening_cash' => 'Opening cash', 'expected_cash' => 'Expected cash', 'actual_cash' => 'Counted cash', 'cash_variance' => 'Variance', 'closing_notes' => 'Closing notes', 'closed_by' => 'Closed by', 'intervention_reason' => 'Intervention reason']],
         ];
@@ -59,6 +73,8 @@ final class CashierOperationalHistoryService
         if (!isset($types[$type])) {
             $type = 'sales';
         }
+        $category = is_string($query['category'] ?? null) ? $query['category'] : '';
+        if (!isset(self::categoryOptions($type)[$category])) $category = '';
         $page = filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT);
         $page = is_int($page) ? max(1, min(100000, $page)) : 1;
         $pageSize = filter_var($query['length'] ?? self::PAGE_SIZE, FILTER_VALIDATE_INT);
@@ -85,15 +101,15 @@ final class CashierOperationalHistoryService
         }
 
         $record = $recordId === null ? null : $this->find($type, $authenticatedCashierId, $recordId);
-        $rows = $recordId === null && $dateError === '' ? $this->page($type, $authenticatedCashierId, $page, $pageSize, $fromDay, $throughDay) : [];
-        $totalRows = $recordId === null && $dateError === '' ? $this->count($type, $authenticatedCashierId, $fromDay, $throughDay) : 0;
+        $rows = $recordId === null && $dateError === '' ? $this->page($type, $authenticatedCashierId, $page, $pageSize, $fromDay, $throughDay, $category) : [];
+        $totalRows = $recordId === null && $dateError === '' ? $this->count($type, $authenticatedCashierId, $fromDay, $throughDay, $category) : 0;
         $totalPages = max(1, (int)ceil($totalRows / $pageSize));
         $hasNext = $page < $totalPages;
-        return compact('types', 'type', 'page', 'pageSize', 'totalRows', 'totalPages', 'recordId', 'record', 'rows', 'hasNext', 'fromDay', 'throughDay', 'dateError');
+        return compact('types', 'type', 'page', 'pageSize', 'totalRows', 'totalPages', 'recordId', 'record', 'rows', 'hasNext', 'fromDay', 'throughDay', 'dateError', 'category');
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function page(string $type, int $cashierId, int $page = 1, int $size = self::PAGE_SIZE, ?string $fromDay = null, ?string $throughDay = null): array
+    public function page(string $type, int $cashierId, int $page = 1, int $size = self::PAGE_SIZE, ?string $fromDay = null, ?string $throughDay = null, string $category = ''): array
     {
         $query = $this->query($type);
         $page = max(1, $page);
@@ -112,8 +128,10 @@ final class CashierOperationalHistoryService
         if ($fromDay !== null && $throughDay !== null && $fromDay > $throughDay) {
             throw new InvalidArgumentException('The end date must be on or after the start date.');
         }
+        $categoryCondition = $this->categoryCondition($type, $category);
+        if ($categoryCondition !== '') $dateParameters[':category'] = $category;
         $sql = "SELECT {$query['columns']} FROM {$query['table']} {$alias}
-                WHERE {$alias}.cashier_id = :cashier_id{$dateConditions}
+                WHERE {$alias}.cashier_id = :cashier_id{$dateConditions}{$categoryCondition}
                 ORDER BY {$query['date']} DESC, {$alias}.{$query['id']} DESC
                 LIMIT :size OFFSET :offset";
         $statement = $this->pdo->prepare($sql);
@@ -128,7 +146,7 @@ final class CashierOperationalHistoryService
         return $type === 'shifts' ? $this->withLiveBalances($rows) : $rows;
     }
 
-    public function count(string $type, int $cashierId, ?string $fromDay = null, ?string $throughDay = null): int
+    public function count(string $type, int $cashierId, ?string $fromDay = null, ?string $throughDay = null, string $category = ''): int
     {
         $query = $this->query($type);
         $where = $query['alias'] . '.cashier_id = :cashier_id';
@@ -141,6 +159,9 @@ final class CashierOperationalHistoryService
             $where .= " AND {$query['date']} < :date_after";
             $parameters[':date_after'] = PhilippineTime::dayAfter($throughDay);
         }
+        $categoryCondition = $this->categoryCondition($type, $category);
+        $where .= $categoryCondition;
+        if ($categoryCondition !== '') $parameters[':category'] = $category;
         $statement = $this->pdo->prepare("SELECT COUNT(*) FROM {$query['table']} {$query['alias']} WHERE {$where}");
         $statement->execute($parameters);
         return (int)$statement->fetchColumn();
@@ -186,6 +207,15 @@ final class CashierOperationalHistoryService
         if (!isset(self::QUERIES[$type])) {
             throw new InvalidArgumentException('Unknown history type.');
         }
-        return self::QUERIES[$type];
+        $query = self::QUERIES[$type];
+        if ($type === 'refunds') $query['columns'] .= ', ' . self::REFUND_STATUS_SQL . ' AS refund_status';
+        return $query;
+    }
+
+    private function categoryCondition(string $type, string $category): string
+    {
+        if (!isset(self::categoryOptions($type)[$category])) return '';
+        $column = $type === 'refunds' ? self::REFUND_STATUS_SQL : 'm.movement_type';
+        return " AND ({$column}) = :category";
     }
 }

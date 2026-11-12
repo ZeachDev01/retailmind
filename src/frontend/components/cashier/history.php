@@ -16,12 +16,12 @@ $request = (new CashierOperationalHistoryService($pdo))->resolve($cashierId, $_G
 ['types' => $types, 'type' => $type, 'page' => $page, 'recordId' => $recordId,
     'record' => $record, 'rows' => $rows, 'hasNext' => $hasNext,
     'pageSize' => $pageSize, 'totalRows' => $totalRows, 'totalPages' => $totalPages,
-    'fromDay' => $fromDay, 'throughDay' => $throughDay, 'dateError' => $dateError] = $request;
+    'fromDay' => $fromDay, 'throughDay' => $throughDay, 'dateError' => $dateError, 'category' => $category] = $request;
 $tabs = array_map(static fn(array $metadata): string => $metadata['label'], $types);
 $columns = $types[$type]['columns'];
 $idColumn = $types[$type]['id'];
 $moneyColumns = ['total_amount', 'cash_received', 'change_due', 'refund_amount', 'amount', 'opening_cash', 'expected_cash', 'actual_cash', 'cash_variance'];
-$display = static function (string $column, mixed $value) use ($moneyColumns): string {
+$display = static function (string $column, mixed $value) use ($moneyColumns, $type): string {
     if ($value === null || $value === '') {
         return '—';
     }
@@ -30,6 +30,9 @@ $display = static function (string $column, mixed $value) use ($moneyColumns): s
     }
     if (in_array($column, ['sale_date', 'created_at', 'opened_at', 'closed_at'], true)) {
         return htmlspecialchars(PhilippineTime::format($value), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+    if (in_array($column, ['refund_status', 'movement_type'], true)) {
+        $value = CashierOperationalHistoryService::categoryOptions($type)[$value] ?? $value;
     }
     return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 };
@@ -54,7 +57,7 @@ $renderPayment = static function (mixed $value) use ($paymentFormat): string {
     $label = $paymentFormat($raw);
     return '<span class="transaction-payment payment-' . htmlspecialchars($key, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">' . htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</span>';
 };
-$url = static fn(array $params): string => app_url('components/cashier/history.php?' . http_build_query($params + ['type' => $type, 'date_from' => $fromDay, 'date_to' => $throughDay, 'length' => $pageSize]));
+$url = static fn(array $params): string => app_url('components/cashier/history.php?' . http_build_query($params + ['type' => $type, 'date_from' => $fromDay, 'date_to' => $throughDay, 'category' => $category, 'length' => $pageSize]));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -130,13 +133,22 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                 <a class="history-tab <?= htmlspecialchars($meta['color']) ?>" href="<?= htmlspecialchars($url(['type' => $key])) ?>" <?= $isActive ? 'aria-current="page"' : '' ?>><span class="history-tab-icon-wrap" aria-hidden="true"><i class="bi <?= htmlspecialchars($meta['icon']) ?>"></i></span><span class="history-tab-label"><?= htmlspecialchars($label) ?></span></a>
             <?php endforeach; ?>
         </nav>
-        <form method="GET" class="actions-row history-filters" aria-label="Filter operational history by Philippine date">
+        <?php $categoryOptions = CashierOperationalHistoryService::categoryOptions($type); $category = $category ?? ''; ?>
+        <form method="GET" class="actions-row history-filters" aria-label="Filter operational history by Philippine date and category">
             <input type="hidden" name="type" value="<?= htmlspecialchars($type) ?>">
             <input type="hidden" name="length" value="<?= (int)$pageSize ?>">
             <label>From date <input type="date" name="date_from" autocomplete="off" value="<?= htmlspecialchars($fromDay ?? '') ?>"></label>
             <label>To date <input type="date" name="date_to" autocomplete="off" value="<?= htmlspecialchars($throughDay ?? '') ?>"></label>
-            <button type="submit" class="btn">Apply dates</button>
-            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/history.php?' . http_build_query(['type' => $type]))) ?>">Clear dates</a>
+            <?php if ($categoryOptions): ?>
+                <label>Category <select name="category" aria-label="Category">
+                    <option value="">All categories</option>
+                    <?php foreach ($categoryOptions as $value => $label): ?>
+                        <option value="<?= htmlspecialchars($value) ?>" <?= $category === $value ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                    <?php endforeach; ?>
+                </select></label>
+            <?php endif; ?>
+            <button type="submit" class="btn">Apply filters</button>
+            <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/history.php?' . http_build_query(['type' => $type]))) ?>">Clear filters</a>
             <p class="history-timezone"><i class="bi bi-clock" aria-hidden="true"></i> Philippine time &middot; Asia/Manila</p>
         </form>
         <?php if ($dateError !== ''): ?><p class="history-error" role="alert"><?= htmlspecialchars($dateError) ?></p><?php endif; ?>
@@ -240,11 +252,11 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                                 <i class="bi <?= htmlspecialchars($activeMeta['empty_icon'] ?? $activeMeta['icon']) ?>"></i>
                             </div>
                             <span class="history-empty-badge"><?= htmlspecialchars($activeMeta['badge']) ?></span>
-                            <?php if ($isDateFiltered): ?>
-                                <h3 class="history-empty-title">No <?= htmlspecialchars(strtolower($tabs[$type])) ?> found for selected dates</h3>
-                                <p class="history-empty-desc">No records match the filter from <strong><?= htmlspecialchars($fromDay ?? 'start') ?></strong> to <strong><?= htmlspecialchars($throughDay ?? 'end') ?></strong>. Clear dates to view all transactions.</p>
+                            <?php if ($isDateFiltered || $category !== ''): ?>
+                                <h3 class="history-empty-title">No <?= htmlspecialchars(strtolower($tabs[$type])) ?> found for selected filters</h3>
+                                <p class="history-empty-desc">No records match the selected dates and category. Clear filters to view all your records.</p>
                                 <div class="history-empty-actions">
-                                    <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars(app_url('components/cashier/history.php?' . http_build_query(['type' => $type]))) ?>"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear dates</a>
+                                    <a class="btn btn-secondary btn-sm" href="<?= htmlspecialchars(app_url('components/cashier/history.php?' . http_build_query(['type' => $type]))) ?>"><i class="bi bi-x-circle" aria-hidden="true"></i> Clear filters</a>
                                 </div>
                             <?php else: ?>
                                 <h3 class="history-empty-title"><?= htmlspecialchars($activeMeta['empty_title']) ?></h3>
@@ -262,7 +274,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                 </tr>
                 <?php endif; ?>
             </tbody></table></div>
-            <?php $paginationFilters = ['type' => $type, 'date_from' => $fromDay ?? '', 'date_to' => $throughDay ?? '']; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
+            <?php $paginationFilters = ['type' => $type, 'date_from' => $fromDay ?? '', 'date_to' => $throughDay ?? '', 'category' => $category]; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
         <?php endif; ?>
         <dialog id="history-details-drawer" class="history-details-drawer" aria-labelledby="history-drawer-title">
             <div class="history-drawer-header">
@@ -342,6 +354,7 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
     const typeLabel = <?= json_encode($tabs[$type] ?? 'Transaction') ?>;
     const idCol = <?= json_encode($idColumn) ?>;
     const receiptEndpoint = <?= json_encode(app_url('components/invoice/sales.php?action=view&ajax=1')) ?>;
+    const categoryLabels = <?= json_encode($categoryOptions) ?>;
 
     let currentRecord = null;
     let activeSaleId = null;
@@ -452,6 +465,8 @@ $url = static fn(array $params): string => app_url('components/cashier/history.p
                 } else if (moneyColumns.includes(col)) {
                     const num = Number(rawVal);
                     dd.textContent = isNaN(num) ? String(rawVal) : '₱' + num.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                } else if (col === 'refund_status' || col === 'movement_type') {
+                    dd.textContent = categoryLabels[rawVal] || String(rawVal);
                 } else if (col === 'payment_method') {
                     const span = document.createElement('span');
                     const norm = String(rawVal).toLowerCase().trim();

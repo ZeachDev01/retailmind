@@ -1006,6 +1006,9 @@
       }
       const count = qs(".toolbar-count", toolbar);
       const pageSize = qs("select", footer);
+      if (["10", "25", "50", "100"].includes(table.dataset.pageSize)) {
+        pageSize.value = table.dataset.pageSize;
+      }
       const summary = qs(".auto-page-summary", footer);
       const buttons = qs(".pagination-buttons", footer);
       const rowSearchText = new Map(

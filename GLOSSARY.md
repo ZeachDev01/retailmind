@@ -136,6 +136,10 @@ _Avoid_: Customer transaction, Cash-In (when referring to replenishment)
 The physical cash in the service cash box and digital balance in the GCash merchant app for the active shift session. It reflects real-time operational money currently held by the store and is unaffected by historical date range filters.
 _Avoid_: Filtered balance, historical balance, period balance
 
+**GCash Handover**:
+The recorded transfer of responsibility for GCash Service Cash and the GCash Service Wallet from the outgoing Cashier to the incoming Cashier, using counted cash and a checked wallet balance. Closing the outgoing Cashier Shift alone does not transfer this responsibility.
+_Avoid_: POS shift closure, automatic custody transfer
+
 **GCash Activity Scope**:
 The administrator-selected reporting period (such as today, month-to-date, or custom dates) and optional cashier filter applied to completed exchanges, gross fees, and transaction history. It governs aggregate performance metrics, distinct from current live custody funds.
 _Avoid_: Session balance, drawer count
@@ -160,13 +164,33 @@ _Avoid_: Latest-price value, earned profit, estimated stock value
 The value of remaining goods without recorded purchase costs, estimated from usable current Product costs and identified separately from Recorded Stock Value. Goods with no usable cost remain unvalued rather than being treated as free.
 _Avoid_: Exact stock value, recorded purchase cost, zero-cost stock
 
+**Supplier Pullout**:
+The actual collection or return of stock to its Supplier under an agreed return arrangement. It is distinct from preparing stock for collection or discarding damaged goods.
+_Avoid_: Expiry alert, automatic stock removal, stock disposal
+
+**Supplier Pullout Eligibility**:
+The Inventory Manager's explicit designation, made when adding a Product, that its stock may be returned under its Supplier's return arrangement. Bread, expiry, or wholesale purchasing alone does not establish eligibility.
+_Avoid_: Automatic bread eligibility, expiry-based permission
+
 **Bread Pullout Reminder**:
-An expiry-based prompt to prepare bread for supplier collection before its printed expiration date. It does not represent a completed collection.
+An expiry-based prompt to prepare bread eligible for Supplier Pullout for collection before its printed expiration date. It does not represent a completed collection.
 _Avoid_: Completed pullout, stock deduction, supplier collection schedule
 
 **Receipt History**:
-The store-wide immutable audit record of customer sale receipts, used for lookup, customer reprints, and dispute verification.
+The store-wide immutable audit record of customer sale receipts, used by authorized staff, including Cashiers, for lookup, customer reprints, and dispute verification. Viewing another Cashier's receipt does not authorize a Cash Refund against that sale.
 _Avoid_: Sales (when referring to the receipt list), Transactions
+
+**Transaction History**:
+A Cashier's own recorded sales, issued Cash Refunds, Drawer Movements, and Cashier Shifts. A sale belongs to the Cashier who completed it; a Cash Refund belongs to the Cashier who issued it.
+_Avoid_: Store-wide receipt lookup
+
+**Partially Refunded Sale**:
+A completed sale whose combined issued Cash Refunds are less than its original paid total, with at least one Cash Refund issued.
+_Avoid_: Pending refund, partial payment
+
+**Fully Refunded Sale**:
+A completed sale whose combined issued Cash Refunds have reached its original paid total. Several partial Cash Refunds can together fully refund a sale.
+_Avoid_: Canceled sale, single full refund
 
 **Sale Receipt**:
 The customer-facing proof of purchase generated upon checkout completion, formatted for 80mm or 58mm thermal reprinting.
@@ -179,6 +203,18 @@ _Avoid_: Reversal, Return (when referring to the transaction record)
 **Cashier Shift**:
 An operational period linked to a register and drawer where a cashier performs sales and refunds. It is separate from the cashier's authenticated access to RetailMind.
 _Avoid_: Work period, Session
+
+**Drawer Movement**:
+A recorded physical addition to or removal from a Cashier Shift's product-sale drawer, identifying where the cash came from or went. It is separate from a Product sale, Cash Refund, or customer GCash exchange.
+_Avoid_: Sale, refund, GCash Cash-In
+
+**Expected Drawer Cash**:
+The cash that should remain in a Cashier Shift's drawer according to its recorded opening cash, cash sales, additions, removals, and cash refunds. It is an estimate from records, separate from the cash physically counted.
+_Avoid_: Counted cash, sales income, actual cash
+
+**Shift Activity**:
+The recorded Product sales, issued Cash Refunds and Drawer Movements attributed to a Cashier Shift. A Cash Refund remains an activity even when the original sale occurred in an earlier Shift or used a non-cash payment method.
+_Avoid_: Transactions (when referring only to sales), cash-only activity
 
 **Fiscal Period**:
 A date-bounded reporting and accounting window for the Store, governed by the Administrator. It is separate from a Cashier Shift.

@@ -29,10 +29,13 @@ try {
     $assert(str_contains($status,'200') && str_contains($body,'Saved Till') && str_contains($body,'Saved Seller') && str_contains($body,'Saved Product'),'Locked owner can view saved transaction-time receipt despite later rename: '.$status.' '.substr(strip_tags($body),0,100));
     $assert(str_contains($body,'Oct 1, 2026 · 8:39 AM') && !str_contains($body,'Payment completed'),'Historical AJAX has Manila time and no payment success');
     [$status,$body]=$request(['action'=>'view','ajax'=>1,'sale_id'=>6],2);
-    $assert(str_contains($status,'403') && !str_contains($body,'Saved Product'),'Another Cashier cannot guess the saved receipt');
+    $assert(str_contains($status,'200') && str_contains($body,'Saved Product'),'Another Cashier can verify the saved receipt');
     [$status,$body]=$request(['action'=>'data','cashier_id'=>2,'date_from'=>'2026-10-01','date_to'=>'2026-10-01']);
     $response=json_decode($body,true,512,JSON_THROW_ON_ERROR);
-    $assert(str_contains($status,'200') && array_column($response['data'],'sale_id')===[3,6,2],'Direct receipt data rejects forged Cashier filter while locked');
+    $assert(str_contains($status,'200') && array_column($response['data'],'sale_id')===[5],'Cashier can filter store-wide receipts by original seller');
+    [$status,$body]=$request(['action'=>'data','date_from'=>'2026-10-01','date_to'=>'2026-10-01']);
+    $response=json_decode($body,true,512,JSON_THROW_ON_ERROR);
+    $assert(str_contains($status,'200') && array_column($response['data'],'sale_id')===[3,6,5,2],'Cashier sees all receipts for verification');
     [$status,$body]=$request(['sale_id'=>6,'checkout'=>'complete'],1,6);
     $assert(str_contains($status,'200') && substr_count($body,'<strong>Payment completed</strong>')===1 && substr_count($body,'class="sale-receipt receipt-print-area"')===1,'Saved checkout opens one receipt with one completion announcement');
     $assert(str_contains($body,'<dialog') && !str_contains($body,'Renamed Product'),'Checkout uses shared modal with saved product');
@@ -41,7 +44,7 @@ try {
     $assert(str_contains($status,'200') && !str_contains($body,'<strong>Payment completed</strong>'),'Reload does not announce another payment');
     $repeatHtml=$body;
     [$status,$body]=$request(['tab'=>'transactions']);
-    $assert(str_contains($status,'200') && str_contains($body,'id="receiptsTable"'),'Receipt History list loads');
+    $assert(str_contains($status,'200') && str_contains($body,'id="receiptsTable"') && str_contains($body,'id="receiptCashier"'),'Cashier receives store-wide receipt lookup and seller filter');
     $listHtml=$body;
     [$status,$body]=$request(['tab'=>'transactions'],3);
     $assert(str_contains($status,'200') && str_contains($body,'id="receiptCashier"'),'Administrator receives the authorized Cashier filter');
@@ -52,7 +55,7 @@ try {
     [$status,$body]=$request(['sale_id'=>2]);
     $assert(str_contains($status,'200') && str_contains($body,'historical') && !str_contains($body,'<strong>Payment completed</strong>'),'Unsnapshotted historical receipt retains notice without payment success');
     [$status,$body]=$request(['sale_id'=>5,'checkout'=>'complete'],1,5);
-    $assert(!str_contains($body,'Saved Product') && !str_contains($body,'<strong>Payment completed</strong>'),'Forged completion query grants neither other sale nor payment announcement');
+    $assert(str_contains($body,'Renamed Product') && !str_contains($body,'<strong>Payment completed</strong>'),'Other seller receipt is readable without a forged payment announcement');
     echo "Receipt History real HTTP locked visibility and completion-once: passed\n";
 } finally {
     if(is_resource($process)){proc_terminate($process);proc_close($process);}

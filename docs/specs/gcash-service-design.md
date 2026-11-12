@@ -1,5 +1,27 @@
 # GCash service design discussion
 
+## Single-register handover discovery (2026-11-12)
+
+Confirmed decisions:
+
+- Keep one open Cashier Shift per Register. The incoming Cashier does not need to open a second simultaneous shift on an occupied Register.
+- For the same Register: the outgoing Cashier closes their POS shift, the incoming Cashier opens a shift on the freed Register, then the outgoing Cashier returns to their own account and reloads GCash to hand over counted Service Cash and the checked Service Wallet balance.
+- The outgoing Cashier retains GCash custody until the recorded handover completes; POS shift closure does not transfer custody.
+- Clarify this sequence and the next action when no eligible recipient is available, using the existing handover process.
+- Pause new GCash customer transactions from outgoing POS shift closure until handover completes, so the funds remain stable while counted and transferred.
+- If no Cashier will take over, count Service Cash and check the Service Wallet balance, close the GCash session, then close the POS shift. Handover is only needed when another Cashier takes over.
+
+Code inspection confirms the existing handover permits the outgoing POS shift to be closed and requires an active, unlocked incoming shift. The recipient list is rendered at page load, so it needs a reload after the incoming shift opens.
+
+Shared understanding is confirmed. This record defines the agreed workflow; it does not establish that the application enforces the changeover pause. No application changes are authorized by this discovery record alone; implementation requires a subsequent instruction.
+
+Validation on 2026-11-12:
+
+- The existing Cashier Shift opening contract passed. A temporary SQLite in-memory scenario using the production services, one Register and unique open-shift indexes passed the complete same-register handover sequence, balance continuity, closing differences and audit recording.
+- Cash-In and Cash-Out writes were refused for the outgoing Cashier after POS closure and for the incoming Cashier before custody transfer, leaving no transaction records. The incoming Cashier could record an unfinished exchange after handover. Closing GCash before POS with no replacement also passed and preserved that unfinished exchange.
+- Headless Chromium confirmed the actual frontend keeps Hand over visible and opens its dialog for an outgoing controller without an open POS shift, using a mocked session response. The existing Open GCash button browser test also passed. Full authenticated account switching and handover submission were not browser-tested.
+- The existing emergency handover contract initially failed because its fixture only opens October 2026. A temporary copy extending that fixture period through 2026 passed; the original test file was left unchanged. Temporary harnesses were removed; live Store data was not used.
+
 ## Administrator overview discovery (2026-10-23)
 
 Confirmed decisions:

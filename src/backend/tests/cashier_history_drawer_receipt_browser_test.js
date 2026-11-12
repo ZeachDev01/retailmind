@@ -78,6 +78,7 @@ const {chromium} = require('playwright');
         const scriptMatch = source.match(/<script>([\s\S]*?)<\/script>\s*<\?php \$selected_sale = null;/);
         assert(scriptMatch, 'Found drawer controller script in history.php');
         const scriptCode = scriptMatch[1]
+            .replace(/<\?= json_encode\(\$categoryOptions\) \?>/g, '{}')
             .replace(/<\?= json_encode\(\$type\) \?>/g, JSON.stringify('sales'))
             .replace(/<\?= json_encode\(\$tabs\[\$type\] \?\? 'Transaction'\) \?>/g, JSON.stringify('Sales'))
             .replace(/<\?= json_encode\(\$idColumn\) \?>/g, JSON.stringify('sale_id'))

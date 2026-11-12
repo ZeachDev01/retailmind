@@ -252,17 +252,17 @@ if (str_contains($uri, "pos.php")) {
         'POS checkout complete page emits no-store'
     );
 
-    // 6. Security and access control: unowned receipt forbidden and not cached
-    [$forbiddenStatus, $forbiddenHeaders] = $request(
+    // 6. Cashiers may verify another seller's receipt with private caching.
+    [$otherStatus, $otherHeaders, $otherBody] = $request(
         '/components/invoice/sales.php',
         ['action' => 'view', 'ajax' => 1, 'sale_id' => 6],
         [],
         2
     );
-    $assert($forbiddenStatus === 403, 'Unowned receipt returns HTTP 403 Access denied');
+    $assert($otherStatus === 200 && str_contains($otherBody, 'Saved Product'), 'Another Cashier can verify saved receipt details');
     $assert(
-        !str_contains($forbiddenHeaders['cache-control'] ?? '', 'immutable'),
-        'HTTP 403 strictly excludes immutable caching'
+        str_contains($otherHeaders['cache-control'] ?? '', 'private'),
+        'Store-wide receipt lookup retains private caching'
     );
 
     // 7. Non-existent receipt returns 404 and is not cached as immutable

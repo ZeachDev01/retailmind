@@ -167,4 +167,47 @@ $assert($invalid['type'] === 'sales' && $invalid['page'] === 1 && $invalid['page
     && $invalid['recordId'] === null, 'malformed filters safely use private list defaults');
 $bounds = $service->resolve(1, ['page' => 999999]);
 $assert($bounds['page'] === 100000 && $bounds['rows'] === [], 'page upper bound is preserved');
+// Categories use the sale's current total across issuers and dates, but lists stay private.
+$pdo->exec("INSERT INTO sales VALUES
+    (300,1,10,'2026-11-12 08:00',100,'cash',100,0,0),
+    (301,2,11,'2026-11-12 08:00',100,'cash',100,0,0),
+    (302,1,10,'2026-11-12 08:00',100,'cash',100,0,0);
+    INSERT INTO cash_refunds VALUES
+    (300,1,300,10,'2026-11-12 12:00',30,'cash','other',NULL),
+    (301,2,300,11,'2026-11-13 12:00',70,'cash','other',NULL),
+    (302,1,301,10,'2026-11-12 12:00',20,'cash','other',NULL),
+    (303,2,301,11,'2026-11-13 12:00',10,'cash','other',NULL),
+    (304,1,302,10,'2026-11-12 12:00',100,'cash','other',NULL);
+    INSERT INTO cash_drawer_movements VALUES
+    (300,1,10,'2026-11-12 12:00','cash_in',10,'other',NULL),
+    (301,1,10,'2026-11-12 12:00','cash_in',10,'other',NULL),
+    (302,1,10,'2026-11-12 12:00','cash_out',10,'other',NULL),
+    (303,1,10,'2026-11-12 12:00','safe_drop',10,'other',NULL),
+    (304,2,11,'2026-11-12 12:00','safe_drop',10,'other',NULL),
+    (305,1,10,'2026-11-13 12:00','cash_out',10,'other',NULL)");
+$changesBeforeCategories = (int)$pdo->query('SELECT total_changes()')->fetchColumn();
+$dates = ['date_from' => '2026-11-12', 'date_to' => '2026-11-12'];
+foreach (['full' => [304,300], 'partial' => [302]] as $category => $ids) {
+    $result = $service->resolve(1, $dates + ['type' => 'refunds', 'category' => $category, 'cashier_id' => 2]);
+    $assert(array_column($result['rows'], 'refund_id') === $ids && $result['totalRows'] === count($ids),
+        'refund category and dates filter owned rows and counts together');
+    $assert(array_unique(array_column($result['rows'], 'refund_status')) === [$category], 'row status matches its category');
+}
+$assert($service->find('refunds', 1, 300)['refund_status'] === 'full', 'earlier partial refund now reflects fully refunded sale');
+$assert($service->find('refunds', 1, 301) === null, 'global receipt visibility does not expose another issuer refund record');
+foreach (['cash_in' => [301,300], 'cash_out' => [302], 'safe_drop' => [303]] as $category => $ids) {
+    $result = $service->resolve(1, $dates + ['type' => 'movements', 'category' => $category, 'cashier_id' => 2]);
+    $assert(array_column($result['rows'], 'drawer_movement_id') === $ids && $result['totalRows'] === count($ids),
+        'movement category respects dates, ownership and counts');
+}
+$assert(array_column($service->page('refunds', 1, 2, 1, '2026-11-12', '2026-11-12', 'full'), 'refund_id') === [300],
+    'refund category survives pagination');
+$assert(array_column($service->page('movements', 1, 2, 1, '2026-11-12', '2026-11-12', 'cash_in'), 'drawer_movement_id') === [300],
+    'movement category survives pagination');
+foreach ([['invalid'], "full' OR 1=1 --", 'cash_in'] as $category) {
+    $result = $service->resolve(1, $dates + ['type' => 'refunds', 'category' => $category]);
+    $assert($result['category'] === '' && $result['totalRows'] === 3, 'malformed and unrelated categories safely use private list defaults');
+}
+$assert((int)$pdo->query('SELECT total_changes()')->fetchColumn() === $changesBeforeCategories, 'category lookup remains read-only');
+
 echo "Cashier operational history contract: passed\n";

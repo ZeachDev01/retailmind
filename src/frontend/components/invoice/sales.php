@@ -18,10 +18,10 @@ require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
 if ($action === 'data') {
     header('Content-Type: application/json; charset=utf-8');
     $request = $_GET;
-    if (!$can_manage_all) {
+    if (!$canViewAllReceipts) {
         unset($request['cashier_id']);
     }
-    $cashierScope = $can_manage_all ? null : (int)$_SESSION['user_id'];
+    $cashierScope = $canViewAllReceipts ? null : (int)$_SESSION['user_id'];
 
     try {
         echo json_encode((new ReceiptTableService($pdo))->fetch($request, $cashierScope), JSON_THROW_ON_ERROR);
@@ -49,7 +49,7 @@ if ($action === 'data') {
 }
 
 $receiptCashiers = [];
-if ($can_manage_all) {
+if ($canViewAllReceipts) {
     $cashierStatement = $pdo->query(
         "SELECT DISTINCT u.user_id, u.display_name
          FROM users u
@@ -80,7 +80,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
         exit;
     }
     $receiptEngine = new \App\Receipts\ReceiptEngine($pdo);
-    if ($receiptEngine->checkConditionalHit($sale_id, $can_manage_all, (int)($_SESSION['user_id'] ?? 0), $storeId)) {
+    if ($receiptEngine->checkConditionalHit($sale_id, $canViewAllReceipts, (int)($_SESSION['user_id'] ?? 0), $storeId)) {
         exit;
     }
 
@@ -92,7 +92,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
         exit;
     }
 
-    if (!$can_manage_all && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
+    if (!$canViewAllReceipts && (int)$sale['cashier_id'] !== (int)$_SESSION['user_id']) {
         http_response_code(403);
         echo '<div class="receipt-container"><p>Access denied</p></div>';
         exit;
@@ -171,7 +171,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                     <input type="date" id="receiptDateTo" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
                 <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
-                <?php if ($can_manage_all): ?>
+                <?php if ($canViewAllReceipts): ?>
                     <label>
                         <span>Cashier</span>
                         <select id="receiptCashier">

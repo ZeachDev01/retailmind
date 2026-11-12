@@ -32,12 +32,18 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Backend Services: `App\Services\GCashTransactionService`
 - **Shift Management**: `components/cashier/shifts.php`
   - Backend Services: `App\Services\CashierShiftService`, `ShiftReconciliationCalculator`, `CashDenominationCounter`
+  - Expected drawer cash and current movements are visible before counting; manual movements require source/destination and use a Shift-bound submission token. Earlier records: My History → Drawer Movements.
+  - The shift header and cash summary remain above GCash-style tabs: Record movement, Current movements, Close shift, Recent shifts. Tabs preserve drafts, support keyboard navigation and URL selection, and retain native links without JavaScript. Successful movement recording opens Current movements; submitted counts open Close shift; completed closure opens Recent shifts.
+  - Header money flow: Starting cash + Money in (cash sales/additions) − Money out (cash removals/refunds) = Expected drawer. Sales, Refunds and Drawer movements counts are separate; sales/refunds include all payment methods, while the money flow includes only drawer cash.
+  - Verification: `drawer_movement_contract.php`, `drawer_movement_browser_test.js`, `shifts_layout_browser_test.js`; disposable-database HTTP checks: `RUN_CHECKOUT_DB_TESTS=1 php src/backend/tests/cashier_operation_serialization_integration.php --drawer-only`.
 - **Refunds & Corrections**: `components/cashier/refunds.php`, `refund_corrections.php`
   - Partials: `src/backend/app/Views/refund_receipt.php`
   - Backend Services: `App\Services\CashRefundService`, `RefundCorrectionReviewService`, `SaleReversalService`
 - **Dashboard & History**: `components/cashier/dashboard.php`, `history.php`, `findProduct.php`
   - Backing JS: `cashier-overview.js`
   - Backend Services: `App\Services\CashierOperationalHistoryService`, `ProductCodeLookupService`
+  - Transaction History remains scoped to the authenticated Cashier. Cash Refunds and Drawer Movements combine date filters with Category; pagination preserves both. Refund category reflects the original sale's current cumulative refunds across issuers and dates.
+  - Receipt History (`components/invoice/sales.php`) is a separate store-wide lookup/reprint workspace for authorized staff, including Cashiers. Viewing another Cashier's receipt does not bypass Supervisor override for refunds. See `docs/specs/cashier-history-consolidation.md`.
 - **Stock Issue Reporting**: `components/cashier/stock_issues.php`
   - Backend Services: `App\Services\StockIssueService`
 

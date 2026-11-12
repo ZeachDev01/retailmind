@@ -51,6 +51,12 @@ try {
     $assert($byId[6]['cash_refunded_amount']===0.0 && $byId[6]['legacy_refunded_amount']===2.0 && $byId[6]['remaining_net_amount']===8.0,'Approved Legacy Reversal value stays distinct from Cash Refunds');
     $assert($byId[6]['sale_date_display']==='Oct 1, 2026 · 8:39 AM','Receipt table does not shift transaction instant again');
     foreach(['partial'=>[2],'full'=>[3],'none'=>[6]] as $status=>$ids) $assert(array_column($service->fetch($request+['refund_status'=>$status],1)['data'],'sale_id')===$ids,'Cash Refund filter '.$status.' is distinct');
+    $history = new \App\Services\CashierOperationalHistoryService($pdo);
+    foreach (['partial' => [1], 'full' => [2]] as $category => $ids) {
+        $filtered = $history->resolve(1, ['type' => 'refunds', 'category' => $category]);
+        $assert(array_column($filtered['rows'], 'refund_id') === $ids && $filtered['totalRows'] === count($ids),
+            'MySQL history category uses matching row and count filters');
+    }
     foreach(['pending'=>[1],'approved'=>[6],'rejected'=>[4]] as $status=>$ids) $assert(array_column($service->fetch(['reversal_status'=>$status],1)['data'],'sale_id')===$ids,'Legacy Reversal filter '.$status.' stays distinct');
     $snapshot=static function() use($pdo): array {
         $result=[];
@@ -58,6 +64,8 @@ try {
         return $result;
     };
     $before=$snapshot();
+    $assert((new \App\Services\CashRefundService($pdo, new \App\Services\CashierShiftService($pdo)))->refundableSaleForCashier(1,5) === null,
+        'Store-wide receipt lookup does not authorize refunds of another seller sale without override');
     require __DIR__.'/support/receipt_history_http_scenarios.php';
     $assert($snapshot()===$before,'Receipt navigation, filters, reload and reprints create no financial or audit records');
     $assert($pdo->query('SELECT details_json FROM sale_receipt_details WHERE sale_id=6')->fetchColumn()===$saved,'Historical customer snapshot remains byte-for-byte stable');

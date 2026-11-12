@@ -29,6 +29,7 @@ class ShiftReconciliationCalculator
     {
         return [
             'sale_count' => 0,
+            'refund_count' => 0,
             'total_sales' => 0.0,
             'cash_sales' => 0.0,
             'card_sales' => 0.0,
@@ -188,6 +189,7 @@ class ShiftReconciliationCalculator
 
         // Query 3: Append-only Cash Refunds
         $refundsSql = "SELECT shift_id,
+                              COUNT(*) AS refund_count,
                               COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN refund_amount ELSE 0 END), 0) AS cash_refunds,
                               COALESCE(SUM(CASE WHEN payment_method = 'card' THEN refund_amount ELSE 0 END), 0) AS card_refunds,
                               COALESCE(SUM(CASE WHEN payment_method = 'ewallet' THEN refund_amount ELSE 0 END), 0) AS ewallet_refunds
@@ -205,6 +207,7 @@ class ShiftReconciliationCalculator
             $cardRef = round((float)$row['card_refunds'], 2);
             $ewalletRef = round((float)$row['ewallet_refunds'], 2);
             $summaries[$id]['cash_refunds'] = $cashRef;
+            $summaries[$id]['refund_count'] = (int)$row['refund_count'];
             $summaries[$id]['card_refunds'] = $cardRef;
             $summaries[$id]['ewallet_refunds'] = $ewalletRef;
             $summaries[$id]['total_refunds'] = round($cashRef + $cardRef + $ewalletRef, 2);

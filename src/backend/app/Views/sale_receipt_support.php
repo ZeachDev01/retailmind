@@ -17,7 +17,7 @@ if ($announcePayment) unset($_SESSION['completed_checkout_sale']);
 $autoPrintSale = $checkoutCompleted && (int)($_SESSION['auto_print_sale'] ?? 0) === $sale_id && !(function_exists('is_remote_request') && is_remote_request());
 if ($autoPrintSale) unset($_SESSION['auto_print_sale']);
 $storeId = store_scope_id($pdo);
-$can_manage_all = has_capability(RoleCapabilityPolicy::VIEW_STORE_REPORTS);
+$canViewAllReceipts = has_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 $canStartSale = has_capability(RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
 
 function receipt_store_info(): array {
@@ -82,7 +82,7 @@ if ($sale_id > 0 && ($action ?? 'list') === 'list') {
     $selected_sale = receipt_fetch_sale($pdo, $sale_id, $storeId);
     if (!$selected_sale) {
         $selected_error = 'Receipt not found.';
-    } elseif (!$can_manage_all && (int)$selected_sale['cashier_id'] !== (int)$_SESSION['user_id']) {
+    } elseif (!$canViewAllReceipts && (int)$selected_sale['cashier_id'] !== (int)$_SESSION['user_id']) {
         $selected_error = 'Access denied.';
         $selected_sale = null;
     } else {
