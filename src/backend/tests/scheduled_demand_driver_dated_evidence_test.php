@@ -79,6 +79,7 @@ $pdo->exec("
         status TEXT NOT NULL DEFAULT 'active'
     );
     CREATE TABLE products (
+        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
         product_id INTEGER PRIMARY KEY AUTOINCREMENT,
         sku TEXT NOT NULL,
         barcode TEXT,

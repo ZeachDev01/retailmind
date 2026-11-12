@@ -99,6 +99,7 @@ try {
         INSERT INTO categories (category_id, category_name) VALUES (1, 'Bakery');
 
         CREATE TABLE products (
+            supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
             product_id INTEGER PRIMARY KEY AUTOINCREMENT,
             sku TEXT,
             barcode TEXT,

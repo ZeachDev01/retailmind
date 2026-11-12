@@ -172,6 +172,7 @@ $pdo->exec("
     );
 
     CREATE TABLE products (
+        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
         product_id INTEGER PRIMARY KEY AUTOINCREMENT,
         branch_id INTEGER NOT NULL DEFAULT 1,
         sku TEXT NOT NULL,
@@ -666,6 +667,7 @@ echo "\n--- Scenario 2: Opening Stock & Initial Batch Creation ---\n";
 $_SESSION['role'] = 'inventory_manager';
 
 $productId = $productService->createProduct([
+    'supplier_pullout_eligible' => 1,
     'product_name' => 'Special Ensaymada',
     'barcode' => 'ENS-SPECIAL-01',
     'sku' => 'SKU-ENS-01',
@@ -1421,6 +1423,7 @@ $_SESSION['role'] = 'inventory_manager';
 $_SESSION['active_role'] = 'inventory_manager';
 
 $packPid = $productService->createProduct([
+    'supplier_pullout_eligible' => 1,
     'sku' => 'SKU-PACK-249',
     'barcode' => 'BC-PIECE-249',
     'pack_barcode' => 'BC-PACK-249',
