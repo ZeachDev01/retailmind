@@ -72,7 +72,7 @@ $prodStmt = $pdo->prepare(
     "SELECT p.product_id, p.product_name, p.sku, p.pack_size, i.quantity_on_hand
      FROM products p
      LEFT JOIN inventory i ON p.product_id = i.product_id
-     WHERE p.status = 'active'{$scopeSql}
+     WHERE p.status = 'active' AND p.supplier_pullout_eligible = 1{$scopeSql}
      ORDER BY p.product_name ASC"
 );
 $prodStmt->execute($scopeParams);

@@ -99,6 +99,7 @@ $pdo->exec("
     INSERT INTO categories (category_id, category_name) VALUES (1, 'Bakery');
 
     CREATE TABLE products (
+        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 1,
         product_id INTEGER PRIMARY KEY AUTOINCREMENT,
         branch_id INTEGER NOT NULL DEFAULT 1,
         sku TEXT NOT NULL,
@@ -588,7 +589,7 @@ foreach ($sardBatches as $sb) { $byNumber[$sb['batch_number']] = $sb; }
 $assert($byNumber['SARD-SRC-40']['sealed_quantity'] === 3 && $byNumber['SARD-SRC-40']['loose_quantity'] === 1 && $byNumber['SARD-SRC-40']['remaining_quantity'] === 19, 'Source batch retains 3 packs, 1 loose, 19 remaining');
 $assert($byNumber['SARD-SRC-40']['expiration_date'] === '2026-10-18' && $byNumber['SARD-SRC-40']['cost_price'] === 12.00, 'Source batch retains original expiration date and cost_price 12.00');
 $assert($byNumber['SARD-REP-1']['sealed_quantity'] === 1 && $byNumber['SARD-REP-1']['loose_quantity'] === 2 && $byNumber['SARD-REP-1']['remaining_quantity'] === 8, 'Replacement batch 1 retains 1 pack, 2 loose, 8 remaining');
-$assert($byNumber['SARD-REP-1']['expiration_date'] === '2026-12-01' && $byNumber['SARD-REP-1']['cost_price'] === null && $byNumber['SARD-REP-1']['source'] === 'Replacement', 'Replacement batch 1 retains own expiration, null optional cost, and Replacement source');
+$assert($byNumber['SARD-REP-1']['expiration_date'] === '2026-12-01' && $byNumber['SARD-REP-1']['cost_price'] === 12.00 && $byNumber['SARD-REP-1']['source'] === 'Replacement', 'Replacement batch 1 retains own expiration, existing Product cost, and Replacement source');
 $assert($byNumber['SARD-REP-2']['sealed_quantity'] === 2 && $byNumber['SARD-REP-2']['loose_quantity'] === 0 && $byNumber['SARD-REP-2']['remaining_quantity'] === 12, 'Replacement batch 2 retains 2 packs, 0 loose, 12 remaining');
 $assert($byNumber['SARD-REP-2']['expiration_date'] === '2026-12-20' && $byNumber['SARD-REP-2']['cost_price'] === 12.75 && $byNumber['SARD-REP-2']['source'] === 'Replacement', 'Replacement batch 2 retains own expiration, 12.75 cost, and Replacement source');
 

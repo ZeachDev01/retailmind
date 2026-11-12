@@ -2004,3 +2004,19 @@ UPDATE users account
   JOIN roles super_definition ON super_definition.role_id = super_role.role_id AND super_definition.role_name = 'super_admin'
    SET account.role_id = super_definition.role_id;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_super_admin_single_workspace','Keep the Super Administrator account on platform governance only') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- Explicit Product eligibility: existing stock remains ineligible.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='products' AND column_name='supplier_pullout_eligible'), 'ALTER TABLE `products` ADD COLUMN `supplier_pullout_eligible` TINYINT(1) NOT NULL DEFAULT 0', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611120001_supplier_pullout_eligibility','Explicit Product eligibility for Supplier Pullouts, default off') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+UPDATE notifications n
+JOIN product_batches pb ON pb.batch_id = n.reference_id
+JOIN products p ON p.product_id = pb.product_id
+SET n.title = CONCAT(IF(n.type = 'expired_stock', 'Expired Stock Alert: ', 'Expiry Alert: '), p.product_name),
+    n.attention_destination = CONCAT('components/', IF(n.workspace = 'admin', 'administrator', 'inventory_management'), '/stock_issues.php')
+WHERE p.supplier_pullout_eligible = 0
+  AND (n.reference_type = 'product_batch' OR n.reference_type LIKE 'product_batch_expiry_%')
+  AND n.type IN ('expiring_stock', 'expired_stock', 'system');

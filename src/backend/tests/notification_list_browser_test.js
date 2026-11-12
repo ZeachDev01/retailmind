@@ -57,7 +57,11 @@ const query = sql => {
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const url = origin + '/components/notification/notifications.php';
-        const submit = async button => Promise.all([page.waitForNavigation(), button.click()]);
+        const submit = async button => {
+            const href = await button.getAttribute('href');
+            if (href !== null) return page.goto(new URL(href, page.url()).href);
+            return Promise.all([page.waitForNavigation(), button.click()]);
+        };
         const assertBells = async count => {
             for (const bell of await page.locator('.global-notification-button').all()) {
                 assert.equal(await bell.getAttribute('aria-label'), 'Notifications' + (count ? ': ' + count + ' unread' : ''));
@@ -81,6 +85,7 @@ const query = sql => {
         assert.equal(await page.getByText('Stock issues awaiting an Administrator decision.').count(), 0);
         assert.equal(await page.locator('.dashboard-state-error').count(), 0);
         assert.equal(await page.locator('.attention-item').filter({hasText: 'Pending Stock Issue'}).count(), 0, 'Routine report is not an Administrator escalation');
+        if (process.env.BREAD_ELIGIBILITY_ONLY !== '1') {
         await page.goto(origin + '/components/administrator/stock_issues.php');
         await page.getByRole('link', {name: /^Open report #/}).click();
         await page.getByText('Disposable theme Stock Issue', {exact: false}).waitFor();
@@ -114,7 +119,7 @@ const query = sql => {
         await assertBells(27);
         assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), Array.from({length: 10}, (_, i) => 'Notice ' + (27 - i)));
         assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'Low stock', 'System']);
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 20);
         await submit(page.getByRole('button', {name: 'Mark as read', exact: true}).first());
         assert.equal(await page.locator('.notification-item').count(), 20);
@@ -125,14 +130,14 @@ const query = sql => {
         assert.equal(await page.locator('.notification-content h2').first().textContent(), 'Notice 26', 'Unread excludes read items');
         assert.equal(await page.locator('.notification-view-count').textContent(), '26', 'Viewing does not mark items read');
         assert.match(await page.locator('.notification-views [aria-current="page"]').textContent(), /^Unread\s+26$/);
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 20, 'Unread expands matching items');
         assert.equal(new URL(page.url()).searchParams.get('view'), 'unread');
         await page.locator('#notification-category').selectOption('low_stock');
-        await submit(page.getByRole('button', {name: 'Apply filter', exact: true}));
+        await submit(page.getByRole('button', {name: 'Apply Filter', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 10, 'Changing category resets Unread expansion');
         assert.equal(new URL(page.url()).searchParams.get('view'), 'unread');
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 13);
         await submit(page.getByRole('button', {name: 'Mark as read', exact: true}).first());
         assert.equal(await page.locator('.notification-item').count(), 12, 'Marked item disappears from Unread');
@@ -145,7 +150,7 @@ const query = sql => {
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.equal(await page.locator('#notification-category').inputValue(), 'low_stock');
         await page.locator('#notification-category').selectOption('low_stock');
-        await submit(page.getByRole('button', {name: 'Apply filter', exact: true}));
+        await submit(page.getByRole('button', {name: 'Apply Filter', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.equal(await page.locator('.notification-content h2').first().textContent(), 'Notice 13');
         const productNotice = page.locator('.notification-item').first();
@@ -167,10 +172,10 @@ const query = sql => {
         assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'Low stock', 'System'], 'Read categories remain selectable');
         await submit(page.getByRole('link', {name: 'View all notifications', exact: true}));
         assert.equal(await page.locator('#notification-category').inputValue(), 'low_stock');
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 13);
         assert.equal(await page.locator('.notification-item.unread').count(), 0, 'Bulk read includes undisplayed category items');
-        assert.equal(await page.getByRole('link', {name: 'Show more', exact: true}).count(), 0);
+        assert.equal(await page.getByRole('link', {name: 'Show More', exact: true}).count(), 0);
         await page.goto(url);
         assert.equal(await page.locator('#notification-category').inputValue(), '');
         assert.equal(await page.locator('.notification-item').count(), 10);
@@ -225,11 +230,11 @@ const query = sql => {
         await assertBells(0);
         assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
         await submit(page.getByRole('link', {name: 'View all notifications', exact: true}));
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
-        await submit(page.getByRole('link', {name: 'Show more', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
+        await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 27);
         assert.equal(await page.locator('.notification-item.unread').count(), 0);
-        assert.equal(await page.getByRole('link', {name: 'Show more', exact: true}).count(), 0);
+        assert.equal(await page.getByRole('link', {name: 'Show More', exact: true}).count(), 0);
         await page.goto(url + '?category[]=system&batch[]=2&view[]=unread');
         assert.equal(await page.locator('.notification-item').count(), 10, 'Malformed filters fall back safely');
         await page.goto(url + '?batch=999999');
@@ -244,11 +249,12 @@ const query = sql => {
         assert.equal(await page.locator('.notification-item').count(), 1, 'Fewer than 10 shows every item');
         assert.equal(await page.locator('.notification-content h2').textContent(), 'Private notice');
         assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Other account remains unread after bulk actions');
-        assert.equal(await page.getByRole('link', {name: 'Show more', exact: true}).count(), 0);
+        assert.equal(await page.getByRole('link', {name: 'Show More', exact: true}).count(), 0);
         await page.goto(url + '?view=unread');
         await submit(page.getByRole('button', {name: 'Mark as read', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 0, 'Last individual unread item reaches caught-up state');
         assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
+        }
         fixture('bread_create');
         const active = page.getByRole('region', {name: 'Active batch reminders', exact: true});
         await page.goto(url);
@@ -260,7 +266,7 @@ const query = sql => {
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(url);
-        assert.equal(await active.getByRole('heading', {name: 'Expired stock—waiting for supplier collection: Reminder Bread'}).count(), 1);
+        assert.equal(await active.getByRole('heading', {name: 'Expired bread—waiting for supplier collection: Reminder Bread'}).count(), 1);
         assert.match(await active.getByRole('link', {name: 'Record Supplier Pullout'}).getAttribute('href'), /product_id=901&batch_id=901$/);
         await submit(active.locator('.notification-product-link'));
         await page.waitForFunction(() => document.getElementById('product-search')?.value === 'REMINDER-BREAD');
@@ -283,6 +289,22 @@ const query = sql => {
         await page.goto(url + '?category=expired_stock');
         assert.equal(await page.locator('.notification-item[data-notification-type="expired_stock"]').count(), 0, 'Resolved expiry alert disappears after final removal');
         assert.equal(await page.locator('#notification-category option[value="expired_stock"]').count(), 0, 'Resolved-only categories disappear from the filter');
+
+        fixture('bread_ineligible');
+        await page.goto(url);
+        assert.equal(await active.getByRole('heading', {name: 'Expired Stock Alert: Ordinary Bread'}).count(), 1);
+        assert.equal(await active.getByRole('link', {name: 'Record Supplier Pullout'}).count(), 0);
+        assert.equal(await active.getByRole('link', {name: 'Review Stock Issues'}).count(), 1);
+        await page.goto(origin + '/components/inventory_management/supplier_pullouts.php?product_id=902&batch_id=902');
+        assert.equal(await page.locator('#product_id option[value="902"]').count(), 0, 'Ineligible product is absent from picker');
+        const batches = await page.evaluate(async () => (await fetch('supplier_pullouts.php?action=get_batches&product_id=902')).json());
+        assert.deepEqual(batches, [], 'Direct batch lookup excludes ineligible stock');
+        query('UPDATE product_batches SET remaining_quantity=0 WHERE batch_id=902');
+
+        if (process.env.BREAD_ELIGIBILITY_ONLY === '1') {
+            console.log('Bread eligibility notifications: passed; screenshots ' + output);
+            return;
+        }
 
         // ---- #262: workspace-scoped lists, counts, read state, role and account eligibility ----
         await page.goto(origin + '/components/auth/logout.php');

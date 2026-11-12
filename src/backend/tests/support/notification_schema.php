@@ -2,6 +2,10 @@
 // Bring small SQLite service fixtures up to the notification persistence contract.
 function notification_test_schema(PDO $pdo): void
 {
+    $productColumns = $pdo->query('PRAGMA table_info(products)')->fetchAll(PDO::FETCH_COLUMN, 1);
+    if ($productColumns && !in_array('supplier_pullout_eligible', $productColumns, true)) {
+        $pdo->exec('ALTER TABLE products ADD COLUMN supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0');
+    }
     $columns = array_column($pdo->query('PRAGMA table_info(notifications)')->fetchAll(PDO::FETCH_ASSOC), 'name');
     foreach (['workspace' => "TEXT NOT NULL DEFAULT ''", 'inapp_enabled' => 'INTEGER NOT NULL DEFAULT 1',
         'email_pending' => 'INTEGER NOT NULL DEFAULT 0', 'resolved_at' => 'TEXT', 'attention_key' => 'TEXT', 'attention_severity' => 'TEXT',

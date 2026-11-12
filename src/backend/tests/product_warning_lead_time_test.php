@@ -117,6 +117,10 @@ $pdo->exec("
 
     CREATE TABLE products (
         product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
+        pack_size INTEGER NULL,
+        pack_barcode TEXT NULL,
+        pack_price REAL NULL,
         sku TEXT,
         barcode TEXT,
         case_barcode TEXT,
@@ -257,6 +261,7 @@ $pdo->exec("
 
 require_once __DIR__ . '/support/notification_schema.php';
 notification_test_schema($pdo);
+$pdo->exec('CREATE TABLE scheduled_demand_drivers (driver_id INTEGER PRIMARY KEY, product_id INTEGER, driver_type TEXT, effective_date TEXT, scheduled_at TEXT, details_json TEXT)');
 $GLOBALS['pdo'] = $pdo;
 
 $_SESSION['user_id'] = 1;
@@ -305,6 +310,7 @@ $assert($cashierThrew, 'createProduct rejects non-inventory-manager setting warn
 // C. Successful creation with override as Inventory Manager
 $_SESSION['role'] = 'inventory_manager';
 $breadId = $productService->createProduct([
+    'supplier_pullout_eligible' => '1',
     'product_name' => 'Artisan Bread',
     'barcode' => 'BREAD-001',
     'selling_price' => 50.0,
@@ -328,6 +334,19 @@ $milkId = $productService->createProduct([
 
 $milkRow = $pdo->query("SELECT * FROM products WHERE product_id = {$milkId}")->fetch(PDO::FETCH_ASSOC);
 $assert($milkRow['warning_lead_time_days'] === null, 'createProduct persists blank warning_lead_time_days as NULL');
+
+$assert((int)$breadRow['supplier_pullout_eligible'] === 1, 'Add Product enables explicit eligibility');
+$assert((int)$milkRow['supplier_pullout_eligible'] === 0, 'Unselected Add Product remains ineligible');
+
+$productService->updateProductCatalogDetails($milkId, ['product_name' => 'Fresh Milk', 'supplier_pullout_eligible' => 1], 1);
+$assert(!(bool)$productService->findProductBySearchTerm('MILK-001')['supplier_pullout_eligible'], 'Editing an existing Product cannot enable eligibility');
+$_SESSION['role'] = 'cashier';
+$eligibilityDenied = false;
+try {
+    $productService->createProduct(['product_name' => 'Unauthorized Bread', 'supplier_pullout_eligible' => 1], 2);
+} catch (RuntimeException $e) { $eligibilityDenied = true; }
+$assert($eligibilityDenied, 'Only Inventory Manager can enable Supplier Pullout Eligibility');
+$_SESSION['role'] = 'inventory_manager';
 
 // E. Validation & workspace enforcement in updateProductCatalogDetails
 $_SESSION['role'] = 'cashier';

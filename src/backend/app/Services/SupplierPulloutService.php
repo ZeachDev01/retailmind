@@ -166,12 +166,16 @@ class SupplierPulloutService
         try {
             [$scopeSql, $scopeParams] = $this->storeProductScope();
             $productTableCols = SalesWorkflowService::getTableColumns($this->pdo, 'products');
-            $productCols = isset($productTableCols['pack_size']) ? 'product_id, pack_size' : 'product_id';
+            $productCols = isset($productTableCols['pack_size']) ? 'product_id, supplier_pullout_eligible, pack_size' : 'product_id, supplier_pullout_eligible';
             $scopeStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE p.product_id = ?{$scopeSql}");
             $scopeStmt->execute(array_merge([$productId], $scopeParams));
             $productRow = $scopeStmt->fetch(PDO::FETCH_ASSOC);
             if (!$productRow) {
                 throw new RuntimeException("Product #{$productId} not found or inaccessible in current store scope.");
+            }
+
+            if (!(bool)$productRow['supplier_pullout_eligible']) {
+                throw new RuntimeException('Product is not eligible for supplier pullouts.');
             }
 
             $productPackSize = isset($productRow['pack_size']) && (int)$productRow['pack_size'] > 1 ? (int)$productRow['pack_size'] : 1;
@@ -365,7 +369,7 @@ class SupplierPulloutService
              FROM product_batches pb
              JOIN products p ON pb.product_id = p.product_id
              LEFT JOIN inventory i ON p.product_id = i.product_id
-             WHERE pb.batch_id = ?"
+             WHERE pb.batch_id = ? AND p.supplier_pullout_eligible = 1"
         );
         $stmt->execute([$batchId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -377,7 +381,8 @@ class SupplierPulloutService
         $stmt = $this->pdo->prepare(
             "SELECT pb.*
              FROM product_batches pb
-             WHERE pb.product_id = ? AND pb.remaining_quantity > 0
+             JOIN products p ON p.product_id = pb.product_id
+             WHERE p.supplier_pullout_eligible = 1 AND pb.product_id = ? AND pb.remaining_quantity > 0
              ORDER BY
                 CASE WHEN pb.expiration_date IS NOT NULL THEN 0 ELSE 1 END,
                 pb.expiration_date ASC,

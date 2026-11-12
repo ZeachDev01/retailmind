@@ -94,7 +94,7 @@ final class StockConditionReader
             $reminders[] = $batch + [
                 'type' => 'expired_stock',
                 'reference_type' => 'product_batch',
-                'title' => 'Expired stock—waiting for supplier collection: ' . $batch['product_name'],
+                'title' => ($batch['supplier_pullout_eligible'] ? 'Expired bread—waiting for supplier collection: ' : 'Expired Stock Alert: ') . $batch['product_name'],
                 'message' => "Batch {$batch['batch_number']} of {$batch['product_name']} ({$batch['sku']}) expired on {$batch['expiration_date']}. Remaining: {$batch['remaining_quantity']}.",
             ];
         }
@@ -110,7 +110,7 @@ final class StockConditionReader
         if ($driver === 'sqlite') {
             $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
             $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days, p.supplier_pullout_eligible
                     FROM product_batches pb
                     JOIN products p ON p.product_id = pb.product_id
                     WHERE pb.remaining_quantity > 0
@@ -124,7 +124,7 @@ final class StockConditionReader
         }
 
         $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days, p.supplier_pullout_eligible
                 FROM product_batches pb
                 JOIN products p ON p.product_id = pb.product_id
                 WHERE pb.remaining_quantity > 0
@@ -146,7 +146,7 @@ final class StockConditionReader
         if ($driver === 'sqlite') {
             $diffExpr = "CAST(ROUND(julianday(pb.expiration_date) - julianday(?)) AS INTEGER)";
             $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                           {$diffExpr} AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days, p.supplier_pullout_eligible
                     FROM product_batches pb
                     JOIN products p ON p.product_id = pb.product_id
                     WHERE pb.remaining_quantity > 0
@@ -159,7 +159,7 @@ final class StockConditionReader
         }
 
         $sql = "SELECT pb.batch_id, pb.product_id, pb.batch_number, pb.remaining_quantity, pb.expiration_date,
-                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days
+                       DATEDIFF(pb.expiration_date, ?) AS days_remaining, p.sku, p.product_name, p.warning_lead_time_days, p.supplier_pullout_eligible
                 FROM product_batches pb
                 JOIN products p ON p.product_id = pb.product_id
                 WHERE pb.remaining_quantity > 0

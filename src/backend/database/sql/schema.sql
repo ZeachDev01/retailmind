@@ -1021,6 +1021,7 @@ CREATE TABLE `products` (
   `receiving_unit` varchar(40) NOT NULL DEFAULT 'package',
   `expiration_date` date DEFAULT NULL,
   `warning_lead_time_days` int(11) DEFAULT NULL,
+  `supplier_pullout_eligible` tinyint(1) NOT NULL DEFAULT 0,
   `product_image` varchar(255) DEFAULT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
   `created_by` int(11) DEFAULT NULL,
@@ -2153,3 +2154,5 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030002_retire_recovery_account_page','Point saved Recovery Account warnings to Protected Audit Records') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_super_admin_single_workspace','Keep the Super Administrator account on platform governance only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_fiscal_period_scheduling','Allow scheduled future Fiscal Periods and opt-in automatic rollover') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611120001_supplier_pullout_eligibility','Explicit Product eligibility for Supplier Pullouts, default off') ON DUPLICATE KEY UPDATE description=VALUES(description);

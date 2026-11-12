@@ -54,13 +54,18 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
     $pdo = new PDO("mysql:host={$config['host']};port={$config['port']};dbname={$database};charset=utf8mb4", $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $pdo->exec("SET time_zone = '+08:00'");
     if ($argv[1] === 'bread_create') {
-        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,warning_lead_time_days) VALUES (901,'REMINDER-BREAD','REMINDER-BREAD','Reminder Bread',25,3,2)");
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,supplier_pullout_eligible,warning_lead_time_days) VALUES (901,'REMINDER-BREAD','REMINDER-BREAD','Reminder Bread',25,3,1,2)");
         $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (901,10)');
         $pdo->exec("INSERT INTO product_batches (batch_id,product_id,batch_number,quantity,remaining_quantity,expiration_date) VALUES (901,901,'COLLECT-10',10,10,'2000-10-25')");
         $clock = new class implements \App\Attention\Clock {
             public function now(): DateTimeImmutable { return new DateTimeImmutable('now'); }
         };
         (new NotificationService($pdo, $clock))->checkAndNotifyExpiringStock(30);
+    } elseif ($argv[1] === 'bread_ineligible') {
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (902,'ORDINARY-BREAD','ORDINARY-BREAD','Ordinary Bread',25,3)");
+        $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (902,5)');
+        $pdo->exec("INSERT INTO product_batches (batch_id,product_id,batch_number,quantity,remaining_quantity,expiration_date) VALUES (902,902,'ORDINARY-5',5,5,'2000-10-25')");
+        (new NotificationService($pdo))->checkAndNotifyExpiringStock();
     } elseif (str_starts_with($argv[1], 'workspace_')) {
         // #262 Workspace-scoped coverage. User 2 holds super_admin plus the admin,
         // inventory_manager, and cashier secondary roles (see theme_fixture.php).
