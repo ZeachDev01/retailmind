@@ -236,7 +236,6 @@ $administratorSystemItems = [
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Configuration'],
     ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
     ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
-    ['path' => 'components/administrator/database_backup.php', 'icon' => 'data_backup', 'label' => 'Database Backup'],
     ['path' => 'components/system_administrator/audit_logs.php', 'icon' => 'inspection', 'label' => 'Operational Audit'],
 ];
 

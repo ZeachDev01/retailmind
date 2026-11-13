@@ -146,13 +146,10 @@ $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
 $qrService = new \App\Services\QrCodeService();
 $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? $qrService->generateSvg($tunnelStatus['url'], 220) : '';
-$settingsSections = [
-    'store-receipts' => ['Store & receipts', 'shop'],
-    'attention-thresholds' => ['Attention thresholds', 'high_priority'],
-    'remote-access' => ['Remote Access', 'deployment'],
-];
 $activeSection = (string)($_GET['section'] ?? 'store-receipts');
-if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts';
+if (!in_array($activeSection, ['store-receipts', 'attention-thresholds', 'remote-access'], true)) $activeSection = 'store-receipts';
+$activeStoreConfigurationSection = $activeSection;
+$remoteAccessStatus = (string)($tunnelStatus['status'] ?? 'offline');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -167,20 +164,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <nav class="settings-sidebar" aria-label="Store configuration sections">
-            <?php foreach ($settingsSections as $section => [$label, $icon]): ?>
-                <?php $navState = $section === 'remote-access' ? (string)($tunnelStatus['status'] ?? 'offline') : ''; ?>
-                <a href="?section=<?= htmlspecialchars($section) ?>"<?= $activeSection === $section ? ' class="active" aria-current="page"' : '' ?>>
-                    <img src="<?= htmlspecialchars(theme_url('assets/img/navigation/' . $icon . '.svg')) ?>" alt="" aria-hidden="true" width="22" height="22">
-                    <span class="settings-nav-copy">
-                        <span class="settings-nav-label"><?= htmlspecialchars($label) ?></span>
-                        <?php if ($section === 'remote-access'): ?>
-                            <span class="settings-nav-state is-<?= $navState === 'online' ? 'online' : ($navState === 'starting' ? 'starting' : 'offline') ?>"><?= $navState === 'online' ? 'Online' : ($navState === 'starting' ? 'Connecting' : 'Offline') ?></span>
-                        <?php endif; ?>
-                    </span>
-                </a>
-            <?php endforeach; ?>
-        </nav>
+        <?php require __DIR__ . '/store_configuration_nav.php'; ?>
         <div class="settings-content">
         <header class="page-heading">
             <div>
