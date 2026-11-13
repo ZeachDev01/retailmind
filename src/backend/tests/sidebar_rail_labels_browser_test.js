@@ -98,6 +98,14 @@ const fixture = action => {
                 await page.waitForURL('**/audit_logs.php');
                 await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
                 await collapseSidebar('Operational Audit');
+                await page.locator('.settings-sidebar a[href*="registers.php"]').click();
+                await page.waitForURL('**/registers.php');
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+                await collapseSidebar('Checkout Stations');
+                await page.locator('.settings-sidebar a[href*="fiscal_periods.php"]').click();
+                await page.waitForURL('**/fiscal_periods.php');
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+                await collapseSidebar('Fiscal Periods');
             }
 
             const firstLink = page.locator('.sidebar-nav a[href]').first();

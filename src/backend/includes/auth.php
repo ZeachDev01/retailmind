@@ -96,6 +96,15 @@ function switch_current_workspace(string $role): bool
     }
 
     $_SESSION['role'] = $role;
+    global $pdo;
+    if (isset($pdo, $_SESSION['user_id']) && $pdo instanceof PDO) {
+        try {
+            $pdo->prepare('UPDATE users SET last_workspace_role = ? WHERE user_id = ?')
+                ->execute([$role, (int)$_SESSION['user_id']]);
+        } catch (PDOException $exception) {
+            error_log('Workspace preference could not be saved: ' . $exception->getMessage());
+        }
+    }
     return true;
 }
 
@@ -306,7 +315,24 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
                 'Super Administrator workspace · local only'
             );
         }
-        $_SESSION['role'] = $availableWorkspaces[0];
+        $lastWorkspace = '';
+        try {
+            $preference = $pdo->prepare('SELECT last_workspace_role FROM users WHERE user_id = ?');
+            $preference->execute([(int)$user['user_id']]);
+            $lastWorkspace = (string)($preference->fetchColumn() ?: '');
+        } catch (PDOException $exception) {
+            error_log('Workspace preference could not be loaded: ' . $exception->getMessage());
+        }
+        $selectedWorkspace = in_array($lastWorkspace, $availableWorkspaces, true)
+            ? $lastWorkspace
+            : $availableWorkspaces[0];
+        $_SESSION['role'] = $selectedWorkspace;
+        try {
+            $pdo->prepare('UPDATE users SET last_workspace_role = ? WHERE user_id = ?')
+                ->execute([$selectedWorkspace, (int)$user['user_id']]);
+        } catch (PDOException $exception) {
+            error_log('Workspace preference could not be saved: ' . $exception->getMessage());
+        }
         $_SESSION['profile_image'] = $user['profile_image'];
         $_SESSION['session_version'] = (int)($user['session_version'] ?? 1);
         $_SESSION['must_change_password'] = (bool)($user['must_change_password'] ?? false);

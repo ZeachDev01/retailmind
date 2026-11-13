@@ -232,10 +232,9 @@ $superAdministratorForecastingItems = [
 
 $administratorSystemItems = [
     ['path' => 'components/user_manager/user_manager.php', 'icon' => 'conference_call', 'label' => 'User Manager'],
-    ['path' => 'components/administrator/registers.php', 'icon' => 'self_service_kiosk', 'label' => 'Checkout Stations'],
     ['path' => 'components/administrator/store_settings.php', 'icon' => 'settings', 'label' => 'Store Configuration'],
-    ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
-    ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
+    ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
+    ['path' => 'components/cashier/refund_corrections.php', 'icon' => 'money_transfer', 'label' => 'Refund Correction Reviews'],
 ];
 
 $managerInventoryItems = [];
@@ -271,9 +270,9 @@ $administratorSections = [
         'items' => [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'shop', 'label' => 'Store Overview'],
             ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
+            ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
             ['icon' => 'business', 'label' => 'Store Management', 'items' => $administratorSystemItems],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
-            ['path' => 'components/administrator/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Oversight'],
             ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $administratorForecastingItems],
             ['icon' => 'statistics', 'label' => 'Store Reports', 'items' => $administratorReportItems],
         ],
@@ -331,7 +330,7 @@ $roleSections = [
     ],
 ];
 
-if (in_array($role, ['admin', 'cashier', 'inventory_manager'], true)) {
+if (in_array($role, ['cashier', 'inventory_manager'], true)) {
     $roleSections[$role][0]['items'][] = ['path' => 'components/cashier/refund_corrections.php', 'icon' => 'money_transfer', 'label' => 'Refund Correction Reviews'];
 }
 
