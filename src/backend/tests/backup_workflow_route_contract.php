@@ -20,6 +20,7 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $administratorPage = $read('src/frontend/components/administrator/database_backup.php');
+$operationalAuditPage = $read('src/frontend/components/system_administrator/audit_logs.php');
 $superAdministratorPage = $read('src/frontend/components/system_administrator/backup_restore.php');
 $legacyRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
 $downloadEndpoint = $read('src/frontend/components/backup/backup_download.php');
@@ -177,8 +178,11 @@ $assert(
 $assert(
     str_contains($administratorPage, "store_configuration_nav.php")
         && str_contains($storeConfigurationNav, "components/administrator/database_backup.php")
-        && !str_contains($sidebar, "'components/administrator/database_backup.php'"),
-    'Database Backup must stay in the Store Configuration sidebar'
+        && str_contains($storeConfigurationNav, "components/system_administrator/audit_logs.php")
+        && str_contains($operationalAuditPage, "store_configuration_nav.php")
+        && !str_contains($sidebar, "'components/administrator/database_backup.php'")
+        && !str_contains($sidebar, "'label' => 'Operational Audit'"),
+    'Operational Audit and Database Backup must stay in the Store Configuration sidebar'
 );
 $restoreEndpoint = $read('src/frontend/components/backup/restore.php');
 $assert(str_contains($administratorPage, "'/../backup/restore_form.php'") && str_contains($superAdministratorPage, "'/../backup/restore_form.php'"), 'Both administrator screens offer the shared encrypted restore form');

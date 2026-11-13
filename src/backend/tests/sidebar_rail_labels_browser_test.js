@@ -57,8 +57,13 @@ const fixture = action => {
             if (role === 'admin') {
                 await page.goto('/components/administrator/store_settings.php');
                 for (const section of ['remote-access', 'attention-thresholds', 'store-receipts']) {
-                    await page.locator('.settings-sidebar a[href="?section=' + section + '"]').click();
-                    await page.waitForURL('**/store_settings.php?section=' + section);
+                    const sectionLink = section === 'store-receipts'
+                        ? '.settings-sidebar a[href$="store_settings.php"]'
+                        : '.settings-sidebar a[href*="section=' + section + '"]';
+                    await page.locator(sectionLink).click();
+                    await page.waitForURL(section === 'store-receipts'
+                        ? '**/store_settings.php'
+                        : '**/store_settings.php?section=' + section);
                     await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
                     assert.equal(await page.locator('.sidebar .dropdown.open').count(), 0,
                         'Switching Store Configuration sections must not open a collapsed sidebar flyout');
@@ -67,6 +72,32 @@ const fixture = action => {
                 await page.reload();
                 assert.equal(await page.locator('.sidebar .dropdown.open').count(), 0, 'Reload keeps collapsed flyouts closed');
                 await page.screenshot({path: path.join(shots, 'admin-settings-closed.png')});
+
+                const collapseSidebar = async label => {
+                    const collapsed = () => page.locator('body').evaluate(node => node.classList.contains('sidebar-collapsed'));
+                    if (await collapsed()) {
+                        await page.locator('#sidebarBrandToggle').click();
+                        await page.waitForFunction(() => !document.body.classList.contains('sidebar-collapsed'));
+                    }
+                    await page.locator('#sidebarBrandToggle').click();
+                    await page.waitForFunction(() => document.body.classList.contains('sidebar-collapsed'));
+                    await page.waitForTimeout(260);
+                    const rail = await page.locator('#appSidebar').evaluate(node => ({
+                        width: Math.round(node.getBoundingClientRect().width),
+                        flexBasis: getComputedStyle(node).flexBasis,
+                        collapsed: document.body.classList.contains('sidebar-collapsed'),
+                    }));
+                    assert.equal(rail.width, 78, label + ' main sidebar collapses to the rail: ' + JSON.stringify(rail));
+                };
+
+                await page.locator('.settings-sidebar a[href*="database_backup.php"]').click();
+                await page.waitForURL('**/database_backup.php');
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+                await collapseSidebar('Database Backup');
+                await page.locator('.settings-sidebar a[href*="audit_logs.php"]').click();
+                await page.waitForURL('**/audit_logs.php');
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+                await collapseSidebar('Operational Audit');
             }
 
             const firstLink = page.locator('.sidebar-nav a[href]').first();

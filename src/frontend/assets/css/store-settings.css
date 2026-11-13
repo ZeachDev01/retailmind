@@ -753,13 +753,15 @@
     accent-color: var(--primary);
 }
 .store-settings-page .sidebar,
-.administrator-backup-page .sidebar {
+.administrator-backup-page.store-configuration-nav .sidebar,
+.audit-log-page.store-configuration-nav .sidebar {
     flex-basis: var(--sidebar-width);
     transition: width .24s ease, flex-basis .24s ease, box-shadow .24s ease, transform .24s ease;
 }
 
 .store-settings-page .main-content,
-.administrator-backup-page .main-content {
+.administrator-backup-page.store-configuration-nav .main-content,
+.audit-log-page.store-configuration-nav .main-content {
     display: grid;
     grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
     align-content: start;
@@ -767,14 +769,16 @@
 }
 
 .store-settings-page .settings-sidebar,
-.administrator-backup-page .settings-sidebar {
+.administrator-backup-page.store-configuration-nav .settings-sidebar,
+.audit-log-page.store-configuration-nav .settings-sidebar {
     grid-column: 1;
     padding: 1rem .75rem;
     border-right: 1px solid var(--border);
 }
 
 .store-settings-page .settings-sidebar a,
-.administrator-backup-page .settings-sidebar a {
+.administrator-backup-page.store-configuration-nav .settings-sidebar a,
+.audit-log-page.store-configuration-nav .settings-sidebar a {
     display: flex;
     align-items: center;
     gap: .65rem;
@@ -787,30 +791,35 @@
 }
 
 .store-settings-page .settings-sidebar a:hover,
-.administrator-backup-page .settings-sidebar a:hover {
+.administrator-backup-page.store-configuration-nav .settings-sidebar a:hover,
+.audit-log-page.store-configuration-nav .settings-sidebar a:hover {
     background: var(--surface-soft, #f1f5f9);
     color: var(--text);
 }
 
 .store-settings-page .settings-sidebar a.active,
-.administrator-backup-page .settings-sidebar a.active {
+.administrator-backup-page.store-configuration-nav .settings-sidebar a.active,
+.audit-log-page.store-configuration-nav .settings-sidebar a.active {
     background: rgba(37, 99, 235, .1);
     color: var(--primary, #2563eb);
     font-weight: 600;
 }
 
 .store-settings-page .settings-nav-copy,
-.administrator-backup-page .settings-nav-copy {
+.administrator-backup-page.store-configuration-nav .settings-nav-copy,
+.audit-log-page.store-configuration-nav .settings-nav-copy {
     display: grid;
     gap: .1rem;
     min-width: 0;
 }
 
 .store-settings-page .settings-nav-label,
-.administrator-backup-page .settings-nav-label { white-space: nowrap; }
+.administrator-backup-page.store-configuration-nav .settings-nav-label,
+.audit-log-page.store-configuration-nav .settings-nav-label { white-space: nowrap; }
 
 .store-settings-page .settings-nav-state,
-.administrator-backup-page .settings-nav-state {
+.administrator-backup-page.store-configuration-nav .settings-nav-state,
+.audit-log-page.store-configuration-nav .settings-nav-state {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
@@ -820,7 +829,8 @@
 }
 
 .store-settings-page .settings-nav-state::before,
-.administrator-backup-page .settings-nav-state::before {
+.administrator-backup-page.store-configuration-nav .settings-nav-state::before,
+.audit-log-page.store-configuration-nav .settings-nav-state::before {
     content: "";
     width: 6px;
     height: 6px;
@@ -829,18 +839,24 @@
 }
 
 .store-settings-page .settings-nav-state.is-online,
-.administrator-backup-page .settings-nav-state.is-online { color: var(--success, #16a34a); }
+.administrator-backup-page.store-configuration-nav .settings-nav-state.is-online,
+.audit-log-page.store-configuration-nav .settings-nav-state.is-online { color: var(--success, #16a34a); }
 .store-settings-page .settings-nav-state.is-starting,
-.administrator-backup-page .settings-nav-state.is-starting { color: var(--warning, #d97706); }
+.administrator-backup-page.store-configuration-nav .settings-nav-state.is-starting,
+.audit-log-page.store-configuration-nav .settings-nav-state.is-starting { color: var(--warning, #d97706); }
 .store-settings-page .settings-nav-state.is-offline,
-.administrator-backup-page .settings-nav-state.is-offline { color: var(--muted, #6b7280); }
+.administrator-backup-page.store-configuration-nav .settings-nav-state.is-offline,
+.audit-log-page.store-configuration-nav .settings-nav-state.is-offline { color: var(--muted, #6b7280); }
 
 .store-settings-page .settings-sidebar a img,
-.administrator-backup-page .settings-sidebar a img { flex: 0 0 22px; }
+.administrator-backup-page.store-configuration-nav .settings-sidebar a img,
+.audit-log-page.store-configuration-nav .settings-sidebar a img { flex: 0 0 22px; }
 .store-settings-page .settings-sidebar a:focus-visible,
-.administrator-backup-page .settings-sidebar a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.administrator-backup-page.store-configuration-nav .settings-sidebar a:focus-visible,
+.audit-log-page.store-configuration-nav .settings-sidebar a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .store-settings-page .settings-content,
-.administrator-backup-page .backup-page-content { grid-column: 2; width: 100%; max-width: 1280px; min-width: 0; }
+.administrator-backup-page.store-configuration-nav .backup-page-content,
+.audit-log-page.store-configuration-nav .audit-page-content { grid-column: 2; width: 100%; max-width: 1280px; min-width: 0; }
 .store-settings-page #workspace-invitation,
 .store-settings-page .workspace-guidance-banner { grid-column: 1 / -1; }
 .store-settings-page #workspace-invitation {
@@ -853,7 +869,9 @@
 .store-settings-page #workspace-invitation .workspace-invitation-actions { margin: 0; }
 .store-settings-page [data-settings-section][hidden] { display: none !important; }
 
-body.store-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); }
+body.store-settings-page.sidebar-collapsed .sidebar,
+body.administrator-backup-page.store-configuration-nav.sidebar-collapsed .sidebar,
+body.audit-log-page.store-configuration-nav.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); }
 
 @media (max-width: 900px) {
     .store-settings-page .settings-sidebar {
@@ -866,7 +884,8 @@ body.store-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-colla
         border-right: 0;
         border-bottom: 1px solid var(--border);
     }
-    .administrator-backup-page .settings-sidebar {
+    .administrator-backup-page.store-configuration-nav .settings-sidebar,
+    .audit-log-page.store-configuration-nav .settings-sidebar {
         display: flex;
         grid-column: 1;
         gap: .35rem;
@@ -877,13 +896,17 @@ body.store-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-colla
         border-bottom: 1px solid var(--border);
     }
     .store-settings-page .settings-sidebar a,
-    .administrator-backup-page .settings-sidebar a { flex: 0 0 auto; }
+    .administrator-backup-page.store-configuration-nav .settings-sidebar a,
+    .audit-log-page.store-configuration-nav .settings-sidebar a { flex: 0 0 auto; }
     .store-settings-page .settings-sidebar a span,
-    .administrator-backup-page .settings-sidebar a span { white-space: nowrap; }
+    .administrator-backup-page.store-configuration-nav .settings-sidebar a span,
+    .audit-log-page.store-configuration-nav .settings-sidebar a span { white-space: nowrap; }
     .store-settings-page .main-content,
-    .administrator-backup-page .main-content { grid-template-columns: minmax(0, 1fr); }
+    .administrator-backup-page.store-configuration-nav .main-content,
+    .audit-log-page.store-configuration-nav .main-content { grid-template-columns: minmax(0, 1fr); }
     .store-settings-page .settings-content { grid-column: 1; max-width: none; }
-    .administrator-backup-page .backup-page-content { grid-column: 1; max-width: none; }
+    .administrator-backup-page.store-configuration-nav .backup-page-content,
+    .audit-log-page.store-configuration-nav .audit-page-content { grid-column: 1; max-width: none; }
     .store-settings-page #workspace-invitation { grid-template-columns: minmax(0, 1fr); }
 }
 

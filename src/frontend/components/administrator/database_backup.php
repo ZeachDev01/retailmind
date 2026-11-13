@@ -81,8 +81,13 @@ $completedHistory = array_filter($history, static fn(array $row): bool => ($row[
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
 $totalSnapshots = count($completedHistory);
 $storePaused = \App\Backup\RecoveryStore::isPaused();
+$hasStoreConfigurationNav = $actorRole === 'admin';
 $activeStoreConfigurationSection = 'database-backup';
-$remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
+$remoteAccessStatus = 'offline';
+if ($hasStoreConfigurationNav) {
+    require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+    $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -93,13 +98,13 @@ $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->ge
     <title>Database Backup</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
-    <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/store-settings.css')) ?>">
+    <?php if ($hasStoreConfigurationNav): ?><link rel="stylesheet" href="<?= $escape(theme_url('assets/css/store-settings.css')) ?>"><?php endif; ?>
 </head>
 
-<body class="manage-users-page database-backup-page administrator-backup-page" data-rm-authenticated="true"
+<body class="manage-users-page database-backup-page administrator-backup-page<?= $hasStoreConfigurationNav ? ' store-configuration-nav' : '' ?>" data-rm-authenticated="true"
     data-rm-backup-status="<?= $escape(app_url('components/backup/backup_status.php')) ?>">
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
-        <?php require __DIR__ . '/store_configuration_nav.php'; ?>
+        <?php if ($hasStoreConfigurationNav) require __DIR__ . '/store_configuration_nav.php'; ?>
         <div class="backup-page-content">
             <header class="page-heading">
                 <div><h1>Database Backup</h1></div>

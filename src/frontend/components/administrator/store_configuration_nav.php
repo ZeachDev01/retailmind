@@ -3,6 +3,7 @@ $storeConfigurationLinks = [
     ['store-receipts', 'Store & receipts', 'shop', 'components/administrator/store_settings.php'],
     ['attention-thresholds', 'Attention thresholds', 'high_priority', 'components/administrator/store_settings.php?section=attention-thresholds'],
     ['remote-access', 'Remote Access', 'deployment', 'components/administrator/store_settings.php?section=remote-access'],
+    ['operational-audit', 'Operational Audit', 'inspection', 'components/system_administrator/audit_logs.php'],
     ['database-backup', 'Database Backup', 'data_backup', 'components/administrator/database_backup.php'],
 ];
 $remoteAccessStatus = (string)($remoteAccessStatus ?? 'offline');

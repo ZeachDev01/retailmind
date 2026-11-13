@@ -326,6 +326,12 @@ if ($dateFrom !== '') {
 if ($dateTo !== '') {
     $activeFilters[] = ['label' => 'To', 'value' => $dateTo];
 }
+$hasStoreConfigurationNav = $actorRole === 'admin';
+if ($hasStoreConfigurationNav) {
+    require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+    $activeStoreConfigurationSection = 'operational-audit';
+    $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -339,11 +345,16 @@ if ($dateTo !== '') {
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/columncontrol/columnControl.dataTables.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/datatables/datetime/dataTables.dateTime.min.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/audit-logs.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/audit-logs.css')) ?>">
+    <?php if ($hasStoreConfigurationNav): ?><link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/store-settings.css')) ?>"><?php endif; ?>
 </head>
-<body class="audit-log-page">
+<body class="audit-log-page<?= $hasStoreConfigurationNav ? ' store-configuration-nav' : '' ?>">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
+            <?php if ($hasStoreConfigurationNav): ?>
+                <?php require __DIR__ . '/../administrator/store_configuration_nav.php'; ?>
+                <div class="audit-page-content">
+            <?php endif; ?>
             <header class="page-heading topbar">
                 <div class="page-heading-title">
                     <h1><?= htmlspecialchars($pageTitle) ?></h1>
@@ -515,6 +526,7 @@ if ($dateTo !== '') {
                     </table>
                 </div>
             </section>
+            <?php if ($hasStoreConfigurationNav): ?></div><?php endif; ?>
         </main>
     </div>
     <div class="rm-drawer-overlay" id="auditDetailsDrawer" aria-hidden="true">
