@@ -15,6 +15,7 @@ $pageTitle = $actorRole === 'super_admin' ? 'Users & Access' : 'Store Staff';
 $message = '';
 $messageClass = '';
 $createFormSubmitted = false;
+$createSucceeded = false;
 $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
 
 function display_label(string $value): string
@@ -101,6 +102,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'password_hash' => password_hash($password, PASSWORD_DEFAULT),
                     'roles' => $selectedRoles,
                 ]);
+                $createSucceeded = true;
             } catch (Throwable $exception) {
                 if ($profileImage !== null) profile_image_storage()->delete($profileImage);
                 throw $exception;
@@ -121,7 +123,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $message = $emailSent
                     ? 'Administrator account created. Welcome email submitted for delivery.'
                     : 'Administrator account created, but the welcome email could not be sent. Check Brevo settings and share the temporary sign-in details securely. Do not create the account again.';
-                $messageClass = $emailSent ? 'tag-success' : 'tag-warning';
+                $messageClass = 'tag-success';
             }
             $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
         } elseif ($action === 'update') {
@@ -566,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!window.RetailMindUI?.openOverlay) {
         [addOverlay, drawerOverlay].forEach(overlay => overlay?.addEventListener('click', event => { if (event.target === overlay) setOpen(overlay, false); }));
     }
-    <?php if ($createFormSubmitted && $messageClass === 'tag-warning'): ?>setOpen(addOverlay, true);<?php endif; ?>
+    <?php if ($createFormSubmitted && !$createSucceeded): ?>setOpen(addOverlay, true);<?php endif; ?>
 });
 </script>
 </body>
