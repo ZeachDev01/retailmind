@@ -105,6 +105,26 @@ $topCategories = array_slice($categoryStats, 0, 8, true);
 $categoryLabels = array_keys($topCategories);
 $categoryUnits = array_values($topCategories);
 $forecastProducts = get_stored_predictions($pdo);
+$forecastByProduct = [];
+foreach ($forecastProducts as $forecast) {
+    $forecastByProduct[(int)$forecast['product_id']] = $forecast;
+}
+$forecastMonitoringRows = [];
+foreach ($products as $product) {
+    $productId = (int)$product['product_id'];
+    $forecast = $forecastByProduct[$productId] ?? null;
+    $currentStock = (int)($product['quantity_on_hand'] ?? 0);
+    $demand7 = $forecast !== null ? (float)$forecast['predicted_demand_next_7_days'] : null;
+    $demand30 = $forecast !== null ? (float)$forecast['predicted_demand_next_30_days'] : null;
+    $forecastMonitoringRows[] = [
+        'product_id' => $productId,
+        'product_name' => (string)$product['product_name'],
+        'current_stock' => $currentStock,
+        'demand7' => $demand7,
+        'demand30' => $demand30,
+        'has_forecast' => $forecast !== null,
+    ];
+}
 usort($forecastProducts, static fn(array $a, array $b): int =>
     (float)$b['predicted_demand_next_30_days'] <=> (float)$a['predicted_demand_next_30_days']
 );
@@ -210,7 +230,7 @@ try {
                 <div>
                     <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
                     <div>
-                        <h3 id="overview-forecast-heading">Demand Forecast vs Current Stock</h3>
+                        <h3 id="overview-forecast-heading">Inventory Monitoring</h3>
                     </div>
                 </div>
             </div>
@@ -218,19 +238,40 @@ try {
             <div class="overview-chart-body">
                 <canvas id="overviewForecastChart" aria-label="Current stock and predicted demand for the next 7 and 30 days by product, in units" role="img"></canvas>
             </div>
-            <details>
-                <summary>View forecast values</summary>
-                <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
-                <div class="overview-table-shell"><table class="overview-table">
-                    <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th></tr></thead>
-                    <tbody><?php foreach ($topForecastProducts as $forecast): ?>
-                    <tr><td><?= htmlspecialchars($forecast['product_name']) ?></td><td><?= number_format((float)$forecast['current_stock']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_7_days']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_30_days']) ?></td></tr>
-                    <?php endforeach; ?></tbody>
-                </table></div>
-            </details>
             <?php else: ?>
             <p class="overview-empty">No forecasts available. Check Demand Forecasting.</p>
             <?php endif; ?>
+            <details>
+                <summary>View inventory comparison</summary>
+                <p>Compare stock with estimated 7- and 30-day demand. This comparison supports review; it does not automatically classify overstock.</p>
+                <div class="overview-view-filter-group">
+                    <div class="overview-filter-field overview-search-field">
+                        <input type="search" id="forecast-monitor-search" class="form-control" placeholder="Search products" aria-label="Search inventory comparison" aria-controls="forecast-monitor-table-body">
+                    </div>
+                    <div class="overview-filter-field">
+                        <select id="forecast-monitor-filter" class="form-select" aria-label="Filter by forecast coverage" aria-controls="forecast-monitor-table-body">
+                            <option value="all">All products</option>
+                            <option value="below-7">Stock below 7-day demand</option>
+                            <option value="below-30">Covers 7 days, below 30-day demand</option>
+                            <option value="covers-30">Meets or exceeds 30-day demand</option>
+                            <option value="no-forecast">No usable forecast</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overview-table-shell"><table class="overview-table">
+                    <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th><th>Comparison</th></tr></thead>
+                    <tbody id="forecast-monitor-table-body"><?php foreach ($forecastMonitoringRows as $row): ?>
+                    <tr data-forecast-monitor-row="<?= $row['product_id'] ?>" data-current-stock="<?= $row['current_stock'] ?>" data-demand7="<?= $row['demand7'] ?? '' ?>" data-demand30="<?= $row['demand30'] ?? '' ?>" data-has-forecast="<?= $row['has_forecast'] ? 'true' : 'false' ?>">
+                        <td><?= htmlspecialchars($row['product_name']) ?></td>
+                        <td><?= number_format($row['current_stock']) ?></td>
+                        <td><?= $row['demand7'] === null ? '&mdash;' : number_format($row['demand7']) ?></td>
+                        <td><?= $row['demand30'] === null ? '&mdash;' : number_format($row['demand30']) ?></td>
+                        <td data-comparison-label>&mdash;</td>
+                    </tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+                <p class="overview-empty" id="forecast-monitor-empty" aria-live="polite" hidden>No products match this search or filter.</p>
+            </details>
         </section>
 
         <section class="overview-charts-grid" id="overview-charts" aria-label="Inventory visual analytics">
@@ -490,6 +531,40 @@ try {
 window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 
 const inventoryChartData = <?= $chartDataJson ?>;
+
+const forecastMonitorRows = Array.from(document.querySelectorAll('[data-forecast-monitor-row]'));
+const forecastMonitorSearch = document.getElementById('forecast-monitor-search');
+const forecastMonitorFilter = document.getElementById('forecast-monitor-filter');
+const forecastMonitorLabels = {
+    'below-7': 'Below 7-day demand',
+    'below-30': 'Covers 7 days, below 30-day demand',
+    'covers-30': 'Meets or exceeds 30-day demand',
+    'no-forecast': 'No usable forecast',
+};
+forecastMonitorRows.forEach(row => {
+    const stock = Number(row.dataset.currentStock);
+    const demand7 = Number(row.dataset.demand7);
+    const demand30 = Number(row.dataset.demand30);
+    const comparison = row.dataset.hasForecast !== 'true'
+        ? 'no-forecast'
+        : (stock < demand7 ? 'below-7' : (stock < demand30 ? 'below-30' : 'covers-30'));
+    row.dataset.comparison = comparison;
+    row.querySelector('[data-comparison-label]').textContent = forecastMonitorLabels[comparison];
+});
+function filterForecastMonitor() {
+    const query = forecastMonitorSearch.value.trim().toLocaleLowerCase();
+    const comparison = forecastMonitorFilter.value;
+    let visibleRows = 0;
+    forecastMonitorRows.forEach(row => {
+        const visible = row.textContent.toLocaleLowerCase().includes(query)
+            && (comparison === 'all' || row.dataset.comparison === comparison);
+        row.hidden = !visible;
+        if (visible) visibleRows++;
+    });
+    document.getElementById('forecast-monitor-empty').hidden = visibleRows > 0;
+}
+forecastMonitorSearch?.addEventListener('input', filterForecastMonitor);
+forecastMonitorFilter?.addEventListener('change', filterForecastMonitor);
 
 function getChartThemeColors() {
     const isDark = document.documentElement.dataset.theme === 'dark';

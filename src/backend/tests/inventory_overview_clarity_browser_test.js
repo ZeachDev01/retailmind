@@ -15,22 +15,40 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
     function app_url($path) { return $path; }
     function format_display_datetime($value) { return $value; }
     $products = [];
-    foreach ([20, 2, 0] as $id => $quantity) {
-        $products[] = ['product_id' => $id + 1, 'product_name' => ['Rice', 'Coffee', 'Milk'][$id],
+    foreach ([20, 2, 0, 8] as $id => $quantity) {
+        $products[] = ['product_id' => $id + 1, 'product_name' => ['Rice', 'Coffee', 'Milk', 'Oil'][$id],
             'sku' => 'SKU-' . $id, 'barcode' => '123456789' . $id, 'brand' => 'Shalom',
             'category_name' => 'Food', 'quantity_on_hand' => $quantity, 'reorder_level' => 5,
             'unit_price' => 30, 'cost_price' => 20, 'next_expiration' => null,
             'has_missing_expiration' => $id === 1, 'undated_quantity' => $id === 1 ? 2 : 0];
     }
-    $total_products = 3; $total_units = 22; $out_of_stock = 1; $missing_expiration_count = 1;
+    $total_products = 4; $total_units = 30; $out_of_stock = 1; $missing_expiration_count = 1;
     $low_stock = [$products[1], $products[2]]; $lowStockProductIds = [2 => true, 3 => true];
     $expiring_batches = $expired_batches = $expiredProductIds = $expiringProductIds = [];
-    $forecastProducts = $topForecastProducts = $recent_movements = $fefo_recommendations = [];
+    $forecastProducts = [
+        ['product_id' => 1, 'product_name' => 'Rice', 'current_stock' => 20,
+            'predicted_demand_next_7_days' => 4, 'predicted_demand_next_30_days' => 15],
+        ['product_id' => 2, 'product_name' => 'Coffee', 'current_stock' => 2,
+            'predicted_demand_next_7_days' => 4, 'predicted_demand_next_30_days' => 10],
+        ['product_id' => 4, 'product_name' => 'Oil', 'current_stock' => 8,
+            'predicted_demand_next_7_days' => 5, 'predicted_demand_next_30_days' => 20],
+    ];
+    $topForecastProducts = $forecastProducts;
+    $forecastMonitoringRows = [
+        ['product_id' => 1, 'product_name' => 'Rice', 'current_stock' => 20, 'demand7' => 4, 'demand30' => 15, 'has_forecast' => true],
+        ['product_id' => 2, 'product_name' => 'Coffee', 'current_stock' => 2, 'demand7' => 4, 'demand30' => 10, 'has_forecast' => true],
+        ['product_id' => 3, 'product_name' => 'Milk', 'current_stock' => 0, 'demand7' => null, 'demand30' => null, 'has_forecast' => false],
+        ['product_id' => 4, 'product_name' => 'Oil', 'current_stock' => 8, 'demand7' => 5, 'demand30' => 20, 'has_forecast' => true],
+    ];
+    $recent_movements = $fefo_recommendations = [];
     foreach (['Rice', 'Coffee', 'Milk', 'Soap', 'Oil', 'Biscuits'] as $i => $name) {
         $recent_movements[] = ['product_name' => $name, 'sku' => 'SKU-' . $i, 'change_qty' => 3 - $i,
             'reason' => 'adjustment', 'moved_by_name' => 'Inventory Manager', 'moved_at' => sprintf('2026-11-%02d 10:00:00', 11 - $i)];
     }
-    $productCategories = ['Food']; $chartDataJson = '{}';
+    $productCategories = ['Food'];
+    $chartDataJson = json_encode(['forecast' => [
+        'labels' => ['Rice', 'Coffee', 'Oil'], 'stock' => [20, 2, 8], 'demand7' => [4, 4, 5], 'demand30' => [15, 10, 20],
+    ]]);
     $riskRows = [];
     foreach (range(1, 13) as $i) {
         $riskRows[] = ['product_id' => 100 + $i, 'product_name' => 'Risk Product ' . $i, 'sku' => 'RISK-' . $i,
@@ -53,6 +71,24 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
             await page.setContent('<!doctype html><html><head></head>' + html);
+            assert.equal(await page.getByRole('heading', {name: 'Inventory Monitoring', exact: true}).count(), 1);
+            await page.getByText('View inventory comparison', {exact: true}).click();
+            assert.equal(await page.locator('[data-forecast-monitor-row]').count(), 4, 'The comparison includes all products, including those without forecasts');
+            assert.match(await page.locator('[data-forecast-monitor-row="1"]').innerText(), /Meets or exceeds 30-day demand/);
+            assert.match(await page.locator('[data-forecast-monitor-row="2"]').innerText(), /Below 7-day demand/);
+            assert.match(await page.locator('[data-forecast-monitor-row="3"]').innerText(), /No usable forecast/);
+            assert.match(await page.locator('[data-forecast-monitor-row="4"]').innerText(), /Covers 7 days, below 30-day demand/);
+            await page.getByLabel('Filter by forecast coverage', {exact: true}).selectOption('below-7');
+            assert.equal(await page.locator('[data-forecast-monitor-row]:visible').count(), 1);
+            assert.match(await page.locator('[data-forecast-monitor-row]:visible').innerText(), /Coffee/);
+            await page.getByLabel('Filter by forecast coverage', {exact: true}).selectOption('no-forecast');
+            assert.match(await page.locator('[data-forecast-monitor-row]:visible').innerText(), /Milk/);
+            await page.getByLabel('Filter by forecast coverage', {exact: true}).selectOption('below-30');
+            assert.match(await page.locator('[data-forecast-monitor-row]:visible').innerText(), /Oil/);
+            await page.getByLabel('Filter by forecast coverage', {exact: true}).selectOption('all');
+            await page.getByLabel('Search inventory comparison', {exact: true}).fill('Coffee');
+            assert.equal(await page.locator('[data-forecast-monitor-row]:visible').count(), 1);
+            await page.getByLabel('Search inventory comparison', {exact: true}).fill('');
             for (const file of ['theme.css', 'style.css', 'inventory.css', 'stock-risk.css']) {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
             }
@@ -74,7 +110,7 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             assert.equal(await page.locator('#movement-page-status').innerText(), 'Page 1 of 2', 'Sorting resets pagination');
             assert.equal(await page.locator('[data-movement-sort="1"]').evaluate(button => button.closest('th').getAttribute('aria-sort')), 'descending');
             await page.locator('.overview-metric[data-overview-view="all"]').click();
-            assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 3);
+            assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 4);
             const search = page.getByLabel('Search products', {exact: true});
             assert.equal(await page.locator('button.overview-metric').count(), 7, 'Original summary cards remain');
             assert.equal(await page.locator('.overview-metric-icon').count(), 7, 'Original card icons remain');
