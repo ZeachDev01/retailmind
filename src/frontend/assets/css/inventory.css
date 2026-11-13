@@ -126,6 +126,115 @@ button.overview-metric:focus-visible { border-color: #2563eb; box-shadow: 0 6px 
 @media(max-width:900px){.overview-header{align-items:stretch;flex-direction:column}.overview-header-actions{justify-content:flex-start}.overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-table-shell{overflow-x:auto}.overview-table{min-width:720px}.overview-product-view-header{align-items:flex-start;flex-direction:column}}
 @media(max-width:560px){.overview-header-actions,.overview-workflow-actions{align-items:stretch;flex-direction:column}.overview-branch-filter select,.overview-workflow-actions .btn{width:100%}.overview-metrics{grid-template-columns:1fr}.overview-tabs{padding-inline:.65rem}.overview-tab{flex:1 0 auto;padding-inline:.75rem}.overview-section-header{align-items:flex-start;flex-direction:column}.overview-section-header>a{padding-left:2.9rem}.overview-tab-pagination,.overview-product-pagination{align-items:stretch;flex-direction:column}.overview-tab-pagination>div,.overview-product-pagination>div{justify-content:space-between}.overview-tab-pagination .btn,.overview-product-pagination .btn{padding-inline:.65rem}}
 
+/* Inventory overview polish */
+.inventory-overview-page .overview-page-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+.inventory-overview-page .overview-page-heading h1 {
+    margin: 0 0 12px;
+    color: var(--text);
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+.inventory-overview-page .overview-product-tabs {
+    gap: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+.inventory-overview-page .overview-tab {
+    min-height: 40px;
+    padding: 8px 12px;
+    border-radius: 8px 8px 0 0;
+    font-weight: 500;
+}
+.inventory-overview-page .overview-tab.is-active {
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--primary, #2563eb);
+}
+.inventory-overview-page .overview-metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.inventory-overview-page .overview-metric {
+    min-height: 92px;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+.inventory-overview-page .overview-metric-icon,
+.inventory-overview-page .overview-metric-icon--green,
+.inventory-overview-page .overview-metric--warning .overview-metric-icon,
+.inventory-overview-page .overview-metric--danger .overview-metric-icon {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+    border-radius: 8px;
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--muted);
+}
+.inventory-overview-page button.overview-metric:hover {
+    border-color: var(--primary, #2563eb);
+    background: var(--theme-surface-soft, #f8fafc);
+    box-shadow: none;
+}
+.inventory-overview-page button.overview-metric:focus-visible {
+    border-color: var(--primary, #2563eb);
+    box-shadow: none;
+}
+.inventory-overview-page .overview-metric.is-active {
+    border-color: var(--primary, #2563eb);
+    box-shadow: inset 0 0 0 1px var(--primary, #2563eb);
+}
+.inventory-overview-page .overview-metric-copy strong {
+    font-size: 1.5rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.inventory-overview-page .overview-metric-copy span {
+    margin-top: 4px;
+    font-size: .8125rem;
+    line-height: 1.25;
+}
+.inventory-overview-page .overview-chart-card {
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: none;
+}
+.inventory-overview-page .overview-chart-icon,
+.inventory-overview-page .overview-chart-icon--blue {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+    border-radius: 8px;
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--muted);
+}
+.inventory-overview-page .overview-chart-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+@media (max-width: 900px) {
+    .inventory-overview-page .overview-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+    .inventory-overview-page .overview-page-heading { align-items: flex-start; flex-direction: column; gap: 0; }
+    .inventory-overview-page .overview-page-heading h1 { margin-bottom: 8px; font-size: 1.5rem; }
+    .inventory-overview-page .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .inventory-overview-page .overview-metric { align-content: center; flex-wrap: nowrap; padding: 12px; }
+    .inventory-overview-page .overview-metric-copy { flex: 1 1 auto; }
+    .inventory-overview-page .overview-metric-copy span { white-space: normal; }
+    .inventory-overview-page .overview-chart-card { padding: 16px; }
+}
+
 /* Source: frontend\modules\inventory_management\csv_import.php */
 .import-section {
             background: var(--theme-surface, white);

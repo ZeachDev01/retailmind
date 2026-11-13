@@ -182,14 +182,16 @@ try {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <h1 class="u-sr-only">Stock Overview</h1>
-        <header class="page-heading"><div>
+        <header class="page-heading overview-page-heading">
+            <h1>Stock overview</h1>
+            <div>
             <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
                 <button type="button" class="overview-tab" id="overview-risk-tab" role="tab" aria-selected="false" aria-controls="overview-risk" data-overview-page-tab="risk" tabindex="-1"><i class="bi bi-shield-check" aria-hidden="true"></i>Stock Risk</button>
             </div>
-        </div></header>
+            </div>
+        </header>
         <section id="overview-risk" role="tabpanel" aria-labelledby="overview-risk-tab" hidden>
             <?php include __DIR__ . '/stock_risk.php'; ?>
         </section>

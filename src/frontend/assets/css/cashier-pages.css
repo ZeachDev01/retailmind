@@ -1730,3 +1730,82 @@ html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
     :is(.cashier-history-page, .cashier-refunds-page) .history-pagination { flex-direction: column; align-items: center; gap: .75rem; }
     :is(.cashier-history-page, .cashier-refunds-page) .history-page-buttons { margin-left: 0; }
 }
+
+/* Cashier shifts: keep attention on the drawer totals and reconciliation. */
+.cashier-shifts-page .shift-tab {
+    gap: 8px;
+    font-weight: 500;
+    transition: color 150ms ease, border-color 150ms ease;
+}
+.cashier-shifts-page :is(#shift-tab-record, #shift-tab-current, #shift-tab-close, #shift-tab-recent) {
+    --shift-tab-accent: var(--primary, #2563eb);
+}
+.cashier-shifts-page .shift-tab > .bi,
+.cashier-shifts-page .shift-tab[aria-selected="true"] > .bi {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--muted);
+}
+.cashier-shifts-page .shift-tab[aria-selected="true"] {
+    color: var(--text);
+    border-bottom-color: var(--primary, #2563eb);
+}
+.cashier-shifts-page .shift-tab[aria-selected="true"] > .bi { color: var(--primary, #2563eb); }
+.cashier-shifts-page .shift-dot { box-shadow: none; }
+.cashier-shifts-page .shift-preview-grid .stat-card .label,
+.cashier-shifts-page .breakdown-group h3,
+.cashier-shifts-page .shift-reconciled-grid .label {
+    color: var(--muted);
+    font-size: .8125rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.cashier-shifts-page .shift-flow-total,
+.cashier-shifts-page .shift-variance-card .variance-amount,
+.cashier-shifts-page .shift-reconciled-grid .value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--theme-surface, var(--card-bg));
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-section-heading { margin-bottom: 16px; }
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-details {
+    gap: 12px 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow {
+    gap: 12px;
+    margin: 16px 0;
+    padding: 0;
+    border: 0;
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > div {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--theme-surface-soft, #f1f5f9);
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child {
+    border-color: var(--primary, #2563eb);
+    background: var(--theme-info-surface, #eff6ff);
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child :is(dt, .shift-flow-total) {
+    color: var(--primary, #2563eb);
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-flow-total { margin-top: 8px; }
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-activity-row {
+    gap: 8px 24px;
+    padding-top: 12px;
+}
+@media (max-width: 480px) {
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) { padding: 16px; }
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > div { padding: 12px; }
+}
