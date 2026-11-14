@@ -274,6 +274,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                         $statusView = $dormancyStatusTab->view($user);
                         $displayName = display_person_name((string)$user['display_name']);
                         $pendingDuties = $lifecycle->pendingDuties((int)$user['user_id']);
+                        $accountLock = $lifecycle->accountLockStatus((int)$user['user_id']);
                     ?>
                         <tr>
                             <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['display_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
@@ -305,6 +306,8 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                         data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['display_name'])) ?>"
                                         data-profile-url="<?= $canViewImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
                                         data-has-profile-image="<?= $hasImage ? '1' : '0' ?>"
+                                        data-account-locked="<?= $accountLock['locked'] ? '1' : '0' ?>"
+                                        data-account-lock-reason="<?= htmlspecialchars($accountLock['reason'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-pending-duties="<?= htmlspecialchars(json_encode($pendingDuties), ENT_QUOTES, 'UTF-8') ?>">Manage</button>
                                 <?php endif; ?>
                             </td>
@@ -520,14 +523,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
         const isLastAdministrator = button.dataset.isLastAdministrator === '1';
+        const accountLocked = button.dataset.accountLocked === '1';
         document.getElementById('drawerAdministratorMinimumHelp').hidden = !isLastAdministrator;
         const canEditOwnSuperRoles = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?>;
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
         document.querySelector('#drawerStatus option[value="disabled"]').disabled = isLastAdministrator;
         const retainedAdministrator = document.getElementById('drawerRetainedAdministrator');
-        retainedAdministrator.disabled = <?= json_encode($actorRole === 'super_admin') ?> || !(isLastAdministrator || (isSelf && !isSuper));
+        retainedAdministrator.disabled = accountLocked || <?= json_encode($actorRole === 'super_admin') ?> || !(isLastAdministrator || (isSelf && !isSuper));
         document.getElementById('drawerStatusButton').disabled = isSuper && !canEditOwnSuperRoles;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
+        const accountLockNotice = document.getElementById('drawerAccountLockNotice');
+        if (accountLockNotice) {
+            accountLockNotice.textContent = button.dataset.accountLockReason || '';
+            accountLockNotice.hidden = !accountLocked;
+        }
         const remove = document.getElementById('drawerRemoveProfileImage');
         remove.disabled = button.dataset.hasProfileImage !== '1';
         const pendingDuties = JSON.parse(button.dataset.pendingDuties || '{}');
@@ -544,7 +553,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         selectDrawerTab('user');
         document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
-            input.disabled = (isSuper && !canEditOwnSuperRoles)
+            input.disabled = accountLocked
+                || (isSuper && !canEditOwnSuperRoles)
                 || (input.dataset.role === 'admin' && (isLastAdministrator || (isSelf && !isSuper)));
         });
         setOpen(drawerOverlay, true);

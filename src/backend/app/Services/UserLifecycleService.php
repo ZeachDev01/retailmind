@@ -154,6 +154,10 @@ final class UserLifecycleService
                     throw new DomainException('You cannot remove your own Administrator role.');
                 }
             }
+            $rolesChanged = $targetRole !== $before['role_name'] || $targetRoles !== $before['roles'];
+            if ($rolesChanged) {
+                $this->requireNoOpenOperationalDuties($userId);
+            }
             if (!in_array('admin', $targetRoles, true)) {
                 $minimum->requireRemovable($userId);
             }
@@ -183,7 +187,7 @@ final class UserLifecycleService
                 $parts[] = 'profile_image = ?';
                 $params[] = $this->nullableString($account['profile_image']);
             }
-            if ($targetRole !== $before['role_name'] || $targetRoles !== $before['roles']) {
+            if ($rolesChanged) {
                 $parts[] = 'session_version = session_version + 1';
             }
             $params[] = $userId;
@@ -329,6 +333,33 @@ final class UserLifecycleService
             'open_gcash_sessions' => $openGcash,
             'handover_links' => $handoverLinks,
         ];
+    }
+
+    public function accountLockStatus(int $userId): array
+    {
+        $statement = $this->pdo->prepare("SELECT COUNT(*) FROM cashier_shifts WHERE cashier_id = ? AND status = 'open'");
+        $statement->execute([$userId]);
+        $openShifts = (int)$statement->fetchColumn();
+        $statement = $this->pdo->prepare("SELECT COUNT(*) FROM gcash_service_sessions WHERE cashier_id = ? AND status = 'open'");
+        $statement->execute([$userId]);
+        $openGcashSessions = (int)$statement->fetchColumn();
+        $reasons = [];
+        if ($openShifts > 0) $reasons[] = 'open shift';
+        if ($openGcashSessions > 0) $reasons[] = 'open GCash session';
+        return [
+            'locked' => $reasons !== [],
+            'open_shifts' => $openShifts,
+            'open_gcash_sessions' => $openGcashSessions,
+            'reason' => $reasons === [] ? '' : 'Role access cannot be changed while this account has an ' . implode(', ', $reasons) . '. Close or hand over the open duties first.',
+        ];
+    }
+
+    private function requireNoOpenOperationalDuties(int $userId): void
+    {
+        $status = $this->accountLockStatus($userId);
+        if ($status['locked']) {
+            throw new DomainException($status['reason']);
+        }
     }
 
     public function delete(int $actorId, string $actorRole, int $userId, bool $confirmed = false): void

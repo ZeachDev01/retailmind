@@ -39,6 +39,7 @@
             <input type="hidden" name="user_id" id="drawerUserId">
             <input type="hidden" name="role_ids[]" id="drawerRetainedAdministrator" value="<?= (int)(array_column($roles, 'role_id', 'role_name')['admin'] ?? 0) ?>" disabled>
             <p class="field-help" id="drawerAdministratorMinimumHelp" hidden><?= htmlspecialchars(\App\Authorization\AdministratorAccessMinimum::MESSAGE) ?></p>
+            <div class="alert tag-warning" id="drawerAccountLockNotice" role="alert" hidden></div>
 
             <div class="user-drawer-body">
                 <!-- Panel 1: Profile / User -->
