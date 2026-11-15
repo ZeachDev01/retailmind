@@ -7,7 +7,7 @@
                     </select> entries per page</label>
                     <button type="submit" class="btn btn-secondary">Apply</button>
                 </form>
-                <nav class="history-page-buttons" aria-label="History pages">
+                <nav class="history-page-buttons" aria-label="<?= htmlspecialchars($paginationLabel ?? 'History pages') ?>">
                     <?php if ($page > 1): ?><a class="history-page-button history-page-direction" href="<?= htmlspecialchars($url(['page' => $page - 1])) ?>" rel="prev">&lsaquo; Previous</a><?php else: ?><span class="history-page-button history-page-direction" aria-disabled="true">&lsaquo; Previous</span><?php endif; ?>
                     <?php $lastVisiblePage = min($totalPages, max(5, $page)); ?>
                     <?php for ($number = 1; $number <= $lastVisiblePage; $number++): ?>

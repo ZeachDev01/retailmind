@@ -222,8 +222,19 @@ $users = $pdo->query(
      GROUP BY u.user_id
      ORDER BY u.created_at DESC, u.user_id DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
+$totalRows = count($users);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
-$disabledCount = count($users) - $activeCount;
+$disabledCount = $totalRows - $activeCount;
+$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
+$page = is_int($page) ? min(max(1, $page), $totalPages) : 1;
+$hasNext = $page < $totalPages;
+$users = array_slice($users, ($page - 1) * $pageSize, $pageSize);
+$paginationFilters = [];
+$paginationLabel = 'User account pages';
+$url = static fn(array $params): string => app_url('components/user_manager/user_manager.php?' . http_build_query($params + ['length' => $pageSize]));
 $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministratorId();
 ?>
 <!DOCTYPE html>
@@ -233,7 +244,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?></title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>" data-bootstrap-icons>
-    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/avatars.css')) ?>?v=<?= (int)@filemtime(__DIR__ . '/../../assets/css/avatars.css') ?>" data-avatar-styles>
 </head>
 <body class="manage-users-page">
@@ -245,7 +256,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
-            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></article>
+            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= $totalRows ?></div><div class="label">Total Users</div></article>
             <article class="stat-card with-icon success"><span class="stat-icon"><i class="bi bi-person-check-fill" aria-hidden="true"></i></span><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></article>
             <article class="stat-card with-icon <?= $disabledCount ? 'warning' : '' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill" aria-hidden="true"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
         </div>
@@ -316,6 +327,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                     </tbody>
                 </table>
             </div>
+            <?php $rows = $users; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
         </section>
     </main>
 </div>

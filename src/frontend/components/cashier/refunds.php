@@ -370,51 +370,7 @@ if ($receiptId > 0 && $receipt === null) {
                 <?php if (!$refunds): ?>
                     <div class="refund-empty">
                         <?php if ($totalRows === 0): ?>
-                            <svg class="refund-empty-illustration" width="220" height="170" viewBox="0 0 220 170" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                <defs>
-                                    <linearGradient id="rm-receipt-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stop-color="var(--card-bg, #ffffff)" />
-                                        <stop offset="100%" stop-color="var(--theme-surface-soft, #f1f5f9)" />
-                                    </linearGradient>
-                                    <linearGradient id="rm-badge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stop-color="#3b82f6" />
-                                        <stop offset="100%" stop-color="#1d4ed8" />
-                                    </linearGradient>
-                                    <filter id="rm-empty-shadow" x="-20%" y="-15%" width="140%" height="140%" filterUnits="userSpaceOnUse">
-                                        <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="rgba(15, 23, 42, 0.12)" />
-                                    </filter>
-                                </defs>
-                                <ellipse cx="110" cy="148" rx="76" ry="12" fill="var(--theme-surface-soft, rgba(37, 99, 235, 0.08))" />
-                                <circle cx="110" cy="80" r="54" fill="var(--primary, #2563eb)" opacity="0.06" />
-                                <g filter="url(#rm-empty-shadow)">
-                                    <path d="M68 26 C68 21 72 17 78 17 L142 17 C148 17 152 21 152 26 L152 134 L144 128 L136 134 L128 128 L120 134 L112 128 L104 134 L96 128 L88 134 L80 128 L72 134 L68 130 Z"
-                                          fill="url(#rm-receipt-bg)" stroke="var(--border, #cbd5e1)" stroke-width="1.5" stroke-linejoin="round" />
-                                </g>
-                                <rect x="82" y="28" width="3" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="88" y="28" width="5" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="96" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="101" y="28" width="4" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="108" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="113" y="28" width="6" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="122" y="28" width="3" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="128" y="28" width="5" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="136" y="28" width="2" height="12" rx="1" fill="var(--muted, #64748b)" opacity="0.75" />
-                                <rect x="80" y="50" width="60" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.4" />
-                                <rect x="80" y="60" width="44" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.3" />
-                                <rect x="80" y="70" width="52" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.3" />
-                                <line x1="80" y1="82" x2="140" y2="82" stroke="var(--border, #cbd5e1)" stroke-width="1.5" stroke-dasharray="3 3" />
-                                <rect x="80" y="92" width="28" height="5" rx="2" fill="var(--primary, #2563eb)" opacity="0.8" />
-                                <rect x="118" y="92" width="22" height="5" rx="2" fill="var(--primary, #2563eb)" opacity="0.9" />
-                                <g transform="translate(132, 90)">
-                                    <circle cx="16" cy="16" r="22" fill="url(#rm-badge-grad)" filter="url(#rm-empty-shadow)" />
-                                    <circle cx="16" cy="16" r="20" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" />
-                                    <path d="M16 8 C11.6 8 8 11.6 8 16 C8 18.2 8.9 20.2 10.3 21.7 L8 24 L15 24 L15 17 L12.8 19.2 C11.7 18.1 11 16.6 11 15 C11 12.2 13.2 10 16 10 C18.8 10 21 12.2 21 15 C21 16.4 20.4 17.7 19.5 18.5 L21 20 C22.2 18.8 23 17 23 15 C23 11.1 19.9 8 16 8 Z" fill="#ffffff" />
-                                </g>
-                                <path d="M52 48 L54 42 L60 40 L54 38 L52 32 L50 38 L44 40 L50 42 Z" fill="var(--primary, #2563eb)" opacity="0.75" />
-                                <path d="M168 36 L169.5 31 L174.5 29.5 L169.5 28 L168 23 L166.5 28 L161.5 29.5 L166.5 31 Z" fill="#f59e0b" opacity="0.85" />
-                                <circle cx="48" cy="78" r="3" fill="#10b981" opacity="0.7" />
-                                <circle cx="172" cy="70" r="2.5" fill="var(--primary, #2563eb)" opacity="0.6" />
-                            </svg>
+                            <div class="refund-empty-receipt" aria-hidden="true"><i class="bi bi-receipt"></i></div>
                             <h3>No refunds yet</h3>
                             <p class="refund-empty-desc">No refunds recorded during this register session.</p>
                             <a href="#sale_id" class="refund-empty-btn"><i class="bi bi-search" aria-hidden="true"></i> Find a sale to refund</a>
@@ -478,9 +434,7 @@ if ($receiptId > 0 && $receipt === null) {
                         </table>
                     </div>
                 <?php endif; ?>
-                <?php if ($totalRows > 0): ?>
-                    <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
-                <?php endif; ?>
+                <?php $rows = $refunds; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
                 <dialog id="refund-details-drawer" class="refund-details-drawer" aria-labelledby="refund-drawer-title">
                     <div class="history-drawer-header">
                         <div class="history-drawer-header-left">

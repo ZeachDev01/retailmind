@@ -14,16 +14,21 @@ $error = null;
 $entries = [];
 $search = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
+$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$totalRows = 0;
+$totalPages = 1;
 $hasNext = false;
 try {
     if (preg_match('/\A.{0,200}\z/us', $search) !== 1) {
         throw new InvalidArgumentException('Keep your search to 200 characters.');
     }
-    // Each existing 20-receipt service batch supplies two 10-entry display pages.
-    $entries = $receivingService->getGroupedReceivingHistory($historyUserId, intdiv($page - 1, 2) + 1, $search);
-    $displayOffset = (($page - 1) % 2) * 10;
-    $hasNext = count($entries) > $displayOffset + 10;
-    $entries = array_slice($entries, $displayOffset, 10);
+    $totalRows = $receivingService->countGroupedReceivingHistory($historyUserId, $search);
+    $totalPages = max(1, (int)ceil($totalRows / $pageSize));
+    $page = min($page, $totalPages);
+    $entries = $receivingService->getGroupedReceivingHistory($historyUserId, $page, $search, $pageSize);
+    $entries = array_slice($entries, 0, $pageSize);
+    $hasNext = $page < $totalPages;
 } catch (InvalidArgumentException $e) {
     $error = $e->getMessage();
 } catch (Throwable $e) {
@@ -66,6 +71,7 @@ try {
         </header>
 
         <form class="rh-mb-5 rh-flex rh-flex-wrap rh-items-center rh-gap-2 rh-rounded-[14px] rh-border rh-border-solid rh-border-[var(--border)] rh-bg-[var(--theme-surface,#fff)] rh-p-3" method="get" role="search" aria-label="Receiving history">
+            <input type="hidden" name="length" value="<?= $pageSize ?>">
             <div class="rh-relative rh-min-w-0 rh-flex-[1_1_20rem]">
                 <label class="rh-sr-only" for="history_search">Search receiving history</label>
                 <svg class="rh-pointer-events-none rh-absolute rh-bottom-0 rh-left-3 rh-top-0 rh-my-auto rh-h-5 rh-w-5 rh-text-[var(--muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -192,16 +198,14 @@ try {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-        <?php if (!$error && ($page > 1 || $hasNext)): ?>
-            <nav class="history-pagination" aria-label="Receiving history pages">
-                <?php if ($page > 1): ?>
-                    <a class="btn btn-secondary" rel="prev" href="?<?= htmlspecialchars(http_build_query(['q' => $search, 'page' => $page - 1])) ?>">Previous page</a>
-                <?php endif; ?>
-                <span class="badge badge-info" aria-current="page">Page <?= $page ?> · 10 per page</span>
-                <?php if ($hasNext): ?>
-                    <a class="btn btn-secondary" rel="next" href="?<?= htmlspecialchars(http_build_query(['q' => $search, 'page' => $page + 1])) ?>">Next page</a>
-                <?php endif; ?>
-            </nav>
+        <?php if (!$error): ?>
+            <?php
+            $rows = $entries;
+            $paginationFilters = ['q' => $search];
+            $paginationLabel = 'Receiving history pages';
+            $url = static fn(array $params): string => '?' . http_build_query($params + $paginationFilters + ['length' => $pageSize]);
+            require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
+            ?>
         <?php endif; ?>
     </main>
 </div>

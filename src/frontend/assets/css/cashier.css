@@ -3168,6 +3168,10 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
         scrollbar-width: thin;
     }
 
+    .cashier-pos-page .pos-workspace {
+        grid-template-rows: max-content minmax(0, 1fr);
+    }
+
     .cashier-pos-page .checkout-panel {
         position: static;
     }
@@ -3223,4 +3227,224 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
         animation: none !important;
         transition: none !important;
     }
+}
+
+/* POS unslop pass 1: spacing */
+.cashier-pos-page .pos-grid,
+.cashier-pos-page .pos-workspace { gap: 16px; }
+.cashier-pos-page .pos-panel { padding: 20px; }
+.cashier-pos-page .pos-panel-header { gap: 12px; margin-bottom: 16px; }
+.cashier-pos-page .quick-add-section { padding: 20px; }
+.cashier-pos-page .scan-row { gap: 8px; }
+
+/* POS unslop pass 2: quiet surfaces, one RetailMind accent */
+.cashier-pos-page {
+    --pos-canvas: #f7f7f8;
+    --pos-sidebar: #171717;
+    --pos-surface: #fff;
+    --pos-raised: #f1f2f4;
+    --pos-line: #d4d4d8;
+    --pos-text: #171717;
+    --pos-secondary: #52525b;
+    --pos-muted: #71717a;
+    --pos-accent: #2563eb;
+    --pos-accent-soft: #eff6ff;
+    --bg: var(--pos-canvas);
+    --card-bg: var(--pos-surface);
+    --surface-soft: var(--pos-raised);
+    --border: var(--pos-line);
+    --text: var(--pos-text);
+    --muted: var(--pos-muted);
+    --primary: var(--pos-accent);
+    --primary-dark: #1d4ed8;
+    --theme-surface: var(--pos-surface);
+    --theme-surface-soft: var(--pos-raised);
+    --theme-surface-glass: rgba(23, 23, 23, .96);
+    --theme-border: var(--pos-line);
+    --theme-ink: var(--pos-text);
+    --theme-muted: var(--pos-muted);
+    --theme-info-text: #1d4ed8;
+    --theme-info-surface: var(--pos-accent-soft);
+    --cashier-surface: var(--pos-surface);
+    --cashier-border: var(--pos-line);
+    --cashier-text: var(--pos-text);
+    --cashier-muted: var(--pos-muted);
+    background: var(--pos-canvas);
+    color: var(--pos-text);
+}
+
+html[data-theme="dark"] body.cashier-pos-page {
+    --pos-canvas: #141415;
+    --pos-sidebar: #0f0f10;
+    --pos-surface: #19191b;
+    --pos-raised: #232325;
+    --pos-line: rgba(237, 237, 237, .09);
+    --pos-text: #ededed;
+    --pos-secondary: #a1a1a6;
+    --pos-muted: #85858b;
+    --pos-accent: #60a5fa;
+    --pos-accent-soft: #202b3b;
+    --primary-dark: #93c5fd;
+    --theme-info-text: #60a5fa;
+    background: var(--pos-canvas) !important;
+    color: var(--pos-text) !important;
+}
+
+body.cashier-pos-page { background: var(--pos-canvas) !important; color: var(--pos-text) !important; }
+body.cashier-pos-page .main-content { background: var(--pos-canvas) !important; color: var(--pos-text) !important; }
+.cashier-pos-page .sidebar {
+    background: var(--pos-sidebar);
+    color: #ededed;
+}
+body.cashier-pos-page .global-topbar,
+body.cashier-pos-page .admin-mobile-topbar,
+body.cashier-pos-page .pos-panel,
+body.cashier-pos-page .quick-add-section {
+    background-color: var(--pos-surface) !important;
+    color: var(--pos-text) !important;
+    border-color: var(--pos-line) !important;
+    box-shadow: none;
+}
+.cashier-pos-page .sidebar-section-title {
+    color: #a1a1a6;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.cashier-pos-page :is(.sidebar-brand-title, .sidebar-profile-copy strong) { font-weight: 600; letter-spacing: 0; }
+.cashier-pos-page .sidebar a { color: #c4c4c8; }
+.cashier-pos-page .sidebar a:hover,
+.cashier-pos-page .sidebar a.active {
+    background: rgba(96, 165, 250, .12);
+    color: #ededed;
+}
+.cashier-pos-page .sidebar a.active { box-shadow: inset 3px 0 0 var(--pos-accent); }
+.cashier-pos-page .pos-input,
+.cashier-pos-page .pos-select,
+.cashier-pos-page .payment-field input,
+.cashier-pos-page .payment-field select,
+.cashier-pos-page .quick-product-search input {
+    background-color: var(--pos-raised);
+    border-color: var(--pos-line);
+    color: var(--pos-text);
+    box-shadow: none;
+}
+.cashier-pos-page :is(.pos-input, .pos-select, .payment-field input, .payment-field select, .quick-product-search input):focus-visible {
+    border-color: var(--pos-accent);
+    outline: 2px solid var(--pos-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+.cashier-pos-page .pos-panel-icon { background: var(--pos-raised); color: var(--pos-secondary); }
+.cashier-pos-page .count-badge {
+    min-width: 20px;
+    height: 20px;
+    padding-inline: 4px;
+    border: 1px solid var(--pos-line);
+    border-radius: 6px;
+    background: var(--pos-raised);
+    color: var(--pos-secondary);
+    font-weight: 500;
+}
+.cashier-pos-page .checkout-total-value { color: var(--pos-accent); }
+.cashier-pos-page .payment-breakdown > div { background: var(--pos-raised); border-color: var(--pos-line); }
+.cashier-pos-page .quick-category-filter { background: var(--pos-surface); border-color: var(--pos-line); color: var(--pos-secondary); }
+.cashier-pos-page .quick-category-filter.active,
+.cashier-pos-page .quick-category-filter[aria-pressed="true"] {
+    background: var(--pos-accent-soft);
+    border-color: var(--pos-accent);
+    color: var(--pos-accent);
+}
+.cashier-pos-page .quick-product-stepper button { background: var(--pos-raised); color: var(--pos-secondary); }
+.cashier-pos-page .quick-product-stepper button:hover { background: var(--pos-accent-soft); color: var(--pos-accent); }
+.cashier-pos-page :where(button, a, summary, input, select, textarea):focus-visible { box-shadow: none; }
+
+/* POS unslop pass 3: keep the existing Bootstrap icon set quiet */
+.cashier-pos-page .pos-toolbar .bi,
+.cashier-pos-page .pos-panel-icon .bi { color: currentColor; }
+
+/* POS unslop pass 4: shorter scan prompt */
+.cashier-pos-page .scan-label,
+.cashier-pos-page .pos-field-label { color: var(--pos-secondary); font-weight: 500; }
+
+/* POS unslop pass 5: one family, lighter hierarchy */
+.cashier-pos-page :is(.pos-panel-title h2, .cart-heading h2, .pos-lock-card h2, .checkout-dialog-header h3) {
+    color: var(--pos-text);
+    font-weight: 500;
+    letter-spacing: 0;
+}
+.cashier-pos-page :is(.held-sales-header h3, .quick-product-meta > strong, .payment-breakdown strong) { font-weight: 500; }
+.cashier-pos-page .quick-product-name,
+.cashier-pos-page .cart-item-name { font-weight: 500; }
+.cashier-pos-page .checkout-total-value { font-weight: 600; }
+
+/* POS unslop pass 6: let the sale total lead */
+.cashier-pos-page .pos-grid { grid-template-columns: minmax(0, 1.3fr) minmax(420px, .95fr); }
+.cashier-pos-page .pos-workspace { min-width: 0; }
+.cashier-pos-page .checkout-panel { min-width: 0; }
+.cashier-pos-page .cart-empty-cell { color: var(--pos-secondary); }
+
+/* POS unslop pass 7: controls share one radius and quiet border */
+.cashier-pos-page :is(.pos-input, .pos-select, .payment-field input, .payment-field select, .quick-product-search input) { border-radius: 8px; }
+.cashier-pos-page :is(.btn, .quick-grid-toggle, #clear-cart-btn, .quick-category-filter) { border-radius: 8px; }
+.cashier-pos-page .pos-panel,
+.cashier-pos-page .quick-add-section { border-radius: 14px; }
+.cashier-pos-page .pos-actions { position: relative; }
+.cashier-pos-page .pos-actions > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 16px;
+    list-style: none;
+    cursor: pointer;
+}
+.cashier-page .main-content .pos-actions > summary::before { display: none; content: none; }
+.cashier-pos-page .pos-actions > summary::-webkit-details-marker { display: none; }
+.cashier-pos-page .pos-actions[open] > summary .bi { transform: rotate(180deg); }
+.cashier-pos-page .pos-actions-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    right: 0;
+    width: 224px;
+    padding: 4px;
+    border: 1px solid var(--pos-line);
+    border-radius: 10px;
+    background: var(--pos-surface);
+    color: var(--pos-text);
+}
+.cashier-pos-page .pos-actions-menu form { margin: 0; }
+.cashier-pos-page .pos-actions-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--pos-text);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.cashier-pos-page .pos-actions-item:hover,
+.cashier-pos-page .pos-actions-item:focus-visible { background: var(--pos-raised); }
+.cashier-pos-page .pos-actions-item.is-disabled { color: var(--pos-muted); cursor: not-allowed; }
+.cashier-pos-page .pos-actions-item.is-disabled:hover { background: transparent; }
+.cashier-pos-page .pos-actions-reason { margin: 0; padding: 0 12px 8px 36px; color: var(--pos-muted); font-size: .8125rem; line-height: 20px; }
+.cashier-pos-page .pos-actions-divider { display: block; height: 1px; margin: 4px 6px; background: var(--pos-line); }
+
+/* POS unslop pass 8: no added decoration; product and sale data carry the screen */
+.cashier-pos-page .quick-add-section { box-shadow: none; }
+
+/* POS unslop pass 9: short, named feedback only */
+.cashier-pos-page :is(.pos-actions > summary, .pos-actions-item, .quick-category-filter, .quick-product-stepper button) {
+    transition: color 160ms ease-out, background-color 160ms ease-out, border-color 160ms ease-out;
+}
+
+@media (max-width: 1100px) {
+    .cashier-pos-page .pos-grid { grid-template-columns: minmax(0, 1fr); }
 }

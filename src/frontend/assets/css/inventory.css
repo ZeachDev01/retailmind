@@ -163,6 +163,25 @@ button.overview-metric:focus-visible { border-color: #2563eb; box-shadow: 0 6px 
     gap: 12px;
     margin-bottom: 24px;
 }
+.inventory-overview-page .overview-metric[data-overview-view="out"],
+.inventory-overview-page .overview-metric[data-overview-view="low"] {
+    grid-column: span 2;
+    min-height: 112px;
+}
+.inventory-overview-page .overview-metric[data-overview-view="out"] .overview-metric-icon {
+    background: var(--theme-danger-surface, #fee2e2);
+    color: var(--theme-danger-text, #b91c1c);
+}
+.inventory-overview-page .overview-metric[data-overview-view="low"] .overview-metric-icon {
+    background: var(--theme-warning-surface, #fef3c7);
+    color: var(--theme-warning-text, #92400e);
+}
+.inventory-overview-page .overview-metric[data-overview-view="out"] .overview-metric-copy strong { color: var(--theme-danger-text, #b91c1c); }
+.inventory-overview-page .overview-metric[data-overview-view="low"] .overview-metric-copy strong { color: var(--theme-warning-text, #92400e); }
+.inventory-overview-page .overview-metric[data-overview-view="out"] .overview-metric-copy strong,
+.inventory-overview-page .overview-metric[data-overview-view="low"] .overview-metric-copy strong { font-size: 2rem; }
+.inventory-overview-page .overview-metric[data-overview-view="out"] .overview-metric-copy span,
+.inventory-overview-page .overview-metric[data-overview-view="low"] .overview-metric-copy span { color: var(--text); font-size: .9375rem; font-weight: 500; }
 .inventory-overview-page .overview-metric {
     min-height: 92px;
     gap: 12px;
@@ -224,12 +243,16 @@ button.overview-metric:focus-visible { border-color: #2563eb; box-shadow: 0 6px 
 }
 @media (max-width: 900px) {
     .inventory-overview-page .overview-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .inventory-overview-page .overview-metric[data-overview-view="out"],
+    .inventory-overview-page .overview-metric[data-overview-view="low"] { grid-column: span 1; }
 }
 @media (max-width: 560px) {
     .inventory-overview-page .overview-page-heading { align-items: flex-start; flex-direction: column; gap: 0; }
     .inventory-overview-page .overview-page-heading h1 { margin-bottom: 8px; font-size: 1.5rem; }
     .inventory-overview-page .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .inventory-overview-page .overview-metric { align-content: center; flex-wrap: nowrap; padding: 12px; }
+    .inventory-overview-page .overview-metric[data-overview-view="out"],
+    .inventory-overview-page .overview-metric[data-overview-view="low"] { min-height: 92px; }
     .inventory-overview-page .overview-metric-copy { flex: 1 1 auto; }
     .inventory-overview-page .overview-metric-copy span { white-space: normal; }
     .inventory-overview-page .overview-chart-card { padding: 16px; }
