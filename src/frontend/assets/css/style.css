@@ -5056,9 +5056,9 @@ body.system-health-open {
   margin-top: 0.2rem;
 }
 .rm-close {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   border: 0;
   border-radius: 9px;
   background: var(--theme-surface-soft, #f1f5f9);
@@ -5068,6 +5068,7 @@ body.system-health-open {
 .rm-modal-body {
   flex: 1;
   min-height: 0;
+  overflow-wrap: anywhere;
   padding: 1.15rem;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -5117,6 +5118,7 @@ body.system-health-open {
 .rm-drawer-body {
   flex: 1;
   min-height: 0;
+  overflow-wrap: anywhere;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1.15rem;
@@ -5128,6 +5130,17 @@ body.system-health-open {
   display: flex;
   gap: 0.65rem;
   flex-wrap: wrap;
+}
+
+/* Stacked actions consume the form body when a landscape keyboard reduces height. */
+@media (max-height: 480px) {
+  .rm-modal .rm-modal-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .rm-modal .rm-modal-actions .btn {
+    width: auto;
+  }
 }
 
 /* products.css */
