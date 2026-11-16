@@ -294,7 +294,9 @@ The root `.user.ini` and `.htaccess` set upload and memory limits. Confirm the
 effective web values after changing PHP configuration; CLI values can differ.
 
 For a Store PC used only on localhost, plain HTTP is acceptable. Set
-`SESSION_SECURE_COOKIE=false` in that case. Before any HTTPS or tunnel use:
+`SESSION_SECURE_COOKIE=false` in that case. For a tablet on the Store LAN, follow
+[stable local address and trusted HTTPS](LOCAL_ADDRESS_AND_HTTPS.md). Before any
+HTTPS or tunnel use:
 
 1. Enable HTTPS for the public hostname.
 2. Set `APP_ENV=production` only when the public site is ready.

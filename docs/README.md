@@ -9,6 +9,7 @@ relative to the repository root unless stated otherwise.
 
 - [Fresh Windows localhost installation](guides/WINDOWS_LOCALHOST_INSTALL.md)
 - [Fresh-install acceptance checklist](DEPLOYMENT_CHECKLIST.md)
+- [Stable local address and trusted HTTPS](guides/LOCAL_ADDRESS_AND_HTTPS.md)
 - [Project structure](PROJECT_STRUCTURE.md)
 - [Database Backup and recovery](BACKUP_RECOVERY.md)
 - [Offline Recovery Account procedure](RECOVERY_ACCOUNT.md)
