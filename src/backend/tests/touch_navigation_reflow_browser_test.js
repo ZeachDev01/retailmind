@@ -116,4 +116,3 @@ const VIEWPORTS = [
         try { fixture('cleanup'); } catch { /* database may already be gone */ }
     }
 })().catch(error => { console.error(error); process.exit(1); });
-
