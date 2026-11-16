@@ -30,6 +30,12 @@ updated shared header at `src/backend/includes/theme.php`. The relative manifest
 scope supports both a domain root and a subfolder installation. Keep the existing
 icon assets at their current paths. No database migration is needed.
 
+`start_url`, `scope`, and `id` are origin-relative, so the installed icon always
+opens the address it was installed from. Install it from the final trusted HTTPS
+address, and delete and re-add the icon if that address changes. For a Store
+LAN address with trusted HTTPS, see
+[stable local address and trusted HTTPS](LOCAL_ADDRESS_AND_HTTPS.md).
+
 On InfinityFree, the manifest link must include `crossorigin="use-credentials"`.
 Its browser-check cookie is needed to fetch the JSON manifest; without it, the
 host returns an HTML challenge that Chrome reports as a manifest syntax error.

@@ -59,8 +59,12 @@ Record actual results on the deployment PC before final acceptance.
 - [ ] Apache denies `.env`, backend paths, logs, SQL files, backup packages, and
   model artifacts.
 - [ ] The local URL loads over HTTP, or HTTPS is configured before production use.
-- [ ] `SESSION_SECURE_COOKIE=true` when HTTPS is enabled; `false` only for plain
-  HTTP localhost.
+- [ ] The Store LAN address is reserved in the router, and a LAN hostname resolves
+  on the tablet, or the reserved-IP fallback is recorded as an open gap. See
+  [stable local address and trusted HTTPS](guides/LOCAL_ADDRESS_AND_HTTPS.md).
+- [ ] Session cookies are `Secure` on HTTPS. For simultaneous HTTP localhost and
+  HTTPS LAN/tunnel access, omit `SESSION_SECURE_COOKIE` to use request-based
+  detection; force `true` only when all entry points use HTTPS.
 - [ ] Cloudflare Tunnel setup uses the generated Store PC block. `cloudflared.exe`
   is downloaded on demand, not present in a fresh clone.
 - [ ] Remote sign-in reaches the intended Workspace. `admin`,
@@ -81,4 +85,6 @@ review:
 - [ ] Scheduled tasks run with no interactive user signed in.
 - [ ] The real barcode scanner and thermal printer work.
 - [ ] Cloudflare account, token, DNS, Access policy, and HTTPS are correct.
+- [ ] The tablet opens the LAN HTTPS address without a certificate warning, and
+  the home-screen icon launches that address in standalone mode.
 - [ ] A restore on replacement hardware meets the recovery target.
