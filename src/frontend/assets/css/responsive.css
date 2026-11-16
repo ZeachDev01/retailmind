@@ -99,10 +99,11 @@
 
     .sidebar {
         position: fixed;
-        top: 0;
+        top: 58px;
         left: 0;
         right: auto;
-        height: 100dvh;
+        height: calc(100vh - 58px);
+        height: calc(100dvh - 58px);
         min-height: 0;
         width: 260px;
         max-width: 80vw;
@@ -111,7 +112,7 @@
         transition: transform 0.25s ease;
         z-index: 1000;
         overflow-y: auto;
-        padding-top: 4rem;
+        padding-top: 1.1rem;
     }
     .sidebar.open { visibility: visible; transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.25); }
 
@@ -243,7 +244,7 @@
 }
 
 @media (max-width: 900px) {
-    .sidebar { position: fixed; height: 100vh; min-height: 0; }
+    .sidebar { position: fixed; min-height: 0; }
     body.sidebar-collapsed .sidebar { width: 260px; max-width: 80vw; }
     body.sidebar-collapsed .sidebar-brand {
         justify-content: flex-start;
@@ -614,7 +615,7 @@ body.products-page .products-quick-action strong {
 @media (max-width: 480px) {
     .main-content {
         padding: .7rem;
-        padding-top: 4rem;
+        padding-top: 1.1rem;
     }
 
     .menu-toggle {
