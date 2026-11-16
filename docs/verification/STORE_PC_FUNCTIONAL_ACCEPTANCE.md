@@ -4,6 +4,8 @@ Kini ang manual nga checklist sa dili pa gamiton ang RetailMind sa tinuod nga op
 
 **Status: wala pa ni gi-execute sa deployment PC.** Ang matag checkbox kay pending; dili kini certification nga pasado na ang system. Ipares kini sa [installation guide](../guides/WINDOWS_LOCALHOST_INSTALL.md) ug [deployment checklist](../DEPLOYMENT_CHECKLIST.md).
 
+**TestSprite run, 2026-11-16:** 23 cases sa isolated test copy: 10 PASS, 6 FAIL, 7 BLOCKED. Tan-awa ang [execution report ug coverage](STORE_PC_TESTSPRITE_2026-11-16.md). Dili kini full deployment-PC acceptance; ang checkboxes magpabiling pending.
+
 ## 1. Test record ug paggamit
 
 | Impormasyon | Isulat dinhi |

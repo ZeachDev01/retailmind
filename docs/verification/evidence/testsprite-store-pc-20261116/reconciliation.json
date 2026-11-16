@@ -1,0 +1,9 @@
+{
+    "source": "Read-only PDO assertions after TestSprite UI runs; not a TestSprite PASS override",
+    "product_3_stock": 99,
+    "product_3_sales": 1,
+    "product_3_refunds": 1,
+    "product_2_stock": 11,
+    "expected_drawer": 175,
+    "drawer_calculation": "100 opening + 25 seeded sale + 50 sale 2 - 25 refund 1 + 50 sale 3 - 25 refund 2"
+}

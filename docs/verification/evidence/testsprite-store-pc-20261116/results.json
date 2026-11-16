@@ -1,0 +1,280 @@
+{
+  "metadata": {
+    "revision": "3775518788644428e6ad60ce8711a55aaa213660",
+    "projectId": "42d35791-e42f-4c52-8968-67f227988f7f",
+    "date": "2026-11-16",
+    "timezone": "Asia/Manila",
+    "firstStart": "2026-11-16T09:54:01.626Z",
+    "lastFinish": "2026-11-16T10:17:39.655Z",
+    "cliVersion": "0.16.0",
+    "engine": "V3",
+    "totals": {
+      "passed": 10,
+      "failed": 6,
+      "blocked": 7
+    },
+    "testCases": 23,
+    "checklistRows": 219,
+    "targetedRows": 61,
+    "unrunRows": 158,
+    "creditsUsed": 11.5,
+    "origin": "http://127.0.0.1:18765",
+    "database": "retailmind_theme_test_551ea3817c9f",
+    "privateArtifacts": "C:/Users/Mike/AppData/Local/Temp/retailmind-testsprite-0527ba7eaf64"
+  },
+  "cases": [
+    {
+      "name": "AUTH-01 all four workspaces",
+      "testId": "162491b9-82ed-4c45-a567-fd282dde48bc",
+      "runId": "bba04f36-1cf1-446d-881c-7a20d2b97e91",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:14:17.357Z",
+      "finishedAt": "2026-11-16T10:17:39.655Z",
+      "case": 1,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/162491b9-82ed-4c45-a567-fd282dde48bc",
+      "review": "Upat ka Workspace login/landing verified."
+    },
+    {
+      "name": "AUTH-02 AUTH-06 invalid login and logout",
+      "testId": "b1e1e574-ef61-40c0-ac4d-8277bd082a87",
+      "runId": "ff98d368-94ee-4478-956b-70b2a2535694",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:13:38.582Z",
+      "finishedAt": "2026-11-16T10:15:36.333Z",
+      "case": 2,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/b1e1e574-ef61-40c0-ac4d-8277bd082a87",
+      "review": "Invalid/blank login ug logout/direct protected-page checks passed."
+    },
+    {
+      "name": "ACL-01 cashier direct-link restrictions",
+      "testId": "b1eb61fa-e850-4000-9a1e-c05cc1054459",
+      "runId": "c3a09dcd-5cb4-4b87-901f-9696bbcf3d09",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:11:58.204Z",
+      "finishedAt": "2026-11-16T10:14:15.965Z",
+      "case": 3,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/b1eb61fa-e850-4000-9a1e-c05cc1054459",
+      "review": "Cashier protected direct links denied; exact-route retest #20 passed usab."
+    },
+    {
+      "name": "ACL-02 ACL-03 Inventory Manager boundaries",
+      "testId": "1c62ee0e-5559-498e-8c07-462be134eb50",
+      "runId": "c52fae71-1742-46ff-8c95-d255ee89ba24",
+      "status": "blocked",
+      "startedAt": "2026-11-16T10:08:28.244Z",
+      "finishedAt": "2026-11-16T10:13:37.144Z",
+      "case": 4,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/1c62ee0e-5559-498e-8c07-462be134eb50",
+      "review": "Route discovery incomplete; exact financial GET URLs passed sa #21. Exports wala verified."
+    },
+    {
+      "name": "ACL-04 Administrator governance boundary",
+      "testId": "c2b71640-0ed7-433f-b774-1c2523b39122",
+      "runId": "25c64b6d-bd07-4d97-bd87-df391a2b1981",
+      "status": "blocked",
+      "startedAt": "2026-11-16T10:05:51.82Z",
+      "finishedAt": "2026-11-16T10:14:25.106Z",
+      "case": 5,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/c2b71640-0ed7-433f-b774-1c2523b39122",
+      "review": "Route discovery incomplete; exact platform GET URLs passed sa #22. Schedule mutation wala verified."
+    },
+    {
+      "name": "ADM-04 ADM-05 ADM-07 Store setup persistence",
+      "testId": "d837255e-8e25-4efd-9ff4-29b3ac415435",
+      "runId": "a0cf17d5-6d31-47a6-bd16-1c64cdaf079e",
+      "status": "failed",
+      "startedAt": "2026-11-16T10:05:10.284Z",
+      "finishedAt": "2026-11-16T10:08:27.115Z",
+      "case": 6,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/d837255e-8e25-4efd-9ff4-29b3ac415435",
+      "review": "Registers label wala mailhi; Store phone/threshold persisted, negative threshold rejected. Checkout Stations retest #23 passed."
+    },
+    {
+      "name": "INV-01 INV-02 INV-06 product and receiving",
+      "testId": "3851f472-a2dd-41a7-acf7-e58f4d2f5ac3",
+      "runId": "7b7c0413-3c65-46a1-b147-edf09e489db8",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:04:58.423Z",
+      "finishedAt": "2026-11-16T10:11:56.89Z",
+      "case": 7,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/3851f472-a2dd-41a7-acf7-e58f4d2f5ac3",
+      "review": "Scoped product creation, duplicate/invalid input, 100-unit receiving ug zero-quantity validation passed."
+    },
+    {
+      "name": "CTL-01 CTL-02 inventory counts",
+      "testId": "84566244-c3ca-4c08-aade-fc46662bc0d5",
+      "runId": "53d1bdca-9ee2-4652-aba6-afc09e70ff86",
+      "status": "failed",
+      "startedAt": "2026-11-16T10:01:25.76Z",
+      "finishedAt": "2026-11-16T10:05:50.506Z",
+      "case": 8,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/84566244-c3ca-4c08-aade-fc46662bc0d5",
+      "review": "Shared-product test contamination: system8, counted11, variance+3. Concurrent refund added1. Independent retest #19 passed; dili proven double-adjustment bug."
+    },
+    {
+      "name": "POS-04 POS-05 REF-01 checkout and refund",
+      "testId": "67bc2e0f-da77-4346-9f5b-a41235f12407",
+      "runId": "141bf860-b4e3-4d07-a116-3e2f52c970c3",
+      "status": "failed",
+      "startedAt": "2026-11-16T10:01:03.709Z",
+      "finishedAt": "2026-11-16T10:04:56.896Z",
+      "case": 9,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/67bc2e0f-da77-4346-9f5b-a41235f12407",
+      "review": "Sale50/change50 ug refund25 completed; stock/drawer/reload UI assertions incomplete. Supplemental ledger reconciles."
+    },
+    {
+      "name": "GCS-01 GCS-03 GCS-04 GCash test records",
+      "testId": "e41f6186-8cc3-4a02-8b0d-0631caada9f0",
+      "runId": "30cd1a7d-b6fb-4a9d-8c69-5a8b83b63180",
+      "status": "blocked",
+      "startedAt": "2026-11-16T09:58:03.519Z",
+      "finishedAt": "2026-11-16T10:01:24.692Z",
+      "case": 10,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/e41f6186-8cc3-4a02-8b0d-0631caada9f0",
+      "review": "Service preview reached; completion stopped at required real-world confirmations. Walay real transfer."
+    },
+    {
+      "name": "RPT Administrator catalog and source totals",
+      "testId": "ce85c45d-2406-44b7-ba1a-a1faac858e29",
+      "runId": "da345e70-7d33-4840-ba82-45f049cdcdfd",
+      "status": "failed",
+      "startedAt": "2026-11-16T09:56:55.304Z",
+      "finishedAt": "2026-11-16T10:05:08.768Z",
+      "case": 11,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/ce85c45d-2406-44b7-ba1a-a1faac858e29",
+      "review": "16-report/range/export/source comparison incomplete. Empty fresh-Store forecast report dili proven defect."
+    },
+    {
+      "name": "FCT-01 FCT-07 forecasting cold start",
+      "testId": "37388187-5b41-4df0-9582-e4426342a74f",
+      "runId": "64dbcbf3-3da9-4376-ac0e-1b4d2300aa35",
+      "status": "blocked",
+      "startedAt": "2026-11-16T09:56:42.42Z",
+      "finishedAt": "2026-11-16T10:01:02.119Z",
+      "case": 12,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/37388187-5b41-4df0-9582-e4426342a74f",
+      "review": "Cold-start pages reached; full filters/details/history/model verification incomplete; walay training launched."
+    },
+    {
+      "name": "BAK-01 encrypted manual backup and review",
+      "testId": "bf267b34-199f-4458-8898-e0cb618bebaf",
+      "runId": "f6965d5b-b151-4d3c-a44b-abd5bcb2325b",
+      "status": "blocked",
+      "startedAt": "2026-11-16T09:54:02.1Z",
+      "finishedAt": "2026-11-16T09:58:02.932Z",
+      "case": 13,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/bf267b34-199f-4458-8898-e0cb618bebaf",
+      "review": "History Completed138.4KB; device download/key/restore validation unverified. Timestamp defect confirmed sa #17."
+    },
+    {
+      "name": "AUTH-09 AUTH-12 AUTH-13 shared UI",
+      "testId": "06493029-dd45-4f3c-a1ef-bbf143673bdd",
+      "runId": "d35039ad-82d3-4268-8cac-273f1ba70f72",
+      "status": "blocked",
+      "startedAt": "2026-11-16T09:54:01.662Z",
+      "finishedAt": "2026-11-16T09:56:54.067Z",
+      "case": 14,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/06493029-dd45-4f3c-a1ef-bbf143673bdd",
+      "review": "Theme/mobile/keyboard/recipient verification incomplete; walay proven theme-persistence defect."
+    },
+    {
+      "name": "AUTH-03 mandatory first-login password",
+      "testId": "863e15c3-ea7c-4204-842b-a9fda296ad7b",
+      "runId": "9779b174-899b-4ad6-bce1-9c5de8077479",
+      "status": "blocked",
+      "startedAt": "2026-11-16T09:54:01.626Z",
+      "finishedAt": "2026-11-16T09:56:41.445Z",
+      "case": 15,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/863e15c3-ea7c-4204-842b-a9fda296ad7b",
+      "review": "Password change/new login observed; mandatory-route bypass check incomplete. Old-password rejection retest #16 passed."
+    },
+    {
+      "name": "AUTH-03 focused old-password rejection",
+      "testId": "970e84b5-5cfb-48fd-99d2-1ddc62b1d31e",
+      "runId": "9fdd0500-4ef2-4c6d-a641-555eccc94980",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:00:30.708Z",
+      "finishedAt": "2026-11-16T10:01:30.66Z",
+      "case": 16,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/970e84b5-5cfb-48fd-99d2-1ddc62b1d31e",
+      "review": "Old temporary password rejected with exact Invalid username or password message."
+    },
+    {
+      "name": "BAK-01 focused backup timestamp and history",
+      "testId": "69376873-f175-4f2a-88a1-1fbdfc84fe27",
+      "runId": "67bb376d-4d27-47cb-b008-d0d8975a8b49",
+      "status": "failed",
+      "startedAt": "2026-11-16T10:00:30.209Z",
+      "finishedAt": "2026-11-16T10:02:00.772Z",
+      "case": 17,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/69376873-f175-4f2a-88a1-1fbdfc84fe27",
+      "review": "CONFIRMED DEFECT: backup timestamp9:56AM imbes5:56PM Manila; existing Completed138.4KB record."
+    },
+    {
+      "name": "POS-05 REF-01 deterministic TEST-A ledger",
+      "testId": "9298576b-7d34-4865-ab5f-5b8c3e13825a",
+      "runId": "e72d595f-b940-497a-a8d5-7757af77f396",
+      "status": "failed",
+      "startedAt": "2026-11-16T10:05:36.514Z",
+      "finishedAt": "2026-11-16T10:09:12.519Z",
+      "case": 18,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/9298576b-7d34-4865-ab5f-5b8c3e13825a",
+      "review": "TEST-A sale50/refund25 completed; UI stock/drawer/reload verification incomplete. PDO proves stock99, one sale, one refund, drawer175."
+    },
+    {
+      "name": "CTL-01 focused independent count approval",
+      "testId": "167f20b7-be3f-4038-aec2-2e63c9f725ba",
+      "runId": "1e4c2e6e-fabf-4d49-b6a3-569387156421",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:05:36.701Z",
+      "finishedAt": "2026-11-16T10:08:49.937Z",
+      "case": 19,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/167f20b7-be3f-4038-aec2-2e63c9f725ba",
+      "review": "Independent count stock10→11 after approval; no repeat-approval control; PDO stock11 verified."
+    },
+    {
+      "name": "ACL-01 focused exact Cashier routes",
+      "testId": "d252603f-4494-4d9b-81c5-530a25288c78",
+      "runId": "449d0117-cbbb-411d-a929-ccee163fcb6d",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:14:07.28Z",
+      "finishedAt": "2026-11-16T10:15:44.947Z",
+      "case": 20,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/d252603f-4494-4d9b-81c5-530a25288c78",
+      "review": "Cashier denied sa5 exact protected GET routes."
+    },
+    {
+      "name": "ACL-03 focused exact financial report routes",
+      "testId": "27210293-36c3-4d99-9143-29e271f92cfb",
+      "runId": "d27d4614-f3c1-424b-829a-9794729f2797",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:14:07.116Z",
+      "finishedAt": "2026-11-16T10:17:07.976Z",
+      "case": 21,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/27210293-36c3-4d99-9143-29e271f92cfb",
+      "review": "Inventory Manager denied sa4 exact financial-report GET routes. POST exports not tested."
+    },
+    {
+      "name": "ACL-04 focused exact Administrator platform routes",
+      "testId": "4541117b-ae4e-4648-8b7d-84dcf2a97cd4",
+      "runId": "3bdec296-941b-4188-8ab2-6d2188265fe2",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:15:46.079Z",
+      "finishedAt": "2026-11-16T10:17:18.944Z",
+      "case": 22,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/4541117b-ae4e-4648-8b7d-84dcf2a97cd4",
+      "review": "Administrator denied sa3 exact platform/reset/technical-model GET routes. POST writes not tested."
+    },
+    {
+      "name": "ADM-04 focused Checkout Stations direct route",
+      "testId": "6bfce47b-b9b0-4cef-b1c7-014538f85ab3",
+      "runId": "2f182393-4e2f-490f-a393-101f8a0ed227",
+      "status": "passed",
+      "startedAt": "2026-11-16T10:09:44.999Z",
+      "finishedAt": "2026-11-16T10:11:18.303Z",
+      "case": 23,
+      "dashboardUrl": "https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/42d35791-e42f-4c52-8968-67f227988f7f/test-cases/6bfce47b-b9b0-4cef-b1c7-014538f85ab3",
+      "review": "Checkout Stations new58mm test station persisted; duplicate/blank name rejected; active seeded station preserved."
+    }
+  ]
+}
