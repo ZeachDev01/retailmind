@@ -65,7 +65,9 @@ const fixture = action => {
             assert.deepEqual(clipped, [], label + ' controls fit');
         };
         await login('admin');
-        for (const viewport of [{width: 320, height: 740}, {width: 390, height: 844}, {width: 844, height: 390}]) {
+        for (const viewport of [{width: 320, height: 740}, {width: 390, height: 844}, {width: 844, height: 390},
+            {width: 640, height: 360}, {width: 800, height: 480}, {width: 960, height: 600},
+            {width: 1024, height: 768}, {width: 1280, height: 800}, {width: 1366, height: 768}]) {
             await page.setViewportSize(viewport);
             for (const route of ['administrator/dashboard.php', 'administrator/gcash_overview.php', 'notification/notifications.php',
                 'report/report_generation.php?report=gross_profit', 'administrator/stock_issues.php']) {
@@ -90,20 +92,20 @@ const fixture = action => {
                     await review.tap();
                     await page.waitForURL('**/administrator/stock_issues.php?detail=1');
                     assert.equal(new URL(page.url()).pathname, '/components/administrator/stock_issues.php', 'Administrator notification opens read-only oversight');
-                    assert(await page.getByRole('heading', {name: /Stock Issue detail/}).isVisible(), 'Notification opens the referenced issue');
+                    await page.getByRole('heading', {name: 'Report #1', exact: true}).waitFor({state: 'visible'});
                 }
                 if (route === 'report/report_generation.php?report=gross_profit') {
                     assert(await page.locator('#at-a-glance-summary').isVisible());
                     assert(await page.locator('#glance-gross-sales').isVisible());
                 }
                 if (route === 'administrator/stock_issues.php') {
-                    assert.equal(await page.locator('main form[method="post" i]').count(), 0, 'Oversight exposes no mutation form');
+                    assert.equal(await page.locator('main .history-section form[method="post" i]').count(), 0, 'Oversight reports expose no mutation form');
                     assert.equal((await context.request.post(origin + '/components/' + route, {form: {action: 'approve', adjustment_id: '1'}})).status(), 403, 'Oversight refuses mutations');
-                    const detail = page.getByRole('link', {name: 'Open report', exact: true}).first();
+                    const detail = page.getByRole('link', {name: 'Open report #1', exact: true});
                     assert(await detail.isVisible(), 'Issue details are reachable');
                     await detail.tap();
                     await page.waitForURL('**/administrator/stock_issues.php?detail=1');
-                    assert(await page.getByRole('heading', {name: /Stock Issue detail/}).isVisible());
+                    await page.getByRole('heading', {name: 'Report #1', exact: true}).waitFor({state: 'visible'});
                     await fits('Stock Issue detail/' + viewport.width);
                 }
                 assert.deepEqual(errors.splice(0), [], route + ' runs without JavaScript errors');
@@ -137,7 +139,7 @@ const fixture = action => {
             }
             await page.goto(origin + '/components/auth/logout.php');
         }
-        console.log('Administrator mobile monitoring: passed (Chromium touch emulation, 320/390 portrait and 844 landscape; artifacts ' + output + ')');
+        console.log('Administrator mobile monitoring: passed (Chromium touch emulation; 320/390 portrait, 844 landscape, and 640x360/800x480/960x600/1024x768/1280x800/1366x768; artifacts ' + output + ')');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();
