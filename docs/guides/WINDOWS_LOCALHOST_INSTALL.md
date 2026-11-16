@@ -90,8 +90,9 @@ SESSION_SECURE_COOKIE=false
   Store as a hosted deployment.
 - `BACKUP_STORAGE_PATH` must be an absolute, persistent directory outside both
   the project and the web root. See step 8.
-- Keep `SESSION_SECURE_COOKIE=false` on plain HTTP localhost. Set it to `true`
-  when the installation uses HTTPS, including through a tunnel.
+- `SESSION_SECURE_COOKIE=false` is for HTTP-only localhost. Remove this key when
+  HTTP localhost and HTTPS LAN/tunnel access coexist: the application detects
+  HTTPS per request. Force `true` only when all entry points use HTTPS.
 
 Never commit `.env`. The root `.htaccess` denies direct web access to it.
 
@@ -300,7 +301,8 @@ HTTPS or tunnel use:
 
 1. Enable HTTPS for the public hostname.
 2. Set `APP_ENV=production` only when the public site is ready.
-3. Set `SESSION_SECURE_COOKIE=true`.
+3. Remove `SESSION_SECURE_COOKIE` for simultaneous HTTP localhost and HTTPS access,
+   or set it to `true` when all entry points use HTTPS.
 4. Restart Apache and sign in again.
 
 ## 11. Cloudflare remote access
@@ -339,7 +341,8 @@ printing. The Super Administrator Workspace stays local-only. See
 - [ ] A manual run of each task writes a new log entry with a successful result.
 - [ ] `npm run check` and `npm run check:contracts` pass when Node is available.
 - [ ] A tunnel login reaches the intended Workspace; the Super Administrator stays local-only.
-- [ ] `SESSION_SECURE_COOKIE=true` after HTTPS is enabled.
+- [ ] HTTPS uses `Secure` session cookies, with request-based detection for mixed
+  HTTP/HTTPS entry points or `SESSION_SECURE_COOKIE=true` for HTTPS-only access.
 
 ## 13. What still needs the real Store PC
 

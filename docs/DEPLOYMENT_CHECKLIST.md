@@ -62,8 +62,9 @@ Record actual results on the deployment PC before final acceptance.
 - [ ] The Store LAN address is reserved in the router, and a LAN hostname resolves
   on the tablet, or the reserved-IP fallback is recorded as an open gap. See
   [stable local address and trusted HTTPS](guides/LOCAL_ADDRESS_AND_HTTPS.md).
-- [ ] `SESSION_SECURE_COOKIE=true` when HTTPS is enabled; `false` only for plain
-  HTTP localhost.
+- [ ] Session cookies are `Secure` on HTTPS. For simultaneous HTTP localhost and
+  HTTPS LAN/tunnel access, omit `SESSION_SECURE_COOKIE` to use request-based
+  detection; force `true` only when all entry points use HTTPS.
 - [ ] Cloudflare Tunnel setup uses the generated Store PC block. `cloudflared.exe`
   is downloaded on demand, not present in a fresh clone.
 - [ ] Remote sign-in reaches the intended Workspace. `admin`,
