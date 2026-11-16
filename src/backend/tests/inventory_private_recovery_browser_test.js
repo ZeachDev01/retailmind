@@ -73,16 +73,15 @@ function fixture(action) {
         await page.getByRole('button', {name:'Discard older Product draft', exact:true}).click();
         await resumeDraft();
         assert.equal(await page.locator('#supplier').inputValue(), 'Older private store');
-        assert.equal(await page.locator('#notes').inputValue(), 'Older draft note');
+        assert.equal(await page.locator('#received_qty').inputValue(), '4');
         assert.equal(await page.evaluate(() => sessionStorage.getItem('receiving-draft:3')), null, 'Own legacy plaintext is removed only after encrypted migration succeeds');
         await page.evaluate(() => RetailMindInventoryDrafts.discard('receiving_form'));
         await page.reload();
         await page.locator('.receiving-card-add').first().click();
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('5');
-        await page.locator('.receiving-extras summary').first().click();
+        if (!await page.locator('.receiving-extras').first().evaluate(el => el.open)) await page.locator('.receiving-extras summary').first().click();
         await page.locator('#batch_number').fill('PRIVATE-BATCH-316');
-        await page.locator('#notes').fill('PRIVATE-NOTE-316');
         await page.locator('#supplier').fill('PRIVATE-STORE-316');
         await page.locator('#invoice_number').fill('PRIVATE-RECEIPT-316');
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
@@ -97,7 +96,7 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0, 'Recovery never silently restores or posts');
         await resumeDraft();
         assert.equal(await page.locator('#received_qty').inputValue(), '5');
-        assert.equal(await page.locator('#notes').inputValue(), 'PRIVATE-NOTE-316');
+        assert.equal(await page.locator('#batch_number').inputValue(), 'PRIVATE-BATCH-316');
         assert.equal(await page.locator('#supplier').inputValue(), 'PRIVATE-STORE-316');
         assert.equal(await page.locator('[name="operation_token"]').inputValue(), originalToken);
         await context.close(); context = null;
@@ -125,7 +124,10 @@ function fixture(action) {
         await page.route('**/components/report/stock_receiving.php', async route => {
             if (route.request().method() !== 'POST') return route.continue();
             const response = await route.fetch();
-            assert(response.ok(), 'Server committed receiving before simulating response loss');
+            assert(response.ok(), 'Server returned receiving response before simulating response loss');
+            const rawBody = await response.text();
+            const responseBody = rawBody.startsWith('{') ? JSON.parse(rawBody).html : rawBody;
+            assert.ok(responseBody.includes('Receiving entry saved'), responseBody.match(/class="message error"[^>]*>([\s\S]*?)<\/div>/)?.[1] || 'No receiving success');
             await route.abort('failed'); committedResolve();
         });
         await page.locator('.btn-submit').click(); await Promise.race([committed, new Promise((_, reject) => setTimeout(() => reject(new Error('No receiving POST after submit')), 15000))]);
@@ -183,9 +185,12 @@ function fixture(action) {
         await page.waitForFunction(() => document.querySelector('[name="batches[extra_1][notes]"]')?.value === 'Found on top shelf');
         assert.equal(await page.locator('[name="batches[extra_1][batch_number]"]').inputValue(), 'FOUND-DRAFT');
         assert.equal(await page.locator('[name="discrepancy_reason"]').inputValue(), 'Shelf count draft');
-        await page.locator('#batch_counts_tbody input[type="number"]').first().fill('5');
+        for (const field of await page.locator('#batch_counts_tbody .batch-count-loose[data-system-qty]').all()) {
+            await field.fill(await field.getAttribute('data-system-qty'));
+        }
+        await page.locator('#batch_counts_tbody .batch-count-loose').first().fill('5');
         await page.getByRole('button', {name:'Record Count', exact:true}).click();
-        await page.waitForFunction(() => document.querySelector('.alert.tag-success')?.textContent.includes('recorded'));
+        await page.waitForFunction(() => document.querySelector('.alert.tag-success')?.textContent.includes('recorded')).catch(async error => { console.error(await page.locator('main').innerText()); throw error; });
         const countDecisionForm = page.locator('form.inline-form').filter({has:page.locator('[name="action"][value="approve"]')}).first();
         const countDraftId = await countDecisionForm.locator('[name="inventory_draft_id"]').inputValue();
         await loseCommittedResponse('inventory_counts.php', () => countDecisionForm.getByRole('button', {name:'Approve', exact:true}).click());
@@ -207,6 +212,11 @@ function fixture(action) {
         await page.waitForFunction(() => document.querySelector('[name="notes"]').value === 'Pullout draft notes');
         assert.equal(await page.locator('#batch_id').inputValue(), batchId);
         assert.equal(await page.locator('[name="quantity"]').inputValue(), '1');
+        const pulloutBefore = JSON.parse(fixture('inventory_state'));
+        await Promise.all([page.waitForNavigation(), page.locator('#pullout-form button[type=submit]').click()]);
+        assert.match(await page.locator('.message.success').innerText(), /Supplier pullout .* recorded/);
+        const pulloutAfter = JSON.parse(fixture('inventory_state'));
+        assert.equal(pulloutAfter.stock_movements.length, pulloutBefore.stock_movements.length + 1, 'Supplier Pullout posts one stock movement');
         // Stock Issue review retains its report identity and entered explanation.
         await page.goto(origin + '/components/inventory_management/stock_issues.php');
         await page.locator('.review-form [name="review_notes"]').first().fill('Review on tablet draft');
@@ -281,8 +291,8 @@ function fixture(action) {
         await page.locator('.receiving-card-add').first().click();
         await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('2');
-        await page.locator('.receiving-extras summary').first().click();
-        await page.locator('#notes').fill('Originally submitted notes');
+        if (!await page.locator('.receiving-extras').first().evaluate(el => el.open)) await page.locator('.receiving-extras summary').first().click();
+        await page.locator('#invoice_number').fill('Originally submitted receipt');
         await page.locator('#receiving_next').click();
         const editedBefore = JSON.parse(fixture('inventory_state'));
         let editedCommitResolve; const editedCommit = new Promise(resolve => { editedCommitResolve = resolve; });
@@ -294,7 +304,7 @@ function fixture(action) {
         await Promise.race([editedCommit, new Promise((_, reject) => setTimeout(() => reject(new Error('No edited receiving POST')), 15000))]);
         await page.unroute('**/components/report/stock_receiving.php');
         await page.getByRole('button', {name:'Edit line 1'}).click();
-        await page.locator('#notes').fill('Newer unsent notes after commit');
+        await page.locator('#invoice_number').fill('Newer unsent receipt after commit');
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
         await page.reload();
         await page.route('**/submission_status.php?**', route => route.abort('failed'));
@@ -304,13 +314,13 @@ function fixture(action) {
         await page.locator('.btn-submit').click();
         await page.waitForFunction(() => document.querySelector('.message.error')?.textContent.includes('already saved with different values'));
         // Further edits on a validation-response page must keep the original submission baseline without requiring Resume.
-        await page.locator('#notes').fill('Newer unsent notes after rejected retry');
+        await page.locator('#invoice_number').fill('Newer unsent receipt after rejected retry');
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
         await page.reload();
         await page.getByRole('button', {name:'Resume', exact:true}).click();
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.includes('Newer unsaved values are still kept'));
         assert(await page.locator('[data-recovery-id="receiving_form"]').isVisible(), 'Newer values retain Resume and explicit Discard');
-        assert((await page.locator('[data-recovery-id="receiving_form"] details').innerText()).includes('Newer unsent notes after rejected retry'), 'Newer values remain readable to their owner');
+        assert((await page.locator('[data-recovery-id="receiving_form"] details').innerText()).includes('Newer unsent receipt after rejected retry'), 'Newer values remain readable to their owner');
         const editedAfter = JSON.parse(fixture('inventory_state'));
         assert.equal(editedAfter.stock_receiving.length, editedBefore.stock_receiving.length + 1, 'Reconciling newer unsent values cannot submit them');
         assert.equal(editedAfter.stock_movements.length, editedBefore.stock_movements.length + 1, 'Reconciling newer unsent values cannot repeat stock');

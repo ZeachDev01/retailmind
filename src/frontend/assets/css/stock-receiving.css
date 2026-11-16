@@ -63,7 +63,7 @@
 .receiving-catalog-hint { grid-column: 1 / -1; font-size: .75rem; color: var(--muted); padding: .5rem 0 0; margin: 0; }
 #receiving_form { display: contents; }
 .delivery-editor { grid-column: 2; grid-row: 2; }
-.receiving-summary { grid-column: 2; grid-row: 3; position: sticky; top: 1rem; }
+.receiving-summary { grid-column: 2; grid-row: 3; }
 .receiving-form:not([data-step="1"]) > fieldset:first-of-type { display: none; }
 .receiving-form:not([data-step="1"]) .delivery-editor { grid-column: 1; grid-row: 2; }
 .receiving-form:not([data-step="1"]) .receiving-summary { grid-column: 2; grid-row: 2; }

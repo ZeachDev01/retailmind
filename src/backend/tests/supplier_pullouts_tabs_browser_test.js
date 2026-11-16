@@ -41,9 +41,9 @@ function render(canMutate) {
     const browser = await chromium.launch({headless: true});
     const screenshots = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-pullout-tabs-'));
     try {
-        for (const width of [1280, 390]) {
+        for (const [width, height] of [[640,360], [800,480], [960,600], [1024,768], [1280,800], [1366,768], [390,900]]) {
             for (const canMutate of [true, false]) {
-                const page = await browser.newPage({viewport: {width, height: 900}});
+                const page = await browser.newPage({viewport: {width, height}});
                 page.setDefaultTimeout(5000);
                 const errors = [];
                 page.on('pageerror', error => errors.push(error.message));
@@ -68,7 +68,7 @@ function render(canMutate) {
                 if (canMutate) {
                     await page.locator('#reason').fill('Supplier recall');
                     const columns = await page.locator('#pullout-form').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-                    assert.equal(columns, width === 390 ? 1 : 2);
+                    assert.equal(columns, width <= 768 ? 1 : 2);
                     assert.equal(await page.locator('#reason').evaluate(el => el.closest('form').contains(el)), true);
                     assert.equal(await page.locator('#pullout-form > div').count(), 7, 'Every field and submit action stays in the grid');
                     for (const theme of ['light', 'dark']) {

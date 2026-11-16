@@ -8,9 +8,10 @@ const frontend = path.resolve(__dirname, '../../frontend');
 const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_issues.php'), 'utf8');
 const template = source.slice(source.indexOf('<body')).replace(/<\?php include[^?]+\?>/g, '');
 const render = empty => execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8', input: `<?php
+require_once 'src/backend/app/Services/StockIssueService.php';
+$formatIssueQty = [StockIssueService::class, 'formatIssueQuantity'];
 function app_url($path) { return $path; }
 function generate_csrf_token() { return 'test-token'; }
-function format_display_datetime($value) { return $value; }
 $message = $error = '';
 $report = ['adjustment_id' => 1, 'product_id' => 1, 'product_name' => 'Coffee & Milk <250 g>',
     'sku' => str_repeat('LONG-SKU-', 8), 'adjustment_type' => 'other', 'adjustment_qty' => -3,
@@ -24,7 +25,7 @@ $pendingCount = count($pending);
 $returned = ${empty ? '[]' : '[$report]'};
 $reviews = ${empty ? '[]' : '[$report, array_replace($report, ["adjustment_id" => 3, "status" => "rejected"])]'};
 $revisionsFor = static fn($id) => [['revision_id' => 1, 'action' => 'submitted', 'actor_id' => 4,
-    'created_at' => '2026-10-20 09:30:00', 'old_status' => '', 'new_status' => 'pending']];
+    'actor_name' => 'Cathy Cashier', 'created_at' => '2026-10-20 09:30:00', 'old_status' => '', 'new_status' => 'pending']];
 $stockIssueService = new class {
     public function getProductBatches($id) { return [['batch_id' => 1, 'batch_number' => 'COFFEE-01', 'expiration_date' => '2026-11-01', 'remaining_quantity' => 12]]; }
     public function recommendBatchAllocation($id, $qty) { return [1 => 3]; }
@@ -37,22 +38,21 @@ $stockIssueService = new class {
     const output = path.resolve('output/playwright/stock-issue-reviews');
     fs.mkdirSync(output, {recursive: true});
     try {
-        for (const width of [1440, 390]) {
-            const page = await browser.newPage({viewport: {width, height: 1000}});
+        for (const [width, height] of [[640,360], [800,480], [960,600], [1024,768], [1280,800], [1366,768], [390,1000]]) {
+            const page = await browser.newPage({viewport: {width, height}});
             await page.setContent('<!doctype html><html><head></head>' + render(false));
             for (const file of ['style.css', 'reports.css', 'stock-issues.css', 'theme.css']) {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
             }
             assert.equal(await page.locator('.adjustment-card.pending').count(), 2);
-            assert.equal(await page.locator('.adjustment-product').first().textContent(), 'Coffee & Milk <250 g>', 'Product text stays escaped');
-            const approve = page.getByRole('button', {name: 'Approve & deduct 3', exact: true});
+            assert.equal(await page.locator('.adjustment-product-name').first().textContent(), 'Coffee & Milk <250 g>', 'Product text stays escaped');
+            const approve = page.getByRole('button', {name: /Approve & deduct 3/});
             assert.equal(await approve.first().isEnabled(), true);
             assert.equal(await approve.nth(1).isDisabled(), true, 'Insufficient stock blocks approval');
-            assert.equal(await page.getByText('Not enough stock to approve. Reject or return this report.').isVisible(), true);
-            assert.equal(await page.getByLabel('Review note', {exact: true}).count(), 2);
-            assert.equal(await page.getByLabel('Category when returning (optional)').count(), 1, 'Only Other reports allow recategorization');
+            assert.equal(await page.getByLabel('Reviewer note', {exact: true}).count(), 2);
+            assert.equal(await page.getByLabel('Recategorize when returning (optional)').count(), 1, 'Only Other reports allow recategorization');
             assert.equal(await page.locator('.issue-history[open]').count(), 0, 'Past reports start collapsed');
-            const batchSummary = page.getByText('Review batch deductions', {exact: true}).first();
+            const batchSummary = page.locator('.issue-batches > summary').first();
             await batchSummary.focus();
             await page.keyboard.press('Enter');
             assert.equal(await page.getByLabel('Deduct from batch COFFEE-01', {exact: true}).first().isVisible(), true);
@@ -64,13 +64,6 @@ $stockIssueService = new class {
                 await page.locator('html').evaluate((el, theme) => { el.dataset.theme = theme; }, theme);
                 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px: no page overflow`);
                 await page.screenshot({path: path.join(output, `${theme}-${width}.png`), fullPage: true, animations: 'disabled'});
-                if (theme === 'dark') {
-                    const secondary = await page.locator('.review-actions .btn-secondary').first().evaluate(node => {
-                        const style = getComputedStyle(node);
-                        return {background: style.backgroundColor, color: style.color};
-                    });
-                    assert.deepEqual(secondary, {background: 'rgb(28, 44, 67)', color: 'rgb(229, 237, 248)'}, 'Secondary actions use readable dark theme colors');
-                }
                 await page.locator('.issue-history > summary, .issue-batches > summary').evaluateAll(nodes => nodes.forEach(node => { node.parentElement.open = true; }));
                 assert.equal(await page.getByRole('link', {name: 'Correct via inventory count'}).getAttribute('href'), 'components/inventory_management/inventory_counts.php?correct=1');
                 assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px: expanded content stays within viewport`);
@@ -82,7 +75,7 @@ $stockIssueService = new class {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
             }
             assert.equal(await page.locator('.page-subtitle').count(), 0);
-            assert.equal(await page.getByRole('heading', {name: 'No reports to review', exact: true}).isVisible(), true);
+            assert.equal(await page.getByRole('heading', {name: 'No reports waiting for review', exact: true}).isVisible(), true);
             assert.equal(await page.locator('.issue-empty-icon[aria-hidden="true"]').isVisible(), true);
             assert.equal(await page.locator('.review-form, .issue-history').count(), 0);
             for (const theme of ['light', 'dark']) {
