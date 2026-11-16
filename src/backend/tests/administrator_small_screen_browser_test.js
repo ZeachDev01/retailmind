@@ -83,14 +83,17 @@ const fixture = action => {
             'report/forecast_exceptions.php', 'administrator/shift_report.php', 'report/receiving_history.php',
             'invoice/sales.php', 'report/report_generation.php?report=gross_profit',
             'cashier/refund_corrections.php', 'notification/notifications.php'];
-        for (const viewport of [{width:320,height:740}, {width:390,height:844}, {width:844,height:390}]) {
+        for (const viewport of [{width:320,height:740}, {width:390,height:844}, {width:844,height:390},
+            {width:640,height:360}, {width:800,height:480}, {width:960,height:600},
+            {width:1024,height:768}, {width:1280,height:800}, {width:1366,height:768}]) {
             await page.setViewportSize(viewport);
             for (const route of routes) {
                 await visit(route);
                 await fits(route + '/' + viewport.width);
-                const header = await page.locator('.admin-mobile-topbar').boundingBox();
-                assert(header.height <= 64, route + ': mobile header stays compact');
-                const controls = await page.locator('.admin-mobile-topbar').evaluate(header =>
+                const mobileHeader = page.locator('.admin-mobile-topbar');
+                const header = await (await mobileHeader.isVisible() ? mobileHeader : page.locator('.global-topbar')).boundingBox();
+                if (await mobileHeader.isVisible()) assert(header.height <= 64, route + ': mobile header stays compact');
+                const controls = await mobileHeader.evaluate(header =>
                     [...header.querySelectorAll('button, a')].filter(el => el.getClientRects().length)
                         .map(el => {const r = el.getBoundingClientRect(); return {name:el.ariaLabel, x:r.x, right:r.right, y:r.y, bottom:r.bottom, width:r.width, height:r.height};})
                         .sort((a,b) => a.x-b.x));
@@ -103,6 +106,7 @@ const fixture = action => {
                 if (heading) assert(heading.y >= header.y + header.height, route + ': heading clears fixed header');
                 assert.deepEqual(errors.splice(0), [], route + ': no JavaScript errors');
             }
+            if (!await page.locator('.mobile-header-search').isVisible()) continue;
             await visit('administrator/dashboard.php');
             await page.locator('.mobile-header-search').tap();
             const geometry = await page.locator('.command-search-row').evaluate(row => {
@@ -123,7 +127,7 @@ const fixture = action => {
             await page.screenshot({path:path.join(output, 'search-' + viewport.width + '.png')});
             await page.getByRole('button', {name:'Close search',exact:true}).tap();
             await page.locator('#menuToggle').tap();
-            const lastLink = page.locator('#appSidebar .sidebar-nav a').last();
+            const lastLink = page.locator('#appSidebar .sidebar-nav a:visible').last();
             await lastLink.scrollIntoViewIfNeeded();
             const lastBox = await lastLink.boundingBox();
             assert(lastBox.y >= 60 && lastBox.y + lastBox.height <= viewport.height + 1, 'Last menu link is reachable');
@@ -140,7 +144,7 @@ const fixture = action => {
         await visit('administrator/dashboard.php');
         await fits('Desktop dashboard');
         assert(await page.locator('.global-topbar').isVisible(), 'Desktop navigation remains available');
-        console.log('Administrator small-screen layout: passed (21 routes; 320/390 portrait, 844 landscape; search/menu touch; desktop dashboard; artifacts ' + output + ')');
+        console.log('Administrator small-screen layout: passed (21 routes; 320/390 portrait, 844 landscape, and 640x360/800x480/960x600/1024x768/1280x800/1366x768; search/menu touch; desktop dashboard; artifacts ' + output + ')');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

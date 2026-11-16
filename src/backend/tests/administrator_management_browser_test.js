@@ -35,7 +35,10 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
         browser = await chromium.launch({headless: true});
-        const context = await browser.newContext({baseURL: origin});
+        const viewports = [{width:640,height:360}, {width:800,height:480}, {width:960,height:600},
+            {width:1024,height:768}, {width:1280,height:800}, {width:1366,height:768}];
+        const context = await browser.newContext({baseURL: origin, ...(superadmin ? {} : {viewport: viewports[0], hasTouch: true})});
+        await context.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
         const page = await context.newPage();
         page.on('pageerror', error => console.error(error));
         await page.goto('/?login=1');
@@ -76,7 +79,10 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             await row.getByRole('button', {name: /Manage/}).click();
             await page.locator('#drawerFirstName').waitFor({state: 'visible'});
         };
+        let viewportIndex = 0;
         const save = async () => {
+            await page.setViewportSize(viewports[++viewportIndex % viewports.length]);
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Management fits after viewport change');
             await Promise.all([page.waitForNavigation(), page.locator('#drawerStatusButton').click()]);
             assert(await page.getByText('User account updated successfully.', {exact: true}).isVisible());
         };
@@ -173,7 +179,7 @@ const fixture = (action, file = 'administrator_minimum_fixture.php') => {
             assert(await admin.isChecked(), 'Own Admin role survives save');
             await page.goto(route);
         }
-        console.log('Administrator management browser/HTTP: passed');
+        console.log('Administrator management browser/HTTP: passed (create at 640x360; account updates across 800x480/960x600/1024x768/1280x800/1366x768/640x360; Chromium touch emulation)');
     } finally {
         if (browser) await browser.close();
         if (server) { server.kill(); await new Promise(resolve => server.once('exit', resolve)); }
