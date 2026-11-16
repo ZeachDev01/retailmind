@@ -51,7 +51,7 @@ $stockIssueService = new class {
             assert.equal(await approve.nth(1).isDisabled(), true, 'Insufficient stock blocks approval');
             assert.equal(await page.getByLabel('Reviewer note', {exact: true}).count(), 2);
             assert.equal(await page.getByLabel('Recategorize when returning (optional)').count(), 1, 'Only Other reports allow recategorization');
-            assert.equal(await page.locator('.issue-history[open]').count(), 0, 'Past reports start collapsed');
+            assert.equal(await page.locator('.issue-batches[open]').count(), 0, 'Batch allocations start collapsed');
             const batchSummary = page.locator('.issue-batches > summary').first();
             await batchSummary.focus();
             await page.keyboard.press('Enter');

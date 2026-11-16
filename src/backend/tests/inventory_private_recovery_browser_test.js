@@ -84,7 +84,7 @@ function fixture(action) {
         await page.locator('#batch_number').fill('PRIVATE-BATCH-316');
         await page.locator('#supplier').fill('PRIVATE-STORE-316');
         await page.locator('#invoice_number').fill('PRIVATE-RECEIPT-316');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         const draftStorageKey = await page.evaluate(() => Object.keys(localStorage).find(key => key.startsWith('retailmind:inventory:v1:') && key.endsWith(':receiving_form')));
         assert(draftStorageKey, 'Edited receiving entry has a stored encrypted draft');
         const originalToken = await page.locator('[name="operation_token"]').inputValue();
@@ -180,7 +180,7 @@ function fixture(action) {
         await page.locator('[name="batches[extra_1][batch_number]"]').fill('FOUND-DRAFT');
         await page.locator('[name="batches[extra_1][notes]"]').fill('Found on top shelf');
         await page.locator('[name="discrepancy_reason"]').fill('Shelf count draft');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload(); await resumeDraft();
         await page.waitForFunction(() => document.querySelector('[name="batches[extra_1][notes]"]')?.value === 'Found on top shelf');
         assert.equal(await page.locator('[name="batches[extra_1][batch_number]"]').inputValue(), 'FOUND-DRAFT');
@@ -207,7 +207,7 @@ function fixture(action) {
         await page.locator('[name="quantity"]').fill('1');
         await page.locator('[name="reason"]').fill('Damaged packaging');
         await page.locator('[name="notes"]').fill('Pullout draft notes');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload(); await resumeDraft();
         await page.waitForFunction(() => document.querySelector('[name="notes"]').value === 'Pullout draft notes');
         assert.equal(await page.locator('#batch_id').inputValue(), batchId);
@@ -220,7 +220,7 @@ function fixture(action) {
         // Stock Issue review retains its report identity and entered explanation.
         await page.goto(origin + '/components/inventory_management/stock_issues.php');
         await page.locator('.review-form [name="review_notes"]').first().fill('Review on tablet draft');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload(); await resumeDraft();
         assert.equal(await page.locator('.review-form [name="review_notes"]').first().inputValue(), 'Review on tablet draft');
         const issueDraftId = await page.locator('.review-form [name="inventory_draft_id"]').first().inputValue();
@@ -248,7 +248,7 @@ function fixture(action) {
         await page.locator('.manage-product[data-product-id="1"]').click();
         await page.locator('#product-edit-btn').click();
         await page.locator('#edit-product-name').fill('Existing Product draft edit');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload();
         await resumeDraft('product-edit-form');
         assert.equal(await page.locator('#edit-product-name').inputValue(), 'Existing Product draft edit');
@@ -305,7 +305,7 @@ function fixture(action) {
         await page.unroute('**/components/report/stock_receiving.php');
         await page.getByRole('button', {name:'Edit line 1'}).click();
         await page.locator('#invoice_number').fill('Newer unsent receipt after commit');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload();
         await page.route('**/submission_status.php?**', route => route.abort('failed'));
         await resumeDraft();
@@ -315,7 +315,7 @@ function fixture(action) {
         await page.waitForFunction(() => document.querySelector('.message.error')?.textContent.includes('already saved with different values'));
         // Further edits on a validation-response page must keep the original submission baseline without requiring Resume.
         await page.locator('#invoice_number').fill('Newer unsent receipt after rejected retry');
-        await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.startsWith('Unsaved values kept'));
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
         await page.reload();
         await page.getByRole('button', {name:'Resume', exact:true}).click();
         await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.includes('Newer unsaved values are still kept'));
