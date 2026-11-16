@@ -509,6 +509,17 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
 
             <div id="remote-ngrok-panel" data-remote-provider-panel="ngrok"<?= $remoteSetupProvider !== 'ngrok' ? ' hidden' : '' ?>>
                 <h3 class="remote-panel-title"><span class="remote-mark" data-mark="ngrok" aria-hidden="true"><?= $remoteProviderMarks['ngrok'] ?></span> Free setup</h3>
+                <p>If the ngrok link does not open on your phone, try Cloudflare Private DNS: <code>one.one.one.one</code>.</p>
+                <details class="remote-details">
+                    <summary>Link not opening? Check DNS</summary>
+                    <ol class="tunnel-checklist">
+                        <li>On the Android phone opening the link, go to Settings and search for Private DNS.</li>
+                        <li>Select Private DNS provider hostname, enter <code>one.one.one.one</code>, and tap Save.</li>
+                        <li>Open the ngrok link again. If internet access stops working, switch Private DNS back to Automatic and try another network.</li>
+                    </ol>
+                    <p>If the link still fails, check that the Store PC, Apache, and ngrok are running and connected to the internet.</p>
+                    <a href="https://developers.cloudflare.com/1.1.1.1/setup/" target="_blank" rel="noopener noreferrer">Cloudflare DNS setup for other devices</a>
+                </details>
                 <form method="post" class="remote-provider-form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="generate_tunnel_setup_block">
@@ -583,7 +594,11 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                         <h3 class="tunnel-setup-heading"><?= $generatedTunnelBlockType === 'removal' ? 'Remove Remote Access' : 'Run in PowerShell as Administrator' ?></h3>
                         <button type="button" class="btn btn-secondary btn-sm" data-copy-target="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>">Copy block</button>
                     </div>
-                    <p class="remote-token-warning"><i class="bi bi-shield-lock" aria-hidden="true"></i> Contains your token. Keep it private.</p>
+                    <?php if ($generatedTunnelBlockType !== 'removal'): ?>
+                        <p class="remote-token-warning"><i class="bi bi-shield-lock" aria-hidden="true"></i> Contains your token. Keep it private.</p>
+                    <?php else: ?>
+                        <p>Copy the entire block and run it in PowerShell as Administrator on this PC.</p>
+                    <?php endif; ?>
                     <textarea id="<?= $generatedTunnelBlockType === 'removal' ? 'tunnel-removal-block' : 'tunnel-setup-block' ?>" class="tunnel-setup-block" readonly spellcheck="false" aria-label="<?= $generatedTunnelBlockType === 'removal' ? 'Remote Access removal PowerShell block' : 'Store PC Remote Access setup PowerShell block' ?>"><?= htmlspecialchars($generatedTunnelBlock) ?></textarea>
                 </div>
             <?php endif; ?>
