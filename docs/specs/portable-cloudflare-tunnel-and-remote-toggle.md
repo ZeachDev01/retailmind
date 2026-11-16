@@ -1,5 +1,11 @@
 # Portable Cloudflare Tunnel and Remote Access Toggle
 
+## Current Access Policy
+
+ADR-0030 and ADR-0031 govern role access and domain activation. Administrator, Inventory Manager, and Cashier may use the configured tunnel or custom domain from inside or outside the Store, with their existing workspace permissions. Super Administrator remains local-only. Direct access through the Store PC's LAN IP must remain available alongside the domain, including during internet or tunnel outages; the PC, local services, and local network must remain running. The domain is another entry point to the same Store installation and database.
+
+Localhost on the Store PC and LAN IP access from other Store devices must remain usable while the remote tunnel is running. Starting or stopping the tunnel must not stop local services or redirect local access to the public domain.
+
 ## Problem Statement
 
 The Store owner wants to easily access RetailMind from a smartphone or laptop outside the local store network without performing complicated router port-forwarding or needing a fixed public IP address. At the same time, the owner is not yet ready to purchase a permanent custom domain, but expects whatever solution is built to be seamless to upgrade once a custom domain is acquired. Furthermore, the application will eventually be deployed to a dedicated physical Store PC that is completely separate from the development workstation; setting up the remote access capability on that target PC must be fast, portable, and require minimal technical effort. In addition, the owner desires an intuitive in-app toggle switch within the administrative interface to enable or disable remote access on demand, easily view and copy the active temporary URL, scan a QR code from a mobile device, and monitor connection status from anywhere in the app header.
@@ -24,7 +30,7 @@ Provide a turnkey, portable Cloudflare Tunnel management solution integrated int
 12. As a Store Owner, I want local Point of Sale checkout and receipt printing to remain fully operational during internet disruptions, so that store sales are never blocked by cloud or connectivity drops.
 13. As an Administrator, I want internal assets, stylesheets, scripts, and session cookies to function properly over both local HTTP and remote HTTPS origins, so that remote pages load cleanly without mixed-content errors or broken styles.
 14. As an Administrator, I want the option to input a Cloudflare Tunnel Token when a custom domain is acquired, so that the tunnel smoothly binds to our private domain name without needing code refactoring.
-15. As a Cashier, I want my physical checkout register and thermal printing to stay isolated on the store counter, so that remote viewers cannot trigger unintended physical till transactions.
+15. As a Cashier, I want my normal checkout and receipt capabilities available through the configured tunnel or custom domain, so that I can perform my permitted work after signing in.
 16. As a Store Owner, I want remote sessions to obey authentication policies and timeouts, so that leaving a remote browser open does not compromise store governance.
 17. As an Administrator, I want stopping the tunnel toggle to immediately sever external access, so that no external connection persists when the store owner wishes to remain strictly local.
 18. As a Deployer, I want clear, concise documentation outlining the 5-minute setup process on the target Store PC, so that store personnel or technicians can bring the system online confidently.
@@ -48,7 +54,7 @@ Provide a turnkey, portable Cloudflare Tunnel management solution integrated int
   - Test the copy button and QR code generator to ensure the output URL accurately matches the current tunnel entrypoint.
 - **Security & Route Guardrail Seam**:
   - Execute automated HTTP probes against sensitive locations (environment definitions, version control directories, backup directories) to guarantee access is categorically denied.
-  - Verify that mutations restricted to physical store premises (cash drawer balancing, physical register adjustments) respect access policy boundaries when accessed over remote origins.
+  - Verify that Administrator, Inventory Manager, and Cashier retain their workspace permissions through the configured tunnel or custom domain, that Super Administrator is blocked there, and that direct LAN IP access remains usable when the tunnel or internet is unavailable.
 - **Prior Art**:
   - Leverages existing administrative dashboard route testing, session/authentication policy tests, and store settings persistence test patterns.
 
@@ -57,7 +63,7 @@ Provide a turnkey, portable Cloudflare Tunnel management solution integrated int
 - Registering or purchasing a custom domain name during the current development iteration.
 - Enforcing paid enterprise Cloudflare features or multi-region load balancing.
 - Replicating the local transactional database to cloud database instances; local transactions remain authoritative on the physical Store PC.
-- Enabling remote cash drawer kicks or triggering remote physical thermal printing.
+- Adding remote hardware control beyond the existing workspace checkout and receipt capabilities.
 
 ## Further Notes
 

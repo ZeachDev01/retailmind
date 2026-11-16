@@ -4,6 +4,11 @@ Use this checklist to accept a new Windows Store PC installation. The complete
 procedure is in the
 [fresh Windows localhost installation guide](guides/WINDOWS_LOCALHOST_INSTALL.md).
 
+For the full manual functionality test by role, hardware, local/LAN/tunnel
+access, and recovery, follow the
+[Store PC functionality checklist](verification/STORE_PC_FUNCTIONAL_ACCEPTANCE.md).
+Record actual results on the deployment PC before final acceptance.
+
 ## Before installation
 
 - [ ] Windows is 64-bit and XAMPP provides Apache, MySQL/MariaDB, and PHP 8.2+
