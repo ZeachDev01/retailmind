@@ -51,6 +51,31 @@ const query = sql => {
         const page = await browser.newPage();
         page.setDefaultTimeout(5000);
         await page.route('https://**/*', route => route.fulfill({status: 200, body: ''}));
+
+        query('UPDATE inventory SET quantity_on_hand = 3 WHERE product_id = 1');
+        assert.equal(query("SELECT notification_id FROM notifications WHERE user_id = 3 AND type = 'low_stock' AND reference_id = 1").length, 0,
+            'Fixture starts without a low-stock notification for the test product');
+        await page.goto(origin + '/?login=1');
+        await page.locator('#landing-login-username').fill('theme_inventory_manager');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        await page.goto(origin + '/components/notification/notifications.php?category=low_stock&view=unread&batch=10');
+        assert.equal(await page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'}).count(), 1,
+            'Opening notifications creates an alert for current low stock');
+        await page.goto(origin + '/components/auth/logout.php');
+        await page.goto(origin + '/?login=1');
+        await page.locator('#landing-login-username').fill('theme_cashier');
+        await page.locator('#landing-login-password').fill(data.password);
+        await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+        await page.goto(origin + '/components/notification/notifications.php?category=low_stock&view=unread&batch=10');
+        assert.equal(await page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'}).count(), 1,
+            'The Cashier Workspace receives the low-stock notification');
+        query('UPDATE inventory SET quantity_on_hand = 11 WHERE product_id = 1');
+        await page.goto(origin + '/components/notification/notifications.php?category=low_stock&view=unread&batch=10');
+        assert.equal(await page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'}).count(), 0,
+            'Safe stock resolves the Cashier low-stock notification');
+        await page.goto(origin + '/components/auth/logout.php');
+
         await page.goto(origin + '/?login=1');
         await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
         await page.locator('#landing-login-username').fill('theme_admin');

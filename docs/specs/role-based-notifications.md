@@ -4,7 +4,7 @@ Status: Product decisions and test approach confirmed on 2026-10-21. Implemented
 
 ## Problem Statement
 
-Staff receive Notifications unrelated to their responsibilities. Routine inventory alerts reach Administrators and Cashiers, technical model-training failures reach operational staff, and users with secondary roles can miss relevant updates. A shared user inbox mixes Workspaces, making unread counts and read actions unreliable indicators of each role's work.
+Staff receive Notifications unrelated to their responsibilities. Inventory alerts can miss the staff who need to see them, technical model-training failures can reach operational staff, and users with secondary roles can miss relevant updates. A shared user inbox mixes Workspaces, making unread counts and read actions unreliable indicators of each role's work.
 
 Administrator attention currently treats every pending Stock Issue as an escalation. Required work can also be suppressed by inconsistent preference handling, while repeated checks can generate unnecessary alerts. Existing development Notifications reflect these inconsistent rules.
 
@@ -17,7 +17,7 @@ Route Notifications according to responsibility across every assigned role, and 
 | Super Administrator | Platform security, locked accounts, backup and restore failures, system health, and technical Demand Forecast failures. |
 | Administrator | Cash discrepancies, unusual discounts, sales reversals, Fiscal Period deadlines, and serious or overdue inventory exceptions. |
 | Inventory Manager | Low stock, replenishment, expiry and Supplier Pullout reminders, unusual demand, and Stock Issues awaiting review. |
-| Cashier | Own workflow updates, including Stock Issues returned, approved, or rejected; relevant stock warnings during checkout. |
+| Cashier | Low-stock alerts, own workflow updates, including Stock Issues returned, approved, or rejected, and relevant stock warnings during checkout. |
 
 Administrator inventory oversight remains read-only. Routine replenishment alerts do not fill Cashier inboxes. Correct existing development Notifications without changing operational records.
 
@@ -36,7 +36,7 @@ Administrator inventory oversight remains read-only. Routine replenishment alert
 11. As an Inventory Manager, I want new and resubmitted Stock Issues promptly, so that I can review reports.
 12. As a Cashier, I want my returned Stock Issues highlighted, so that I can correct and resubmit them.
 13. As a Cashier, I want approval and rejection updates for my Stock Issues, so that I know their outcomes.
-14. As a Cashier, I want relevant stock warnings during checkout, so that I can respond while serving a customer.
+14. As a Cashier, I want low-stock products in my Notifications, so that I can alert the Inventory Manager before a sale is affected.
 15. As a Cashier, I want replenishment alerts routed to Inventory Managers, so that my inbox remains relevant.
 16. As a multi-role staff member, I want eligibility based on every assigned role, so that a secondary role does not miss its work.
 17. As a multi-role staff member, I want the active Workspace's list and bell count, so that I can identify that role's unread updates.
@@ -60,7 +60,7 @@ Administrator inventory oversight remains read-only. Routine replenishment alert
 - New or resubmitted Stock Issues notify eligible Inventory Managers immediately through the workflow. Returned, approved, and rejected reports notify their reporting Cashier.
 - Stock Issues escalate when pending for at least 24 hours OR valued at PHP 5,000 or more. Reuse existing configurable thresholds. Counting all pending reports alone must not trigger escalation. Preserve the existing per-report value calculation rather than treating the total value of unrelated reports as a serious individual report.
 - Products becoming out of stock escalate to Administrator oversight. Expired stock remaining uncollected 24 hours after expiry also escalates. Reuse the Store's inventory and Stock Batch conventions and Philippine time; stock that is no longer present must not continue generating an active expiry condition.
-- Routine low stock and approaching expiry remain Inventory Manager concerns. Checkout warnings remain contextual Cashier feedback.
+- Low-stock alerts appear in the Inventory Manager and Cashier Workspaces. Replenishment and approaching-expiry reminders remain Inventory Manager concerns; checkout warnings remain contextual Cashier feedback.
 - Required-action in-app delivery overrides optional-delivery preferences for security failures, pending Stock Issue reviews, returned reports, and escalated exceptions. Routine reminders and email remain optional. Do not treat the entire Notification Category as mandatory when its individual conditions differ.
 - Keep email on the existing daily notification run. Only newly triggered or escalated conditions are eligible, subject to email preferences and available recipient addresses. There is no immediate-email guarantee. Email-only recipients must also be deduplicated.
 - Use stable condition identity and lifecycle state. Repeated checks of an unchanged condition must not insert or email another alert. Reading does not resolve a condition. Notify again on escalation or recurrence after actual resolution; required unresolved work remains visible independently of unread status.
