@@ -122,6 +122,10 @@ echo "\n=== 4. Removal block ===\n";
 
 $removal = $builder->buildRemovalBlock(['app_root' => 'C:\\Store PC\\retailmind']);
 $assert(str_contains($removal, 'service_uninstall.ps1'), 'Removal block invokes the existing removal script');
+$assert(str_contains($removal, "'src/backend/scripts/tunnel/service_uninstall.ps1'"), 'Removal block directly locates the production uninstaller');
+$assert(str_contains($removal, '-NoProfile -ExecutionPolicy Bypass -File $uninstaller'), 'Copied removal works with the default script execution policy without changing machine settings');
+$assert(str_contains($removal, "if (\$LASTEXITCODE -ne 0) { throw"), 'Removal errors prevent the success message');
+$assert(str_contains(str_replace("\r\n", "\n", $removal), "\n& {\n") && str_ends_with(trim($removal), '}'), 'Removal block runs as one complete paste with its variables in scope');
 $assert(str_contains($removal, 'RetailMindCloudflareTunnel'), 'Removal block names the shared Windows Service');
 $assert(str_contains($removal, 'not deleted'), 'Removal block states application data is preserved');
 $assert(!str_contains($removal, $permanentToken), 'Removal block never contains a token');

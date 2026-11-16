@@ -76,6 +76,7 @@ final class TunnelSetupBlockBuilder
         return $header . <<<POWERSHELL
 & {
 \$ErrorActionPreference = 'Stop'
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 \$serviceName = '{$serviceName}'
 \$legacyTaskName = '{$legacyTaskName}'
 \$appRoot = {$rootLiteral}
@@ -151,11 +152,12 @@ POWERSHELL;
 # Paste this entire block into an elevated PowerShell on the Store PC.
 # The application, database, and backups are not deleted.
 
+& {
 \$ErrorActionPreference = 'Stop'
 \$serviceName = '{$serviceName}'
 \$legacyTaskName = '{$legacyTaskName}'
 \$appRoot = {$rootLiteral}
-\$uninstaller = Join-Path \$appRoot 'scripts/tunnel/service_uninstall.ps1'
+\$uninstaller = Join-Path \$appRoot 'src/backend/scripts/tunnel/service_uninstall.ps1'
 
 # Pre-flight: elevated PowerShell
 \$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -165,9 +167,11 @@ if (-not \$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administr
 }
 
 # Stop and delete the service, then remove the legacy scheduled task and state
-& \$uninstaller -ServiceName \$serviceName -LegacyTaskName \$legacyTaskName
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File \$uninstaller -ServiceName \$serviceName -LegacyTaskName \$legacyTaskName
+if (\$LASTEXITCODE -ne 0) { throw 'Remote Access removal failed. Check the error above before retrying.' }
 
 Write-Host 'Remote Access is removed. Local checkout and printing are unaffected.' -ForegroundColor Green
+}
 POWERSHELL;
     }
 
