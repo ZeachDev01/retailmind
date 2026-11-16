@@ -16,7 +16,20 @@ device integration. See [manual receipt printing](../specs/opt-in-receipt-printi
 
 A **RetailMind POS** shortcut was created on Mike's Desktop on 2026-10-24. Open it
 and sign in to RetailMind. It uses a separate Chrome profile, so an existing login
-in normal Chrome is not copied. Keep this window for Store work.
+in normal Chrome is not copied. Keep this window for cashier receipts.
+
+On 2026-11-12, a separate **RetailMind Reports** Desktop shortcut was created.
+Use it for Generate Report and other reports, including Stock Movement Report.
+It opens a separate Chrome profile with normal print preview and printer selection:
+
+```text
+--no-first-run --no-default-browser-check --new-window --user-data-dir="C:\Users\Mike\AppData\Local\RetailMind\ChromeReports" "http://localhost/retailmind/src/frontend/components/report/report_generation.php"
+```
+
+Sign in separately in this Reports window. Generate the report there, then click
+Print / Save as PDF to review the browser preview before printing. The POS window
+keeps silent receipt printing. Opening a report in the POS window, even in another
+tab or pop-up, still uses silent printing; use the Reports shortcut instead.
 
 The shortcut opens the local POS with these options:
 
@@ -81,3 +94,10 @@ Bluetooth operation remain unverified.
 On 2026-11-12, the Desktop shortcut flags were read back and Xprinter XP-58 was
 still the Windows default printer, with WorkOffline false. Browser automation was
 unavailable; the successful device test was performed and confirmed by the user.
+
+The separate Reports shortcut passed a red/green PowerShell check on 2026-11-12:
+the check failed before it existed, then passed after creation. It verifies a
+separate profile, the Generate Report URL, a valid browser executable, a new window,
+no silent-print or preview-disabling flags, and preserved POS silent-print flags.
+The native/browser automation host was unavailable, so the Reports window's actual
+print preview and paper output remain unverified.

@@ -26,14 +26,16 @@ const screens = inventory ? [
     'report/forecast_analytics', 'report/forecast_exceptions', 'report/predictions', 'report/data_readiness',
     'auth/user_info', 'auth/preferences', 'auth/change_password', 'auth/workspace', 'notification/notifications',
 ] : admin ? [
-    'administrator/dashboard', 'administrator/registers', 'administrator/store_settings',
+    'administrator/dashboard', 'administrator/gcash_overview', 'administrator/model_review',
+    'administrator/registers', 'administrator/store_settings',
+    'administrator/store_settings?section=attention-thresholds', 'administrator/store_settings?section=remote-access',
     'administrator/store_calendar', 'system_administrator/fiscal_periods',
     'administrator/database_backup', 'user_manager/user_manager',
     'system_administrator/audit_logs', 'invoice/sales', 'invoice/sales?tab=reversals&sale_id=1',
     'invoice/legacy_reversals?sale_id=1', 'inventory_management/promotions',
-    'administrator/stock_issues', 'administrator/shift_report', 'report/forecast_analytics',
+    'administrator/stock_issues', 'administrator/shift_report', 'report/receiving_history',
     'report/forecast_exceptions', 'report/data_readiness', 'report/report_generation',
-    'report/report_generation?report=inventory_valuation', 'auth/user_info', 'auth/preferences',
+    'report/report_generation?report=inventory_valuation', 'report/report_generation?report=gcash_transactions', 'auth/user_info', 'auth/preferences',
     'auth/change_password', 'auth/workspace', 'notification/notifications',
     ...['sales_product', 'sales_category', 'sales_cashier', 'refunds', 'fast_moving', 'slow_moving',
         'low_stock', 'stock_movements', 'adjustments', 'forecast_actual',
@@ -72,8 +74,8 @@ const fixture = action => {
         const port = listener.address().port;
         await new Promise(resolve => listener.close(resolve));
         const origin = 'http://127.0.0.1:' + port;
-        server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
-            {env: {...env, RM_THEME_TEST_DATABASE: database}, stdio: ['ignore', 'ignore', 'pipe']});
+        server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend'],
+            {env: {...env, DB_NAME: database}, stdio: ['ignore', 'ignore', 'pipe']});
         let logs = '';
         server.stderr.on('data', chunk => { logs += chunk; });
         for (let attempt = 0; attempt < 100; attempt++) {
@@ -120,12 +122,15 @@ const fixture = action => {
                 await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, theme);
                 for (const [width, height] of sizes) {
                     await page.setViewportSize({width, height});
-                    await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => animation.effect.getTiming().iterations !== Infinity && animation.effect.target.checkVisibility()).map(animation => animation.finished.catch(() => {}))));
+                    await page.evaluate(() => Promise.race([
+                        new Promise(resolve => setTimeout(resolve, 400)),
+                        Promise.all(document.getAnimations().filter(animation => animation.effect.getTiming().iterations !== Infinity && animation.effect.target.checkVisibility()).map(animation => animation.finished.catch(() => {}))),
+                    ]));
                     const issues = await page.evaluate(() => {
                         const width = document.documentElement.clientWidth;
                         const main = document.querySelector('.main-content, main');
                         const issues = [];
-                        const visible = el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden';
+                        const visible = el => el.checkVisibility({contentVisibilityAuto: true, visibilityProperty: true});
                         const name = el => el.tagName.toLowerCase() + '#' + el.id + '.' + el.className;
                         const rgb = value => {
                             const channels = value.match(/[\d.]+/g).map(Number);
@@ -137,8 +142,9 @@ const fixture = action => {
                             return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4;
                         }).reduce((sum, channel, i) => sum + channel * [.2126, .7152, .0722][i], 0);
                         if (document.documentElement.scrollWidth > width + 1) issues.push('Page overflow');
-                        if (document.querySelectorAll('main h1').length !== 1) issues.push('Expected one page h1');
+                        if ([...document.querySelectorAll('main h1')].filter(visible).length !== 1) issues.push('Expected one visible page h1');
                         for (const el of document.querySelectorAll('main input:not([type=hidden]), main select, main textarea, #commandSearch')) {
+                            if (!visible(el)) continue;
                             if (!el.labels?.length && !el.getAttribute('aria-label') && !el.getAttribute('aria-labelledby')) issues.push('Unlabelled field ' + name(el));
                         }
                         for (const el of document.querySelectorAll('main button, main a.btn, main summary, .admin-mobile-topbar button, .global-topbar button, .global-topbar a')) {
@@ -208,6 +214,7 @@ const fixture = action => {
                     await page.keyboard.press('Enter');
                     assert.equal(await commands.evaluate(el => el.open), false, 'Maintenance reference closes with the keyboard');
                 }
+                if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');
                 const menu = page.locator('#menuToggle');
                 if (await menu.count()) {
                     await menu.tap();
@@ -308,6 +315,7 @@ const fixture = action => {
                     await date.tap();
                     assert.equal(await page.locator('#calendar_date').inputValue(), await date.getAttribute('data-date'), 'Calendar date selection responds to touch');
                     assert.equal(await date.getAttribute('aria-pressed'), 'true', 'Selected date is announced');
+                    await page.keyboard.press('Escape');
                     const first = page.locator('button.calendar-day-cell').first();
                     await first.focus();
                     await page.keyboard.press('Space');
@@ -322,6 +330,55 @@ const fixture = action => {
                         assert.equal(await page.locator('#product-scope').isVisible(), scope === 'product');
                         assert.equal(await page.locator('#category-scope').isVisible(), scope === 'category');
                     }
+                    const draftName = 'Audit <draft> & "promotion"';
+                    await page.locator('#promotion-promotion_name').fill(draftName);
+                    await page.locator('#promotion-discount_value').fill('10');
+                    await page.locator('#promotion-discount_type').selectOption('fixed');
+                    await page.locator('#scope').selectOption('product');
+                    await page.locator('#promotion-product_id').selectOption('1', {force: true});
+                    await page.locator('#promotion-minimum_quantity').fill('3');
+                    await page.locator('#promotion-starts_at').fill('2026-11-20T08:00');
+                    await page.locator('#promotion-ends_at').fill('2026-11-19T08:00');
+                    await page.getByRole('button', {name: 'Create promotion', exact: true}).click();
+                    await page.locator('#promotion-ends_at[aria-invalid="true"]').waitFor();
+                    assert.equal(await page.locator('#promotion-promotion_name').inputValue(), draftName, 'Rejected promotion preserves escaped text');
+                    for (const [id, value] of Object.entries({'promotion-discount_type':'fixed', scope:'product', 'promotion-product_id':'1', 'promotion-minimum_quantity':'3', 'promotion-starts_at':'2026-11-20T08:00'})) {
+                        assert.equal(await page.locator('#' + id).inputValue(), value, 'Rejected promotion retains ' + id);
+                    }
+                    assert.equal(await page.locator('#promotion-field-error').isVisible(), true);
+                    assert.equal(await page.locator('#promotion-ends_at').evaluate(el => document.activeElement === el), true, 'Focus the date that needs correction');
+                    page.once('dialog', dialog => dialog.accept());
+                    await page.reload();
+                }
+                if (admin && screen === 'administrator/store_settings') {
+                    assert.equal(await page.evaluate(() => RetailMindUI.hasUnsavedChanges()), false, 'Empty file inputs and untouched settings are clean');
+                    const original = await page.locator('#store_name').inputValue();
+                    await page.locator('#store_name').fill('Unsaved Store draft');
+                    await page.locator('.settings-sidebar a[href*="attention-thresholds"]').click();
+                    await page.getByRole('dialog', {name: 'Leave unsaved changes?'}).waitFor();
+                    await page.getByRole('button', {name: 'Cancel', exact: true}).click();
+                    assert.equal(await page.locator('#store_name').inputValue(), 'Unsaved Store draft', 'Cancelled navigation retains edits');
+                    await page.locator('#store_name').fill(original);
+                    assert.equal(await page.evaluate(() => RetailMindUI.hasUnsavedChanges()), false, 'Reverting edits clears the warning');
+                    const before = fixture('store_settings_state');
+                    await page.locator('#store_name').fill('Draft <Store> & "name"');
+                    await page.locator('#timezone').fill('Invalid/AuditZone');
+                    await page.getByRole('button', {name: 'Save store details', exact: true}).click();
+                    await page.locator('#timezone[aria-invalid="true"]').waitFor();
+                    assert.equal(await page.locator('#store_name').inputValue(), 'Draft <Store> & "name"');
+                    assert.equal(await page.locator('#timezone').inputValue(), 'Invalid/AuditZone');
+                    assert.equal(await page.locator('#timezone-error').isVisible(), true);
+                    assert.equal(await page.locator('#timezone').evaluate(el => document.activeElement === el), true);
+                    assert.equal(fixture('store_settings_state'), before, 'Rejected settings do not change saved records');
+                    let unloadWarning = false;
+                    page.once('dialog', async dialog => { unloadWarning = dialog.type() === 'beforeunload'; await dialog.accept(); });
+                    await page.reload();
+                    assert.equal(unloadWarning, true, 'Reload warns before discarding a rejected draft');
+                    await page.locator('#store_name').fill('Discard this draft');
+                    await page.locator('.settings-sidebar a[href*="attention-thresholds"]').click();
+                    await page.getByRole('button', {name: 'Discard changes', exact: true}).click();
+                    await page.waitForURL('**/store_settings.php?section=attention-thresholds');
+                    assert.equal(await page.evaluate(() => RetailMindUI.hasUnsavedChanges()), false, 'Committed navigation releases the old form snapshots');
                 }
                 if (screen === 'inventory_management/products' && admin) {
                     await page.locator('#product-search').fill('Theme Test Item');
@@ -464,7 +521,7 @@ const fixture = action => {
                     }
                 }
                 if (screen === 'report/data_readiness') {
-                    assert.equal(await page.locator('.stat-card .value').first().textContent(), '66', 'Data Readiness counts fixture products rather than treating a query error as an empty catalog');
+                    assert.match(await page.locator('.forecast-readiness-visual strong').first().textContent(), /\/ 66 products/, 'Data Readiness counts fixture products rather than treating a query error as an empty catalog');
                 }
             };
             try { await verify(); }

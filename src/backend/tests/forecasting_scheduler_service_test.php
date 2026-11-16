@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../app/Services/MlJobService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
@@ -19,6 +21,7 @@ function assert_same(mixed $expected, mixed $actual, string $message): void
 $clock = '2024-05-20 23:05:00';
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $pdo->sqliteCreateFunction('NOW', static function () use (&$clock) { return $clock; });
+createReplenishmentBatchSchema($pdo);
 $pdo->exec("CREATE TABLE products (product_id INT, sku TEXT, product_name TEXT, reorder_level INT DEFAULT 10, safety_stock INT DEFAULT 5, minimum_order_quantity INT DEFAULT 1, units_per_package INT DEFAULT 1, status TEXT);
     CREATE TABLE inventory (product_id INT PRIMARY KEY, quantity_on_hand INT);
     CREATE TABLE forecast_sales_imports (product_id INT, sale_date TEXT, quantity INT);

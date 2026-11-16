@@ -29,7 +29,11 @@ const {chromium} = require('playwright');
                     'category_id' => 0,
                     'granularity' => 'daily',
                     'period' => $activePeriod,
+                    'cashier_id' => '',
+                    'type' => 'all',
+                    'search' => '',
                 ];
+                $cashiers = [];
                 require_once '../../../backend/app/Services/ReportAccessService.php';
                 $reportCatalog = App\\Services\\ReportAccessService::catalogForRole('admin');
                 $todayPh = '2026-10-17';

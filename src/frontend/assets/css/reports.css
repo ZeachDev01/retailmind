@@ -605,7 +605,7 @@ html[data-theme="dark"] .analytics-tab.is-active {
 }
 .report-filter-grid input[type="date"],
 .report-filter-grid select {
-    min-height: 42px;
+    min-height: 44px;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border, #cbd5e1);
     border-radius: 8px;
@@ -622,7 +622,7 @@ html[data-theme="dark"] .analytics-tab.is-active {
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 .report-filter-grid button[type="submit"] {
-    min-height: 42px;
+    min-height: 44px;
     padding: 0.5rem 1.25rem;
     font-weight: 600;
     border-radius: 8px;
@@ -638,7 +638,7 @@ html[data-theme="dark"] .analytics-tab.is-active {
     border-top: 1px solid var(--border, #e2e8f0);
 }
 .report-actions .btn {
-    min-height: 40px;
+    min-height: 44px;
     padding: 0.5rem 1.1rem;
     border-radius: 8px;
     font-weight: 600;

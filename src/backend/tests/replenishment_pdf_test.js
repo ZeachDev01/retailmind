@@ -22,7 +22,11 @@ const vm = require('node:vm');
     const rows = Array.from({ length: 100 }, (_, i) => ({
         hidden: true,
         dataset: { stock: ['Out of stock', 'Low stock', 'In stock', 'Unknown'][i % 4], name: `商品 café (${i})`, sku: `SKU-${i}`, onHand: '2', quantity: '10', expectedSales: i === 0 ? '' : i === 1 ? '0' : '42', forecastPeriod: '2026-10-28 – 2026-11-24' },
-        querySelector() { return { firstChild: { textContent: 'Low stock' } }; },
+        querySelector(selector) {
+            return selector === '[data-on-hand-label]'
+                ? {dataset: {onHandLabel: '29 pieces\n1 pack + 17 loose\nExpired: 13 pieces'}}
+                : { firstChild: { textContent: 'Low stock' } };
+        },
     }));
     const document = {
         fonts: { ready: Promise.resolve() },
@@ -44,6 +48,7 @@ const vm = require('node:vm');
     assert.ok(pages > 1);
     assert.equal(images, pages);
     assert.ok(text.includes('商品 café (99)'), 'Export includes hidden rows and Unicode names');
+    assert.ok(text.includes('29 pieces') && text.includes('1 pack + 17 loo') && text.some(line => line.startsWith('Expired: 13')), 'Export uses the screen saleable total, actual forms and separate expired stock');
     assert.equal(fills.filter(fill => fill.color === '#111827' && fill.height === 44).length, pages, 'Every page has a navy table header');
     for (const [value, color, background] of [
         ['Out of stock', '#b91c1c', '#fef2f2'],

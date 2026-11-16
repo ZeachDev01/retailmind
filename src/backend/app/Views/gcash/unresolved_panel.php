@@ -11,9 +11,8 @@
             </span>
         </div>
     </div>
-    <p class="gcash-section-description">Clear an exchange once its cash and wallet movements check out. Cancel failed exchanges in the Cashier workspace.</p>
     <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Unresolved activity">
-        <table class="table" id="gcash-admin-nc-table">
+        <table class="table" id="gcash-admin-nc-table" data-no-ghost-rows>
             <thead>
                 <tr>
                     <th scope="col">Date / exchange</th>
@@ -33,10 +32,9 @@
                 <?php elseif (empty($overview['unresolved_activity'])): ?>
                     <tr>
                         <td colspan="9" class="gcash-empty-msg gcash-empty-cell">
-                            <div class="gcash-empty-inner">
-                                <i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i>
-                                <p>No unresolved activity.</p>
-                                <span class="gcash-empty-sub">All transactions are fully confirmed and accounted for.</span>
+                            <div class="gcash-empty-state">
+                                <i class="bi bi-check2-circle" aria-hidden="true"></i>
+                                <h3>No unresolved exchanges</h3>
                             </div>
                         </td>
                     </tr>
@@ -48,14 +46,18 @@
                             <td><strong><?= gcash_admin_e($nc['transaction_type']) ?></strong></td>
                             <td><?= gcash_admin_money($nc['principal_amount']) ?></td>
                             <td>
-                                <?= $nc['is_legacy'] ? 'Not recorded' : gcash_admin_money($nc['gross_fee']) ?>
+                                <?= $nc['is_legacy'] ? '—' : gcash_admin_money($nc['gross_fee']) ?>
                                 <?php if (!empty($nc['fee_location'])): ?>
                                     &middot; <?= gcash_admin_e(ucfirst($nc['fee_location'])) ?>
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <div class="gcash-movement-line"><span class="gcash-movement-label">Cash:</span> <span class="<?= !$nc['is_legacy'] && $nc['service_cash_delta'] > 0 ? 'gcash-delta-positive' : (!$nc['is_legacy'] && $nc['service_cash_delta'] < 0 ? 'gcash-delta-negative' : '') ?>"><?= $nc['is_legacy'] ? 'Not recorded' : ($nc['service_cash_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['service_cash_delta']) ?></span></div>
-                                <div class="gcash-movement-line"><span class="gcash-movement-label">Wallet:</span> <span class="<?= !$nc['is_legacy'] && $nc['wallet_delta'] > 0 ? 'gcash-delta-positive' : (!$nc['is_legacy'] && $nc['wallet_delta'] < 0 ? 'gcash-delta-negative' : '') ?>"><?= $nc['is_legacy'] ? 'Not recorded' : ($nc['wallet_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['wallet_delta']) ?></span></div>
+                                <?php if ($nc['is_legacy']): ?>
+                                <span class="gcash-badge gcash-badge-legacy">Legacy reference</span>
+                                <?php else: ?>
+                                <div class="gcash-movement-line"><span class="gcash-movement-label">Cash:</span> <span class="<?= $nc['service_cash_delta'] > 0 ? 'gcash-delta-positive' : ($nc['service_cash_delta'] < 0 ? 'gcash-delta-negative' : '') ?>"><?= ($nc['service_cash_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['service_cash_delta']) ?></span></div>
+                                <div class="gcash-movement-line"><span class="gcash-movement-label">Wallet:</span> <span class="<?= $nc['wallet_delta'] > 0 ? 'gcash-delta-positive' : ($nc['wallet_delta'] < 0 ? 'gcash-delta-negative' : '') ?>"><?= ($nc['wallet_delta'] > 0 ? '+' : '') . gcash_admin_money($nc['wallet_delta']) ?></span></div>
+                                <?php endif; ?>
                             </td>
                             <td><code><?= gcash_admin_e($nc['reference_number'] ?: '—') ?></code></td>
                             <td>
@@ -72,7 +74,7 @@
                                 <?php if (!$nc['is_legacy']): ?>
                                     <?php if ($canMutate): ?><button type="button" class="btn btn-primary gcash-verify" data-transaction-id="<?= (int)$nc['transaction_id'] ?>" data-reference="<?= gcash_admin_e($nc['reference_number'] ?? '') ?>" data-cashier-id="<?= (int)$nc['cashier_id'] ?>" data-confirmed-cash="<?= (int)$nc['confirmed_cash'] ?>" data-confirmed-wallet="<?= (int)$nc['confirmed_wallet'] ?>">Verify &amp; Clear</button><?php else: ?><span class="text-muted gcash-muted-placeholder">—</span><?php endif; ?>
                                 <?php else: ?>
-                                    <span class="gcash-badge gcash-badge-legacy">Legacy reference</span>
+                                    <span class="gcash-muted-placeholder">—</span>
                                 <?php endif; ?>
                             </td>
                         </tr>

@@ -422,7 +422,7 @@ try {
     $assert(str_contains($gcashOverviewApi, 'is_remote_request()'), 'gcash_overview_api rejects remote mutations');
 
     $gcashOverview = (string)file_get_contents(dirname(__DIR__, 2) . '/frontend/components/administrator/gcash_overview.php');
-    $assert(str_contains($gcashOverview, 'Bulk exports are not available during remote monitoring'), 'gcash_overview rejects remote csv export');
+    $assert(!str_contains($gcashOverview, 'gcash-export') && !str_contains($gcashOverview, 'fputcsv('), 'gcash_overview no longer owns report exports');
     $assert(str_contains($gcashOverview, '$canMutate'), 'gcash_overview guards mutation buttons with canMutate');
 
     // 12. Test auth.php helper functions:

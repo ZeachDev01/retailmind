@@ -78,6 +78,7 @@ $excludedReports = [
     'sales_cashier',
     'refunds',
     'gross_profit',
+    'gcash_transactions',
 ];
 
 foreach ($excludedReports as $reportKey) {
@@ -167,7 +168,7 @@ $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 $pdo->exec("CREATE TABLE branches (branch_id INTEGER PRIMARY KEY, branch_name TEXT, branch_code TEXT, status TEXT)");
 $pdo->exec("INSERT INTO branches VALUES (1, 'Main Store', 'MAIN', 'active')");
 
-$pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, full_name TEXT, username TEXT, role_id INTEGER, branch_id INTEGER, status TEXT)");
+$pdo->exec("CREATE TABLE users (user_id INTEGER PRIMARY KEY, display_name TEXT, username TEXT, role_id INTEGER, branch_id INTEGER, status TEXT)");
 $pdo->exec("INSERT INTO users VALUES (1, 'Alice Cashier', 'alice', 1, 1, 'active'), (2, 'Bob Manager', 'bob', 2, 1, 'active')");
 
 $pdo->exec("CREATE TABLE products (product_id INTEGER PRIMARY KEY, branch_id INTEGER, sku TEXT, barcode TEXT, product_name TEXT, category_id INTEGER, cost_price REAL, unit_price REAL, reorder_level INTEGER)");

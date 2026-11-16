@@ -10,9 +10,8 @@
             <span class="gcash-badge gcash-badge-attention"><i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i> <?= $diffCount ?> pending review</span>
         <?php endif; ?>
     </div>
-    <p class="gcash-section-description">Mark reviewed once you have investigated. The difference stays on record.</p>
     <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Reconciliation differences">
-        <table class="table" id="gcash-admin-diff-table">
+        <table class="table" id="gcash-admin-diff-table" data-no-ghost-rows>
             <thead>
                 <tr>
                     <th scope="col">Session</th>
@@ -31,10 +30,9 @@
                 <?php elseif (empty($overview['reconciliation_differences'])): ?>
                     <tr>
                         <td colspan="8" class="gcash-empty-msg gcash-empty-cell">
-                            <div class="gcash-empty-inner">
-                                <i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i>
-                                <p>No reconciliation differences recorded.</p>
-                                <span class="gcash-empty-sub">All cashier shift balances matched expected cash and wallet amounts exactly.</span>
+                            <div class="gcash-empty-state">
+                                <i class="bi bi-journal-check" aria-hidden="true"></i>
+                                <h3>No closing differences</h3>
                             </div>
                         </td>
                     </tr>
@@ -62,8 +60,8 @@
                                 <details class="gcash-row-details">
                                     <summary>Session details</summary>
                                     <dl>
-                                        <dt>Closed by</dt><dd><?= gcash_admin_e($diff['closed_by_name'] ?? 'Not recorded') ?></dd>
-                                        <dt>Closing notes</dt><dd><?= gcash_admin_e($diff['closing_notes'] ?: 'Not recorded') ?></dd>
+                                        <dt>Closed by</dt><dd><?= gcash_admin_e($diff['closed_by_name'] ?? '—') ?></dd>
+                                        <dt>Notes</dt><dd><?= gcash_admin_e($diff['closing_notes'] ?: '—') ?></dd>
                                     </dl>
                                 </details>
                             </td>

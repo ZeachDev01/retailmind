@@ -18,6 +18,12 @@ Updated 2026-11-12: automatic receipt printing is removed. This restores manual 
 
 Setup and rollback: [Xprinter printing](../guides/xprinter-xp-58iid-setup.md).
 
+On this cashier PC, use **RetailMind POS** for silent receipt printing and the
+separate **RetailMind Reports** Desktop shortcut for reports with normal browser
+print preview. The shortcuts use different Chrome profiles and require separate
+sign-ins. Reports opened inside the POS window still print silently; a new tab or
+pop-up in that profile does not restore print preview.
+
 ## Verification, 2026-11-12
 
 - Passed: `npm run check`, changed PHP/JavaScript syntax checks, cashier checkout

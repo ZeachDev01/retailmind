@@ -144,10 +144,10 @@ function build_query(array $params): string {
             text-decoration: none;
             font-weight: 500;
         }
-        .table-pagination-nav .page-btn.active {
-            background: var(--primary, #2563eb);
+        .forecast-workspace .table-pagination-nav .page-btn.active {
+            background: #2563eb;
             color: #ffffff;
-            border-color: var(--primary, #2563eb);
+            border-color: #2563eb;
             cursor: default;
         }
         .table-pagination-nav .page-btn[aria-disabled="true"] {

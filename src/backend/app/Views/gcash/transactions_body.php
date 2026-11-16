@@ -3,7 +3,14 @@
         <tr><td colspan="9" role="alert">Transaction history unavailable for this selection. Try again.</td></tr>
     <?php elseif (empty($overview['transactions'])): ?>
         <tr>
-            <td colspan="9" class="gcash-empty-msg gcash-empty-cell">No transactions match these filters.</td>
+            <td colspan="9" class="gcash-empty-msg gcash-empty-cell">
+                <div class="gcash-empty-state">
+                    <i class="bi bi-receipt" aria-hidden="true"></i>
+                    <h3>No transactions found</h3>
+                    <p>Try a different date range, cashier, or search.</p>
+                    <a class="btn btn-secondary" href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=transactions')) ?>">Reset filters</a>
+                </div>
+            </td>
         </tr>
     <?php else: ?>
         <?php foreach ($overview['transactions'] as $tx): ?>
@@ -17,7 +24,7 @@
                     </span>
                 </td>
                 <td><strong><?= gcash_admin_money($tx['principal_amount']) ?></strong></td>
-                <td><span class="gcash-fee-value"><?= $tx['is_legacy'] ? 'Not recorded' : gcash_admin_money($tx['gross_fee']) ?></span><?php if (!empty($tx['fee_location'])): ?><small class="gcash-cell-meta"><?= gcash_admin_e(ucfirst($tx['fee_location'])) ?></small><?php endif; ?></td>
+                <td><span class="gcash-fee-value"><?= $tx['is_legacy'] ? '—' : gcash_admin_money($tx['gross_fee']) ?></span><?php if (!empty($tx['fee_location'])): ?><small class="gcash-cell-meta"><?= gcash_admin_e(ucfirst($tx['fee_location'])) ?></small><?php endif; ?></td>
                 <td>
                     <?php
                     $stClass = match($tx['verification_status']) {
@@ -29,7 +36,7 @@
                     ?>
                     <span class="gcash-status <?= $stClass ?>"><?= gcash_admin_e($tx['verification_status']) ?></span>
                 </td>
-                <td><?= gcash_admin_e($tx['cashier_name'] ?: $tx['cashier_username']) ?><small class="gcash-cell-meta">Shift <?= $tx['shift_id'] !== null ? '#' . gcash_admin_e($tx['shift_id']) : 'not recorded' ?></small></td>
+                <td><?= gcash_admin_e($tx['cashier_name'] ?: $tx['cashier_username']) ?><?php if ($tx['shift_id'] !== null): ?><small class="gcash-cell-meta">Shift #<?= gcash_admin_e($tx['shift_id']) ?></small><?php endif; ?></td>
                 <td>
                     <?php if ($tx['is_legacy']): ?>
                         <span class="gcash-badge gcash-badge-legacy">Legacy reference</span>

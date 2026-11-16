@@ -89,6 +89,7 @@
 .report-generation-page .report-filter-grid select,
 .report-generation-page .report-filter-grid button { min-height: 44px; font-size: .95rem; }
 .report-generation-page .report-filter-grid select,
+.report-generation-page .report-filter-grid input[type="search"],
 .report-generation-page .report-filter-grid input[type="date"] {
     width: 100%;
     background: var(--theme-surface, #fff);
@@ -96,6 +97,7 @@
     border-radius: 10px;
 }
 .report-generation-page .report-filter-grid select:hover,
+.report-generation-page .report-filter-grid input[type="search"]:hover,
 .report-generation-page .report-filter-grid input[type="date"]:hover { border-color: var(--primary, #2563eb); }
 .report-generation-page .report-run-btn {
     grid-column: span 2;
@@ -151,7 +153,7 @@
     flex-shrink: 0;
 }
 .report-generation-page .report-actions form { margin: 0; }
-.report-generation-page .report-actions .btn { min-height: 40px; font-size: .875rem; border: 1px solid var(--border); background: var(--theme-surface, #fff); color: var(--text); }
+.report-generation-page .report-actions .btn { min-height: 44px; font-size: .875rem; border: 1px solid var(--border); background: var(--theme-surface, #fff); color: var(--text); }
 .report-generation-page .report-actions .btn:hover { background: var(--theme-surface-soft, #f8fafc); }
 .report-generation-page .report-filter-actions .btn {
     display: inline-flex;

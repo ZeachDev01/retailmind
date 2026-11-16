@@ -548,9 +548,9 @@ $remember = static fn(string $field): string => htmlspecialchars((string)($remem
             right: 0.45rem !important;
             bottom: auto !important;
             transform: translateY(-50%) !important;
-            height: 32px !important;
-            min-height: 32px !important;
-            max-height: 32px !important;
+            height: 44px !important;
+            min-height: 44px !important;
+            max-height: 44px !important;
             padding: 0 0.65rem !important;
             border-radius: 7px !important;
             border: none !important;

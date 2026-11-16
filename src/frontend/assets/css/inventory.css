@@ -29,7 +29,6 @@ button.overview-metric:focus-visible { border-color: #2563eb; box-shadow: 0 6px 
 .overview-metric-copy strong { font-size: 1.35rem; line-height: 1.1; }
 .overview-metric-copy span { margin-top: .25rem; color: var(--muted); font-size: .75rem; white-space: nowrap; }
 .overview-charts-grid { display: grid; grid-template-columns: 1fr 1.35fr; gap: 1rem; margin-bottom: 1.75rem; }
-.overview-forecast-card { margin-bottom: 1.75rem; }
 .overview-chart-card { border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); padding: 1.15rem; display: flex; flex-direction: column; min-width: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
 .overview-chart-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
 .overview-chart-header > div { display: flex; align-items: center; gap: .65rem; min-width: 0; }

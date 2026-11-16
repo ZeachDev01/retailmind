@@ -1,5 +1,13 @@
 # Administrator GCash Overview: funds, outstanding issues, and daily activity
 
+## Confirmed amendment — 2026-11-16
+
+Remove Record Exchange and Export Report from the overview header. Exchange recording stays in the separately entered Cashier workspace; remove the overview shortcut and its switch dialog without changing role assignments or open Shift/session requirements.
+
+Generate Report now owns the Administrator-only GCash Transactions report and CSV export. Preserve the previous CSV details, legacy labels, complete traversal, formula protection and failure-safe staging. Provide date range (Today, Month-to-date or Custom), Cashier, search and exchange-type filters there. Report scope is selected independently from the overview; equivalent filters must return equivalent records. Permit export locally and through the tunnel under the same Administrator permission, with CSRF validation and report audit logging.
+
+Keep the overview's Activity report, filters, transactions, balances and review controls. This amendment supersedes earlier requirements below to retain the recording shortcut or host CSV export on the overview. See [accepted discussion](../discussions/administrator-gcash-actions-and-reporting.md).
+
 ## Problem Statement
 
 The Administrator needs to answer three questions quickly: what Service Cash and Service Wallet funds are recorded, which exchanges or closing discrepancies need attention, and how much completed activity and gross fees occurred today.
@@ -65,8 +73,8 @@ Follow with Today-based completed activity. Put shared period and Cashier contro
 - Preserve service compatibility for other GCash callers when separating query scopes and counts. Update affected initial rendering, API responses, asynchronous consumers, pagination, details and export together. Keep responses from obsolete requests from overwriting newer selections.
 - After successful verification or waiver, refresh affected outstanding counts, review records, balances and selected-period totals using their respective scopes. Do not conflate a waiver with removal or correction of the counted variance.
 - Preserve reference validation, both wallet/cash confirmations, CSRF protection, authorization, atomic movement posting and audit behavior. Verify & Clear completes the exchange and posts only its remaining movements. Retain the existing endpoint/workspace authority; this work grants no broader operational rights to the Super Administrator or other roles.
-- Exchange recording remains in the Cashier workspace. Preserve the existing eligible-account workspace switch and open Cashier Shift/session-control requirements; do not add direct recording to this page.
-- Preserve legacy labels, linked adjustments, attribution, complete filtered CSV, formula-injection protections and failure-safe export behavior. Exports follow the list's shared and local filters across every matching page.
+- Exchange recording remains in the Cashier workspace, entered through existing workspace navigation. Remove the overview's Record Exchange shortcut; preserve open Cashier Shift/session-control requirements.
+- Preserve legacy labels, linked adjustments, attribution, complete filtered CSV, formula-injection protections and failure-safe export behavior. Generate Report owns GCash CSV export with its own equivalent date, Cashier, search and type selection across every matching page; the overview has no export action.
 - Retain keyboard tab navigation, accessible labels, native confirmation dialogs, bounded tables, mobile behavior and error feedback. Missing data, loading failures and invalid filters must not silently become zero balances or an all-clear statement; errors must not present fallback data as matching the rejected selection.
 
 ## Testing Decisions

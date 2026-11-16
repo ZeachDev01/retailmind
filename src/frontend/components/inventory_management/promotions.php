@@ -9,6 +9,8 @@ require_role(['admin', 'super_admin']);
 
 $message = '';
 $error = '';
+$invalidField = '';
+$validationMessage = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (current_role() === 'super_admin') {
@@ -29,19 +31,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ends = trim((string)($_POST['ends_at'] ?? ''));
 
             if ($name === '' || $value <= 0 || $starts === '' || $ends === '') {
-                throw new RuntimeException('Name, value, start, and end dates are required.');
+                $invalidField = $name === '' ? 'promotion_name' : ($value <= 0 ? 'discount_value' : ($starts === '' ? 'starts_at' : 'ends_at'));
+                $validationMessage = 'Name, value, start, and end dates are required.';
+                throw new RuntimeException($validationMessage);
             }
             if ($type === 'percentage' && $value > 100) {
-                throw new RuntimeException('Percentage cannot exceed 100%.');
+                $invalidField = 'discount_value';
+                $validationMessage = 'Percentage cannot exceed 100%.';
+                throw new RuntimeException($validationMessage);
             }
             if (strtotime($ends) <= strtotime($starts)) {
-                throw new RuntimeException('End date must be later than start date.');
+                $invalidField = 'ends_at';
+                $validationMessage = 'End date must be later than start date.';
+                throw new RuntimeException($validationMessage);
             }
             if ($scope === 'product' && !$productId) {
-                throw new RuntimeException('Select a product.');
+                $invalidField = 'product_id';
+                $validationMessage = 'Select a product.';
+                throw new RuntimeException($validationMessage);
             }
             if ($scope === 'category' && !$categoryId) {
-                throw new RuntimeException('Select a category.');
+                $invalidField = 'category_id';
+                $validationMessage = 'Select a category.';
+                throw new RuntimeException($validationMessage);
             }
 
             $stmt = $pdo->prepare("INSERT INTO promotions(promotion_name,discount_type,discount_value,scope,product_id,category_id,minimum_quantity,starts_at,ends_at,status,created_by) VALUES(?,?,?,?,?,?,?,?,?,'active',?)");
@@ -70,6 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $products = $pdo->query("SELECT product_id,sku,product_name,variant_label FROM products WHERE status='active' ORDER BY product_name")->fetchAll(PDO::FETCH_ASSOC);
 $categories = $pdo->query('SELECT category_id,category_name FROM categories ORDER BY category_name')->fetchAll(PDO::FETCH_ASSOC);
 $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_name created_by_name FROM promotions pr LEFT JOIN products p ON p.product_id=pr.product_id LEFT JOIN categories c ON c.category_id=pr.category_id JOIN users u ON u.user_id=pr.created_by ORDER BY pr.created_at DESC")->fetchAll(PDO::FETCH_ASSOC);
+$draft = $error !== '' && ($_POST['action'] ?? '') === 'create' ? array_filter($_POST, 'is_string') : [];
+$promotionValue = static fn(string $key, string $default = ''): string => htmlspecialchars($draft[$key] ?? $default, ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -101,38 +115,39 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
         <div class="two-col promotions-workspace">
             <section class="dashboard-section">
                 <h2>Create promotion</h2>
-                <form method="post">
+                <form method="post" data-unsaved-changes="<?= $draft ? 'dirty' : '' ?>" data-error-field="<?= htmlspecialchars($invalidField) ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="create">
+                    <?php if ($invalidField !== ''): ?><small class="field-error" id="promotion-field-error" data-field-error><?= htmlspecialchars($validationMessage) ?></small><?php endif; ?>
                     <div class="form-group">
                         <label for="promotion-promotion_name">Name</label>
-                        <input id="promotion-promotion_name" name="promotion_name" autocomplete="off" required>
+                        <input id="promotion-promotion_name" name="promotion_name" value="<?= $promotionValue('promotion_name') ?>" autocomplete="off" required>
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="promotion-discount_type">Discount type</label>
                             <select id="promotion-discount_type" name="discount_type">
-                                <option value="percentage">Percentage</option>
-                                <option value="fixed">Fixed amount</option>
+                                <option value="percentage" <?= ($draft['discount_type'] ?? 'percentage') === 'percentage' ? 'selected' : '' ?>>Percentage</option>
+                                <option value="fixed" <?= ($draft['discount_type'] ?? '') === 'fixed' ? 'selected' : '' ?>>Fixed amount</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="promotion-discount_value">Value</label>
-                            <input type="number" id="promotion-discount_value" name="discount_value" min="0.01" step="0.01" autocomplete="off" required>
+                            <input type="number" id="promotion-discount_value" name="discount_value" value="<?= $promotionValue('discount_value') ?>" min="0.01" step="0.01" autocomplete="off" required>
                         </div>
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="scope">Scope</label>
                             <select name="scope" id="scope">
-                                <option value="all">Entire cart</option>
-                                <option value="product">Product</option>
-                                <option value="category">Category</option>
+                                <option value="all" <?= ($draft['scope'] ?? 'all') === 'all' ? 'selected' : '' ?>>Entire cart</option>
+                                <option value="product" <?= ($draft['scope'] ?? '') === 'product' ? 'selected' : '' ?>>Product</option>
+                                <option value="category" <?= ($draft['scope'] ?? '') === 'category' ? 'selected' : '' ?>>Category</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="promotion-minimum_quantity">Minimum quantity</label>
-                            <input type="number" id="promotion-minimum_quantity" name="minimum_quantity" min="1" value="1" autocomplete="off">
+                            <input type="number" id="promotion-minimum_quantity" name="minimum_quantity" min="1" value="<?= $promotionValue('minimum_quantity', '1') ?>" autocomplete="off">
                         </div>
                     </div>
                     <div class="form-group" id="product-scope" hidden>
@@ -140,7 +155,7 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
                         <select data-search-dropdown id="promotion-product_id" name="product_id">
                             <option value="">Select product</option>
                             <?php foreach ($products as $p): ?>
-                                <option value="<?= $p['product_id'] ?>"><?= htmlspecialchars($p['product_name'] . (!empty($p['variant_label']) ? ' - ' . $p['variant_label'] : '') . ' (' . $p['sku'] . ')') ?></option>
+                                <option value="<?= $p['product_id'] ?>" <?= (string)($draft['product_id'] ?? '') === (string)$p['product_id'] ? 'selected' : '' ?>><?= htmlspecialchars($p['product_name'] . (!empty($p['variant_label']) ? ' - ' . $p['variant_label'] : '') . ' (' . $p['sku'] . ')') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -149,18 +164,18 @@ $promotions = $pdo->query("SELECT pr.*,p.product_name,c.category_name,u.display_
                         <select data-search-dropdown id="promotion-category_id" name="category_id">
                             <option value="">Select category</option>
                             <?php foreach ($categories as $c): ?>
-                                <option value="<?= $c['category_id'] ?>"><?= htmlspecialchars($c['category_name']) ?></option>
+                                <option value="<?= $c['category_id'] ?>" <?= (string)($draft['category_id'] ?? '') === (string)$c['category_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['category_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="promotion-starts_at">Starts</label>
-                            <input type="datetime-local" id="promotion-starts_at" name="starts_at" value="<?= date('Y-m-d\TH:i') ?>" required>
+                            <input type="datetime-local" id="promotion-starts_at" name="starts_at" value="<?= $promotionValue('starts_at', date('Y-m-d\TH:i')) ?>" required>
                         </div>
                         <div class="form-group">
                             <label for="promotion-ends_at">Ends</label>
-                            <input type="datetime-local" id="promotion-ends_at" name="ends_at" value="<?= date('Y-m-d\TH:i', strtotime('+7 days')) ?>" required>
+                            <input type="datetime-local" id="promotion-ends_at" name="ends_at" value="<?= $promotionValue('ends_at', date('Y-m-d\TH:i', strtotime('+7 days'))) ?>" required>
                         </div>
                     </div>
                     <button type="submit" class="btn">Create promotion</button>

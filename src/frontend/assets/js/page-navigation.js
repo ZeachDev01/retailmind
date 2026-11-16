@@ -216,6 +216,15 @@
         if (initializing) { queued = {destination, options}; return; }
         const url = new URL(destination, location.href);
         if (!eligible(url)) { location.assign(url.href); return; }
+        if (window.RetailMindUI?.hasUnsavedChanges(options.form) && !await window.RetailMindUI.confirm({
+            title: 'Leave unsaved changes?',
+            message: 'Your changes have not been saved. Leave this page and discard them?',
+            confirmText: 'Discard changes',
+            danger: true,
+        })) {
+            if (options.history === 'none') history.replaceState({}, '', currentURL);
+            return;
+        }
         const content = document.querySelector('.main-content');
         if (!content) { location.assign(url.href); return; }
         pending?.abort();
@@ -387,10 +396,10 @@
         const data = submitter ? new FormData(form, submitter) : new FormData(form);
         const params = new URLSearchParams();
         for (const [key, value] of data) params.append(key, value instanceof File ? value.name : value);
-        if (method === 'get') { url.search = params.toString(); navigate(url.href); }
+        if (method === 'get') { url.search = params.toString(); navigate(url.href, {form}); }
         else {
             const enctype = submitter?.getAttribute('formenctype') || form.enctype;
-            navigate(url.href, {fetch: {method: 'POST', body: enctype === 'multipart/form-data' ? data : params}});
+            navigate(url.href, {form, fetch: {method: 'POST', body: enctype === 'multipart/form-data' ? data : params}});
         }
         return true;
     }

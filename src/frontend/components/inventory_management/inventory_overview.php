@@ -104,19 +104,7 @@ sort($productCategories, SORT_NATURAL | SORT_FLAG_CASE);
 $topCategories = array_slice($categoryStats, 0, 8, true);
 $categoryLabels = array_keys($topCategories);
 $categoryUnits = array_values($topCategories);
-$forecastProducts = get_stored_predictions($pdo);
-usort($forecastProducts, static fn(array $a, array $b): int =>
-    (float)$b['predicted_demand_next_30_days'] <=> (float)$a['predicted_demand_next_30_days']
-);
-$topForecastProducts = array_slice($forecastProducts, 0, 10);
-
 $chartDataJson = json_encode([
-    'forecast' => [
-        'labels' => array_column($topForecastProducts, 'product_name'),
-        'stock' => array_map('floatval', array_column($topForecastProducts, 'current_stock')),
-        'demand7' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_7_days')),
-        'demand30' => array_map('floatval', array_column($topForecastProducts, 'predicted_demand_next_30_days')),
-    ],
     'status' => [
         'labels' => ['Available', 'Low Stock', 'Out of Stock', 'Expiring Soon', 'Expired'],
         'values' => [
@@ -141,9 +129,10 @@ $chartDataJson = json_encode([
 $riskRows = [];
 $riskError = '';
 try {
-    $riskRows = \App\Inventory\StockRiskReader::read($pdo, $products, $expiring_batches);
+    $movementPeriod = \App\Inventory\StockMovementReader::period();
+    $riskRows = \App\Inventory\StockMovementReader::read($pdo, $products, $movementPeriod);
 } catch (Throwable $e) {
-    $riskError = \App\Support\OperatorAlert::message($e, 'Stock Risk could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
+    $riskError = \App\Support\OperatorAlert::message($e, 'Stock Movement could not be loaded. Refresh the page and try again. Tell your Administrator if this keeps happening.');
 }
 ?>
 <!DOCTYPE html>
@@ -167,7 +156,7 @@ try {
             <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
-                <button type="button" class="overview-tab" id="overview-risk-tab" role="tab" aria-selected="false" aria-controls="overview-risk" data-overview-page-tab="risk" tabindex="-1"><i class="bi bi-shield-check" aria-hidden="true"></i>Stock Risk</button>
+                <button type="button" class="overview-tab" id="overview-risk-tab" role="tab" aria-selected="false" aria-controls="overview-risk" data-overview-page-tab="risk" tabindex="-1"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>Stock Movement</button>
             </div>
         </div></header>
         <section id="overview-risk" role="tabpanel" aria-labelledby="overview-risk-tab" hidden>
@@ -204,34 +193,6 @@ try {
             </button>
         </section>
 
-
-        <section class="overview-chart-card overview-forecast-card" id="overview-forecast" aria-labelledby="overview-forecast-heading">
-            <div class="overview-chart-header">
-                <div>
-                    <span class="overview-chart-icon overview-chart-icon--blue" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
-                    <div>
-                        <h3 id="overview-forecast-heading">Demand Forecast vs Current Stock</h3>
-                    </div>
-                </div>
-            </div>
-            <?php if ($topForecastProducts): ?>
-            <div class="overview-chart-body">
-                <canvas id="overviewForecastChart" aria-label="Current stock and predicted demand for the next 7 and 30 days by product, in units" role="img"></canvas>
-            </div>
-            <details>
-                <summary>View forecast values</summary>
-                <p>Top 10 products by predicted 30-day demand. Forecasts are estimates; 7-day demand is included in the 30-day total.</p>
-                <div class="overview-table-shell"><table class="overview-table">
-                    <thead><tr><th>Product</th><th>Current stock</th><th>7-day demand</th><th>30-day demand</th></tr></thead>
-                    <tbody><?php foreach ($topForecastProducts as $forecast): ?>
-                    <tr><td><?= htmlspecialchars($forecast['product_name']) ?></td><td><?= number_format((float)$forecast['current_stock']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_7_days']) ?></td><td><?= number_format((float)$forecast['predicted_demand_next_30_days']) ?></td></tr>
-                    <?php endforeach; ?></tbody>
-                </table></div>
-            </details>
-            <?php else: ?>
-            <p class="overview-empty">No forecasts available. Check Demand Forecasting.</p>
-            <?php endif; ?>
-        </section>
 
         <section class="overview-charts-grid" id="overview-charts" aria-label="Inventory visual analytics">
             <div class="overview-chart-card">
@@ -486,6 +447,7 @@ try {
 <?php include __DIR__ . '/../modals/product_overview/product.php'; ?>
 <?php include __DIR__ . '/../modals/product_overview/viewBatches.php'; ?>
 <script src="<?= htmlspecialchars(app_url('assets/js/stock-risk.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/stock-risk.js')) ?>"></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>"></script>
 <script>
 window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 
@@ -503,7 +465,6 @@ function getChartThemeColors() {
 
 let statusChartInstance = null;
 let categoryChartInstance = null;
-let forecastChartInstance = null;
 let overviewNeedsRefresh = false;
 function refreshInventoryOnReturn() {
     if (!overviewNeedsRefresh || document.visibilityState !== 'visible') return;
@@ -539,31 +500,6 @@ function initInventoryCharts() {
     }
 
     const colors = getChartThemeColors();
-    if (forecastChartInstance) forecastChartInstance.destroy();
-    forecastChartInstance = null;
-    const forecastCtx = document.getElementById('overviewForecastChart');
-    if (forecastCtx) {
-        forecastChartInstance = new Chart(forecastCtx, {
-            type: 'bar',
-            data: {
-                labels: inventoryChartData.forecast.labels,
-                datasets: [
-                    { label: 'Current stock', data: inventoryChartData.forecast.stock, backgroundColor: '#16a34a' },
-                    { label: '7-day demand', data: inventoryChartData.forecast.demand7, backgroundColor: '#60a5fa' },
-                    { label: '30-day demand', data: inventoryChartData.forecast.demand30, backgroundColor: '#7c3aed' }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { labels: { color: colors.textColor } } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: colors.mutedColor } },
-                    y: { beginAtZero: true, title: { display: true, text: 'Units', color: colors.mutedColor }, grid: { color: colors.gridColor }, ticks: { color: colors.mutedColor, precision: 0 } }
-                }
-            }
-        });
-    }
     const statusCtx = document.getElementById('overviewStatusChart');
     const categoryCtx = document.getElementById('overviewCategoryChart');
 
@@ -692,15 +628,6 @@ function initInventoryCharts() {
 }
 
 window.addEventListener('retailmind:themechange', function () {
-    if (forecastChartInstance) {
-        const colors = getChartThemeColors();
-        forecastChartInstance.options.plugins.legend.labels.color = colors.textColor;
-        forecastChartInstance.options.scales.x.ticks.color = colors.mutedColor;
-        forecastChartInstance.options.scales.y.ticks.color = colors.mutedColor;
-        forecastChartInstance.options.scales.y.title.color = colors.mutedColor;
-        forecastChartInstance.options.scales.y.grid.color = colors.gridColor;
-        forecastChartInstance.update();
-    }
     if (!statusChartInstance && !categoryChartInstance) return;
     const colors = getChartThemeColors();
     if (statusChartInstance) {
@@ -906,7 +833,6 @@ document.addEventListener('DOMContentLoaded', function () {
             button.classList.toggle('is-active', button.dataset.overviewView === view);
         });
         document.getElementById('overview-metrics').hidden = true;
-        document.getElementById('overview-forecast').hidden = true;
         document.getElementById('overview-charts').hidden = true;
         defaultView.hidden = true;
         productView.hidden = false;
@@ -927,7 +853,6 @@ document.addEventListener('DOMContentLoaded', function () {
         productView.hidden = true;
         defaultView.hidden = false;
         document.getElementById('overview-metrics').hidden = false;
-        document.getElementById('overview-forecast').hidden = false;
         document.getElementById('overview-charts').hidden = false;
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.remove('is-active');
@@ -942,7 +867,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function showStockRisk() {
         productView.hidden = true;
         defaultView.hidden = true;
-        ['overview-metrics', 'overview-forecast', 'overview-charts'].forEach(id => { document.getElementById(id).hidden = true; });
+        ['overview-metrics', 'overview-charts'].forEach(id => { document.getElementById(id).hidden = true; });
         document.documentElement.classList.remove('overview-fefo-active');
         setOverviewTab('risk');
     }
@@ -955,7 +880,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pageTabs[next].click();
         pageTabs[next].focus();
     }));
-    if (new URL(location.href).searchParams.get('tab') === 'risk' || location.hash === '#stock-risk') showStockRisk();
+    if (['risk', 'movement'].includes(new URL(location.href).searchParams.get('tab')) || ['#stock-risk', '#stock-movement'].includes(location.hash)) showStockRisk();
 
     document.getElementById('overview-back').addEventListener('click', function () {
         showOverviewSummary();

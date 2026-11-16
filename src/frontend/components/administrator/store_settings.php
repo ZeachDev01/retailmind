@@ -76,6 +76,8 @@ $fields = [
 ];
 $message = '';
 $messageClass = '';
+$failedAction = '';
+$fieldErrors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_local_request();
@@ -91,13 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $updates[$key] = trim($_POST[$key]);
             }
             if ($updates['store_name'] === '' && $receiptLogo === '') {
-                throw new InvalidArgumentException('Store name is required unless a receipt logo is saved.');
+                $fieldErrors['store_name'] = 'Store name is required unless a receipt logo is saved.';
+                throw new InvalidArgumentException($fieldErrors['store_name']);
             }
             if ($updates['store_email'] !== '' && filter_var($updates['store_email'], FILTER_VALIDATE_EMAIL) === false) {
-                throw new InvalidArgumentException('Enter a valid store email address.');
+                $fieldErrors['store_email'] = 'Enter a valid store email address.';
+                throw new InvalidArgumentException($fieldErrors['store_email']);
             }
             if ($updates['timezone'] !== '' && !in_array($updates['timezone'], timezone_identifiers_list(), true)) {
-                throw new InvalidArgumentException('Enter a valid IANA timezone such as Asia/Manila or UTC.');
+                $fieldErrors['timezone'] = 'Enter a valid IANA timezone such as Asia/Manila or UTC.';
+                throw new InvalidArgumentException($fieldErrors['timezone']);
             }
             if ($updates['store_email'] !== trim((string)($settings['store_email'] ?? ''))
                 && !empty($settings['store_email_alerts_enabled'])) {
@@ -133,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($messageClass === '') $messageClass = 'tag-success';
     } catch (Throwable $exception) {
+        $failedAction = is_string($action) ? $action : '';
         $message = \App\Support\OperatorAlert::message($exception, 'The Store Setting could not be saved. Check the values and try again.');
         $messageClass = 'tag-warning';
     }
@@ -141,6 +147,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $settings = get_store_settings($pdo);
 $receiptLogo = \App\Receipts\ReceiptLogo::source($settings['receipt_logo'] ?? '');
 $requested = $service->storeSettings();
+$formSettings = $settings;
+if ($failedAction === 'save_receipts') {
+    foreach ($receiptFields as $key => $label) {
+        if (is_string($_POST[$key] ?? null)) $formSettings[$key] = $_POST[$key];
+    }
+} elseif ($failedAction === 'save_attention') {
+    foreach ($fields as $key => $config) {
+        if (is_string($_POST[$key] ?? null)) $requested[$key] = $_POST[$key];
+    }
+}
 $effective = $service->thresholdsFor('admin');
 $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
@@ -197,7 +213,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     <p class="section-description">Store identity, regional defaults, and receipt text.</p>
                 </div>
             </div>
-            <form method="post">
+            <form method="post" data-unsaved-changes="<?= $failedAction === 'save_receipts' ? 'dirty' : '' ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save_receipts">
                 <div class="form-grid">
@@ -206,6 +222,8 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                         $isRequired = !empty($meta['required']) && !($key === 'store_name' && $receiptLogo !== '');
                         $isFull = !empty($meta['full']);
                         $helpId = !empty($meta['help']) && ($key !== 'store_name' || $receiptLogo !== '') ? $key . '_help' : '';
+                        $error = $fieldErrors[$key] ?? '';
+                        $describedBy = trim($helpId . ($error !== '' ? ' ' . $key . '-error' : ''));
                     ?>
                         <div class="form-group<?= $isFull ? ' full' : '' ?>">
                             <label for="<?= htmlspecialchars($key) ?>">
@@ -216,19 +234,21 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                                 <textarea id="<?= htmlspecialchars($key) ?>"
                                           name="<?= htmlspecialchars($key) ?>"
                                           rows="3" autocomplete="off"
-                                          <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
-                                          <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>><?= htmlspecialchars((string)($settings[$key] ?? '')) ?></textarea>
+                                          <?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?>
+                                          <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>><?= htmlspecialchars((string)($formSettings[$key] ?? '')) ?></textarea>
                             <?php else: ?>
                                 <input type="<?= htmlspecialchars((string)($meta['type'] ?? 'text')) ?>"
                                        id="<?= htmlspecialchars($key) ?>"
                                        name="<?= htmlspecialchars($key) ?>"
-                                       value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"
+                                       value="<?= htmlspecialchars((string)($formSettings[$key] ?? '')) ?>"
                                        autocomplete="<?= htmlspecialchars((string)($meta['autocomplete'] ?? 'off')) ?>"
                                        <?= !empty($meta['maxlength']) ? ' maxlength="' . htmlspecialchars((string)$meta['maxlength']) . '"' : '' ?>
                                        <?= !empty($meta['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$meta['placeholder']) . '"' : '' ?>
-                                       <?= $helpId !== '' ? ' aria-describedby="' . htmlspecialchars($helpId) . '"' : '' ?>
+                                       <?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?>
+                                       <?= $error !== '' ? ' aria-invalid="true"' : '' ?>
                                        <?= $isRequired ? ' required aria-required="true"' : '' ?>>
                             <?php endif; ?>
+                            <?php if ($error !== ''): ?><small class="field-error" id="<?= htmlspecialchars($key) ?>-error"><?= htmlspecialchars($error) ?></small><?php endif; ?>
                             <?php if ($helpId !== ''): ?>
                                 <small class="field-help" id="<?= htmlspecialchars($helpId) ?>"><?= htmlspecialchars((string)$meta['help']) ?></small>
                             <?php endif; ?>
@@ -239,7 +259,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     <button type="submit" class="btn btn-primary">Save store details</button>
                 </div>
             </form>
-            <form method="post" enctype="multipart/form-data" class="receipt-logo-form">
+            <form method="post" enctype="multipart/form-data" class="receipt-logo-form" data-unsaved-changes>
                 <?= csrf_field() ?>
                 <h3 class="settings-subheading">Receipt logo</h3>
                 <div class="form-group">
@@ -268,7 +288,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                     <p class="section-description">Values that trigger operator warnings and supervisor review.</p>
                 </div>
             </div>
-            <form method="post">
+            <form method="post" data-unsaved-changes="<?= $failedAction === 'save_attention' ? 'dirty' : '' ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save_attention">
                 <div class="form-grid">
@@ -335,7 +355,7 @@ if (!isset($settingsSections[$activeSection])) $activeSection = 'store-receipts'
                 <!-- Active URL Output Box -->
                 <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
                     <div class="remote-url-top">
-                        <span class="remote-url-label">Public Tunnel URL</span>
+                        <label class="remote-url-label" for="remote-public-url">Public Tunnel URL</label>
                         <span class="remote-url-security-note">Full staff Workspaces &bull; Super Administrator stays local</span>
                     </div>
                     <div class="remote-url-group">

@@ -26,6 +26,7 @@ require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../app/Services/NotificationService.php';
 require_once __DIR__ . '/support/notification_schema.php';
+require_once __DIR__ . '/support/replenishment_schema.php';
 require_once __DIR__ . '/support/forecasting_diagnostics_isolation.php';
 
 use App\Core\Database;
@@ -98,6 +99,7 @@ $pdo = new PDO('sqlite::memory:', null, null, [
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ]);
 
+createReplenishmentBatchSchema($pdo);
 $pdo->sqliteCreateFunction('NOW', static function () use (&$clock) { return $clock; });
 $pdo->sqliteCreateFunction('CURDATE', static function () use (&$clock) { return substr($clock, 0, 10); });
 

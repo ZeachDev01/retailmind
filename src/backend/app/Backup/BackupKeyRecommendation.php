@@ -9,7 +9,7 @@ use Throwable;
 
 /**
  * Recommends saving the recovery key that encrypted the newest completed
- * backup, and records a per-account acknowledgement after a successful export.
+ * scheduled backup, and records a per-account acknowledgement after a successful export.
  */
 final class BackupKeyRecommendation
 {
@@ -36,7 +36,8 @@ final class BackupKeyRecommendation
             $stmt = $this->pdo->query(
                 "SELECT key_fingerprint, filename, snapshot_at, created_at
                    FROM backup_history
-                  WHERE status = 'completed' AND key_fingerprint IS NOT NULL AND key_fingerprint <> ''
+                  WHERE backup_type = 'scheduled' AND status = 'completed'
+                    AND key_fingerprint IS NOT NULL AND key_fingerprint <> ''
                   ORDER BY COALESCE(snapshot_at, created_at) DESC, backup_id DESC
                   LIMIT 1"
             );

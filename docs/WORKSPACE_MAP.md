@@ -49,7 +49,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 
 ### Inventory Manager (`inventory_manager`)
 - **Stock Overview**: `components/inventory_management/inventory_overview.php`
-  - **Stock Risk** tab (`?tab=risk`): compares recorded stock, 30-day sales, historical coverage and expiry/slow-stock concerns, with search, risk filters, sortable columns, pagination and stock-in/out details. Backend: `App\Inventory\StockRiskReader`; view: `stock_risk.php`; assets: `stock-risk.css`, `stock-risk.js`. Replaces Insights & Risk; `inventory_insights.php` redirects here and no longer generates cycle-count schedules. Existing schedule records and manual Physical Counts are preserved.
+  - **Stock Movement** tab (`?tab=movement`, legacy `?tab=risk` supported): three consecutive 30-day periods ending yesterday in Philippine time. Simple table shows current stock, latest-period sales and distinct selling days, Fast/Slow/Dead Stock or history limitations, and a separate trend. Criteria use the shared tooltips; details open in a keyboard-accessible right drawer with period comparisons and stock flow. Default to positive current stock and fewest selling days. Generate Report prints/saves every matching page with product details. Expiry remains in Overview. Backend: `App\Inventory\StockMovementReader`; view: `stock_risk.php`; assets: `stock-risk.css`, `stock-risk.js`, `info-tooltip.js`. Legacy asset names and links remain supported; manual Physical Counts are preserved. Verification: `stock_movement_reader_test.php`, `inventory_overview_clarity_browser_test.js`. See `docs/specs/inventory-stock-movement.md`.
   - Recent Stock Movements appear below the summary by default: latest 10 additions/receiving and corrections, excluding sales and returns; sortable column headers and five rows per page.
   - Verification: `inventory_recent_movements_test.php`, `inventory_overview_clarity_browser_test.js`
   - Modals: `components/modals/product_overview/` (`expiredStock.php`, `expringSoon.php`, `lowOfStack.php`, `outOfStack.php`, `viewBatches.php`)
@@ -94,6 +94,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Contract Tests: `forecasting_notices_contract.php`, `store_forecasting_operational_workflow_test.php`
 - **Reports**: `components/administrator/shift_report.php`, `receiving_history.php`, `sales.php`, `report_generation.php`
   - Backend Services: `App\Services\StoreShiftReportService`, `ReportAccessService`, `GrossProfitService`
+  - **GCash Transactions** in Generate Report: Administrator-only preview/CSV with date, Cashier, search and exchange-type filters; equivalent local/tunnel access. Reuses `App\GCash\GCashActivityScopeReport`. GCash Overview retains monitoring/reviews without Record Exchange or Export Report header actions. Verification: `gcash_report_browser_test.js`, `gcash_admin_overview_browser_test.js`, `inventory_manager_report_access_contract.php`.
 - **Stock Issue Oversight**: `components/administrator/stock_issues.php`
 - **Promotions**: `components/inventory_management/promotions.php`
 

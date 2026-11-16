@@ -67,6 +67,10 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         for (const panel of ['[data-fragment="balances"]', '#gcash-outstanding-reviews', '#gcash-reporting-scope', '#gcash-completed-activity']) {
             assert.equal(await page.locator(panel).isVisible(), true, panel + ' is available without switching views');
         }
+        assert.equal(await page.locator('.gcash-activity-row h2').count(), 1, 'Filters and totals have one Activity report heading');
+        assert.equal(await page.getByRole('heading', {name: 'Activity report', exact: true}).isVisible(), true);
+        assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Cashier and last actual check need no extra click');
+        const serviceCash = await page.locator('#admin-expected-cash').textContent();
         assert.equal(await page.locator('#gcash-tab-overview').evaluate(tab => {
             const style = getComputedStyle(tab);
             return tab.classList.contains('active') && style.borderBottomWidth === '2px' && style.borderRadius === '0px';
@@ -88,10 +92,42 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await page.locator('#btn-apply-filters').click();
         await page.waitForURL(url => url.searchParams.get('period') === 'month_to_date');
         assert.equal(await page.locator('#gcash-completed-activity').isVisible(), true, 'Filtered totals remain visible beside the report controls');
+        assert.equal(await page.locator('#admin-expected-cash').textContent(), serviceCash, 'Report dates do not change service funds');
+        assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Balance provenance remains visible after filtering');
         await page.getByRole('link', {name: 'Reset filters', exact: true}).click();
         await page.waitForURL(url => url.searchParams.get('tab') === 'overview' && !url.searchParams.has('period'));
         assert.equal(await page.getByLabel('Reporting period', {exact: true}).inputValue(), 'today', 'Reset restores Today without leaving Overview');
-        for (const width of [1440, 390]) {
+        await page.getByLabel('Start date', {exact: true}).fill('2099-01-01');
+        await page.getByLabel('End date', {exact: true}).fill('2099-01-01');
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForURL(url => url.searchParams.get('start_date') === '2099-01-01');
+        assert.equal(await page.locator('.gcash-activity-empty').isVisible(), true, 'No completed exchanges shows the report empty state');
+        assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), false, 'Empty report omits zero metrics');
+        for (const width of [320, 390, 768, 1024, 1440]) {
+            await page.setViewportSize({width, height: 900});
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Empty report fits ' + width + 'px in ' + theme);
+                assert.equal(await page.locator('.gcash-activity-empty').evaluate(element => {
+                    const bounds = element.getBoundingClientRect();
+                    return bounds.left >= 0 && bounds.right <= innerWidth;
+                }), true, 'Empty state stays inside the viewport');
+                fs.mkdirSync('output/playwright/gcash-admin-empty', {recursive: true});
+                await page.screenshot({path: 'output/playwright/gcash-admin-empty/' + theme + '-' + width + '.png', fullPage: true});
+            }
+        }
+        await page.route('**/gcash_overview_fragments.php*', route => route.abort());
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForFunction(() => document.querySelector('#gcash-filter-status').textContent.includes('unavailable'));
+        assert.equal(await page.locator('.gcash-activity-empty').isVisible(), false, 'Failed loading is not an empty report');
+        assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), true, 'Failed report exposes unavailable totals');
+        await page.unroute('**/gcash_overview_fragments.php*');
+        await page.locator('#btn-reset-filters').click();
+        await page.waitForURL(url => !url.searchParams.has('period'));
+        assert.equal(await page.locator('.gcash-activity-empty').isVisible(), false, 'Reset restores the populated report');
+        assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), true);
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+        for (const width of [1440, 768, 390]) {
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page overflow at ' + width + 'px');
             for (const [name, panel] of [['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Overview', 'overview'], ['Transactions', 'transactions']]) {
@@ -113,15 +149,21 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             assert.ok(Math.abs(reportGap) < 1, 'Filters and completed activity form one panel at ' + width + 'px');
             await page.evaluate(() => window.scrollTo(0, 0));
             fs.mkdirSync('output/playwright/gcash-admin-clarity', {recursive: true});
-            await page.screenshot({path: 'output/playwright/gcash-admin-clarity/overview-' + width + '.png', fullPage: true});
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, theme + ' fits ' + width + 'px');
+                await page.screenshot({path: 'output/playwright/gcash-admin-clarity/overview-' + theme + '-' + width + '.png', fullPage: true});
+            }
+            await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
         }
         await page.emulateMedia({reducedMotion: 'reduce'});
         fs.mkdirSync('.impeccable/review', {recursive: true});
-        for (const width of [1440, 390]) {
+        for (const width of [1440, 768, 390, 320]) {
             await page.setViewportSize({width, height: 900});
             for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Service Fund Movements', 'money']]) {
                 await page.getByRole('tab', {name}).click();
                 await page.locator('#tab-' + panel).waitFor({state: 'visible'});
+                assert.equal(await page.locator('#tab-' + panel + ' .table-ghost-row').count(), 0, 'Reports show only actual rows');
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, panel + ' fits ' + width);
                 if (panel === 'reconciliation') {
                     assert.equal(await page.locator('#gcash-admin-diff-table th').count(), 8);
@@ -151,8 +193,89 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
                 });
                 if (panel === 'money') await page.screenshot({path: '.impeccable/review/gcash-money-' + width + '-viewport.png'});
                 await page.screenshot({path: '.impeccable/review/gcash-' + panel + '-' + width + '.png', fullPage: true});
+                fs.mkdirSync('output/playwright/gcash-distill', {recursive: true});
+                for (const theme of ['light', 'dark']) {
+                    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, panel + ' fits ' + width + ' in ' + theme);
+                    assert.equal((await page.locator('#tab-' + panel).innerText()).includes('Not recorded'), false, 'No repetitive missing-value prose in ' + panel);
+                    await page.screenshot({path: 'output/playwright/gcash-distill/' + panel + '-' + theme + '-' + width + '.png', fullPage: true});
+                }
+                await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
             }
         }
+        fixture('cleanup');
+        run('src/backend/tests/support/cashier_ui_fixture.php', ['create', database]);
+        await page.goto(origin + '/components/administrator/gcash_overview.php');
+        assert.equal(await page.locator('.gcash-funds-panel .gcash-empty-state').isVisible(), true);
+        fs.mkdirSync('output/playwright/gcash-empty-states', {recursive: true});
+        for (const width of [1440, 1024, 768, 390, 320]) {
+            await page.setViewportSize({width, height: 900});
+            for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Service Fund Movements', 'money']]) {
+                await page.locator('#gcash-tab-' + panel).click();
+                await page.locator('#tab-' + panel).waitFor({state: 'visible'});
+                if (panel === 'money') {
+                    await page.waitForLoadState('networkidle');
+                    const help = page.getByRole('button', {name: 'Timestamp & correction rules'});
+                    assert.equal(await help.evaluate(button => Boolean(button.closest('#tab-money .pos-panel-header'))), true, 'Rules sit inside the money panel header');
+                    await help.focus();
+                    await page.locator('#gcash-money-rules').waitFor({state: 'visible'});
+                    assert.equal(await page.locator('#gcash-money-rules').evaluate(element => {
+                        const bounds = element.getBoundingClientRect();
+                        return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight;
+                    }), true, 'Rules tooltip stays inside the viewport');
+                    await page.keyboard.press('Escape');
+                    assert.equal(await page.locator('#gcash-money-rules').isVisible(), false, 'Escape dismisses rules');
+                    await help.click();
+                    assert.equal(await page.locator('#gcash-money-rules').isVisible(), true, 'Rules open on click');
+                    await page.keyboard.press('Escape');
+                }
+                for (const theme of ['light', 'dark']) {
+                    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+                    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Empty ' + panel + ' fits ' + width);
+                    const states = page.locator('#tab-' + panel + ' .gcash-empty-state:visible');
+                    assert.ok(await states.count() > 0, panel + ' has an empty state');
+                    for (const state of await states.all()) {
+                        assert.equal(await state.evaluate(element => {
+                            const bounds = element.getBoundingClientRect();
+                            const wrap = element.closest('.gcash-table-wrap')?.getBoundingClientRect();
+                            return bounds.left >= 0 && bounds.right <= innerWidth && element.scrollWidth <= element.clientWidth && (!wrap || Math.abs(bounds.width - wrap.width) < 2);
+                        }), true, 'Empty content is fully visible without horizontal scrolling');
+                        for (const button of await state.locator('.btn').all()) {
+                            assert.ok((await button.boundingBox()).height >= 44, 'Empty-state actions retain touch target height');
+                        }
+                    }
+                    await page.locator('#tab-' + panel).screenshot({path: 'output/playwright/gcash-empty-states/' + panel + '-' + theme + '-' + width + '.png'});
+                }
+            }
+        }
+        await page.setViewportSize({width: 1440, height: 1800});
+        for (const panel of ['transactions', 'reconciliation', 'unresolved', 'money']) {
+            await page.locator('#gcash-tab-' + panel).click();
+            await page.locator('#tab-' + panel).waitFor({state: 'visible'});
+            if (panel === 'money') await page.waitForLoadState('networkidle');
+            await page.evaluate(() => window.scrollTo(0, 0));
+            const gap = await page.locator('#tab-' + panel + ' > section').evaluate(element => {
+                const workspace = document.getElementById('gcash-admin-workspace');
+                return innerHeight - element.getBoundingClientRect().bottom - parseFloat(getComputedStyle(workspace).paddingBottom);
+            });
+            assert.ok(Math.abs(gap) < 2, panel + ' fills available viewport height; gap=' + gap);
+            await page.locator('#tab-' + panel).screenshot({path: 'output/playwright/gcash-empty-states/viewport-' + panel + '-1440.png'});
+        }
+        await page.locator('#gcash-tab-transactions').click();
+        await page.locator('#gcash-admin-history-body').getByRole('link', {name: 'Reset filters'}).click();
+        await page.waitForURL(url => url.searchParams.get('tab') === 'transactions' && !url.searchParams.has('period'));
+        await page.waitForLoadState('networkidle');
+        assert.equal(await page.locator('#tab-transactions .gcash-empty-state').isVisible(), true, 'Reset preserves the Transactions tab');
+        await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        await page.locator('#tab-overview').waitFor({state: 'visible'});
+        await page.route('**/gcash_overview_fragments.php*', route => route.abort());
+        await page.locator('#btn-apply-filters').click();
+        await page.waitForFunction(() => document.querySelector('#gcash-filter-status').textContent.includes('unavailable'));
+        assert.equal(await page.locator('.gcash-funds-panel .gcash-empty-state').isVisible(), false, 'Failed loading hides the missing-balance state');
+        assert.equal(await page.locator('#gcash-outstanding-reviews [role="alert"]').isVisible(), true, 'Failed loading replaces the all-clear state');
+        await page.unroute('**/gcash_overview_fragments.php*');
+        await page.locator('#btn-apply-filters').click();
+        await page.locator('.gcash-funds-panel .gcash-empty-state').waitFor({state: 'visible'});
         assert.deepEqual(errors, []);
         console.log('GCash cached-script tab regression: passed');
     } finally {

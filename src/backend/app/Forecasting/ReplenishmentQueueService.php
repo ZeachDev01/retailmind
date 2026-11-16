@@ -82,17 +82,12 @@ class ReplenishmentQueueService
         // If forecasts are empty because job was observation/failed/superseded, but historical forecast rows exist, load them for metadata display
         if ($jobId && empty($forecasts)) {
             try {
-                $rawRows = $this->buildQueue($jobId);
+                $rawRows = $this->buildQueue($jobId, $asOfDate);
                 $forecasts = array_column($rawRows, null, 'product_id');
             } catch (Throwable $e) {}
         }
 
-        $products = $this->pdo->query("SELECT p.product_id, p.sku, p.product_name,
-            p.reorder_level, p.safety_stock, p.minimum_order_quantity, p.units_per_package,
-            COALESCE(i.quantity_on_hand, 0) AS current_stock
-            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
-            WHERE p.status = 'active'
-            ORDER BY COALESCE(i.quantity_on_hand, 0), p.product_name")->fetchAll(PDO::FETCH_ASSOC);
+        $products = $this->getProducts($today->format('Y-m-d'));
 
         foreach ($products as &$product) {
             $stock = (int)$product['current_stock'];
@@ -182,7 +177,7 @@ class ReplenishmentQueueService
             return [];
         }
 
-        return $this->buildQueue($jobId);
+        return $this->buildQueue($jobId, $asOfDate);
     }
 
     public static function replayDatabaseAllowed(string $database): bool
@@ -207,7 +202,42 @@ class ReplenishmentQueueService
             static fn(array $product): bool => $product['forecast_7_day'] !== null)) : [];
     }
 
-    private function buildQueue(int $jobId): array
+    private function getProducts(string $today): array
+    {
+        $stmt = $this->pdo->prepare("SELECT p.*, COALESCE(i.quantity_on_hand, 0) AS physical_stock,
+            COALESCE(b.expired_quantity, 0) AS expired_quantity,
+            COALESCE(b.saleable_sealed_packs, 0) AS saleable_sealed_packs,
+            COALESCE(b.saleable_loose_pieces, i.quantity_on_hand, 0) AS saleable_loose_pieces,
+            COALESCE(b.expired_sealed_packs, 0) AS expired_sealed_packs,
+            COALESCE(b.expired_loose_pieces, 0) AS expired_loose_pieces
+            FROM products p LEFT JOIN inventory i ON i.product_id = p.product_id
+            LEFT JOIN (
+                SELECT product_id,
+                    SUM(CASE WHEN expiration_date < ? THEN remaining_quantity ELSE 0 END) AS expired_quantity,
+                    SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN sealed_quantity ELSE 0 END) AS saleable_sealed_packs,
+                    SUM(CASE WHEN expiration_date IS NULL OR expiration_date >= ? THEN loose_quantity ELSE 0 END) AS saleable_loose_pieces,
+                    SUM(CASE WHEN expiration_date < ? THEN sealed_quantity ELSE 0 END) AS expired_sealed_packs,
+                    SUM(CASE WHEN expiration_date < ? THEN loose_quantity ELSE 0 END) AS expired_loose_pieces
+                FROM product_batches WHERE remaining_quantity > 0 GROUP BY product_id
+            ) b ON b.product_id = p.product_id
+            WHERE p.status = 'active'");
+        $stmt->execute(array_fill(0, 5, $today));
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($products as &$product) {
+            $product['expired_quantity'] = min(max(0, (int)$product['physical_stock']), (int)$product['expired_quantity']);
+            $product['current_stock'] = max(0, (int)$product['physical_stock'] - $product['expired_quantity']);
+            if ($product['current_stock'] === 0) {
+                $product['saleable_sealed_packs'] = 0;
+                $product['saleable_loose_pieces'] = 0;
+            }
+        }
+        unset($product);
+        usort($products, static fn(array $a, array $b): int =>
+            ($a['current_stock'] <=> $b['current_stock']) ?: strcmp($a['product_name'], $b['product_name']));
+        return $products;
+    }
+
+    private function buildQueue(int $jobId, ?string $asOfDate = null): array
     {
         // Check observation mode and recommendation suspension status
         $isObservationMode = false;
@@ -224,30 +254,16 @@ class ReplenishmentQueueService
         $aggregates = $reader->read($jobId, false);
         $leadTimeDemands = $reader->readLeadTimeDemand($jobId);
 
-        // 1. Fetch products (goods count only when received; no supplier joins or open POs)
-        $stmt = $this->pdo->prepare("
-            SELECT 
-                p.product_id,
-                p.sku,
-                p.product_name,
-                COALESCE(i.quantity_on_hand, 0) AS current_stock,
-                COALESCE(p.supplier_lead_time_days, 7) AS lead_time_days,
-                COALESCE(p.minimum_order_quantity, 1) AS moq
-            FROM products p
-            LEFT JOIN inventory i ON p.product_id = i.product_id
-            WHERE p.status = 'active'
-        ");
-        
-        $stmt->execute();
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $today = new DateTimeImmutable($asOfDate ?? 'today', new DateTimeZone('Asia/Manila'));
+        $rows = $this->getProducts($today->format('Y-m-d'));
         
         $queue = [];
         
         foreach ($rows as $row) {
             $productId = (int)$row['product_id'];
             $currentStock = (int)$row['current_stock'];
-            $leadTimeDays = max(1, (int)($row['lead_time_days'] ?? 7));
-            $moq = max(1, (int)($row['moq'] ?? 1));
+            $leadTimeDays = max(1, (int)($row['supplier_lead_time_days'] ?? 7));
+            $moq = max(1, (int)($row['minimum_order_quantity'] ?? 1));
 
             $forecast = $aggregates[$productId] ?? null;
             $hasForecast = $forecast !== null && $forecast['readiness_level'] !== null;

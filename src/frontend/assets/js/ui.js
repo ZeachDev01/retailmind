@@ -14,6 +14,18 @@
     return Array.from((root || document).querySelectorAll(selector));
   }
 
+  const formSnapshots = new WeakMap();
+  const formSnapshot = form => JSON.stringify(Array.from(new FormData(form), ([key, value]) =>
+    [key, value instanceof File ? (value.name ? [value.name, value.size, value.lastModified] : '') : value]));
+  RM.hasUnsavedChanges = exceptForm => qsa('form[data-unsaved-changes]').some(form =>
+    form !== exceptForm && formSnapshots.has(form) &&
+    (form.dataset.unsavedChanges === 'dirty' || formSnapshots.get(form) !== formSnapshot(form)));
+  window.addEventListener('beforeunload', event => {
+    if (!RM.hasUnsavedChanges(qs('form[data-rm-submitting="1"]'))) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
   const GENERIC_ALERT = {
     error:
       "Something went wrong. Please try again. Tell your Administrator if this keeps happening.",
@@ -1095,7 +1107,7 @@
         input.className = field.className;
         input.id = (field.id || 'rm-search-' + ++searchDropdownId) + '-search';
         input.required = required;
-        for (const name of ['aria-label', 'aria-labelledby', 'aria-describedby']) {
+        for (const name of ['aria-label', 'aria-labelledby', 'aria-describedby', 'aria-invalid']) {
           if (field.hasAttribute(name)) input.setAttribute(name, field.getAttribute(name));
         }
         const labelText = Array.from(field.labels, label => Array.from(label.childNodes)
@@ -1305,12 +1317,24 @@
   RM.fillTableGhostRows = initTableGhostRows;
 
   RM.initPageContent = function () {
+    qsa('form[data-unsaved-changes]').forEach(form => {
+      if (!formSnapshots.has(form)) formSnapshots.set(form, formSnapshot(form));
+    });
+    qsa('form[data-error-field]').forEach(form => {
+      const field = form.elements.namedItem(form.dataset.errorField);
+      const error = qs('[data-field-error]', form);
+      if (!field || !error) return;
+      field.setAttribute('aria-invalid', 'true');
+      field.setAttribute('aria-describedby', error.id);
+      field.after(error);
+    });
     initQueryToasts();
     initServerNotifications();
     initForms();
     initSmartTables();
     initTableGhostRows();
     initSearchDropdowns();
+    qs('[aria-invalid="true"]:not([hidden])')?.focus();
   };
 
   initDialogAccessibility();

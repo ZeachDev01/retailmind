@@ -38,7 +38,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    min-height: 34px;
+    min-height: 44px;
     padding: 0.15rem 0.3rem 0.15rem 0.15rem;
     border: 0;
     border-radius: 999px;
@@ -127,8 +127,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     border-radius: 8px;

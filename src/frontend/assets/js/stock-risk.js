@@ -2,57 +2,81 @@
     const root = document.getElementById('stock-risk');
     if (!root || !root.querySelector('#risk-table-body')) return;
     const rows = Array.from(root.querySelectorAll('[data-risk-row]'));
-    const initialOrder = new Map(rows.map((row,index) => [row,index]));
     const search = root.querySelector('#risk-search');
+    const stockFilter = root.querySelector('#movement-stock');
+    const reportButton = root.querySelector('#movement-report');
     const body = root.querySelector('#risk-table-body');
-    const filters = Array.from(root.querySelectorAll('[data-risk-filter]'));
     const sorters = Array.from(root.querySelectorAll('[data-risk-sort]'));
     const previous = root.querySelector('#risk-previous');
     const next = root.querySelector('#risk-next');
+    const drawer = root.querySelector('#movement-drawer');
+    const detailBody = root.querySelector('#movement-detail-body');
     const collator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
-    let filter = 'all';
     let page = 1;
-    let sort = '';
+    let sort = 'days';
     let direction = 1;
-    function render() {
+    let trigger = null;
+    let bodyOverflow = '';
+    function matchingRows() {
         const query = search.value.trim().toLowerCase();
-        const matching = rows.filter(row => (filter === 'all' || row.dataset.flags.split(' ').includes(filter)) && row.dataset.search.includes(query));
+        return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0) && row.dataset.search.includes(query));
+    }
+    function render() {
+        const matching = matchingRows();
+        reportButton.disabled = matching.length === 0;
         const pages = Math.max(1, Math.ceil(matching.length / 10));
         page = Math.min(page, pages);
-        rows.forEach(row => {
-            row.hidden = true;
-            const button = row.querySelector('[data-risk-review]');
-            button.setAttribute('aria-expanded', 'false');
-            root.querySelector('#risk-detail-' + button.dataset.riskReview).hidden = true;
-        });
+        rows.forEach(row => { row.hidden = true; });
         matching.slice((page - 1) * 10, page * 10).forEach(row => { row.hidden = false; });
         root.querySelector('#risk-empty').hidden = matching.length > 0;
-        root.querySelector('#risk-page-summary').textContent = matching.length ? `Showing ${(page - 1) * 10 + 1}–${Math.min(page * 10, matching.length)} of ${matching.length} products` : 'No products to show';
-        root.querySelector('#risk-page-status').textContent = `Page ${page} of ${pages}`;
+        root.querySelector('#risk-page-summary').textContent = matching.length ? 'Showing ' + ((page - 1) * 10 + 1) + '–' + Math.min(page * 10, matching.length) + ' of ' + matching.length + ' products' : 'No products to show';
+        root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
         previous.disabled = page === 1;
         next.disabled = page === pages;
     }
-    filters.forEach(button => button.addEventListener('click', () => {
-        filter = button.dataset.riskFilter;
-        page = 1;
-        filters.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-        render();
-    }));
     search.addEventListener('input', () => { page = 1; render(); });
+    stockFilter.addEventListener('change', () => { page = 1; render(); });
+    function outsideDrawer(event) {
+        if (event.target !== drawer) return;
+        const rect = drawer.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) drawer.close();
+    }
+    function containDrawerFocus(event) {
+        if (event.key !== 'Tab') return;
+        const controls = Array.from(drawer.querySelectorAll('button,summary')).filter(el => !el.disabled && el.getClientRects().length);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+        }
+    }
     root.addEventListener('click', event => {
         const button = event.target.closest('[data-risk-review]');
-        if (!button) return;
-        const expanded = button.getAttribute('aria-expanded') !== 'true';
-        button.setAttribute('aria-expanded', String(expanded));
-        root.querySelector('#risk-detail-' + button.dataset.riskReview).hidden = !expanded;
+        if (!button || drawer.open) return;
+        detailBody.replaceChildren(root.querySelector('#risk-detail-' + button.dataset.riskReview).content.cloneNode(true));
+        trigger = button;
+        button.setAttribute('aria-expanded', 'true');
+        bodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        drawer.showModal();
+        drawer.addEventListener('click', outsideDrawer);
+        drawer.addEventListener('keydown', containDrawerFocus);
+    });
+    root.querySelector('#movement-drawer-close').addEventListener('click', () => drawer.close());
+    drawer.addEventListener('close', () => {
+        drawer.removeEventListener('click', outsideDrawer);
+        drawer.removeEventListener('keydown', containDrawerFocus);
+        document.body.style.overflow = bodyOverflow;
+        trigger?.setAttribute('aria-expanded', 'false');
+        trigger?.focus();
+        detailBody.replaceChildren();
     });
     function sortRows(key, order) {
         direction = order;
         sort = key;
-        rows.sort((a,b) => key === 'priority' ? initialOrder.get(a) - initialOrder.get(b) : direction * (key === 'name' ? collator.compare(a.dataset.name,b.dataset.name) : Number(a.dataset[key]) - Number(b.dataset[key])));
-        rows.forEach(row => {
-            body.append(row, root.querySelector('#risk-detail-' + row.querySelector('[data-risk-review]').dataset.riskReview));
-        });
+        rows.sort((a,b) => direction * (key === 'name' ? collator.compare(a.dataset.name,b.dataset.name) : Number(a.dataset[key]) - Number(b.dataset[key])));
+        rows.forEach(row => body.append(row));
         body.append(root.querySelector('#risk-empty'));
         sorters.forEach(item => {
             const active = item.dataset.riskSort === key;
@@ -68,9 +92,86 @@
     }));
     root.querySelector('#risk-sort-mobile').addEventListener('change', event => {
         const key = event.target.value;
-        sortRows(key, key === 'name' ? 1 : -1);
+        sortRows(key, key === 'stock' ? -1 : 1);
     });
     previous.addEventListener('click', () => { if (page > 1) { page--; render(); } });
     next.addEventListener('click', () => { page++; render(); });
+    reportButton.addEventListener('click', () => {
+        const report = window.open('', '_blank');
+        if (!report) {
+            root.querySelector('#movement-report-status').textContent = 'Allow pop-ups for RetailMind, then generate the report again.';
+            return;
+        }
+        root.querySelector('#movement-report-status').textContent = '';
+        report.opener = null;
+        report.document.title = 'Stock Movement Report';
+        report.document.documentElement.lang = 'en';
+        report.document.documentElement.dataset.theme = 'light';
+        document.querySelectorAll('link[rel="stylesheet"],style').forEach(link => {
+            const copy = link.cloneNode(true);
+            if (link.href) copy.href = link.href;
+            report.document.head.append(copy);
+        });
+        report.document.body.className = 'stock-movement-report';
+        const actions = report.document.createElement('div');
+        actions.className = 'sr-report-actions';
+        const print = report.document.createElement('button');
+        print.type = 'button';
+        print.className = 'btn btn-primary';
+        print.textContent = 'Print / Save as PDF';
+        print.addEventListener('click', () => report.print());
+        actions.append(print);
+        const snapshot = root.cloneNode(true);
+        snapshot.classList.add('sr-report');
+        snapshot.querySelector('.sr-heading').replaceWith(root.querySelector('#movement-report-letterhead').content.cloneNode(true));
+        snapshot.querySelectorAll('template,dialog,.sr-tools,.sr-mobile-sort,.sr-mobile-status,.sr-pagination,#movement-report,#movement-report-status,.sr-row-action,.tooltip-box,.info-tooltip-trigger:not(.sr-badge)').forEach(el => el.remove());
+        snapshot.querySelector('thead tr').lastElementChild.remove();
+        snapshot.querySelectorAll('button').forEach(button => {
+            if (button.classList.contains('sr-badge')) {
+                const label = report.document.createElement('span');
+                label.className = button.className.replace('info-tooltip-trigger', '');
+                label.append(...button.cloneNode(true).childNodes);
+                button.replaceWith(label);
+            } else button.replaceWith(report.document.createTextNode(button.textContent));
+        });
+        const matching = matchingRows();
+        const ids = new Set(matching.map(row => row.dataset.productId));
+        snapshot.querySelectorAll('[data-risk-row]').forEach(row => {
+            if (ids.has(row.dataset.productId)) row.hidden = false;
+            else row.remove();
+        });
+        snapshot.querySelector('#risk-empty').remove();
+        const generated = new Intl.DateTimeFormat('en-PH', {dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Manila'}).format(new Date()) + ' PHT';
+        snapshot.querySelector('.sr-report-stamp strong').textContent = generated;
+        snapshot.querySelector('.sr-report-scope').textContent = stockFilter.selectedOptions[0].textContent + ' · Search: ' + (search.value.trim() || 'All') + ' · ' + matching.length + ' products · Quantities in base units';
+        const review = report.document.createElement('p');
+        review.className = 'sr-caption';
+        review.textContent = root.querySelector('#movement-period-help').textContent;
+        snapshot.append(review);
+        matching.forEach(row => {
+            const section = report.document.createElement('section');
+            section.className = 'sr-report-product';
+            section.append(root.querySelector('#risk-detail-' + row.dataset.productId).content.cloneNode(true));
+            section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            section.querySelectorAll('details').forEach(el => { el.open = true; });
+            snapshot.append(section);
+        });
+        // Shared calculation limitations belong once in a complete report.
+        const basis = Array.from(snapshot.querySelector('.sr-report-product .sr-basis')).slice(0,2).map(el => el.textContent).join(' ');
+        snapshot.querySelectorAll('.sr-basis').forEach(el => el.remove());
+        const note = report.document.createElement('p');
+        note.className = 'sr-caption';
+        note.textContent = basis;
+        snapshot.append(note);
+        const footer = report.document.createElement('footer');
+        footer.className = 'sr-report-footer';
+        const store = report.document.createElement('span');
+        store.textContent = snapshot.querySelector('.sr-report-brand strong').textContent + ' · RetailMind';
+        const end = report.document.createElement('span');
+        end.textContent = 'End of report · ' + matching.length + ' products · ' + generated;
+        footer.append(store, end);
+        snapshot.append(footer);
+        report.document.body.append(actions, snapshot);
+    });
     render();
 })();

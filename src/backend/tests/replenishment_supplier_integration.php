@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit; }
 if (getenv('RUN_REPLENISHMENT_DB_TESTS') !== '1') {
     echo "Replenishment suppliers: skipped (set RUN_REPLENISHMENT_DB_TESTS=1; requires CREATE DATABASE)\n";
@@ -24,6 +26,7 @@ try {
     $server->exec("CREATE DATABASE `{$database}`");
     $created = true;
     $pdo = $connect($database);
+    createReplenishmentBatchSchema($pdo);
     $pdo->exec("SET SESSION sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'");
     $pdo->exec("CREATE TABLE ml_jobs (job_id INT PRIMARY KEY, trigger_type VARCHAR(50), status VARCHAR(20));
         INSERT INTO ml_jobs VALUES (10, 'forecast_generation', 'succeeded');

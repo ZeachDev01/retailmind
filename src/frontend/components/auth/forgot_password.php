@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $htmlBody = password_reset_email_html((string)$user['display_name'], $pinFormatted);
 
-            if (!send_email_notification($userEmail, 'RetailMind verification code: ' . $pin, $plainBody, $htmlBody)) {
+            if (!send_email_notification($userEmail, 'RetailMind password reset code', $plainBody, $htmlBody)) {
                 throw new RuntimeException('Failed to deliver verification code email. Please check store email settings.');
             }
 

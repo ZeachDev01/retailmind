@@ -68,6 +68,11 @@
 
     function markReviewsUnavailable() {
         document.getElementById('admin-nc-count').textContent = 'Unavailable';
+        workspace.querySelectorAll('#gcash-outstanding-reviews .gcash-empty-state').forEach(state => {
+            state.classList.remove('gcash-empty-state');
+            state.textContent = 'Review data unavailable. Refresh to try again.';
+            state.setAttribute('role', 'alert');
+        });
         for (const [id, columns] of [['gcash-admin-diff-body', 8], ['gcash-admin-nc-table tbody', 9]]) {
             const body = workspace.querySelector('#' + id);
             const row = document.createElement('tr');
@@ -144,8 +149,6 @@
             const count = document.getElementById('gcash-matching-record-count').textContent;
             pageUrl.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
             history.replaceState(null, '', pageUrl);
-            const exportLink = document.getElementById('gcash-export');
-            if (exportLink) exportLink.href = pageUrl + '&export=csv';
             status.textContent = `${count} matching transactions`;
             return true;
         } catch (error) {
@@ -165,7 +168,11 @@
                 document.getElementById('gcash-session-status').classList.remove('gcash-status-completed');
                 for (const button of workspace.querySelectorAll('[data-type]')) button.textContent = `${button.dataset.type === 'all' ? 'All' : button.dataset.type} (Unavailable)`;
                 workspace.querySelectorAll('#admin-expected-cash, #admin-expected-wallet').forEach(value => { value.textContent = 'Unavailable. Refresh to try again.'; });
+                workspace.querySelectorAll('.gcash-funds-panel .gcash-empty-state').forEach(state => { state.hidden = true; });
+                workspace.querySelector('.gcash-balances-grid').hidden = false;
                 status.textContent = error.message + ' Report totals are unavailable for this selection.';
+                workspace.querySelector('.gcash-activity-empty').hidden = true;
+                workspace.querySelector('#gcash-completed-activity .gcash-metrics-grid').hidden = false;
                 workspace.querySelectorAll('#gcash-completed-activity .gcash-card-value, #admin-metric-total-tx').forEach(value => { value.textContent = 'Unavailable'; });
             }
             return false;
@@ -191,15 +198,6 @@
         typeInput.value = button.dataset.type;
         filterTransactions();
     });
-    workspace.addEventListener('click', event => {
-        const link = event.target.closest('#gcash-export');
-        if (!link) return;
-        const url = new URL(filterForm.action);
-        url.search = new URLSearchParams(new FormData(filterForm)).toString();
-        url.searchParams.set('export', 'csv');
-        link.href = url;
-    });
-    document.getElementById('gcash-record')?.addEventListener('click', () => document.getElementById('gcash-record-dialog').showModal());
     workspace.querySelectorAll('dialog').forEach(dialog => {
         dialog.addEventListener('click', event => {
             if (event.target.closest('[data-close-dialog]')) dialog.close();
@@ -229,10 +227,10 @@
             'Cashier & Shift': `${tx.cashier_name || tx.cashier_username} / ${tx.shift_id === null ? 'Legacy reference' : '#' + tx.shift_id}`,
             'Exchange Type': tx.transaction_type,
             'Customer Principal': tx.is_legacy ? 'Legacy reference — ' + formatMoney(tx.amount) : formatMoney(tx.principal_amount),
-            'Convenience Fee': tx.is_legacy ? 'Not recorded' : formatMoney(tx.gross_fee),
-            'Fee Deducted At': tx.fee_location || 'Not recorded',
-            'GCash Service Cash': tx.is_legacy ? 'Not recorded' : signedMoney(tx.service_cash_delta),
-            'GCash App Balance': tx.is_legacy ? 'Not recorded' : signedMoney(tx.wallet_delta),
+            'Convenience Fee': tx.is_legacy ? '—' : formatMoney(tx.gross_fee),
+            'Fee Deducted At': tx.fee_location || '—',
+            'GCash Service Cash': tx.is_legacy ? '—' : signedMoney(tx.service_cash_delta),
+            'GCash App Balance': tx.is_legacy ? '—' : signedMoney(tx.wallet_delta),
             'Notes': tx.notes || tx.verification_note || '—'
         };
         Object.entries(values).forEach(([label, value]) => {

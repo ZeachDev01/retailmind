@@ -272,7 +272,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
 
             <?php if (!$isReviewed): ?>
                 <div class="investigation-forms">
-                    <form method="post" class="shift-review-form shift-review-form--primary">
+                    <form method="post" class="shift-review-form shift-review-form--primary" data-unsaved-changes>
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="mark_reviewed">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
@@ -292,7 +292,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         <button type="submit" class="btn btn-primary u-mt-10">Mark reviewed</button>
                     </form>
 
-                    <form method="post" class="shift-review-form">
+                    <form method="post" class="shift-review-form" data-unsaved-changes>
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="save_draft">
                         <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">
@@ -315,7 +315,7 @@ $totalRefundsAmount = (float)($report['totals']['Total Refunds'] ?? 0);
                         </div>
                         <details class="shift-reopen-disclosure">
                             <summary class="btn btn-secondary">Reopen review</summary>
-                            <form method="post" class="shift-reopen-form">
+                            <form method="post" class="shift-reopen-form" data-unsaved-changes>
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="reopen_review">
                                 <input type="hidden" name="shift_id" value="<?= (int)$targetedShift['Shift ID'] ?>">

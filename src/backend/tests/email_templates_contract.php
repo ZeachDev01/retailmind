@@ -13,7 +13,9 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 try {
-    $reset = password_reset_email_html('<b>Ana</b>', '123 456');
+    $logo = 'https://img.mailinblue.com/example/retailmind.png?version=1&size=header';
+    $render = static fn(string $body): string => branded_email_html('Test', 'Text fallback', $body, 'Shalom <Store>', $logo);
+    $reset = $render(password_reset_email_html('<b>Ana</b>', '123 456'));
     $assert(str_contains($reset, '&lt;b&gt;Ana&lt;/b&gt;'), 'Reset email must escape the display name');
     $assert(!str_contains($reset, '<b>Ana</b>'), 'Reset email must not inject the display name as markup');
     $assert(str_contains($reset, '123 456'), 'Reset email must show the verification code');
@@ -23,7 +25,7 @@ try {
     $assert(!str_contains($reset, 'display:flex') && !str_contains($reset, 'display:grid'), 'Reset email must avoid flex and grid');
 
     $temporaryPassword = 'Temp<>&"\'Password123';
-    $welcome = administrator_welcome_email_html('<b>Ana</b>', 'admin<one>', $temporaryPassword);
+    $welcome = $render(administrator_welcome_email_html('<b>Ana</b>', 'admin<one>', $temporaryPassword));
     foreach (['<b>Ana</b>', 'admin<one>', $temporaryPassword] as $value) {
         $assert(str_contains($welcome, htmlspecialchars($value, ENT_QUOTES, 'UTF-8')), 'Welcome email must preserve and escape each account detail');
         $assert(!str_contains($welcome, $value), 'Welcome email must not inject account details as markup');
@@ -48,7 +50,7 @@ CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY, product_id INTEGER, 
 (1,2,'B<b>1</b>',3,'" . date('Y-m-d', strtotime('+3 days')) . "','" . date('Y-m-d') . "','')");
 
     $brief = (new App\Services\StockBriefService($pdo))->buildReport();
-    $html = (string)$brief['html'];
+    $html = $render((string)$brief['html']);
 
     $assert(!str_contains($html, '<script>'), 'Stock brief must escape the Store name');
     $assert(!str_contains($html, '<b>Item</b>'), 'Stock brief must escape product names');
@@ -58,8 +60,30 @@ CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY, product_id INTEGER, 
     $assert(str_contains($html, 'rm-sm-hide'), 'Stock brief must collapse optional columns on small screens');
     $assert(str_contains($html, '<!--[if mso]>'), 'Stock brief must pin a fixed width for Outlook');
     $assert(str_contains($html, 'Daily Stock Brief'), 'Stock brief must name the report');
-    $assert(str_contains($html, 'Automated Daily Stock Brief from RetailMind'), 'Stock brief must carry its footer credit');
+    $assert(str_contains($html, 'Automated notification from'), 'Stock brief must carry the shared footer credit');
     $assert(!str_contains($html, 'display:flex') && !str_contains($html, 'display:grid'), 'Stock brief must avoid flex and grid');
+
+    foreach ([null, '', '   '] as $body) {
+        $plain = branded_email_html('Alert <title>', "Line <script>\nNext & line", $body, '<Store>', $logo);
+        $assert(str_contains($plain, 'Alert &lt;title&gt;') && str_contains($plain, 'Line &lt;script&gt;<br>'), 'Plain emails must escape text and preserve line breaks');
+        $assert(!str_contains($plain, '<script>'), 'Plain messages must never become executable markup');
+    }
+    foreach ([$reset, $welcome, $html, $plain] as $email) {
+        $assert(substr_count($email, 'alt="RetailMind"') === 1, 'Every email must have exactly one RetailMind image logo');
+        $assert(str_contains($email, htmlspecialchars($logo, ENT_QUOTES, 'UTF-8')), 'Logo URL must be preserved and escaped');
+        $assert(str_contains($email, '&lt;Store&gt;'), 'Every email must show the escaped Store name');
+        $assert(substr_count($email, 'Automated notification from') === 1, 'Every email must have one shared footer');
+        $assert(str_contains($email, 'background:#ffffff') && !str_contains($email, 'background:#0f172a'), 'Every email must retain the white RetailMind header');
+        $assert(str_contains($email, '<!--[if mso]>'), 'Every email must retain Outlook table support');
+    }
+    foreach (['', 'http://localhost/logo.png', 'javascript:alert(1)', 'data:image/png;base64,abc'] as $url) {
+        $fallback = branded_email_html('Test', 'Message', null, '', $url);
+        $assert(!str_contains($fallback, '<img') && str_contains($fallback, '>Mind</span>'), 'Missing or unsafe logo URL must use the text wordmark');
+    }
+    $functions = file_get_contents(__DIR__ . '/../includes/functions.php');
+    $assert(str_contains($functions, "\$payloadData['htmlContent'] = branded_email_html("), 'The shared Brevo boundary must brand all email callers');
+    $resetSource = file_get_contents(__DIR__ . '/../../frontend/components/auth/forgot_password.php');
+    $assert(str_contains($resetSource, "send_email_notification(\$userEmail, 'RetailMind password reset code', \$plainBody, \$htmlBody)"), 'Reset PIN must stay out of the logged subject');
 } catch (Throwable $exception) {
     $failures[] = 'Email template contract threw: ' . $exception->getMessage();
 }

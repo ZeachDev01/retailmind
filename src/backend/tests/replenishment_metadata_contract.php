@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/CandidateEvaluationService.php';
@@ -17,6 +19,7 @@ function store_product_scope(string $alias): array { return ['', []]; }
 
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $pdo->sqliteCreateFunction('GREATEST', static fn ($a, $b) => max($a, $b));
+createReplenishmentBatchSchema($pdo);
 $pdo->exec("CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT, completed_at TEXT);
     CREATE TABLE demand_forecasts (forecast_id INTEGER PRIMARY KEY, job_id INTEGER, product_id INTEGER,
         forecast_origin TEXT, horizon_day INTEGER, predicted_units INTEGER, model_version TEXT, readiness_level TEXT);
@@ -95,6 +98,32 @@ foreach ([null, 'invalid-json'] as $metrics) {
         throw new RuntimeException('Missing training provenance must retain forecast model without inventing Demo label');
     }
 }
+$pdo->exec("ALTER TABLE products ADD COLUMN base_unit TEXT DEFAULT 'bottle';
+    ALTER TABLE products ADD COLUMN pack_size INTEGER;
+    UPDATE products SET base_unit='piece', pack_size=12, reorder_level=30, units_per_package=24;
+    UPDATE inventory SET quantity_on_hand=42;
+    INSERT INTO product_batches VALUES (1, 29, NULL, 1, 17), (1, 13, '2000-01-01', 1, 1)");
+$stock = (new App\Forecasting\ReplenishmentQueueService($pdo))->getRecommendations()[0];
+if ($stock['current_stock'] !== 29 || $stock['stock_rule_quantity'] !== 24 || $stock['stock_status'] !== 'Low stock') {
+    throw new RuntimeException('Buying and status must use saleable stock, with receiving-package rounding preserved');
+}
+$html = renderReplenishmentPage($pdo, 'replenishment_queue');
+foreach (['29 piece', '1 pack + 17 loose · 12 piece/pack', 'Expired: 13 piece (1 pack + 1 loose)', 'data-on-hand="29"', 'data-on-hand-label='] as $needle) {
+    if (!str_contains($html, $needle)) throw new RuntimeException('Missing saleable stock display: ' . $needle);
+}
+$pdo->exec("UPDATE product_batches SET expiration_date='2000-01-01'");
+$stock = (new App\Forecasting\ReplenishmentQueueService($pdo))->getRecommendations()[0];
+if ($stock['current_stock'] !== 0 || $stock['stock_status'] !== 'Out of stock' || $stock['stock_rule_quantity'] !== 48) {
+    throw new RuntimeException('Expired-only stock must not cover replenishment needs');
+}
+$pdo->exec("UPDATE products SET pack_size=NULL, base_unit='bottle'");
+$html = renderReplenishmentPage($pdo, 'replenishment_queue');
+if (str_contains($html, 'loose') || !str_contains($html, 'Expired: 42 bottle')) {
+    throw new RuntimeException('Products without Sales Packs show only their own Base Unit');
+}
+if ((int)$pdo->query('SELECT quantity_on_hand FROM inventory')->fetchColumn() !== 42) {
+    throw new RuntimeException('Viewing saleable stock must preserve physical stock');
+}
 $pdo->exec("UPDATE products SET status='inactive'");
 $empty = renderReplenishmentPage($pdo, 'replenishment_queue');
 if (!str_contains($empty, 'No active products available') || str_contains($empty, 'Print all recommendations')) {
@@ -103,7 +132,7 @@ if (!str_contains($empty, 'No active products available') || str_contains($empty
 $pdo->exec('DROP TABLE inventory');
 $unavailable = renderReplenishmentPage($pdo, 'replenishment_queue');
 if (!str_contains($unavailable, 'Recommendations could not be loaded')
-    || !str_contains($unavailable, '>Reload</a>') || !str_contains($unavailable, 'role="status"')
+    || !str_contains($unavailable, '>Reload</a>') || !str_contains($unavailable, 'role="note"')
     || str_contains($unavailable, 'No active products available') || str_contains($unavailable, 'SQLSTATE')) {
     throw new RuntimeException('Loading failure must offer recovery without an empty catalog claim or technical details');
 }

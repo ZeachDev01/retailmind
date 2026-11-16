@@ -36,7 +36,6 @@ if ($filterError !== null) {
 
 require __DIR__ . '/../../../backend/app/Views/gcash/tab_badges.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/session_status.php';
-require __DIR__ . '/../../../backend/app/Views/gcash/export_link.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/balances.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php';
 require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php';

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 require_once __DIR__ . '/../bootstrap/app.php';
 
 use App\Forecasting\ReplenishmentQueueService;
@@ -25,6 +27,7 @@ try {
     if ($savedAppEnv === null) { unset($_ENV['APP_ENV']); } else { $_ENV['APP_ENV'] = $savedAppEnv; }
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    createReplenishmentBatchSchema($pdo);
 
     $pdo->exec("
         CREATE TABLE ml_jobs (job_id INTEGER PRIMARY KEY, trigger_type TEXT, status TEXT);
@@ -267,6 +270,22 @@ try {
         $pdo->prepare('DELETE FROM platform_settings WHERE setting_key=?')->execute([$key]);
     }
     $assert($planningStock === (int)$pdo->query('SELECT SUM(quantity_on_hand) FROM inventory')->fetchColumn(), 'Planning comparison must not change stock');
+
+    $pdo->exec("UPDATE inventory SET quantity_on_hand=5 WHERE product_id=1");
+    $saleableBaseline = array_column($service->getRecommendations(10, '2026-10-28'), null, 'product_id')[1];
+    $pdo->exec("UPDATE inventory SET quantity_on_hand=35 WHERE product_id=1;
+        INSERT INTO product_batches VALUES (1, 30, '2026-10-27', 2, 6),
+            (1, 3, '2026-10-28', 0, 3), (1, 2, NULL, 0, 2)");
+    $withExpired = array_column($service->getRecommendations(10, '2026-10-28'), null, 'product_id')[1];
+    foreach (['current_stock', 'stock_status', 'stock_rule_quantity', 'recommended_quantity', 'stock_exposure', 'urgency_label'] as $field) {
+        $assert($withExpired[$field] === $saleableBaseline[$field], "$field must exclude expired stock in both stock-rule and forecast guidance");
+    }
+    $assert((int)$withExpired['saleable_loose_pieces'] === 5 && (int)$withExpired['expired_quantity'] === 30,
+        'Expiry day remains saleable, undated stock remains saleable, and earlier dates are expired');
+    $tomorrow = array_column($service->getQueue(10, '2026-10-29'), null, 'product_id')[1];
+    $assert($tomorrow['current_stock'] === 2, 'Forecast queue must use its supplied Manila date for expiry');
+    $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=1')->fetchColumn() === 35,
+        'Expiry-aware guidance must not dispose of recorded stock');
 
     if (empty($failures)) {
         echo "PASS: replenishment_queue_contract\n";

@@ -19,6 +19,7 @@ final class ReportAccessService
         'sales_cashier',
         'refunds',
         'gross_profit',
+        'gcash_transactions',
     ];
 
     /** Standard store reporting catalog. */
@@ -51,6 +52,7 @@ final class ReportAccessService
 
         if ($activeRole === 'admin') {
             $catalog['gross_profit'] = 'Gross Profit Report';
+            $catalog['gcash_transactions'] = 'GCash Transactions';
         }
 
         if ($activeRole === 'inventory_manager') {

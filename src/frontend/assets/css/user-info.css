@@ -185,7 +185,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    min-height: 42px;
+    min-height: 44px;
     padding: 0.55rem 1.15rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -389,7 +389,7 @@
 .profile-details-form input {
     min-width: 0;
     width: 100%;
-    min-height: 42px;
+    min-height: 44px;
     padding: 0.6rem 0.85rem;
     font-size: 0.9375rem;
     color: var(--text, #0f172a);

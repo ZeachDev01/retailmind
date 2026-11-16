@@ -789,7 +789,7 @@
 
 .store-settings-page .settings-sidebar a.active {
     background: rgba(37, 99, 235, .1);
-    color: var(--primary, #2563eb);
+    color: var(--theme-info-text, #1d4ed8);
     font-weight: 600;
 }
 
@@ -818,7 +818,7 @@
     background: currentColor;
 }
 
-.store-settings-page .settings-nav-state.is-online { color: var(--success, #16a34a); }
+.store-settings-page .settings-nav-state.is-online { color: var(--theme-success-text, #166534); }
 .store-settings-page .settings-nav-state.is-starting { color: var(--warning, #d97706); }
 .store-settings-page .settings-nav-state.is-offline { color: var(--muted, #6b7280); }
 

@@ -1,5 +1,5 @@
 <?php
-// Legacy Insights URL now opens the consolidated, read-only Stock Risk tab.
+// Legacy Insights URL now opens the consolidated, read-only Stock Movement tab.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);

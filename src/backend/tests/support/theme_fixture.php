@@ -101,6 +101,11 @@ if (in_array($argv[1], ['identity_historical', 'identity_reset_count'], true)) {
     } else echo (int)$pdo->query('SELECT COUNT(*) FROM password_reset_tokens WHERE user_id=3')->fetchColumn();
     exit;
 }
+if ($argv[1] === 'scheduled_backup_history') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("UPDATE backup_history SET backup_type='scheduled' WHERE status='completed' ORDER BY backup_id DESC LIMIT 1");
+    exit;
+}
 if ($argv[1] === 'backup_package_contents') {
     require_once __DIR__ . '/../../includes/backup.php';
     $pdo->exec("USE `{$database}`");

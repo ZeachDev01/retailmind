@@ -17,7 +17,6 @@ $config = require __DIR__ . '/../../../backend/config/gcash.php';
 $service = new GCashTransactionService($pdo, $config);
 $custody = new GCashLiveCustodySession($pdo);
 $reportBuilder = new AdminOverviewReport($custody, new GCashActivityScopeReport($pdo), new GCashExchangeReview($pdo, $config, $custody));
-$filters = $reportBuilder->filters($_GET, (string)current_role(), (int)$_SESSION['user_id']);
 
 $canMutate = current_role() === 'admin' && !(function_exists('is_remote_request') && is_remote_request());
 
@@ -58,45 +57,6 @@ try {
     error_log((string)$e);
 }
 
-// Reporting owns authorized selection and complete traversal.
-if (($_GET['export'] ?? '') === 'csv') {
-    if (function_exists('is_remote_request') && is_remote_request()) {
-        http_response_code(403);
-        exit('Bulk exports are not available during remote monitoring.');
-    }
-    // Stage the complete report before sending headers so failures cannot produce partial downloads.
-    $csv = null;
-    try {
-        $csv = fopen('php://temp', 'w+');
-        if ($csv === false) throw new RuntimeException('Unable to stage export.');
-        if (fwrite($csv, "\xEF\xBB\xBF") !== 3) throw new RuntimeException('Unable to stage export.');
-        if (fputcsv($csv, ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement', 'Record Basis', 'Legacy Reference Amount'], ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
-        foreach ($service->adminTransactions($filters) as $row) {
-            $cells = [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['is_legacy'] ? 'Not recorded' : $row['principal_amount'], $row['is_legacy'] ? 'Not recorded' : $row['gross_fee'], $row['fee_location'] ?? 'Not recorded', $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'] ?? 'Not recorded', $row['is_legacy'] ? 'Not recorded' : $row['service_cash_delta'], $row['is_legacy'] ? 'Not recorded' : $row['wallet_delta'], $row['is_legacy'] ? 'Legacy reference only' : 'Service exchange', $row['is_legacy'] ? $row['amount'] : null];
-            foreach ($cells as &$cell) {
-                if (is_string($cell) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $cell)) $cell = "'" . $cell;
-            }
-            unset($cell);
-            if (fputcsv($csv, $cells, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
-        }
-        if (!rewind($csv)) throw new RuntimeException('Unable to stage export.');
-    } catch (DomainException) {
-        if (is_resource($csv)) fclose($csv);
-        http_response_code(400);
-        exit('Unable to export. Check the filters and try again.');
-    } catch (Throwable) {
-        if (is_resource($csv)) fclose($csv);
-        http_response_code(503);
-        exit('Unable to export the complete report. Try again.');
-    }
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="gcash-transactions.csv"');
-    header('Cache-Control: no-store');
-    fpassthru($csv);
-    fclose($csv);
-    exit;
-}
-
 $report = $reportBuilder->forRequest($_GET, (string)current_role(), (int)($_SESSION['user_id'] ?? 0));
 $overview = $report->overview;
 $filterError = $report->filterError;
@@ -132,12 +92,6 @@ $isFilteredActivity = $report->isFilteredActivity;
                 <h1>GCash Overview</h1>
 
                 <?php require __DIR__ . '/../../../backend/app/Views/gcash/session_status.php'; ?>
-            </div>
-            <div class="gcash-topbar-actions">
-                <?php require __DIR__ . '/../../../backend/app/Views/gcash/export_link.php'; ?>
-                <?php if (in_array('cashier', current_workspace_roles(), true)): ?>
-                    <button type="button" class="btn btn-primary" id="gcash-record">Record Exchange</button>
-                <?php endif; ?>
             </div>
         </header>
 
@@ -176,15 +130,14 @@ $isFilteredActivity = $report->isFilteredActivity;
             <?php require __DIR__ . '/../../../backend/app/Views/gcash/balances.php'; ?>
             <?php require __DIR__ . '/../../../backend/app/Views/gcash/outstanding_reviews.php'; ?>
         </div>
-        <div class="gcash-activity-row">
-        <section class="pos-panel gcash-overview-section" id="gcash-reporting-scope" aria-labelledby="gcash-reporting-title" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
+        <section class="gcash-activity-row" aria-labelledby="gcash-reporting-title">
+        <div class="pos-panel gcash-overview-section" id="gcash-reporting-scope" data-today="<?= gcash_admin_e(PhilippineTime::today()) ?>">
             <div class="pos-panel-header">
                 <div class="pos-panel-title">
                     <div>
-                        <h2 id="gcash-reporting-title">Activity report range</h2>
+                        <h2 id="gcash-reporting-title">Activity report</h2>
                     </div>
                 </div>
-                <span class="gcash-badge gcash-badge-neutral"><i class="bi bi-funnel" aria-hidden="true"></i> Scope for activity &amp; transactions below</span>
             </div>
             <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
                 <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
@@ -225,10 +178,10 @@ $isFilteredActivity = $report->isFilteredActivity;
                 </div>
             </form>
             <p id="gcash-filter-status" role="status" aria-live="polite"></p>
-        </section>
+        </div>
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php'; ?>
 
-        </div>
+        </section>
         </div>
 
         <div id="tab-transactions" role="tabpanel" aria-labelledby="gcash-tab-transactions" tabindex="0" <?= $activeTab !== 'transactions' ? 'hidden' : '' ?>>
@@ -246,14 +199,14 @@ $isFilteredActivity = $report->isFilteredActivity;
                 <div class="gcash-transaction-local-filters">
                     <div class="gcash-field gcash-filter-search">
                         <label for="gcash-search" class="gcash-filter-label"><i class="bi bi-search" aria-hidden="true"></i> Search transactions</label>
-                        <input type="search" id="gcash-search" name="search" form="gcash-admin-filter-form" maxlength="200" class="form-control" autocomplete="off" value="<?= gcash_admin_e($_GET['search'] ?? '') ?>" placeholder="Search reference, shift #, cashier… (e.g. 1042)">
+                        <input type="search" id="gcash-search" name="search" form="gcash-admin-filter-form" maxlength="200" class="form-control" autocomplete="off" value="<?= gcash_admin_e($_GET['search'] ?? '') ?>" placeholder="Reference, shift, or cashier">
                     </div>
                     <input type="hidden" name="type" form="gcash-admin-filter-form" id="gcash-type-filter" value="<?= gcash_admin_e($_GET['type'] ?? 'all') ?>">
                     <?php require __DIR__ . '/../../../backend/app/Views/gcash/transactions_type_pills.php'; ?>
                 </div>
             </div>
             <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Store-wide transaction history">
-                <table class="table" id="gcash-admin-history-table" data-no-smart-table>
+                <table class="table" id="gcash-admin-history-table" data-no-ghost-rows data-no-smart-table>
                     <thead>
                         <tr>
                             <th scope="col">Date / time</th>
@@ -308,15 +261,6 @@ $isFilteredActivity = $report->isFilteredActivity;
             <dl id="tx-detail-fields"></dl>
             <div class="gcash-actions"><button type="button" class="btn btn-secondary" data-close-dialog>Close</button></div>
         </dialog>
-        <dialog id="gcash-record-dialog" aria-labelledby="gcash-record-title">
-            <h2 id="gcash-record-title">Record Exchange</h2>
-            <p>Exchanges require an open shift and active GCash session in the Cashier workspace.</p>
-            <form method="post" action="<?= gcash_admin_e(app_url('components/auth/workspace.php')) ?>">
-                <?= csrf_field() ?>
-                <input type="hidden" name="workspace" value="cashier">
-                <div class="gcash-actions"><button type="button" class="btn btn-secondary" data-close-dialog>Cancel</button><button class="btn btn-primary" type="submit">Open Cashier Workspace</button></div>
-            </form>
-        </dialog>
         <div id="tab-money" data-loaded="<?= $moneyHistory !== null ? 'true' : 'false' ?>" role="tabpanel" aria-labelledby="gcash-tab-money" tabindex="0" <?= $activeTab !== 'money' ? 'hidden' : '' ?>>
             <section class="pos-panel gcash-overview-section" aria-labelledby="gcash-money-title">
             <div class="pos-panel-header">
@@ -325,22 +269,25 @@ $isFilteredActivity = $report->isFilteredActivity;
                         <h2 id="gcash-money-title">Service Fund Movements</h2>
                     </div>
                 </div>
+                <span class="info-tooltip">
+                    <button class="info-tooltip-trigger" type="button" aria-describedby="gcash-money-rules">Timestamp &amp; correction rules <i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                    <span class="tooltip-box" id="gcash-money-rules" role="tooltip">Finished exchanges use completion time; unfinished use start time; corrections use recorded time.</span>
+                </span>
             </div>
             <form method="get" class="gcash-money-filters">
                 <input type="hidden" name="tab" value="money">
                 <div class="gcash-field"><label for="gcash-money-scope">Records</label><select class="form-control" id="gcash-money-scope" name="movement_scope"><option value="funds" <?= !$allMoneyHistory ? 'selected' : '' ?>>Service fund movements</option><option value="all" <?= $allMoneyHistory ? 'selected' : '' ?>>All money history</option></select></div>
-                <div class="gcash-field"><label for="gcash-money-session"><i class="bi bi-hash" aria-hidden="true"></i> Session ID</label><input class="form-control" id="gcash-money-session" type="number" name="session_id" min="1" autocomplete="off" placeholder="All sessions (e.g. 1042)" value="<?= gcash_admin_e($_GET['session_id'] ?? '') ?>"></div>
+                <div class="gcash-field"><label for="gcash-money-session"><i class="bi bi-hash" aria-hidden="true"></i> Session ID</label><input class="form-control" id="gcash-money-session" type="number" name="session_id" min="1" autocomplete="off" placeholder="All sessions" value="<?= gcash_admin_e($_GET['session_id'] ?? '') ?>"></div>
                 <button class="btn btn-primary" type="submit">Load movements</button>
                 <a class="btn btn-secondary" href="?tab=money<?= $allMoneyHistory ? '&amp;movement_scope=all' : '' ?>">All sessions</a>
             </form>
-            <details class="gcash-history-help"><summary>Timestamp &amp; correction rules</summary><p>Finished exchanges use completion time; unfinished use start time; corrections use recorded time.</p></details>
-            <?php if ($moneyHistoryError !== ''): ?><p role="alert"><?= gcash_admin_e($moneyHistoryError) ?></p><?php elseif ($moneyHistory === null): ?><p role="status">Open or reload Service Fund Movements to load records.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><h3>No movements recorded</h3><p>No records match this selection. Choose All sessions to include closed sessions.</p></div><?php else: ?>
-            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash money history"><table class="gcash-table" id="gcash-money-table"><thead><tr><th scope="col">Date / time</th><th scope="col">Movement</th><th scope="col">Session / exchange</th><th scope="col">Cash / wallet effect</th><th scope="col">Recorded / approved by</th><th scope="col">Evidence / reason</th></tr></thead><tbody>
+            <?php if ($moneyHistoryError !== ''): ?><p role="alert"><?= gcash_admin_e($moneyHistoryError) ?></p><?php elseif ($moneyHistory === null): ?><p role="status">Open or reload Service Fund Movements to load records.</p><?php elseif (!$moneyHistory): ?><div class="gcash-empty-state"><i class="bi bi-arrow-left-right" aria-hidden="true"></i><h3>No fund movements found</h3><p>Try another session or view all sessions.</p><a class="btn btn-secondary" href="?tab=money<?= $allMoneyHistory ? '&amp;movement_scope=all' : '' ?>">All sessions</a></div><?php else: ?>
+            <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash money history"><table class="gcash-table" id="gcash-money-table" data-no-ghost-rows><thead><tr><th scope="col">Date / time</th><th scope="col">Movement</th><th scope="col">Session / exchange</th><th scope="col">Cash / wallet effect</th><th scope="col">Recorded / approved by</th><th scope="col">Evidence / reason</th></tr></thead><tbody>
             <?php foreach ($moneyHistory as $movement): ?><tr>
-                <td><?= gcash_admin_e($movement['created_at']) ?></td><td><span class="gcash-type-badge gcash-movement-badge"><?= gcash_admin_e(ucfirst(str_replace('_', ' ', $movement['movement_type']))) ?></span><?php if (empty($movement['is_actual_movement'])): ?><small class="gcash-cell-meta">Recording correction · no current money moved</small><?php endif; ?></td>
+                <td><?= gcash_admin_e($movement['created_at']) ?></td><td><span class="gcash-type-badge gcash-movement-badge"><?= gcash_admin_e(ucfirst(str_replace('_', ' ', $movement['movement_type']))) ?></span><?php if (empty($movement['is_actual_movement'])): ?><small class="gcash-cell-meta">Correction · no money moved</small><?php endif; ?></td>
                 <td>#<?= (int)$movement['session_id'] ?> / <?= isset($movement['linked_transaction_id']) ? '#' . (int)$movement['linked_transaction_id'] : '—' ?><?= !empty($movement['linked_session_id']) ? ' · Recovery for session #' . (int)$movement['linked_session_id'] : '' ?></td>
                 <td><?php if ($movement['kind'] === 'funding_movement'): ?><?= gcash_admin_e($movement['fund_type']) ?> <?= $movement['direction'] === 'in' ? '+' : '−' ?><?= gcash_admin_money($movement['amount']) ?><?php else: ?><div class="gcash-movement-line"><span class="gcash-movement-label">Cash</span> <?= gcash_admin_money($movement['service_cash_delta']) ?></div><div class="gcash-movement-line"><span class="gcash-movement-label">Wallet</span> <?= gcash_admin_money($movement['wallet_delta']) ?></div><?php endif; ?></td>
-                <td><?= gcash_admin_e($movement['recorder_name'] ?? 'Not recorded') ?><small class="gcash-cell-meta">Approved: <?= gcash_admin_e($movement['authorizer_name'] ?? 'Not recorded') ?></small></td><td><?= gcash_admin_e($movement['evidence'] ?? '') ?> <?= gcash_admin_e($movement['reason'] ?? '') ?></td>
+                <td><?= gcash_admin_e($movement['recorder_name'] ?? '—') ?><?php if (!empty($movement['authorizer_name'])): ?><small class="gcash-cell-meta">Approved: <?= gcash_admin_e($movement['authorizer_name']) ?></small><?php endif; ?></td><td><?= gcash_admin_e($movement['evidence'] ?? '') ?> <?= gcash_admin_e($movement['reason'] ?? '') ?></td>
             </tr><?php endforeach; ?></tbody></table></div><?php endif; ?></section>
         </div>
         <!-- Closing-difference review dialog -->
@@ -375,5 +322,6 @@ $isFilteredActivity = $report->isFilteredActivity;
 <script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt.js')) ?>"></script>
 <script src="<?= gcash_admin_e(app_url('assets/js/sale-receipt-dialog.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/sale-receipt-dialog.js')) ?>"></script>
 <script src="<?= gcash_admin_e(app_url('assets/js/gcash-admin-overview.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/gcash-admin-overview.js')) ?>"></script>
+<script src="<?= gcash_admin_e(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>"></script>
 </body>
 </html>

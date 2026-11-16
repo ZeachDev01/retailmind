@@ -89,6 +89,15 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         }
         await first.page.setViewportSize({width: 1440, height: 960});
 
+        // A manual backup must not become a reminder on a fresh login, even without a key export.
+        for (const role of ['admin', 'super_admin']) {
+            const fresh = await login(role);
+            assert.equal(await fresh.page.locator('[data-backup-key-dialog]').count(), 0, 'Manual backup does not prompt on a fresh ' + role + ' login');
+            await fresh.page.goto(role === 'admin' ? adminUrl : origin + '/components/system_administrator/backup_restore.php');
+            assert.equal(await fresh.page.locator('[data-backup-key-dialog]').count(), 0, 'Manual backup does not prompt when revisiting backup tools');
+            await fresh.context.close();
+        }
+
         // Wrong passwords stay in the modal and do not acknowledge or expose the key.
         await prompt.getByLabel('Current login password').fill('wrong-password');
         await prompt.getByRole('button', {name: 'Download recovery key', exact: true}).click();
@@ -123,6 +132,9 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         await prompt.waitFor({state: 'hidden'});
         await first.page.goto(adminUrl);
         assert.equal(await prompt.count(), 0, 'Successful export suppresses unattended reminders for this account');
+        fixture('scheduled_backup_history');
+        await first.page.reload();
+        assert.equal(await prompt.count(), 0, 'Successful export also suppresses scheduled-backup reminders using that key');
         assert.equal((await superAdministrator.page.goto(origin + '/components/system_administrator/backup_restore.php')).status(), 200);
         assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').isVisible(), true, 'Another account still gets its reminder');
         await superAdministrator.page.keyboard.press('Escape');

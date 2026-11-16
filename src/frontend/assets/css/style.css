@@ -621,6 +621,7 @@ button.btn-loading {
 .form-group.invalid select,
 .form-group.invalid textarea { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,.1); }
 .form-group.invalid .field-error { display: block; }
+[aria-invalid="true"] ~ .field-error, .field-error[data-field-error] { display: block; }
 .form-inline-action { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
 .form-inline-action .form-inline-field { flex: 1 1 280px; min-width: 0; margin-bottom: 0; }
 .form-inline-action > .btn { flex: 0 0 auto; min-height: 44px; white-space: nowrap; }
@@ -1582,7 +1583,7 @@ body.sidebar-collapsed .sidebar .dropdown-content a.active { box-shadow: inset 3
 .profit-formula-bar { display: inline-flex; align-items: center; gap: .45rem; font-size: .92rem; font-weight: 600; color: var(--text); }
 .profit-formula-bar .formula-operator { color: var(--muted); font-weight: 800; }
 .profit-exclusion-note { font-size: .82rem; color: var(--muted); margin: .25rem 0 .5rem; line-height: 1.4; }
-.profit-incomplete-explanation { display: flex; align-items: flex-start; gap: .5rem; padding: .6rem .75rem; margin: .5rem 0; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: .82rem; line-height: 1.4; }
+body.admin-dashboard-page .profit-incomplete-explanation { display: flex; align-items: flex-start; gap: .5rem; padding: .6rem .75rem; margin: .5rem 0; border-radius: 8px; background: var(--theme-danger-surface, #fef2f2); border: 1px solid var(--border, #fecaca); color: var(--theme-danger-text, #991b1b); font-size: .82rem; line-height: 1.4; }
 .profit-return-help { margin-top: .4rem; font-size: .85rem; }
 .profit-return-help summary { cursor: pointer; color: var(--primary, #2563eb); font-weight: 600; padding: .2rem 0; }
 .profit-return-help summary:hover { text-decoration: underline; }
@@ -2021,7 +2022,7 @@ body.admin-dashboard-page.administrator-workspace .financial-breakdown > summary
     padding: .75rem 1.15rem;
     font-size: .9rem;
     font-weight: 700;
-    color: var(--primary, #2563eb);
+    color: var(--theme-info-text, #1d4ed8);
     background: var(--theme-surface-soft, #f8fafc);
     transition: background-color .15s ease, color .15s ease;
 }

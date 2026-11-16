@@ -100,7 +100,6 @@ $outOfStockCount = (int)($stockCounts['Out of stock'] ?? 0);
 $lowStockCount = (int)($stockCounts['Low stock'] ?? 0);
 $inStockCount = (int)($stockCounts['In stock'] ?? 0);
 $totalSuggestedUnits = (int)array_sum(array_column($queue, 'stock_rule_quantity'));
-$replenishCount = count(array_filter($queue, static fn (array $item): bool => $item['stock_rule_quantity'] > 0));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -123,7 +122,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
         <header class="page-heading">
             <div>
                 <h1>Replenishment Recommendations</h1>
-                <p class="page-subtitle">Review stock and suggested buying quantities.</p>
             </div>
         </header>
 
@@ -133,7 +131,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <div class="queue-stat-content">
                     <div class="queue-stat-label">Out of Stock</div>
                     <strong class="queue-stat-number"><?= $outOfStockCount ?></strong>
-                    <span class="queue-stat-desc">0 units on hand</span>
                 </div>
             </div>
             <div class="queue-stat queue-low-stock">
@@ -141,7 +138,6 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <div class="queue-stat-content">
                     <div class="queue-stat-label">Low Stock</div>
                     <strong class="queue-stat-number"><?= $lowStockCount ?></strong>
-                    <span class="queue-stat-desc">At or below reorder level</span>
                 </div>
             </div>
             <div class="queue-stat queue-in-stock">
@@ -149,15 +145,13 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                 <div class="queue-stat-content">
                     <div class="queue-stat-label">In Stock</div>
                     <strong class="queue-stat-number"><?= $inStockCount ?></strong>
-                    <span class="queue-stat-desc">Healthy inventory level</span>
                 </div>
             </div>
             <div class="queue-stat queue-suggested-total">
                 <div class="queue-stat-icon-wrap" aria-hidden="true"><i class="bi bi-cart-check-fill"></i></div>
                 <div class="queue-stat-content">
-                    <div class="queue-stat-label">Suggested Buy</div>
+                    <div class="queue-stat-label">Suggested to Buy</div>
                     <strong class="queue-stat-number"><?= number_format($totalSuggestedUnits) ?> <small>units</small></strong>
-                    <span class="queue-stat-desc"><?= $replenishCount ?> products to reorder</span>
                 </div>
             </div>
         </section>
@@ -209,7 +203,7 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                         <div class="queue-list table-wrap" tabindex="0" role="region" aria-label="Replenishment recommendations">
                             <table class="table" data-no-smart-table>
                                 <thead><tr>
-                                    <th scope="col">Product</th><th scope="col">On hand</th>
+                                    <th scope="col">Product</th><th scope="col">On hand <small class="muted queue-stock-breakdown">Saleable stock</small></th>
                                     <th scope="col">Stock-rule suggestion
                                         <span class="info-tooltip no-print">
                                             <button class="info-tooltip-trigger" type="button" aria-label="About stock-rule suggestions" aria-describedby="queue-stock-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
@@ -228,6 +222,15 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                     <?php foreach ($queue as $item):
                                         $rowClass = str_replace(' ', '-', strtolower($item['stock_status']));
                                         $stockClass = ['Out of stock' => 'tag-danger', 'Low stock' => 'tag-warning', 'In stock' => 'tag-success'][$item['stock_status']];
+                                        $baseUnit = (string)($item['base_unit'] ?? 'piece');
+                                        $stockBreakdown = (int)($item['pack_size'] ?? 0) > 1
+                                            ? sprintf('%d pack%s + %d loose · %d %s/pack', $item['saleable_sealed_packs'], (int)$item['saleable_sealed_packs'] === 1 ? '' : 's', $item['saleable_loose_pieces'], $item['pack_size'], $baseUnit)
+                                            : '';
+                                        $expiredLabel = (int)$item['expired_quantity'] > 0
+                                            ? sprintf('Expired: %d %s', $item['expired_quantity'], $baseUnit)
+                                                . ($stockBreakdown !== '' ? sprintf(' (%d pack%s + %d loose)', $item['expired_sealed_packs'], (int)$item['expired_sealed_packs'] === 1 ? '' : 's', $item['expired_loose_pieces']) : '')
+                                            : '';
+                                        $stockLabel = implode("\n", array_filter([$item['current_stock'] . ' ' . $baseUnit, $stockBreakdown, $expiredLabel]));
                                     ?>
                                         <tr class="queue-item queue-<?= $rowClass ?>" data-stock="<?= htmlspecialchars($item['stock_status']) ?>" data-name="<?= htmlspecialchars($item['product_name']) ?>" data-sku="<?= htmlspecialchars($item['sku']) ?>" data-on-hand="<?= (int)$item['current_stock'] ?>" data-quantity="<?= (int)$item['stock_rule_quantity'] ?>" data-expected-sales="<?= $item['expected_sales_28_day'] === null ? '' : (int)$item['expected_sales_28_day'] ?>" data-forecast-period="<?= htmlspecialchars($item['expected_sales_period'] ?? '') ?>">
                                             <td>
@@ -257,7 +260,10 @@ $replenishCount = count(array_filter($queue, static fn (array $item): bool => $i
                                                 <?php endif; ?>
                                                 </div>
                                             </td>
-                                            <td><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted">units</small></td>
+                                            <td data-on-hand-label="<?= htmlspecialchars($stockLabel) ?>"><strong class="queue-number <?= $item['current_stock'] <= 0 ? 'queue-out' : '' ?>"><?= (int)$item['current_stock'] ?></strong> <small class="muted"><?= htmlspecialchars($baseUnit) ?></small>
+                                                <?php if ($stockBreakdown !== ''): ?><small class="muted queue-stock-breakdown"><?= htmlspecialchars($stockBreakdown) ?></small><?php endif; ?>
+                                                <?php if ($expiredLabel !== ''): ?><small class="muted queue-stock-breakdown"><?= htmlspecialchars($expiredLabel) ?></small><?php endif; ?>
+                                            </td>
                                             <td>
                                                 <span class="info-tooltip queue-stock-tooltip">
                                                     <button class="info-tooltip-trigger" type="button" aria-describedby="queue-stock-rule-<?= (int)$item['product_id'] ?>"><strong class="queue-number"><?= (int)$item['stock_rule_quantity'] ?></strong> <small class="muted">units</small></button>

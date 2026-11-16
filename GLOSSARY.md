@@ -256,9 +256,25 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
 
+**Stock Movement**:
+The recorded inflow and outflow of a Product's stock over a stated period, reviewed alongside remaining stock. Recorded sales help the Inventory Manager identify products with little or no recorded sales; they do not guarantee future demand or when stock will run out.
+_Avoid_: Expiry review, stock depletion forecast
+
+**Sales Frequency**:
+The number of distinct days within a stated period on which a Product has recorded customer sales. Multiple purchases on the same day count as one day; the quantity sold is measured separately.
+_Avoid_: Receipt count, customer count, quantity sold
+
 **Stock Risk**:
 An indication that stock may tie up the Store's money or become a loss because it sells slowly, exceeds likely needs, or approaches expiration. It calls for review rather than declaring goods unsellable or requiring a purchase or disposal.
-_Avoid_: Dead stock (when only absence of recorded sales is established)
+_Avoid_: Dead Stock (when referring to the broader range of stock risks)
+
+**Dead Stock**:
+A Product with stock remaining now and no recorded customer sales during a complete preceding 90-day product history. This classification does not itself require disposal or a stock adjustment.
+_Avoid_: Expired stock, automatic disposal
+
+**Limited History**:
+A Product whose recorded history does not cover the full 90-day Stock Movement review period. Its recorded sales remain visible, but a complete movement judgment is unavailable.
+_Avoid_: Dead Stock, zero demand
 
 **Forecast Quantity**:
 The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
@@ -335,6 +351,10 @@ _Avoid_: Cost price, Sales Pack price
 **Sales Pack**:
 A sealed package containing a fixed number of a Product's Base Units, sold at a dedicated price cheaper than buying that number individually. It may have a barcode distinct from the individual piece barcode; unopened Sales Packs and loose pieces are counted separately within the same Product's stock.
 _Avoid_: Receiving Unit (when referring to a customer purchase)
+
+**Saleable Stock**:
+A Product's remaining stock eligible for sale, excluding expired goods. It includes unopened Sales Packs and loose Base Units where applicable.
+_Avoid_: Total physical stock (when expired goods remain)
 
 **Stock Count Correction**:
 A correction of a Product's recorded stock to its verified physical count, including unopened Sales Packs and loose pieces where applicable. It covers incorrect starting quantities and differences found during inventory checks, with a recorded reason.

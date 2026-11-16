@@ -430,9 +430,9 @@ function send_brevo_email(string $email, string $subject, string $message, ?stri
         'subject' => $subject,
         'textContent' => $message,
     ];
-    if ($htmlContent !== null && trim($htmlContent) !== '') {
-        $payloadData['htmlContent'] = $htmlContent;
-    }
+    $payloadData['htmlContent'] = branded_email_html(
+        $subject, $message, $htmlContent, brevo_sender_name($config), (string)env('MAIL_LOGO_URL', '')
+    );
 
     $payload = json_encode($payloadData, JSON_UNESCAPED_SLASHES);
     if ($payload === false) {
@@ -585,10 +585,35 @@ function get_store_brevo_settings(PDO $pdo): array
     return $settings;
 }
 
-/**
- * HTML body for the password reset code email. Table layout and inline
- * styles only, because email clients drop stylesheets and flexbox.
- */
+/** Shared email frame; body templates supply trusted, escaped HTML fragments. */
+function branded_email_html(string $subject, string $message, ?string $content, string $storeName, string $logoUrl): string
+{
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+    $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    $logoUrl = trim($logoUrl);
+    $brand = '<span style="color:#0f172a;font-size:23px;font-weight:700;">Retail<span style="color:#2563eb;">Mind</span></span>';
+    if (filter_var($logoUrl, FILTER_VALIDATE_URL) && parse_url($logoUrl, PHP_URL_SCHEME) === 'https') {
+        $brand = '<img src="' . $escape($logoUrl) . '" alt="RetailMind" width="156" height="52" style="display:block;width:156px;max-width:100%;height:auto;border:0;color:#0f172a;font-size:23px;">';
+    }
+    if ($content === null || trim($content) === '') {
+        $content = '<h1 style="margin:0 0 16px;color:#0f172a;font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-0.02em;">' . $escape($subject) . '</h1>'
+            . '<p style="margin:0;font-size:15px;line-height:1.65;overflow-wrap:anywhere;word-break:break-word;">' . nl2br($escape($message), false) . '</p>';
+    }
+
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;">'
+        . '<tr><td align="center" style="padding:24px 12px;">'
+        . '<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;table-layout:fixed;">'
+        . '<tr><td style="padding:10px 20px;background:#ffffff;border-bottom:1px solid #e2e8f0;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;"><tr>'
+        . '<td width="58%" style="vertical-align:middle;">' . $brand . '</td>'
+        . '<td width="42%" align="right" style="padding-left:12px;vertical-align:middle;font-family:' . $font . ';color:#475569;font-size:12px;font-weight:600;line-height:1.5;overflow-wrap:anywhere;word-break:break-word;">' . $escape(trim($storeName) !== '' ? $storeName : 'RetailMind') . '</td>'
+        . '</tr></table></td></tr>'
+        . '<tr><td style="padding:28px 20px 32px;background:#ffffff;font-family:' . $font . ';color:#334155;overflow-wrap:anywhere;word-break:break-word;">' . $content . '</td></tr>'
+        . '<tr><td align="center" style="padding:16px 20px 0;font-family:' . $font . ';color:#475569;font-size:11px;line-height:1.5;">Automated notification from <span style="font-weight:600;">RetailMind</span></td></tr>'
+        . '</table><!--[if mso]></td></tr></table><![endif]--></td></tr></table>';
+}
+
 function password_reset_email_html(string $displayName, string $formattedPin): string
 {
     $name = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
@@ -597,26 +622,13 @@ function password_reset_email_html(string $displayName, string $formattedPin): s
     $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
 
     return '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your RetailMind reset code expires in 15 minutes.</div>'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
-        . '<tr><td align="center" style="padding:32px 16px;">'
-        . '<!--[if mso]><table role="presentation" width="520" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;">'
-        . '<tr><td style="background:#0f172a;padding:18px 28px;border-radius:13px 13px 0 0;font-family:' . $font . ';">'
-        . '<span style="color:#ffffff;font-size:15px;font-weight:700;letter-spacing:-0.01em;">RetailMind</span>'
-        . '</td></tr>'
-        . '<tr><td style="padding:32px 28px 28px;font-family:' . $font . ';">'
-        . '<div style="color:#0f172a;font-size:22px;font-weight:700;line-height:1.25;letter-spacing:-0.02em;">Reset your password</div>'
-        . '<p style="margin:10px 0 24px;color:#6b7280;font-size:14px;line-height:1.5;">Hi ' . $name . ', use this code to continue.</p>'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;">'
-        . '<tr><td align="center" style="padding:22px 16px 6px;font-family:' . $mono . ';font-size:34px;font-weight:700;letter-spacing:5px;color:#0f172a;padding-left:21px;">' . $code . '</td></tr>'
-        . '<tr><td align="center" style="padding:0 16px 20px;font-family:' . $font . ';color:#6b7280;font-size:12px;">Expires in 15 minutes</td></tr>'
+        . '<h1 style="margin:0;color:#0f172a;font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-0.02em;">Reset your password</h1>'
+        . '<p style="margin:12px 0 24px;color:#475569;font-size:15px;line-height:1.65;">Hi ' . $name . ', use this code to continue.</p>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eff6ff;">'
+        . '<tr><td align="center" style="padding:22px 12px 8px;font-family:' . $mono . ';font-size:34px;font-weight:700;line-height:1.2;letter-spacing:4px;white-space:nowrap;color:#1d4ed8;">' . $code . '</td></tr>'
+        . '<tr><td align="center" style="padding:0 12px 20px;font-family:' . $font . ';color:#475569;font-size:12px;line-height:1.5;">Expires in 15 minutes</td></tr>'
         . '</table>'
-        . '<p style="margin:24px 0 0;color:#6b7280;font-size:12px;line-height:1.5;">If you did not request this, you can ignore this email.</p>'
-        . '</td></tr>'
-        . '</table>'
-        . '<!--[if mso]></td></tr></table><![endif]-->'
-        . '</td></tr>'
-        . '</table>';
+        . '<p style="margin:24px 0 0;color:#64748b;font-size:13px;line-height:1.6;">If you did not request this, you can ignore this email.</p>';
 }
 
 function administrator_welcome_email_html(string $displayName, string $username, string $temporaryPassword): string
@@ -624,30 +636,20 @@ function administrator_welcome_email_html(string $displayName, string $username,
     $name = htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8');
     $login = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
     $password = htmlspecialchars($temporaryPassword, ENT_QUOTES, 'UTF-8');
-    $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
     $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
 
     return '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your Administrator account is ready. Change your temporary password at your first sign-in.</div>'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
-        . '<tr><td align="center" style="padding:32px 16px;">'
-        . '<!--[if mso]><table role="presentation" width="520" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;table-layout:fixed;">'
-        . '<tr><td style="background:#0f172a;padding:18px 24px;border-radius:13px 13px 0 0;font-family:' . $font . ';color:#ffffff;font-size:16px;font-weight:700;">RetailMind</td></tr>'
-        . '<tr><td style="padding:28px 24px;font-family:' . $font . ';color:#1f2937;">'
         . '<h1 style="margin:0;color:#0f172a;font-size:24px;line-height:1.25;letter-spacing:-0.02em;">Your Administrator account is ready</h1>'
-        . '<p style="margin:16px 0 24px;font-size:16px;line-height:1.5;overflow-wrap:anywhere;">Hi ' . $name . ', your Super Administrator has created your RetailMind account.</p>'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;table-layout:fixed;">'
-        . '<tr><td style="padding:18px 20px 6px;color:#4b5563;font-size:13px;line-height:1.5;">Username</td></tr>'
-        . '<tr><td style="padding:0 20px 18px;font-family:' . $mono . ';font-size:16px;line-height:1.5;word-break:break-all;overflow-wrap:anywhere;">' . $login . '</td></tr>'
-        . '<tr><td style="padding:16px 20px 6px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:13px;line-height:1.5;">Temporary password</td></tr>'
-        . '<tr><td style="padding:0 20px 18px;font-family:' . $mono . ';font-size:16px;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' . $password . '</td></tr>'
+        . '<p style="margin:12px 0 24px;color:#475569;font-size:15px;line-height:1.65;overflow-wrap:anywhere;">Hi ' . $name . ', your Super Administrator has created your RetailMind account.</p>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #e2e8f0;table-layout:fixed;">'
+        . '<tr><td style="padding:16px 0 6px;color:#475569;font-size:12px;line-height:1.5;">Username</td></tr>'
+        . '<tr><td style="padding:0 0 16px;color:#0f172a;font-family:' . $mono . ';font-size:15px;line-height:1.6;word-break:break-all;overflow-wrap:anywhere;">' . $login . '</td></tr>'
+        . '<tr><td style="padding:16px 0 6px;border-top:1px solid #e2e8f0;color:#475569;font-size:12px;line-height:1.5;">Temporary password</td></tr>'
+        . '<tr><td style="padding:0 0 16px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-family:' . $mono . ';font-size:15px;line-height:1.6;white-space:pre-wrap;word-break:break-all;overflow-wrap:anywhere;">' . $password . '</td></tr>'
         . '</table>'
-        . '<h2 style="margin:24px 0 8px;color:#0f172a;font-size:18px;line-height:1.4;">Change your password at first sign-in</h2>'
-        . '<p style="margin:0;font-size:16px;line-height:1.5;">Open RetailMind using the Store link provided by your Super Administrator. Sign in with the details above, then choose a new password before you can access your workspace.</p>'
-        . '<p style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e7eb;color:#4b5563;font-size:13px;line-height:1.5;">Keep these details private. If you were not expecting this account, contact your Super Administrator.</p>'
-        . '</td></tr></table>'
-        . '<!--[if mso]></td></tr></table><![endif]-->'
-        . '</td></tr></table>';
+        . '<h2 style="margin:24px 0 8px;color:#0f172a;font-size:16px;line-height:1.4;">Change your password at first sign-in</h2>'
+        . '<p style="margin:0;color:#475569;font-size:15px;line-height:1.65;">Open RetailMind using the Store link provided by your Super Administrator. Sign in with the details above, then choose a new password before you can access your workspace.</p>'
+        . '<p style="margin:24px 0 0;color:#64748b;font-size:13px;line-height:1.6;">Keep these details private. If you were not expecting this account, contact your Super Administrator.</p>';
 }
 
 /** Send all application email through the Brevo API. */

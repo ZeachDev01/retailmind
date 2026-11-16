@@ -4,6 +4,6 @@ Confirmed on 2026-11-12 (Asia/Manila): when the Super Administrator creates an o
 
 If delivery fails, preserve the account and show the Super Administrator a warning. Do not report account creation as failed or encourage duplicate creation. Provider acceptance means submitted for delivery, not confirmed inbox receipt. No automatic resend or stored plaintext password is introduced. Ordinary Administrator-created staff accounts retain their existing behavior.
 
-The email extends the existing password-reset email's navy header, white body, system fonts, inline styles and Outlook-compatible tables. Credentials remain readable on narrow screens; instructions refer to the Store link supplied by the Super Administrator instead of inventing an externally reachable login URL.
+The email uses the [shared email branding](email-branding.md): white logo header, blue accents, Store label, white body, system fonts, inline styles and Outlook-compatible tables. Credentials remain readable on narrow screens; instructions refer to the Store link supplied by the Super Administrator instead of inventing an externally reachable login URL.
 
 Temporary credentials remain visible in the recipient's inbox until deleted. Password hashes, audit records and delivery logs must not gain plaintext passwords.

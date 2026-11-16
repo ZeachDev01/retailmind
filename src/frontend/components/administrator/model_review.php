@@ -117,7 +117,7 @@ $formatUnits = static function ($val): string {
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/registers.css')) ?>">
     <style>
         .badge-status { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.85rem; }
-        .badge-under-evaluation { background: var(--color-warning-subtle, #fef3c7); color: var(--color-warning-text, #92400e); border: 1px solid var(--color-warning-border, #fcd34d); }
+        .badge-under-evaluation { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); border: 1px solid var(--border, #fcd34d); }
         .badge-awaiting-approval { background: var(--color-info-subtle, #e0f2fe); color: var(--color-info-text, #075985); border: 1px solid var(--color-info-border, #bae6fd); }
         .badge-approved { background: var(--color-success-subtle, #dcfce7); color: var(--color-success-text, #166534); border: 1px solid var(--color-success-border, #86efac); }
         .progress-bar-container { background: var(--color-bg-subtle, #e5e7eb); border-radius: 8px; overflow: hidden; height: 16px; margin: 0.5rem 0; width: 100%; max-width: 400px; }
@@ -238,7 +238,7 @@ $formatUnits = static function ($val): string {
                     <!-- Pause/Resume -->
                     <div style="margin-bottom: 1.25rem;">
                         <label style="font-weight: 600; font-size: 0.9rem;">Buying suggestions</label>
-                        <p style="font-size: 0.85rem; color: var(--color-text-muted, #6b7280); margin: 0.25rem 0 0.5rem 0;">
+                        <p style="font-size: 0.85rem; color: var(--muted, #626b7a); margin: 0.25rem 0 0.5rem 0;">
                             Stock rules remain available while forecast suggestions are paused.
                         </p>
                         <?php if (empty($summary['is_recommendations_suspended'])): ?>
@@ -268,7 +268,7 @@ $formatUnits = static function ($val): string {
                     <?php if (!empty($summary['can_rollback'])): ?>
                         <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 1rem;">
                             <label style="font-weight: 600; font-size: 0.9rem;">Reversible Rollback</label>
-                            <p style="font-size: 0.85rem; color: var(--color-text-muted, #6b7280); margin: 0.25rem 0 0.5rem 0;">
+                            <p style="font-size: 0.85rem; color: var(--muted, #626b7a); margin: 0.25rem 0 0.5rem 0;">
                                 Restore previously approved model: <strong><?= htmlspecialchars($summary['previous_version']) ?></strong>
                             </p>
                             <form method="post">
@@ -286,7 +286,7 @@ $formatUnits = static function ($val): string {
                     <?php elseif (!empty($summary['previous_version'])): ?>
                         <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 1rem;">
                             <label style="font-weight: 600; font-size: 0.9rem;">Reversible Rollback</label>
-                            <p style="font-size: 0.85rem; color: var(--color-warning-text, #92400e); margin: 0.25rem 0 0.5rem 0;">
+                            <p style="font-size: 0.85rem; color: var(--theme-warning-text, #92400e); margin: 0.25rem 0 0.5rem 0;">
                                 Rollback to previous model <strong><?= htmlspecialchars($summary['previous_version']) ?></strong> unavailable: <?= htmlspecialchars($summary['rollback_validation']['reason'] ?? 'Incompatible artifact') ?>
                             </p>
                         </div>
@@ -331,8 +331,8 @@ $formatUnits = static function ($val): string {
                             <?php foreach ($summary['products']['excluded'] as $ep): ?>
                                 <li>
                                     <strong><?= htmlspecialchars($ep['product_name']) ?></strong> (<?= htmlspecialchars($ep['sku']) ?>):
-                                    <br><span style="color: var(--color-warning-text, #92400e);"><?= htmlspecialchars($ep['exclusion_reason']) ?></span>
-                                    <br><span style="font-size: 0.85rem; color: var(--color-text-muted, #6b7280);"><?= htmlspecialchars($ep['blocked_next_action']) ?></span>
+                                    <br><span style="color: var(--theme-warning-text, #92400e);"><?= htmlspecialchars($ep['exclusion_reason']) ?></span>
+                                    <br><span style="font-size: 0.85rem; color: var(--muted, #626b7a);"><?= htmlspecialchars($ep['blocked_next_action']) ?></span>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
@@ -357,7 +357,7 @@ $formatUnits = static function ($val): string {
                     ?>
                     <div class="progress-bar-fill" style="width: <?= $pct ?>%;"></div>
                 </div>
-                <p style="font-size: 0.9rem; color: var(--color-text-muted, #6b7280);">
+                <p style="font-size: 0.9rem; color: var(--muted, #626b7a);">
                     <?= htmlspecialchars($summary['observation_progress']['explanation'] ?? '') ?>
                 </p>
             </div>

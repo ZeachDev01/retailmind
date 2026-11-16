@@ -403,7 +403,7 @@
     align-items: center;
     justify-content: center;
     gap: .4rem;
-    min-height: 40px;
+    min-height: 44px;
     padding: .45rem .75rem;
     border: 0;
     border-radius: 7px;
@@ -451,7 +451,7 @@
     align-items: center;
     gap: 0.4rem;
     box-sizing: border-box;
-    min-height: 40px;
+    min-height: 44px;
     padding: 0.55rem 1.35rem;
     color: var(--muted);
     font-size: 0.8rem;

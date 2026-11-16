@@ -47,18 +47,30 @@ function percentage_value($value, int $decimals = 2): string
     return $value === null ? '-' : number_format((float)$value, $decimals) . '%';
 }
 
-function send_csv(string $filename, array $rows, array $headers): void
+function send_csv(string $filename, array $rows, array $headers, bool $gcashFormat = false): void
 {
+    // Stage the complete file so write failures cannot deliver a partial report.
+    $output = fopen('php://temp', 'w+');
+    if ($output === false) throw new RuntimeException('Unable to stage export.');
+    try {
+        if ($gcashFormat && fwrite($output, "\xEF\xBB\xBF") !== 3) throw new RuntimeException('Unable to stage export.');
+        if (fputcsv($output, $headers, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
+        foreach ($rows as $row) {
+            $cells = array_map(static function ($header) use ($row, $gcashFormat): string {
+                $value = $row[$header] ?? '';
+                return is_string($value) && ($gcashFormat || !is_numeric($value)) && preg_match('/^[\x00-\x20]*[=+@\-\t\r\n]/', $value) ? "'" . $value : (string)$value;
+            }, $headers);
+            if (fputcsv($output, $cells, ',', '"', '') === false) throw new RuntimeException('Unable to stage export.');
+        }
+        if (!rewind($output)) throw new RuntimeException('Unable to stage export.');
+    } catch (Throwable $exception) {
+        fclose($output);
+        throw $exception;
+    }
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . basename($filename) . '"');
-    $output = fopen('php://output', 'w');
-    fputcsv($output, $headers);
-    foreach ($rows as $row) {
-        fputcsv($output, array_map(static function ($header) use ($row): string {
-            $value = (string)($row[$header] ?? '');
-            return !is_numeric($value) && preg_match('/^[\\s]*[=+\\-@]/u', $value) ? "'" . $value : $value;
-        }, $headers));
-    }
+    header('Cache-Control: no-store');
+    fpassthru($output);
     fclose($output);
     exit;
 }
@@ -85,6 +97,23 @@ function run_report(PDO $pdo, string $report, array $filters): array
 {
     if (class_exists(\App\Services\ReportAccessService::class)) {
         \App\Services\ReportAccessService::enforceAccess(function_exists('current_role') ? current_role() : null, $report);
+    }
+    if ($report === 'gcash_transactions') {
+        $headers = ['Date / Time', 'Reference No.', 'Type', 'Principal', 'Fee', 'Fee Location', 'Status', 'Cashier', 'Shift', 'Service Cash Movement', 'Wallet Movement', 'Record Basis', 'Legacy Reference Amount'];
+        $rows = [];
+        $selection = [
+            'actor_role' => current_role(),
+            'period' => 'custom',
+            'start_date' => $filters['from'],
+            'end_date' => $filters['to'],
+            'cashier_id' => $filters['cashier_id'],
+            'type' => $filters['type'],
+            'search' => $filters['search'],
+        ];
+        foreach ((new \App\GCash\GCashActivityScopeReport($pdo))->adminTransactions($selection) as $row) {
+            $rows[] = array_combine($headers, [$row['time_formatted'], $row['reference_number'], $row['transaction_type'], $row['is_legacy'] ? 'Not recorded' : $row['principal_amount'], $row['is_legacy'] ? 'Not recorded' : $row['gross_fee'], $row['fee_location'] ?? 'Not recorded', $row['verification_status'], $row['cashier_name'] ?: $row['cashier_username'], $row['shift_id'] ?? 'Not recorded', $row['is_legacy'] ? 'Not recorded' : $row['service_cash_delta'], $row['is_legacy'] ? 'Not recorded' : $row['wallet_delta'], $row['is_legacy'] ? 'Legacy reference only' : 'Service exchange', $row['is_legacy'] ? $row['amount'] : null]);
+        }
+        return ['headers' => $headers, 'rows' => $rows];
     }
     $fromStart = $filters['from'] . ' 00:00:00';
     $toEnd = $filters['to'] . ' 23:59:59';
@@ -807,12 +836,20 @@ function run_report(PDO $pdo, string $report, array $filters): array
 
 $selectedReport = request_value('report', '');
 if ($selectedReport !== '') {
-    ReportAccessService::enforceAccess((string)current_role(), $selectedReport);
+    try {
+        ReportAccessService::enforceAccess((string)current_role(), $selectedReport);
+    } catch (DomainException) {
+        access_denied_page('Choose a report available in your active workspace.', 'Report access');
+    }
 } else {
     $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
 }
 if (!array_key_exists($selectedReport, $reportCatalog)) {
     $selectedReport = array_key_first($reportCatalog) ?? 'sales_period';
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
+    require_local_request('Bulk exports are not available during remote monitoring.');
+    verify_csrf_token($_POST['csrf_token'] ?? '');
 }
 
 $tz = new DateTimeZone(PhilippineTime::ZONE);
@@ -826,6 +863,9 @@ $monthStartPh = $nowPh->setDate((int)$nowPh->format('Y'), (int)$nowPh->format('n
 $requestedPeriod = request_value('period', '');
 $rawFrom = request_value('from', '');
 $rawTo = request_value('to', '');
+if ($selectedReport === 'gcash_transactions' && $requestedPeriod === '' && $rawFrom === '' && $rawTo === '') {
+    $requestedPeriod = 'today';
+}
 
 if ($requestedPeriod === 'today') {
     $fromVal = $todayPh;
@@ -856,6 +896,7 @@ if ($requestedPeriod === 'today') {
     $toVal = $todayPh;
     $activePeriod = 'month';
 }
+if ($selectedReport === 'gcash_transactions' && ($requestedPeriod === 'custom' || $activePeriod === 'week')) $activePeriod = 'custom';
 
 $validationError = null;
 $fromDateObj = DateTimeImmutable::createFromFormat('!Y-m-d', $fromVal, $tz);
@@ -877,6 +918,16 @@ $filters = [
     'granularity' => request_value('granularity', 'daily'),
     'period' => $activePeriod,
 ];
+if ($selectedReport === 'gcash_transactions') {
+    $filters['cashier_id'] = request_value('cashier_id');
+    $filters['type'] = request_value('type', 'all');
+    $filters['search'] = request_value('search');
+}
+
+$cashiers = [];
+if ($selectedReport === 'gcash_transactions') {
+    $cashiers = $pdo->query('SELECT DISTINCT u.user_id, u.display_name, u.username FROM gcash_transactions t JOIN users u ON u.user_id = t.cashier_id ORDER BY u.display_name, u.username')->fetchAll();
+}
 
 $productStatement = $pdo->prepare(
     "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name
@@ -900,18 +951,19 @@ if ($validationError === null) {
     } catch (InvalidArgumentException $e) {
         $validationError = $e->getMessage();
     } catch (DomainException $e) {
-        throw $e;
+        if ($selectedReport !== 'gcash_transactions') throw $e;
+        $validationError = $e->getMessage();
     } catch (\Throwable $e) {
-        $loadError = 'Gross profit report data could not be loaded.';
+        $loadError = 'Report data could not be loaded. Try again.';
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'export_csv') {
-    require_local_request('Bulk exports are not available during remote monitoring.');
-    verify_csrf_token($_POST['csrf_token'] ?? '');
-    $exportReport = request_value('report', $selectedReport);
-    ReportAccessService::enforceAccess((string)current_role(), $exportReport);
-    if ($validationError === null && !empty($reportData['rows'])) {
+    if ($selectedReport === 'gcash_transactions' && ($validationError !== null || $loadError !== null)) {
+        http_response_code($validationError !== null ? 400 : 503);
+        exit($validationError !== null ? 'Unable to export. Check the filters and try again.' : 'Unable to export the complete report. Try again.');
+    }
+    if ($validationError === null && $loadError === null && ($reportData['rows'] || $selectedReport === 'gcash_transactions')) {
         log_activity(
             $pdo,
             (int)$_SESSION['user_id'],
@@ -926,7 +978,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'expor
                 'row_count' => count($reportData['rows']),
             ]
         );
-        send_csv($selectedReport . '_' . date('Ymd_His') . '.csv', $reportData['rows'], $reportData['headers']);
+        try {
+            send_csv($selectedReport . '_' . date('Ymd_His') . '.csv', $reportData['rows'], $reportData['headers'], $selectedReport === 'gcash_transactions');
+        } catch (Throwable) {
+            http_response_code(503);
+            exit('Unable to export the complete report. Try again.');
+        }
     }
 }
 
@@ -965,6 +1022,13 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
 }
 $printPreparedBy = trim((string)($_SESSION['display_name'] ?? ''));
 $printRoleLabel = function_exists('current_role') ? ucwords(str_replace('_', ' ', (string)current_role())) : '';
+$printCashierLabel = 'All Cashiers';
+foreach ($cashiers ?? [] as $printCashier) {
+    if ((string)$printCashier['user_id'] === ($filters['cashier_id'] ?? '')) {
+        $printCashierLabel = $printCashier['display_name'] ?: $printCashier['username'];
+        break;
+    }
+}
 
 $printProductLabel = 'All products';
 foreach ($products as $printProduct) {
@@ -1027,6 +1091,11 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                             <input type="hidden" name="to" value="<?= htmlspecialchars($filters['to']) ?>">
                             <input type="hidden" name="product_id" value="<?= (int)$filters['product_id'] ?>">
                             <input type="hidden" name="category_id" value="<?= (int)$filters['category_id'] ?>">
+                            <?php if ($selectedReport === 'gcash_transactions'): ?>
+                                <?php foreach (['cashier_id', 'type', 'search'] as $key): ?>
+                                    <input type="hidden" name="<?= $key ?>" value="<?= htmlspecialchars($filters[$key]) ?>">
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                             <button type="submit" class="btn btn-secondary report-export-btn" id="export-csv-btn">
                                 <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3v9m0 0 3-3m-3 3L7 9"/><path d="M4 13v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-2"/></svg>
                                 <span>Export CSV</span>
@@ -1048,7 +1117,16 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <?php if ($selectedReport === 'gross_profit'): ?>
+                <?php if ($selectedReport === 'gcash_transactions'): ?>
+                    <div class="form-group">
+                        <label for="gcash-period">Reporting period</label>
+                        <select id="gcash-period" name="period">
+                            <?php foreach (['today' => 'Today', 'month' => 'Month-to-date', 'custom' => 'Custom dates'] as $key => $label): ?>
+                                <option value="<?= $key ?>" <?= $activePeriod === $key ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php elseif ($selectedReport === 'gross_profit'): ?>
                     <div class="form-group period-controls-group" id="period_group">
                         <label>Period</label>
                         <div class="period-controls" role="group" aria-label="Report period">
@@ -1078,6 +1156,29 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                     <label for="to">End date</label>
                     <input type="date" id="to" name="to" autocomplete="off" value="<?= htmlspecialchars($filters['to']) ?>">
                 </div>
+                <?php if ($selectedReport === 'gcash_transactions'): ?>
+                    <div class="form-group">
+                        <label for="cashier_id">Cashier</label>
+                        <select id="cashier_id" name="cashier_id">
+                            <option value="">All Cashiers</option>
+                            <?php foreach ($cashiers as $cashier): ?>
+                                <option value="<?= (int)$cashier['user_id'] ?>" <?= (string)$cashier['user_id'] === $filters['cashier_id'] ? 'selected' : '' ?>><?= htmlspecialchars($cashier['display_name'] ?: $cashier['username']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="gcash-type">Exchange type</label>
+                        <select id="gcash-type" name="type">
+                            <?php foreach (['all' => 'All types', 'Cash-In' => 'Cash-In', 'Cash-Out' => 'Cash-Out'] as $key => $label): ?>
+                                <option value="<?= $key ?>" <?= $filters['type'] === $key ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="gcash-search">Search transactions</label>
+                        <input type="search" id="gcash-search" name="search" maxlength="200" value="<?= htmlspecialchars($filters['search']) ?>" placeholder="Reference, shift, or cashier">
+                    </div>
+                <?php else: ?>
                 <div class="form-group report-product-field">
                     <label for="product_id">Product</label>
                     <select data-search-dropdown id="product_id" name="product_id">
@@ -1100,6 +1201,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <?php endif; ?>
                 <button type="submit" class="btn report-run-btn">Generate report</button>
             </form>
         </section>
@@ -1138,7 +1240,12 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                         <h1>Gross Profit Report</h1>
                         <p class="print-report-scope"><strong><?= htmlspecialchars($printRangeLabel) ?></strong> &middot; <?= htmlspecialchars(ucfirst($activePeriod)) ?> period &middot; <?= number_format($totalRows) ?> product<?= $totalRows === 1 ? '' : 's' ?></p>
                         <p class="print-report-filters">
-                            Product: <?= htmlspecialchars($printProductLabel) ?> &middot; Category: <?= htmlspecialchars($printCategoryLabel) ?>
+                            <?php if ($selectedReport === 'gcash_transactions'): ?>
+                                Cashier: <?= htmlspecialchars($printCashierLabel) ?> &middot; Type: <?= htmlspecialchars($filters['type'] === 'all' ? 'All types' : $filters['type']) ?>
+                                <?php if ($filters['search'] !== ''): ?>&middot; Search: <?= htmlspecialchars($filters['search']) ?><?php endif; ?>
+                            <?php else: ?>
+                                Product: <?= htmlspecialchars($printProductLabel) ?> &middot; Category: <?= htmlspecialchars($printCategoryLabel) ?>
+                            <?php endif; ?>
                             <?php if ($printPreparedBy !== ''): ?>&middot; Prepared by <?= htmlspecialchars($printPreparedBy) ?><?= $printRoleLabel !== '' ? ' (' . htmlspecialchars($printRoleLabel) . ')' : '' ?><?php endif; ?>
                         </p>
                     </div>
@@ -1442,6 +1549,10 @@ if (reportSelect) {
 const fromInput = document.getElementById('from');
 const toInput = document.getElementById('to');
 const periodInput = document.getElementById('period_input');
+const gcashPeriod = document.getElementById('gcash-period');
+if (gcashPeriod) {
+    [fromInput, toInput].forEach(input => input.addEventListener('change', () => { gcashPeriod.value = 'custom'; }));
+}
 if (fromInput && toInput && periodInput) {
     const onDateChange = () => {
         periodInput.value = 'custom';

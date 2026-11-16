@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 require_once __DIR__ . '/../app/Forecasting/DemandForecastService.php';
 require_once __DIR__ . '/../app/Forecasting/ReplenishmentQueueService.php';
 require_once __DIR__ . '/../app/Forecasting/StoreModelGovernanceService.php';
@@ -25,6 +27,7 @@ $assert = function (bool $condition, string $message) use (&$failures) {
 function createLandingTestDatabase(): PDO {
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    createReplenishmentBatchSchema($pdo);
 
     $pdo->exec("
         CREATE TABLE ml_jobs (

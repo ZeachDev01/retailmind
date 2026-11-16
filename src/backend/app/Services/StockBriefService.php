@@ -90,48 +90,41 @@ class StockBriefService
         $font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
         $mono = "ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace";
         $kpi = static function (string $label, int $count, string $color) use ($font): string {
-            return '<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;font-family:' . $font . ';">'
-                . '<div class="rm-kpi-label" style="color:#6b7280;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">' . $label . '</div>'
-                . '<div style="color:' . $color . ';font-size:26px;font-weight:800;line-height:1.1;margin-top:6px;">' . $count . '</div>'
+            return '<div style="padding:16px 10px;font-family:' . $font . ';">'
+                . '<div style="color:' . $color . ';font-size:24px;font-weight:700;line-height:1.2;">' . $count . '</div>'
+                . '<div class="rm-kpi-label" style="margin-top:4px;color:#475569;font-size:12px;line-height:1.5;">' . $label . '</div>'
                 . '</div>';
         };
-        $sectionTitle = static function (string $title, int $count, string $color, string $surface) use ($font): string {
-            return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0 10px;"><tr>'
-                . '<td style="font-family:' . $font . ';font-size:15px;font-weight:700;color:#0f172a;">' . $title . '</td>'
-                . '<td align="right"><span style="display:inline-block;padding:3px 9px;border-radius:999px;background:' . $surface . ';color:' . $color . ';font-family:' . $font . ';font-size:11px;font-weight:700;">' . $count . '</span></td>'
+        $sectionTitle = static function (string $title, int $count) use ($font): string {
+            return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 12px;"><tr>'
+                . '<td style="font-family:' . $font . ';font-size:16px;font-weight:700;line-height:1.4;color:#0f172a;">' . $title . '</td>'
+                . '<td align="right" style="padding-left:8px;font-family:' . $font . ';color:#64748b;font-size:12px;line-height:1.5;">' . $count . '</td>'
                 . '</tr></table>';
         };
         $headCell = static function (string $label, bool $numeric = false, bool $hideSmall = false) use ($font): string {
-            return '<th' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:0 6px 8px;font-family:' . $font . ';font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;border-bottom:1px solid #e5e7eb;">' . $label . '</th>';
+            return '<th scope="col"' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:0 6px 8px;font-family:' . $font . ';font-size:12px;font-weight:600;line-height:1.5;color:#475569;border-bottom:1px solid #cbd5e1;">' . $label . '</th>';
         };
         $cell = static function (string $value, string $color = '#374151', bool $numeric = false, bool $monospace = false, bool $hideSmall = false) use ($font, $mono): string {
-            return '<td' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:10px 6px;border-bottom:1px solid #f1f5f9;color:' . $color . ';font-family:' . ($monospace ? $mono : $font) . ';font-size:' . ($monospace ? '11px' : '13px') . ';overflow-wrap:break-word;' . ($numeric ? 'font-variant-numeric:tabular-nums;font-weight:700;' : 'font-weight:600;') . '">' . $value . '</td>';
+            return '<td' . ($hideSmall ? ' class="rm-sm-hide"' : '') . ' align="' . ($numeric ? 'right' : 'left') . '" style="padding:12px 6px;border-bottom:1px solid #e2e8f0;color:' . $color . ';font-family:' . ($monospace ? $mono : $font) . ';font-size:' . ($monospace ? '12px' : '13px') . ';line-height:1.5;overflow-wrap:anywhere;word-break:break-word;' . ($numeric ? 'font-variant-numeric:tabular-nums;font-weight:600;' : 'font-weight:400;') . '">' . $value . '</td>';
         };
         $moreRow = static function (int $remaining, int $columns) use ($font): string {
             return '<tr><td colspan="' . $columns . '" style="padding:9px 8px;background:#f8fafc;border-bottom:1px solid #f1f5f9;color:#6b7280;font-family:' . $font . ';font-size:12px;text-align:center;">+ ' . $remaining . ' more in RetailMind</td></tr>';
         };
-        $tableOpen = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">';
+        $tableOpen = '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;table-layout:fixed;">';
 
-        $html = '<style>.rm-kpi-label{white-space:nowrap;}@media only screen and (max-width:480px){.rm-sm-hide{display:none !important;}.rm-kpi-label{white-space:normal;}}</style>'
+        $html = '<style>@media only screen and (max-width:480px){.rm-sm-hide{display:none !important;}}</style>'
             . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">' . $outCount . ' out of stock, ' . $lowCount . ' low, ' . $expCount . ' expiring.</div>'
-            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f9;">'
-            . '<tr><td align="center" style="padding:32px 16px;">'
-            . '<!--[if mso]><table role="presentation" width="680" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->'
-            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;">'
-            . '<tr><td style="background:#0f172a;padding:22px 24px;border-radius:13px 13px 0 0;font-family:' . $font . ';">'
-            . '<div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">' . $storeName . '</div>'
-            . '<div style="color:#cbd5e1;font-size:12px;margin-top:4px;">Daily Stock Brief &middot; ' . $dateStr . '</div>'
-            . '</td></tr>'
-            . '<tr><td style="padding:24px 24px 4px;">'
-            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
-            . '<td width="33.33%" style="padding:0 5px 0 0;">' . $kpi('Out of Stock', $outCount, '#dc2626') . '</td>'
-            . '<td width="33.33%" style="padding:0 5px;">' . $kpi('Low Stock', $lowCount, '#a16207') . '</td>'
-            . '<td width="33.33%" style="padding:0 0 0 5px;">' . $kpi('Expiring', $expCount, '#c2410c') . '</td>'
+            . '<h1 style="margin:0;color:#0f172a;font-size:24px;line-height:1.3;">Daily Stock Brief</h1>'
+            . '<p style="margin:10px 0 24px;color:#475569;font-size:13px;line-height:1.6;">' . $storeName . ' &middot; ' . $dateStr . '</p>'
+            . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;table-layout:fixed;"><tr>'
+            . '<td width="33.33%" style="vertical-align:top;">' . $kpi('Out of Stock', $outCount, '#b91c1c') . '</td>'
+            . '<td width="33.33%" style="vertical-align:top;">' . $kpi('Low Stock', $lowCount, '#92400e') . '</td>'
+            . '<td width="33.33%" style="vertical-align:top;">' . $kpi('Expiring', $expCount, '#9a3412') . '</td>'
             . '</tr></table>';
 
         // Out of Stock Table
         if ($outCount > 0) {
-            $html .= $sectionTitle('Out of Stock', $outCount, '#991b1b', '#fee2e2')
+            $html .= $sectionTitle('Out of Stock', $outCount)
                 . $tableOpen
                 . '<thead><tr>' . $headCell('Product') . $headCell('SKU') . $headCell('Current', true) . $headCell('Reorder at', true, true) . '</tr></thead><tbody>';
             foreach (array_slice($outOfStock, 0, 20) as $row) {
@@ -150,7 +143,7 @@ class StockBriefService
 
         // Low Stock Table
         if ($lowCount > 0) {
-            $html .= $sectionTitle('Low Stock', $lowCount, '#854d0e', '#fef3c7')
+            $html .= $sectionTitle('Low Stock', $lowCount)
                 . $tableOpen
                 . '<thead><tr>' . $headCell('Product') . $headCell('SKU') . $headCell('Current', true) . $headCell('Reorder at', true, true) . '</tr></thead><tbody>';
             foreach (array_slice($lowStock, 0, 20) as $row) {
@@ -169,7 +162,7 @@ class StockBriefService
 
         // Expiring Batches Table
         if ($expCount > 0) {
-            $html .= $sectionTitle('Expiring / Expired', $expCount, '#9a3412', '#ffedd5')
+            $html .= $sectionTitle('Expiring / Expired', $expCount)
                 . $tableOpen
                 . '<thead><tr>' . $headCell('Product') . $headCell('Batch') . $headCell('Remaining', true, true) . $headCell('Expiration', true) . '</tr></thead><tbody>';
             foreach (array_slice($expiringBatches, 0, 15) as $b) {
@@ -190,15 +183,6 @@ class StockBriefService
             }
             $html .= '</tbody></table>';
         }
-
-        $html .= '</td></tr>'
-            . '<tr><td style="padding:0 24px 24px;font-family:' . $font . ';">'
-            . '<div style="border-top:1px solid #e5e7eb;padding-top:16px;color:#6b7280;font-size:12px;text-align:center;">Automated Daily Stock Brief from RetailMind</div>'
-            . '</td></tr>'
-            . '</table>'
-            . '<!--[if mso]></td></tr></table><![endif]-->'
-            . '</td></tr>'
-            . '</table>';
 
         return [
             'subject' => $subject,

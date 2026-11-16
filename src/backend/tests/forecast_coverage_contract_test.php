@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/support/replenishment_schema.php';
+
 /**
  * Contract test for Ticket #411:
  * "Show trustworthy forecast coverage and buying guidance"
@@ -34,6 +36,7 @@ function createTestPdo(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 
+    createReplenishmentBatchSchema($pdo);
     $pdo->exec("
         CREATE TABLE platform_settings (
             setting_key TEXT PRIMARY KEY,

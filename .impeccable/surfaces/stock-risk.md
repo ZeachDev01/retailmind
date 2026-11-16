@@ -5,22 +5,24 @@ primary_target: "src/frontend/components/inventory_management/stock_risk.php"
 related_targets: ["src/frontend/components/inventory_management/inventory_overview.php", "src/frontend/assets/css/stock-risk.css", "src/frontend/assets/js/stock-risk.js"]
 ---
 
-# Stock Risk
+# Stock Movement
 
 ## Mode and confirmed direction
 
-Operate. The user selected Compare products (prototype A) for a new Stock Risk tab inside the existing Stock Overview, then explicitly requested colorful category icons and stronger table/UI presentation. Overview and Products remain host content, not redesign targets. No ABC or automatic counting schedule is included.
-
-Keep RetailMind's system font, blue action voice, restrained borders, panel geometry and native light/dark themes. Local blue, orange, purple, teal, green and slate tints identify product/concern categories. Every icon has an adjacent label; hue never carries the only meaning. Icons reuse the installed Bootstrap Icons library. No dependency or global brand token was added.
+Operate. The user confirmed the replacement design and reviewed an interactive mockup on 2026-11-12. Preserve RetailMind's system font, Action Blue, restrained panel borders and native light/dark themes. Focus on distinct selling days, quantity and stock. Expiry remains in Overview. No new global tokens or dependency.
 
 ## Composition and interaction
 
-Lead with the Stock Risk heading and purpose, then a row of icon/category filter controls. The white comparison surface combines a compact toolbar, labeled records and pagination. Rows align stock/sales quantities, separate category/SKU metadata, and offer explicit expandable details. Product, stock and sales headers sort; filters/search reset pagination and close stale details.
+One compact comparison surface: date range and Generate Report, then search and stock scope. No month inputs, summary cards or repeated criteria paragraphs. Main columns are Product, Stock, Sold, Selling days, Status and Trend, with a compact details action. Default to positive current stock and fewest selling days.
 
-Mobile reflows each table record into labeled quantities, its concern and a visible View action. A native sorting selector preserves sorting without requiring interaction with visually hidden headers. Details expose the historical stock-in/out calculation, basis and next step in place. No modal, count prompt or new inventory mutation is introduced. Motion is confined to detail reveal and respects reduced motion.
+Three consecutive 30-day periods end yesterday in Philippine time. Fast/Slow use latest-period selling days; Dead Stock checks the complete 90 days. Limited or stockout-affected history withholds unsupported judgments. Status and trend remain separate; icons and labels accompany color. The existing info-tooltip component explains criteria on hover/focus/tap and dismisses with Escape.
+
+Product name or chevron opens a right-side native-dialog drawer showing current stock, status, all three date-labelled period comparisons, latest-period stock flow and history limitations. Calculation basis uses a disclosure. Closing returns focus and restores scrolling. Mobile records reflow to labelled quantities with native sorting; the drawer fits the screen and scrolls internally.
+
+Generate Report opens a light print preview containing all matching pages in sort order plus every product's drawer details, filter scope, dates and generation time. Shared limitations appear once. Print / Save as PDF uses landscape print rules.
 
 ## Implementation and verification
 
-See `docs/specs/inventory-stock-risk-consolidation.md` for the approved purpose, calculation limits and archived prototype source. Dedicated reader checks, inventory alert/recent-movement checks and the Overview browser check cover the integration. Captures at 1440px and 390px in both themes were inspected; mobile overflow and accidental visible screen-reader labels were corrected. Existing Overview behavior remains covered by the same browser check. A read-only local-database check loaded active product rows.
+See docs/specs/inventory-stock-movement.md for precise classification, Dead Stock precedence and stock arithmetic. Old asset filenames, DOM identifiers and risk links remain supported. Reader tests cover distinct days, periods, packs, history limitations, trends and reconciliation. Browser checks cover existing Overview behavior, tooltips, drawer focus/close, filters, sorting, pagination, complete/filtered reports and print action at 1440px/390px in both themes. npm run check, npm run check:contracts and inventory alert/recent-movement checks passed.
 
-The design detector's font finding was a false positive for the existing Bootstrap icon font embedded in the browser fixture. A value-level ignore is scoped only to `src/backend/tests/inventory_overview_clarity_browser_test.js`; no real UI font rule was disabled. No deterministic design issues remain standing. A signed-in live browser session and the full theme/account suite have not been checked.
+Checks use isolated fixtures. A signed-in live database browser session and physical printer output remain unverified.

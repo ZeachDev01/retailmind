@@ -48,13 +48,20 @@ $insert = $pdo->prepare('INSERT INTO backup_history (filename, backup_type, stat
 $insert->execute(['null-fingerprint.rmpkg', 'manual', 'completed', null, '2026-11-06 08:00:00', '2026-11-06 08:00:00']);
 $insert->execute(['failed.rmpkg', 'scheduled', 'failed', $fingerprint('failed'), '2026-11-07 08:00:00', '2026-11-07 08:00:00']);
 $insert->execute(['older.rmpkg', 'manual', 'completed', $fingerprint('older'), '2026-11-01 08:00:00', '2026-11-01 08:00:00']);
+
+$recommendation = new BackupKeyRecommendation($pdo);
+foreach (['admin', 'super_admin'] as $role) {
+    $assert($recommendation->recommendation(1, $role) === null,
+        'A manual backup must not reopen the recovery-key prompt on a later login');
+}
+
 $insert->execute(['first-newest.rmpkg', 'scheduled', 'completed', $fingerprint('first-newest'), '2026-11-05 08:00:00', '2026-11-05 08:00:00']);
 $insert->execute(['newest.rmpkg', 'scheduled', 'completed', $fingerprint('newest'), '2026-11-05 08:00:00', '2026-11-05 08:00:00']);
 
-$recommendation = new BackupKeyRecommendation($pdo);
+$insert->execute(['later-manual.rmpkg', 'manual', 'completed', $fingerprint('later-manual'), '2026-11-08 08:00:00', '2026-11-08 08:00:00']);
 $result = $recommendation->recommendation(1, 'admin');
 $assert($result !== null, 'A completed backup with a key fingerprint is recommended');
-$assert($result['fingerprint'] === $fingerprint('newest'), 'The newest completed backup wins; failed and null fingerprints are ignored');
+$assert($result['fingerprint'] === $fingerprint('newest'), 'The newest completed scheduled backup wins; manual, failed and null fingerprints are ignored');
 $assert($result['short'] === substr($fingerprint('newest'), 0, 8), 'The recommendation exposes a short fingerprint');
 $assert($result['filename'] === 'newest.rmpkg', 'The recommendation names the package');
 $assert($result['snapshot_at'] === '2026-11-05 08:00:00', 'The recommendation reports the snapshot time');
