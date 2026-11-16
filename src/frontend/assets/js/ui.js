@@ -1078,7 +1078,12 @@
   const searchDropdowns = new WeakMap();
   function closeSearchPopups(event) {
     qsa('.rm-search-popup:popover-open').forEach(popup => {
-      if (!(event.target instanceof Node) || !popup.contains(event.target)) searchDropdowns.get(popup.parentElement.querySelector('input'))?.close();
+      if (event.target instanceof Node && popup.contains(event.target)) return;
+      const input = popup.parentElement.querySelector('input');
+      const dropdown = searchDropdowns.get(input);
+      const rect = input.getBoundingClientRect();
+      // A queued scroll from focusing the field must not dismiss choices opened at its new position.
+      if (event.type !== 'scroll' || rect.top !== dropdown.anchor.top || rect.left !== dropdown.anchor.left) dropdown.close();
     });
   }
   window.addEventListener('resize', closeSearchPopups);
@@ -1144,7 +1149,7 @@
       status.setAttribute('role', 'status');
       popup.append(list, more);
       wrapper.append(popup, status);
-      let active = -1;
+      let active = -1, anchor;
       function close() {
         if (popup.matches(':popover-open')) popup.hidePopover();
         input.setAttribute('aria-expanded', 'false');
@@ -1208,7 +1213,7 @@
         more.hidden = all || options.length <= 5;
         more.textContent = 'Show all ' + options.length + ' matches';
         status.textContent = options.length + ' matches';
-        const rect = input.getBoundingClientRect();
+        const rect = anchor = input.getBoundingClientRect();
         popup.style.width = rect.width + 'px';
         popup.style.left = rect.left + 'px';
         const below = window.innerHeight - rect.bottom - 12;
@@ -1273,7 +1278,7 @@
       field.form?.addEventListener('reset', () => setTimeout(sync, 0));
       field.closest('.rm-modal-overlay, .rm-drawer-overlay')?.addEventListener('retailmind:overlayopen', sync);
       field.closest('.rm-modal-overlay, .rm-drawer-overlay')?.addEventListener('retailmind:overlayclose', close);
-      searchDropdowns.set(input, {render, close});
+      searchDropdowns.set(input, {render, close, get anchor() { return anchor; }});
       sync();
     });
   }

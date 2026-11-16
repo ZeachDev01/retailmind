@@ -192,7 +192,7 @@ window.RetailMindInventoryDrafts = (() => {
                 submitted.set(retained, {token:retained.elements.operation_token.value, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
                 retained.dataset.inventorySubmissionKind = draft.context.operationKind || '';
             }
-            const panel = document.createElement('div'); panel.className = 'alert alert-info inventory-recovery-alert'; panel.dataset.recoveryId = draft.id;
+            const panel = document.createElement('div'); panel.className = 'alert alert-info inventory-recovery-alert'; panel.setAttribute('role', 'note'); panel.dataset.recoveryId = draft.id;
             const text = document.createElement('span'); text.textContent = 'Unfinished inventory work (' + draft.id + '). ';
             const actions = document.createElement('div'); actions.className = 'inventory-recovery-actions';
             const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'btn btn-small'; restore.textContent = 'Resume';
@@ -204,7 +204,7 @@ window.RetailMindInventoryDrafts = (() => {
     }
     async function legacyDrafts() {
         if (localStorage.getItem('retail_mind_add_product_state') || localStorage.getItem('retail_mind_add_product_step')) {
-            const panel = document.createElement('div'); panel.className = 'alert alert-warning'; panel.dataset.legacyProductDraft = '1';
+            const panel = document.createElement('div'); panel.className = 'alert alert-warning'; panel.setAttribute('role', 'note'); panel.dataset.legacyProductDraft = '1';
             const text = document.createElement('p'); text.textContent = 'An older Product draft has no account owner and predates private storage. It cannot be restored safely on this shared device. It remains here until you explicitly discard it.';
             const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-small btn-secondary'; button.textContent = 'Discard older Product draft';
             button.addEventListener('click', () => { try { localStorage.removeItem('retail_mind_add_product_state'); localStorage.removeItem('retail_mind_add_product_step'); panel.remove(); } catch (_) { notice('The older draft could not be discarded. Browser storage is unavailable.', true); } });
