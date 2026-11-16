@@ -167,9 +167,10 @@ $movements = $openShift ? $service->drawerMovements((int)$openShift['shift_id'])
 // this form can be posted directly.
 $unresolvedHeldSales = $openShift ? $service->unresolvedHeldSales((int)$openShift['shift_id']) : [];
 $recent = $service->recentShifts($isCashier ? $targetCashierId : null);
-// Only the Cashier workspace offers a Register to open on, and only Registers
-// that are enabled and not already anchoring somebody else's open shift.
-$availableRegisters = $isCashier && !$openShift ? $service->availableRegisters() : [];
+// Show occupied Registers in the cashier selector, but keep them unavailable.
+$registerOptions = $isCashier && !$openShift ? $service->registerOpeningOptions() : [];
+$availableRegisters = array_filter($registerOptions, static fn(array $register): bool => !$register['in_use']);
+$firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register_id'] ?? 0);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -219,8 +220,10 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                         <?php endif; ?>
                     </div>
                     <?php if (!$isCashier && !$openShift): ?><p class="shift-help">Cashier session required to open drawer.</p><?php endif; ?>
-                    <?php if (!$openShift && $isCashier && !$availableRegisters): ?><p class="shift-empty">No registers available.</p><?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
-                            <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($availableRegisters as $register): ?><option value="<?= (int)$register['register_id'] ?>"><?= htmlspecialchars($register['name']) ?></option><?php endforeach; ?></select></div>
+                    <?php if (!$openShift && $isCashier && !$registerOptions): ?><p class="shift-empty">No registers available.</p>
+                    <?php elseif (!$openShift && $isCashier && !$availableRegisters): ?><div class="form-row"><div><label for="open-register">Register</label><select id="open-register" disabled><?php foreach ($registerOptions as $register): ?><option><?= htmlspecialchars($register['name'] . ' — In use by ' . ($register['in_use_by'] ?? 'another cashier')) ?></option><?php endforeach; ?></select></div></div><p class="shift-empty">All registers are currently in use.</p>
+                    <?php elseif (!$openShift && $isCashier): ?><form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>"><input type="hidden" name="action" value="open"><div class="form-row">
+                            <div><label for="open-register">Register</label><select id="open-register" name="register_id" required><?php foreach ($registerOptions as $register): ?><option value="<?= (int)$register['register_id'] ?>" <?= $register['in_use'] ? 'disabled' : '' ?> <?= (int)$register['register_id'] === $firstAvailableRegisterId ? 'selected' : '' ?>><?= htmlspecialchars($register['name'] . ($register['in_use'] ? ' — In use by ' . $register['in_use_by'] : '')) ?></option><?php endforeach; ?></select></div>
                             <div><label for="opening-float">Starting cash (₱)</label><input id="opening-float" type="number" name="opening_float" min="0" step="0.01" value="0" required></div>
                         </div><button class="btn" type="submit">Open shift</button></form><?php elseif ($openShift): ?>
                         <div class="shift-overview-content">
@@ -338,7 +341,7 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                 </section><?php else: ?><section class="dashboard-section"><h2>Current shift movements</h2><p class="shift-empty">Open a shift to see its drawer movements.</p></section><?php endif; ?>
                 </div><?php endif; ?>
                 <?php if (isset($shiftTabs['close'])): ?><div class="shift-tabpanel" role="tabpanel" id="shift-panel-close" aria-labelledby="shift-tab-close" tabindex="0" <?= $activeShiftTab === 'close' ? '' : 'hidden' ?>>
-                <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation">
+                <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation" <?= $isCashier ? 'data-shift-cart-guard data-cashier-id="' . $actorId . '" data-shift-id="' . (int)$openShift['shift_id'] . '"' : '' ?>>
                         <div class="shift-reconciliation-header">
                             <span class="shift-money-header-badge" aria-hidden="true">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
@@ -353,6 +356,10 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
                                 <?php endif; ?>
                             </div>
                         </div>
+                        <?php if ($isCashier): ?><div class="workflow-notice" data-shift-cart-blocker hidden role="status">
+                            <div><h2>Sale in progress</h2><p>Finish or cancel the current sale before closing this shift.</p></div>
+                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Return to POS</a>
+                        </div><?php endif; ?>
                         <?php if (!$isCashier): ?><p class="shift-help">Closing for <?= htmlspecialchars($openShift['display_name'] ?? $openShift['full_name'] ?? 'Cashier') ?>.</p><?php endif; ?>
                         <?php if ($unresolvedHeldSales): ?><div class="message error shift-held-alert" role="note" data-rm-alert-processed="1">
                             <div class="shift-held-alert-head">
@@ -491,6 +498,20 @@ $availableRegisters = $isCashier && !$openShift ? $service->availableRegisters()
         const alignActiveShiftTab = () => alignShiftTab(shiftTabs.find(tab => tab.getAttribute('aria-selected') === 'true'));
         window.addEventListener('resize', alignActiveShiftTab);
         alignActiveShiftTab();
+        const shiftCartGuard = document.querySelector('[data-shift-cart-guard]');
+        const shiftCart = window.cartWorkspace?.state;
+        const shiftCartContext = window.cartWorkspace?.context;
+        const shiftCartMatches = shiftCartGuard && shiftCartContext?.workspace === 'cashier'
+            && shiftCartContext.cashier === Number(shiftCartGuard.dataset.cashierId)
+            && shiftCartContext.shift === Number(shiftCartGuard.dataset.shiftId)
+            && shiftCart && Object.keys(shiftCart.cart || {}).length > 0;
+        if (shiftCartMatches) {
+            shiftCartGuard.querySelector('[data-shift-cart-blocker]').hidden = false;
+            shiftCartGuard.querySelectorAll('form').forEach(form => {
+                form.querySelectorAll('button[type="submit"]').forEach(button => { button.disabled = true; });
+                form.addEventListener('submit', event => event.preventDefault());
+            });
+        }
         const movementType = document.getElementById('movement-type');
         const movementReason = document.getElementById('movement-reason');
         if (movementType && movementReason) {

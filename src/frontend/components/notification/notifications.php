@@ -5,7 +5,9 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
 require_once __DIR__ . '/../../../backend/app/Services/NotificationService.php';
 
+require_role(['super_admin', 'admin', 'inventory_manager', 'cashier']);
 $user_id = (int)$_SESSION['user_id'];
+check_and_notify_low_stock($pdo);
 reconcile_notification_stock($pdo, $user_id);
 $category_labels = [
     'low_stock' => 'Low stock',

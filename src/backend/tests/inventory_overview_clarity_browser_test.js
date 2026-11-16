@@ -18,14 +18,14 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
     function app_url($path) { return $path; }
     function format_display_datetime($value) { return $value; }
     $products = [];
-    foreach ([20, 2, 0] as $id => $quantity) {
-        $products[] = ['product_id' => $id + 1, 'product_name' => ['Rice', 'Coffee', 'Milk'][$id],
+    foreach ([20, 2, 0, 8] as $id => $quantity) {
+        $products[] = ['product_id' => $id + 1, 'product_name' => ['Rice', 'Coffee', 'Milk', 'Oil'][$id],
             'sku' => 'SKU-' . $id, 'barcode' => '123456789' . $id, 'brand' => 'Shalom',
             'category_name' => 'Food', 'quantity_on_hand' => $quantity, 'reorder_level' => 5,
             'unit_price' => 30, 'cost_price' => 20, 'next_expiration' => null,
             'has_missing_expiration' => $id === 1, 'undated_quantity' => $id === 1 ? 2 : 0];
     }
-    $total_products = 3; $total_units = 22; $out_of_stock = 1; $missing_expiration_count = 1;
+    $total_products = 4; $total_units = 30; $out_of_stock = 1; $missing_expiration_count = 1;
     $low_stock = [$products[1], $products[2]]; $lowStockProductIds = [2 => true, 3 => true];
     $expiring_batches = $expired_batches = $expiredProductIds = $expiringProductIds = [];
     $recent_movements = $fefo_recommendations = [];
@@ -62,6 +62,7 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
             await page.setContent('<!doctype html><html><head></head>' + html);
+            assert.equal(await page.locator('#overview-forecast').count(), 0, 'Stock Movement replaces the forecast comparison');
             for (const file of ['theme.css', 'style.css', 'inventory.css', 'stock-risk.css']) {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
             }
@@ -86,7 +87,7 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             assert.equal(await page.locator('#movement-page-status').innerText(), 'Page 1 of 2', 'Sorting resets pagination');
             assert.equal(await page.locator('[data-movement-sort="1"]').evaluate(button => button.closest('th').getAttribute('aria-sort')), 'descending');
             await page.locator('.overview-metric[data-overview-view="all"]').click();
-            assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 3);
+            assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 4);
             const search = page.getByLabel('Search products', {exact: true});
             assert.equal(await page.locator('button.overview-metric').count(), 7, 'Original summary cards remain');
             assert.equal(await page.locator('.overview-metric-icon').count(), 7, 'Original card icons remain');

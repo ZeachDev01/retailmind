@@ -141,6 +141,26 @@ class CashierShiftService
         ], $rows);
     }
 
+    /** Active Registers and the Cashier currently using each one, for the opening screen. */
+    public function registerOpeningOptions(): array
+    {
+        $rows = $this->pdo->query(
+            "SELECT r.register_id, r.name, cs.cashier_id, " . $this->userDisplayNameColumn("u") . "
+             FROM registers r
+             LEFT JOIN cashier_shifts cs ON cs.register_id = r.register_id AND cs.status = 'open'
+             LEFT JOIN users u ON u.user_id = cs.cashier_id
+             WHERE r.status = 'active'
+             ORDER BY r.name, r.register_id"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        return array_map(static fn(array $row): array => [
+            'register_id' => (int)$row['register_id'],
+            'name' => (string)$row['name'],
+            'in_use' => $row['cashier_id'] !== null,
+            'in_use_by' => $row['cashier_id'] !== null ? (string)($row['display_name'] ?? 'Cashier') : null,
+        ], $rows);
+    }
+
     /** The display name a Cashier picks from, or null for an unknown Register. */
     public function registerName(int $registerId): ?string
     {

@@ -53,6 +53,20 @@ try {
     $error = \App\Support\OperatorAlert::message($exception, 'Stock issue reports could not be loaded. Refresh the page and try again. Tell your Super Administrator if this keeps happening.');
 }
 
+$appliedFilters = array_filter($filters, static fn($value) => $value !== '' && $value !== 0);
+$totalRows = count($reports);
+$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
+$page = is_int($page) ? min(max(1, $page), $totalPages) : 1;
+$hasNext = $page < $totalPages;
+$reports = array_slice($reports, ($page - 1) * $pageSize, $pageSize);
+$paginationFilters = $appliedFilters;
+$paginationLabel = 'Stock issue report pages';
+$url = static fn(array $params): string => app_url('components/administrator/stock_issues.php?' . http_build_query($params + $paginationFilters + ['length' => $pageSize]));
+$filterQuery = $appliedFilters !== [] ? http_build_query($appliedFilters) . '&' : '';
+
 $detail = null;
 $detailId = (int)($_GET['detail'] ?? 0);
 if ($detailId > 0 && $error === '') {
@@ -66,8 +80,6 @@ if ($detailId > 0 && $error === '') {
     }
 }
 
-$appliedFilters = array_filter($filters, static fn($value) => $value !== '' && $value !== 0);
-$filterQuery = $appliedFilters !== [] ? http_build_query($appliedFilters) . '&' : '';
 $hasAdvancedFilters = $filters['cashier_id'] !== 0
     || $filters['approver_id'] !== 0
     || $filters['date_from'] !== ''
@@ -391,7 +403,7 @@ try {
             </section>
 
             <section class="history-section" aria-labelledby="reports-heading">
-                <h2 id="reports-heading">Stock Issue reports <span class="issue-count"><?= count($reports) ?></span></h2>
+                <h2 id="reports-heading">Stock Issue reports <span class="issue-count"><?= $totalRows ?></span></h2>
                 <?php if (empty($reports)): ?>
                     <div class="issue-empty">
                         <h3>No matching reports</h3>
@@ -446,6 +458,7 @@ try {
                         </table>
                     </div>
                 <?php endif; ?>
+                <?php $rows = $reports; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
             </section>
         </main>
     </div>

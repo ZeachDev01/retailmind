@@ -167,6 +167,44 @@
     color: var(--text);
 }
 
+/* Pagination */
+.refund-corrections-page .history-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.refund-corrections-page .history-page-number {
+    color: var(--muted);
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.refund-corrections-page .history-page-length,
+.refund-corrections-page .history-page-length label,
+.refund-corrections-page .history-page-buttons,
+.refund-corrections-page .history-page-button {
+    display: inline-flex;
+    align-items: center;
+}
+
+.refund-corrections-page .history-page-length label { gap: 8px; color: var(--muted); font-size: 0.84rem; }
+.refund-corrections-page .history-page-length select { min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); }
+.refund-corrections-page .history-page-length .btn { min-height: 36px; margin-left: 8px; }
+.refund-corrections-page .history-page-buttons { justify-content: center; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.refund-corrections-page .history-page-button { justify-content: center; min-width: 36px; min-height: 36px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font-size: 0.84rem; text-decoration: none; }
+.refund-corrections-page .history-page-direction { padding-inline: 12px; }
+.refund-corrections-page .history-page-button[aria-current="page"] { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: 600; }
+.refund-corrections-page a.history-page-button:hover:not([aria-current="page"]) { background: var(--theme-surface-soft, #f8fafc); }
+.refund-corrections-page .history-page-button[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.refund-corrections-page .history-page-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
 /* Form */
 .correction-form {
     display: grid;
@@ -930,6 +968,8 @@ html[data-theme="dark"] .btn-table-action:hover {
         width: 120px;
         height: 105px;
     }
+    .refund-corrections-page .history-pagination { flex-direction: column; }
+    .refund-corrections-page .history-page-buttons { margin-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

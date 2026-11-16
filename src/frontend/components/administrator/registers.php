@@ -70,6 +70,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $allRegisters = $registers->all();
+require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+$activeStoreConfigurationSection = 'checkout-stations';
+$remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -79,11 +82,14 @@ $allRegisters = $registers->all();
     <title>Checkout Stations</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/registers.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/store-settings.css')) ?>">
 </head>
-<body class="registers-page">
+<body class="registers-page store-configuration-nav">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
+        <?php require __DIR__ . '/store_configuration_nav.php'; ?>
+        <div class="register-page-content">
         <header class="page-heading">
             <div>
                 <h1>Checkout Stations</h1>
@@ -233,6 +239,7 @@ $allRegisters = $registers->all();
                 </div>
             <?php endif; ?>
         </section>
+        </div>
     </main>
 </div>
 <script>

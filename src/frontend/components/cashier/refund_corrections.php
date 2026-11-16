@@ -66,6 +66,16 @@ $reviews = match ($role) {
     'cashier' => $service->getPendingReviewsForCashier($actorId),
     'inventory_manager' => $service->getPendingReviewsForInventoryManager($actorId),
 };
+$totalRows = count($reviews);
+$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
+$page = is_int($page) ? min(max(1, $page), $totalPages) : 1;
+$hasNext = $page < $totalPages;
+$reviews = array_slice($reviews, ($page - 1) * $pageSize, $pageSize);
+$paginationFilters = [];
+$url = static fn(array $params): string => app_url('components/cashier/refund_corrections.php?' . http_build_query($params + ['length' => $pageSize]));
 
 $staff = [];
 if ($role === 'admin') {
@@ -109,7 +119,7 @@ function correction_e(mixed $value): string {
     <title>Refund corrections</title>
     <link rel="stylesheet" href="<?= correction_e(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= correction_e(theme_url('assets/css/cashier.css')) ?>">
-    <link rel="stylesheet" href="<?= correction_e(theme_url('assets/css/refund-corrections.css')) ?>">
+    <link rel="stylesheet" href="<?= correction_e(theme_url('assets/css/refund-corrections.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/refund-corrections.css')) ?>">
 </head>
 <body class="cashier-page refund-corrections-page">
 <a class="skip-link" href="#refund-corrections-main">Skip to main content</a>
@@ -137,7 +147,7 @@ function correction_e(mixed $value): string {
         <div class="correction-header-stats">
             <div class="stat-card">
                 <span class="stat-label"><?= $role === 'admin' ? 'Total' : 'Pending' ?></span>
-                <span class="stat-value"><?= count($reviews) ?></span>
+                <span class="stat-value"><?= $totalRows ?></span>
             </div>
         </div>
     </header>
@@ -252,7 +262,7 @@ function correction_e(mixed $value): string {
             <h2 id="correction-tasks-title"><?= $role === 'admin' ? 'Correction history' : 'Pending corrections' ?></h2>
             <span class="stat-card" style="padding: 0.35rem 0.75rem;">
                 <span class="stat-label">Records</span>
-                <span class="stat-value" style="font-size: 1.15rem;"><?= count($reviews) ?></span>
+                <span class="stat-value" style="font-size: 1.15rem;"><?= $totalRows ?></span>
             </span>
         </div>
 
@@ -378,6 +388,8 @@ function correction_e(mixed $value): string {
                 </table>
             </div>
         <?php endif; ?>
+
+        <?php $rows = $reviews; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
 
         <dialog id="correction-details-drawer" class="correction-details-drawer" aria-labelledby="correction-drawer-title">
             <div class="drawer-header">

@@ -30,16 +30,21 @@ class NotificationService
 
     public function checkAndNotifyLowStock(): void
     {
-        foreach (['inventory_manager', 'admin'] as $role) {
+        foreach (['inventory_manager', 'admin', 'cashier'] as $role) {
             foreach ($this->recipients($role) as $user) {
                 $this->reconcileStockAlerts((int)$user['user_id'], $role);
+                $scope = match ($role) {
+                    'admin' => 'oversight',
+                    'cashier' => 'cashier',
+                    default => 'inventory',
+                };
                 $items = [];
                 foreach ($this->getLowStockProducts() as $product) {
                     $out = (int)$product['quantity_on_hand'] <= 0;
                     if ($role === 'admin' && !$out) continue;
                     $target = (int)$product['reorder_level'];
                     $items[] = new \App\Attention\AttentionItem(
-                        ($role === 'admin' ? 'oversight' : 'inventory') . '.stock.' . $product['product_id'],
+                        $scope . '.stock.' . $product['product_id'],
                         $out ? 'critical' : 'warning', 'inventory',
                         ($out ? 'Out of stock: ' : 'Low Stock Alert: ') . $product['product_name'],
                         "Product {$product['product_name']} ({$product['sku']}) is at or below the threshold. Current: {$product['quantity_on_hand']}, Threshold: {$target}",
@@ -48,7 +53,7 @@ class NotificationService
                     );
                 }
                 $inApp = (bool)($user['notify_inapp'] ?? true) && (bool)($user['notify_low_stock'] ?? true);
-                $this->synchronize($user, $items, $inApp, ($role === 'admin' ? 'oversight' : 'inventory') . '.stock.');
+                $this->synchronize($user, $items, $inApp, $scope . '.stock.');
             }
         }
     }
@@ -56,7 +61,7 @@ class NotificationService
     /** Resolve existing stock updates on normal renders, without delivering new updates. */
     public function reconcileStockAlerts(int $userId, string $workspace): void
     {
-        if (!in_array($workspace, ['inventory_manager', 'admin'], true) || !$this->inWorkspace($userId, $workspace)) return;
+        if (!in_array($workspace, ['inventory_manager', 'admin', 'cashier'], true) || !$this->inWorkspace($userId, $workspace)) return;
         $stmt = $this->pdo->prepare("SELECT n.notification_id, n.attention_key, n.type, n.reference_id, s.is_active
             FROM notifications n
             LEFT JOIN attention_states s ON s.user_id = n.user_id AND s.attention_key = n.attention_key

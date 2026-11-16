@@ -1573,6 +1573,7 @@ CREATE TABLE `users` (
   `email` varchar(100) DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
   `theme_preference` enum('light','dark','system') NOT NULL DEFAULT 'system',
+  `last_workspace_role` varchar(32) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `role_id` int(11) NOT NULL,
   `status` enum('active','disabled') DEFAULT 'active',

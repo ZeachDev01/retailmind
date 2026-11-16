@@ -282,7 +282,7 @@ $checks = [
         'forbidden' => ['embed=1', 'data-embedded-close', 'fiscal-periods-embedded', "app_url('assets/css/fiscal-periods.css')"],
     ],
     'Fiscal periods use direct sidebar navigation' => [
-        'file' => 'src/frontend/components/sidebar.php',
+        'file' => 'src/frontend/components/administrator/store_configuration_nav.php',
         'needles' => ['components/system_administrator/fiscal_periods.php'],
         'forbidden' => ['data-fiscal-periods-open', 'fiscalPeriodsOverlay', 'fiscalPeriodsFrame'],
     ],
@@ -361,7 +361,7 @@ $checks = [
     ],
     'Administrator navigation offers stock-issue oversight' => [
         'file' => 'src/frontend/components/sidebar.php',
-        'needles' => ["'path' => 'components/administrator/stock_issues.php'", "'label' => 'Stock Issue Oversight'"],
+        'needles' => ["'path' => 'components/administrator/stock_issues.php'", "'label' => 'Stock Issue Oversight'", "'path' => 'components/cashier/refund_corrections.php'", "'label' => 'Refund Correction Reviews'", "if (in_array(\$role, ['cashier', 'inventory_manager'], true))"],
     ],
     'Legacy damage report page hands administrators to read-only oversight' => [
         'file' => 'src/frontend/components/report/inventory_adjustments.php',
@@ -422,8 +422,8 @@ $checks = [
         'needles' => ['MANAGE_REGISTERS'],
     ],
     'Administrator navigation offers Register administration' => [
-        'file' => 'src/frontend/components/sidebar.php',
-        'needles' => ["'path' => 'components/administrator/registers.php'", "'label' => 'Checkout Stations'"],
+        'file' => 'src/frontend/components/administrator/store_configuration_nav.php',
+        'needles' => ['components/administrator/registers.php', 'Checkout Stations'],
     ],
     'Register structure ships in an upgrade migration' => [
         'file' => 'src/backend/database/migrations/202609290001_store_registers.php',

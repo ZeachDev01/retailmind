@@ -15,6 +15,7 @@ $pageTitle = $actorRole === 'super_admin' ? 'Users & Access' : 'Store Staff';
 $message = '';
 $messageClass = '';
 $createFormSubmitted = false;
+$createSucceeded = false;
 $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
 
 function display_label(string $value): string
@@ -101,6 +102,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'password_hash' => password_hash($password, PASSWORD_DEFAULT),
                     'roles' => $selectedRoles,
                 ]);
+                $createSucceeded = true;
             } catch (Throwable $exception) {
                 if ($profileImage !== null) profile_image_storage()->delete($profileImage);
                 throw $exception;
@@ -121,7 +123,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $message = $emailSent
                     ? 'Administrator account created. Welcome email submitted for delivery.'
                     : 'Administrator account created, but the welcome email could not be sent. Check Brevo settings and share the temporary sign-in details securely. Do not create the account again.';
-                $messageClass = $emailSent ? 'tag-success' : 'tag-warning';
+                $messageClass = 'tag-success';
             }
             $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
         } elseif ($action === 'update') {
@@ -220,8 +222,19 @@ $users = $pdo->query(
      GROUP BY u.user_id
      ORDER BY u.created_at DESC, u.user_id DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
+$totalRows = count($users);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
-$disabledCount = count($users) - $activeCount;
+$disabledCount = $totalRows - $activeCount;
+$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
+$page = is_int($page) ? min(max(1, $page), $totalPages) : 1;
+$hasNext = $page < $totalPages;
+$users = array_slice($users, ($page - 1) * $pageSize, $pageSize);
+$paginationFilters = [];
+$paginationLabel = 'User account pages';
+$url = static fn(array $params): string => app_url('components/user_manager/user_manager.php?' . http_build_query($params + ['length' => $pageSize]));
 $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministratorId();
 ?>
 <!DOCTYPE html>
@@ -231,7 +244,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?></title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/vendor/bootstrap-icons/bootstrap-icons.min.css')) ?>" data-bootstrap-icons>
-    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/avatars.css')) ?>?v=<?= (int)@filemtime(__DIR__ . '/../../assets/css/avatars.css') ?>" data-avatar-styles>
 </head>
 <body class="manage-users-page">
@@ -243,7 +256,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
         </header>
         <?php if ($message): ?><div class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div><?php endif; ?>
         <div class="card-grid">
-            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= count($users) ?></div><div class="label">Total Users</div></article>
+            <article class="stat-card with-icon"><span class="stat-icon"><i class="bi bi-people-fill" aria-hidden="true"></i></span><div class="value"><?= $totalRows ?></div><div class="label">Total Users</div></article>
             <article class="stat-card with-icon success"><span class="stat-icon"><i class="bi bi-person-check-fill" aria-hidden="true"></i></span><div class="value"><?= $activeCount ?></div><div class="label">Active Users</div></article>
             <article class="stat-card with-icon <?= $disabledCount ? 'warning' : '' ?>"><span class="stat-icon"><i class="bi bi-person-x-fill" aria-hidden="true"></i></span><div class="value"><?= $disabledCount ?></div><div class="label">Disabled Users</div></article>
         </div>
@@ -272,6 +285,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                         $statusView = $dormancyStatusTab->view($user);
                         $displayName = display_person_name((string)$user['display_name']);
                         $pendingDuties = $lifecycle->pendingDuties((int)$user['user_id']);
+                        $accountLock = $lifecycle->accountLockStatus((int)$user['user_id']);
                     ?>
                         <tr>
                             <td><div class="user-name-cell"><?= profile_avatar_html((int)$user['user_id'], (string)$user['display_name'], $canViewImage ? ($user['profile_image'] ?? null) : null, 'user-avatar') ?><strong><?= htmlspecialchars($displayName) ?></strong></div></td>
@@ -303,6 +317,8 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                                         data-profile-initials="<?= htmlspecialchars(profile_initials((string)$user['display_name'])) ?>"
                                         data-profile-url="<?= $canViewImage ? htmlspecialchars(profile_image_url((int)$user['user_id'])) : '' ?>"
                                         data-has-profile-image="<?= $hasImage ? '1' : '0' ?>"
+                                        data-account-locked="<?= $accountLock['locked'] ? '1' : '0' ?>"
+                                        data-account-lock-reason="<?= htmlspecialchars($accountLock['reason'], ENT_QUOTES, 'UTF-8') ?>"
                                         data-pending-duties="<?= htmlspecialchars(json_encode($pendingDuties), ENT_QUOTES, 'UTF-8') ?>">Manage</button>
                                 <?php endif; ?>
                             </td>
@@ -311,6 +327,7 @@ $lastAdministratorId = (new AdministratorAccessMinimum($pdo))->lastAdministrator
                     </tbody>
                 </table>
             </div>
+            <?php $rows = $users; require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
         </section>
     </main>
 </div>
@@ -518,14 +535,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
         const isLastAdministrator = button.dataset.isLastAdministrator === '1';
+        const accountLocked = button.dataset.accountLocked === '1';
         document.getElementById('drawerAdministratorMinimumHelp').hidden = !isLastAdministrator;
         const canEditOwnSuperRoles = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?>;
         document.getElementById('drawerStatus').disabled = isSelf || isSuper;
         document.querySelector('#drawerStatus option[value="disabled"]').disabled = isLastAdministrator;
         const retainedAdministrator = document.getElementById('drawerRetainedAdministrator');
-        retainedAdministrator.disabled = <?= json_encode($actorRole === 'super_admin') ?> || !(isLastAdministrator || (isSelf && !isSuper));
+        retainedAdministrator.disabled = accountLocked || <?= json_encode($actorRole === 'super_admin') ?> || !(isLastAdministrator || (isSelf && !isSuper));
         document.getElementById('drawerStatusButton').disabled = isSuper && !canEditOwnSuperRoles;
         document.getElementById('drawerRevokeButton').disabled = isSelf || isSuper;
+        const accountLockNotice = document.getElementById('drawerAccountLockNotice');
+        if (accountLockNotice) {
+            accountLockNotice.textContent = button.dataset.accountLockReason || '';
+            accountLockNotice.hidden = !accountLocked;
+        }
         const remove = document.getElementById('drawerRemoveProfileImage');
         remove.disabled = button.dataset.hasProfileImage !== '1';
         const pendingDuties = JSON.parse(button.dataset.pendingDuties || '{}');
@@ -542,7 +565,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         selectDrawerTab('user');
         document.querySelectorAll('#drawerRoles input[name="role_ids[]"]').forEach(input => {
-            input.disabled = (isSuper && !canEditOwnSuperRoles)
+            input.disabled = accountLocked
+                || (isSuper && !canEditOwnSuperRoles)
                 || (input.dataset.role === 'admin' && (isLastAdministrator || (isSelf && !isSuper)));
         });
         setOpen(drawerOverlay, true);
@@ -566,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!window.RetailMindUI?.openOverlay) {
         [addOverlay, drawerOverlay].forEach(overlay => overlay?.addEventListener('click', event => { if (event.target === overlay) setOpen(overlay, false); }));
     }
-    <?php if ($createFormSubmitted && $messageClass === 'tag-warning'): ?>setOpen(addOverlay, true);<?php endif; ?>
+    <?php if ($createFormSubmitted && !$createSucceeded): ?>setOpen(addOverlay, true);<?php endif; ?>
 });
 </script>
 </body>

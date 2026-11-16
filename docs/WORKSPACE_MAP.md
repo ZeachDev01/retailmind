@@ -83,6 +83,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Store Calendar: `components/administrator/store_calendar.php` (`App\Store\StoreCalendar`, JS: `store-staff-availability.js`)
   - Store Configuration: `components/administrator/store_settings.php` (`App\Store\StoreSetupConfirmations`)
   - Fiscal Periods: `components/system_administrator/fiscal_periods.php` (Modal: `components/modals/fiscal_periods.php`, `App\Services\FiscalPeriodGuardService`)
+  - Stock Issue Oversight: `components/administrator/stock_issues.php` (read-only)
+  - Refund Correction Reviews: `components/cashier/refund_corrections.php`
   - Operational Audit: `components/system_administrator/audit_logs.php`
   - Shared audit history uses Category (Super Administrator), Module, and Action selectors. Choices respect audit permissions; changing Category narrows Modules, and changing Module narrows Actions.
   - Verification: `audit_modules_test.php`, `audit_history_filters_browser_test.js`
@@ -95,7 +97,6 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 - **Reports**: `components/administrator/shift_report.php`, `receiving_history.php`, `sales.php`, `report_generation.php`
   - Backend Services: `App\Services\StoreShiftReportService`, `ReportAccessService`, `GrossProfitService`
   - **GCash Transactions** in Generate Report: Administrator-only preview/CSV with date, Cashier, search and exchange-type filters; equivalent local/tunnel access. Reuses `App\GCash\GCashActivityScopeReport`. GCash Overview retains monitoring/reviews without Record Exchange or Export Report header actions. Verification: `gcash_report_browser_test.js`, `gcash_admin_overview_browser_test.js`, `inventory_manager_report_access_contract.php`.
-- **Stock Issue Oversight**: `components/administrator/stock_issues.php`
 - **Promotions**: `components/inventory_management/promotions.php`
 
 ### Super Administrator (`super_admin`)

@@ -209,6 +209,24 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* Report pagination */
+.stock-issues-page .history-pagination { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border); }
+.stock-issues-page .history-page-number { color:var(--muted); font-size:.84rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.stock-issues-page .history-page-length,
+.stock-issues-page .history-page-length label,
+.stock-issues-page .history-page-buttons,
+.stock-issues-page .history-page-button { display:inline-flex; align-items:center; }
+.stock-issues-page .history-page-length label { gap:8px; color:var(--muted); font-size:.84rem; white-space:nowrap; }
+.stock-issues-page .history-page-length select { min-height:36px; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); }
+.stock-issues-page .history-page-length .btn { min-height:36px; margin-left:8px; padding:4px 12px; }
+.stock-issues-page .history-page-buttons { justify-content:center; flex-wrap:wrap; gap:4px; margin-left:auto; }
+.stock-issues-page .history-page-button { justify-content:center; min-width:36px; min-height:36px; padding:4px 8px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font-size:.84rem; text-decoration:none; }
+.stock-issues-page .history-page-direction { padding-inline:12px; }
+.stock-issues-page .history-page-button[aria-current="page"] { border-color:var(--primary); background:var(--primary); color:#fff; font-weight:600; }
+.stock-issues-page a.history-page-button:hover:not([aria-current="page"]) { background:var(--surface-soft); }
+.stock-issues-page .history-page-button[aria-disabled="true"] { opacity:.4; cursor:default; }
+.stock-issues-page .history-page-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+
 /* Audit Detail Section Enhancements */
 .stock-issues-page .detail-hero-grid {
     display: grid;
@@ -430,6 +448,8 @@
     .stock-issues-page .review-actions { display:grid; grid-template-columns:1fr; }
     .stock-issues-page .review-actions :is(button, .btn) { width:100%; }
     .stock-issues-page .issue-history > summary h2 { font-size:1rem; }
+    .stock-issues-page .history-pagination { flex-direction:column; }
+    .stock-issues-page .history-page-buttons { margin-left:0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

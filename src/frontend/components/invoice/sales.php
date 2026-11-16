@@ -147,19 +147,26 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="receipts-main">
-            <h1 class="u-sr-only">Receipt History</h1>
+            <header class="receipt-page-heading">
+                <div>
+                    <h1>Receipt history</h1>
+                    <p class="receipt-page-description">Find and reopen completed sales</p>
+                </div>
+            </header>
             <?php if ($selected_error): ?>
                 <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
             <?php endif; ?>
 
-            <?php if ($canStartSale): ?>
-                <a id="receiptNewSale" href="<?= htmlspecialchars(app_url('components/cashier/pos.php?new_sale=1')) ?>" class="btn"><i class="bi bi-plus-lg" aria-hidden="true"></i> New Sale</a>
-            <?php endif; ?>
-
             <section class="receipt-history-panel" aria-label="Search receipt history">
             <div class="receipt-filter-heading">
-                <h2><i class="bi bi-funnel" aria-hidden="true"></i> Filter receipts</h2>
-                <span>Dates in Philippine time &middot; Asia/Manila</span>
+                <h2>Filter receipts</h2>
+                <div class="receipt-filter-meta">
+                    <span>Dates in Philippine time &middot; Asia/Manila</span>
+                    <details class="receipt-policy-help">
+                        <summary class="receipt-policy-help-button" aria-label="Receipt policy" aria-describedby="receiptPolicyTooltip"><i class="bi bi-shield-check" aria-hidden="true"></i></summary>
+                        <span id="receiptPolicyTooltip" class="receipt-policy-tooltip" role="tooltip">Completed receipts are saved permanently. Use the authorized Cash Refund workflow to make corrections.</span>
+                    </details>
+                </div>
             </div>
             <div class="receipt-filters" role="group" aria-label="Receipt filters">
                 <label>
@@ -217,7 +224,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                     <tbody></tbody>
                 </table>
             </div>
-            <p class="receipt-history-note"><i class="bi bi-shield-check" aria-hidden="true"></i> Completed receipts are saved permanently. Use the authorized Cash Refund workflow to make corrections.</p>
+            <nav id="receiptPagination" class="receipt-pagination" aria-label="Receipt history pages"></nav>
             </section>
     </main>
 </div>
@@ -259,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     const textRenderer = DataTable.render.text();
+    const pagination = document.getElementById('receiptPagination');
 
     function validDates() {
         const reversed = dateFrom.value && dateTo.value && dateFrom.value > dateTo.value;
@@ -385,11 +393,10 @@ document.addEventListener('DOMContentLoaded', function() {
             topStart: null,
             topEnd: [{
                 search: {
-                    placeholder: 'Receipt number or payment method...'
+                    placeholder: 'Receipt number or payment method'
                 }
-            }, document.getElementById('receiptNewSale')].filter(Boolean),
-            bottom: ['info', {pageLength: {menu: [10, 25, 50, 100]}}, {paging: {numbers: 5}}],
-            bottomStart: null,
+            }],
+            bottomStart: ['info', {pageLength: {menu: [10, 25, 50, 100]}}],
             bottomEnd: null
         },
         language: {
@@ -506,6 +513,41 @@ document.addEventListener('DOMContentLoaded', function() {
             updateStatus(info.recordsDisplay + ' permitted receipt' + (info.recordsDisplay === 1 ? '' : 's') + ' found.', false, false);
         }
     });
+
+    let restorePageFocus = false;
+    function renderPagination() {
+        const info = table.page.info();
+        const totalPages = Math.max(info.pages, 1);
+        const pageCount = Math.min(totalPages, Math.max(5, info.page + 1));
+        const fragment = document.createDocumentFragment();
+        function addButton(label, target, options) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'receipt-page-button' + (options.current ? ' current' : '') + (options.direction ? ' direction' : '');
+            button.textContent = label;
+            if (options.current) button.setAttribute('aria-current', 'page');
+            if (options.disabled) button.disabled = true;
+            else button.addEventListener('click', function() {
+                restorePageFocus = true;
+                table.page(target).draw('page');
+            });
+            if (options.current) button.setAttribute('aria-label', 'Page ' + (target + 1) + ', current page');
+            else if (!options.direction) button.setAttribute('aria-label', 'Page ' + (target + 1));
+            fragment.append(button);
+        }
+        addButton('‹ Previous', info.page - 1, {direction: true, disabled: info.page === 0});
+        for (let page = 0; page < pageCount; page++) {
+            addButton(String(page + 1), page, {current: page === info.page});
+        }
+        addButton('Next ›', info.page + 1, {direction: true, disabled: info.page >= totalPages - 1});
+        pagination.replaceChildren(fragment);
+        if (restorePageFocus) {
+            pagination.querySelector('[aria-current="page"]')?.focus();
+            restorePageFocus = false;
+        }
+    }
+    table.on('draw', renderPagination);
+    renderPagination();
 
     retryButton.addEventListener('click', function() {
         if (validDates()) table.ajax.reload(null, false);

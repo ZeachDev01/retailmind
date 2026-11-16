@@ -586,13 +586,24 @@ $quickCategoryIcon = static function (string $categoryName): string {
                             </div>
                         </div>
                         <div class="pos-toolbar">
-                            <?php if ($posShiftOpen): ?>
-                                <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="lock_register">
-                                    <button class="btn btn-small btn-secondary" type="submit"><i class="bi bi-lock" aria-hidden="true"></i>Lock register</button>
-                                </form>
-                            <?php endif; ?>
+                            <details class="pos-actions">
+                                <summary class="btn btn-small btn-secondary">Actions<i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+                                <div class="pos-actions-menu">
+                                    <?php if ($posShiftOpen): ?>
+                                        <form method="post" data-confirm="Lock this register for a break? Your Cashier Shift stays open and your Register stays yours. Nobody else can use it until you unlock it with your password." data-confirm-title="Lock register" data-confirm-button="Lock register">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="action" value="lock_register">
+                                            <button class="pos-actions-item btn-quiet" type="submit"><i class="bi bi-lock" aria-hidden="true"></i>Lock register</button>
+                                        </form>
+                                        <span class="pos-actions-divider" aria-hidden="true"></span>
+                                    <?php endif; ?>
+                                    <form method="get" action="<?= htmlspecialchars(app_url('components/cashier/shifts.php')) ?>">
+                                        <input type="hidden" name="tab" value="close">
+                                        <button class="pos-actions-item btn-quiet is-disabled" type="submit" data-close-shift-action aria-describedby="close-shift-action-reason" disabled><i class="bi bi-calculator" aria-hidden="true"></i>Close shift</button>
+                                    </form>
+                                    <p class="pos-actions-reason" id="close-shift-action-reason" data-close-shift-reason hidden>Finish or cancel the current sale first</p>
+                                </div>
+                            </details>
                             <button type="button" class="quick-grid-toggle" id="quick-grid-toggle" title="Toggle compact product grid" aria-label="Toggle compact product grid" aria-pressed="false">
                                 <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
                             </button>
@@ -602,7 +613,7 @@ $quickCategoryIcon = static function (string $categoryName): string {
                     <p id="catalog-status" class="tag-warning" role="status" hidden></p>
                     <label class="scan-label" for="sku-input">Scan or search products</label>
                     <div class="scan-row">
-                        <input id="sku-input" class="pos-input" type="text" placeholder="Scan barcode or search by name or SKU…" autocomplete="off" inputmode="search" spellcheck="false">
+                        <input id="sku-input" class="pos-input" type="text" placeholder="Barcode, product name, or SKU" autocomplete="off" inputmode="search" spellcheck="false">
                         <button type="button" class="btn" id="add-code-btn" title="Add item (Enter)">
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>Add item
                         </button>
@@ -889,6 +900,9 @@ const cashierClock = document.getElementById('cashier-clock');
 const quickCategoryFilters = document.getElementById('quick-category-filters');
 const quickProductGrid = document.getElementById('quick-product-grid');
 const quickGridToggle = document.getElementById('quick-grid-toggle');
+const posActions = document.querySelector('.pos-actions');
+const closeShiftAction = document.querySelector('[data-close-shift-action]');
+const closeShiftReason = document.querySelector('[data-close-shift-reason]');
 const findProductUrl = <?= json_encode(app_url('components/cashier/findProduct.php')) ?>;
 const barcodeApiUrl = <?= json_encode(app_url('components/cashier/pos.php')) ?>;
 const heldSalesApiUrl = <?= json_encode(app_url('components/barcodeScanner/apiScanner/held_sales.php')) ?>;
@@ -915,6 +929,23 @@ function setTextIfPresent(id, value) {
         element.textContent = value;
     }
 }
+
+function updateCloseShiftAction(hasItems) {
+    if (!closeShiftAction) return;
+    closeShiftAction.disabled = hasItems;
+    closeShiftAction.classList.toggle('is-disabled', hasItems);
+    if (closeShiftReason) closeShiftReason.hidden = !hasItems;
+}
+
+document.addEventListener('click', event => {
+    if (posActions?.open && !posActions.contains(event.target)) posActions.open = false;
+});
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && posActions?.open) {
+        posActions.open = false;
+        posActions.querySelector('summary').focus();
+    }
+});
 
 function quickProductMedia(product) {
     if (product.product_image) {
@@ -1019,7 +1050,7 @@ function renderQuickProducts() {
     });
 
     if (!products.length) {
-        quickProductGrid.innerHTML = '<div class="quick-products-empty"><i class="bi bi-search" aria-hidden="true"></i><span>No matching products found.</span></div>';
+        quickProductGrid.innerHTML = '<div class="quick-products-empty"><i class="bi bi-search" aria-hidden="true"></i><span>No matching products found</span></div>';
         return;
     }
 
@@ -1689,7 +1720,7 @@ function renderCart() {
     let rows = '';
 
     if (Object.keys(cart).length === 0) {
-        rows = '<tr role="row"><td role="cell" colspan="4" class="cart-empty-cell"><i class="bi bi-cart3" aria-hidden="true"></i>Scan or search for a product to begin.</td></tr>';
+        rows = '<tr role="row"><td role="cell" colspan="4" class="cart-empty-cell"><i class="bi bi-cart3" aria-hidden="true"></i>Scan or search to add a product</td></tr>';
     } else {
         for (const id in cart) {
             const item = cart[id];
@@ -1723,6 +1754,7 @@ function renderCart() {
     const discount = getDiscountAmount();
     const net = getNetTotal();
     const hasItems = lineCount > 0;
+    updateCloseShiftAction(hasItems);
     cartBody.innerHTML = rows;
     document.getElementById('cart-total').textContent = money(net);
     document.getElementById('cart-item-count').textContent = itemCount;

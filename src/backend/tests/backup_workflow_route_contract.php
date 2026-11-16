@@ -20,12 +20,14 @@ $assert = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $administratorPage = $read('src/frontend/components/administrator/database_backup.php');
+$operationalAuditPage = $read('src/frontend/components/system_administrator/audit_logs.php');
 $superAdministratorPage = $read('src/frontend/components/system_administrator/backup_restore.php');
 $legacyRoute = $read('src/backend/legacy/routes/admin/backup_restore.php');
 $downloadEndpoint = $read('src/frontend/components/backup/backup_download.php');
 $statusEndpoint = $read('src/frontend/components/backup/backup_status.php');
 $recoveryKeyEndpoint = $read('src/frontend/components/backup/recovery_key.php');
 $sidebar = $read('src/frontend/components/sidebar.php');
+$storeConfigurationNav = $read('src/frontend/components/administrator/store_configuration_nav.php');
 $scheduledScript = $read('src/backend/scripts/backup_database.php');
 $scheduledBackupScript = $read('src/backend/scripts/run_scheduled_backup.php');
 $taskInstaller = $read('src/backend/scripts/install_scheduled_tasks.ps1');
@@ -172,10 +174,15 @@ $assert(
 );
 
 
-// --- Administrator-facing navigation: backup yes, restoration no -------------
+// --- Administrator-facing navigation: backup in Store Configuration ---------
 $assert(
-    str_contains($sidebar, "'components/administrator/database_backup.php'"),
-    'Administrator navigation must offer the shared Database Backup page'
+    str_contains($administratorPage, "store_configuration_nav.php")
+        && str_contains($storeConfigurationNav, "components/administrator/database_backup.php")
+        && str_contains($storeConfigurationNav, "components/system_administrator/audit_logs.php")
+        && str_contains($operationalAuditPage, "store_configuration_nav.php")
+        && !str_contains($sidebar, "'components/administrator/database_backup.php'")
+        && !str_contains($sidebar, "'label' => 'Operational Audit'"),
+    'Operational Audit and Database Backup must stay in the Store Configuration sidebar'
 );
 $restoreEndpoint = $read('src/frontend/components/backup/restore.php');
 $assert(str_contains($administratorPage, "'/../backup/restore_form.php'") && str_contains($superAdministratorPage, "'/../backup/restore_form.php'"), 'Both administrator screens offer the shared encrypted restore form');

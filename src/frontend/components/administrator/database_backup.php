@@ -5,6 +5,7 @@
 // stays limited; this screen does not authorize replacement.
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/backup.php';
+require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::MANAGE_DATABASE_BACKUP);
 
 use App\Authorization\RoleCapabilityPolicy;
@@ -80,6 +81,13 @@ $completedHistory = array_filter($history, static fn(array $row): bool => ($row[
 $latestBackup = !empty($completedHistory) ? reset($completedHistory) : null;
 $totalSnapshots = count($completedHistory);
 $storePaused = \App\Backup\RecoveryStore::isPaused();
+$hasStoreConfigurationNav = $actorRole === 'admin';
+$activeStoreConfigurationSection = 'database-backup';
+$remoteAccessStatus = 'offline';
+if ($hasStoreConfigurationNav) {
+    require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
+    $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -90,11 +98,14 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
     <title>Database Backup</title>
     <link rel="stylesheet" href="<?= $escape(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= $escape(app_url('assets/css/backup.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/backup.css')) ?>">
+    <?php if ($hasStoreConfigurationNav): ?><link rel="stylesheet" href="<?= $escape(theme_url('assets/css/store-settings.css')) ?>"><?php endif; ?>
 </head>
 
-<body class="manage-users-page database-backup-page administrator-backup-page" data-rm-authenticated="true"
+<body class="manage-users-page database-backup-page administrator-backup-page<?= $hasStoreConfigurationNav ? ' store-configuration-nav' : '' ?>" data-rm-authenticated="true"
     data-rm-backup-status="<?= $escape(app_url('components/backup/backup_status.php')) ?>">
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content">
+        <?php if ($hasStoreConfigurationNav) require __DIR__ . '/store_configuration_nav.php'; ?>
+        <div class="backup-page-content">
             <header class="page-heading">
                 <div><h1>Database Backup</h1></div>
                 <a class="backup-history-link" href="#backup-history"><i class="bi bi-clock-history" aria-hidden="true"></i> View history</a>
@@ -231,6 +242,7 @@ $storePaused = \App\Backup\RecoveryStore::isPaused();
                 <?php endif; ?>
             </section>
 
+        </div>
         </main>
     </div>
     <script src="<?= $escape(app_url('assets/js/backup_status.js')) ?>"></script>

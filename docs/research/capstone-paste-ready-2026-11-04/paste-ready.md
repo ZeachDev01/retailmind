@@ -106,7 +106,7 @@ The Output phase provides inventory information, receipts, reports, notification
 [[PAGE]]
 # Chapter 1 definition of terms
 ## 07 Revised and additional definitions
-@Asa ibutang: 1.6 Definition of Terms. ILISI ang existing Demand Forecasting, Overstock, Replenishment, ug Stock-out definitions. IDUGANG ang uban nga terms sa ubos. Ayaw duplicate sa daang list.
+@Asa ibutang: 1.6 Definition of Terms. ILISI ang existing Demand Forecasting, Inventory Monitoring, Replenishment, ug Stock-out definitions. IDUGANG ang uban nga terms sa ubos. Ayaw duplicate sa daang list.
 @Text to paste
 **Demand Forecasting.** The estimation of future recorded Product sales from supported historical observations. In RetailMind, the forecast does not directly measure customer demand lost while stock was unavailable.
 
@@ -128,7 +128,7 @@ The Output phase provides inventory information, receipts, reports, notification
 
 **Stockout Day.** A trading day when a Product was unavailable during part or all of the day. Recorded sales remain valid, but do not reveal all demand that could have occurred with stock available.
 
-**Overstock Exposure.** A planning indication that available stock may exceed expected sales or the applicable inventory target. It is a decision-support estimate rather than proof that inventory will remain unsold.
+**Inventory Monitoring.** The review of current stock information alongside available forecast estimates to support inventory decisions. RetailMind presents these data for staff review but does not automatically classify stock as overstock.
 
 **Base Unit.** The individual physical unit used to track Product quantities, such as a piece, sachet, can, or bottle. Sales packs and receiving packages are converted according to their recorded contents.
 

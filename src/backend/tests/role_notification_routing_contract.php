@@ -3,8 +3,8 @@
 //
 // - recipients come from every currently assigned role and active-account eligibility,
 //   with a primary-role fallback for accounts that have no role mapping;
-// - routine low stock reaches Inventory Managers only, while an out-of-stock product
-//   adds a required Administrator oversight condition in the Administrator Workspace;
+// - routine low stock reaches Inventory Managers and Cashiers in separate Workspaces,
+//   while an out-of-stock product adds Administrator oversight;
 // - expiring batches reach Inventory Managers, and Administrator escalation appears
 //   exactly at the Manila expiration day plus two days (24 hours past the end of the
 //   expiration day), then resolves with depleted stock and recurs after a restock;
@@ -146,6 +146,7 @@ notification_test_schema($pdo);
 
 $pdo->exec("INSERT INTO user_roles (user_id, role_id, is_primary) VALUES
     ({$adminSecondaryId}, {$roleIds['inventory_manager']}, 0),
+    ({$crossoverId}, {$roleIds['cashier']}, 1),
     ({$crossoverId}, {$roleIds['inventory_manager']}, 0)");
 // Administrator with optional in-app delivery switched off; oversight is still required.
 $pdo->exec("INSERT INTO notification_preferences (user_id, notify_inapp) VALUES ({$adminId}, 0)");
@@ -222,7 +223,9 @@ $secondaryRoutine = $rowsFor($adminSecondaryId, 'inventory.stock.1');
 $assert($secondaryRoutine !== [] && $secondaryRoutine[0]['workspace'] === 'inventory_manager', 'A secondary Inventory Manager receives the routine low-stock alert');
 $assert(count($rowsFor($adminSecondaryId, 'oversight.stock.')) === 0, 'A secondary Inventory Manager role does not fill the Administrator Workspace');
 $assert(count($rowsFor($crossoverId, 'inventory.stock.1')) === 1, 'A secondary-role Cashier receives the routine low-stock alert');
-$assert($rowsFor($cashierId) === [], 'A primary Cashier receives no routine stock alerts');
+$cashierRoutine = $rowsFor($cashierId, 'cashier.stock.1');
+$assert(count($cashierRoutine) === 1 && $cashierRoutine[0]['workspace'] === 'cashier', 'A primary Cashier receives the low-stock alert in the Cashier Workspace');
+$assert(count($rowsFor($crossoverId, 'cashier.stock.1')) === 1, 'A multi-role Cashier receives a separate alert in each assigned Workspace');
 $assert(count($rowsFor($disabledManagerId)) === 0, 'A disabled account receives no routine stock alerts');
 $assert(count($rowsFor($adminId, 'oversight.stock.1')) === 0, 'Administrator oversight ignores products that are still in stock');
 
@@ -237,7 +240,7 @@ $assert(count($adminOversight) === 1, 'An out-of-stock product additionally esca
 $assert($adminOversight[0]['workspace'] === 'admin', 'The out-of-stock escalation belongs to the Administrator Workspace');
 $assert($adminOversight[0]['attention_key'] === 'oversight.stock.2', 'Administrator oversight uses the oversight stock condition identity');
 $assert((int)$adminOversight[0]['inapp_enabled'] === 1, 'Required oversight keeps in-app delivery despite a disabled optional preference');
-$assert($rowsFor($cashierId) === [], 'A Cashier receives no out-of-stock oversight alert');
+$assert($rowsFor($cashierId, 'oversight.stock.') === [], 'A Cashier receives no Administrator out-of-stock oversight alert');
 
 $optedOutRoutine = $rowsFor($managerOptedOutId, 'inventory.stock.1');
 $assert(count($optedOutRoutine) === 1, 'A routine opt-out keeps the condition active for the Inventory Manager');
@@ -252,11 +255,15 @@ $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_i
 $assert($notifications->requiredWork($adminId, 'admin') === [], 'Stock oversight is not Administrator action needed');
 $pdo->exec('UPDATE inventory SET quantity_on_hand = 5 WHERE product_id IN (1, 2)');
 $notifications->reconcileStockAlerts($managerId, 'inventory_manager');
+$notifications->reconcileStockAlerts($cashierId, 'cashier');
 $notifications->reconcileStockAlerts($adminId, 'admin');
 $assert($stateActive($managerId, 'inventory.stock.1') === 1, 'Equality at Reorder Level remains low stock');
+$assert($stateActive($cashierId, 'cashier.stock.1') === 1, 'The Cashier low-stock condition remains active at Reorder Level');
 $assert($stateActive($managerId, 'inventory.stock.2') === 1, 'Partial replenishment from zero retains the Inventory warning');
 $assert($stateActive($adminId, 'oversight.stock.2') === 0, 'Positive stock resolves Administrator stockout oversight immediately');
 $pdo->exec('UPDATE inventory SET quantity_on_hand = 6 WHERE product_id IN (1, 2)');
+$notifications->reconcileStockAlerts($cashierId, 'cashier');
+$assert($stateActive($cashierId, 'cashier.stock.1') === 0, 'Stock above Reorder Level resolves the Cashier notification');
 $pdo->exec("CREATE TRIGGER reject_recovery BEFORE UPDATE ON attention_states
     WHEN OLD.user_id = {$managerId} BEGIN SELECT RAISE(ABORT, 'Recovery write failed'); END");
 try {
@@ -300,7 +307,7 @@ $pdo->exec("DELETE FROM user_roles WHERE user_id = {$crossoverId}");
 $notifications->checkAndNotifyLowStock();
 $assert(count($rowsFor($crossoverId)) === $crossoverBefore, 'Removing the role assignment stops new Inventory Workspace alerts');
 $assert(!in_array($crossoverId, $userIds($notifications->recipients('inventory_manager')), true), 'Removing the role assignment revokes Inventory Workspace recipients');
-$assert(in_array($crossoverId, $userIds($notifications->recipients('cashier')), true), 'A removed secondary role falls back to the primary Cashier role');
+$assert(in_array($crossoverId, $userIds($notifications->recipients('cashier')), true), 'Removing the secondary role retains the assigned primary Cashier Workspace');
 
 // --- 3. Expiry routine reminder, escalation boundary, resolution, recurrence ---
 echo "\n--- 3. Expiry routing ---\n";
@@ -314,7 +321,7 @@ $assert($managerExpiry[0]['type'] === 'expiring_stock', 'A batch inside its lead
 $assert((int)$managerExpiry[0]['inapp_enabled'] === 1, 'A routine expiry reminder is delivered in-app when preferences allow');
 $assert(count($rowsFor($adminSecondaryId, 'inventory.expiry.1')) === 1, 'A secondary Inventory Manager receives the routine expiry reminder');
 $assert(count($rowsFor($adminId, 'oversight.expiry.')) === 0, 'Administrator oversight waits for the overdue escalation');
-$assert($rowsFor($cashierId) === [], 'A Cashier receives no routine expiry reminder');
+$assert($rowsFor($cashierId, 'inventory.expiry.') === [], 'A Cashier receives no routine expiry reminder');
 $assert(count($rowsFor($disabledManagerId)) === 0, 'A disabled account receives no expiry reminder');
 
 $reminders = $notifications->getBatchReminders($managerId, '2026-10-25');

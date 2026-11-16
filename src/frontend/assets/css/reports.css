@@ -699,8 +699,20 @@ html[data-theme="dark"] .analytics-tab.is-active {
 .receiving-history-page .history-skip-link { position:absolute; top:.5rem; left:.5rem; z-index:1200; padding:.75rem; background:var(--card-bg); color:var(--text); transform:translateY(-200%); }
 .receiving-history-page .history-skip-link:focus { transform:none; }
 .receiving-history-page .history-navigation,
-.receiving-history-page .history-controls,
-.receiving-history-page .history-pagination { display:flex; flex-wrap:wrap; align-items:end; gap:.75rem; margin-block:1rem 1.5rem; }
+.receiving-history-page .history-controls { display:flex; flex-wrap:wrap; align-items:end; gap:.75rem; margin-block:1rem 1.5rem; }
+.receiving-history-page .history-pagination { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:.75rem 1rem; margin-block:1rem 1.5rem; }
+.receiving-history-page .history-page-number { color:var(--muted); font-size:.875rem; }
+.receiving-history-page .history-page-length { display:flex; align-items:end; gap:.5rem; }
+.receiving-history-page .history-page-length label { display:flex; align-items:center; gap:.5rem; margin:0; color:var(--muted); font-size:.875rem; }
+.receiving-history-page .history-page-length select { min-height:2.5rem; margin:0; padding:.5rem 2rem .5rem .75rem; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); }
+.receiving-history-page .history-page-length .btn { min-height:2.5rem; padding:.5rem .75rem; }
+.receiving-history-page .history-page-buttons { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:.375rem; }
+.receiving-history-page .history-page-button { display:inline-flex; min-width:2.5rem; min-height:2.5rem; align-items:center; justify-content:center; padding:.5rem .75rem; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); text-decoration:none; }
+.receiving-history-page .history-page-button:hover { border-color:var(--primary); color:var(--primary); }
+.receiving-history-page .history-page-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.receiving-history-page .history-page-button[aria-current="page"] { border-color:var(--primary); background:var(--primary); color:#fff; font-weight:700; }
+.receiving-history-page .history-page-button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; }
+.receiving-history-page .history-page-direction { min-width:auto; }
 .receiving-history-page .history-controls .form-group { flex:1 1 20rem; max-width:36rem; min-width:0; margin:0; }
 .receiving-history-page #history_search { font-size:1rem; border-color:var(--muted); }
 .receiving-history-page #history_search::placeholder { color:var(--muted); opacity:1; }
@@ -726,6 +738,8 @@ html[data-theme="dark"] .analytics-tab.is-active {
     .receiving-history-page .history-table { font-size:1rem; }
     .receiving-history-page .history-table th,
     .receiving-history-page .history-table td { font-size:inherit; }
+    .receiving-history-page .history-pagination { grid-template-columns:1fr; align-items:start; }
+    .receiving-history-page .history-page-length { flex-wrap:wrap; }
 }
 
 /* Gross Profit Layout C */

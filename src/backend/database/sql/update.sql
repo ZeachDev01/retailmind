@@ -2020,3 +2020,10 @@ SET n.title = CONCAT(IF(n.type = 'expired_stock', 'Expired Stock Alert: ', 'Expi
 WHERE p.supplier_pullout_eligible = 0
   AND (n.reference_type = 'product_batch' OR n.reference_type LIKE 'product_batch_expiry_%')
   AND n.type IN ('expiring_stock', 'expired_stock', 'system');
+
+-- 202611130001_user_last_workspace: Resume each account in its last-used workspace.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users' AND column_name='last_workspace_role'), 'ALTER TABLE `users` ADD COLUMN `last_workspace_role` VARCHAR(32) NULL AFTER `theme_preference`', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611130001_user_last_workspace','Remember each user account’s last-used workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);

@@ -486,10 +486,12 @@ class ReceivingService
         return $stmt->fetchAll();
     }
 
-    /** Returns 20 complete receipts plus one next-page probe. */
-    public function getGroupedReceivingHistory(?int $userId = null, int $page = 1, string $search = ''): array
+    /** Returns one page of complete receipts plus one next-page probe. */
+    public function getGroupedReceivingHistory(?int $userId = null, int $page = 1, string $search = '', int $pageSize = 20): array
     {
-        $offset = (min(100000, max(1, $page)) - 1) * 20;
+        $pageSize = min(100, max(1, $pageSize));
+        $offset = (min(100000, max(1, $page)) - 1) * $pageSize;
+        $limit = $pageSize + 1;
         $from = 'FROM stock_receiving sr
             LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
             JOIN products p ON sr.product_id = p.product_id
@@ -521,7 +523,7 @@ class ReceivingService
                     u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
                 ORDER BY MAX(COALESCE(srg.received_at, sr.received_at)) DESC,
                     MAX(COALESCE(sr.group_id, sr.receiving_id)) DESC, entry_key DESC
-                LIMIT 21 OFFSET {$offset}
+                LIMIT {$limit} OFFSET {$offset}
             ) history_page ON history_page.entry_key = {$key}
             WHERE (? IS NULL OR sr.received_by = ?)
             ORDER BY COALESCE(srg.received_at, sr.received_at) DESC, COALESCE(sr.group_id, sr.receiving_id) DESC,
@@ -592,6 +594,25 @@ class ReceivingService
         }
 
         return array_values($groups);
+    }
+
+    public function countGroupedReceivingHistory(?int $userId = null, string $search = ''): int
+    {
+        $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM (
+                SELECT {$key} AS entry_key
+                FROM stock_receiving sr
+                LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
+                JOIN products p ON sr.product_id = p.product_id
+                JOIN users u ON sr.received_by = u.user_id
+                WHERE (? IS NULL OR sr.received_by = ?)
+                GROUP BY entry_key
+                HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
+                    COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
+                    u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
+            ) receiving_history");
+        $stmt->execute([$userId, $userId, $search]);
+        return (int)$stmt->fetchColumn();
     }
 
     private function wholeNumber($value, string $label): int

@@ -752,9 +752,67 @@ foreach ($products as $product) {
         .catalog-toolbar {
             margin-bottom: 1rem;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 12px;
             background: var(--card-bg, #fff);
             overflow: visible;
+        }
+
+        .products-page-heading {
+            margin: 0 0 20px;
+            color: var(--text);
+            font-size: 1.75rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .products-page .catalog-toolbar-primary,
+        .products-page .catalog-filter-row {
+            gap: 8px;
+            padding: 12px;
+        }
+
+        .products-page .catalog-search input,
+        .products-page .catalog-field select,
+        .products-page .catalog-utility-controls select {
+            border-radius: 8px;
+            background-color: var(--theme-surface, #fff);
+            color: var(--text);
+        }
+
+        .products-page .catalog-icon-button {
+            border-radius: 8px;
+            transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+        }
+
+        .products-page .catalog-icon-button:hover,
+        .products-page .catalog-icon-button.is-active {
+            color: var(--text);
+            background: var(--theme-surface-soft, #f1f5f9);
+            border-color: var(--border);
+        }
+
+        .products-page .product-add-trigger {
+            border-radius: 8px;
+        }
+
+        .products-page .data-table-shell {
+            border-radius: 12px;
+            box-shadow: none;
+        }
+
+        .products-page .product-table-shell .data-table th {
+            font-weight: 500;
+        }
+
+        .products-page .stock-value {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        @media (max-width: 560px) {
+            .products-page-heading { font-size: 1.5rem; }
+            .products-page .catalog-toolbar-primary,
+            .products-page .catalog-filter-row { padding: 8px; }
         }
 
         .catalog-toolbar-primary,
@@ -1222,7 +1280,7 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
-                <h1 class="u-sr-only">Product Catalog</h1>
+                <h1 class="products-page-heading">Product catalog</h1>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">
@@ -1234,7 +1292,7 @@ foreach ($products as $product) {
                             <input type="search" id="product-search" placeholder="Search products…" autocomplete="off" aria-label="Search products">
                         </label>
                         <label class="catalog-field catalog-show-field"><span>Show</span><select id="stock-filter" aria-label="Show products by stock status">
-                            <option value="">All Products</option><option value="available">🟢 Available</option><option value="low">🟡 Low stock</option><option value="out">🔴 Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
+                            <option value="">All Products</option><option value="available">Available</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="no-barcode">Without barcode</option><option value="expiring">Expiring soon</option>
                         </select></label>
                         <label class="catalog-field catalog-sort-field"><span>Sort by</span><select id="catalog-sort" aria-label="Sort products">
                             <option value="name:1">Default</option><option value="name:1">Name A-Z</option><option value="name:-1">Name Z-A</option><option value="stock:1">Stock: Low to High</option><option value="stock:-1">Stock: High to Low</option><option value="price:1">Price: Low to High</option><option value="price:-1">Price: High to Low</option>

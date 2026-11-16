@@ -151,26 +151,20 @@ try {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content overview-main">
-        <h1 class="u-sr-only">Stock Overview</h1>
-        <header class="page-heading"><div>
+        <header class="page-heading overview-page-heading">
+            <h1>Stock overview</h1>
+            <div>
             <div class="overview-tabs overview-product-tabs" id="overview-product-tabs" role="tablist" aria-label="Inventory sections">
                 <button type="button" class="overview-tab is-active" id="overview-summary-tab" role="tab" aria-selected="true" aria-controls="overview-metrics" data-overview-page-tab="summary">Stock Overview</button>
                 <button type="button" class="overview-tab" id="overview-products-tab" role="tab" aria-selected="false" aria-controls="overview-product-view" data-overview-page-tab="products" tabindex="-1">Products</button>
                 <button type="button" class="overview-tab" id="overview-risk-tab" role="tab" aria-selected="false" aria-controls="overview-risk" data-overview-page-tab="risk" tabindex="-1"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>Stock Movement</button>
             </div>
-        </div></header>
+            </div>
+        </header>
         <section id="overview-risk" role="tabpanel" aria-labelledby="overview-risk-tab" hidden>
             <?php include __DIR__ . '/stock_risk.php'; ?>
         </section>
         <section class="overview-metrics" id="overview-metrics" aria-label="Inventory summary">
-            <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
-                <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
-                <span class="overview-metric-copy"><strong><?= number_format((int)$total_products) ?></strong><span>Total products</span></span>
-            </button>
-            <button type="button" class="overview-metric" data-overview-view="in-stock" aria-controls="overview-product-view">
-                <span class="overview-metric-icon overview-metric-icon--green" aria-hidden="true"><i class="bi bi-boxes"></i></span>
-                <span class="overview-metric-copy"><strong><?= number_format((int)$total_units) ?></strong><span>Units on hand</span></span>
-            </button>
             <button type="button" class="overview-metric overview-metric--danger" data-overview-view="out" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-x-octagon"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format((int)$out_of_stock) ?></strong><span>Out of stock</span></span>
@@ -178,6 +172,14 @@ try {
             <button type="button" class="overview-metric overview-metric--warning" data-overview-view="low" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-exclamation-triangle"></i></span>
                 <span class="overview-metric-copy"><strong><?= number_format(count($low_stock)) ?></strong><span>Low stock</span></span>
+            </button>
+            <button type="button" class="overview-metric" data-overview-view="all" aria-controls="overview-product-view">
+                <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></span>
+                <span class="overview-metric-copy"><strong><?= number_format((int)$total_products) ?></strong><span>Total products</span></span>
+            </button>
+            <button type="button" class="overview-metric" data-overview-view="in-stock" aria-controls="overview-product-view">
+                <span class="overview-metric-icon overview-metric-icon--green" aria-hidden="true"><i class="bi bi-boxes"></i></span>
+                <span class="overview-metric-copy"><strong><?= number_format((int)$total_units) ?></strong><span>Units on hand</span></span>
             </button>
             <button type="button" class="overview-metric overview-metric--warning" data-overview-view="expiring" aria-controls="overview-product-view">
                 <span class="overview-metric-icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></span>
