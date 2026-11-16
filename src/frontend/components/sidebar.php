@@ -577,8 +577,31 @@ cartWorkspace.bindNavigation();
             }
         }
 
+        function onDrawerKeydown(event) {
+            if (event.defaultPrevented) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setSidebarOpen(false);
+                menuToggle?.focus();
+            } else if (event.key === 'Tab') {
+                var controls = Array.from(document.querySelectorAll('.admin-mobile-topbar button, .admin-mobile-topbar a[href], #appSidebar a[href], #appSidebar button, #sidebarAccountMenu.open a[href], #sidebarAccountMenu.open button, #sidebarAccountMenu.open summary'))
+                    .filter(function(control) { return !control.disabled && control.getClientRects().length && getComputedStyle(control).visibility !== 'hidden'; });
+                var first = controls[0];
+                var last = controls[controls.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last?.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first?.focus();
+                }
+            }
+        }
+
         function setSidebarOpen(isOpen) {
             var restoreFocus = !isOpen && sidebar.contains(document.activeElement);
+            document.removeEventListener('keydown', onDrawerKeydown);
+            if (isOpen) document.addEventListener('keydown', onDrawerKeydown);
             sidebar.classList.toggle('open', isOpen);
             overlay.classList.toggle('open', isOpen);
             if (menuToggle) {
@@ -594,7 +617,7 @@ cartWorkspace.bindNavigation();
             else document.body.classList.toggle('no-scroll', isOpen);
             updateBrandState();
             if (isOpen) sidebar.querySelector('.sidebar-nav a, .sidebar-nav button')?.focus();
-            else if (restoreFocus) menuToggle?.focus();
+            else if (restoreFocus) (isMobileDrawer() ? menuToggle : brandToggle)?.focus();
         }
 
         function setSidebarCollapsed(isCollapsed) {
@@ -636,12 +659,6 @@ cartWorkspace.bindNavigation();
                     setSidebarOpen(false);
                 }
                 updateBrandState();
-            });
-            document.addEventListener('keydown', function(event) {
-                if (event.key === 'Escape' && !event.defaultPrevented && sidebar.classList.contains('open')) {
-                    setSidebarOpen(false);
-                    menuToggle?.focus();
-                }
             });
         }
         if (brandToggle) {
@@ -771,7 +788,7 @@ cartWorkspace.bindNavigation();
                 }
             });
             sidebar.addEventListener('scroll', function() {
-                closeSidebarDropdowns();
+                if (!isMobileDrawer() && document.body.classList.contains('sidebar-collapsed')) closeSidebarDropdowns();
                 hideNavTip();
             }, { passive: true });
         }
