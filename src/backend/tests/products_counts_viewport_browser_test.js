@@ -34,7 +34,7 @@ const VIEWPORTS = [
     let server, browser;
     try {
         const data = JSON.parse(fixture('create'));
-        
+
         const listener = net.createServer();
         await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
         const port = listener.address().port;
