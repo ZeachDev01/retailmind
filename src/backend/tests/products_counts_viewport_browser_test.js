@@ -16,7 +16,7 @@ const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-products-counts-'));
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(output, 'recovery')};
 const fixture = action => {
-    const result = spawnSync(php, ['src/backend/tests/support/theme_fixture.php', action, database], {encoding: 'utf8', env});
+    const result = spawnSync(php, ['src/backend/tests/support/inventory_recovery_fixture.php', action, database], {encoding: 'utf8', env});
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
@@ -114,6 +114,17 @@ const VIEWPORTS = [
                 await table.evaluate(node => {node.scrollLeft = node.scrollWidth;});
             }
             await page.screenshot({path: path.join(output, 'count-' + viewport.width + '.png'), fullPage: true});
+            if (viewport.width === 640) {
+                await page.locator('[aria-label="Found batch number or label"]').fill('TABLET-469');
+                await page.locator('[aria-label="Found batch counted quantity"]').fill('2');
+                await page.locator('[name="discrepancy_reason"]').fill('Disposable tablet count verification');
+                await page.getByRole('button', {name:'Record Count', exact:true}).click();
+                await page.waitForFunction(() => document.body.textContent.includes('recorded and sent for approval'));
+                const approve = page.locator('form.inline-form').filter({has:page.locator('[name="action"][value="approve"]')}).first();
+                await approve.getByRole('button', {name:'Approve', exact:true}).click();
+                await page.waitForFunction(() => document.body.textContent.includes('approved and stock reconciled'));
+            }
+
             console.log(viewport.width + 'x' + viewport.height + ': Product required/empty/retained wizard and Count long batch/local tables passed');
         }
         await context.close();

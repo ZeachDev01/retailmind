@@ -9,7 +9,7 @@ Red/green evidence:
 - Count reconciliation failed on `notifications.resolved_at`; reuse of `notification_test_schema()` restores all passing approval, batch, stale guard, rollback and duplicate approval checks.
 
 Checks:
-- `RUN_DB_TESTS=1 node src/backend/tests/products_counts_viewport_browser_test.js`: PASS 640x360, 800x480, 960x600, 1024x768, 1280x800, 1366x768. Real Product empty search, required validation, Category tap, encrypted explicit Resume/Discard, no Product POST on Resume, long name retained after240px height reduction, Count found-batch long entry and table-local scroll. Artifacts `C:/Users/Mike/AppData/Local/Temp/rm-products-counts-ndTxii`.
+- `RUN_DB_TESTS=1 node src/backend/tests/products_counts_viewport_browser_test.js`: PASS 640x360, 800x480, 960x600, 1024x768, 1280x800, 1366x768. Real Product empty search, required validation, Category tap, encrypted explicit Resume/Discard, no Product POST on Resume, long name retained after240px height reduction, Count found-batch long entry and table-local scroll. At640x360 also successfully records a Count and approves it through real authorized forms with visible server confirmation. Uses inventory_recovery_fixture for its open fiscal period. Artifacts `C:/Users/Mike/AppData/Local/Temp/rm-products-counts-f2sDSm`.
 - `php src/backend/tests/inventory_count_reconciliation_test.php`: PASS.
 - `node src/backend/tests/search_dropdown_browser_test.js`: PASS.
 - `node src/backend/tests/shared_overlay_viewport_browser_test.js`: PASS six viewports.
