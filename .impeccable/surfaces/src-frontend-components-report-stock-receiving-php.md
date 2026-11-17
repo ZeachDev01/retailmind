@@ -38,3 +38,7 @@ The verification note records functional/browser coverage and the physical-scann
 ## Independent batches — #480
 
 Each product has one group with a calculated accepted total and independent batch rows. Add another batch uses the existing secondary action and form controls. Review lists each batch and offers Current product cost only when known costs differ. Group headings, dividers, system typography, theme surfaces and focus treatments extend the incumbent interface without changing global tokens or assets. Desktop/narrow light/dark captures and functional verification are recorded in `docs/verification/independent-receiving-batches-480.md`; evidence is under ignored `output/issue-480/`.
+
+## Code recovery — #481
+
+An inline recovery section below scan status uses the existing form typography, secondary actions, theme border and Action Blue focus. Unknown codes require explicit packaging classification; existing cartons show saved-size confirmation with base-unit and configuration recovery. Native radio labels keep 44px targets, actions wrap on narrow screens, and programmatic focus remains visible. No global tokens, dependencies or shipping assets were added. Final 1440px/dark and 390px/light confirmation captures were inspected against the incumbent system; classification coverage also includes both themes and reduced motion. Verification, independent review fixes, the failed TestSprite status and device limits are recorded in `docs/verification/receiving-code-recovery-481.md`; captures are under ignored `output/issue-481/`.

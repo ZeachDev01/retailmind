@@ -39,7 +39,7 @@ class ProductCodeLookupService
      *     candidates: array<int, array>
      * }
      */
-    public function lookup(string $code): array
+    public function lookup(string $code, bool $receiving = false): array
     {
         $code = trim($code);
         if ($code === '') {
@@ -47,10 +47,11 @@ class ProductCodeLookupService
         }
 
         [$scopeSql, $scopeParams] = $this->productScope();
+        $statusSql = $receiving ? '' : "AND p.status = 'active'";
         // The match flags reuse the same comparison as the WHERE clause so the
         // reported kind always agrees with whatever the engine matched on.
         $statement = $this->pdo->prepare(
-            "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name,
+            "SELECT p.product_id, p.status, p.sku, p.barcode, p.case_barcode, p.pack_barcode, p.pack_size, p.pack_price, p.product_name,
                     COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
                     CASE WHEN p.sku = ? THEN 1 ELSE 0 END AS match_sku,
                     CASE WHEN p.barcode = ? THEN 1 ELSE 0 END AS match_unit_barcode,
@@ -58,7 +59,7 @@ class ProductCodeLookupService
                     CASE WHEN p.pack_barcode = ? THEN 1 ELSE 0 END AS match_pack_barcode
              FROM products p
              LEFT JOIN inventory i ON i.product_id = p.product_id
-             WHERE p.status = 'active'{$scopeSql}
+             WHERE 1=1 {$statusSql}{$scopeSql}
                AND (p.sku = ? OR p.barcode = ? OR p.case_barcode = ? OR p.pack_barcode = ?)"
         );
         $statement->execute(array_merge(
@@ -70,6 +71,11 @@ class ProductCodeLookupService
 
         if ($rows === []) {
             return $this->result(self::OUTCOME_UNKNOWN, $code, null, []);
+        }
+
+        // Inactive identifiers block duplicate creation without disclosing the record.
+        if ($receiving && array_filter($rows, static fn(array $row): bool => $row['status'] !== 'active')) {
+            return $this->result('inactive', $code, null, []);
         }
 
         $products = [];
@@ -114,6 +120,18 @@ class ProductCodeLookupService
         $product = array_shift($products);
         $kinds = $product['kinds'];
         unset($product['kinds']);
+
+        if ($receiving) {
+            $barcodeKinds = array_values(array_diff($kinds, [self::KIND_SKU]));
+            if (count($barcodeKinds) > 1) {
+                return $this->result(self::OUTCOME_AMBIGUOUS, $code, null, [[
+                    'product_id' => $product['product_id'],
+                    'sku' => $product['sku'],
+                    'product_name' => $product['product_name'],
+                ]]);
+            }
+            $kinds = $barcodeKinds ?: $kinds;
+        }
 
         return $this->result(
             self::OUTCOME_MATCH,

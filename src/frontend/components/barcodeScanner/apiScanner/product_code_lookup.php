@@ -2,6 +2,7 @@
 // Read-only exact product code lookup for the barcode scan fields.
 // Ticket #79: authenticated, read-only, no mutation and no pairing-token path.
 header('Content-Type: application/json');
+header('Cache-Control: no-store');
 
 require_once __DIR__ . '/../../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../../backend/app/Services/ProductCodeLookupService.php';
@@ -39,7 +40,7 @@ if ($code === '') {
 
 try {
     $lookup = new ProductCodeLookupService($pdo);
-    echo json_encode(['success' => true] + $lookup->lookup($code));
+    echo json_encode(['success' => true] + $lookup->lookup($code, ($_GET['context'] ?? '') === 'receiving'));
 } catch (Throwable $exception) {
     error_log((string)$exception);
     http_response_code(500);

@@ -326,6 +326,14 @@
     .receiving-review-quantities { gap: .5rem; }
 }
 
+.receiving-code-recovery { border-top: 1px solid var(--border); padding-block: .75rem; overflow-wrap: anywhere; }
+.receiving-code-recovery label { display: flex; align-items: center; gap: .5rem; min-height: 44px; padding-block: .25rem; }
+.receiving-code-recovery input[type="radio"] { width: auto; min-height: auto; margin: 0; padding: 0; }
+.receiving-code-actions, #scan_package_confirmation { display: flex; flex-wrap: wrap; gap: .5rem; }
+.receiving-code-recovery [hidden] { display: none; }
+#scan_saved_size { flex-basis: 100%; }
+.receiving-code-recovery :focus { outline: 2px solid var(--primary); outline-offset: 3px; }
+
 @media (prefers-reduced-motion: reduce) {
     .receiving-card, .receiving-category-tile { transition: none; }
     .receiving-card:hover, .receiving-category-tile:hover { transform: none; }

@@ -203,7 +203,7 @@ $categoryIcon = static function (string $categoryName): string {
             <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">Receive stock</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
-            <fieldset class="receiving-fieldset-reset" <?= !$canReceive || !$products ? 'disabled' : '' ?>>
+            <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
             <div class="form-section" id="receiving_selection">
                 <div class="receiving-panel-heading"><div><h2>Product catalog</h2></div><div class="receiving-catalog-actions"><button type="button" class="btn btn-secondary" id="receiving_help_open" aria-haspopup="dialog">How to receive stock</button><span class="receiving-count"><?= count($products) ?> products</span></div></div>
                 <div class="receiving-search-bar form-group">
@@ -213,6 +213,29 @@ $categoryIcon = static function (string $categoryName): string {
                         <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to delivery</button>
                     </div>
                     <small id="scan_status" role="status" aria-live="polite"></small>
+                    <section id="receiving_code_recovery" class="receiving-code-recovery" aria-label="Resolve scanned code" hidden>
+                        <p id="scan_recovery_message" tabindex="-1"></p>
+                        <fieldset id="scan_classification" class="receiving-fieldset-reset">
+                            <legend>Which packaging did you scan?</legend>
+                            <label><input type="radio" name="scan_packaging" value="units"> Individual item</label>
+                            <label><input type="radio" name="scan_packaging" value="packages"> Receiving case</label>
+                            <label><input type="radio" name="scan_packaging" value="packs"> Sales Pack</label>
+                            <p id="scan_packaging_hint"></p>
+                        </fieldset>
+                        <div id="scan_package_confirmation" hidden>
+                            <p id="scan_saved_size"></p>
+                            <button type="button" class="btn btn-secondary" id="scan_confirm_size">Confirm saved size</button>
+                            <button type="button" class="btn btn-secondary" id="scan_use_units">Enter actual base units</button>
+                            <a id="scan_correct_config" class="btn btn-secondary" target="_blank" rel="noopener" href="../inventory_management/products.php">Correct product configuration</a>
+                        </div>
+                        <div class="receiving-code-actions">
+                            <button type="button" class="btn btn-secondary" id="scan_retry">Retry lookup</button>
+                            <button type="button" class="btn btn-secondary" id="scan_find_existing">Find existing product</button>
+                            <button type="button" class="btn btn-secondary" id="scan_back">Back</button>
+                            <button type="button" class="btn btn-secondary" id="scan_cancel">Cancel</button>
+                            <a id="scan_manage_product" href="../inventory_management/products.php" hidden>Review inactive products</a>
+                        </div>
+                    </section>
                     <small id="product_search_status" role="status"></small>
                 </div>
                 <div class="receiving-category-filters" id="receiving_category_filters" role="group" aria-label="Product categories">
@@ -407,6 +430,129 @@ const productCodeScan = productSearchScan;
 const productSearch = productSearchScan;
 let activeScanLookup = 0;
 let scanLookupController = null;
+let pendingScan = null;
+const codeRecovery = document.getElementById('receiving_code_recovery');
+const scanClassification = document.getElementById('scan_classification');
+const scanConfirmation = document.getElementById('scan_package_confirmation');
+function keepScanRecovery() { window.RetailMindInventoryDrafts?.keep(document.getElementById('receiving_form')); }
+function showScanRecovery(code, outcome, message) {
+    pendingScan = {code, outcome, packaging: '', finding: false};
+    codeRecovery.hidden = false;
+    scanClassification.hidden = outcome !== 'unknown';
+    scanConfirmation.hidden = true;
+    for (const radio of scanClassification.querySelectorAll('input')) radio.checked = false;
+    document.getElementById('scan_packaging_hint').textContent = '';
+    document.getElementById('scan_recovery_message').textContent = `${code}: ${message}`;
+    document.getElementById('scan_manage_product').hidden = outcome !== 'inactive';
+    document.getElementById('scan_manage_product').href = '../inventory_management/products.php?q=' + encodeURIComponent(code);
+    productSearchScan.value = code;
+    renderCatalog();
+    document.getElementById('scan_recovery_message').focus();
+    keepScanRecovery();
+}
+scanClassification.addEventListener('change', event => {
+    pendingScan = {...pendingScan, productId: null};
+    scanConfirmation.hidden = true;
+    pendingScan.packaging = event.target.value;
+    document.getElementById('scan_packaging_hint').textContent = event.target.value === 'packages'
+        ? 'Scan the outer carton. Keep the item barcode separate and confirm the actual units per carton.'
+        : event.target.value === 'packs' ? 'A Sales Pack needs its own size, barcode and price. If received and sold unchanged, use only its Sales Pack barcode.'
+        : 'Use the individual item barcode only.';
+    keepScanRecovery();
+});
+document.getElementById('scan_retry').addEventListener('click', () => identifyReceivingProduct(pendingScan.code));
+document.getElementById('scan_find_existing').addEventListener('click', () => {
+    pendingScan.finding = true;
+    productSearchScan.value = '';
+    selectedCategory = 'all';
+    renderCatalog();
+    productSearchScan.focus();
+    keepScanRecovery();
+});
+document.getElementById('scan_back').addEventListener('click', () => {
+    pendingScan = {...pendingScan};
+    pendingScan.finding = false;
+    pendingScan.productId = null;
+    scanConfirmation.hidden = true;
+    productSearchScan.value = pendingScan.code;
+    renderCatalog();
+    document.getElementById('scan_recovery_message').focus();
+    keepScanRecovery();
+});
+document.getElementById('scan_cancel').addEventListener('click', () => {
+    productSearchScan.value = pendingScan.code;
+    pendingScan = null;
+    codeRecovery.hidden = true;
+    productSearchScan.focus();
+    renderCatalog();
+    keepScanRecovery();
+});
+function addRecoveredProduct(product, mode) {
+    const group = productGroup(product.product_id);
+    const existing = group?.lastEdited?.isConnected ? group.lastEdited : group?.querySelector('.receiving-line');
+    if (!group) productMap.set(String(product.product_id), product);
+    const row = existing && existing.querySelector('[data-field="quantity_mode"]').value === mode ? existing
+        : addReceivingLine({product_id: product.product_id, quantity_mode: mode}, !!group);
+    pendingScan = null;
+    codeRecovery.hidden = true;
+    showStep(1, false);
+    if (row) visibleQuantityInput(row)?.focus();
+    scanStatus.textContent = row === existing ? 'Product already added. Entered quantities and mode preserved.'
+        : 'Existing product selected. No identifier was attached. Enter actual delivered quantities.';
+    keepScanRecovery();
+}
+function chooseRecoveryProduct(product) {
+    pendingScan = {...pendingScan};
+    pendingScan.productId = String(product.product_id);
+    if (pendingScan.outcome !== 'unknown') {
+        // Manual recovery must explicitly select a quantity mode, including legacy overlaps.
+        scanConfirmation.hidden = false;
+        document.getElementById('scan_saved_size').textContent = `${product.product_name}: choose actual base units, or correct the registered identifiers before retrying.`;
+        document.getElementById('scan_confirm_size').hidden = true;
+    } else if (pendingScan.packaging === 'units') {
+        addRecoveredProduct(product, 'units');
+        return;
+    } else {
+        scanConfirmation.hidden = false;
+        const size = Number(pendingScan.packaging === 'packs' ? product.pack_size : product.units_per_package);
+        pendingScan.size = size;
+        pendingScan.packBarcode = product.pack_barcode;
+        pendingScan.packPrice = Number(product.pack_price);
+        const valid = Number.isInteger(size) && size > 0 && (pendingScan.packaging !== 'packs' || (size > 1 && product.pack_barcode && Number(product.pack_price) > 0));
+        document.getElementById('scan_saved_size').textContent = `${product.product_name}: saved ${pendingScan.packaging === 'packs' ? 'Sales Pack' : 'carton'} size is ${size || 'not configured'} base units. Does this match the scanned packaging?`;
+        document.getElementById('scan_confirm_size').hidden = !valid;
+    }
+    document.getElementById('scan_correct_config').href = '../inventory_management/products.php?q=' + encodeURIComponent(product.sku);
+    document.getElementById('scan_use_units').focus();
+    keepScanRecovery();
+}
+document.getElementById('scan_use_units').addEventListener('click', () => {
+    const product = productMap.get(pendingScan.productId);
+    if (product) addRecoveredProduct(product, 'units');
+});
+document.getElementById('scan_confirm_size').addEventListener('click', async () => {
+    const scan = pendingScan;
+    const button = document.getElementById('scan_confirm_size');
+    button.disabled = true;
+    try {
+        const response = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin'});
+        if (!response.ok || response.redirected) throw new Error('Catalog unavailable');
+        const catalog = await response.json();
+        if (pendingScan !== scan) return;
+        const product = catalog.products.find(item => String(item.product_id) === scan.productId);
+        if (!product) throw new Error('Product unavailable');
+        const key = scan.packaging === 'packs' ? 'pack_size' : 'units_per_package';
+        if (scan.size !== Number(product[key]) || (scan.packaging === 'packs' && (product.pack_barcode !== scan.packBarcode || Number(product.pack_price) !== scan.packPrice))) {
+            chooseRecoveryProduct(product);
+            return;
+        }
+        addRecoveredProduct(product, scan.packaging);
+    } catch (_) {
+        if (pendingScan !== scan) return;
+        document.getElementById('scan_saved_size').textContent = 'Current product could not be checked. Code and delivery kept. Retry lookup or find the product again.';
+        document.getElementById('scan_retry').focus();
+    } finally { button.disabled = false; }
+});
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = document.getElementById('receiving_line_template');
 let activeLine = null;
@@ -424,12 +570,14 @@ async function identifyReceivingProduct(code) {
         return;
     }
     const lookupId = ++activeScanLookup;
+    pendingScan = null;
+    codeRecovery.hidden = true;
     if (scanLookupController) scanLookupController.abort();
     const controller = new AbortController();
     scanLookupController = controller;
     scanStatus.textContent = 'Checking product code…';
     try {
-        const response = await fetch('../barcodeScanner/apiScanner/product_code_lookup.php?code=' + encodeURIComponent(code), {
+        const response = await fetch('../barcodeScanner/apiScanner/product_code_lookup.php?code=' + encodeURIComponent(code) + '&context=receiving', {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' },
             signal: controller.signal
@@ -438,14 +586,22 @@ async function identifyReceivingProduct(code) {
         if (lookupId !== activeScanLookup) return;
         if (!response.ok || result.success === false) {
             scanStatus.textContent = result.error || 'The product code could not be checked right now. Try again or choose the product manually.';
+            showScanRecovery(code, 'error', scanStatus.textContent);
             return;
         }
         if (result.outcome === 'unknown') {
             scanStatus.textContent = 'No product matches that code. Try again or choose the product manually.';
+            showScanRecovery(code, 'unknown', 'Code is not registered. Identify the packaging or find an existing product.');
             return;
         }
         if (result.outcome === 'ambiguous') {
             scanStatus.textContent = 'That code matches more than one product. Choose the product manually.';
+            showScanRecovery(code, 'ambiguous', 'Conflicting products or barcode types. Find the product and explicitly enter base units, or correct its identifiers before retrying.');
+            return;
+        }
+        if (result.outcome === 'inactive') {
+            scanStatus.textContent = 'This code belongs to an inactive product. Review it in Products or ask your Administrator. Nothing was reactivated.';
+            showScanRecovery(code, 'inactive', scanStatus.textContent);
             return;
         }
         let product = productMap.get(String(result.product.product_id));
@@ -462,6 +618,7 @@ async function identifyReceivingProduct(code) {
         const hasPackConfig = Number(product.pack_size || 0) > 1;
         if ((matchedPack && !hasPackConfig) || (matchedCase && !(Number.isInteger(Number(product.units_per_package)) && Number(product.units_per_package) > 0))) {
             scanStatus.textContent = 'This barcode has no valid saved conversion. Ask your Administrator to correct the product, or enter its base units manually.';
+            showScanRecovery(code, 'error', scanStatus.textContent);
             return;
         }
         if (step === 3) showStep(1, false);
@@ -504,6 +661,7 @@ async function identifyReceivingProduct(code) {
     } catch (error) {
         if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
         scanStatus.textContent = 'The product code could not be checked right now. Try again or choose the product manually.';
+        showScanRecovery(code, 'error', scanStatus.textContent);
     } finally {
         if (scanLookupController === controller) scanLookupController = null;
     }
@@ -514,7 +672,6 @@ productSearchScan.addEventListener('keydown', function (event) {
     event.preventDefault();
     if (event.repeat) return;
     const code = this.value.trim();
-    this.value = '';
     if (code !== '') identifyReceivingProduct(code);
 });
 
@@ -717,6 +874,7 @@ function renderCatalog() {
             p.sku,
             p.barcode,
             p.case_barcode,
+            p.pack_barcode,
             p.variant_label
         ].filter(Boolean).join(' ').toLowerCase().includes(query);
         return matchesCategory && matchesQuery;
@@ -809,8 +967,16 @@ function renderCatalog() {
         button.className = 'btn btn-secondary receiving-card-add';
         button.textContent = isAdded ? 'Added' : 'Add to delivery';
         button.setAttribute('aria-label', 'Add ' + p.product_name);
-        button.disabled = isAdded;
+        button.disabled = isAdded && !pendingScan;
         button.addEventListener('click', () => {
+            if (pendingScan) {
+                if (pendingScan.outcome === 'unknown' && !pendingScan.packaging) {
+                    scanClassification.querySelector('input').focus();
+                    return;
+                }
+                chooseRecoveryProduct(productMap.get(String(p.product_id)) || p);
+                return;
+            }
             const row = addReceivingLine({product_id: p.product_id});
             showStep(1, false);
             if (row) visibleQuantityInput(row)?.focus();
@@ -1553,7 +1719,7 @@ window.RetailMindInventoryDrafts?.register({
     eligible: candidate => candidate === form,
     submissionKind: () => 'receiving',
     capture(draft) {
-        draft.context = {...draft.context, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
+        draft.context = {...draft.context, pendingScan, scanText: productSearchScan.value, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
             Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || '', current_product_cost: row.closest('.receiving-product-group').querySelector('.current-product-cost').value, cost_choice_explicit: row.closest('.receiving-product-group').dataset.choiceExplicit || ''}))};
     },
     prepare(draft) {
@@ -1581,9 +1747,21 @@ window.RetailMindInventoryDrafts?.register({
             document.getElementById('entry_status').textContent = 'A saved draft used damaged or rejected quantities. Enter the good quantities received again; your draft is still kept.';
         }
         showStep(draft.context.step === 3 ? 2 : (draft.context.step || 1));
+        productSearchScan.value = String(draft.context.scanText || '');
+        const recovery = draft.context.pendingScan;
+        if (recovery?.code) {
+            showStep(1, false);
+            showScanRecovery(String(recovery.code), recovery.outcome, 'Code kept. Choose packaging and find the product again before applying a conversion.');
+            pendingScan.packaging = ['units', 'packages', 'packs'].includes(recovery.packaging) ? recovery.packaging : '';
+        }
+        renderCatalog();
     },
     restored() {
         if (step === 3) renderReview();
+        if (pendingScan) {
+            for (const radio of scanClassification.querySelectorAll('input')) radio.checked = radio.value === pendingScan.packaging;
+            scanClassification.querySelector('input:checked')?.dispatchEvent(new Event('change', {bubbles: true}));
+        }
     }
 });
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;

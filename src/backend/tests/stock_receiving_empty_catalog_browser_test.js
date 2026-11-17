@@ -46,7 +46,11 @@ function fixture(action) {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(origin + '/components/report/stock_receiving.php');
         assert.equal(await page.locator('#delivery_count').innerText(), '0 products');
-        assert.equal(await page.locator('.receiving-fieldset-reset').first().getAttribute('disabled'), '');
+        assert.equal(await page.locator('#product_search_scan').isEnabled(), true, 'empty catalog still allows code recovery');
+        await page.locator('#product_search_scan').fill('UNREGISTERED-EMPTY');
+        await page.locator('#product_search_scan').press('Enter');
+        await page.locator('#scan_classification').waitFor({state:'visible'});
+        assert.equal(await page.locator('[name="scan_packaging"]:checked').count(), 0);
         assert.equal(await page.getByText('No active products are available. Ask your Administrator to add or activate a product before receiving stock.').count(), 0);
         console.log('Receiving empty catalog: passed');
     } finally {
