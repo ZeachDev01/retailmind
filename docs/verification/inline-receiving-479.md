@@ -8,7 +8,7 @@ The existing scan workflow now creates its own disposable database, including it
 
 Additional checks: `npm run check`, `npm run check:contracts`, PHP syntax, `known_receiving_cost_mysql_test.php`, `batch_receiving_mysql_test.php`, `supplier_replacement_receiving_test.php`, `receiving_submission_contract.php`, and the existing receiving UI, landscape, Sales Pack and known-cost browser tests. The repository has no separate TypeScript typecheck command; production changes are PHP and vanilla JavaScript.
 
-The project checks, contracts, end-to-end script and listed focused receiving checks passed. The full repository command is `bash src/backend/tests/run_all.sh`; its lint phase also includes existing `.worktrees` checkouts.
+The project checks, contracts, end-to-end script and listed focused receiving checks passed. The full repository command, `bash src/backend/tests/run_all.sh`, passed the shared browser checks and PHP lint (including existing `.worktrees`), then stopped at `consolidated_sql_integration.php:88`: `Fresh schema.sql import still requires PHP migrations`. That schema, migration directory and test are unchanged from `db3f9f5`; remaining full-suite steps are unverified.
 
 Browser captures and TestSprite receipts are under the ignored `output/issue-479/` directory. Chromium viewport/touch simulation does not verify physical scanners or real mobile devices.
 
