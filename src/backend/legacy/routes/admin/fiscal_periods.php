@@ -29,21 +29,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int)$_SESSION['user_id']
                 );
                 $message = "Fiscal period \"$period_name\" created successfully";
-                log_activity(
-                    $pdo,
-                    (int)$_SESSION['user_id'],
-                    'Fiscal period creation',
-                    'Fiscal Periods',
-                    $periodId,
-                    null,
-                    [
-                        'period_id' => $periodId,
-                        'period_name' => $period_name,
-                        'start_date' => $start_date,
-                        'end_date' => $end_date,
-                        'status' => 'open',
-                    ]
-                );
             } catch (PDOException $e) {
                 $error = "Error creating period: " . ($e->errorInfo[2] ?? $e->getMessage());
             } catch (Throwable $e) {
@@ -57,23 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($period_id <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStmt = $pdo->prepare("SELECT * FROM fiscal_periods WHERE period_id = ?");
-            $beforeStmt->execute([$period_id]);
-            $before = $beforeStmt->fetch();
             try {
                 (new FiscalPeriodGuardService($pdo))->closePeriod($period_id, (int)$_SESSION['user_id']);
-                $afterStmt = $pdo->prepare("SELECT * FROM fiscal_periods WHERE period_id = ?");
-                $afterStmt->execute([$period_id]);
                 $message = "Fiscal period closed successfully";
-                log_activity(
-                    $pdo,
-                    (int)$_SESSION['user_id'],
-                    'Fiscal-period closing',
-                    'Fiscal Periods',
-                    $period_id,
-                    $before,
-                    $afterStmt->fetch()
-                );
             } catch (Throwable $e) {
                 $error = $e->getMessage();
             }
@@ -85,15 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($period_id <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStmt = $pdo->prepare("SELECT * FROM fiscal_periods WHERE period_id = ?");
-            $beforeStmt->execute([$period_id]);
-            $before = $beforeStmt->fetch();
             try {
-                (new FiscalPeriodGuardService($pdo))->lockPeriod($period_id);
-                $afterStmt = $pdo->prepare("SELECT * FROM fiscal_periods WHERE period_id = ?");
-                $afterStmt->execute([$period_id]);
+                (new FiscalPeriodGuardService($pdo))->lockPeriod($period_id, (int)$_SESSION['user_id']);
                 $message = "Fiscal period locked successfully";
-                log_activity($pdo, (int)$_SESSION['user_id'], 'Fiscal period locked', 'Fiscal Periods', $period_id, $before, $afterStmt->fetch());
             } catch (Throwable $e) {
                 $error = $e->getMessage();
             }
@@ -102,13 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf_token($_POST['csrf_token'] ?? '');
         $period_id = (int)($_POST['period_id'] ?? 0);
         try {
-            $result = (new FiscalPeriodGuardService($pdo))->amendOpenEndDate(
+            (new FiscalPeriodGuardService($pdo))->amendOpenEndDate(
                 $period_id,
-                trim((string)($_POST['end_date'] ?? ''))
+                trim((string)($_POST['end_date'] ?? '')),
+                (int)$_SESSION['user_id']
             );
-            $afterStmt = $pdo->prepare("SELECT * FROM fiscal_periods WHERE period_id = ?");
-            $afterStmt->execute([$period_id]);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Fiscal period end-date amended', 'Fiscal Periods', $period_id, $result['before'], $afterStmt->fetch());
             $message = 'Fiscal period end date updated successfully';
         } catch (Throwable $e) {
             $error = $e->getMessage();

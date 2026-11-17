@@ -172,6 +172,13 @@ class FiscalPeriodGuardService
             );
             $stmt->execute([$name, $start, $end, $actorId, $status]);
             $id = (int)$this->pdo->lastInsertId();
+            $this->record('Fiscal period creation', $actorId, $id, null, [
+                'period_id' => $id,
+                'period_name' => $name,
+                'start_date' => $start,
+                'end_date' => $end,
+                'status' => $status,
+            ]);
             $this->pdo->commit();
             return $id;
         } catch (Throwable $e) {
@@ -291,6 +298,7 @@ class FiscalPeriodGuardService
                     'status' => $status,
                 ];
             }
+            $this->record('Fiscal period schedule generated', $actorId, (int)$created[count($created) - 1]['period_id'], null, $created);
             $this->pdo->commit();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -351,6 +359,8 @@ class FiscalPeriodGuardService
             if ($update->rowCount() !== 1) {
                 throw new RuntimeException('Fiscal period changed while it was being closed. Try again.');
             }
+            $stmt->execute([$periodId]);
+            $this->record('Fiscal-period closing', $actorId, $periodId, $period, $stmt->fetch(PDO::FETCH_ASSOC));
             $this->pdo->commit();
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -361,12 +371,26 @@ class FiscalPeriodGuardService
         $this->notifyClosedManually($period);
     }
 
-    public function lockPeriod(int $periodId): void
+    public function lockPeriod(int $periodId, int $actorId): void
     {
-        $stmt = $this->pdo->prepare("UPDATE fiscal_periods SET status = 'locked' WHERE period_id = ? AND status = 'closed'");
-        $stmt->execute([$periodId]);
-        if ($stmt->rowCount() !== 1) {
-            throw new RuntimeException('Only a closed fiscal period can be locked.');
+        \App\Store\StoreWriteGate::begin($this->pdo);
+        try {
+            $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?' . $lock);
+            $stmt->execute([$periodId]);
+            $period = $stmt->fetch(PDO::FETCH_ASSOC);
+            $update = $this->pdo->prepare("UPDATE fiscal_periods SET status = 'locked' WHERE period_id = ? AND status = 'closed'");
+            $update->execute([$periodId]);
+            if ($update->rowCount() !== 1) {
+                throw new RuntimeException('Only a closed fiscal period can be locked.');
+            }
+            $this->record('Fiscal period locked', $actorId, $periodId, $period, array_replace($period, ['status' => 'locked']));
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
     }
 
@@ -498,14 +522,14 @@ class FiscalPeriodGuardService
         }
     }
 
-    public function amendOpenEndDate(int $periodId, string $endDate): array
+    public function amendOpenEndDate(int $periodId, string $endDate, int $actorId): array
     {
-        return $this->amendEndDate($periodId, $endDate, ['open']);
+        return $this->amendEndDate($periodId, $endDate, ['open'], $actorId);
     }
 
-    public function amendScheduledEndDate(int $periodId, string $endDate): array
+    public function amendScheduledEndDate(int $periodId, string $endDate, int $actorId): array
     {
-        return $this->amendEndDate($periodId, $endDate, [self::STATUS_SCHEDULED]);
+        return $this->amendEndDate($periodId, $endDate, [self::STATUS_SCHEDULED], $actorId);
     }
 
     /**
@@ -605,10 +629,10 @@ class FiscalPeriodGuardService
         }
     }
 
-    private function amendEndDate(int $periodId, string $endDate, array $allowedStatuses): array
+    private function amendEndDate(int $periodId, string $endDate, array $allowedStatuses, int $actorId): array
     {
         $end = $this->date($endDate, 'end date');
-        $this->pdo->beginTransaction();
+        \App\Store\StoreWriteGate::begin($this->pdo);
         try {
             $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $stmt = $this->pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?' . $lock);
@@ -659,6 +683,13 @@ class FiscalPeriodGuardService
             $status = (string)$period['status'];
             $update = $this->pdo->prepare('UPDATE fiscal_periods SET end_date = ? WHERE period_id = ? AND status = ?');
             $update->execute([$end, $periodId, $status]);
+            $this->record(
+                $scheduledOnly ? 'Scheduled fiscal period end date amended' : 'Fiscal period end-date amended',
+                $actorId,
+                $periodId,
+                $period,
+                $scheduledOnly ? ['end_date' => $end] : array_replace($period, ['end_date' => $end])
+            );
             $this->pdo->commit();
             return ['before' => $period, 'end_date' => $end];
         } catch (Throwable $e) {
@@ -821,7 +852,7 @@ class FiscalPeriodGuardService
     private function record(string $action, ?int $actorId, int $periodId, ?array $before, ?array $after): void
     {
         if (!function_exists('log_activity')) {
-            return;
+            throw new RuntimeException('Fiscal period changes cannot be saved because audit recording is unavailable.');
         }
         log_activity($this->pdo, $actorId, $action, 'Fiscal Periods', $periodId, $before, $after);
     }

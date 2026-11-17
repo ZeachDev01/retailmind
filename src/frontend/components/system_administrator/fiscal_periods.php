@@ -64,21 +64,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $message = $createdStatus === 'open'
                     ? "Fiscal period \"{$periodName}\" created and opened."
                     : "Fiscal period \"{$periodName}\" scheduled. It opens on " . date('M j, Y', strtotime($startDate)) . '.';
-                log_activity(
-                    $pdo,
-                    $actorId,
-                    'Fiscal period creation',
-                    'Fiscal Periods',
-                    $createdId,
-                    null,
-                    [
-                        'period_id' => $createdId,
-                        'period_name' => $periodName,
-                        'start_date' => $startDate,
-                        'end_date' => $endDate,
-                        'status' => $createdStatus,
-                    ]
-                );
             } catch (Throwable $exception) {
                 $error = $exception->getMessage();
             }
@@ -102,23 +87,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-            $beforeStatement->execute([$periodId]);
-            $before = $beforeStatement->fetch();
             try {
                 $guard->closePeriod($periodId, $actorId);
-                $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-                $afterStatement->execute([$periodId]);
                 $message = 'Fiscal period closed successfully';
-                log_activity(
-                    $pdo,
-                    $actorId,
-                    'Fiscal-period closing',
-                    'Fiscal Periods',
-                    $periodId,
-                    $before,
-                    $afterStatement->fetch()
-                );
             } catch (Throwable $exception) {
                 $error = $exception->getMessage();
             }
@@ -129,23 +100,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($periodId <= 0) {
             $error = 'Invalid period';
         } else {
-            $beforeStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-            $beforeStatement->execute([$periodId]);
-            $before = $beforeStatement->fetch();
             try {
-                $guard->lockPeriod($periodId);
-                $afterStatement = $pdo->prepare('SELECT * FROM fiscal_periods WHERE period_id = ?');
-                $afterStatement->execute([$periodId]);
+                $guard->lockPeriod($periodId, $actorId);
                 $message = 'Fiscal period locked successfully';
-                log_activity(
-                    $pdo,
-                    $actorId,
-                    'Fiscal period locked',
-                    'Fiscal Periods',
-                    $periodId,
-                    $before,
-                    $afterStatement->fetch()
-                );
             } catch (Throwable $exception) {
                 $error = $exception->getMessage();
             }
@@ -157,17 +114,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $error = 'Invalid period';
         } else {
             try {
-                $amended = $guard->amendScheduledEndDate($periodId, trim((string)($_POST['end_date'] ?? '')));
+                $guard->amendScheduledEndDate($periodId, trim((string)($_POST['end_date'] ?? '')), $actorId);
                 $message = 'Scheduled fiscal period end date updated';
-                log_activity(
-                    $pdo,
-                    $actorId,
-                    'Scheduled fiscal period end date amended',
-                    'Fiscal Periods',
-                    $periodId,
-                    $amended['before'] ?? null,
-                    ['end_date' => $amended['end_date'] ?? null]
-                );
             } catch (Throwable $exception) {
                 $error = $exception->getMessage();
             }
@@ -202,16 +150,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 date('M j, Y', strtotime((string)$generated['start_date'])),
                 date('M j, Y', strtotime((string)$generated['end_date'])),
                 $generated['auto_rollover_enabled'] ? ' Automatic rollover is now on.' : ''
-            );
-            $lastPeriod = $generated['periods'][$periodCount - 1];
-            log_activity(
-                $pdo,
-                $actorId,
-                'Fiscal period schedule generated',
-                'Fiscal Periods',
-                (int)$lastPeriod['period_id'],
-                null,
-                $generated['periods']
             );
         } catch (Throwable $exception) {
             $error = $exception->getMessage();

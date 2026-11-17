@@ -125,9 +125,9 @@ $again = $guard->rolloverIfDue('2026-12-01', 1);
 $assert($again['rolled'] === false, 'A repeated rollover is a no-op');
 
 // 11. Scheduled ranges can be edited while they stay continuous.
-$amended = $guard->amendScheduledEndDate($januaryId, '2027-01-20');
+$amended = $guard->amendScheduledEndDate($januaryId, '2027-01-20', 1);
 $assert($amended['end_date'] === '2027-01-20', 'Scheduled end date amended');
-$expectError(fn() => $guard->amendScheduledEndDate($januaryId, '2026-12-15'), 'before the start date');
+$expectError(fn() => $guard->amendScheduledEndDate($januaryId, '2026-12-15', 1), 'before the start date');
 
 // 12. Deleting respects continuity: the last period first.
 $februaryId = $guard->createPeriod('February 2027', '2027-01-21', '2027-02-28', 1, '2026-12-01');
@@ -304,3 +304,53 @@ $assert(array_column($schedule['periods'], 'status') === array_fill(0, 4, 'sched
 $assert($pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id LIMIT 1')->fetchAll(PDO::FETCH_ASSOC) === $existing, 'Mid-month generation leaves existing history unchanged');
 
 echo "Fiscal-year divisions and month boundaries: passed\n";
+
+// Audit failure must undo every mutation, including a whole generated schedule.
+$auditCases = [
+    'Fiscal period creation' => [null, fn() => $guard->createPeriod('November', '2026-11-01', '2026-11-30', 7, '2026-11-10')],
+    'Scheduled creation' => ['open', fn() => $guard->createPeriod('December', '2026-12-01', '2026-12-31', 7, '2026-11-10')],
+    'Fiscal period schedule generated' => [null, fn() => $guard->generatePeriodSchedule(4, '', 7, '2026-11-10')],
+    'Fiscal-period closing' => ['open', fn() => $guard->closePeriod(1, 7, '2026-12-01')],
+    'Fiscal period locked' => ['closed', fn() => $guard->lockPeriod(1, 7)],
+    'Fiscal period end-date amended' => ['open', fn() => $guard->amendOpenEndDate(1, '2026-11-29', 7)],
+    'Scheduled fiscal period end date amended' => ['scheduled', fn() => $guard->amendScheduledEndDate(1, '2026-11-29', 7)],
+    'Fiscal period opened' => ['scheduled', fn() => $guard->openScheduledPeriod(1, 7, '2026-11-10')],
+    'Scheduled fiscal period deleted' => ['scheduled', fn() => $guard->deleteScheduledPeriod(1, 7)],
+    'Next fiscal period opened' => ['closed', fn() => $guard->openNextPeriod(1, 'December', '2026-12-31', 7)],
+    'Fiscal period rolled over automatically' => ['open', fn() => $guard->rolloverIfDue('2026-12-01', 7)],
+];
+foreach ($auditCases as $action => [$status, $change]) {
+    $pdo->exec('DELETE FROM fiscal_periods; DELETE FROM activity_log; DELETE FROM notifications');
+    if ($status !== null) {
+        $pdo->prepare('INSERT INTO fiscal_periods (period_id, period_name, start_date, end_date, created_by, status) VALUES (1, ?, ?, ?, 1, ?)')
+            ->execute(['November', '2026-11-01', '2026-11-30', $status]);
+    }
+    $before = $pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id')->fetchAll(PDO::FETCH_ASSOC);
+    $pdo->exec("CREATE TRIGGER reject_period_audit BEFORE INSERT ON activity_log BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END");
+    $expectError($change, 'audit unavailable');
+    $assert(!$pdo->inTransaction(), "$action closes its failed transaction");
+    $assert($pdo->query('SELECT * FROM fiscal_periods ORDER BY period_id')->fetchAll(PDO::FETCH_ASSOC) === $before, "$action rolls back when audit recording fails");
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM activity_log')->fetchColumn() === 0, "$action leaves no audit on failure");
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM notifications')->fetchColumn() === 0, "$action sends no success notification on failure");
+    $pdo->exec('DROP TRIGGER reject_period_audit');
+
+    $change();
+    $logs = $pdo->query('SELECT * FROM activity_log')->fetchAll(PDO::FETCH_ASSOC);
+    $assert(count($logs) === 1, "$action records exactly one audit on success");
+    $log = $logs[0];
+    $assert((int)$log['user_id'] === 7 && $log['module'] === 'Fiscal Periods', "$action records the actor and module");
+    $assert($log['action'] === ($action === 'Scheduled creation' ? 'Fiscal period creation' : $action), "$action keeps the audit action");
+    $after = json_decode((string)$log['new_value'], true);
+    if ($action === 'Scheduled creation') {
+        $assert($after['status'] === 'scheduled', 'Creation audit records the actual scheduled status');
+    } elseif ($action === 'Fiscal period schedule generated') {
+        $assert(count($after) === 4 && (int)$log['record_id'] === (int)$after[3]['period_id'], 'One schedule audit contains all periods and references the last');
+    } elseif ($action === 'Fiscal-period closing' || $action === 'Fiscal period locked') {
+        $saved = $pdo->query('SELECT * FROM fiscal_periods WHERE period_id = 1')->fetch(PDO::FETCH_ASSOC);
+        $assert($after === $saved && json_decode($log['previous_value'], true) === $before[0], "$action records actual before and after state");
+    } elseif (str_contains($action, 'amended')) {
+        $assert($after['end_date'] === '2026-11-29' && json_decode($log['previous_value'], true) === $before[0], "$action records original state and changed date");
+    }
+}
+
+echo "Fiscal period atomic audit contract: passed\n";
