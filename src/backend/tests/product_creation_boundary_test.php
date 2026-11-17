@@ -14,6 +14,7 @@ foreach ([
     ['selling_price', '', 'Selling price'], ['selling_price', '0', 'Selling price'],
     ['units_per_package', '0', 'Items per Receiving Package'],
     ['units_per_package', '1.5', 'Items per Receiving Package'],
+    ['selling_price', '0.001', 'Selling price'],
     ['selling_price', 'NaN', 'Selling price'], ['selling_price', '-1', 'Selling price'],
 ] as [$field, $value, $message]) {
     try { $service->createProduct(array_replace($valid, [$field => $value]), 1); throw new LogicException("Accepted invalid $field"); }

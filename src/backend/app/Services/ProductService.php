@@ -72,7 +72,7 @@ class ProductService
         if ($cost === null) throw new RuntimeException('Cost price is required. Enter zero for free goods.');
         $selling = $data['selling_price'] ?? $data['unit_price'] ?? null;
         if (!is_scalar($selling) || !is_numeric($selling) || !is_finite((float)$selling)
-            || (float)$selling <= 0 || (float)$selling > 99999999.99 || (float)$selling < $cost) {
+            || (float)$selling < 0.01 || (float)$selling > 99999999.99 || (float)$selling < $cost) {
             throw new RuntimeException('Selling price must be positive, within range, and not lower than cost.');
         }
         $this->validateStockSetting($data['units_per_package'] ?? 1, 'Items per Receiving Package', 1);
