@@ -254,6 +254,8 @@ $_SESSION['role'] = 'inventory_manager';
 $driverService = new ScheduledDemandDriverService();
 $historyService = new DemandHistoryService();
 $pdo->exec("INSERT INTO categories (category_id, category_name) VALUES (1, 'Groceries')");
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $productService = new ProductService($pdo);
 
 // --------------------------------------------------------------------------

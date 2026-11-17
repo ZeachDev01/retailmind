@@ -62,11 +62,13 @@ const fixture = action => {
             await page.waitForFunction(() => document.getElementById('cost-price').getAttribute('aria-invalid') === 'true');
             assert.equal(await page.locator('#product-name').inputValue(),name);
             await page.locator('#cost-price').fill('0');
+            const retryToken = await page.locator('#add-product-form [name="operation_token"]').inputValue();
             // Bypass client checks: server failure retains values and opens the form.
             await Promise.all([page.waitForNavigation(),page.locator('#add-product-form').evaluate(form => {form.elements.cost_price.value=''; form.submit();})]);
             await page.locator('#product-create-error').waitFor();
             assert.equal(await page.locator('#product-name').inputValue(),name);
             assert.match(await page.locator('#product-create-error').innerText(),/Cost price is required/);
+            assert.equal(await page.locator('#add-product-form [name="operation_token"]').inputValue(),retryToken,'Server retry retains the operation token');
             await page.locator('#cost-price').fill('0');
             await page.locator('#create-opening-stock summary').click();
             await page.locator('#initial-stock-quantity').fill('2');
@@ -81,6 +83,7 @@ const fixture = action => {
             for (const field of ['initial_stock_quantity','starting_packs','starting_loose']) {
                 await page.goto(products+'?origin=receiving');
                 await page.locator('#receiving-product-note').waitFor();
+                assert.equal(await page.locator('#units-per-package').isVisible(),true,'Receiving conversion stays visible');
                 assert.equal(await page.locator('#create-opening-stock').isVisible(),false);
                 await Promise.all([page.waitForNavigation(),page.locator('#add-product-form').evaluate((form,{field,category,name}) => {
                     form.elements.product_name.value=name;
@@ -92,6 +95,11 @@ const fixture = action => {
                 assert.match(await page.locator('#product-create-error').innerText(),/Receiving/);
                 assert.equal(await page.evaluate(() => Array.from(document.querySelectorAll('.manage-product')).some(button => button.getAttribute('aria-label').startsWith('Manage Tampered'))),false);
             }
+            await page.locator('#product-name').fill('Receiving zero stock '+width);
+            await Promise.all([page.waitForNavigation(),page.locator('#product-create-save').click()]);
+            await page.waitForFunction(() => Array.from(document.scripts).some(script => script.textContent.includes('const productData =')));
+            const receivingProduct = await page.evaluate(name => JSON.parse(Array.from(document.scripts).find(script => script.textContent.includes('const productData =')).textContent.match(/const productData = (.*);/)[1]).find(product => product.product_name===name),'Receiving zero stock '+width);
+            assert.equal(Number(receivingProduct.quantity_on_hand),0,'Receiving-origin creation saves no opening stock');
             assert.deepEqual(errors,[]);
             await context.close();
         }

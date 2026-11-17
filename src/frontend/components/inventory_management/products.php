@@ -3061,6 +3061,7 @@ foreach ($products as $product) {
         function syncStartingStockFields() {
             addProductForm.elements.creation_origin.value = productCreationOrigin;
             if (productCreationOrigin === 'receiving') {
+                document.getElementById('create-receiving-options').open = true;
                 [initialStockInput, startingPacksCount, startingPackLooseCount].forEach(field => { field.value = '0'; field.disabled = true; });
                 document.getElementById('create-opening-stock').hidden = true;
                 document.getElementById('receiving-product-note').hidden = false;
@@ -3164,6 +3165,12 @@ foreach ($products as $product) {
         if (retry) {
             Object.entries(retry.values).forEach(([name, value]) => {
                 const field = addProductForm.elements[name];
+                if (!field && ['operation_token', 'inventory_draft_id'].includes(name)) {
+                    const retained = document.createElement('input');
+                    retained.type = 'hidden'; retained.name = name; retained.value = value;
+                    addProductForm.append(retained);
+                    return;
+                }
                 if (!field || field.type === 'file' || name === 'creation_origin') return;
                 if (field.type === 'checkbox') field.checked = !!value;
                 else field.value = value;
@@ -3173,7 +3180,7 @@ foreach ($products as $product) {
             RetailMindUI.openOverlay(productModalOverlay);
             const error = document.getElementById('product-create-error');
             error.textContent = retry.error; error.hidden = false; error.focus();
-        } else if (new URLSearchParams(location.search).get('origin') === 'receiving') {
+        } else if (new URLSearchParams(location.search).get('origin') === 'receiving' && !new URLSearchParams(location.search).has('success')) {
             RetailMindUI.openOverlay(productModalOverlay);
         }
 

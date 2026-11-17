@@ -32,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $productId = $productService->createProduct([
             'barcode' => $_POST['barcode'] ?? '',
             'product_name' => $_POST['product_name'] ?? '',
+            'base_unit' => $_POST['base_unit'] ?? 'piece',
             'brand' => $_POST['brand'] ?? '',
             'category_id' => $_POST['category_id'] ?? '',
             'cost_price' => $_POST['cost_price'] ?? '',
