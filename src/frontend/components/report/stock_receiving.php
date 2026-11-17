@@ -475,13 +475,6 @@ async function identifyReceivingProduct(code) {
         const existingGroup = productGroup(product.product_id);
         const existingRow = existingGroup?.lastEdited?.isConnected ? existingGroup.lastEdited : existingGroup?.querySelector('.receiving-line');
         if (existingRow) {
-            if (!isLineTouched(existingRow) && !existingRow.dataset.modeEdited) {
-                const modeSelect = existingRow.querySelector('[data-field="quantity_mode"]');
-                if (modeSelect) {
-                    modeSelect.value = targetMode;
-                    updateQuantityMode(existingRow);
-                }
-            }
             const focusField = visibleQuantityInput(existingRow);
             focusField?.focus();
             scanStatus.textContent = `${product.product_name} (${product.sku}) already added. Entered quantities preserved.`;
@@ -1519,10 +1512,11 @@ document.getElementById('receiving_next').addEventListener('click', async () => 
         const catalog = await response.json();
         if (!Array.isArray(catalog.products)) throw new Error('Catalog unavailable');
         const fresh = new Map(catalog.products.map(product => [String(product.product_id), product]));
+        const priorProducts = new Map(productMap);
         let changed = false;
         for (const row of receivingRows()) {
             const id = row.querySelector('[data-field="product_id"]').value;
-            const prior = productMap.get(id), current = fresh.get(id);
+            const prior = priorProducts.get(id), current = fresh.get(id);
             if (!current) { prior.unavailable = true; changed = true; continue; }
             const inheritsCost = row.querySelector('[data-field="cost_price"]').value.trim() === '';
             changed ||= reviewConversion(row, prior) !== reviewConversion(row, current)

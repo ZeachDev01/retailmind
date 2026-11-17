@@ -73,6 +73,8 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-line').count(), 2);
         assert.equal(await page.locator('#batch_number_1').inputValue(), '', 'new batches never copy provenance');
         assert.equal(await page.locator('#expiration_date_1').inputValue(), '');
+        await scan('THEME-CASE');
+        assert.equal(await page.locator('#quantity_mode_1').inputValue(), 'packs', 'rescan cannot change even an empty added batch mode');
         await page.locator('#quantity_mode_1').selectOption('units');
         await page.locator('#received_qty_1').fill('12');
         await scan('THEME-PACK');
@@ -80,9 +82,23 @@ function fixture(action) {
         assert.equal(await page.locator('#received_qty_1').inputValue(), '12');
         assert.equal(await page.locator('#summary_products').innerText(), '1');
         assert.equal(await page.locator('#summary_accepted').innerText(), '36');
+        await page.locator('#quantity_mode').selectOption('units');
+        await page.locator('#received_qty').fill('12');
+        await page.locator('.receiving-line').first().locator('summary').click();
+        await page.locator('#cost_price').fill('6');
+        fixture('receiving_conversion_changed');
+        await page.locator('#receiving_next').click();
+        await page.waitForFunction(() => document.getElementById('entry_status').textContent.includes('changed'));
+        assert.equal(await page.locator('#receiving_review').isVisible(), false, 'a later inherited-cost batch still requires refreshed Review');
+        await review();
+        await page.locator('#receiving_back').click();
+        fixture('receiving_pack_config');
+        await review();
+        await page.locator('#receiving_back').click();
+        await page.locator('#quantity_mode').selectOption('packages');
         for (const [index, price, lot, expiry] of [[0, '6', 'MAY', '2027-05-31'], [1, '7', 'AUG', '2027-08-31']]) {
             const row = page.locator('.receiving-line').nth(index);
-            await row.locator('summary').click();
+            if (!(await row.locator('details').evaluate(details => details.open))) await row.locator('summary').click();
             await row.locator('[data-field="cost_price"]').fill(price);
             await row.locator('[data-field="batch_number"]').fill(lot);
             await row.locator('[data-field="expiration_date"]').fill(expiry);
