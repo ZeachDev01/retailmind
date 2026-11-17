@@ -139,9 +139,43 @@ const {chromium} = require('playwright');
                 assert.equal(state.focused, 'trigger');
                 assert.equal(state.scroll, state.initialScroll);
             });
+            await check('bulk dismissal follows open order and preserves Sidebar scroll lock', async () => {
+                const state = await page.evaluate(async () => {
+                    const sidebar = document.createElement('div');
+                    sidebar.id = 'sidebarOverlay';
+                    sidebar.className = 'open';
+                    document.body.append(sidebar);
+                    window.scrollTo({top: 200, behavior: 'instant'});
+                    const scroll = window.scrollY;
+                    const closed = [];
+                    for (const id of ['user', 'drawer']) document.getElementById(id).addEventListener('retailmind:overlayclose', () => closed.push(id), {once: true});
+                    document.getElementById('trigger').focus({preventScroll: true});
+                    RetailMindUI.openOverlay(document.getElementById('user'));
+                    document.querySelector('#user button').focus({preventScroll: true});
+                    RetailMindUI.openOverlay(document.getElementById('drawer'));
+                    document.getElementById('drawer-first').focus({preventScroll: true});
+                    const confirmation = RetailMindUI.confirm({message: 'Leaving page'});
+                    document.getElementById('receipt').showModal();
+                    let swalClosed = false;
+                    window.Swal = {close: () => { swalClosed = true; }};
+                    RetailMindUI.dismissOverlays();
+                    delete window.Swal;
+                    const lockedWithSidebar = document.body.classList.contains('no-scroll');
+                    sidebar.remove();
+                    RetailMindUI.syncScrollLock();
+                    const result = await confirmation;
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    return {closed, result, swalClosed, lockedWithSidebar, locked: document.body.classList.contains('no-scroll'),
+                        confirmations: document.querySelectorAll('[data-rm-confirm]').length, dialog: document.getElementById('receipt').open,
+                        focused: document.activeElement.id, scroll: window.scrollY, initialScroll: scroll};
+                });
+                assert.equal(state.scroll, state.initialScroll, 'Bulk dismissal preserves page scroll');
+                assert.deepEqual(state, {closed: ['drawer', 'user'], result: false, swalClosed: true, lockedWithSidebar: true,
+                    locked: false, confirmations: 0, dialog: false, focused: 'trigger', scroll: state.initialScroll, initialScroll: state.initialScroll});
+            });
             await page.close();
         }
         assert.deepEqual(failures, [], failures.join('\n'));
-        console.log('Overlay lifecycle: passed (320/375/425/768/1024/1440px, repeated initialization, confirm/cancel/retry, topmost dismissal, payment/native dialog ownership, focus trap/restore, scroll stability)');
+        console.log('Overlay lifecycle: passed (320/375/425/768/1024/1440px, repeated initialization, confirm/cancel/retry, topmost/bulk dismissal, payment/native dialog ownership, Sidebar scroll lock, focus trap/restore, scroll stability)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

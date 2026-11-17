@@ -619,8 +619,7 @@ cartWorkspace.bindNavigation();
                     menuIcon.src = new URL(isOpen ? 'close.svg' : 'menu.svg', menuIcon.src).href;
                 }
             }
-            if (window.RetailMindUI?.syncScrollLock) RetailMindUI.syncScrollLock();
-            else document.body.classList.toggle('no-scroll', isOpen);
+            RetailMindUI.syncScrollLock();
             updateBrandState();
             if (isOpen) sidebar.querySelector('.sidebar-nav a, .sidebar-nav button')?.focus();
             else if (restoreFocus) (isMobileDrawer() ? menuToggle : brandToggle)?.focus();

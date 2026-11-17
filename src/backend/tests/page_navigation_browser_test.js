@@ -144,11 +144,27 @@ const render = (html, partial) => {
                     for (const id of ['second', 'first', 'second']) {
                         await page.evaluate(() => RetailMindNavigation.initializePage(() => RetailMindUI.toast('Register: 2nd Register · Shift #3243', 'info', 'Register ready', 3000)));
                         assert.equal(await page.locator('.rm-toast').count(), 1);
-                        await page.evaluate(() => RetailMindUI.openOverlay(document.querySelector('#page-modal')));
-                        await page.evaluate(() => { RetailMindUI.confirm({message: 'Pending page action'}); });
+                        await page.evaluate(() => RetailMindNavigation.initializePage(() => {
+                            window.overlayClosed = [];
+                            window.confirmationResult = undefined;
+                            // Open order deliberately differs from document order.
+                            const drawer = document.createElement('div');
+                            drawer.className = 'rm-drawer-overlay';
+                            drawer.innerHTML = '<button>Drawer action</button>';
+                            document.querySelector('.main-content').append(drawer);
+                            for (const [name, overlay] of [['drawer', drawer], ['modal', document.querySelector('#page-modal')]]) {
+                                overlay.addEventListener('retailmind:overlayclose', () => window.overlayClosed.push(name));
+                                RetailMindUI.openOverlay(overlay);
+                            }
+                            RetailMindUI.confirm({message: 'Pending page action'}).then(value => window.confirmationResult = value);
+                            const dialog = document.createElement('dialog');
+                            dialog.innerHTML = '<button>Receipt</button>';
+                            document.querySelector('.main-content').append(dialog);
+                            dialog.showModal();
+                        }));
                         assert(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')));
                         await page.evaluate(() => { navigationFrames.length = 0; });
-                        await page.locator('#' + id).click();
+                        await page.evaluate(id => RetailMindNavigation.navigate(document.getElementById(id).href), id);
                         await waitPage('/' + id + '.php');
                         await page.evaluate(() => window.workspaceTransitionFinished);
                         assert.deepEqual(await page.evaluate(() => window.workspaceTransitionStyle), {group: 'none', old: 'none', incoming: 'workspace-text-enter'}, 'All workspace pages use a stable text fade');
@@ -161,6 +177,9 @@ const render = (html, partial) => {
                         assert(await page.evaluate(() => document === originalDocument && document.querySelector('#appSidebar') === originalSidebar && document.querySelector('#navbar') === originalNavbar));
                         assert(await page.evaluate(() => !!document.fullscreenElement || document.documentElement.classList.contains('rm-app-fullscreen')));
                         assert.equal(await page.locator('body').evaluate(node => node.classList.contains('no-scroll')), false, 'Navigation releases removed modal scroll lock');
+                        assert.deepEqual(await page.evaluate(() => window.overlayClosed), ['modal', 'drawer'], 'Navigation closes overlays newest first before removing page handlers');
+                        assert.equal(await page.evaluate(() => window.confirmationResult), false, 'Navigation settles outgoing confirmation');
+                        assert.equal(await page.locator('dialog[open], [data-rm-confirm]').count(), 0, 'Navigation immediately removes confirmations and closes native dialogs');
                         assert.equal(await page.locator('.rm-modal-overlay').count(), 1, 'Navigation removes temporary confirmation nodes');
                         assert.equal(await page.locator('iframe').count(), 0);
                         assert.equal(await page.locator('#page-modal').count(), 1);

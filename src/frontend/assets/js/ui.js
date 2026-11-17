@@ -317,6 +317,15 @@
     overlay.dispatchEvent(new CustomEvent("retailmind:overlayclose", {bubbles: true}));
   };
 
+  RM.dismissOverlays = function () {
+    window.Swal?.close();
+    qsa("dialog[open]").reverse().forEach((dialog) => dialog.close());
+    for (let overlay = topOverlay(); overlay; overlay = topOverlay()) RM.closeOverlay(overlay);
+    // Navigation cancels page timers, including confirmation removal animations.
+    qsa("[data-rm-confirm]").forEach((overlay) => overlay.remove());
+    RM.syncScrollLock();
+  };
+
   RM.confirm = function (options) {
     const opts = options || {};
     return new Promise((resolve) => {

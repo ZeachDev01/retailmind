@@ -86,12 +86,8 @@
     function cleanup(retainedAssets) {
         window.RetailMindInventoryDrafts?.destroy?.();
         clearPrefetch();
-        window.Swal?.close();
         for (const item of page.listeners.filter(item => item.type === 'pagehide')) item.wrapped.call(item.target, new Event('pagehide'));
-        document.querySelectorAll('.command-overlay.open, .rm-modal-overlay.open, .rm-drawer-overlay.open, .checkout-modal.open, .user-modal-overlay.open, .user-drawer-overlay.open').forEach(overlay => window.RetailMindUI?.closeOverlay(overlay));
-        document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
-        document.querySelectorAll('[data-rm-confirm]').forEach(overlay => overlay.remove());
-        window.RetailMindUI?.syncScrollLock();
+        window.RetailMindUI?.dismissOverlays();
         page.abort.abort();
         page.listeners.forEach(item => nativeRemove.call(item.target, item.type, item.wrapped, item.options));
         page.timers.forEach(cancel => cancel());
