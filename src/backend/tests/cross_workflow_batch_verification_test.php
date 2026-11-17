@@ -557,6 +557,9 @@ $quietNotifications = new class($pdo) extends NotificationService {
 };
 
 // Initialize services
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
+$pdo->exec('CREATE TABLE scheduled_demand_drivers (driver_id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, driver_type TEXT NOT NULL, effective_date TEXT NOT NULL, scheduled_at TEXT NOT NULL, details_json TEXT NOT NULL)');
 $productService = new ProductService($pdo, $quietNotifications);
 $receivingService = new ReceivingService($pdo);
 $stockIssueService = new StockIssueService($pdo, $quietNotifications);
@@ -604,6 +607,7 @@ $_SESSION['role'] = 'cashier';
 $throws(
     function () use ($productService, $cashierId, $future2Manila) {
         $productService->createProduct([
+            'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
             'product_name' => 'Cashier Bread',
             'barcode' => 'CASHIER-BREAD-01',
             'initial_stock_quantity' => 10,
@@ -619,6 +623,7 @@ $_SESSION['role'] = 'admin';
 $throws(
     function () use ($productService, $adminId, $future2Manila) {
         $productService->createProduct([
+            'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
             'product_name' => 'Admin Bread',
             'barcode' => 'ADMIN-BREAD-01',
             'warning_lead_time_days' => 3,
@@ -666,6 +671,8 @@ echo "\n--- Scenario 2: Opening Stock & Initial Batch Creation ---\n";
 $_SESSION['role'] = 'inventory_manager';
 
 $productId = $productService->createProduct([
+    'base_unit' => 'piece',
+    'supplier_pullout_eligible' => 1,
     'product_name' => 'Special Ensaymada',
     'barcode' => 'ENS-SPECIAL-01',
     'sku' => 'SKU-ENS-01',
@@ -818,6 +825,7 @@ $assertInvariant($productId, 'Stock Issue Approved');
 echo "\n--- Scenario 4B: Canonical Balance Scenario (Spec Line 106) ---\n";
 
 $canonicalPid = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
     'product_name' => 'Monay Loaves',
     'barcode' => 'MONAY-CANONICAL-20',
     'sku' => 'SKU-MONAY-CANONICAL',
@@ -1188,6 +1196,7 @@ echo "\n--- Scenario 10: Atomic Rollback on Failure & Safety Enforcements ---\n"
 // 10.1 Multi-line receiving rollback on failure
 // Create a second product for line 2 to avoid duplicate product in single trip
 $product2Id = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
     'product_name' => 'Cheese Roll',
     'barcode' => 'CHEESE-ROLL-01',
     'sku' => 'SKU-CROLL-01',
@@ -1421,6 +1430,8 @@ $_SESSION['role'] = 'inventory_manager';
 $_SESSION['active_role'] = 'inventory_manager';
 
 $packPid = $productService->createProduct([
+    'supplier_pullout_eligible' => 1,
+    'base_unit' => 'piece',
     'sku' => 'SKU-PACK-249',
     'barcode' => 'BC-PIECE-249',
     'pack_barcode' => 'BC-PACK-249',

@@ -258,6 +258,7 @@ $inventoryService = new InventoryService($pdo);
 // 3. Test: Ordinary product creation requires no pack fields
 echo "Testing ordinary product creation without pack fields...\n";
 $ordinaryId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece',
     'barcode' => 'BARCODE-ORD-001',
     'product_name' => 'Ordinary Soda Can',
     'unit_price' => 25.00,
@@ -275,6 +276,7 @@ echo "Testing incomplete pack configuration rejection on creation...\n";
 // Only pack_size provided
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-TEST-INC1',
         'product_name' => 'Incomplete 1',
         'unit_price' => 10.00,
@@ -288,6 +290,7 @@ try {
 // Only pack_barcode provided
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-TEST-INC2',
         'product_name' => 'Incomplete 2',
         'unit_price' => 10.00,
@@ -301,6 +304,7 @@ try {
 // Only pack_price provided
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-TEST-INC3',
         'product_name' => 'Incomplete 3',
         'unit_price' => 10.00,
@@ -316,6 +320,7 @@ echo "Testing invalid pack_size rejection...\n";
 foreach ([1, 0, -5, '1.5', 'abc'] as $invalidSize) {
     try {
         $productService->createProduct([
+            'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
             'barcode' => 'BARCODE-INV-SZ',
             'product_name' => 'Invalid Size Product',
             'unit_price' => 10.00,
@@ -334,6 +339,7 @@ echo "Testing invalid pack_price rejection...\n";
 // pack_price = 0
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-PR-0',
         'product_name' => 'Zero Pack Price',
         'unit_price' => 10.00,
@@ -349,6 +355,7 @@ try {
 // pack_price >= pack_size * unit_price (12 * 10 = 120; pack_price = 120.00)
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-PR-EQUAL',
         'product_name' => 'Equal Pack Price',
         'unit_price' => 10.00,
@@ -364,6 +371,7 @@ try {
 // pack_price > pack_size * unit_price (12 * 10 = 120; pack_price = 130.00)
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BARCODE-PR-MORE',
         'product_name' => 'Expensive Pack Price',
         'unit_price' => 10.00,
@@ -381,6 +389,7 @@ echo "Testing barcode identity conflicts across products and code kinds...\n";
 // pack_barcode matching piece barcode on same product
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'SHARED-CODE-1',
         'product_name' => 'Same Code Self',
         'unit_price' => 10.00,
@@ -396,6 +405,7 @@ try {
 // pack_barcode matching existing product barcode
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'UNIQUE-PIECE-2',
         'product_name' => 'Colliding Pack Code',
         'unit_price' => 10.00,
@@ -411,6 +421,7 @@ try {
 // 8. Test: Valid pack-enabled product creation & ProductCodeLookupService
 echo "Testing valid pack-enabled product creation and code lookup...\n";
 $biscuitId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece',
     'sku' => 'BISCUIT-SKU-001',
     'barcode' => 'BISCUIT-PC-001',
     'product_name' => 'Butter Biscuits',
@@ -436,6 +447,7 @@ $assert((int)$lookupPack['product']['product_id'] === $biscuitId, 'Lookup pack b
 // Ensure new product with piece barcode colliding with existing pack_barcode is rejected
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'BISCUIT-PK-001',
         'product_name' => 'Colliding Unit Barcode',
         'unit_price' => 15.00,
@@ -448,6 +460,7 @@ try {
 // 9. Test: Starting stock: 5 packs of 12 + 3 loose pieces yields 63 Base Units
 echo "Testing starting stock of 5 packs of 12 plus 3 loose pieces...\n";
 $startingProductId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece',
     'barcode' => 'SNACK-PC-63',
     'product_name' => 'Choco Crackers 12s',
     'unit_price' => 15.00,
@@ -503,6 +516,7 @@ $invCountBefore = (int)$pdo->query("SELECT COUNT(*) FROM inventory")->fetchColum
 // Invalid fractional pack count
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'ROLLBACK-1',
         'product_name' => 'Rollback Product',
         'unit_price' => 20.00,
@@ -520,6 +534,7 @@ try {
 // Overflow starting stock
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'ROLLBACK-2',
         'product_name' => 'Rollback Product 2',
         'unit_price' => 20.00,
@@ -580,6 +595,7 @@ $assert((float)$updated['pack_price'] === 140.00, 'Updating pack_price with seal
 // 12. Test: Product with zero sealed stock allows changing pack_size or removing configuration
 echo "Testing pack configuration modification when sealed stock is zero...\n";
 $zeroSealedProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'ZERO-SEAL-01',
     'product_name' => 'Zero Sealed Product',
     'unit_price' => 20.00,
@@ -602,6 +618,7 @@ $assert((int)$upZero['pack_size'] === 8, 'Changing pack_size with 0 sealed packs
 // 13. Test: Never infer packs when adding pack configuration to an existing piece product with stock
 echo "Testing adding pack configuration to legacy piece product preserves loose stock...\n";
 $legacyProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'LEGACY-PIECE-24',
     'product_name' => 'Legacy Biscuits 24 Pieces',
     'unit_price' => 10.00,
@@ -625,6 +642,7 @@ $assert((int)$legBatch['loose_quantity'] === 24, 'Legacy stock remains loose (lo
 echo "Testing inventory summaries and batch views with sealed, loose, and expired stock...\n";
 // Create product with 1 active batch (2 packs, 1 loose, expires in future) and 1 expired batch (1 pack, 2 loose, expired)
 $expProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'EXP-PROD-PC',
     'product_name' => 'Perishable Snack 6s',
     'unit_price' => 10.00,
@@ -682,6 +700,7 @@ $assert($hasActiveBatch, 'Active batch identified with Active status');
 // 15. Test: Selling price update rejects price that violates pack_price < pack_size * selling_price
 echo "Testing selling price reduction guard against existing pack price...\n";
 $sellingGuardProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'SELL-GUARD-PC',
     'product_name' => 'Selling Guard Product',
     'unit_price' => 20.00,
@@ -704,6 +723,7 @@ try {
 // 16. Test: pack_barcode cannot collide with an existing product SKU
 echo "Testing pack_barcode collision with existing SKU...\n";
 $skuProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'sku' => 'CUSTOM-SKU-99',
     'barcode' => 'REG-BARCODE-99',
     'product_name' => 'Custom SKU Product',
@@ -712,6 +732,7 @@ $skuProdId = $productService->createProduct([
 
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
         'barcode' => 'OTHER-BARCODE-99',
         'product_name' => 'Colliding Pack Barcode Product',
         'unit_price' => 10.00,
@@ -727,6 +748,7 @@ try {
 // 17. Test: reconcilePhysicalStock updates inventory, distributes batches, records delta movement and activity log
 echo "Testing physical stock reconciliation...\n";
 $reconProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'RECON-TEST-PC',
     'product_name' => 'Recon Test Biscuit',
     'unit_price' => 10.00,
@@ -755,6 +777,7 @@ $assert($act !== false, 'Activity log recorded for physical stock reconciliation
 
 // The same correction handles incorrect starting quantities and later piece-only counts.
 $pieceCountId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'COUNT-PIECES',
     'product_name' => 'Piece-only count correction',
     'unit_price' => 10.00,
@@ -777,6 +800,7 @@ $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_i
 // 18. Blank starting_loose on a pack product means zero, never the auto-computed total.
 echo "Testing blank starting loose with starting packs...\n";
 $blankLooseProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'BLANK-LOOSE-PC',
     'product_name' => 'Blank Loose Biscuit',
     'unit_price' => 10.00,
@@ -794,6 +818,7 @@ $assert((int)$blankLooseBatch['sealed_quantity'] === 2 && (int)$blankLooseBatch[
 // 19. Reconciliation must allocate the whole asserted sealed count across batches or refuse atomically.
 echo "Testing multi-batch sealed reconciliation...\n";
 $multiReconProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'MULTI-RECON-PC',
     'product_name' => 'Multi Batch Biscuit',
     'unit_price' => 10.00,
@@ -841,6 +866,7 @@ $assert($allocated[0]['expiration_date'] === '2027-01-01' && $allocated[1]['expi
 // 20. Emergency stock adjustments never reinterpret sealed packs as loose pieces.
 echo "Testing form-aware stock adjustments...\n";
 $adjustProdId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0,
     'barcode' => 'ADJUST-FORM-PC',
     'product_name' => 'Adjustable Pack Biscuit',
     'unit_price' => 10.00,

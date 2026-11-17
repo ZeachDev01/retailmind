@@ -5217,6 +5217,19 @@ body.system-health-open {
     }
 }
 
+
+/* Compact shared product creation: essentials first, optional settings below. */
+#add-product-modal .product-create-options { border-top: 1px solid var(--border); padding-block: .75rem; }
+#add-product-modal .product-create-options > summary { cursor: pointer; font-weight: 600; padding-block: .35rem; min-height: 44px; box-sizing: border-box; }
+#add-product-modal .product-create-options[open] > summary { margin-bottom: .75rem; }
+#add-product-modal summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+#add-product-modal #product-create-error { color: var(--theme-danger-text, #b91c1c); margin-bottom: 1rem; }
+#add-product-modal [hidden] { display: none !important; }
+@media (max-width: 640px) {
+    #add-product-modal input:not([type="checkbox"]), #add-product-modal select { font-size: 1rem; }
+    #product-create-save { grid-column: 1 / -1; }
+}
+
 /* responsive.css */
 /* ============================
    Responsive layout (tablet & mobile)

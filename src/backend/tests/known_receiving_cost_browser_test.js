@@ -103,12 +103,10 @@ function fixture(action) {
         const category = await page.locator('#product-category option').nth(1).textContent();
         await page.locator('#product-category-search').fill(category);
         await page.getByRole('option', {name: category, exact: true}).click();
-        await page.locator('#wizard-next').click();
-        await page.locator('#wizard-next').click();
         await page.locator('#selling-price').fill('25');
-        await page.locator('#wizard-next').click();
-        await page.locator('#wizard-next').click();
-        assert.match(await page.locator('#product-review').innerText(), /Cost Price\s+Not recorded/i, 'product creation Review preserves blank cost');
+        await page.locator('#product-create-save').click();
+        await page.waitForFunction(() => document.getElementById('cost-price').getAttribute('aria-invalid') === 'true');
+        assert.equal(await page.locator('#cost-price').getAttribute('aria-invalid'), 'true', 'Creation rejects blank cost while receiving retains unknown costs');
         console.log('Known receiving cost browser and draft: passed');
     } finally {
         if (browser) await browser.close();

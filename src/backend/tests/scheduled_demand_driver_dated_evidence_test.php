@@ -253,6 +253,7 @@ $_SESSION['role'] = 'inventory_manager';
 
 $driverService = new ScheduledDemandDriverService();
 $historyService = new DemandHistoryService();
+$pdo->exec("INSERT INTO categories (category_id, category_name) VALUES (1, 'Groceries')");
 $productService = new ProductService($pdo);
 
 // --------------------------------------------------------------------------
@@ -261,6 +262,7 @@ $productService = new ProductService($pdo);
 echo "--- Step 1: Product Price Driver Recording on Create and Updates ---\n";
 
 $productId = $productService->createProduct([
+    'category_id' => 1,
     'product_name' => 'Coffee Beans 250g',
     'barcode' => 'COFFEE-250',
     'selling_price' => 150.00,

@@ -285,6 +285,7 @@ foreach ($invalidValues as $val) {
     $threw = false;
     try {
         $productService->createProduct([
+            'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
             'product_name' => 'Invalid Lead Time Test',
             'warning_lead_time_days' => $val,
         ], 1);
@@ -299,6 +300,7 @@ $_SESSION['role'] = 'cashier';
 $cashierThrew = false;
 try {
     $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
         'product_name' => 'Cashier Override Test',
         'warning_lead_time_days' => 2,
     ], 2);
@@ -310,6 +312,7 @@ $assert($cashierThrew, 'createProduct rejects non-inventory-manager setting warn
 // C. Successful creation with override as Inventory Manager
 $_SESSION['role'] = 'inventory_manager';
 $breadId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece',
     'supplier_pullout_eligible' => '1',
     'product_name' => 'Artisan Bread',
     'barcode' => 'BREAD-001',
@@ -324,6 +327,7 @@ $assert((int)$breadRow['warning_lead_time_days'] === 2, 'createProduct persists 
 
 // D. Blank / null lead time creates product with NULL override
 $milkId = $productService->createProduct([
+    'category_id' => 1, 'base_unit' => 'piece',
     'product_name' => 'Fresh Milk',
     'barcode' => 'MILK-001',
     'selling_price' => 80.0,
@@ -343,7 +347,7 @@ $assert(!(bool)$productService->findProductBySearchTerm('MILK-001')['supplier_pu
 $_SESSION['role'] = 'cashier';
 $eligibilityDenied = false;
 try {
-    $productService->createProduct(['product_name' => 'Unauthorized Bread', 'supplier_pullout_eligible' => 1], 2);
+    $productService->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Unauthorized Bread', 'supplier_pullout_eligible' => 1], 2);
 } catch (RuntimeException $e) { $eligibilityDenied = true; }
 $assert($eligibilityDenied, 'Only Inventory Manager can enable Supplier Pullout Eligibility');
 $_SESSION['role'] = 'inventory_manager';

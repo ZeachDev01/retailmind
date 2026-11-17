@@ -78,6 +78,7 @@ try {
         CREATE TABLE users (
             user_id INTEGER PRIMARY KEY,
             full_name TEXT NOT NULL DEFAULT 'User',
+            display_name TEXT NOT NULL DEFAULT 'User',
             username TEXT NULL,
             password_hash TEXT NULL,
             role_id INTEGER NULL,
@@ -126,6 +127,7 @@ try {
             pack_price REAL DEFAULT NULL,
             expiration_date TEXT DEFAULT NULL,
             warning_lead_time_days INTEGER DEFAULT NULL,
+            supplier_pullout_eligible INTEGER NOT NULL DEFAULT 0,
             product_image TEXT DEFAULT NULL,
             status TEXT NOT NULL DEFAULT 'active',
             branch_id INTEGER NOT NULL DEFAULT 1,
@@ -287,12 +289,16 @@ try {
     $_SESSION['role'] = 'inventory_manager';
     $_SESSION['user'] = ['role_name' => 'inventory_manager', 'user_id' => 1];
 
+    require_once __DIR__ . '/support/notification_schema.php';
+    notification_test_schema($pdo);
     $productService = new ProductService($pdo);
     $receivingService = new ReceivingService($pdo);
 
     // 3. Opening stock with expiration creates Opening Batch with supplied date
     echo "Testing opening stock with expiration creates Opening Batch...\n";
+    $pdo->exec('CREATE TABLE scheduled_demand_drivers (driver_id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, driver_type TEXT NOT NULL, effective_date TEXT NOT NULL, scheduled_at TEXT NOT NULL, details_json TEXT NOT NULL)');
     $breadId = $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece',
         'product_name' => 'Artisan Bread',
         'initial_stock_quantity' => 20,
         'cost_price' => 15.00,
@@ -319,6 +325,7 @@ try {
     // 4. Zero starting stock creates no quantity-bearing batch
     echo "Testing zero starting stock creates no quantity-bearing batch...\n";
     $zeroStockId = $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece',
         'product_name' => 'Zero Stock Loaf',
         'initial_stock_quantity' => 0,
         'cost_price' => 10.00,
@@ -341,6 +348,7 @@ try {
     // 5. Optional / omitted expiration dates remain null
     echo "Testing optional/omitted expiration dates remain null...\n";
     $undatedId = $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece',
         'product_name' => 'General Merchandise Box',
         'initial_stock_quantity' => 10,
         'cost_price' => 50.00,
@@ -388,6 +396,7 @@ try {
         $productThrew = false;
         try {
             $productService->createProduct([
+                'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
                 'product_name' => 'Invalid Test Product',
                 'initial_stock_quantity' => 1,
                 'expiration_date' => $invalidDate,
@@ -417,6 +426,7 @@ try {
 
     // Valid leap year February 29 succeeds
     $leapYearId = $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
         'product_name' => 'Leap Year Product',
         'initial_stock_quantity' => 2,
         'expiration_date' => '2024-02-29',
@@ -511,11 +521,12 @@ try {
     // 8b. Package conversion and duplicate line protection
     echo "Testing package conversion into product_batches...\n";
     $packProdId = $productService->createProduct([
+        'category_id' => 1, 'base_unit' => 'piece',
         'product_name' => 'Packaged Soda Can',
         'barcode' => 'PKG-SODA-001',
         'units_per_package' => 12,
         'initial_stock_quantity' => 0,
-        'cost_price' => 24.00,
+        'cost_price' => 2.00,
         'selling_price' => 3.00,
     ], 1);
     $receivingService->receiveShoppingTrip([
@@ -595,6 +606,7 @@ try {
         $rejected = false;
         try {
             $productService->createProduct([
+                'category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20,
                 'product_name' => 'Invalid starting quantity',
                 'initial_stock_quantity' => $invalidQuantity,
             ], 1);
@@ -660,7 +672,7 @@ try {
         BEGIN SELECT RAISE(ABORT, 'Injected opening movement failure'); END");
     $openingFailed = false;
     try {
-        $productService->createProduct(['product_name' => 'Failed Opening Batch', 'initial_stock_quantity' => 7,
+        $productService->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Failed Opening Batch', 'initial_stock_quantity' => 7,
             'expiration_date' => '2027-03-01'], 1);
     } catch (RuntimeException $e) {
         $openingFailed = true;
@@ -677,7 +689,7 @@ try {
         $blocked = false;
         try {
             if ($workflow === 'opening') {
-                $productService->createProduct(['product_name' => 'Closed period opening', 'initial_stock_quantity' => 1], 1);
+                $productService->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Closed period opening', 'initial_stock_quantity' => 1], 1);
             } else {
                 $receivingService->receiveStock(['product_id' => $breadId, 'received_qty' => 1], 1);
             }
@@ -711,6 +723,7 @@ try {
     }
 
 } catch (Throwable $e) {
+    if ($e->getPrevious()) fwrite(STDERR, (string)$e->getPrevious() . "\n");
     $failures[] = "Unexpected exception: " . $e->getMessage() . "\n" . $e->getTraceAsString();
     fwrite(STDERR, "  fail - Unexpected exception: {$e->getMessage()}\n{$e->getTraceAsString()}\n");
 }

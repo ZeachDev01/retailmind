@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
     const start = source.indexOf('<div class="rm-modal-overlay" id="add-product-modal"');
     const end = source.indexOf('<div class="rm-modal-overlay" id="add-category-modal"', start);
     const markup = source.slice(start, end).replace(/<\?php[\s\S]*?\?>/g, '').replace(/<\?=[\s\S]*?\?>/g, '');
-    const wizard = source.slice(source.indexOf('// Product wizard and validation'), source.indexOf('// Camera scan and internal barcode generation'));
+    const wizard = source.slice(source.indexOf('// Product creation and validation'), source.indexOf('// Camera scan and internal barcode generation'));
     const css = fs.readFileSync(path.join(frontend, 'assets/css/style.css'), 'utf8') + source.match(/<style>([\s\S]*?)<\/style>/)[1];
 
     const browser = await chromium.launch({
@@ -50,32 +50,32 @@ const { chromium } = require('playwright');
             // 1. Check Base Unit dropdown offers 'pouch'
             await page.evaluate(() => {
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
-                setWizardStep(3);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
             });
             const baseUnitSelect = page.getByLabel('Base Unit', { exact: true });
             const options = await baseUnitSelect.locator('option').evaluateAll(opts => opts.map(o => o.value));
             assert.ok(options.includes('pouch'), 'Base Unit dropdown includes pouch option');
 
             // 2. Configure Oil 250 mL: price PHP 20.00, base unit pouch
-            await page.evaluate(() => setWizardStep(1));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#product-name').fill('Oil 250 mL');
-            await page.evaluate(() => setWizardStep(2));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#create-barcode-input').fill('OIL-250ML');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#cost-price').fill('15.00');
             await page.locator('#selling-price').fill('20.00');
             await baseUnitSelect.selectOption('pouch');
             await page.getByLabel('Receiving Unit', { exact: true }).selectOption('box');
 
             // 3. Test starting stock validation: whole integer pouches, rejecting invalid/fractional
-            await page.evaluate(() => setWizardStep(4));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             const initialQtyInput = page.locator('#initial-stock-quantity');
 
             // Rejects fractional quantity (2.5)
             await initialQtyInput.fill('2.5');
             const isInvalidFractional = await page.evaluate(() => {
                 const qtyInput = document.getElementById('initial-stock-quantity');
-                return !qtyInput.validity.valid && !validateStep(4);
+                return !qtyInput.validity.valid;
             });
             assert.ok(isInvalidFractional, 'Fractional pouch quantity is rejected by browser validation');
 
@@ -83,7 +83,7 @@ const { chromium } = require('playwright');
             await initialQtyInput.fill('-1');
             const isInvalidNegative = await page.evaluate(() => {
                 const qtyInput = document.getElementById('initial-stock-quantity');
-                return !qtyInput.validity.valid && !validateStep(4);
+                return !qtyInput.validity.valid;
             });
             assert.ok(isInvalidNegative, 'Negative pouch quantity is rejected by browser validation');
 
@@ -91,21 +91,21 @@ const { chromium } = require('playwright');
             await initialQtyInput.fill('10');
             const isValidInteger = await page.evaluate(() => {
                 const qtyInput = document.getElementById('initial-stock-quantity');
-                return qtyInput.validity.valid && validateStep(4);
+                return qtyInput.validity.valid;
             });
             assert.ok(isValidInteger, 'Whole integer pouch quantity is accepted');
             assert.equal(await initialQtyInput.inputValue(), '10', 'Accepts whole integer pouch quantity');
 
             // Submit product 1
             await page.evaluate(() => {
-                setWizardStep(5);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
                 window.submittedProducts = [];
                 window.addEventListener('submit', event => {
                     window.submittedProducts.push(Object.fromEntries(new FormData(event.target)));
                     event.preventDefault();
                 });
             });
-            await page.locator('#wizard-save').click();
+            await page.locator('#product-create-save').click();
 
             const submitted250 = await page.evaluate(() => window.submittedProducts[0]);
             assert.equal(submitted250.product_name, 'Oil 250 mL');
@@ -116,25 +116,26 @@ const { chromium } = require('playwright');
             // 4. Configure Oil 500 mL independently: price PHP 40.00, base unit pouch
             await page.waitForTimeout(200);
             await page.evaluate(() => {
-                clearFormState();
+                document.getElementById('add-product-form').reset();
+                document.getElementById('product-create-save').disabled = false;
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
-                setWizardStep(1);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
             });
             await page.locator('#product-name').fill('Oil 500 mL');
-            await page.evaluate(() => setWizardStep(2));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#create-barcode-input').fill('OIL-500ML');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#cost-price').fill('30.00');
             await page.locator('#selling-price').fill('40.00');
             await baseUnitSelect.selectOption('pouch');
             await page.getByLabel('Receiving Unit', { exact: true }).selectOption('box');
 
-            await page.evaluate(() => setWizardStep(4));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await initialQtyInput.fill('5');
             assert.equal(await initialQtyInput.inputValue(), '5', 'Accepts whole integer pouch quantity');
 
-            await page.evaluate(() => setWizardStep(5));
-            await page.locator('#wizard-save').click();
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
+            await page.locator('#product-create-save').click();
 
             const submitted500 = await page.evaluate(() => window.submittedProducts[1]);
             assert.equal(submitted500.product_name, 'Oil 500 mL');

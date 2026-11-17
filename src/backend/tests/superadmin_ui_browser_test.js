@@ -495,8 +495,8 @@ const fixture = action => {
                     await page.locator('#add-product-btn').tap();
                     await page.locator('#add-product-modal.open').waitFor({state: 'visible'});
                     assert.equal(await page.locator('body').evaluate(el => el.classList.contains('no-scroll')), true);
-                    await page.locator('#wizard-next').tap();
-                    assert.equal(await page.locator('[data-panel="1"]').isVisible(), true, 'Invalid form stays on Basic step');
+                    await page.locator('#product-create-save').tap();
+                    assert.equal(await page.locator('#product-name').getAttribute('aria-invalid'), 'true', 'Empty form stays open with inline validation');
                     await page.keyboard.press('Escape');
                     await page.locator('.manage-product').first().tap();
                     await page.locator('#product-drawer.open').waitFor({state: 'visible'});

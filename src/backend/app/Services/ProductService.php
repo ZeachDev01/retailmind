@@ -62,6 +62,33 @@ class ProductService
 
     public function createProduct(array $data, int $userId): int
     {
+        if (trim((string)($data['product_name'] ?? '')) === '') throw new RuntimeException('Product name is required.');
+        $category = filter_var($data['category_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $categoryQuery = $this->pdo->prepare('SELECT category_id FROM categories WHERE category_id = ?');
+        $categoryQuery->execute([$category ?: 0]);
+        if (!$category || !$categoryQuery->fetchColumn()) throw new RuntimeException('Category is required. Select an existing category.');
+        if (trim((string)($data['base_unit'] ?? '')) === '') throw new RuntimeException('Base unit is required.');
+        $cost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
+        if ($cost === null) throw new RuntimeException('Cost price is required. Enter zero for free goods.');
+        $selling = $data['selling_price'] ?? $data['unit_price'] ?? null;
+        if (!is_scalar($selling) || !is_numeric($selling) || !is_finite((float)$selling)
+            || (float)$selling <= 0 || (float)$selling > 99999999.99 || (float)$selling < $cost) {
+            throw new RuntimeException('Selling price must be positive, within range, and not lower than cost.');
+        }
+        $this->validateStockSetting($data['units_per_package'] ?? 1, 'Items per Receiving Package', 1);
+        if (($data['creation_origin'] ?? '') === 'receiving') {
+            foreach (['initial_stock_quantity', 'starting_packs', 'starting_loose'] as $field) {
+                if ($this->validateStockSetting($data[$field] ?? 0, 'Receiving starting stock', 0) !== 0) {
+                    throw new RuntimeException('Enter delivered quantities in Stock Receiving. Starting stock must be zero.');
+                }
+            }
+        }
+        return $this->createProductRecord($data, $userId);
+    }
+
+    // Imports retain optional historical fields; normal creation requires the essentials above.
+    private function createProductRecord(array $data, int $userId): int
+    {
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
         }
@@ -509,7 +536,7 @@ class ProductService
                     throw new RuntimeException('Product name is required for a new product.');
                 }
 
-                $productId = $this->createProduct([
+                $productId = $this->createProductRecord([
                     'barcode' => $barcode,
                     'product_name' => $productName,
                     'brand' => $brand,

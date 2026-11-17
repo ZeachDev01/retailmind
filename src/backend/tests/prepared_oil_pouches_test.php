@@ -128,6 +128,7 @@ try {
     // Rejection of fractional initial stock quantity at entry boundary
     $throws(
         static fn() => $productService->createProduct([
+            'category_id' => 1, 'cost_price' => 0,
             'product_name' => 'Fractional Oil',
             'barcode' => 'OIL-FRAC-01',
             'base_unit' => 'pouch',
@@ -140,6 +141,7 @@ try {
 
     $throws(
         static fn() => $productService->createProduct([
+            'category_id' => 1, 'cost_price' => 0,
             'product_name' => 'Fractional String Oil',
             'barcode' => 'OIL-FRAC-02',
             'base_unit' => 'pouch',
@@ -152,6 +154,7 @@ try {
 
     // Create Oil 250 mL pouch
     $oil250Id = $productService->createProduct([
+        'category_id' => 1,
         'product_name' => 'Oil 250 mL',
         'barcode' => 'OIL-250ML',
         'base_unit' => 'pouch',
@@ -165,6 +168,7 @@ try {
 
     // Create Oil 500 mL pouch
     $oil500Id = $productService->createProduct([
+        'category_id' => 1,
         'product_name' => 'Oil 500 mL',
         'barcode' => 'OIL-500ML',
         'base_unit' => 'pouch',

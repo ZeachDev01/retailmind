@@ -26,13 +26,15 @@ try {
     $fixture('open_fiscal_period');
     $products = new ProductService($pdo);
     $receiving = new ReceivingService($pdo);
-    $id = $products->createProduct(['product_name' => 'Free sample', 'cost_price' => '0', 'initial_stock_quantity' => 1], 3);
+    $id = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'selling_price' => 20, 'product_name' => 'Free sample', 'cost_price' => '0', 'initial_stock_quantity' => 1], 3);
     $receiving->receiveStock(['product_id' => $id, 'received_qty' => 2], 3);
     $history = $receiving->getGroupedReceivingHistory(3);
     $assert($history[0]['lines'][0]['cost_price'] === 0.0, 'Blank receipt must inherit explicitly recorded product zero');
-    $missing = $products->createProduct(['product_name' => 'Missing sample', 'initial_stock_quantity' => 1], 3);
-    $legacy = $products->createProduct(['product_name' => 'Legacy sample'], 3);
-    $positive = $products->createProduct(['product_name' => 'Paid sample', 'cost_price' => '5'], 3);
+    $missing = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Missing sample', 'initial_stock_quantity' => 1], 3);
+    $legacy = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Legacy sample'], 3);
+    $positive = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'selling_price' => 20, 'product_name' => 'Paid sample', 'cost_price' => '5'], 3);
+    $pdo->exec("UPDATE products SET cost_known=0 WHERE product_id IN ($missing, $legacy)");
+    $pdo->exec("UPDATE product_batches SET cost_price=NULL WHERE product_id=$missing");
     $receiving->receiveShoppingTrip([
         ['product_id' => $missing, 'received_qty' => 2],
         ['product_id' => $legacy, 'received_qty' => 2],

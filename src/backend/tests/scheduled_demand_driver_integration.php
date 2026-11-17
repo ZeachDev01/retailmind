@@ -55,11 +55,12 @@ $productService = new \ProductService($pdo);
 
 // 1. Create a product with a selling price
 $productId = $productService->createProduct([
+    'base_unit' => 'piece',
     'product_name' => 'Integration Test Product',
     'barcode' => 'INT-TEST-01',
     'selling_price' => 123.45,
     'cost_price' => 100.0,
-    'category_id' => null
+    'category_id' => 1
 ], $userId);
 
 // Check if scheduled demand driver for price was created

@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
     const start = source.indexOf('<div class="rm-modal-overlay" id="add-product-modal"');
     const end = source.indexOf('<div class="rm-modal-overlay" id="add-category-modal"', start);
     const markup = source.slice(start, end).replace(/<\?php[\s\S]*?\?>/g, '').replace(/<\?=[\s\S]*?\?>/g, '');
-    const wizard = source.slice(source.indexOf('// Product wizard and validation'), source.indexOf('// Camera scan and internal barcode generation'));
+    const wizard = source.slice(source.indexOf('// Product creation and validation'), source.indexOf('// Camera scan and internal barcode generation'));
     const css = fs.readFileSync(path.join(frontend, 'assets/css/style.css'), 'utf8') + source.match(/<style>([\s\S]*?)<\/style>/)[1];
     const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
 
@@ -31,20 +31,18 @@ const { chromium } = require('playwright');
                 document.getElementById('product-category').innerHTML = '<option value="1">Biscuits</option>';
             });
             await page.addScriptTag({ content: wizard });
-            await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('add-product-modal')));
+            await page.evaluate(() => { RetailMindUI.openOverlay(document.getElementById('add-product-modal')); document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }); });
 
             // Panel 1: Name and Category
             await page.locator('#product-name').fill('Chocolate Biscuits 12s');
             assert.equal(await page.getByRole('combobox', {name: 'Parent Product Family', exact: true}).inputValue(), 'Standalone product', 'Standalone is visible as the default parent family');
             await page.locator('#product-category').selectOption('1', { force: true });
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
 
             // Panel 2: Barcodes & Identifiers (optional fields, can proceed directly)
-            assert.ok(await page.locator('[data-panel="2"]').evaluate(p => p.classList.contains('active')), 'Step 2 active');
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
 
             // Panel 3: Pricing & Units & Sales Pack configuration
-            assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Step 3 active');
             await page.locator('#cost-price').fill('8.00');
             await page.locator('#selling-price').fill('10.00');
 
@@ -68,9 +66,9 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#cost-price').getAttribute('readonly'), '', 'Computed cost is read-only');
             assert.equal(await page.locator('#selling-price').inputValue(), '10.00', 'Pack costing preserves manually entered selling price');
             assert.equal(await page.evaluate(() => new FormData(document.getElementById('add-product-form')).has('pack_size')), false, 'Purchase cost does not enable Sales Packs');
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
             assert.equal(await page.locator('#stock-sales-packs-wrapper').isVisible(), false, 'Purchase packs alone do not enable sealed stock');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
             await capture('pack');
             await page.locator('#create-markup-tools summary').click();
             await page.locator('#create-pack-markup').fill('25');
@@ -94,8 +92,8 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#cost-price').inputValue(), '12.00', 'Returning By pack recomputes from its inputs');
             for (const invalid of ['', '0', '1.5', '2147483648']) {
                 await page.locator('#create-purchase-pack-size').fill(invalid);
-                await page.locator('#wizard-next').click();
-                assert.ok(await page.locator('[data-panel="3"]').evaluate(panel => panel.classList.contains('active')), 'Invalid purchase count blocks progress');
+                await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
+            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
             }
             await page.locator('#create-purchase-pack-size').fill('12');
             await page.locator('#create-pack-cost').fill('96.00');
@@ -115,15 +113,15 @@ const { chromium } = require('playwright');
             await page.locator('#create-pack-size').fill('12');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Sold individually: ₱120.00'), 'Comparison shows the individual selling total');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('Pack cost: ₱96.00'), 'Purchase cost remains visible beside the discount guide');
-            await page.locator('#wizard-next').click();
-            assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Incomplete pack configuration blocks step 3 advance');
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
+            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
 
             // Fill barcode, but invalid price (pack price >= pack_size * selling_price: 12 * 10 = 120)
             await page.locator('#create-pack-barcode').fill('BISCUIT-12PK');
             await page.locator('#create-pack-price').fill('125.00');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('below ₱120.00'), 'Comparison warns when the pack price kills the discount');
-            await page.locator('#wizard-next').click();
-            assert.ok(await page.locator('[data-panel="3"]').evaluate(p => p.classList.contains('active')), 'Excessive pack price blocks step 3 advance');
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
+            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
 
             // Valid pack price: 100.00 (< 120.00)
             await page.locator('#create-pack-price').fill('100.00');
@@ -135,10 +133,9 @@ const { chromium } = require('playwright');
             assert.ok((await page.locator('#pack-price-calc-preview').textContent()).includes('₱144.00'), 'Comparison follows a change in the selling price');
             await page.locator('#selling-price').fill('10.00');
             await capture('sealed');
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
 
             // Panel 4: starting stock follows Sales Pack configuration automatically.
-            assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), 'Step 4 is now active');
 
             assert.equal(await page.locator('[name="starting_stock_mode"]').count(), 0, 'No stock-mode selection is needed');
             assert.ok(await page.getByLabel('Sales Packs', { exact: true }).isVisible(), 'Sales Pack count is shown automatically');
@@ -160,7 +157,7 @@ const { chromium } = require('playwright');
 
             // Closing and reopening preserves explicit sealed and loose counts.
             await page.locator('#add-product-modal [data-close-modal]').first().click();
-            await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('add-product-modal')));
+            await page.evaluate(() => { RetailMindUI.openOverlay(document.getElementById('add-product-modal')); document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }); });
             assert.equal(await page.locator('#starting-packs-count').inputValue(), '5');
             assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '3');
             assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '63');
@@ -168,13 +165,13 @@ const { chromium } = require('playwright');
             // Invalid visible counts and overflow must block review.
             for (const invalid of ['-1', '1.5', '2147483647']) {
                 await page.locator('#starting-packs-count').fill(invalid);
-                await page.locator('#wizard-next').click();
-                assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), `${invalid} pack count blocks review`);
+                await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
+            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
             }
             await page.locator('#starting-packs-count').fill('5');
             await page.locator('#starting-pack-loose-count').fill('1.5');
-            await page.locator('#wizard-next').click();
-            assert.ok(await page.locator('[data-panel="4"]').evaluate(p => p.classList.contains('active')), 'Fractional loose count blocks review');
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
+            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
             await page.locator('#starting-pack-loose-count').fill('3');
 
             assert.equal(await page.locator('#stock-sales-packs-wrapper').evaluate(el => el.closest('.form-group').classList.contains('invalid')), false, 'Correcting counts clears the stock error');
@@ -182,23 +179,22 @@ const { chromium } = require('playwright');
             assert.ok(await page.locator('#add-product-modal .rm-modal').evaluate(el => el.scrollWidth <= el.clientWidth), 'Modal has no horizontal overflow');
 
             // Removing the pack configuration keeps the total as pieces; enabling it never invents sealed stock.
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
             await page.locator('#create-sell-packs').uncheck();
             assert.equal(await page.evaluate(() => new FormData(document.getElementById('add-product-form')).has('pack_size')), false, 'Disabled Sales Pack values are omitted from saving');
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
             assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '63');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
             await page.locator('#create-sell-packs').check();
             assert.equal(await page.locator('#create-pack-size').inputValue(), '12', 'Re-enabling preserves the entered Sales Pack');
-            await page.locator('#wizard-next').click();
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
             assert.equal(await page.locator('#starting-packs-count').inputValue(), '0');
             assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '63');
             await page.locator('#starting-packs-count').fill('5');
             await page.locator('#starting-pack-loose-count').fill('3');
 
             // Advance to Panel 5: Review
-            await page.locator('#wizard-next').click();
-            assert.ok(await page.locator('[data-panel="5"]').evaluate(p => p.classList.contains('active')), 'Step 5 review is active');
+            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
             assert.equal(await page.locator('[name="print_after_create"]').isChecked(), false, 'Barcode labels stay closed by default');
 
             // Intercept form submit and assert payload
@@ -208,7 +204,7 @@ const { chromium } = require('playwright');
                     event.preventDefault();
                 });
             });
-            await page.locator('#wizard-save').click();
+            await page.locator('#product-create-save').click();
 
             const submitted = await page.evaluate(() => window.submittedProduct);
             assert.equal(submitted.product_name, 'Chocolate Biscuits 12s');
@@ -226,7 +222,7 @@ const { chromium } = require('playwright');
                 syncStartingStockFields();
                 updatePackPriceCalc();
             });
-            await page.evaluate(() => setWizardStep(4));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
             assert.equal(await page.getByLabel('Starting pieces', { exact: true }).inputValue(), '0', 'Reset returns to piece-only entry');
             assert.equal(await page.locator('#create-cost-mode').inputValue(), 'piece', 'Reset returns to By piece');
             assert.equal(await page.locator('#create-sell-packs').isChecked(), false);
@@ -234,7 +230,7 @@ const { chromium } = require('playwright');
             assert.deepEqual(errors, []);
             await page.close();
         }
-        console.log('PASS: Sales pack configuration wizard, non-inferred starting stock, and submission (desktop/mobile)');
+        console.log('PASS: Sales pack configuration form, non-inferred starting stock, and submission (desktop/mobile)');
     } finally {
         await browser.close();
     }

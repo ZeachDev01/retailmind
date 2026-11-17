@@ -100,7 +100,7 @@ const frontend = path.resolve(__dirname, '../../frontend');
                 await page.evaluate(() => updateProductTableRow({ product_id: 3, product_name: 'Updated', cost_price: 0.1, unit_price: 0.3, status: 'active' }));
                 assert.equal((await rows.nth(2).locator('td').nth(profitIndex).innerText()).trim(), '₱-0.20', 'Saving prices refreshes Profit with two decimal places');
                 await page.locator('body').evaluate(body => body.insertAdjacentHTML('beforeend', '<button id="export-products">Export</button>'));
-                const exportScript = source.slice(source.indexOf('        function csvCell('), source.indexOf('        // Product wizard'));
+                const exportScript = source.slice(source.indexOf('        function csvCell('), source.indexOf('        // Product creation'));
                 await page.addScriptTag({ content: `const filteredRows = Array.from(document.querySelectorAll('tbody tr')); const productsById = {1: {cost_price: 80, unit_price: 100}, 2: {cost_price: 120, unit_price: 100}, 3: {cost_price: 0.1, unit_price: 0.3}};` + exportScript });
                 const downloadPromise = page.waitForEvent('download');
                 await page.getByRole('button', { name: 'Export', exact: true }).click();

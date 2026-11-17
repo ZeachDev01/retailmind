@@ -131,8 +131,8 @@ const fixture = (action, extra) => {
                                 await page.locator('#guidance-btn-next').click();
                             }
                             if (topicId === 'products' && index === 3) {
-                                await page.locator('#wizard-back').click({timeout: 3000});
-                                assert.equal(await page.locator('.wizard-panel.active').getAttribute('data-panel'), '2', 'Product wizard state follows the guide');
+                                await page.locator('#create-receiving-options summary').click({timeout: 3000});
+                                assert.equal(await page.locator('#create-receiving-options').evaluate(el => el.open), false, 'Optional product settings remain keyboard accessible');
                                 await page.locator('#guidance-btn-back').click();
                                 await page.locator('#guidance-btn-next').click();
                             }

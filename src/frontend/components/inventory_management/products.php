@@ -10,6 +10,9 @@ require_role(['admin', 'super_admin', 'inventory_manager']);
 $canManageInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
+$receivingOrigin = ($_POST['creation_origin'] ?? $_GET['origin'] ?? '') === 'receiving';
+$productCreateRetry = $_SESSION['product_create_retry'] ?? null;
+unset($_SESSION['product_create_retry']);
 
 function product_ids_from_request($value): array
 {
@@ -20,7 +23,7 @@ function product_ids_from_request($value): array
 function redirect_products(string $type, string $message): void
 {
     if (in_array($type, ['success', 'warning'], true)) $_SESSION['inventory_confirmed_draft'] = $_POST['inventory_draft_id'] ?? null;
-    header('Location: products.php?' . $type . '=' . urlencode($message));
+    header('Location: products.php?' . ((($_POST['creation_origin'] ?? '') === 'receiving') ? 'origin=receiving&' : '') . $type . '=' . urlencode($message));
     exit;
 }
 
@@ -216,6 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $productId = $productService->createProduct([
                 'product_image_fingerprint' => !empty($_FILES['product_image']['tmp_name']) ? hash_file('sha256', $_FILES['product_image']['tmp_name']) : '',
                 'operation_token' => $_POST['operation_token'] ?? '',
+                'creation_origin' => $receivingOrigin ? 'receiving' : 'products',
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
                 'brand' => $_POST['brand'] ?? '',
@@ -242,8 +246,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'pack_size' => !empty($_POST['pack_size']) ? $_POST['pack_size'] : null,
                 'pack_barcode' => !empty($_POST['pack_barcode']) ? $_POST['pack_barcode'] : null,
                 'pack_price' => !empty($_POST['pack_price']) ? $_POST['pack_price'] : null,
-                'starting_packs' => $startingPacks,
-                'starting_loose' => $startingLoose,
+                'starting_packs' => $receivingOrigin ? ($_POST['starting_packs'] ?? 0) : $startingPacks,
+                'starting_loose' => $receivingOrigin ? ($_POST['starting_loose'] ?? 0) : $startingLoose,
             ], (int)$_SESSION['user_id']);
 
             $newProductStmt = $pdo->prepare(
@@ -258,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $_SESSION['inventory_confirmed_draft'] = $_POST['inventory_draft_id'] ?? null;
             $labelQuantity = max(1, min(200, (int)($_POST['label_quantity'] ?? 1)));
-            if (!empty($_POST['print_after_create'])) {
+            if (!$receivingOrigin && !empty($_POST['print_after_create'])) {
                 header('Location: print_barcodes.php?product_id=' . $productId . '&quantity=' . $labelQuantity . '&autoprint=1');
                 exit;
             }
@@ -269,6 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
+            $_SESSION['product_create_retry'] = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again.' : '')];
             if (in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE], true)) {
                 redirect_products('warning', $alert);
             }
@@ -416,7 +421,7 @@ foreach ($products as $product) {
     <title>Products &amp; Stock</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <style>
-        /* Keep wizard actions visible while the fields scroll. */
+        /* Keep product actions visible while the fields scroll. */
         #add-product-modal {
             padding: 12px;
         }
@@ -464,7 +469,7 @@ foreach ($products as $product) {
             font-size: 1rem;
         }
 
-        /* Pricing step: three labelled sections instead of one unbroken field grid. */
+        /* Pricing helpers: three labelled sections instead of one unbroken field grid. */
         #add-product-modal .pricing-section {
             display: grid;
             gap: 0.6rem;
@@ -570,9 +575,6 @@ foreach ($products as $product) {
                 white-space: normal;
             }
 
-            #add-product-modal .wizard-step-indicator {
-                font-size: 12px;
-            }
 
             #add-product-modal .form-grid,
             #add-product-modal .detail-grid {
@@ -580,9 +582,6 @@ foreach ($products as $product) {
             }
         }
 
-        #add-product-modal .wizard-panel {
-            min-height: auto;
-        }
 
         .product-add-menu {
             position: relative;
@@ -1460,63 +1459,55 @@ foreach ($products as $product) {
             <header class="rm-modal-header">
                 <div>
                     <h2 id="add-product-title">Add Product</h2>
-                    <p>Complete the product details and enter any starting stock.</p>
+                    <p>Enter the essentials. Expand settings when needed.</p>
                 </div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button>
             </header>
-            <form method="POST" id="add-product-form" novalidate enctype="multipart/form-data">
+            <form method="POST" id="add-product-form" data-retry="<?= htmlspecialchars(json_encode($productCreateRetry), ENT_QUOTES, 'UTF-8') ?>" novalidate enctype="multipart/form-data">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
                 <div class="rm-modal-body">
-                    <div class="wizard-progress" aria-label="Product creation steps">
-                        <span class="wizard-step-indicator active" data-step="1">Basic</span><span class="wizard-step-indicator" data-step="2">Barcode</span><span class="wizard-step-indicator" data-step="3">Pricing</span><span class="wizard-step-indicator" data-step="4">Planning</span><span class="wizard-step-indicator" data-step="5">Review</span>
-                    </div>
-
-                    <section class="wizard-panel active" data-panel="1">
-                        <div class="form-grid">
-                            <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
-                            <div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
-                            <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
+<input type="hidden" name="creation_origin" value="<?= $receivingOrigin ? 'receiving' : 'products' ?>">
+<div id="product-create-error" role="alert" tabindex="-1" hidden></div>
+<div class="form-grid">
+<div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
+<div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
-                            <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown data-search-empty-label name="parent_product_id" id="parent-product-id">
-                                    <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
-                                </select></div>
-                            <div class="form-group"><label for="create-variant-label">Variant Label</label><input name="variant_label" id="create-variant-label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
-                            <div class="form-group full"><label for="product-image-input">Product Image</label>
-                                <div class="u-mb-05"><input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp"><small class="field-help">Supported formats: JPEG, PNG, GIF, WebP. Max size: 5MB.</small></div>
-                                <div id="image-preview-container" hidden>
-                                    <div style="display:flex;flex-direction:column;gap:0.5rem"><img id="image-preview" src="" alt="Product preview" width="200" height="200" style="max-width:200px;border-radius:4px;border:1px solid #ddd;"><button type="button" class="btn btn-small btn-quiet" id="clear-image-btn">Clear image</button></div>
+<div class="form-group">
+                                    <label for="product-base-unit">Base Unit</label>
+                                    <select id="product-base-unit" data-unit-field="base_unit">
+                                        <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
+                                        <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
+                                        <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
+                                        <option value="">Other…</option>
+                                    </select>
+                                    <div data-unit-custom hidden>
+                                        <label for="product-base-unit-custom">Custom base unit</label>
+                                        <input name="base_unit" id="product-base-unit-custom" value="piece" placeholder="Enter your unit">
+                                        <small class="field-error">Enter a custom base unit.</small>
+                                    </div>
                                 </div>
+<div class="form-group">
+                                    <label for="cost-price">Cost Price per Piece (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" required aria-describedby="pack-price-suggested">
+                                    <small class="field-error">Enter a cost of zero or more.</small>
+                                    <small class="field-help" id="pack-price-suggested" aria-live="polite">Your purchase cost for one piece.</small>
+                                </div>
+<div class="form-group">
+                                    <label for="selling-price">Selling Price per Piece (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="selling_price" id="selling-price" required>
+                                    <small class="field-error">Selling price must not be lower than cost.</small>
+                                    <small class="field-help">What the customer pays for one piece.</small>
+                                </div>
+<div class="form-group full"><label for="create-barcode-input">Individual Item Barcode</label>
+                                <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
                             </div>
-                        </div>
-                    </section>
-
-                    <section class="wizard-panel" data-panel="2">
-                        <div class="u-mb-1" id="add-product-scanner-section" hidden>
-                            <div id="add-product-scanner-reader" style="max-width:420px;margin:auto"></div>
-                            <p class="section-description" id="add-product-scanner-result">Point the camera at a barcode.</p>
-                        </div>
-                        <div class="form-grid">
-                            <div class="form-group full"><label for="create-barcode-input">Individual Item Barcode</label>
-                                <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, generate, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button><button type="button" class="btn btn-warning" id="generate-barcode-btn"><i class="bi bi-upc"></i> Generate</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
-                            </div>
-                            <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
-                            <div class="form-group"><label for="create-product-status">Status</label><select name="status" id="create-product-status">
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                </select></div>
-                        </div>
-                    </section>
-
-                    <section class="wizard-panel" data-panel="3">
-                        <div class="pricing-section">
-                            <h3 class="planning-section-title">Purchase cost</h3>
-                            <input type="hidden" name="cost_entry_mode" id="create-cost-mode" value="piece">
-                            <div class="pricing-mode-switch" role="group" aria-label="Cost entry mode">
+</div>
+<details class="product-create-options"><summary>Purchase pack cost and markup</summary>
+<input type="hidden" name="cost_entry_mode" id="create-cost-mode" value="piece"><div class="pricing-mode-switch" role="group" aria-label="Cost entry mode">
                                 <button type="button" data-cost-mode="piece" aria-pressed="true" aria-controls="purchase-pack-fields"><i class="bi bi-pencil-square" aria-hidden="true"></i><span><strong>Enter cost per piece</strong></span></button>
                                 <button type="button" data-cost-mode="pack" aria-pressed="false" aria-controls="purchase-pack-fields"><i class="bi bi-calculator" aria-hidden="true"></i><span><strong>Calculate from purchase pack</strong></span></button>
-                            </div>
-                            <div id="purchase-pack-fields" hidden>
+                            </div><div id="purchase-pack-fields" hidden>
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label for="create-pack-cost">Purchase Pack Cost (&#8369;) *</label>
@@ -1530,25 +1521,7 @@ foreach ($products as $product) {
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="pricing-section">
-                            <h3 class="planning-section-title">Piece pricing</h3>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="cost-price">Cost Price per Piece (&#8369;)</label>
-                                    <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" placeholder="Not recorded" aria-describedby="pack-price-suggested">
-                                    <small class="field-error">Enter a valid cost price.</small>
-                                    <small class="field-help" id="pack-price-suggested" aria-live="polite">Your purchase cost for one piece.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="selling-price">Selling Price per Piece (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="selling_price" id="selling-price" required>
-                                    <small class="field-error">Selling price must not be lower than cost.</small>
-                                    <small class="field-help">What the customer pays for one piece.</small>
-                                </div>
-                            </div>
-                            <details class="pricing-markup" id="create-markup-tools">
+<details class="pricing-markup" id="create-markup-tools">
                                 <summary>Calculate selling price with markup</summary>
                                 <div class="pricing-markup-row">
                                     <div class="form-group"><label for="create-pack-markup">Markup % (optional)</label><input type="number" step="0.1" min="0" name="pack_markup_percent" id="create-pack-markup"><small class="field-error">Enter a markup of zero or more.</small></div>
@@ -1556,9 +1529,28 @@ foreach ($products as $product) {
                                 </div>
                                 <p class="field-help" id="create-markup-status" role="status"></p>
                             </details>
-                            <label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label>
-                            <p class="pricing-note">Set a pack price cheaper than buying the same pieces individually.</p>
-                            <div id="sales-pack-fields" hidden>
+</details>
+<details class="product-create-options" id="create-receiving-options"><summary>Receiving package</summary>
+<div class="form-grid">
+<div class="form-group">
+                                    <label for="product-receiving-unit">Receiving Unit</label>
+                                    <select id="product-receiving-unit" data-unit-field="receiving_unit">
+                                        <option value="package">Package</option><option value="case">Case</option><option value="box">Box</option><option value="carton">Carton</option>
+                                        <option value="pack">Pack</option><option value="bundle">Bundle</option><option value="bag">Bag</option><option value="sack">Sack</option>
+                                        <option value="tray">Tray</option><option value="crate">Crate</option><option value="ream">Ream</option><option value="pallet">Pallet</option>
+                                        <option value="">Other…</option>
+                                    </select>
+                                    <div data-unit-custom hidden>
+                                        <label for="product-receiving-unit-custom">Custom receiving unit</label>
+                                        <input name="receiving_unit" id="product-receiving-unit-custom" value="package" placeholder="Enter your unit">
+                                        <small class="field-error">Enter a custom receiving unit.</small>
+                                    </div>
+                                </div>
+<div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1" required step="1" max="2147483647"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
+<div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
+</div>
+</details>
+<label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label><div id="sales-pack-fields" hidden>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="create-pack-size">Pieces per Sales Pack *</label>
@@ -1577,49 +1569,25 @@ foreach ($products as $product) {
                                 </div>
                             </div>
                             <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
-                            </div>
-                        </div>
-
-                        <div class="pricing-section">
-                            <h3 class="planning-section-title">Units</h3>
-                            <p class="pricing-note">How stock is counted and how deliveries arrive.</p>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="product-base-unit">Base Unit</label>
-                                    <select id="product-base-unit" data-unit-field="base_unit">
-                                        <option value="piece">Piece</option><option value="bottle">Bottle</option><option value="can">Can</option><option value="sachet">Sachet</option>
-                                        <option value="stick">Stick</option><option value="pack">Pack</option><option value="bag">Bag</option><option value="box">Box</option>
-                                        <option value="jar">Jar</option><option value="tube">Tube</option><option value="roll">Roll</option><option value="pair">Pair</option><option value="pouch">Pouch</option>
-                                        <option value="">Other…</option>
-                                    </select>
-                                    <div data-unit-custom hidden>
-                                        <label for="product-base-unit-custom">Custom base unit</label>
-                                        <input name="base_unit" id="product-base-unit-custom" value="piece" placeholder="Enter your unit">
-                                        <small class="field-error">Enter a custom base unit.</small>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="product-receiving-unit">Receiving Unit</label>
-                                    <select id="product-receiving-unit" data-unit-field="receiving_unit">
-                                        <option value="package">Package</option><option value="case">Case</option><option value="box">Box</option><option value="carton">Carton</option>
-                                        <option value="pack">Pack</option><option value="bundle">Bundle</option><option value="bag">Bag</option><option value="sack">Sack</option>
-                                        <option value="tray">Tray</option><option value="crate">Crate</option><option value="ream">Ream</option><option value="pallet">Pallet</option>
-                                        <option value="">Other…</option>
-                                    </select>
-                                    <div data-unit-custom hidden>
-                                        <label for="product-receiving-unit-custom">Custom receiving unit</label>
-                                        <input name="receiving_unit" id="product-receiving-unit-custom" value="package" placeholder="Enter your unit">
-                                        <small class="field-error">Enter a custom receiving unit.</small>
-                                    </div>
+                            </div><p class="field-help">If a pack is received and sold unchanged, register its barcode only as a Sales Pack barcode.</p>
+<details class="product-create-options"><summary>Brand, photo and variants</summary>
+<div class="form-grid">
+<div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
+<div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown data-search-empty-label name="parent_product_id" id="parent-product-id">
+                                    <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
+                                </select></div>
+<div class="form-group"><label for="create-variant-label">Variant Label</label><input name="variant_label" id="create-variant-label" maxlength="100" placeholder="Example: 200 mL, Red, Large"></div>
+<div class="form-group full"><label for="product-image-input">Product Image</label>
+                                <div class="u-mb-05"><input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp"><small class="field-help">Supported formats: JPEG, PNG, GIF, WebP. Max size: 5MB.</small></div>
+                                <div id="image-preview-container" hidden>
+                                    <div style="display:flex;flex-direction:column;gap:0.5rem"><img id="image-preview" src="" alt="Product preview" width="200" height="200" style="max-width:200px;border-radius:4px;border:1px solid #ddd;"><button type="button" class="btn btn-small btn-quiet" id="clear-image-btn">Clear image</button></div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
-
-                    <section class="wizard-panel" data-panel="4">
-                        <div class="form-grid">
-                            <h3 class="full planning-section-title">Starting Stock</h3>
-                            <div class="form-group full">
+</div>
+</details>
+<p id="receiving-product-note" hidden>Enter delivered quantities in Stock Receiving after saving this product. Opening stock stays zero.</p>
+<details class="product-create-options" id="create-opening-stock"><summary>Opening Batch stock and barcode labels</summary><div class="form-grid">
+<div class="form-group full">
                                 <div id="stock-pieces-wrapper">
                                     <label for="initial-stock-quantity">Starting pieces</label>
                                     <input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required>
@@ -1640,30 +1608,22 @@ foreach ($products as $product) {
                                 </div>
                                 <small class="field-error">Enter whole numbers of zero or more. Total stock cannot exceed 2,147,483,647 pieces.</small>
                             </div>
-                            <div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
-                            <h3 class="full planning-section-title">Restocking</h3>
-                            <div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
-                            <div class="form-group"><label for="create-min-order">Minimum Order Quantity</label><input type="number" min="1" id="create-min-order" name="minimum_order_quantity" value="1"></div>
-                            <div class="form-group"><label for="create-reorder-level">Reorder Level</label><input type="number" min="0" id="create-reorder-level" name="reorder_level" value="10"></div>
-                            <div class="form-group"><label for="create-safety-stock">Safety Stock</label><input type="number" min="0" id="create-safety-stock" name="safety_stock" value="0"></div>
-                            <div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
-                            <div class="form-group full"><label class="u-checkbox-label" for="supplier-pullout-eligible"><input type="checkbox" id="supplier-pullout-eligible" name="supplier_pullout_eligible" value="1" aria-describedby="supplier-pullout-help"> Supplier Pullout Eligibility</label><small class="field-help" id="supplier-pullout-help">Enable only when the supplier accepts this Product for collection.</small></div>
-                            <h3 class="full planning-section-title">Supplier</h3>
-                            <div class="form-group full"><label for="preferred-supplier">Supplier Name (optional)</label><input id="preferred-supplier" name="preferred_supplier"></div>
-                            <div class="form-group full"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
-                        </div>
-                    </section>
-
-                    <section class="wizard-panel" data-panel="5">
-                        <div class="detail-grid" id="product-review"></div>
-                        <div class="u-info-note"><i class="bi bi-info-circle"></i> Starting stock is the number of items you have now. Use Stock Receiving to add future deliveries.</div>
-                        <div class="form-grid u-mt-1">
-                            <label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1">Open printable barcode labels after saving</label>
+<div class="form-group full" id="starting-stock-expiration-group" hidden><label for="starting-stock-expiration">Starting Stock Expiration</label><input type="date" id="starting-stock-expiration" name="expiration_date"></div>
+<label class="form-group full u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1">Open printable barcode labels after saving</label>
                             <div class="form-group"><label for="create-label-qty">Number of labels</label><input type="number" id="create-label-qty" name="label_quantity" value="1" min="1" max="200"></div>
-                        </div>
-                    </section>
+</div></details>
+<details class="product-create-options"><summary>Planning and expiry</summary>
+<div class="form-grid">
+<div class="form-group"><label for="create-min-order">Minimum Order Quantity</label><input type="number" min="1" id="create-min-order" name="minimum_order_quantity" value="1"></div>
+<div class="form-group"><label for="create-reorder-level">Reorder Level</label><input type="number" min="0" id="create-reorder-level" name="reorder_level" value="10"></div>
+<div class="form-group"><label for="create-safety-stock">Safety Stock</label><input type="number" min="0" id="create-safety-stock" name="safety_stock" value="0"></div>
+<div class="form-group full"><label for="supplier-lead-time">Supplier Lead Time (Days, optional)</label><input id="supplier-lead-time" type="number" min="0" name="supplier_lead_time_days"></div>
+<div class="form-group"><label for="warning-lead-time-days">Expiry Warning Lead Time (Days)</label><input id="warning-lead-time-days" type="number" min="1" step="1" name="warning_lead_time_days" placeholder="Default (30)"></div>
+<div class="form-group full"><label class="u-checkbox-label" for="supplier-pullout-eligible"><input type="checkbox" id="supplier-pullout-eligible" name="supplier_pullout_eligible" value="1" aria-describedby="supplier-pullout-help"> Supplier Pullout Eligibility</label><small class="field-help" id="supplier-pullout-help">Enable only when the supplier accepts this Product for collection.</small></div>
+</div>
+</details>
                 </div>
-                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="wizard-reset">Reset</button><button type="button" class="btn btn-quiet" id="wizard-back" hidden>Back</button><button type="button" class="btn" id="wizard-next">Next</button><button type="submit" class="btn btn-success" id="wizard-save" hidden><i class="bi bi-check2"></i> Save Product</button></footer>
+                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="product-create-reset">Reset</button><button type="submit" class="btn" id="product-create-save"><i class="bi bi-check2"></i> Save Product</button></footer>
             </form>
         </section>
     </div>
@@ -2868,18 +2828,16 @@ foreach ($products as $product) {
             URL.revokeObjectURL(link.href);
         });
 
-        // Product wizard and validation
-        let wizardStep = 1;
+        // Product creation and validation
         const addProductForm = document.getElementById('add-product-form');
-        const nextButton = document.getElementById('wizard-next');
-        const backButton = document.getElementById('wizard-back');
-        const saveButton = document.getElementById('wizard-save');
+        const saveButton = document.getElementById('product-create-save');
+        const productCreationOrigin = addProductForm.elements.creation_origin.value;
         const unitSelects = addProductForm.querySelectorAll('[data-unit-field]');
         const costEntryMode = document.getElementById('create-cost-mode');
         const purchasePackCost = document.getElementById('create-pack-cost');
         const purchasePackSize = document.getElementById('create-purchase-pack-size');
         const sellSealedPacks = document.getElementById('create-sell-packs');
-        addProductForm.querySelector('[data-panel="3"]').addEventListener('input', event => {
+        addProductForm.addEventListener('input', event => {
             event.target.closest('.form-group')?.classList.remove('invalid');
         });
 
@@ -2907,7 +2865,6 @@ foreach ($products as $product) {
             });
         });
 
-        addProductForm.addEventListener('retailmind:guidance-step', event => setWizardStep(event.detail.step, false));
 
         function updatePackPriceCalc() {
             const preview = document.getElementById('pack-price-calc-preview');
@@ -2996,135 +2953,68 @@ foreach ($products as $product) {
         [purchasePackCost, purchasePackSize].forEach(field => field.addEventListener('input', () => { updatePackCostCalc(); updatePackPriceCalc(); }));
         document.getElementById('apply-pack-markup').addEventListener('click', applyPackMarkup);
 
-        function setWizardStep(step, saveDraft = true) {
-            if (saveDraft) queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(addProductForm));
-            wizardStep = Math.max(1, Math.min(5, step));
-            document.querySelectorAll('.wizard-panel').forEach(panel => panel.classList.toggle('active', Number(panel.dataset.panel) === wizardStep));
-            document.querySelectorAll('.wizard-step-indicator').forEach((indicator, index) => {
-                indicator.classList.toggle('active', index + 1 === wizardStep);
-                indicator.classList.toggle('complete', index + 1 < wizardStep);
+        function showProductFieldError(field) {
+            for (let parent = field.parentElement; parent && parent !== addProductForm; parent = parent.parentElement) {
+                if (parent.tagName === 'DETAILS') parent.open = true;
+            }
+            const group = field.closest('.form-group');
+            group?.classList.add('invalid');
+            let message = group?.querySelector('.field-error');
+            if (!message && group) {
+                message = document.createElement('small');
+                message.className = 'field-error';
+                group.append(message);
+            }
+            if (message) {
+                message.id ||= `${field.id}-error`;
+                message.textContent = field.validationMessage;
+                field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), message.id].filter(Boolean).join(' '));
+            }
+            field.setAttribute('aria-invalid', 'true');
+        }
+        addProductForm.querySelectorAll('.field-error').forEach((message, index) => {
+            message.id = `product-create-field-error-${index}`;
+            message.parentElement.querySelectorAll('input, select').forEach(field => {
+                field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), message.id].filter(Boolean).join(' '));
             });
-            backButton.hidden = wizardStep === 1;
-            nextButton.hidden = wizardStep === 5;
-            saveButton.hidden = wizardStep !== 5;
-            if (wizardStep === 5) renderReview();
-            if (wizardStep === 4) syncStartingStockFields();
-            if (wizardStep === 3) {
-                updatePackPriceCalc();
-                updatePackCostCalc();
-            }
-            document.querySelector('#add-product-modal .rm-modal-body').scrollTop = 0;
-            if (wizardStep === 2 && !window.matchMedia('(pointer: coarse), (max-width: 900px)').matches) {
-                document.getElementById('create-barcode-input').focus({ preventScroll: true });
-            }
-        }
-
-        function validateStep(step) {
-            let valid = true;
-            if (step === 4) {
-                const quantity = document.getElementById('initial-stock-quantity');
-                const invalid = !quantity.validity.valid ||
-                    (!startingPacksCount.disabled && (!startingPacksCount.validity.valid || !startingPackLooseCount.validity.valid));
-                quantity.closest('.form-group').classList.toggle('invalid', invalid);
-                return !invalid;
-            }
-            const panel = document.querySelector(`.wizard-panel[data-panel="${step}"]`);
-            panel.querySelectorAll('.form-group').forEach(group => group.classList.remove('invalid'));
-            if (step === 1) {
-                const name = document.getElementById('product-name');
-                const category = document.getElementById('product-category');
-                if (!name.value.trim()) {
-                    name.closest('.form-group').classList.add('invalid');
-                    valid = false;
-                }
-                if (!category.value) {
-                    category.closest('.form-group').classList.add('invalid');
-                    valid = false;
-                }
-                if (existingProductNames.has(name.value.trim().toLowerCase())) RetailMindUI.toast('A product with the same name already exists. Add a variant label when appropriate.', 'warning');
-            }
-            if (step === 2) {
-                const barcode = document.getElementById('create-barcode-input');
-                if (barcode.value.trim() && existingBarcodes.has(barcode.value.trim().toLowerCase())) {
-                    barcode.closest('.form-group').classList.add('invalid');
-                    valid = false;
-                }
-            }
-            if (step === 3) {
-                updatePackCostCalc();
-                if (costEntryMode.value === 'pack') {
-                    [purchasePackCost, purchasePackSize].forEach(field => {
-                        if (!field.value || !field.validity.valid) {
-                            field.closest('.form-group').classList.add('invalid');
-                            valid = false;
-                        }
-                    });
-                }
-                unitSelects.forEach(select => {
-                    const input = addProductForm.elements[select.dataset.unitField];
-                    if (!select.value && !input.value.trim()) {
-                        input.closest('.form-group').classList.add('invalid');
-                        valid = false;
-                    }
-                });
-                const cost = document.getElementById('cost-price');
-                const selling = document.getElementById('selling-price');
-                if (!cost.validity.valid || (cost.value !== '' && Number(cost.value) < 0)) {
-                    cost.closest('.form-group').classList.add('invalid');
-                    valid = false;
-                }
-                if (selling.value === '' || !selling.validity.valid || Number(selling.value) < Number(cost.value)) {
-                    selling.closest('.form-group').classList.add('invalid');
-                    valid = false;
-                }
-                const packSize = document.getElementById('create-pack-size');
-                const packBarcode = document.getElementById('create-pack-barcode');
-                const packPrice = document.getElementById('create-pack-price');
-                if (sellSealedPacks.checked) {
-                    const pSizeVal = Number(packSize.value);
-                    const pPriceVal = parseFloat(packPrice.value);
-                    const sellingVal = parseFloat(selling.value);
-                    if (!packSize.validity.valid || !Number.isInteger(pSizeVal) || pSizeVal < 2) {
-                        packSize.closest('.form-group').classList.add('invalid');
-                        valid = false;
-                    }
-                    const barcode = packBarcode.value.trim().toLowerCase();
-                    if (!barcode || !packBarcode.validity.valid || existingBarcodes.has(barcode) || ['create-barcode-input', 'create-receiving-barcode'].some(id => document.getElementById(id).value.trim().toLowerCase() === barcode)) {
-                        packBarcode.closest('.form-group').classList.add('invalid');
-                        valid = false;
-                    }
-                    if (!packPrice.validity.valid || isNaN(pPriceVal) || pPriceVal <= 0 || (!isNaN(sellingVal) && !isNaN(pSizeVal) && pPriceVal >= (pSizeVal * sellingVal))) {
-                        packPrice.closest('.form-group').classList.add('invalid');
-                        valid = false;
-                    }
-                }
-            }
-            return valid;
-        }
-        nextButton.addEventListener('click', () => {
-            if (validateStep(wizardStep)) setWizardStep(wizardStep + 1);
         });
-        backButton.addEventListener('click', () => setWizardStep(wizardStep - 1));
+        addProductForm.addEventListener('input', event => {
+            event.target.removeAttribute('aria-invalid');
+            event.target.closest('.form-group')?.classList.remove('invalid');
+        });
         addProductForm.addEventListener('keydown', event => {
-            if (wizardStep === 2 && event.key === 'Enter' && event.target.matches('input')) {
-                event.preventDefault();
-            }
+            if (event.key === 'Enter' && ['create-barcode-input', 'create-receiving-barcode', 'create-pack-barcode'].includes(event.target.id)) event.preventDefault();
         });
         addProductForm.addEventListener('submit', event => {
-            if (wizardStep !== 5) {
+            updatePackCostCalc();
+            const name = document.getElementById('product-name');
+            name.setCustomValidity(name.value.trim() ? '' : 'Enter a product name.');
+            const family = document.getElementById('parent-product-id');
+            document.getElementById('create-variant-label').required = !!family.value;
+            const cost = document.getElementById('cost-price');
+            cost.setCustomValidity(cost.value === '' ? 'Enter a cost of zero or more.' : '');
+            const selling = document.getElementById('selling-price');
+            selling.setCustomValidity(Number(selling.value) < Number(cost.value) ? 'Selling price must not be lower than cost.' : '');
+            const codes = ['create-barcode-input', 'create-receiving-barcode', 'create-pack-barcode'].map(id => document.getElementById(id));
+            codes.forEach(field => {
+                const code = field.value.trim().toLowerCase();
+                field.setCustomValidity(!field.disabled && code && (existingBarcodes.has(code) || codes.some(other => other !== field && !other.disabled && other.value.trim().toLowerCase() === code)) ? 'Use a unique barcode.' : '');
+            });
+            const packPrice = document.getElementById('create-pack-price');
+            packPrice.setCustomValidity(sellSealedPacks.checked && Number(packPrice.value) >= Number(document.getElementById('create-pack-size').value) * Number(selling.value) ? 'Pack price must be below buying its pieces separately.' : '');
+            const invalid = Array.from(addProductForm.elements).filter(field => field.willValidate && !field.validity.valid);
+            if (invalid.length) {
                 event.preventDefault();
+                invalid.forEach(showProductFieldError);
+                invalid[0].focus();
+                RetailMindUI.toast('Review the highlighted fields before saving.', 'error');
                 return;
-            }
-            for (let step = 1; step <= 4; step++) {
-                if (!validateStep(step)) {
-                    event.preventDefault();
-                    setWizardStep(step);
-                    RetailMindUI.toast('Review the highlighted fields before saving.', 'error');
-                    return;
-                }
             }
             saveButton.disabled = true;
             saveButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving...';
+        });
+        document.getElementById('parent-product-id').addEventListener('change', event => {
+            document.getElementById('create-variant-label').required = !!event.target.value;
         });
 
         // Starting stock follows the product's Sales Pack configuration.
@@ -3169,6 +3059,13 @@ foreach ($products as $product) {
         }
 
         function syncStartingStockFields() {
+            addProductForm.elements.creation_origin.value = productCreationOrigin;
+            if (productCreationOrigin === 'receiving') {
+                [initialStockInput, startingPacksCount, startingPackLooseCount].forEach(field => { field.value = '0'; field.disabled = true; });
+                document.getElementById('create-opening-stock').hidden = true;
+                document.getElementById('receiving-product-note').hidden = false;
+                return;
+            }
             const isPacks = sellSealedPacks.checked && !packSizeInput.disabled && Number(packSizeInput.value) > 1;
             const wasPacks = !stockSalesPacksWrapper.hidden;
             const currentTotal = Math.max(0, parseInt(initialStockInput?.value, 10) || 0);
@@ -3203,47 +3100,14 @@ foreach ($products as $product) {
             addProductForm.querySelectorAll('.invalid').forEach(group => group.classList.remove('invalid'));
         }));
 
-        function renderReview() {
-            const data = new FormData(addProductForm);
-            const categoryText = document.getElementById('product-category').selectedOptions[0]?.text || '—';
-            const items = [
-                ['Product', data.get('product_name')],
-                ['Brand', data.get('brand') || '—'],
-                ['Category', categoryText],
-                ['Individual Item Barcode', data.get('barcode') || 'Generate automatically'],
-                ['Receiving Package Barcode', data.get('case_barcode') || 'None'],
-                ['Cost Price', data.get('cost_price') === '' ? 'Not recorded' : formatMoney(data.get('cost_price'))],
-                ['Selling Price', formatMoney(data.get('selling_price'))],
-                ['Initial Quantity', `${data.get('initial_stock_quantity')} ${data.get('base_unit') || 'piece'}`],
-                ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`],
-                ['Supplier', data.get('preferred_supplier') || '—']
-            ];
-            if (costEntryMode.value === 'pack') {
-                items.push(['Purchase Pack Cost', formatMoney(data.get('pack_cost'))]);
-                items.push(['Pieces per Purchase Pack', data.get('purchase_pack_size')]);
-            }
-            const initialQty = parseInt(data.get('initial_stock_quantity'), 10) || 0;
-            if (data.get('pack_size') && parseInt(data.get('pack_size'), 10) > 1) {
-                items.push(['Starting Stock', `${data.get('starting_packs')} Sales Packs + ${data.get('starting_loose')} loose pieces`]);
-                items.push(['Items per Sales Pack', `${data.get('pack_size')} ${data.get('base_unit') || 'piece'}(s)`]);
-                items.push(['Sales Pack Barcode', data.get('pack_barcode') || '—']);
-                items.push(['Sales Pack Price', formatMoney(data.get('pack_price'))]);
-            }
-            if (initialQty > 0 && data.get('expiration_date')) {
-                items.push(['Starting Stock Expiration', data.get('expiration_date')]);
-            }
-            document.getElementById('product-review').innerHTML = items.map(([label, value]) => `<div class="detail-item"><span>${label}</span><strong>${String(value).replace(/[<>]/g,'')}</strong></div>`).join('');
-        }
-
         const productModalOverlay = document.getElementById('add-product-modal');
-        document.getElementById('wizard-reset').addEventListener('click', async event => {
+        document.getElementById('product-create-reset').addEventListener('click', async event => {
             event.preventDefault();
             if (await RetailMindUI.confirm({title: 'Clear entered data', message: 'Discard this Product draft?', confirmText: 'Discard', danger: true})) {
                 RetailMindInventoryDrafts.discard(addProductForm);
                 addProductForm.reset();
                 syncUnitSelects();
                 syncPricingFields();
-                setWizardStep(1);
             }
         });
 
@@ -3252,7 +3116,6 @@ foreach ($products as $product) {
                 (form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value),
             submissionKind: (form, action) => ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '',
             capture(draft, form) {
-                if (form === addProductForm) draft.context.step = wizardStep;
                 if (['product-edit-form', 'pack-reconcile-form'].includes(form.id)) draft.context.productId = currentDrawerProductId;
             },
             async prepare(draft) {
@@ -3261,7 +3124,6 @@ foreach ($products as $product) {
                 }
                 if (draft.formId === 'add-product-form') {
                     RetailMindUI.openOverlay(productModalOverlay);
-                    setWizardStep(draft.context.step || 1);
                 } else if (draft.formId === 'pack-reconcile-form') {
                     openProductDrawer(draft.context.productId);
                     document.getElementById('drawer-reconcile-pack')?.click();
@@ -3288,10 +3150,32 @@ foreach ($products as $product) {
                     stockSalesPacksWrapper.hidden = !sellSealedPacks.checked;
                     syncUnitSelects();
                     syncPricingFields();
-                    setWizardStep(draft.context.step || 1);
+                    revealProductOptions();
                 }
             }
         });
+
+        function revealProductOptions() {
+            addProductForm.querySelectorAll('details').forEach(details => {
+                if (Array.from(details.querySelectorAll('input, select')).some(field => field.type !== 'hidden' && field.type !== 'file' && (field.type === 'checkbox' ? field.checked : field.value !== field.defaultValue && field.value !== ''))) details.open = true;
+            });
+        }
+        const retry = JSON.parse(addProductForm.dataset.retry || 'null');
+        if (retry) {
+            Object.entries(retry.values).forEach(([name, value]) => {
+                const field = addProductForm.elements[name];
+                if (!field || field.type === 'file' || name === 'creation_origin') return;
+                if (field.type === 'checkbox') field.checked = !!value;
+                else field.value = value;
+            });
+            stockSalesPacksWrapper.hidden = !sellSealedPacks.checked;
+            syncUnitSelects(); syncPricingFields(); revealProductOptions();
+            RetailMindUI.openOverlay(productModalOverlay);
+            const error = document.getElementById('product-create-error');
+            error.textContent = retry.error; error.hidden = false; error.focus();
+        } else if (new URLSearchParams(location.search).get('origin') === 'receiving') {
+            RetailMindUI.openOverlay(productModalOverlay);
+        }
 
         // Camera scan and internal barcode generation
         const barcodeInput = document.getElementById('create-barcode-input');
@@ -3377,14 +3261,6 @@ foreach ($products as $product) {
         window.addEventListener('blur', resetProductKeyboardScan);
         document.addEventListener('visibilitychange', resetProductKeyboardScan);
         let productScanner = null;
-        document.getElementById('generate-barcode-btn').addEventListener('click', () => {
-            const values = new Uint32Array(1);
-            if (window.crypto?.getRandomValues) window.crypto.getRandomValues(values);
-            else values[0] = Math.floor(Math.random() * 99999999);
-            const now = new Date();
-            barcodeInput.value = `RM${String(now.getFullYear()).slice(-2)}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}${String(values[0] % 100000000).padStart(8,'0')}`;
-            barcodeInput.focus();
-        });
         document.getElementById('add-product-scan-btn').addEventListener('click', async () => {
             const section = document.getElementById('add-product-scanner-section');
             if (!window.Html5Qrcode) {

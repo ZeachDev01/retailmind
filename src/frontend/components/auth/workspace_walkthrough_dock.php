@@ -135,11 +135,8 @@ $completedInPath = array_intersect(array_keys($allTopics), $completedTopics);
                     modal.classList.add('open');
                     modal.removeAttribute('aria-hidden');
                 }
-                const panel = targetEl.closest('.wizard-panel');
-                if (panel && panel.dataset.panel) {
-                    document.getElementById('add-product-form').dispatchEvent(new CustomEvent('retailmind:guidance-step', {
-                        detail: {step: Number(panel.dataset.panel)}
-                    }));
+                for (let parent = targetEl.parentElement; parent; parent = parent.parentElement) {
+                    if (parent.tagName === 'DETAILS') parent.open = true;
                 }
             } else {
                 document.body.append(dock);

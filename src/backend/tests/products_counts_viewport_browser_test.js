@@ -71,7 +71,7 @@ const VIEWPORTS = [
             await page.locator('#empty-clear-filters').click();
             await page.locator('#product-add-trigger').click();
             await page.locator('#add-product-btn').click();
-            await page.locator('#wizard-next').click();
+            await page.locator('#product-create-save').click();
             assert(await page.locator('#add-product-form :invalid').count() > 0, 'Required Product fields block advance');
             await page.locator('#add-product-form [name="product_name"]').fill('Long Product name '.repeat(10));
             const categoryName = await page.locator('#product-category option').nth(1).innerText();
@@ -92,8 +92,8 @@ const VIEWPORTS = [
             page.off('request', trackPost);
             for (const size of [viewport, {width:viewport.width,height:240}, viewport]) {
                 await page.setViewportSize(size);
-                await page.locator('#wizard-next').scrollIntoViewIfNeeded();
-                const box = await page.locator('#wizard-next').boundingBox();
+                await page.locator('#product-create-save').scrollIntoViewIfNeeded();
+                const box = await page.locator('#product-create-save').boundingBox();
                 assert(box.y >= 0 && box.y + box.height <= size.height + 1, 'Product Next fits reduced viewport');
                 assert.equal(await page.locator('#add-product-form [name="product_name"]').inputValue(), 'Long Product name '.repeat(10));
             }

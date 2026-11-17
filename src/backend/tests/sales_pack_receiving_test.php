@@ -318,6 +318,7 @@ notification_test_schema($pdo);
 
 $pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''; UPDATE users SET display_name = full_name");
 
+$pdo->exec('CREATE TABLE scheduled_demand_drivers (driver_id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, driver_type TEXT NOT NULL, effective_date TEXT NOT NULL, scheduled_at TEXT NOT NULL, details_json TEXT NOT NULL)');
 $productService = new ProductService($pdo);
 $inventoryService = new InventoryService($pdo);
 $receivingService = new ReceivingService($pdo);
@@ -326,6 +327,7 @@ $lookupService = new ProductCodeLookupService($pdo);
 // 1. Create a pack-enabled product: 12 pieces per pack, pack barcode, starting stock 5 packs and 3 loose
 echo "Testing AC 1 & 2: Receive 2 packs of 12 and 4 loose pieces into 5 packs and 3 loose...\n";
 $biscuit = $productService->createProduct([
+    'base_unit' => 'piece',
     'product_name' => 'Choco Biscuits Pack of 12',
     'category_id' => 1,
     'sku' => 'SKU-CHOCO-12',
@@ -490,6 +492,7 @@ $assert($packLookup['matched_code_kind'] === 'pack_barcode', 'Pack barcode kind 
 
 // Create ordinary product without pack config
 $plain = $productService->createProduct([
+    'base_unit' => 'piece',
     'product_name' => 'Plain Cracker',
     'category_id' => 1,
     'sku' => 'SKU-PLAIN-01',

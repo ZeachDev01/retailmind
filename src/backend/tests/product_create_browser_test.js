@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
     const start = source.indexOf('<div class="rm-modal-overlay" id="add-product-modal"');
     const end = source.indexOf('<div class="rm-modal-overlay" id="add-category-modal"', start);
     const markup = source.slice(start, end).replace(/<\?php[\s\S]*?\?>/g, '').replace(/<\?=[\s\S]*?\?>/g, '');
-    const wizard = source.slice(source.indexOf('// Product wizard and validation'), source.indexOf('// Camera scan and internal barcode generation'));
+    const wizard = source.slice(source.indexOf('// Product creation and validation'), source.indexOf('// Camera scan and internal barcode generation'));
     const css = fs.readFileSync(path.join(frontend, 'assets/css/style.css'), 'utf8') + source.match(/<style>([\s\S]*?)<\/style>/)[1];
     const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
     try {
@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
             page.on('pageerror', error => errors.push(error.message));
             await page.route('http://localhost/products.php', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><style>${css}</style></head><body>${markup}</body></html>` }));
             await page.goto('http://localhost/products.php');
-            assert.equal(await page.locator('#cost-price').evaluate(field => field.required), false, 'Unknown product cost may remain blank');
+            assert.equal(await page.locator('#cost-price').evaluate(field => field.required), true, 'New products require explicit cost, including zero');
             await page.addScriptTag({ path: path.join(frontend, 'assets/js/ui.js') });
             await page.evaluate(() => {
                 window.existingProductNames = new Set();
@@ -48,7 +48,7 @@ const { chromium } = require('playwright');
             await page.locator('#product-name').fill('Draft product');
             await page.locator('#cost-price').evaluate(field => { field.value = '30'; });
             await page.locator('#selling-price').evaluate(field => { field.value = '45'; });
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             for (const [label, choices, selected] of [
                 ['Base Unit', ['piece', 'bottle', 'can', 'sachet', 'stick', 'pack', 'bag', 'box', 'jar', 'tube', 'roll', 'pair'], 'bottle'],
                 ['Receiving Unit', ['package', 'case', 'box', 'carton', 'pack', 'bundle', 'bag', 'sack', 'tray', 'crate', 'ream', 'pallet'], 'carton']
@@ -71,10 +71,10 @@ const { chromium } = require('playwright');
                 return JSON.parse(new TextDecoder().decode(plain));
             });
             assert.equal(saved.values.some(item => item.name === 'csrf_token'), false, 'Private draft excludes security token');
-            assert.equal(saved.context.step, 3, 'Private draft captures the current wizard step');
+            assert.equal(saved.values.some(item => item.name === 'base_unit' && item.value === 'bottle'), true, 'Private draft captures unit settings');
             await page.evaluate(() => {
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
-                setWizardStep(4);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
             });
             assert.equal(await page.getByLabel('Starting Stock Expiration', { exact: true }).isVisible(), false, 'Zero starting stock hides its optional expiration');
             const eligibility = page.getByLabel('Supplier Pullout Eligibility', {exact: true});
@@ -88,7 +88,7 @@ const { chromium } = require('playwright');
 
             await page.evaluate(() => {
                 RetailMindUI.openOverlay(document.getElementById('add-product-modal'));
-                setWizardStep(4);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
             });
             assert.equal(await page.locator('[name="starting_stock_mode"]').count(), 0, 'Stock entry has no mode buttons');
             assert.equal(await page.getByLabel('Sales Packs', { exact: true }).isVisible(), false, 'Piece-only product hides pack counts');
@@ -100,11 +100,12 @@ const { chromium } = require('playwright');
             const commonUnits = await page.evaluate(() => Object.fromEntries(new FormData(document.getElementById('add-product-form'))));
             assert.equal(commonUnits.base_unit, 'bottle');
             assert.equal(commonUnits.receiving_unit, 'carton');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.getByLabel('Base Unit', { exact: true }).selectOption({ label: 'Other…' });
             await page.getByLabel('Receiving Unit', { exact: true }).selectOption({ label: 'Other…' });
-            await page.locator('#wizard-next').click();
-            assert.ok(await page.locator('[data-panel="3"]').evaluate(panel => panel.classList.contains('active')), 'Empty custom units prevent advancing');
+            await page.locator('#product-create-save').click();
+            await page.waitForFunction(() => document.getElementById('product-base-unit-custom').getAttribute('aria-invalid') === 'true');
+            assert.equal(await page.locator('#product-base-unit-custom').getAttribute('aria-invalid'), 'true', 'Empty custom unit prevents saving');
             await page.getByLabel('Custom base unit', { exact: true }).fill('bar');
             await page.getByLabel('Custom receiving unit', { exact: true }).fill('basket');
             await page.locator('#add-product-modal [data-close-modal]').first().click();
@@ -118,13 +119,13 @@ const { chromium } = require('playwright');
             await page.getByLabel('Receiving Unit', { exact: true }).selectOption({ label: 'Other…' });
             await page.getByLabel('Custom receiving unit', { exact: true }).fill('basket');
             await page.evaluate(() => {
-                setWizardStep(5);
+                document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; });
                 window.addEventListener('submit', event => {
                     window.submittedProduct = Object.fromEntries(new FormData(event.target));
                     event.preventDefault();
                 });
             });
-            await page.locator('#wizard-save').click();
+            await page.locator('#product-create-save').click();
             await page.waitForFunction(() => window.submittedProduct);
             const submitted = await page.evaluate(() => window.submittedProduct);
             assert.equal(submitted.csrf_token, 'current-session-token');
@@ -138,10 +139,10 @@ const { chromium } = require('playwright');
             await page.evaluate(() => document.getElementById('add-product-form').reset());
             assert.equal(await page.locator('[name="base_unit"]').inputValue(), 'piece', 'Reset restores default base unit');
             assert.equal(await page.locator('[name="receiving_unit"]').inputValue(), 'package', 'Reset restores default receiving unit');
-            await page.evaluate(() => setWizardStep(4));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             assert.equal(await page.getByLabel('Starting Stock Expiration', { exact: true }).isVisible(), false, 'Reset to zero stock hides opening expiration');
             assert.equal(await page.getByLabel('Starting Stock Expiration', { exact: true }).inputValue(), '', 'Reset clears the old opening date');
-            await page.evaluate(() => setWizardStep(3));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             assert.equal(await page.getByLabel('Base Unit', { exact: true }).inputValue(), 'piece');
             assert.equal(await page.getByLabel('Receiving Unit', { exact: true }).inputValue(), 'package');
             assert.equal(await page.getByLabel('Custom base unit', { exact: true }).isVisible(), false);
@@ -156,16 +157,16 @@ const { chromium } = require('playwright');
             await page.locator('#create-pack-size').fill('6');
             await page.locator('#create-pack-price').fill('85');
             await page.locator('#create-pack-barcode').fill('PACK-DRAFT-6');
-            await page.evaluate(() => setWizardStep(4));
+            await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
             await page.locator('#starting-packs-count').fill('5');
             await page.locator('#starting-pack-loose-count').fill('3');
             for (const enabled of [true, false]) {
                 if (!enabled) {
-                    await page.evaluate(() => setWizardStep(3));
+                    await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
                     await page.locator('#create-sell-packs').uncheck();
                     await page.locator('[data-cost-mode="piece"]').click();
                     await page.locator('#cost-price').fill('11');
-                    await page.evaluate(() => setWizardStep(4));
+                    await page.evaluate(() => document.querySelectorAll('#add-product-form details').forEach(details => { details.open = true; }));
                     await page.locator('#initial-stock-quantity').fill('80');
                 }
                 await page.evaluate(async () => {
@@ -186,7 +187,7 @@ const { chromium } = require('playwright');
                     document.dispatchEvent(new Event('DOMContentLoaded'));
                 });
                 await page.getByRole('button',{name:'Resume',exact:true}).click();
-                await page.waitForFunction(() => document.querySelector('[data-panel="4"]').classList.contains('active'));
+                await page.waitForFunction(() => document.getElementById('add-product-modal').classList.contains('open'));
                 assert.equal(await page.locator('#create-cost-mode').inputValue(), enabled ? 'pack' : 'piece');
                 assert.equal(await page.locator('#cost-price').inputValue(), enabled ? '10.00' : '11');
                 assert.equal(await page.locator('#selling-price').inputValue(), '15');
