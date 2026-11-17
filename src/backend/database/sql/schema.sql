@@ -2160,3 +2160,4 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_fiscal_period_scheduling','Allow scheduled future Fiscal Periods and opt-in automatic rollover') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611120001_supplier_pullout_eligibility','Explicit Product eligibility for Supplier Pullouts, default off') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180001_receiving_allocations','Preserve receiving allocation modes, cost provenance and current-cost choices') ON DUPLICATE KEY UPDATE description=VALUES(description);
