@@ -334,8 +334,9 @@
                 else history.pushState({}, '', finalURL.href);
                 currentURL = finalURL.href;
                 activeMenu(finalURL);
-                const profile = document.querySelector('.sidebar-profile-copy strong');
-                if (profile && payload.shell?.name) profile.textContent = payload.shell.name;
+                for (const profile of document.querySelectorAll('.sidebar-profile-copy strong')) {
+                    if (payload.shell?.name) profile.textContent = payload.shell.name;
+                }
                 const avatar = document.querySelector('#sidebarProfile .sidebar-avatar');
                 if (avatar && payload.shell?.avatar) avatar.outerHTML = payload.shell.avatar;
                 const mobileAvatar = document.querySelector('.admin-mobile-avatar');

@@ -131,6 +131,11 @@
 html[data-theme="dark"] .replenishment-page .main-content { background-color: var(--bg) !important; }
 html[data-theme="dark"] .queue-panel ::selection { background: var(--primary); color: var(--bg); }
 @media (max-width: 1180px) {
+    .replenishment-page .queue-list table { min-width: 640px; }
+    .queue-product-cell { grid-template-columns: minmax(0, 1fr); gap: .25rem; }
+    .queue-product-cell > .queue-priority,
+    .queue-product-cell > .queue-details { grid-column: 1; justify-self: start; }
+    .queue-product-cell:has(> .queue-details) > .queue-product-identity { grid-row: auto; }
     .queue-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .queue-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .queue-search { grid-column: 1 / -1; }

@@ -22,6 +22,8 @@ const fixture = action => {
 };
 
 const VIEWPORTS = [
+    {width: 375, height: 812},
+    {width: 768, height: 1024},
     {width: 640, height: 360},
     {width: 800, height: 480},
     {width: 900, height: 600},
@@ -53,7 +55,7 @@ const VIEWPORTS = [
         }
         browser = await chromium.launch({headless: true});
 
-        for (const role of ['admin', 'inventory_manager', 'cashier']) {
+        for (const role of ['admin', 'super_admin', 'inventory_manager', 'cashier']) {
             const context = await browser.newContext({viewport: {width: 1280, height: 800}, hasTouch: true});
             const page = await context.newPage();
             page.setDefaultTimeout(5000);
@@ -63,7 +65,7 @@ const VIEWPORTS = [
             await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
             const skip = page.getByRole('button', {name: 'Skip guidance'});
             if (await skip.isVisible()) await skip.click();
-            await page.goto(origin + '/components/' + (role === 'admin' ? 'administrator/dashboard.php' : role === 'inventory_manager' ? 'inventory_management/inventory_overview.php' : 'cashier/dashboard.php'));
+            await page.goto(origin + '/components/' + (role === 'admin' ? 'administrator/dashboard.php' : role === 'super_admin' ? 'super_administrator/dashboard.php' : role === 'inventory_manager' ? 'inventory_management/inventory_overview.php' : 'cashier/dashboard.php'));
             for (const viewport of VIEWPORTS) {
                 await page.setViewportSize(viewport);
                 await page.waitForTimeout(300);
@@ -72,8 +74,25 @@ const VIEWPORTS = [
                 assert(overflow.content <= overflow.width + 1, label + ': no page horizontal overflow ' + JSON.stringify(overflow));
                 console.log(label + ' geometry ' + JSON.stringify(overflow));
                 if (viewport.width <= 900) {
+                    assert.equal(await page.locator('#sidebarBrandToggle').isVisible(), false, label + ': brand appears only in the header');
+                    const header = await page.locator('.admin-mobile-topbar').boundingBox();
+                    assert(header.height <= 60, label + ': compact single-row header');
+                    const search = page.locator('.mobile-header-search');
+                    const searchBox = await search.boundingBox();
+                    assert(searchBox.width >= 44 && searchBox.width <= 45 && searchBox.height >= 44, label + ': search icon touch target');
+                    await search.tap();
+                    await page.locator('#commandSearch').fill('Tablet search');
+                    await page.keyboard.press('Escape');
                     await page.locator('#menuToggle').tap();
                     await page.waitForFunction(() => document.querySelector('#appSidebar').classList.contains('open'));
+                    assert.equal(await page.locator('#sidebarBrandToggle').isVisible(), false, label + ': drawer has no duplicate brand');
+                    assert.equal(await page.locator('#sidebarProfile').isVisible(), false, label + ': profile appears only in the header');
+                    const drawer = await page.locator('#appSidebar').boundingBox();
+                    assert(drawer.y >= header.y + header.height, label + ': drawer starts below entire header');
+                    if (viewport.width === 768) {
+                        await page.waitForTimeout(300);
+                        await page.screenshot({path: path.join(output, role + '-768-navigation.png')});
+                    }
                     for (const group of await page.locator('#appSidebar .dropbtn').all()) {
                         if (await group.getAttribute('aria-expanded') !== 'true') await group.tap();
                         for (const link of await group.locator('..').locator('a[href]').all()) {
@@ -84,7 +103,7 @@ const VIEWPORTS = [
                         }
                     }
                     // Keyboard users must be able to reach every visible destination without losing the drawer.
-                    const last = page.locator('#sidebarProfile');
+                    const last = page.locator('#appSidebar a:visible, #appSidebar button:visible').last();
                     await last.focus();
                     await page.keyboard.press('Tab');
                     assert(await page.locator('#appSidebar').evaluate(el => el.contains(document.activeElement)) ||
@@ -92,10 +111,24 @@ const VIEWPORTS = [
                     await page.keyboard.press('Escape');
                     assert.equal(await page.locator('#menuToggle').evaluate(el => el === document.activeElement), true, label + ': Escape restores focus');
                     await page.locator('.admin-mobile-avatar').tap();
+                    await page.locator('#sidebarAccountMenu').waitFor({state: 'visible'});
+                    await page.waitForTimeout(200);
+                    assert.equal(await page.locator('.sidebar-account-identity').isVisible(), true, label + ': account menu shows name and role');
+                    assert(await page.locator('.sidebar-account-identity strong').textContent(), label + ': account name is present');
+                    assert(await page.locator('.sidebar-account-identity span').textContent(), label + ': account role is present');
+                    const accountMenu = await page.locator('#sidebarAccountMenu').boundingBox();
+                    assert(accountMenu.y >= 0 && accountMenu.y + accountMenu.height <= viewport.height + 1, label + ': account actions fit the viewport');
+                    if (viewport.width === 768) {
+                        await page.screenshot({path: path.join(output, role + '-768-account.png')});
+                    }
                     await page.locator('.sidebar-workspace-switcher summary').tap();
                     const workspace = await page.locator('.sidebar-workspace-options').boundingBox();
                     assert(workspace.y >= 0 && workspace.y + workspace.height <= viewport.height + 1, label + ': Workspace options fit');
                     await page.keyboard.press('Escape');
+                    await page.waitForTimeout(300);
+                } else {
+                    assert.equal(await page.locator('#sidebarBrandToggle').isVisible(), true, label + ': desktop keeps sidebar brand');
+                    assert.equal(await page.locator('#sidebarProfile').isVisible(), true, label + ': desktop keeps sidebar profile');
                 }
                 await page.screenshot({path: path.join(output, role + '-' + viewport.width + '.png')});
             }

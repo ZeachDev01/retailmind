@@ -1262,16 +1262,6 @@ foreach ($products as $product) {
                 font-size: .76rem;
             }
         }
-        @media (max-width: 900px) {
-            .product-table-shell { overflow: hidden; }
-            .product-table-shell .data-table-scroll { overflow: auto; }
-            .product-table-shell .data-table { display: table; min-width: 980px; }
-            .product-table-shell thead { display: table-header-group; }
-            .product-table-shell tbody { display: table-row-group; }
-            .product-table-shell tr { display: table-row; }
-            .product-table-shell td,
-            .product-table-shell td.mobile-hide { display: table-cell; padding: .8rem 1rem; }
-        }
     </style>
 <?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
@@ -1408,8 +1398,8 @@ foreach ($products as $product) {
                                             </div>
                                         </td>
                                         <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
-                                        <td class="column-price mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
-                                        <td class="column-profit">₱<?= number_format((float)($product['unit_price'] ?? 0) - (float)($product['cost_price'] ?? 0), 2) ?></td>
+                                        <td class="column-price">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
+                                        <td class="column-profit mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0) - (float)($product['cost_price'] ?? 0), 2) ?></td>
                                         <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">

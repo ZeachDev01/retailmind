@@ -15,7 +15,7 @@ const php = process.env.PHP_BINARY || (process.platform === 'win32' ? 'C:/xampp/
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-responsive-browser-'));
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(output, 'recovery')};
-const widths = [320, 375, 425, 768, 1024, 1440];
+const widths = [320, 375, 425, 768, 900, 912, 1024, 1440];
 const routes = {
     admin: ['administrator/dashboard', 'administrator/store_settings', 'administrator/registers',
         'administrator/shift_report', 'administrator/stock_issues', 'administrator/database_backup',
@@ -30,7 +30,11 @@ const routes = {
         'inventory_management/products', 'inventory_management/csv_import', 'inventory_management/replenishment_queue',
         'inventory_management/stock_issues', 'inventory_management/inventory_counts', 'report/stock_receiving',
         'report/receiving_history', 'report/predictions', 'report/forecast_exceptions', 'report/data_readiness',
-        'report/forecast_analytics'],
+        'inventory_management/inventory_overview?tab=movement',
+        'inventory_management/supplier_pullouts', 'inventory_management/product_investigation?product_id=1',
+        'inventory_management/print_barcodes', 'invoice/sales', 'report/report_generation',
+        'cashier/refund_corrections', 'auth/help', 'auth/user_info', 'auth/change_password',
+        'notification/notifications'],
     cashier: ['cashier/dashboard', 'cashier/pos', 'cashier/shifts', 'cashier/history', 'cashier/refunds',
         'cashier/stock_issues', 'invoice/sales', 'auth/user_info', 'auth/preferences', 'auth/change_password',
         'cashier/findProduct', 'notification/notifications', 'cashier/refunds?sale_id=1'],
@@ -63,7 +67,7 @@ const fixture = action => {
             if (attempt === 99) throw new Error(logs);
         }
         browser = await chromium.launch({headless: true});
-        const context = await browser.newContext({viewport: {width: 1440, height: 900}});
+        const context = await browser.newContext({viewport: {width: 1440, height: 900}, hasTouch: process.env.RESPONSIVE_ROLE === 'inventory_manager'});
         // Network-independent checks exercise the application's local CSS and JavaScript.
         await context.route('https://**/*', route => route.fulfill({status: 200, body: '', contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'text/javascript'}));
         const page = await context.newPage();
@@ -154,7 +158,11 @@ const fixture = action => {
             if (route === 'inventory_management/products') {
                 const stylesheet = await page.locator('link[href*="assets/css/style.css"]').first().getAttribute('href');
                 assert(new URL(stylesheet, origin).searchParams.has('v'), 'Product page requests the current stylesheet version');
+                if (!await page.locator('#clear-filters').isVisible()) await page.locator('#catalog-filter-toggle').click();
                 await page.locator('#clear-filters').click();
+                if (page.viewportSize().width <= 900) {
+                    assert.equal(await page.locator('#product-table-body').evaluate(el => getComputedStyle(el).display), 'grid', 'Phone and tablet products use cards');
+                }
                 const first = page.getByRole('button', {name: 'First page', exact: true});
                 if (await first.isEnabled()) await first.click();
                 assert.equal(await page.locator('#product-table-body tr:visible').count(), 10, 'Mobile cards preserve pagination');
@@ -210,26 +218,54 @@ const fixture = action => {
             }
         };
         for (const [role, screens] of Object.entries(routes)) {
+            if (process.env.RESPONSIVE_ROLE && process.env.RESPONSIVE_ROLE !== role) continue;
             await page.goto(origin + '/?login=1', {waitUntil: 'domcontentloaded'});
             await page.waitForFunction(() => document.activeElement.id === 'landing-login-username');
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            const deferGuidance = page.getByRole('button', {name: 'Not now', exact: true});
+            if (await deferGuidance.isVisible()) {
+                await deferGuidance.click();
+                if (role === 'inventory_manager') await page.getByRole('button', {name: 'Okay', exact: true}).click();
+                await page.locator('#workspace-guidance').waitFor({state: 'hidden'});
+            }
             for (const screen of screens) {
                 console.log('Responsive screen: ' + role + '/' + screen);
                 const [route, query] = screen.split('?');
                 const response = await page.goto(origin + '/components/' + route + '.php' + (query ? '?' + query : ''), {waitUntil: 'domcontentloaded'});
                 if (response.status() !== 200) { failures.push({role, screen, error: 'HTTP ' + response.status()}); continue; }
                 for (const width of widths) {
-                    await page.setViewportSize({width, height: 900});
+                    await page.setViewportSize({width, height: width === 768 ? 1024 : width === 1024 ? 768 : 900});
                     await page.waitForTimeout(60);
                     const label = role + '/' + screen + '/' + width;
                     try {
                         await layout(label);
                         if (screen === screens[0]) await sharedNavigation();
                         await actions(route);
+                        if (route === 'inventory_management/inventory_overview' && width === 768) {
+                            const heading = await page.locator('.overview-page-heading').boundingBox();
+                            const title = await page.locator('.overview-page-heading h1').boundingBox();
+                            assert.ok(Math.abs(heading.x - title.x) < 1, 'iPad Mini title aligns with the content edge');
+                            const tabs = page.locator('.overview-product-tabs');
+                            assert.equal(await tabs.evaluate(el => el.scrollWidth <= el.clientWidth + 1), true, 'All overview tabs fit iPad Mini');
+                        }
                         assert.deepEqual(pageErrors.splice(0), [], 'Page actions must not throw JavaScript errors');
                         coverage.push(label);
+                        if (process.env.RESPONSIVE_ROLE && [375, 768, 1024, 1440].includes(width)) {
+                            await page.evaluate(() => {
+                                window.scrollTo({top: 0, behavior: 'instant'});
+                                document.querySelectorAll('.data-table-scroll').forEach(el => el.scrollTo({left: 0, behavior: 'instant'}));
+                            });
+                            await page.screenshot({path: path.join(output, role + '-' + screen.replace(/[^a-z0-9]/gi, '-') + '-' + width + '.png'), fullPage: true, animations: 'disabled'});
+                            if (width === 768) {
+                                await page.locator('html').evaluate(el => { el.dataset.theme = 'dark'; window.dispatchEvent(new Event('retailmind:themechange')); });
+                                await page.waitForTimeout(1000);
+                                await layout(label + '/dark');
+                                await page.screenshot({path: path.join(output, role + '-' + screen.replace(/[^a-z0-9]/gi, '-') + '-768-dark.png'), fullPage: true, animations: 'disabled'});
+                                await page.locator('html').evaluate(el => { el.dataset.theme = 'light'; window.dispatchEvent(new Event('retailmind:themechange')); });
+                            }
+                        }
                     } catch (error) {
                         failures.push({role, screen, width, error: error.message});
                         pageErrors.length = 0;
@@ -244,7 +280,7 @@ const fixture = action => {
         fs.writeFileSync(path.join(output, 'server.log'), logs);
         console.log('Responsive browser artifacts: ' + output);
         assert.deepEqual(failures, [], 'Responsive screens and actions must pass');
-        console.log('Responsive system browser: passed (' + coverage.length + ' real page/viewport checks across four roles)');
+        console.log('Responsive system browser: passed (' + coverage.length + ' real page/viewport checks)');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

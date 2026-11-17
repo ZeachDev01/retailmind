@@ -1008,25 +1008,30 @@ body.no-scroll { overflow: hidden; }
 .sidebar-profile-copy strong { font-size: .86rem; }
 .sidebar-profile-copy span { color: #94a3b8; font-size: .72rem; text-transform: capitalize; }
 .sidebar-account-menu {
+    --theme-info-text: var(--theme-ink, #1f2937);
+    --theme-info-surface: color-mix(in srgb, var(--theme-ink, #1f2937) 8%, var(--theme-surface-soft, #f1f5f9));
     position: fixed;
     z-index: 1450;
     left: 18px;
     bottom: 92px;
     width: calc(var(--sidebar-width) - 36px);
     padding: .45rem;
-    border: 1px solid rgba(148, 163, 184, .22);
+    border: 1px solid var(--theme-border, #cbd5e1);
     border-radius: 8px;
-    background: #111827;
-    color: #e5e7eb;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, .35);
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--theme-ink, #1f2937);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
     opacity: 0;
     visibility: hidden;
-    transform: translateY(8px);
-    transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+    transform: translateY(0);
+    pointer-events: none;
+    transition: opacity .14s ease-out, visibility 0s linear .14s;
 }
 .sidebar-account-menu.open {
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
     transform: translateY(0);
 }
 .sidebar-account-actions {
@@ -1044,10 +1049,10 @@ body.no-scroll { overflow: hidden; }
     min-height: 50px;
     margin: 0;
     padding: .75rem .8rem;
-    border: 1px solid rgba(148, 163, 184, .12);
+    border: 1px solid transparent;
     border-radius: 8px;
-    background: var(--theme-surface-glass, rgba(255,255,255,.04));
-    color: #dbeafe;
+    background: transparent;
+    color: var(--theme-ink, #1f2937);
     text-decoration: none;
     font-weight: 700;
     font: inherit;
@@ -1061,8 +1066,8 @@ body.no-scroll { overflow: hidden; }
 .sidebar-account-button:hover,
 .sidebar-account-button:focus-visible {
     border-color: rgba(96, 165, 250, .38);
-    background: rgba(37, 99, 235, .18);
-    color: #fff;
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-ink, #1f2937);
     outline: none;
 }
 .sidebar-workspace-switcher {
@@ -1087,22 +1092,22 @@ body.no-scroll { overflow: hidden; }
     gap: .7rem;
     min-height: 50px;
     padding: .75rem .8rem;
-    border: 1px solid rgba(96, 165, 250, .55);
+    border: 1px solid transparent;
     border-radius: 8px;
-    background: rgba(37, 99, 235, .28);
-    color: #fff;
-    font-weight: 700;
+    background: transparent;
+    color: var(--theme-ink, #1f2937);
+    font-weight: 600;
     cursor: pointer;
 }
 .sidebar-preferences-menu .sidebar-account-preferences {
-    border-color: rgba(148, 163, 184, .12);
-    background: var(--theme-surface-glass, rgba(255,255,255,.04));
-    color: #dbeafe;
+    border-color: transparent;
+    background: transparent;
+    color: var(--theme-ink, #1f2937);
 }
 .sidebar-system-menu .sidebar-account-system {
-    border-color: rgba(148, 163, 184, .12);
-    background: var(--theme-surface-glass, rgba(255,255,255,.04));
-    color: #dbeafe;
+    border-color: transparent;
+    background: transparent;
+    color: var(--theme-ink, #1f2937);
 }
 .sidebar-workspace-switcher .sidebar-account-workspace:hover,
 .sidebar-workspace-switcher .sidebar-account-workspace:focus-visible,
@@ -1110,7 +1115,7 @@ body.no-scroll { overflow: hidden; }
 .sidebar-preferences-menu .sidebar-account-preferences:focus-visible,
 .sidebar-system-menu .sidebar-account-system:hover,
 .sidebar-system-menu .sidebar-account-system:focus-visible {
-    background: rgba(37, 99, 235, .4);
+    background: var(--theme-info-surface, #eff6ff);
     outline: none;
 }
 .sidebar-preferences-menu .sidebar-account-preferences:hover,
@@ -1118,19 +1123,19 @@ body.no-scroll { overflow: hidden; }
 .sidebar-system-menu .sidebar-account-system:hover,
 .sidebar-system-menu .sidebar-account-system:focus-visible {
     border-color: rgba(96, 165, 250, .38);
-    color: #fff;
+    color: var(--theme-ink, #1f2937);
 }
 .sidebar-workspace-switcher .sidebar-account-workspace > :is(i, .navigation-icon):first-child,
 .sidebar-preferences-menu .sidebar-account-preferences > :is(i, .navigation-icon):first-child,
 .sidebar-system-menu .sidebar-account-system > :is(i, .navigation-icon):first-child {
-    color: #93c5fd;
+    color: var(--theme-info-text, #1d4ed8);
     font-size: 1.15rem;
     text-align: center;
 }
 .sidebar-workspace-chevron,
 .sidebar-preferences-chevron,
 .sidebar-system-chevron {
-    color: #93a4bb;
+    color: var(--theme-muted, #64748b);
     transition: transform .16s ease;
 }
 .sidebar-workspace-switcher[open] .sidebar-workspace-chevron,
@@ -1149,11 +1154,11 @@ body.no-scroll { overflow: hidden; }
     display: grid;
     gap: .2rem;
     padding: .45rem;
-    border: 1px solid rgba(148, 163, 184, .22);
+    border: 1px solid var(--theme-border, #cbd5e1);
     border-radius: 8px;
-    background: #111827;
-    color: #e5e7eb;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, .35);
+    background: var(--theme-surface-soft, #f1f5f9);
+    color: var(--theme-ink, #1f2937);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
 }
 .sidebar-workspace-switcher:not([open]) > .sidebar-workspace-options,
 .sidebar-preferences-menu:not([open]) > .sidebar-preferences-options,
@@ -1177,7 +1182,7 @@ body.no-scroll { overflow: hidden; }
     border: 1px solid transparent;
     border-radius: 6px;
     background: transparent;
-    color: #dbeafe;
+    color: var(--theme-ink, #1f2937);
     font: inherit;
     font-size: .82rem;
     font-weight: 700;
@@ -1189,29 +1194,29 @@ button.sidebar-workspace-option {
 button.sidebar-workspace-option:hover,
 button.sidebar-workspace-option:focus-visible {
     border-color: rgba(96, 165, 250, .3);
-    background: rgba(37, 99, 235, .18);
-    color: #fff;
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-ink, #1f2937);
     outline: none;
 }
 .sidebar-workspace-option > :is(i, .navigation-icon):first-child {
-    color: #93c5fd;
+    color: var(--theme-info-text, #1d4ed8);
     text-align: center;
 }
 .sidebar-workspace-option > :is(i, .navigation-icon):last-child,
 .sidebar-workspace-option small {
-    color: var(--theme-info-text, #7f91aa);
+    color: var(--theme-info-text, #1d4ed8);
     font-size: .68rem;
     font-weight: 700;
 }
 .sidebar-workspace-option.is-current {
-    background: var(--theme-surface-glass, rgba(255, 255, 255, .04));
-    color: #fff;
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-ink, #1f2937);
 }
 .sidebar-account-actions a > :is(i, .navigation-icon):first-child,
 .sidebar-account-button > :is(i, .navigation-icon):first-child {
     width: 28px;
     min-width: 28px;
-    color: #93c5fd;
+    color: var(--theme-info-text, #1d4ed8);
     font-size: 1.15rem;
     text-align: center;
 }
@@ -1223,10 +1228,10 @@ button.sidebar-workspace-option:focus-visible {
     font-size: .78rem;
 }
 .sidebar-account-actions .sidebar-account-logout {
-    color: #fecaca;
+    color: var(--theme-danger-text, #b91c1c);
 }
 .sidebar-account-actions .sidebar-account-logout > :is(i, .navigation-icon):first-child {
-    color: #f87171;
+    color: var(--theme-danger-text, #b91c1c);
 }
 .sidebar-preferences-options a,
 .sidebar-preferences-options .sidebar-account-button,
@@ -1242,10 +1247,10 @@ button.sidebar-workspace-option:focus-visible {
     grid-template-columns: 28px minmax(0, 1fr);
     align-items: center;
     gap: .7rem;
-    border: 1px solid rgba(148, 163, 184, .12);
+    border: 1px solid transparent;
     border-radius: 8px;
-    background: var(--theme-surface-glass, rgba(255,255,255,.04));
-    color: #dbeafe;
+    background: transparent;
+    color: var(--theme-ink, #1f2937);
     font: inherit;
     font-weight: 700;
     text-align: left;
@@ -1254,12 +1259,12 @@ button.sidebar-workspace-option:focus-visible {
 .sidebar-preference-option:hover,
 .sidebar-preference-option:focus-visible {
     border-color: rgba(96, 165, 250, .38);
-    background: rgba(37, 99, 235, .18);
-    color: #fff;
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-ink, #1f2937);
     outline: none;
 }
 .sidebar-preference-option > :is(i, .navigation-icon) {
-    color: #93c5fd;
+    color: var(--theme-info-text, #1d4ed8);
     font-size: 1.15rem;
     text-align: center;
 }
@@ -1267,6 +1272,15 @@ button.sidebar-workspace-option:focus-visible {
     min-width: 0;
 }
 .sidebar-account-actions :is(a, button, summary) { min-height: 44px; }
+.sidebar-account-menu .navigation-icon { filter: saturate(.6); }
+.sidebar-account-menu details[open] > summary {
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-info-text, #1d4ed8);
+}
+.sidebar-account-menu .sidebar-account-actions :is(a, button, summary):focus-visible {
+    outline: 2px solid var(--primary, #2563eb);
+    outline-offset: -2px;
+}
 
 html.rm-fullscreen-fallback {
     min-height: 100%;
@@ -1365,6 +1379,7 @@ body.sidebar-collapsed .sidebar .dropdown-content a.active { box-shadow: inset 3
 }
 @media (prefers-reduced-motion: reduce) {
     .sidebar-tip { transition: none; }
+    .sidebar-account-menu { transition: none !important; }
 }
 
 /* dashboard.css */
@@ -5206,6 +5221,22 @@ body.system-health-open {
 /* ============================
    Responsive layout (tablet & mobile)
    ============================ */
+@media (max-width: 1180px) {
+    body:has([data-workspace="inventory_manager"]) .main-content :is(.page-heading, .topbar) {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    body:has([data-workspace="inventory_manager"]) .page-heading-actions {
+        justify-content: flex-start;
+        max-width: 100%;
+    }
+    body:has([data-workspace="inventory_manager"]) .page-heading-actions .btn {
+        width: auto;
+        height: auto;
+        min-height: 44px;
+        white-space: normal;
+    }
+}
 @media (max-width: 900px) {
     input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 1rem; }
     .sidebar-account-menu {
@@ -5506,19 +5537,33 @@ body.system-health-open {
     .wizard-progress { gap: .15rem; }
     .rm-modal-actions { flex-direction: column-reverse; }
     .rm-modal-actions .btn { width: 100%; text-align: center; }
+}
+@media (max-width: 900px) {
     .data-table-shell.product-table-shell { border: 0; background: transparent; overflow: visible; }
     .product-table-shell .data-table-scroll { max-height: none; overflow: visible; }
-    .product-table-shell .data-table { display: block; min-width: 0; background: transparent; }
+    .data-table-shell.product-table-shell .data-table { display: block; min-width: 0; background: transparent; }
     .product-table-shell thead { display: none; }
     .product-table-shell tbody { display: grid; gap: .75rem; }
     .product-table-shell tr { display: grid; grid-template-columns: auto 1fr auto; gap: .55rem; padding: .85rem; border: 1px solid var(--border); border-radius: 13px; background: var(--theme-surface, #fff); }
     .product-table-shell td { display: block; border: 0; padding: 0; white-space: normal; }
     .product-table-shell td.product-cell { grid-column: 2 / 4; min-width: 0; }
     .product-table-shell td.mobile-hide { display: none; }
+    .product-table-shell td.column-price { grid-column: 2 / -1; }
+    .product-table-shell td.column-price::before { content: "Selling price "; color: var(--muted); }
+    .product-table-shell .stock-value::before { content: "Stock "; color: var(--muted); font-weight: 400; }
     .product-table-shell td.stock-cell { grid-column: 2; }
     .product-table-shell td.status-cell { grid-column: 3; }
     .product-table-shell td.action-cell { grid-column: 1 / -1; }
     .product-table-shell .row-actions { justify-content: flex-end; }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+    .product-table-shell tr { grid-template-columns: 24px minmax(0, 1fr) minmax(100px, .55fr) auto; align-items: center; gap: .6rem .75rem; }
+    .product-table-shell td:first-child { grid-column: 1; grid-row: 1 / 3; }
+    .product-table-shell td.product-cell { grid-column: 2 / 4; grid-row: 1; }
+    .product-table-shell td.column-price { grid-column: 2; grid-row: 2; }
+    .product-table-shell td.stock-cell { grid-column: 3; grid-row: 2; }
+    .product-table-shell td.status-cell { grid-column: 4; grid-row: 1; }
+    .product-table-shell td.action-cell { grid-column: 4; grid-row: 2; }
 }
 @media (min-width: 901px) {
     .main-content { padding-top: 4.35rem; }

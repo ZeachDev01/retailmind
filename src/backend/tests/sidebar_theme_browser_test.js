@@ -22,6 +22,11 @@ const fixture = action => {
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
+const luminance = color => color.match(/[\d.]+/g).slice(0, 3)
+    .map(value => Number(value) / 255)
+    .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+    .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
 
 (async () => {
     let server, browser;
@@ -51,7 +56,7 @@ const fixture = action => {
                 await page.locator('[data-account-menu-open]').filter({visible: true}).last().click();
                 await page.locator('.sidebar-preferences-menu > summary').click();
                 await page.locator('.sidebar-theme-control > summary').click();
-                const saved = page.waitForResponse(response => response.url().endsWith('/auth/theme.php') && response.request().method() === 'POST');
+                const saved = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/auth/theme.php') && response.request().method() === 'POST');
                 await page.locator('.sidebar-theme-control [data-theme-mode="' + mode + '"]').click();
                 assert.equal((await saved).status(), 200);
                 await page.reload();
@@ -78,6 +83,35 @@ const fixture = action => {
                     await page.keyboard.press('Escape');
                 }
                 if (mode !== 'system') {
+                    for (const width of [768, 1440]) {
+                        await page.setViewportSize({width, height: 1024});
+                        await page.locator('[data-account-menu-open]').filter({visible: true}).last().click();
+                        await page.waitForTimeout(180);
+                        const menu = page.locator('#sidebarAccountMenu');
+                        const colors = await menu.evaluate(node => {
+                            const style = getComputedStyle(node);
+                            const probe = document.createElement('span');
+                            probe.style.color = 'var(--theme-surface-soft, #f1f5f9)';
+                            node.append(probe);
+                            const expectedBackground = getComputedStyle(probe).color;
+                            probe.remove();
+                            return {background: style.backgroundColor, expectedBackground, transform: style.transform,
+                                rows: [...node.querySelectorAll('.sidebar-account-actions > a, .sidebar-account-actions > details > summary, .sidebar-account-identity span')]
+                                    .filter(row => row.getClientRects().length)
+                                    .map(row => getComputedStyle(row).color)};
+                        });
+                        assert.equal(colors.background, colors.expectedBackground, role + ': menu follows theme');
+                        for (const color of colors.rows) assert(contrast(color, colors.background) >= 4.5, role + ' ' + mode + ': account text contrast ' + color + ' on ' + colors.background);
+                        await page.locator('.sidebar-workspace-switcher > summary').click();
+                        const submenu = page.locator('.sidebar-workspace-options');
+                        assert.equal(await submenu.evaluate(node => getComputedStyle(node).backgroundColor), colors.background);
+                        await page.screenshot({path: path.join(screenshots, role + '-' + mode + '-' + width + '-account.png'), animations: 'disabled'});
+                        await page.keyboard.press('Escape');
+                        await page.waitForTimeout(180);
+                        assert.equal(await menu.isVisible(), false, role + ': menu closes after fade');
+                        assert.equal(await menu.evaluate(node => getComputedStyle(node).transform), colors.transform, role + ': fade does not move submenu anchors');
+                    }
+                    await page.setViewportSize({width: 1440, height: 1000});
                     await page.screenshot({path: path.join(screenshots, role + '-' + mode + '.png'), animations: 'disabled'});
                     if (role === 'cashier') {
                         await page.locator('[data-account-menu-open]').filter({visible: true}).last().click();
@@ -117,6 +151,8 @@ const fixture = action => {
             await page.keyboard.press('Escape');
             assert.equal(await page.locator('#menuToggle').getAttribute('aria-expanded'), 'false');
             assert((await page.locator('#menuToggle img').getAttribute('src')).endsWith('/menu.svg'));
+            await page.emulateMedia({reducedMotion: 'reduce'});
+            assert.equal(await page.locator('#sidebarAccountMenu').evaluate(node => getComputedStyle(node).transitionDuration), '0s', role + ': reduced motion skips menu animation');
             await context.close();
         }
         console.log('Sidebar theme browser: passed (four roles, colored SVG loading and search, GCash, collapsed/mobile navigation, fullscreen, themes, invalid mode and CSRF rejection)');

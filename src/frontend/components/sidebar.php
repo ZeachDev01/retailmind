@@ -411,7 +411,13 @@ $GLOBALS['rm_navigation_shell'] = [
         <div class="sidebar-account-actions">
             <a href="<?= sidebar_e(app_url('components/auth/user_info.php')) ?>">
                 <?= sidebar_icon('contacts', 'bi-person-circle') ?>
-                <span>User</span>
+                <span>
+                    <span class="sidebar-account-user-label">User</span>
+                    <span class="sidebar-account-identity sidebar-profile-copy">
+                        <strong><?= sidebar_e($sidebarUserName) ?></strong>
+                        <span><?= sidebar_e($sidebarRoleLabel) ?></span>
+                    </span>
+                </span>
                 <?= sidebar_icon('next', 'bi-chevron-right') ?>
             </a>
             <details class="sidebar-workspace-switcher">
