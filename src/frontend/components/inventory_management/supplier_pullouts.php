@@ -620,16 +620,17 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    document.addEventListener('inventorydraft:prepare', event => {
-        if (event.detail.draft.formId !== 'pullout-form') return;
-        const value = name => event.detail.draft.values.find(item => item.name === name)?.value;
-        event.detail.waitUntil((async () => {
+    window.RetailMindInventoryDrafts?.register({
+        eligible: form => form.id === 'pullout-form',
+        submissionKind: () => 'pullout',
+        async prepare(draft) {
+            const value = name => draft.values.find(item => item.name === name)?.value;
             const productId = value('product_id') || '';
             if (!Array.from(productSelect.options).some(option => option.value === productId)) throw new Error('The selected Product is no longer available. Your draft is still kept.');
             productSelect.value = productId;
             await loadBatchesForProduct(productId, value('batch_id'));
             if (!Array.from(batchSelect.options).some(option => option.value === value('batch_id'))) throw new Error('The selected batch is no longer available. Your draft is still kept.');
-        })());
+        }
     });
 
     productSelect.addEventListener('change', function () {

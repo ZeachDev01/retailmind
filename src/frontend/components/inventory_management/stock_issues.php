@@ -108,6 +108,12 @@ $revisionsFor = static function (int $adjustmentId) use ($stockIssueService, &$r
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/stock-issues.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/stock-issues.css')) ?>">
 <?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
+<script>
+window.RetailMindInventoryDrafts?.register({
+    eligible: form => form.matches('.review-form'),
+    submissionKind: (form, action) => ({approve:'approveReport', reject:'rejectReport', return:'returnReport'})[action] || ''
+});
+</script>
 </head>
 
 <body class="stock-issues-page">

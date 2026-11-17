@@ -4,6 +4,7 @@ window.RetailMindInventoryDrafts = (() => {
     let config, key, prefix, busy = 0, restoring = false, active = false;
     const lifetime = new AbortController();
     let observer;
+    let adapter = {};
     const encoder = new TextEncoder(), decoder = new TextDecoder(), snapshots = new Map();
     const encode = bytes => btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
     const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
@@ -27,8 +28,7 @@ window.RetailMindInventoryDrafts = (() => {
             [form.querySelector('[name="action"]')?.value || 'entry', form.querySelector('[name="adjustment_id"], [name="count_id"]')?.value || ''].join(':'));
     }
     function eligible(form) {
-        return form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, #pullout-form, .count-form, .review-form, #receiving_form, .inline-form') ||
-            (location.pathname.endsWith('/products.php') && form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value);
+        return !!adapter.eligible?.(form);
     }
     function hidden(form, name, value) {
         let field = form.elements.namedItem(name);
@@ -54,7 +54,7 @@ window.RetailMindInventoryDrafts = (() => {
             values.push(item);
         }
         const draft = {id: identity(form), formId: form.id, values, context: {operationKind: form.dataset.inventorySubmissionKind || '', submittedFingerprint: submitted.get(form)?.original || null, latestSubmittedFingerprint: submitted.get(form)?.latest || null}};
-        document.dispatchEvent(new CustomEvent('inventorydraft:capture', {detail: {draft, form}}));
+        adapter.capture?.(draft, form);
         return draft;
     }
     async function fingerprint(values) {
@@ -64,15 +64,6 @@ window.RetailMindInventoryDrafts = (() => {
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, encoder.encode(JSON.stringify(draft)));
         localStorage.setItem(prefix + draft.id, JSON.stringify({iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext))}));
-    }
-    function submissionKind(form, submitter) {
-        const action = submitter?.name === 'action' ? submitter.value : form.querySelector('[name="action"]')?.value;
-        if (form.id === 'receiving_form') return 'receiving';
-        if (location.pathname.endsWith('/inventory_counts.php')) return ({record:'count', approve:'approveCount', reject:'rejectCount'})[action] || '';
-        if (location.pathname.endsWith('/stock_issues.php')) return ({approve:'approveReport', reject:'rejectReport', return:'returnReport'})[action] || '';
-        if (location.pathname.endsWith('/products.php')) return ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '';
-        if (form.id === 'pullout-form') return 'pullout';
-        return '';
     }
     async function keep(form, submitting = false) {
         if (!active || restoring || !eligible(form)) return;
@@ -146,17 +137,16 @@ window.RetailMindInventoryDrafts = (() => {
                     }
                 }
             }
-            const promises = [];
-            document.dispatchEvent(new CustomEvent('inventorydraft:prepare', {detail: {draft, waitUntil: promise => promises.push(promise)}}));
-            await Promise.all(promises);
-            const form = Array.from(document.forms).find(item => identity(item) === draft.id || (draft.formId && item.id === draft.formId));
+            // Adapter corrections must not mutate the saved snapshot or submission fingerprints.
+            const restoredDraft = structuredClone(draft);
+            await adapter.prepare?.(restoredDraft);
+            const form = Array.from(document.forms).find(item => eligible(item) && (identity(item) === draft.id || (draft.formId && item.id === draft.formId)));
             if (!form) throw new Error('The form is no longer available with your current access.');
             prepare(form);
             if (draft.context.submittedFingerprint) submitted.set(form, {token:operationToken, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
             if (draft.context.operationKind) form.dataset.inventorySubmissionKind = draft.context.operationKind;
-            // Product selection loads current batches; adapters await that request before restoring quantities.
             const ordinals = new Map();
-            for (const item of draft.values) {
+            for (const item of restoredDraft.values) {
                 const fields = Array.from(form.elements).filter(field => field.name === item.name);
                 const ordinal = ordinals.get(item.name) || 0;
                 const field = fields[ordinal];
@@ -173,7 +163,7 @@ window.RetailMindInventoryDrafts = (() => {
                 field.dispatchEvent(new Event('input', {bubbles: true}));
                 field.dispatchEvent(new Event('retailmind:fieldrestore'));
             }
-            document.dispatchEvent(new CustomEvent('inventorydraft:restored', {detail: {draft, form}}));
+            await adapter.restored?.(restoredDraft, form);
             form.scrollIntoView({block: 'nearest'});
             notice('Draft restored. Review items and quantities before saving.');
             return true;
@@ -246,7 +236,8 @@ window.RetailMindInventoryDrafts = (() => {
                 if (resubmitting.has(event.target)) { resubmitting.delete(event.target); return; }
                 event.preventDefault(); event.stopImmediatePropagation();
                 const form = event.target, submitter = event.submitter;
-                form.dataset.inventorySubmissionKind = submissionKind(form, submitter);
+                const action = submitter?.name === 'action' ? submitter.value : form.querySelector('[name="action"]')?.value;
+                form.dataset.inventorySubmissionKind = adapter.submissionKind?.(form, action) || '';
                 keep(form, true).then(() => setTimeout(() => { resubmitting.add(form); form.requestSubmit(submitter); }, 0));
             }, {capture: true, signal: lifetime.signal});
             window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } }, {signal: lifetime.signal});
@@ -259,6 +250,7 @@ window.RetailMindInventoryDrafts = (() => {
     }
     function destroy() { clearTimeout(noticeTimer); active = false; lifetime.abort(); observer?.disconnect(); key = null; }
     return {
+        register(pageAdapter) { adapter = pageAdapter; },
         start(options) {
             config = options;
             window.addEventListener('pagehide', destroy, {once:true, signal:lifetime.signal});

@@ -3244,41 +3244,49 @@ foreach ($products as $product) {
             }
         });
 
-        document.addEventListener('inventorydraft:capture', event => {
-            if (event.detail.form === addProductForm) event.detail.draft.context.step = wizardStep;
-            if (['product-edit-form', 'pack-reconcile-form'].includes(event.detail.form.id)) event.detail.draft.context.productId = currentDrawerProductId;
-        });
-        document.addEventListener('inventorydraft:prepare', event => {
-            const draft = event.detail.draft;
-            if (draft.formId === 'add-product-form') {
-                RetailMindUI.openOverlay(productModalOverlay);
-                setWizardStep(draft.context.step || 1);
-            } else if (draft.formId === 'pack-reconcile-form') {
-                openProductDrawer(draft.context.productId);
-                document.getElementById('drawer-reconcile-pack')?.click();
-            } else if (draft.formId === 'product-edit-form') {
-                event.detail.waitUntil(Promise.resolve(openProductDrawer(draft.context.productId)).then(() => enterProductEditMode()));
-            } else {
-                if (draft.context.productId) openProductDrawer(draft.context.productId);
-                const target = Array.from(document.forms).find(form => RetailMindInventoryDrafts.identity(form) === draft.id);
-                const overlay = target?.closest('.rm-modal-overlay');
-                if (overlay) RetailMindUI.openOverlay(overlay);
-            }
-        });
-        document.addEventListener('inventorydraft:restored', event => {
-            if (event.detail.form.id === 'pack-reconcile-form') updateReconcilePreview();
-            if (event.detail.form === addProductForm) {
-                const values = event.detail.draft.values;
-                if (!values.some(item => item.name === 'sell_sealed_packs')) sellSealedPacks.checked = Number(packSizeInput.value) > 1;
-                if (!values.some(item => item.name === 'cost_entry_mode')) {
-                    costEntryMode.value = 'piece';
-                    if (Number(purchasePackCost.value) > 0 && Number(packSizeInput.value) > 1) purchasePackSize.value = packSizeInput.value;
+        window.RetailMindInventoryDrafts?.register({
+            eligible: form => form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, .inline-form') ||
+                (form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value),
+            submissionKind: (form, action) => ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '',
+            capture(draft, form) {
+                if (form === addProductForm) draft.context.step = wizardStep;
+                if (['product-edit-form', 'pack-reconcile-form'].includes(form.id)) draft.context.productId = currentDrawerProductId;
+            },
+            async prepare(draft) {
+                if ((draft.context.productId || ['product-edit-form', 'pack-reconcile-form'].includes(draft.formId)) && !productsById[Number(draft.context.productId)]) {
+                    throw new Error('The selected Product is no longer available. Your draft is still kept.');
                 }
-                // Explicit draft counts must survive showing the sealed-stock fields.
-                stockSalesPacksWrapper.hidden = !sellSealedPacks.checked;
-                syncUnitSelects();
-                syncPricingFields();
-                setWizardStep(event.detail.draft.context.step || 1);
+                if (draft.formId === 'add-product-form') {
+                    RetailMindUI.openOverlay(productModalOverlay);
+                    setWizardStep(draft.context.step || 1);
+                } else if (draft.formId === 'pack-reconcile-form') {
+                    openProductDrawer(draft.context.productId);
+                    document.getElementById('drawer-reconcile-pack')?.click();
+                } else if (draft.formId === 'product-edit-form') {
+                    openProductDrawer(draft.context.productId);
+                    await enterProductEditMode();
+                } else {
+                    if (draft.context.productId) openProductDrawer(draft.context.productId);
+                    const target = Array.from(document.forms).find(form => RetailMindInventoryDrafts.identity(form) === draft.id);
+                    const overlay = target?.closest('.rm-modal-overlay');
+                    if (overlay) RetailMindUI.openOverlay(overlay);
+                }
+            },
+            restored(draft, form) {
+                if (form.id === 'pack-reconcile-form') updateReconcilePreview();
+                if (form === addProductForm) {
+                    const values = draft.values;
+                    if (!values.some(item => item.name === 'sell_sealed_packs')) sellSealedPacks.checked = Number(packSizeInput.value) > 1;
+                    if (!values.some(item => item.name === 'cost_entry_mode')) {
+                        costEntryMode.value = 'piece';
+                        if (Number(purchasePackCost.value) > 0 && Number(packSizeInput.value) > 1) purchasePackSize.value = packSizeInput.value;
+                    }
+                    // Explicit draft counts must survive showing the sealed-stock fields.
+                    stockSalesPacksWrapper.hidden = !sellSealedPacks.checked;
+                    syncUnitSelects();
+                    syncPricingFields();
+                    setWizardStep(draft.context.step || 1);
+                }
             }
         });
 

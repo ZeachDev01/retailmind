@@ -29,6 +29,7 @@ const { chromium } = require('playwright');
                 user: '1',
                 confirmed: false
             });
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         }, encodedKey);
 
@@ -51,6 +52,7 @@ const { chromium } = require('playwright');
         await page.addScriptTag({ content: draftsJs });
         await page.evaluate(key => {
             RetailMindInventoryDrafts.start({key, user: '1', confirmed: false});
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         }, encodedKey);
         await page.waitForSelector('.inventory-recovery-alert');
@@ -82,6 +84,7 @@ const { chromium } = require('playwright');
                 user: '1',
                 confirmed: false
             });
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         }, encodedKey);
 
@@ -103,6 +106,7 @@ const { chromium } = require('playwright');
                 user: '1',
                 confirmed: false
             });
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         });
 

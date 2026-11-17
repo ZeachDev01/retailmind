@@ -14,5 +14,6 @@ $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remain
 $pdo->exec("UPDATE products SET supplier_pullout_eligible=1 WHERE product_id=1");
 $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Inventory recovery test','2026-01-01','2099-12-31','open',1)");
 $pdo->exec("INSERT INTO users (username,password_hash,display_name,email,role_id,status) SELECT 'theme_inventory_other', password_hash, 'Other Inventory Manager', 'other-inventory@example.test', role_id, status FROM users WHERE user_id = 3");
+$pdo->exec('INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (3,1,0)');
 
 $pdo->exec("INSERT INTO categories (category_name) VALUES ('Recovery test category')");

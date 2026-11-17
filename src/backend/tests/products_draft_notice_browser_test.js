@@ -25,6 +25,7 @@ const { chromium } = require('playwright');
                 user: '1',
                 confirmed: false
             });
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         });
 
@@ -46,6 +47,7 @@ const { chromium } = require('playwright');
         await page.evaluate(() => {
             document.querySelector('main').insertAdjacentHTML('beforeend', '<form method="post"><input name="note"></form><form id="add-product-form" method="post"><input name="product_name"></form>');
             RetailMindInventoryDrafts.start({key:btoa(String.fromCharCode(...new Uint8Array(32))), user:'1', confirmed:false});
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         });
         await page.waitForTimeout(100);
@@ -75,6 +77,7 @@ const { chromium } = require('playwright');
                 user: '1',
                 confirmed: false
             });
+            RetailMindInventoryDrafts.register({eligible: form => form.matches('#add-product-form, #receiving_form')});
             document.dispatchEvent(new Event('DOMContentLoaded'));
         });
         await page.waitForTimeout(100);

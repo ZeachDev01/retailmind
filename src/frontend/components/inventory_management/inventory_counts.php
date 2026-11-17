@@ -502,24 +502,26 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         let extraBatchIndex = 0;
         let activeCoverage = null;
 
-        document.addEventListener('inventorydraft:prepare', event => {
-            if (event.detail.draft.id !== 'record:') return;
-            event.detail.waitUntil((async () => {
-                const value = name => event.detail.draft.values.find(item => item.name === name)?.value;
+        window.RetailMindInventoryDrafts?.register({
+            eligible: form => form.matches('.count-form, .review-form, .inline-form'),
+            submissionKind: (form, action) => ({record:'count', approve:'approveCount', reject:'rejectCount'})[action] || '',
+            async prepare(draft) {
+                if (draft.id !== 'record:') return;
+                const value = name => draft.values.find(item => item.name === name)?.value;
                 const productId = value('product_id') || '';
                 if (!Array.from(productSelect.options).some(option => option.value === productId)) throw new Error('The selected Product is no longer available. Your draft is still kept.');
                 productSelect.value = productId;
                 syncProductSearch();
-                await fetchBatchCoverage(productSelect.value);
-                for (const item of event.detail.draft.values.filter(item => /^batches\[\d+\]\[batch_id\]$/.test(item.name))) {
+                if (!await fetchBatchCoverage(productSelect.value)) throw new Error('Current batch coverage is unavailable. Your draft is still kept.');
+                for (const item of draft.values.filter(item => /^batches\[\d+\]\[batch_id\]$/.test(item.name))) {
                     if (document.getElementsByName(item.name)[0]?.value !== item.value) throw new Error('Batch availability has changed. Your draft is still kept; review current stock before resuming.');
                 }
-                const keys = [...new Set(event.detail.draft.values.map(item => item.name.match(/^batches\[(extra_\d+)\]/)?.[1]).filter(Boolean))];
+                const keys = [...new Set(draft.values.map(item => item.name.match(/^batches\[(extra_\d+)\]/)?.[1]).filter(Boolean))];
                 for (const key of keys) {
                     extraBatchIndex = Number(key.slice(6)) - 1;
                     addExtraBatchBtn.click();
                 }
-            })());
+            }
         });
         function fetchBatchCoverage(productId) {
             if (!productId || productId <= 0) {
@@ -535,8 +537,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     if (!data.success || !data.coverage) return;
                     activeCoverage = data.coverage;
                     renderBatchSection(data.coverage);
+                    return data.coverage;
                 })
-                .catch(() => {});
+                .catch(() => { activeCoverage = null; });
         }
 
         function escapeHtml(str) {

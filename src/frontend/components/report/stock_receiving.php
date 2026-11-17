@@ -1320,15 +1320,15 @@ renumberLines();
 const receivingDraftObserver = new MutationObserver(() => RetailMindInventoryDrafts?.keep(form));
 receivingDraftObserver.observe(lineContainer, {childList: true});
 window.addEventListener('pagehide', () => receivingDraftObserver.disconnect(), {once: true});
-document.addEventListener('inventorydraft:capture', event => {
-    if (event.detail.form !== form) return;
-    event.detail.draft.context = {...event.detail.draft.context, step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
-        Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])))};
-});
-document.addEventListener('inventorydraft:prepare', event => {
-    if (event.detail.draft.formId !== 'receiving_form') return;
-    event.detail.waitUntil((async () => {
-        const lines = event.detail.draft.context.lines || [];
+window.RetailMindInventoryDrafts?.register({
+    eligible: candidate => candidate === form,
+    submissionKind: () => 'receiving',
+    capture(draft) {
+        draft.context = {...draft.context, step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
+            Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])))};
+    },
+    prepare(draft) {
+        const lines = draft.context.lines || [];
         const linesWithExcludedQuantity = lines.filter(line => ['damaged_qty', 'damaged_packs', 'damaged_loose', 'rejected_packs', 'rejected_loose']
             .some(name => Number(line[name] || 0) > 0));
         if (lines.some(line => !productMap.has(String(line.product_id)))) {
@@ -1337,16 +1337,20 @@ document.addEventListener('inventorydraft:prepare', event => {
         for (const line of linesWithExcludedQuantity) {
             for (const name of ['received_qty', 'received_packages', 'received_packs', 'received_loose']) line[name] = '';
         }
+        draft.values = draft.values.filter(item => {
+            const match = item.name.match(/^lines\[(\d+)\]\[(received_qty|received_packages|received_packs|received_loose)\]$/);
+            return !match || !linesWithExcludedQuantity.includes(lines[Number(match[1])]);
+        });
         lineContainer.replaceChildren();
         for (const line of lines) addReceivingLine(line);
         if (linesWithExcludedQuantity.length > 0) {
             document.getElementById('entry_status').textContent = 'A saved draft used damaged or rejected quantities. Enter the good quantities received again; your draft is still kept.';
         }
-        showStep(event.detail.draft.context.step || 1);
-    })());
-});
-document.addEventListener('inventorydraft:restored', event => {
-    if (event.detail.form === form && step === 3) renderReview();
+        showStep(draft.context.step || 1);
+    },
+    restored() {
+        if (step === 3) renderReview();
+    }
 });
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);

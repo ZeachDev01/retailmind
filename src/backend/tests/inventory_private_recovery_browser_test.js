@@ -51,11 +51,42 @@ function fixture(action) {
             return page;
         }
         let page = await open();
-        async function resumeDraft(id) {
+        async function editDraft(id, update) {
+            const html = await (await page.request.get(page.url())).text();
+            const key = JSON.parse(html.match(/key:\s*("[^"]+")/)[1]);
+            const saved = await page.evaluate(async ({id, key}) => {
+                const storageKey = Object.keys(localStorage).find(key => key.startsWith('retailmind:inventory:v1:') && key.endsWith(':' + id));
+                const decode = value => Uint8Array.from(atob(value), char => char.charCodeAt(0));
+                const stored = JSON.parse(localStorage.getItem(storageKey));
+                const cryptoKey = await crypto.subtle.importKey('raw', decode(key), 'AES-GCM', false, ['decrypt']);
+                const bytes = await crypto.subtle.decrypt({name:'AES-GCM',iv:decode(stored.iv)}, cryptoKey, decode(stored.ciphertext));
+                return {storageKey, draft:JSON.parse(new TextDecoder().decode(bytes))};
+            }, {id, key});
+            update(saved.draft);
+            await page.evaluate(async ({storageKey, draft, key}) => {
+                const cryptoKey = await crypto.subtle.importKey('raw', Uint8Array.from(atob(key), char => char.charCodeAt(0)), 'AES-GCM', false, ['encrypt']);
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const ciphertext = await crypto.subtle.encrypt({name:'AES-GCM',iv}, cryptoKey, new TextEncoder().encode(JSON.stringify(draft)));
+                const encode = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+                localStorage.setItem(storageKey, JSON.stringify({iv:encode(iv),ciphertext:encode(ciphertext)}));
+            }, {...saved, key});
+        }
+        async function resumeDraft(id, rejected = false) {
             const panel = id ? page.locator('[data-recovery-id="' + id + '"]') : page.locator('[data-recovery-id]').first();
             const draftId = await panel.getAttribute('data-recovery-id');
-            await panel.getByRole('button', {name:'Resume', exact:true}).click();
-            await page.locator('[data-recovery-id="' + draftId + '"]').waitFor({state:'detached'});
+            const posts = [];
+            const recordPost = request => {
+                if (request.method() === 'POST' && /\/components\/(inventory_management\/|report\/stock_receiving\.php)/.test(new URL(request.url()).pathname)) posts.push(request.url());
+            };
+            page.on('request', recordPost);
+            try {
+                await panel.getByRole('button', {name:'Resume', exact:true}).click();
+                if (rejected) {
+                    await page.waitForFunction(() => document.querySelector('#inventory-draft-status')?.textContent.includes('Draft could not be resumed'));
+                    assert(await panel.isVisible(), 'Failed restoration keeps Resume and explicit Discard');
+                } else await page.locator('[data-recovery-id="' + draftId + '"]').waitFor({state:'detached'});
+                assert.deepEqual(posts, [], 'Resume never posts an inventory operation');
+            } finally { page.off('request', recordPost); }
         }
 
         // Migrate only this user's older receiving data; never delete another user's work.
@@ -75,6 +106,16 @@ function fixture(action) {
         assert.equal(await page.locator('#supplier').inputValue(), 'Older private store');
         assert.equal(await page.locator('#received_qty').inputValue(), '4');
         assert.equal(await page.evaluate(() => sessionStorage.getItem('receiving-draft:3')), null, 'Own legacy plaintext is removed only after encrypted migration succeeds');
+        await editDraft('receiving_form', draft => {
+            draft.context.lines[0].damaged_qty = '1';
+            draft.values.push({name:'lines[0][received_qty]',value:'4'});
+        });
+        await page.reload();
+        const incompatibleDraft = await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find(key => key.endsWith(':receiving_form'))));
+        await resumeDraft();
+        assert.equal(await page.locator('#received_qty').inputValue(), '', 'Generic replay cannot reintroduce incompatible legacy quantities');
+        assert.match(await page.locator('#entry_status').innerText(), /Enter the good quantities received again/);
+        assert.equal(await page.evaluate(() => localStorage.getItem(Object.keys(localStorage).find(key => key.endsWith(':receiving_form')))), incompatibleDraft, 'Compatibility restoration leaves the saved draft unchanged');
         await page.evaluate(() => RetailMindInventoryDrafts.discard('receiving_form'));
         await page.reload();
         await page.locator('.receiving-card-add').first().click();
@@ -99,6 +140,21 @@ function fixture(action) {
         assert.equal(await page.locator('#batch_number').inputValue(), 'PRIVATE-BATCH-316');
         assert.equal(await page.locator('#supplier').inputValue(), 'PRIVATE-STORE-316');
         assert.equal(await page.locator('[name="operation_token"]').inputValue(), originalToken);
+        // The same account's other Workspace must not unlock inventory drafts.
+        for (const workspace of ['admin', 'inventory_manager']) {
+            await page.goto(origin + '/components/auth/workspace.php');
+            await Promise.all([
+                page.waitForNavigation(),
+                page.locator('.workspace-option').filter({has:page.locator('[name="workspace"][value="' + workspace + '"]')}).getByRole('button', {name:'Open',exact:true}).click()
+            ]);
+            await page.goto(origin + '/components/report/stock_receiving.php');
+            if (workspace === 'admin') {
+                assert.equal(await page.evaluate(() => typeof window.RetailMindInventoryDrafts), 'undefined', 'Administrator Workspace receives no inventory draft unlocker');
+                assert.equal(await page.getByRole('button', {name:'Resume',exact:true}).count(), 0);
+                assert(await page.evaluate(key => !!localStorage.getItem(key), draftStorageKey), 'Workspace switch retains the encrypted Inventory draft');
+            } else await resumeDraft();
+        }
+        assert.equal(await page.locator('#invoice_number').inputValue(), 'PRIVATE-RECEIPT-316', 'Returning to Inventory Workspace restores the same account draft');
         await context.close(); context = null;
         page = await open('theme_inventory_other');
         assert.equal(await page.getByRole('button', {name: 'Resume', exact: true}).count(), 0, 'Another authenticated manager cannot discover or resume another user draft');
@@ -181,6 +237,18 @@ function fixture(action) {
         await page.locator('[name="batches[extra_1][notes]"]').fill('Found on top shelf');
         await page.locator('[name="discrepancy_reason"]').fill('Shelf count draft');
         await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        let countValues;
+        await editDraft('record:', draft => {
+            countValues = draft.values;
+            draft.values = draft.values.filter(item => !/^batches\[\d+\]/.test(item.name));
+        });
+        await page.reload();
+        await page.route('**/inventory_counts.php?action=batch_coverage&**', route => route.abort('failed'));
+        const countBeforeResume = JSON.parse(fixture('inventory_state'));
+        await resumeDraft('record:', true);
+        assert.deepEqual(JSON.parse(fixture('inventory_state')), countBeforeResume, 'Failed coverage recovery changes no inventory');
+        await page.unroute('**/inventory_counts.php?action=batch_coverage&**');
+        await editDraft('record:', draft => { draft.values = countValues; });
         await page.reload(); await resumeDraft();
         await page.waitForFunction(() => document.querySelector('[name="batches[extra_1][notes]"]')?.value === 'Found on top shelf');
         assert.equal(await page.locator('[name="batches[extra_1][batch_number]"]').inputValue(), 'FOUND-DRAFT');
@@ -249,6 +317,15 @@ function fixture(action) {
         await page.locator('#product-edit-btn').click();
         await page.locator('#edit-product-name').fill('Existing Product draft edit');
         await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        await editDraft('product-edit-form', draft => { draft.context.productId = 999999; });
+        await page.reload();
+        await page.locator('.manage-product[data-product-id="1"]').click();
+        await page.locator('#product-edit-btn').click();
+        const currentProductName = await page.locator('#edit-product-name').inputValue();
+        await page.evaluate(() => RetailMindUI.closeOverlay(document.getElementById('product-drawer')));
+        await resumeDraft('product-edit-form', true);
+        assert.equal(await page.locator('#edit-product-name').inputValue(), currentProductName, 'Unavailable Product cannot overwrite another open editor');
+        await editDraft('product-edit-form', draft => { draft.context.productId = 1; });
         await page.reload();
         await resumeDraft('product-edit-form');
         assert.equal(await page.locator('#edit-product-name').inputValue(), 'Existing Product draft edit');
@@ -261,7 +338,20 @@ function fixture(action) {
         await page.locator('#wizard-next').click();
         await page.locator('#cost-price').fill('1');
         await page.locator('#selling-price').fill('2');
+        await page.locator('#create-sell-packs').check();
+        await page.locator('#create-pack-size').fill('6');
+        await page.locator('#create-pack-price').fill('10');
+        await page.locator('#create-pack-barcode').fill('RECOVERY-PACK-6');
         await page.locator('#wizard-next').click();
+        await page.locator('#starting-packs-count').fill('5');
+        await page.locator('#starting-pack-loose-count').fill('3');
+        await page.evaluate(() => RetailMindInventoryDrafts.flush());
+        const packDraftBefore = JSON.parse(fixture('inventory_state'));
+        await page.reload(); await resumeDraft('add-product-form');
+        assert.equal(await page.locator('#starting-packs-count').inputValue(), '5', 'Resume preserves unopened Sales Packs');
+        assert.equal(await page.locator('#starting-pack-loose-count').inputValue(), '3', 'Resume preserves loose pieces separately');
+        assert.equal(await page.locator('#initial-stock-quantity').inputValue(), '33', 'Derived stock is refreshed after explicit counts');
+        assert.deepEqual(JSON.parse(fixture('inventory_state')), packDraftBefore, 'Resuming Sales Pack counts saves no stock');
         await page.locator('#wizard-next').click();
         assert.equal(await page.locator('[name="print_after_create"]').isChecked(), false, 'Barcode label printing is opt-in');
         await page.locator('[name="print_after_create"]').check();
