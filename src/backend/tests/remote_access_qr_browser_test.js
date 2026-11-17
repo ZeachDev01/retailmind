@@ -95,9 +95,9 @@ const fixture = action => {
                 assert.equal(await page.locator('#show-qr-code-btn').evaluate(node => node === document.activeElement), true, 'Focus returns to QR trigger');
             }
         }
-        await page.locator('.settings-sidebar a[href="?section=store-receipts"]').click();
-        await page.waitForURL('**/store_settings.php?section=store-receipts');
-        await page.locator('.settings-sidebar a[href="?section=remote-access"]').click();
+        await page.getByRole('navigation', {name: 'Store configuration sections'}).getByRole('link', {name: 'Store & receipts', exact: true}).click();
+        await page.waitForURL('**/store_settings.php');
+        await page.getByRole('navigation', {name: 'Store configuration sections'}).getByRole('link', {name: /^Remote Access/}).click();
         await page.waitForURL('**/store_settings.php?section=remote-access');
         assert.equal(await page.locator('#qr-code-modal').count(), 1, 'Page navigation keeps one QR modal');
         assert(await page.locator('#qr-code-modal').isHidden(), 'Page navigation starts with a closed dialog');

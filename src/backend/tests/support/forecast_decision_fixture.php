@@ -24,11 +24,16 @@ if ($argv[1] === 'create') {
     $pdo->exec("INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (3,3,1);
         INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (1,'DECISION-ITEM','DECISION-ITEM','Decision Test Item',25,3);
         INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,0)");
+    (new App\Database\MigrationRunner($pdo, __DIR__ . '/../../database/migrations'))->runPending();
     echo json_encode(['password' => $password]);
     exit;
 }
 $pdo->exec("USE `{$database}`");
 switch ($argv[1]) {
+    case 'recommendations':
+        $service = new App\Forecasting\DemandForecastService($pdo);
+        echo json_encode((new App\Forecasting\ReplenishmentQueueService($pdo))->getRecommendations($service->getLatestUsableJobId() ?? $service->getLatestSuccessfulJobId()));
+        break;
     case 'queue_many':
         $pdo->exec("UPDATE products SET status='inactive' WHERE product_id IN (3,4)");
         $product = $pdo->prepare('INSERT INTO products (sku,barcode,product_name,unit_price,cost_price,reorder_level) VALUES (?,?,?,25,3,10)');

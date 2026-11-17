@@ -446,7 +446,7 @@ $checks = [
             '$service->openShift($actorId, $actorRole, $registerId',
             'name="register_id"',
             'name="opening_float"',
-            '$service->availableRegisters()',
+            '$service->registerOpeningOptions()',
             "require_role(['admin', 'super_admin', 'cashier'])",
         ],
         // A shift is never opened on somebody's behalf, and the duplicate

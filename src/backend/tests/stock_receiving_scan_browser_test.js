@@ -94,6 +94,7 @@ async function selectProducts(page) {
 }
 async function enterQuantities(page) {
     if (await page.locator('.receiving-form').getAttribute('data-step') === '1') await page.locator('#receiving_next').click();
+    await page.locator('.receiving-extras').evaluateAll(rows => rows.forEach(row => { row.open = true; }));
 }
 async function saveEntry(page, double = false) {
     await enterQuantities(page);
@@ -108,7 +109,10 @@ async function scan(page, code) {
     await selectProducts(page);
     const input = page.locator('#product_search_scan');
     await input.fill(code);
+    const response = page.waitForResponse(response => response.url().includes('product_code_lookup.php'));
     await input.press('Enter');
+    await response;
+    await page.waitForFunction(() => !document.getElementById('scan_status').textContent.includes('Checking'));
 }
 
 async function receivingForm(page, fields = {}) {
@@ -146,6 +150,7 @@ async function main() {
 
     try {
         fixture = runFixture('--create', '--token', token);
+        runFixture('--seed-batches', '--token', token);
         const port = await freePort();
         const baseURL = 'http://127.0.0.1:' + port;
         server = spawn(phpBinary, ['-S', '127.0.0.1:' + port, '-t', path.join(repoRoot, 'src', 'frontend')], {
@@ -156,8 +161,9 @@ async function main() {
         await waitForHttp(baseURL + '/?login=1');
 
         browser = await playwright.chromium.launch({ headless: true, args: ['--no-sandbox'] });
-        const context = await browser.newContext({ baseURL });
+        const context = await browser.newContext({ baseURL, reducedMotion: 'reduce' });
         const page = await context.newPage();
+        await page.addInitScript(() => { localStorage.clear(); sessionStorage.clear(); });
         await login(page, fixture.staff.manager);
         await page.goto('/components/inventory_management/inventory_overview.php');
         const primaryNavigation = page.locator('.sidebar-section').first();
@@ -227,9 +233,9 @@ async function main() {
         if (!await page.locator('#receiving_next').count()) throw new Error('Guided receiving steps are unavailable.');
         check(await page.locator('#purchase_order_item_id, #replenishment_request_id, #scan_document_review').count() === 0,
             'receiving exposes no document selectors or resolution');
-        check(await page.locator('#add_receiving_line').count() === 1,
-            'Stock Receiving offers another product line before one reviewed save');
-        if (!await page.locator('#add_receiving_line').count()) throw new Error('Multi-product receiving is unavailable.');
+        check(await page.locator('#receiving_line_template').count() === 1
+            && await page.locator('.receiving-card-add').count() > 1,
+            'Stock Receiving offers catalog products for one reviewed multi-product save');
 
         const before = runFixture('--state', '--token', token);
         const historicalReceipt = before.receipts.find(item => item.invoice_number === 'HISTORICAL-' + token);
@@ -250,10 +256,11 @@ async function main() {
             'a scan does not infer a delivered quantity');
 
         await page.goto(receivingPath);
-        await page.locator('#product_search_scan').focus();
+        await page.locator('#add_scanned_item').focus();
         await page.keyboard.type(fixture.products.direct.barcode, { delay: 10 });
-        check(await eventually(page, id => document.getElementById('product_id').value === String(id),
-            fixture.products.direct.product_id), 'scanner-speed barcode input selects a product without Enter');
+        await page.keyboard.press('Enter');
+        check(await eventually(page, id => document.getElementById('product_id')?.value === String(id),
+            fixture.products.direct.product_id), 'an Enter-terminated keyboard-wedge scan selects a product from an idle control');
 
         const after = runFixture('--state', '--token', token);
         const afterZero = after.products.find((product) => product.sku === fixture.products.zero.sku);
@@ -263,8 +270,10 @@ async function main() {
             'a scan alone creates no receiving record');
 
         console.log('Guided selection and retained draft');
+        await page.goto(receivingPath);
         await scan(page, fixture.products.zero.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('already in the shopping entry'));
+        await scan(page, fixture.products.zero.barcode);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Focused entry field'));
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '',
             'duplicate scan preserves the existing line and never infers quantity');
         await page.locator('#receiving_next').focus();
@@ -276,13 +285,14 @@ async function main() {
             'blank bought quantity cannot reach review');
         await enterQuantities(page);
         await page.fill('#received_qty', '5');
+        await page.fill('#cost_price', '');
         await page.fill('#supplier', 'Reviewed shopping store');
         await page.fill('#invoice_number', 'INV-REVIEW-' + token);
         await page.fill('#batch_number', 'BATCH-REVIEW-' + token);
         await page.locator('#receiving_next').click();
-        check((await page.locator('#receiving_review').innerText()).includes('5 accepted units')
-            && (await page.locator('#receiving_review').innerText()).includes('Unknown; current cost preserved'),
-            'review shows accepted quantities and unknown cost');
+        check((await page.locator('#receiving_review').innerText()).includes('5 units')
+            && (await page.locator('#receiving_review').innerText()).includes('Cost: ₱5.00 per unit'),
+            'review shows accepted quantities and the saved product cost');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(before),
             'selection, quantities and review never write stock');
         await page.getByRole('button', {name: 'Edit line 1', exact: true}).click();
@@ -297,9 +307,9 @@ async function main() {
             && await page.inputValue('#received_qty') === '5', 'unknown and ambiguous scans preserve the draft');
         await page.goto(receivingPath);
         await page.fill('#product_search_scan', fixture.products.short.sku);
-        check(await page.locator('#product_id option:not([hidden])').count() === 2, 'search filters active products by SKU');
+        check(await page.locator('.receiving-card').count() === 1, 'search filters active products by SKU');
         await scan(page, fixture.products.short.sku);
-        await page.waitForFunction(id => document.getElementById('product_id').value === String(id), fixture.products.short.product_id);
+        await page.waitForFunction(id => document.getElementById('product_id')?.value === String(id), fixture.products.short.product_id);
         await enterQuantities(page);
         await enterQuantities(page);
         await page.fill('#received_qty', '1');
@@ -349,12 +359,14 @@ async function main() {
         console.log('Direct bought stock without purchasing history');
         await page.goto(receivingPath);
         await scan(page, fixture.products.direct.case_barcode);
-        check(await eventually(page, id => document.getElementById('product_id').value === String(id),
+        check(await eventually(page, id => document.getElementById('product_id')?.value === String(id),
             fixture.products.direct.product_id), 'a case barcode selects a product without purchasing history');
-        check(await page.inputValue('#cost_price') === '', 'unknown purchase cost stays blank');
+        check(await page.locator('[data-field="cost_price"]').inputValue() === '5.00', 'receiving starts with the current product cost');
         await enterQuantities(page);
+        await page.fill('#cost_price', '');
         await page.fill('#received_packages', '2');
-        check((await page.locator('#package_conversion').innerText()).includes('2 × 24 = 48'),
+        check((await page.locator('#package_conversion').innerText()).includes('Accepted: 48 units.')
+            && (await page.locator('.receiving-product-pack').innerText()).includes('24'),
             'two saved cases display 48 units before saving');
         const duplicateForm = {
             csrf_token: await page.inputValue('input[name="csrf_token"]'),
@@ -367,13 +379,13 @@ async function main() {
         let directProduct = state.products.find(item => item.sku === fixture.products.direct.sku);
         let directReceipt = state.receipts.find(item => item.sku === fixture.products.direct.sku);
         check(Number(directProduct.quantity_on_hand) === 56, '8 + two cases of 24 = 56 units');
-        check(directReceipt.cost_price === null && directReceipt.supplier === null
+        check(Number(directReceipt.cost_price) === 5 && directReceipt.supplier === null
             && directReceipt.invoice_number === null
             && Number(directProduct.cost_price) === 5
             && directProduct.preferred_supplier === 'Original preferred supplier',
             'missing optional details preserve cost and preferred supplier without purchasing links');
-        check(state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).length === 0,
-            'unknown cost creates no invented purchase-cost history');
+        check(state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).length === 1,
+            'omitted cost records the saved product cost in purchase history');
         check(await page.locator('.history-table').count() === 0,
             'entry workspace contains no embedded receiving history table');
         const successText = await page.locator('.message.success').innerText();
@@ -396,11 +408,13 @@ async function main() {
             batch_number: 'DIRECT-BATCH-' + token, expiration_date: '2027-12-31'
         });
         const costResponse = await context.request.post(receivingPath, { form: costForm });
+        const costBody = await costResponse.text();
+        if (!costBody.includes('3 accepted units')) throw new Error('Cost/damage receipt failed: ' + (costBody.match(/<div class="message error">([\s\S]*?)<\/div>/)?.[1] || costResponse.status()));
         check((await costResponse.text()).includes('3 accepted units'), 'direct damage excludes two of five bought units');
         state = runFixture('--state', '--token', token);
         directProduct = state.products.find(item => item.sku === fixture.products.direct.sku);
         directReceipt = state.receipts.filter(item => item.sku === fixture.products.direct.sku).at(-1);
-        const purchase = state.purchase_history.find(item => item.sku === fixture.products.direct.sku);
+        const purchase = state.purchase_history.filter(item => item.sku === fixture.products.direct.sku).at(-1);
         const batch = state.product_batches.find(item => Number(item.receiving_id) === Number(directReceipt.receiving_id));
         const damage = state.inventory_adjustments.find(item => item.sku === fixture.products.direct.sku);
         check(Number(directProduct.quantity_on_hand) === 59 && Number(directProduct.cost_price) === 7.25
@@ -445,7 +459,7 @@ async function main() {
                 'invalid entry rolls back every stock, cost, batch and history change');
         }
         await page.goto(receivingPath);
-        await page.selectOption('#product_id', String(fixture.products.direct.product_id));
+        await scan(page, fixture.products.direct.sku);
         await enterQuantities(page);
         await page.fill('#received_qty', 'bad quantity');
         await page.fill('#supplier', 'Keep entered store');
@@ -511,7 +525,7 @@ async function main() {
             });
             check(response.status() === 403, role + ' workspace cannot mutate receiving through HTTP');
             await response.text();
-            if (role === 'super_admin') {
+            if (role === 'admin') {
                 await deniedContext.request.post('/components/auth/workspace.php', {
                     form: { csrf_token: csrf, workspace: 'inventory_manager' }
                 });
@@ -520,7 +534,7 @@ async function main() {
                 });
                 const privilegedResponse = await deniedContext.request.post(receivingPath, { form: privilegedForm });
                 check((await privilegedResponse.text()).includes('2 accepted units'),
-                    'privileged identity can receive when operating in Inventory Manager workspace');
+                    'Administrator identity can receive only after entering Inventory Manager workspace');
             }
             await deniedContext.close();
         }
@@ -610,21 +624,19 @@ async function main() {
         await page.goto('/components/inventory_management/replenishment_queue.php');
         const packGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku });
         const unitGuidance = page.locator('.queue-item').filter({ hasText: fixture.products.bulk_units.sku });
-        await packGuidance.locator('.queue-details summary').click();
-        await unitGuidance.locator('.queue-details summary').click();
-        check((await packGuidance.innerText()).includes('Demand Forecast')
-            && (await packGuidance.innerText()).includes('48 units'),
-            'saved forecast and eight on hand suggest 48 units rounded to cases');
-        check(((await unitGuidance.innerText()).includes('Stock-rule suggestion') || (await unitGuidance.innerText()).includes('Stock rules'))
-            && (await unitGuidance.innerText()).includes('7 units')
-            && (await unitGuidance.innerText()).includes('Forecast unavailable'),
-            'a product without a forecast uses honest stock-rule guidance');
-        check(await page.locator('main').getByRole('link', { name: 'Check stock', exact: true }).count() === 0
-            && await page.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
-            'replenishment guidance keeps stock and bought-stock actions absent');
+        await packGuidance.locator('.queue-details').evaluateAll(details => details.forEach(item => { item.open = true; }));
+        check(await packGuidance.getAttribute('data-on-hand') === '8'
+            && await packGuidance.getAttribute('data-quantity') === '24'
+            && await packGuidance.getAttribute('data-expected-sales') === '',
+            'an incomplete forecast retains honest stock-rule guidance rounded to cases');
+        check(await unitGuidance.getAttribute('data-quantity') === '7'
+            && await unitGuidance.getAttribute('data-expected-sales') === '',
+            'products without a usable forecast retain stock-rule guidance');
+        check(await page.locator('main').getByRole('link', {name: 'Record bought stock', exact: true}).count() === 0,
+            'recommendations do not execute receiving');
         await page.goto(receivingPath);
         const beforeTrip = runFixture('--state', '--token', token);
-        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await scan(page, fixture.products.bulk_units.sku);
         await enterQuantities(page);
         await page.fill('#received_qty', '5');
         await page.fill('#cost_price', '7.25');
@@ -633,10 +645,8 @@ async function main() {
         await page.fill('#supplier', 'Shopping trip store');
         await page.fill('#invoice_number', 'SHOP-' + token);
         await selectProducts(page);
-        await page.locator('#add_receiving_line').focus();
-        await page.keyboard.press('Enter');
-        check(await page.locator('.receiving-line').count() === 2, 'keyboard action adds a second product line');
         await scan(page, fixture.products.bulk_pack.case_barcode);
+        check(await page.locator('.receiving-line').count() === 2, 'keyboard scan adds a second product line');
         check(await eventually(page, id => document.getElementById('product_id_1').value === String(id),
             fixture.products.bulk_pack.product_id), 'case lookup selects the active second line without replacing the first');
         await enterQuantities(page);
@@ -644,10 +654,10 @@ async function main() {
         check((await page.locator('#package_conversion_1').innerText()).includes('Accepted: 48 units.')
             && (await page.locator('#package_conversion').innerText()).includes('Accepted: 5 units.'),
             'every line displays its pack basis and actual accepted units before saving');
-        check(await page.locator('.receiving-line').nth(1).getByLabel('Product', { exact: true }).inputValue()
+        check(await page.locator('.receiving-line').nth(1).locator('[data-field="product_id"]').inputValue()
             === String(fixture.products.bulk_pack.product_id), 'cloned line labels remain associated with their fields');
         await scan(page, fixture.products.bulk_units.barcode);
-        check(await eventually(page, () => document.getElementById('scan_status').textContent.includes('already in the shopping entry'))
+        check(await eventually(page, () => document.getElementById('scan_status').textContent.includes('Focused entry field'))
             && await page.inputValue('#product_id_1') === String(fixture.products.bulk_pack.product_id)
             && await page.inputValue('#received_packages_1') === '2',
             'scanning an existing product explains duplicates and preserves both reviewed lines');
@@ -671,10 +681,10 @@ async function main() {
             && Number(item.received_by) === fixture.staff.manager.user_id)
             && Number(tripReceipts.find(item => item.sku === fixture.products.bulk_pack.sku).units_per_package_used) === 24,
             'shared shopping details, staff attribution and saved pack size persist on each receiving line');
-        check(tripReceipts.find(item => item.sku === fixture.products.bulk_pack.sku).cost_price === null
+        check(Number(tripReceipts.find(item => item.sku === fixture.products.bulk_pack.sku).cost_price) === 5
             && tripState.products.filter(item => [fixture.products.bulk_units.sku, fixture.products.bulk_pack.sku].includes(item.sku))
                 .every(item => item.preferred_supplier === 'Original preferred supplier'),
-            'mixed optional costs preserve unknown cost and preferred suppliers');
+            'mixed optional costs use the saved cost and preserve preferred suppliers');
         const unitBatch = tripState.product_batches.find(item => item.batch_number === 'SHOP-UNITS-' + token);
         const unitPurchase = tripState.purchase_history.filter(item => item.sku === fixture.products.bulk_units.sku).at(-1);
         check(Number(unitBatch.remaining_quantity) === 5 && unitBatch.expiration_date === '2028-12-31'
@@ -688,18 +698,15 @@ async function main() {
             && Number(tripState.recommendations.find(item => item.sku === fixture.products.bulk_units.sku).recommended_quantity) === 0,
             'committed stock updates forecast-backed and stock-rule buying guidance');
         await dismissBlockingDialog(page);
-        await page.locator('a[href*="replenishment_queue.php"]').filter({ hasText: 'Review updated recommendations' }).click();
+        await page.locator('.sidebar').getByRole('link', {name: 'Replenishment Recommendations', exact: true}).click();
         await page.waitForURL('**/inventory_management/replenishment_queue.php');
-        await packGuidance.locator('.queue-details summary').click();
-        await unitGuidance.locator('.queue-details summary').click();
-        check((await packGuidance.innerText()).includes('56 units')
-            && (await packGuidance.innerText()).includes('0 units')
-            && (await packGuidance.innerText()).includes('Demand Forecast'),
-            'success action reloads forecast guidance using 56 committed units');
-        check((await unitGuidance.innerText()).includes('13 units')
-            && (await unitGuidance.innerText()).includes('0 units')
-            && ((await unitGuidance.innerText()).includes('Stock-rule suggestion') || (await unitGuidance.innerText()).includes('Stock rules')),
-            'stock-rule view reflects the actual unplanned quantity of accepted goods');
+        await packGuidance.locator('.queue-details').evaluateAll(details => details.forEach(item => { item.open = true; }));
+        check(await packGuidance.getAttribute('data-on-hand') === '56'
+            && await packGuidance.getAttribute('data-quantity') === '0',
+            'received stock refreshes case-product guidance without another buying suggestion');
+        check(await unitGuidance.getAttribute('data-on-hand') === '13'
+            && await unitGuidance.getAttribute('data-quantity') === '0',
+            'stock rules reflect the actual accepted quantity');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(tripState),
             'reviewing refreshed recommendations changes no inventory, purchasing or forecast records');
         await page.screenshot({ path: path.join(repoRoot, '.scratch', 'receiving180-guidance-desktop.png') });
@@ -712,6 +719,7 @@ async function main() {
         await page.goto(historyPath);
         const tripCardId = await page.locator('.receiving-entry-card').filter({ hasText: 'SHOP-' + token }).getAttribute('id');
         const tripCard = page.locator('#' + tripCardId);
+        await tripCard.locator('summary').click();
         const tripCardText = await tripCard.innerText();
         check(tripCardText.includes('Shopping trip store')
             && tripCardText.includes('SHOP-' + token)
@@ -719,8 +727,8 @@ async function main() {
             && tripCardText.includes('2 package(s) × 24 = 48 units')
             && tripCardText.includes('SHOP-UNITS-' + token)
             && tripCardText.includes('2028-12-31')
-            && tripCardText.includes('Unknown'),
-            'receiving history entry inspects store, receipt ref, staff, pack conversion, batch, expiry, and unknown cost');
+            && tripCardText.includes('₱5.00'),
+            'receiving history inspects store, receipt, staff, pack conversion, batch, expiry, and saved cost');
         const inspectBtn = tripCard.locator('.inspect-btn');
         await inspectBtn.click();
         check(await tripCard.getAttribute('open') === null, 'inspect button toggles details card closed');
@@ -748,10 +756,10 @@ async function main() {
         }
         await receiptReference.evaluate((el, text) => { el.textContent = text; }, originalReference);
         await page.fill('#history_search', 'SHOP-' + token);
-        await Promise.all([page.waitForURL('**?q=SHOP-' + token), page.locator('#history_search').press('Enter')]);
+        await Promise.all([page.waitForURL(url => url.searchParams.get('q') === 'SHOP-' + token), page.locator('#history_search').press('Enter')]);
         check(await tripCard.isVisible(), 'matching card remains visible when filtering history');
         await page.fill('#history_search', 'NONEXISTENT_QUERY_' + token);
-        await Promise.all([page.waitForURL('**?q=NONEXISTENT_QUERY_' + token), page.locator('#history_search').press('Enter')]);
+        await Promise.all([page.waitForURL(url => url.searchParams.get('q') === 'NONEXISTENT_QUERY_' + token), page.locator('#history_search').press('Enter')]);
         check(!await tripCard.isVisible() && await page.getByRole('heading', { name: 'No matching receipts' }).isVisible(),
             'non-matching search explains the empty result');
         await page.getByRole('link', { name: 'Clear search' }).click();
@@ -759,11 +767,16 @@ async function main() {
         const oversightContext = await browser.newContext({ baseURL });
         const oversightPage = await oversightContext.newPage();
         await login(oversightPage, fixture.staff.admin);
+        await oversightPage.goto('/components/auth/workspace.php');
+        await oversightContext.request.post('/components/auth/workspace.php', {
+            form: {csrf_token: await oversightPage.inputValue('input[name="csrf_token"]'), workspace: 'admin'}
+        });
         await oversightPage.goto('/components/inventory_management/replenishment_queue.php');
-        check((await oversightPage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).innerText()).includes('56 units')
+        check(await oversightPage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).getAttribute('data-on-hand') === '56'
             && await oversightPage.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
             'Administrator sees refreshed guidance without an inventory execution action');
         await oversightPage.goto(historyPath);
+        await oversightPage.locator('.receiving-entry-card').filter({hasText: 'SHOP-' + token}).locator('summary').click();
         const oversightText = await oversightPage.locator('main').innerText();
         check(oversightText.includes('SHOP-' + token)
             && oversightText.includes('Shopping trip store')
@@ -774,21 +787,23 @@ async function main() {
 
         console.log('Add/remove and empty shopping entries');
         await page.goto(receivingPath);
-        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await scan(page, fixture.products.bulk_units.sku);
         await enterQuantities(page);
         await page.fill('#received_qty', '7');
         await selectProducts(page);
-        await page.locator('#add_receiving_line').click();
-        await page.selectOption('#product_id_1', String(fixture.products.bulk_units.product_id));
-        check((await page.locator('#entry_status').innerText()).includes('Duplicate product'),
-            'manual duplicate selection gives a clear correction message');
-        await page.locator('.receiving-line').nth(1).getByRole('button', { name: 'Remove product' }).click();
+        await scan(page, fixture.products.bulk_units.sku);
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Focused entry field'));
+        check(await page.locator('.receiving-line').count() === 1,
+            'duplicate scan focuses the existing line without adding another');
+        await scan(page, fixture.products.bulk_pack.sku);
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('.receiving-line').nth(1).getByRole('button', { name: /^Remove / }).click();
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '7',
             'removing a line preserves the other entered product and quantity');
         page.once('dialog', dialog => dialog.accept());
         await page.locator('.remove-receiving-line').click();
         await page.locator('#receiving_next').click();
-        check((await page.locator('#entry_status').innerText()).includes('Select at least one product'),
+        check((await page.locator('#entry_status').innerText()).includes('Add at least one product'),
             'empty shopping entries show a correction message');
         await scan(page, fixture.products.zero.barcode);
         await page.waitForFunction(() => document.querySelectorAll('.receiving-line').length === 1);
@@ -796,7 +811,7 @@ async function main() {
 
         console.log('Later-line validation retains the complete entry');
         await page.goto(receivingPath);
-        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await scan(page, fixture.products.bulk_units.sku);
         await enterQuantities(page);
         await page.fill('#received_qty', '7');
         await page.fill('#cost_price', '11.25');
@@ -805,8 +820,7 @@ async function main() {
         await page.fill('#supplier', 'Retain trip store');
         await page.fill('#invoice_number', 'RETAIN-' + token);
         await selectProducts(page);
-        await page.locator('#add_receiving_line').click();
-        await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await scan(page, fixture.products.bulk_pack.sku);
         await enterQuantities(page);
         await page.selectOption('#quantity_mode_1', 'packages');
         await enterQuantities(page);
@@ -826,7 +840,7 @@ async function main() {
             'invalid later line rolls back earlier inventory, batch, cost, damage, history and movement writes');
         const guidancePage = await context.newPage();
         await guidancePage.goto('/components/inventory_management/replenishment_queue.php');
-        check((await guidancePage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).innerText()).includes('56 units'),
+        check(await guidancePage.locator('.queue-item').filter({ hasText: fixture.products.bulk_pack.sku }).getAttribute('data-on-hand') === '56',
             'failed receiving leaves visible guidance at committed stock');
         await guidancePage.close();
 
@@ -894,14 +908,14 @@ async function main() {
                 context.request.post(receivingPath, { form: firstTrip }),
                 concurrentContext.request.post(receivingPath, { form: reverseTrip })
             ]);
-            check((await responses[0].text()).includes('Shopping entry saved')
-                && (await responses[1].text()).includes('Shopping entry saved'),
+            check((await responses[0].text()).includes('Receiving entry saved')
+                && (await responses[1].text()).includes('Receiving entry saved'),
                 'simultaneous overlapping receipts in different product orders both save');
         } finally {
             runFixture('--allow-purchase', '--token', token);
         }
         const concurrentState = runFixture('--state', '--token', token);
-        check(Number(concurrentState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 16
+        check(Number(concurrentState.products.find(item => item.sku === fixture.products.bulk_units.sku).quantity_on_hand) === 18
             && Number(concurrentState.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 65,
             'both simultaneous receipts contribute to current stock without overwriting quantities');
         await context.request.post(receivingPath, { form: firstTrip });
@@ -914,12 +928,11 @@ async function main() {
         await concurrentContext.close();
 
         await page.goto(receivingPath);
-        await page.selectOption('#product_id', String(fixture.products.bulk_units.product_id));
+        await scan(page, fixture.products.bulk_units.sku);
         await enterQuantities(page);
         await page.fill('#received_qty', '5');
         await selectProducts(page);
-        await page.locator('#add_receiving_line').click();
-        await page.selectOption('#product_id_1', String(fixture.products.bulk_pack.product_id));
+        await scan(page, fixture.products.bulk_pack.sku);
         await enterQuantities(page);
         await page.selectOption('#quantity_mode_1', 'packages');
         await enterQuantities(page);
@@ -935,7 +948,7 @@ async function main() {
         await page.screenshot({ path: path.join(repoRoot, '.impeccable', 'review', 'mobile.png'), fullPage: true });
         await page.locator('#receiving_next').click();
         check(await page.locator('.btn-submit').isVisible() && !await page.locator('#supplier').isVisible()
-            && (await page.locator('#receiving_review').innerText()).includes('2 × 24 = 48'),
+            && (await page.locator('#receiving_review').innerText()).includes('48 units'),
             'only review exposes final save and summarizes saved case conversion');
         for (const [name, width, height] of [['mobile', 390, 844], ['desktop', 1280, 720]]) {
             await page.setViewportSize({width, height});
@@ -1005,7 +1018,7 @@ async function main() {
             const receiving = context.request.post(receivingPath, {form: overlapForm});
             await new Promise(resolve => setTimeout(resolve, 100));
             const results = await Promise.all([receiving, pay(zeroFields, overlapQuote.token)]);
-            check((await results[0].text()).includes('Shopping entry saved'), 'overlapping receiving commits the whole entry');
+            check((await results[0].text()).includes('Receiving entry saved'), 'overlapping receiving commits the whole entry');
             const afterOverlap = runFixture('--state', '--token', token);
             const stock = Number(afterOverlap.products.find(item => item.sku === fixture.products.zero.sku).quantity_on_hand);
             check(stock === (results[1].url().includes('checkout=complete') ? 8 : 9),
@@ -1029,7 +1042,7 @@ async function main() {
         const afterSale = runFixture('--state', '--token', token);
         check(Number(afterSale.products.find(item => item.sku === fixture.products.bulk_pack.sku).quantity_on_hand) === 17
             && afterSale.product_batches.filter(item => item.sku === fixture.products.bulk_pack.sku)
-                .reduce((sum, item) => sum + Number(item.remaining_quantity), 0) === 9,
+                .reduce((sum, item) => sum + Number(item.remaining_quantity), 0) === 17,
             'case-stock sale reduces shared inventory and received batches by 48');
         await page.goto('/components/inventory_management/inventory_overview.php');
         await page.locator('[data-overview-view="all"]').click();
@@ -1037,7 +1050,7 @@ async function main() {
             'Stock Overview reloads committed stock after Cashier sale');
         await page.goto('/components/inventory_management/replenishment_queue.php');
         const soldGuidance = page.locator('.queue-item').filter({hasText: fixture.products.bulk_pack.sku});
-        check((await soldGuidance.innerText()).includes('17 units') && (await soldGuidance.innerText()).includes('24 units'),
+        check(await soldGuidance.getAttribute('data-on-hand') === '17' && await soldGuidance.getAttribute('data-quantity') === '0',
             'normal navigation refreshes case-rounded buying guidance after sale');
 
         const reportPath = '/components/cashier/stock_issues.php';

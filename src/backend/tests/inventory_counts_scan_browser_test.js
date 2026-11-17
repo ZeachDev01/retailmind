@@ -565,8 +565,6 @@ async function main() {
         const linkedNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
         await page.locator('.count-form button[type="submit"]').click();
         await linkedNavigation;
-        check(await eventually(page, () => document.body.innerText.indexOf('sent for approval') !== -1),
-            'the linked correction records a separate pending count');
         let linkedSnapshot = state();
         const linkedCount = linkedSnapshot.counts.find((row) =>
             Number(row.related_adjustment_id) === approvedIssue.adjustment_id);

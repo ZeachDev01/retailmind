@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'checkout-setup', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'seed-batches', 'checkout-setup', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -162,6 +162,18 @@ $productByName = [];
 $staffByUsername = [];
 $approvedIssue = null;
 
+if (array_key_exists('seed-batches', $options)) {
+    // Receiving requires balanced opening stock; count scenarios also cover legacy unbatched stock.
+    $skus = array_column($products, 'sku');
+    $placeholders = implode(',', array_fill(0, count($skus), '?'));
+    $pdo->prepare("INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity, loose_quantity)
+        SELECT i.product_id, 'OPENING', i.quantity_on_hand, i.quantity_on_hand, i.quantity_on_hand
+        FROM inventory i JOIN products p ON p.product_id = i.product_id
+        WHERE p.sku IN ({$placeholders}) AND i.quantity_on_hand > 0")->execute($skus);
+    echo json_encode(['ok' => true]) . PHP_EOL;
+    exit(0);
+}
+
 if (array_key_exists('checkout-setup', $options)) {
     $pdo->prepare('INSERT INTO registers (name) VALUES (?)')->execute(['Scan WF ' . $token]);
     $registerId = (int)$pdo->lastInsertId();
@@ -217,18 +229,14 @@ if (array_key_exists('hold-gate', $options)) {
 
 if (array_key_exists('close-period', $options) || array_key_exists('open-period', $options)) {
     $name = 'Receiving WF ' . $token;
-    $pdo->prepare('DELETE FROM fiscal_periods WHERE period_name = ?')->execute([$name]);
-    if (array_key_exists('close-period', $options)) {
-        $stmt = $pdo->prepare('SELECT user_id FROM users WHERE username = ?');
-        $stmt->execute([$staff['admin']['username']]);
-        $pdo->prepare("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by)
-            VALUES (?, CURRENT_DATE, CURRENT_DATE, 'closed', ?)")->execute([$name, $stmt->fetchColumn()]);
-    }
+    $pdo->prepare('UPDATE fiscal_periods SET status = ? WHERE period_name = ?')
+        ->execute([array_key_exists('close-period', $options) ? 'closed' : 'open', $name]);
     echo json_encode(['ok' => true]) . PHP_EOL;
     exit(0);
 }
 
 $cleanup = static function () use ($pdo, $products, $staff, $token, &$productByName, &$staffByUsername): void {
+    $pdo->prepare('DELETE FROM fiscal_periods WHERE period_name = ?')->execute(['Receiving WF ' . $token]);
     $pdo->exec("DROP TRIGGER IF EXISTS `receiving_wf_{$token}`");
     $pdo->prepare('DELETE FROM ml_jobs WHERE diagnostic_reference = ?')->execute(['receiving-wf-' . $token]);
     $productIds = [];
@@ -450,6 +458,14 @@ try {
             'role' => $member['role'],
         ];
     }
+
+    $pdo->prepare('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (?, ?, 1), (?, ?, 0)')
+        ->execute([$staffByUsername['admin']['user_id'], $roleId($pdo, 'admin'),
+            $staffByUsername['admin']['user_id'], $roleId($pdo, 'inventory_manager')]);
+
+    $pdo->prepare("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by)
+        VALUES (?, CURRENT_DATE, CURRENT_DATE, 'open', ?)")
+        ->execute(['Receiving WF ' . $token, $staffByUsername['admin']['user_id']]);
 
     $insertApprovedIssue = $pdo->prepare(
         "INSERT INTO inventory_adjustments

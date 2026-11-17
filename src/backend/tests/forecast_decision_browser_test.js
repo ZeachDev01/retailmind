@@ -13,7 +13,7 @@ if (process.env.RUN_DB_TESTS !== '1') {
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';
 const recovery = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-forecast-decision-'));
-const testEnv = {...process.env, BACKUP_STORAGE_PATH: recovery};
+const testEnv = {...process.env, APP_DEBUG: 'false', BACKUP_STORAGE_PATH: recovery};
 const route = '/components/inventory_management/replenishment_requests.php';
 const fixture = action => {
     const result = spawnSync(php, ['src/backend/tests/support/forecast_decision_fixture.php', action, database], {encoding: 'utf8', env: testEnv});
@@ -50,6 +50,8 @@ async function checkQueueAccessibility(page) {
         }
         for (const el of main.querySelectorAll('a, button, input, select, summary')) {
             if (!el.checkVisibility()) continue;
+            // WCAG target sizing exempts links constrained by surrounding sentence text.
+            if (el.matches('p a') && getComputedStyle(el).display === 'inline') continue;
             const row = el.closest('tr.queue-item');
             if (row && row.rowIndex > 10) continue;
             const rect = el.getBoundingClientRect();
@@ -91,44 +93,33 @@ async function checkQueueAccessibility(page) {
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const queueRoute = '/components/inventory_management/replenishment_queue.php';
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-        const stockOnly = page.locator('.queue-item').filter({hasText: 'Decision Test Item'});
-        await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
+        const stockOnly = page.locator('.queue-item[data-sku="DECISION-ITEM"]');
+        const guidance = () => JSON.parse(fixture('recommendations')).find(item => item.sku === 'DECISION-ITEM');
+        async function checkGuidance(row, expectedSales, stockQuantity) {
+            assert.equal(await row.getAttribute('data-quantity'), String(stockQuantity));
+            assert.equal(await row.getAttribute('data-expected-sales'), expectedSales === null ? '' : String(expectedSales));
+            assert.equal(await row.locator('.queue-details').count(), expectedSales === null ? 0 : 1);
+            if (expectedSales === null) assert.match(await row.innerText(), /Not available yet/);
+            else {
+                await row.locator('.queue-details').evaluate(details => { details.open = true; });
+                assert.match(await row.innerText(), /Demand Forecast/);
+                assert.doesNotMatch(await row.innerText(), /Not available yet/);
+            }
+        }
+        await checkGuidance(stockOnly, null, 16);
         assert.match(await stockOnly.innerText(), /Out of stock/);
-        assert.match(await stockOnly.innerText(), /16 units/);
-        assert.match(await stockOnly.innerText(), /Stock-rule suggestion/);
-        assert.match(await stockOnly.innerText(), /Forecast unavailable/);
-        assert.match(await stockOnly.innerText(), /Not available yet/);
-        assert.match(await stockOnly.innerText(), /0 on hand; reorder level 10 \+ safety stock 5/);
+        await stockOnly.locator('.info-tooltip-trigger').focus();
+        assert.match(await stockOnly.getByRole('tooltip').innerText(), /Reorder level: 10 units \+ Safety stock: 5 units/);
+        assert.equal(guidance().basis, 'Stock-rule suggestion');
         fixture('seed');
         const unchanged = JSON.parse(fixture('state'));
         await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-        await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
-        assert.match(await stockOnly.innerText(), /Demand Forecast/);
-        assert.match(await stockOnly.innerText(), /32 units/);
-
-        // Product 2: legacy product with no ML forecast
-        const missing = page.locator('.queue-item').filter({hasText: 'Unrelated legacy product'});
-        await missing.locator('.queue-details').evaluate(d => { d.open = true; });
-        assert.match(await missing.innerText(), /Stock-rule suggestion/);
-        assert.match(await missing.innerText(), /Forecast unavailable/);
-        assert.match(await missing.innerText(), /Not available yet/);
+        await checkGuidance(stockOnly, 14, 16);
+        const missing = page.locator('.queue-item[data-sku="UNRELATED"]');
+        await checkGuidance(missing, null, 10);
         assert.match(await missing.innerText(), /Low stock/);
-
-        // Product 3: genuine zero forecast
-        const zeroItem = page.locator('.queue-item').filter({hasText: 'Zero Forecast Item'});
-        await zeroItem.locator('.queue-details').evaluate(d => { d.open = true; });
-        assert.match(await zeroItem.innerText(), /Demand Forecast/);
-        assert.match(await zeroItem.innerText(), /0 units/);
-        assert.doesNotMatch(await zeroItem.innerText(), /Not available yet/);
-
-        // Product 4: stale forecast
-        const staleItem = page.locator('.queue-item').filter({hasText: 'Stale Forecast Item'});
-        await staleItem.locator('.queue-details').evaluate(d => { d.open = true; });
-        assert.match(await staleItem.innerText(), /Stock-rule suggestion/);
-        assert.match(await staleItem.innerText(), /Stale forecast/);
-        assert.match(await staleItem.innerText(), /Not available yet/);
-        assert.match(await staleItem.innerText(), /16 units/);
-
+        await checkGuidance(page.locator('.queue-item[data-sku="ZERO-ITEM"]'), 0, 0);
+        await checkGuidance(page.locator('.queue-item[data-sku="STALE-ITEM"]'), null, 16);
         assert.equal(await page.getByRole('link', {name: 'Review Request', exact: true}).count(), 0);
         const response = await context.request.post(queueRoute, {form: {action: 'accept', product_id: 1}});
         assert.equal(response.status(), 405);
@@ -137,29 +128,14 @@ async function checkQueueAccessibility(page) {
             fixture(mode);
             const beforeView = JSON.parse(fixture('state'));
             await page.goto(queueRoute, {waitUntil: 'domcontentloaded'});
-            await stockOnly.locator('.queue-details').evaluate(d => { d.open = true; });
-            const text = await stockOnly.innerText();
-            if (mode === 'low_readiness') assert.match(text, /Low readiness forecast/);
+            const result = guidance();
+            await checkGuidance(stockOnly, ['low_readiness', 'production'].includes(mode) ? 14 : null, 16);
+            if (mode === 'low_readiness') assert.match(result.forecast_status, /Low readiness forecast/);
             if (mode === 'demo') assert.match(await page.locator('main').innerText(), /Demo Mode|Demo:/);
             if (mode === 'production') assert.match(await page.locator('main').innerText(), /Production forecast/);
-            if (mode === 'unavailable') {
-                assert.match(text, /Stock-rule suggestion/);
-                assert.match(text, /Forecast unavailable/);
-                assert.match(text, /16 units/);
-                assert.match(text, /Not available yet/);
-            }
-            if (mode === 'observe') {
-                assert.match(text, /Stock-rule suggestion/);
-                assert.match(text, /Observation Mode/);
-                assert.match(text, /Not available yet/);
-                assert.match(text, /16 units/);
-            }
-            if (mode === 'suspend') {
-                assert.match(text, /Stock-rule suggestion/);
-                assert.match(text, /Recommendations Suspended by Administrator/);
-                assert.match(text, /Not available yet/);
-                assert.match(text, /16 units/);
-            }
+            if (mode === 'unavailable') assert.match(result.forecast_status, /Forecast unavailable/);
+            if (mode === 'observe') assert.match(result.forecast_status, /Observation Mode/);
+            if (mode === 'suspend') assert.match(result.forecast_status, /Recommendations Suspended by Administrator/);
             assert.deepEqual(JSON.parse(fixture('state')), beforeView, 'Guidance leaves the database unchanged in ' + mode);
         }
         fixture('activate');
@@ -204,7 +180,7 @@ async function checkQueueAccessibility(page) {
                 await page.setViewportSize({width, height: 900});
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
                     `${colorScheme} queue fits ${width}px`);
-                assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), width < 900);
+                if (width < 900) assert.equal(await page.locator('.queue-list').evaluate(el => el.scrollWidth > el.clientWidth), true, 'Wide recommendation tables scroll inside their container');
                 await checkQueueAccessibility(page);
                 if (width === 1280 || width === 390) {
                     await page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, 0); });

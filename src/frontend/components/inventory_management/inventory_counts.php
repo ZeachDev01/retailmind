@@ -187,7 +187,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                     role="combobox" aria-autocomplete="list" aria-expanded="false"
                                     aria-controls="product_results" aria-describedby="product_search_status scan_status" disabled>
                                 <div id="product_popup" class="count-product-results" hidden>
-                                    <div id="product_results" role="listbox" aria-label="Products" hidden></div>
+                                    <div id="product_results" role="listbox" aria-label="Products" tabindex="-1" hidden></div>
                                     <button type="button" id="product_show_all" class="btn btn-secondary" hidden>Show all matches</button>
                                 </div>
                             </div>
