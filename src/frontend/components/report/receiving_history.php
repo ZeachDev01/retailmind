@@ -175,7 +175,7 @@ try {
                                                     <?php if ($line['cost_price'] !== null): ?>
                                                         ₱<?= number_format((float)$line['cost_price'], 2) ?>
                                                     <?php else: ?>
-                                                        <span class="cost-unknown">Unknown</span>
+                                                        <span class="cost-unknown">Not recorded</span>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>

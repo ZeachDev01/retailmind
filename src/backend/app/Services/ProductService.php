@@ -71,7 +71,8 @@ class ProductService
         $productName = trim((string)($data['product_name'] ?? ''));
         $brand = trim((string)($data['brand'] ?? ''));
         $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
-        $costPrice = (float)($data['cost_price'] ?? 0);
+        $enteredCost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
+        $costPrice = $enteredCost ?? 0;
         $sellingPrice = (float)($data['selling_price'] ?? ($data['unit_price'] ?? 0));
         $reorderLevel = (int)($data['reorder_level'] ?? 10);
         $preferredSupplier = trim((string)($data['preferred_supplier'] ?? ($data['supplier'] ?? '')));
@@ -255,6 +256,9 @@ class ProductService
                 $userId,
             ]);
             $productId = (int)$this->pdo->lastInsertId();
+            if (isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products')['cost_known'])) {
+                $this->pdo->prepare('UPDATE products SET cost_known = ? WHERE product_id = ?')->execute([(int)($enteredCost !== null), $productId]);
+            }
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
 
@@ -284,9 +288,9 @@ class ProductService
                     $preferredSupplier !== '' ? $preferredSupplier : null,
                     $startingPacks,
                     $startingLoose,
-                    $costPrice > 0 ? $costPrice : null
+                    $enteredCost
                 );
-                $this->pdo->prepare(
+                if ($enteredCost !== null) $this->pdo->prepare(
                     "INSERT INTO purchase_history (product_id, quantity_purchased, cost_price, purchase_date, total_cost, recorded_by)
                      VALUES (?, ?, ?, ?, ?, ?)"
                 )->execute([$productId, $initialStock, $costPrice, $purchaseDate, $totalCost, $userId]);
@@ -316,7 +320,8 @@ class ProductService
         }
         $searchTerm = trim((string)($data['search_term'] ?? ''));
         $purchaseQuantity = $this->validateStockSetting($data['purchase_quantity'] ?? 0, 'Purchase quantity', 1);
-        $costPrice = (float)($data['purchase_cost_price'] ?? 0);
+        $enteredCost = \App\Inventory\ProductCost::input($data['purchase_cost_price'] ?? null);
+        $costPrice = $enteredCost;
         $purchaseDate = (($data['purchase_date'] ?? '') !== '') ? $data['purchase_date'] : date('Y-m-d H:i:s');
         $barcode = trim((string)($data['barcode'] ?? ''));
         $productName = trim((string)($data['product_name'] ?? ''));
@@ -368,8 +373,14 @@ class ProductService
                     throw new RuntimeException('Purchase quantity would exceed the supported stock total.');
                 }
                 $previousProduct = $existingProduct;
-                $updateParts = ['quantity_purchased = quantity_purchased + ?', 'cost_price = ?'];
-                $params = [$purchaseQuantity, $costPrice];
+                if ($costPrice === null && \App\Inventory\ProductCost::known($existingProduct)) $costPrice = (float)$existingProduct['cost_price'];
+                $updateParts = ['quantity_purchased = quantity_purchased + ?'];
+                $params = [$purchaseQuantity];
+                if ($costPrice !== null) {
+                    $updateParts[] = 'cost_price = ?';
+                    $params[] = $costPrice;
+                    if (isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products')['cost_known'])) $updateParts[] = 'cost_known = 1';
+                }
 
                 if ($brand !== '') {
                     $updateParts[] = 'brand = ?';
@@ -464,9 +475,10 @@ class ProductService
                     $purchaseQuantity,
                     $expirationDate,
                     $purchaseDate,
-                    $supplier !== '' ? $supplier : null
+                    $supplier !== '' ? $supplier : null,
+                    0, 0, $costPrice
                 );
-                $this->pdo->prepare(
+                if ($costPrice !== null) $this->pdo->prepare(
                     "INSERT INTO purchase_history (product_id, quantity_purchased, cost_price, purchase_date, total_cost, recorded_by)
                      VALUES (?, ?, ?, ?, ?, ?)"
                 )->execute([$existingProduct['product_id'], $purchaseQuantity, $costPrice, $purchaseDate, $totalCost, $userId]);
@@ -930,23 +942,9 @@ class ProductService
             : $existing['product_image'];
 
         $hasSellingPrice = array_key_exists('selling_price', $data) || array_key_exists('unit_price', $data);
-        $costPrice = (float)($existing['cost_price'] ?? 0);
+        $enteredCost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
+        $costPrice = $enteredCost ?? (float)($existing['cost_price'] ?? 0);
         $warning = null;
-
-        if (array_key_exists('cost_price', $data)) {
-            $rawCost = $data['cost_price'];
-            if ((!is_string($rawCost) && !is_int($rawCost) && !is_float($rawCost)) || !is_numeric($rawCost)) {
-                throw new RuntimeException('Cost price must be a valid number of PHP 0 or more.');
-            }
-            $costPrice = (float)$rawCost;
-            if (!is_finite($costPrice) || $costPrice < 0) {
-                throw new RuntimeException('Cost price must be PHP 0 or more.');
-            }
-            $costPrice = round($costPrice, 2);
-            if ($costPrice > 99999999.99) {
-                throw new RuntimeException('Cost price is out of range.');
-            }
-        }
 
         if ($hasSellingPrice) {
             $rawPrice = $data['selling_price'] ?? $data['unit_price'];
@@ -1108,6 +1106,11 @@ class ProductService
                 $productId,
             ]);
 
+            if ($enteredCost !== null
+                && isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products')['cost_known'])) {
+                $this->pdo->prepare('UPDATE products SET cost_known = 1 WHERE product_id = ?')->execute([$productId]);
+            }
+
             if ($hasSellingPrice) {
                 $driverService = new \App\Store\ScheduledDemandDriverService();
                 $driverService->recordDriver(
@@ -1263,6 +1266,10 @@ class ProductService
             $supplier,
             $costPrice,
         ]);
+        $batchId = (int)$this->pdo->lastInsertId();
+        if (isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'product_batches')['cost_known'])) {
+            $this->pdo->prepare('UPDATE product_batches SET cost_known = ? WHERE batch_id = ?')->execute([(int)($costPrice !== null), $batchId]);
+        }
     }
 
     public function reconcilePhysicalStock(int $productId, int $sealedPacks, int $loosePieces, string $reason, int $userId, string $operationToken = ''): array

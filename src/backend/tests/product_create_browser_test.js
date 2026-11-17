@@ -19,6 +19,7 @@ const { chromium } = require('playwright');
             page.on('pageerror', error => errors.push(error.message));
             await page.route('http://localhost/products.php', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<html><head><style>${css}</style></head><body>${markup}</body></html>` }));
             await page.goto('http://localhost/products.php');
+            assert.equal(await page.locator('#cost-price').evaluate(field => field.required), false, 'Unknown product cost may remain blank');
             await page.addScriptTag({ path: path.join(frontend, 'assets/js/ui.js') });
             await page.evaluate(() => {
                 window.existingProductNames = new Set();

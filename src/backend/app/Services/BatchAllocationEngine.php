@@ -146,6 +146,7 @@ class BatchAllocationEngine
         }
 
         $hasSrJoin = false;
+        $selectCols[] = isset($productBatchColumns['cost_known']) ? 'pb.cost_known AS batch_cost_known' : 'NULL AS batch_cost_known';
         if (isset($productBatchColumns['receiving_id']) && !empty($stockReceivingColumns)) {
             $hasSrJoin = true;
             $selectCols[] = isset($stockReceivingColumns['cost_price']) ? 'sr.cost_price AS receiving_cost_price' : 'NULL AS receiving_cost_price';
@@ -248,6 +249,7 @@ class BatchAllocationEngine
                 'remaining_quantity' => (int)$b['remaining_quantity'],
                 'expiration_date' => $b['expiration_date'],
                 'batch_cost_price' => $b['batch_cost_price'],
+                'batch_cost_known' => $b['batch_cost_known'],
                 'receiving_cost_price' => $b['receiving_cost_price'],
                 'receiving_total_cost' => $b['receiving_total_cost'],
                 'receiving_accepted_qty' => $b['receiving_accepted_qty'],
@@ -402,7 +404,7 @@ class BatchAllocationEngine
                 $costStatus = 'recorded';
                 $costSource = 'receiving';
             }
-        } elseif ($productCost !== null && $productCost > 0) {
+        } elseif (($batch['batch_cost_known'] ?? null) === null && $productCost !== null && $productCost > 0) {
             $unitCost = round((float)$productCost, 2);
             $costStatus = 'estimated';
             $costSource = 'product';

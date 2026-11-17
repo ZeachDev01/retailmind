@@ -85,6 +85,13 @@ class ReceivingService
                 $this->pdo->rollBack();
                 return $completed;
             }
+            // Resolve every fallback from the catalog before any delivery line updates it.
+            [$scopeSql, $scopeParams] = $this->productScope();
+            $productStmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
+            foreach ($products as $productId => $_) {
+                $productStmt->execute(array_merge([$productId], $scopeParams));
+                $products[$productId] = $productStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            }
             $groupStmt = $this->pdo->prepare("INSERT INTO stock_receiving_groups (received_by, supplier, invoice_number, notes) VALUES (?, ?, ?, ?)");
             $groupStmt->execute([
                 $userId,
@@ -97,7 +104,7 @@ class ReceivingService
             $results = [];
             foreach ($lines as $index => $line) {
                 try {
-                    $results[] = $this->receiveLine(array_replace($line, $shared, ['group_id' => $groupId]), $userId);
+                    $results[] = $this->receiveLine(array_replace($line, $shared, ['group_id' => $groupId]), $userId, $products[(int)$line['product_id']]);
                 } catch (RuntimeException $e) {
                     if ($e instanceof PDOException) {
                         error_log((string)$e);
@@ -127,7 +134,7 @@ class ReceivingService
         return $results;
     }
 
-    private function receiveLine(array $data, int $userId): array
+    private function receiveLine(array $data, int $userId, ?array $product): array
     {
         $productId = $this->wholeNumber($data['product_id'] ?? 0, 'Product');
         $quantityMode = $data['quantity_mode'] ?? 'units';
@@ -180,18 +187,14 @@ class ReceivingService
             throw new RuntimeException('Invalid delivery discrepancy type.');
         }
 
-        [$scopeSql, $scopeParams] = $this->productScope();
-        $hasProductPackCols = $this->hasColumn('products', 'pack_size');
-        $productCols = $hasProductPackCols
-            ? 'product_id, product_name, cost_price, units_per_package, pack_size, pack_barcode, quantity_purchased'
-            : 'product_id, product_name, cost_price, units_per_package, quantity_purchased';
-        $productStmt = $this->pdo->prepare("SELECT {$productCols} FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
-        $productStmt->execute(array_merge([$productId], $scopeParams));
-        $product = $productStmt->fetch(PDO::FETCH_ASSOC);
         if (!$product) {
             throw new RuntimeException('Active product not found.');
         }
-        if ($costPrice === null && (float)($product['cost_price'] ?? 0) > 0) {
+        $fallbackCost = \App\Inventory\ProductCost::known($product) ? number_format((float)$product['cost_price'], 2, '.', '') : '';
+        if ($costPrice === null && array_key_exists('cost_fallback', $data) && $data['cost_fallback'] !== $fallbackCost) {
+            throw new RuntimeException('Saved product cost changed. Review this entry again before saving.');
+        }
+        if ($costPrice === null && $fallbackCost !== '') {
             $costPrice = (float)$product['cost_price'];
         }
 
@@ -398,6 +401,7 @@ class ReceivingService
             if ($costPrice !== null) {
                 $productUpdateParts[] = 'cost_price = ?';
                 $productUpdateParams[] = $costPrice;
+                if ($this->hasColumn('products', 'cost_known')) $productUpdateParts[] = 'cost_known = 1';
             }
             $productUpdateParams[] = $productId;
             $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
@@ -438,6 +442,8 @@ class ReceivingService
             'recorded_by' => $recording['display_name'],
             'received_at' => $recording['received_at'],
             'receiving_id' => $receivingId,
+            'cost_price' => $costPrice,
+            'total_cost' => $costPrice !== null ? $totalCost : null,
             'received_qty' => $receivedQty,
             'accepted_qty' => $acceptedQty,
             'damaged_qty' => $damagedQty,
@@ -461,7 +467,8 @@ class ReceivingService
     public function getActiveProducts(): array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
-        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, p.units_per_package, p.pack_size, p.pack_barcode, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
+        $knownSelect = $this->hasColumn('products', 'cost_known') ? 'p.cost_known' : '0 AS cost_known';
+        $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, {$knownSelect}, p.units_per_package, p.pack_size, p.pack_barcode, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
         $stmt->execute($scopeParams);
         return $stmt->fetchAll();
     }
@@ -580,7 +587,7 @@ class ReceivingService
                 'rejected_loose' => (int)($row['rejected_loose'] ?? 0),
                 'pack_size_used' => isset($row['pack_size_used']) && $row['pack_size_used'] !== null ? (int)$row['pack_size_used'] : null,
                 'cost_price' => $row['cost_price'] !== null ? (float)$row['cost_price'] : null,
-                'total_cost' => (float)$row['total_cost'],
+                'total_cost' => $row['cost_price'] !== null ? (float)$row['total_cost'] : null,
                 'batch_number' => $row['batch_number'],
                 'expiration_date' => $row['expiration_date'],
                 'discrepancy_type' => $row['discrepancy_type'],

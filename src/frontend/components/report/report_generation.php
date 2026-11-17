@@ -426,11 +426,15 @@ function run_report(PDO $pdo, string $report, array $filters): array
             ];
 
         case 'inventory_valuation':
+            $productColumns = \App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products');
+            $batchColumns = \App\Services\BatchAllocationEngine::getTableColumns($pdo, 'product_batches');
+            $knownProductSelect = isset($productColumns['cost_known']) ? 'p.cost_known' : '0 AS cost_known';
+            $knownBatchSelect = isset($batchColumns['cost_known']) ? 'pb.cost_known' : 'NULL AS cost_known';
             $stmt = $pdo->prepare(
                 "SELECT p.product_id, COALESCE(p.barcode, p.sku) AS sku, p.product_name,
                         COALESCE(c.category_name, 'Uncategorized') AS category_name,
                         COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
-                        p.cost_price, p.unit_price
+                        p.cost_price, p.unit_price, {$knownProductSelect}
                  FROM products p
                  LEFT JOIN inventory i ON i.product_id = p.product_id
                  LEFT JOIN categories c ON c.category_id = p.category_id
@@ -444,7 +448,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             try {
                 $batchStmt = $pdo->query(
                     "SELECT pb.batch_id, pb.product_id, pb.remaining_quantity, pb.cost_price AS batch_cost,
-                            sr.cost_price AS sr_cost, sr.total_cost, sr.accepted_qty
+                            sr.cost_price AS sr_cost, sr.total_cost, sr.accepted_qty, {$knownBatchSelect}
                      FROM product_batches pb
                      LEFT JOIN stock_receiving sr ON sr.receiving_id = pb.receiving_id
                      WHERE pb.remaining_quantity > 0
@@ -474,7 +478,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
             foreach ($products as $row) {
                 $pId = (int)$row['product_id'];
                 $currentStock = (int)$row['quantity_on_hand'];
-                $catalogCost = $row['cost_price'] !== null ? (float)$row['cost_price'] : null;
+                $catalogCost = \App\Inventory\ProductCost::known($row) ? (float)$row['cost_price'] : null;
                 $unitPrice = $row['unit_price'] !== null ? (float)$row['unit_price'] : 0.0;
                 $batches = $batchesByProduct[$pId] ?? [];
 
@@ -508,11 +512,11 @@ function run_report(PDO $pdo, string $report, array $filters): array
                         $bQty = (int)$b['remaining_quantity'];
                         if ($b['batch_cost'] !== null) {
                             $recordedVal += $bQty * (float)$b['batch_cost'];
-                        } elseif (!empty($b['total_cost']) && !empty($b['accepted_qty']) && (float)$b['accepted_qty'] > 0) {
+                        } elseif ($b['total_cost'] !== null && (float)$b['total_cost'] > 0 && (float)$b['accepted_qty'] > 0) {
                             $recordedVal += $bQty * ((float)$b['total_cost'] / (float)$b['accepted_qty']);
                         } elseif ($b['sr_cost'] !== null) {
                             $recordedVal += $bQty * (float)$b['sr_cost'];
-                        } elseif (!$hasMismatch && $catalogCost !== null && $catalogCost > 0) {
+                        } elseif (!$hasMismatch && ($b['cost_known'] ?? null) === null && $catalogCost !== null && $catalogCost > 0) {
                             $estimatedVal += $bQty * $catalogCost;
                             $hasEstimate = true;
                         } else {
@@ -555,9 +559,9 @@ function run_report(PDO $pdo, string $report, array $filters): array
                     'Product' => $row['product_name'],
                     'Category' => $row['category_name'],
                     'Current Stock' => $currentStock,
-                    'Cost Price' => money_value($catalogCost ?? 0.0),
+                    'Cost Price' => $catalogCost !== null ? money_value($catalogCost) : 'Not recorded',
                     'Retail Price' => money_value($unitPrice),
-                    'Profit' => money_value($priceMinusCost),
+                    'Profit' => $catalogCost !== null ? money_value($priceMinusCost) : 'Not recorded',
                     'Recorded Value' => money_value($recordedVal),
                     'Estimated Value' => money_value($estimatedVal),
                     'Cost Missing Qty' => $costMissingQty,

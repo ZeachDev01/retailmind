@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $brand = trim($row[3] ?? '');
                     $category_name = trim($row[4] ?? '');
                     $unit_price = (float)($row[5] ?? 0);
-                    $cost_price = (float)($row[6] ?? 0);
+                    $cost_price = \App\Inventory\ProductCost::input($row[6] ?? null);
                     $reorder_level = (int)($row[7] ?? 10);
                     $preferred_supplier = trim($row[8] ?? '');
                     $supplier_lead_time_days = max(0, (int)($row[9] ?? 7));
@@ -56,9 +56,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                     $minimum_order_quantity = max(1, (int)($row[11] ?? 1));
                     $units_per_package = max(1, (int)($row[12] ?? 1));
 
-                    if (!$product_name || $unit_price <= 0 || $cost_price <= 0) {
+                    if (!$product_name || $unit_price <= 0) {
                         $failed++;
-                        $errors[] = "Row " . ($successful + $failed) . ": Missing required fields (product_name, unit_price, cost_price)";
+                        $errors[] = "Row " . ($successful + $failed) . ": Missing required fields (product_name, unit_price)";
                         continue;
                     }
 
@@ -93,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $beforeStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
                         $beforeStmt->execute([(int)$prod['product_id']]);
                         $beforeProduct = $beforeStmt->fetch();
+                        if ($cost_price === null && \App\Inventory\ProductCost::known($beforeProduct)) $cost_price = (float)$beforeProduct['cost_price'];
 
                         // Update existing
                         $upd = $pdo->prepare("UPDATE products SET barcode = ?, product_name = ?, brand = ?, category_id = ?, 
@@ -105,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $brand,
                             $category_id,
                             $unit_price,
-                            $cost_price,
+                            $cost_price ?? 0,
                             $reorder_level,
                             $preferred_supplier,
                             $preferred_supplier,
@@ -115,6 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $units_per_package,
                             $sku,
                         ]);
+                        if ($cost_price !== null && isset(\App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products')['cost_known'])) {
+                            $pdo->prepare('UPDATE products SET cost_known = 1 WHERE sku = ?')->execute([$sku]);
+                        }
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
                         $afterStmt->execute([(int)$prod['product_id']]);
                         log_activity(
@@ -140,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $brand,
                             $category_id,
                             $unit_price,
-                            $cost_price,
+                            $cost_price ?? 0,
                             $reorder_level,
                             $preferred_supplier,
                             $preferred_supplier,
@@ -156,6 +160,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $inv_ins = $pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, 0)");
                         App\Store\StoreWriteGate::execute($pdo, $inv_ins, [$product_id]);
 
+                        if ($cost_price !== null && isset(\App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products')['cost_known'])) {
+                            $pdo->prepare('UPDATE products SET cost_known = 1 WHERE sku = ?')->execute([$sku]);
+                        }
                         $afterStmt = $pdo->prepare("SELECT * FROM products WHERE product_id = ?");
                         $afterStmt->execute([(int)$product_id]);
                         log_activity(

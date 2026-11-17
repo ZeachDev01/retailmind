@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             'product_name' => $_POST['product_name'] ?? '',
             'brand' => $_POST['brand'] ?? '',
             'category_id' => $_POST['category_id'] ?? '',
-            'cost_price' => $_POST['cost_price'] ?? 0,
+            'cost_price' => $_POST['cost_price'] ?? '',
             'selling_price' => $_POST['selling_price'] ?? 0,
             'reorder_level' => $_POST['reorder_level'] ?? 10,
             'preferred_supplier' => $_POST['preferred_supplier'] ?? '',
@@ -108,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'purch
         $productService->purchaseStock([
             'search_term' => $_POST['search_term'] ?? '',
             'purchase_quantity' => $_POST['purchase_quantity'] ?? 0,
-            'purchase_cost_price' => $_POST['purchase_cost_price'] ?? 0,
+            'purchase_cost_price' => $_POST['purchase_cost_price'] ?? '',
             'purchase_date' => $_POST['purchase_date'] ?? '',
             'barcode' => $_POST['barcode'] ?? '',
             'product_name' => $_POST['product_name'] ?? '',

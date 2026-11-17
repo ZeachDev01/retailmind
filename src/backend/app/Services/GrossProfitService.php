@@ -1040,12 +1040,14 @@ class GrossProfitService
             $pbCols = $this->getTableColumns('product_batches');
             $costCol = isset($pbCols['cost_price']) ? 'pb.cost_price' : 'NULL AS cost_price';
             $recIdCol = isset($pbCols['receiving_id']) ? 'pb.receiving_id' : 'NULL AS receiving_id';
+            $knownCol = isset($pbCols['cost_known']) ? 'pb.cost_known' : 'NULL AS cost_known';
 
-            $pbStmt = $this->pdo->prepare("SELECT pb.batch_id, {$costCol}, {$recIdCol} FROM product_batches pb WHERE pb.batch_id = ?");
+            $pbStmt = $this->pdo->prepare("SELECT pb.batch_id, {$costCol}, {$recIdCol}, {$knownCol} FROM product_batches pb WHERE pb.batch_id = ?");
             $pbStmt->execute([$batchId]);
             $batch = $pbStmt->fetch(PDO::FETCH_ASSOC);
 
             if ($batch) {
+                if ($batch['cost_known'] !== null) $fallbackToProductCost = false;
                 // 1. Direct batch purchase cost
                 if ($batch['cost_price'] !== null && $batch['cost_price'] !== '') {
                     $unitCost = round((float)$batch['cost_price'], 2);

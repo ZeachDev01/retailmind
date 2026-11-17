@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 // Exercise the report's public result without starting its authenticated page.
@@ -22,7 +23,7 @@ if (array_slice($result['headers'], array_search('Cost Price', $result['headers'
     throw new RuntimeException('Inventory valuation must export cost, sale, then price minus cost per item');
 }
 $profits = array_column($result['rows'], 'Profit', 'Product');
-foreach (['Gain' => '20.00', 'Loss' => '-20.00', 'Equal' => '0.00', 'Unknown cost' => '100.00'] as $product => $profit) {
+foreach (['Gain' => '20.00', 'Loss' => '-20.00', 'Equal' => '0.00', 'Unknown cost' => 'Not recorded'] as $product => $profit) {
     if (($profits[$product] ?? null) !== $profit) {
         throw new RuntimeException("Incorrect exported price minus cost per item for {$product}");
     }

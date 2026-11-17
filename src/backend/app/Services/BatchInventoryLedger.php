@@ -745,6 +745,10 @@ class BatchInventoryLedger
             $batchCols[] = 'cost_price';
             $batchParams[] = $costPrice;
         }
+        if ($this->hasColumn('product_batches', 'cost_known')) {
+            $batchCols[] = 'cost_known';
+            $batchParams[] = (int)($costPrice !== null);
+        }
         $batchCols[] = 'expiration_date';
         $batchParams[] = $expirationDate;
 

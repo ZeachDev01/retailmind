@@ -309,6 +309,7 @@ $categoryIcon = static function (string $categoryName): string {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="cost_price">Purchase cost / base unit</label>
+                                    <input type="hidden" name="cost_fallback" data-field="cost_fallback">
                                     <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
                                     <small id="cost_hint" data-field="cost_hint">Per base unit. Blank uses saved cost.</small>
                                 </div>
@@ -656,7 +657,7 @@ function refreshDelivery() {
         products++;
         const quantities = getLineQuantities(row, prod);
         accepted += quantities.accepted;
-        const price = field('cost_price').value.trim() || (Number(prod.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '');
+        const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
         if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * quantities.accepted;
     }
     for (const [name, value] of Object.entries({products, accepted})) {
@@ -773,9 +774,9 @@ function renderCatalog() {
         const cost = document.createElement('span');
         cost.className = 'receiving-card-cost';
         const rawCost = p.cost_price;
-        cost.textContent = rawCost !== '' && rawCost !== null && !isNaN(Number(rawCost)) && Number(rawCost) > 0
+        cost.textContent = knownProductCost(p)
             ? '₱' + Number(rawCost).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2})
-            : 'Unknown cost';
+            : 'Not recorded';
 
         const stock = document.createElement('span');
         stock.className = 'receiving-card-stock ' + stockInfo.state;
@@ -1012,6 +1013,11 @@ function connectLine(row) {
     });
 }
 
+function knownProductCost(product) {
+    return product && product.cost_price !== null && product.cost_price !== ''
+        && (Number(product.cost_price) > 0 || Number(product.cost_known) === 1);
+}
+
 function addReceivingLine(values = {}) {
     const productId = String(values.product_id || values.productId || '');
     if (!productId) return null;
@@ -1025,9 +1031,10 @@ function addReceivingLine(values = {}) {
     const row = lineTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.productId = productId;
     row.querySelector('[data-field="product_id"]').value = productId;
-    if (Number(product.cost_price) > 0) {
-        row.querySelector('[data-field="cost_price"]').value = Number(product.cost_price).toFixed(2);
-    }
+    row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
+    row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(product)
+        ? 'Blank uses saved cost: ₱' + Number(product.cost_price).toFixed(2)
+        : 'Cost not recorded — enter cost if known';
 
     const hasSalesPack = Number(product.pack_size || 0) > 1;
     const unitsPerPkg = Number(product.units_per_package || 1);
@@ -1215,6 +1222,10 @@ function validateQuantities() {
 function renderReview() {
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
+    for (const row of lineContainer.children) {
+        const product = productMap.get(row.querySelector('[data-field="product_id"]').value);
+        row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
+    }
     const sharedDetails = [
         form.elements.supplier.value && 'Bought from: ' + form.elements.supplier.value,
         form.elements.invoice_number.value && 'Receipt: ' + form.elements.invoice_number.value,
@@ -1280,9 +1291,9 @@ function renderReview() {
             pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
             section.append(pulloutInfo);
         }
-        const price = field('cost_price').value.trim() || (Number(prod?.cost_price) > 0 ? Number(prod.cost_price).toFixed(2) : '');
+        const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
         const details = [
-            price ? 'Cost: ₱' + price + ' per unit' : 'Cost: unknown',
+            price ? 'Cost: ₱' + price + ' per unit' : 'Cost: Not recorded',
             field('batch_number').value && 'Batch: ' + field('batch_number').value,
             field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
         ].filter(Boolean);
@@ -1346,7 +1357,7 @@ window.RetailMindInventoryDrafts?.register({
         if (linesWithExcludedQuantity.length > 0) {
             document.getElementById('entry_status').textContent = 'A saved draft used damaged or rejected quantities. Enter the good quantities received again; your draft is still kept.';
         }
-        showStep(draft.context.step || 1);
+        showStep(draft.context.step === 3 ? 2 : (draft.context.step || 1));
     },
     restored() {
         if (step === 3) renderReview();

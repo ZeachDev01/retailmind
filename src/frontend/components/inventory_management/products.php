@@ -220,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'product_name' => $_POST['product_name'] ?? '',
                 'brand' => $_POST['brand'] ?? '',
                 'category_id' => $_POST['category_id'] ?? '',
-                'cost_price' => $_POST['cost_price'] ?? 0,
+                'cost_price' => $_POST['cost_price'] ?? '',
                 'selling_price' => $_POST['selling_price'] ?? 0,
                 'reorder_level' => $_POST['reorder_level'] ?? 10,
                 'preferred_supplier' => $_POST['preferred_supplier'] ?? '',
@@ -1397,9 +1397,9 @@ foreach ($products as $product) {
                                                 <span class="product-copy"><strong><?= htmlspecialchars($product['product_name']) ?></strong><span><?= htmlspecialchars($product['brand'] ?: 'No brand') ?><?= !empty($product['variant_label']) ? ' · ' . htmlspecialchars($product['variant_label']) : '' ?></span></span>
                                             </div>
                                         </td>
-                                        <td class="column-cost mobile-hide">₱<?= number_format((float)($product['cost_price'] ?? 0), 2) ?></td>
+                                        <td class="column-cost mobile-hide"><?= \App\Inventory\ProductCost::known($product) ? '₱' . number_format((float)$product['cost_price'], 2) : 'Not recorded' ?></td>
                                         <td class="column-price">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
-                                        <td class="column-profit mobile-hide">₱<?= number_format((float)($product['unit_price'] ?? 0) - (float)($product['cost_price'] ?? 0), 2) ?></td>
+                                        <td class="column-profit mobile-hide"><?= \App\Inventory\ProductCost::known($product) ? '₱' . number_format((float)$product['unit_price'] - (float)$product['cost_price'], 2) : 'Not recorded' ?></td>
                                         <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
@@ -1520,8 +1520,8 @@ foreach ($products as $product) {
                                 <div class="form-grid">
                                     <div class="form-group">
                                         <label for="create-pack-cost">Purchase Pack Cost (&#8369;) *</label>
-                                        <input type="number" step="0.01" min="0.01" max="99999999.99" name="pack_cost" id="create-pack-cost" disabled>
-                                        <small class="field-error">Enter a purchase pack cost greater than zero.</small>
+                                        <input type="number" step="0.01" min="0" max="99999999.99" name="pack_cost" id="create-pack-cost" disabled>
+                                        <small class="field-error">Enter a purchase pack cost of PHP 0 or more.</small>
                                     </div>
                                     <div class="form-group">
                                         <label for="create-purchase-pack-size">Pieces per Purchase Pack *</label>
@@ -1536,8 +1536,8 @@ foreach ($products as $product) {
                             <h3 class="planning-section-title">Piece pricing</h3>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="cost-price">Cost Price per Piece (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" required aria-describedby="pack-price-suggested">
+                                    <label for="cost-price">Cost Price per Piece (&#8369;)</label>
+                                    <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" placeholder="Not recorded" aria-describedby="pack-price-suggested">
                                     <small class="field-error">Enter a valid cost price.</small>
                                     <small class="field-help" id="pack-price-suggested" aria-live="polite">Your purchase cost for one piece.</small>
                                 </div>
@@ -1751,6 +1751,9 @@ foreach ($products as $product) {
 
     <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script>
+        function knownProductCost(product) {
+            return product.cost_price !== null && product.cost_price !== '' && (Number(product.cost_price) > 0 || Number(product.cost_known) === 1);
+        }
         const PRODUCT_PHOTO_LIMIT_MESSAGE = <?= json_encode(PRODUCT_PHOTO_LIMIT_MESSAGE) ?>;
         const productData = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const canDirectAdjust = <?= $canDirectAdjust ? 'true' : 'false' ?>;
@@ -2181,7 +2184,7 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
-        <div class="detail-item"><span>Cost Price</span><strong>${formatMoney(product.cost_price)}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
+        <div class="detail-item"><span>Cost Price</span><strong>${knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded'}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${productPhotoPreview(product)}</strong></div>
     </div>`;
             renderProductDrawerQuantity(product);
@@ -2252,8 +2255,8 @@ foreach ($products as $product) {
                     <fieldset class="settings-fieldset product-edit-section"><legend>Pricing & availability</legend>
                         <div class="form-grid">
                             <label class="form-field">
-                                <span>Cost Price (₱) <span class="product-edit-required" aria-hidden="true">*</span></span>
-                                <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="edit-cost-price" required value="${(Number(product.cost_price) || 0).toFixed(2)}" class="form-input">
+                                <span>Cost Price (₱)</span>
+                                <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="edit-cost-price" placeholder="Not recorded" value="${knownProductCost(product) ? Number(product.cost_price).toFixed(2) : ''}" class="form-input">
                             </label>
                             <label class="form-field">
                                 <span>Selling Price (₱) <span class="product-edit-required" aria-hidden="true">*</span></span>
@@ -2408,7 +2411,7 @@ foreach ($products as $product) {
 
             const costInput = document.getElementById('edit-cost-price');
             const costPriceVal = costInput?.value.trim() ? Number(costInput.value) : NaN;
-            if (!Number.isFinite(costPriceVal) || costPriceVal < 0 || costPriceVal > 99999999.99) {
+            if (costInput.value.trim() !== '' && (!Number.isFinite(costPriceVal) || costPriceVal < 0 || costPriceVal > 99999999.99)) {
                 errorBox.textContent = 'Cost price must be between PHP 0 and PHP 99,999,999.99.';
                 errorBox.hidden = false;
                 costInput?.focus();
@@ -2547,7 +2550,7 @@ foreach ($products as $product) {
             row.dataset.category = String(product.category_id || 0);
             row.dataset.categoryName = (product.category_name || '').toLowerCase();
             row.dataset.price = String(product.unit_price || 0);
-            row.dataset.cost = String(product.cost_price || 0);
+            row.dataset.cost = knownProductCost(product) ? String(product.cost_price) : '';
             row.dataset.status = product.status;
             row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
             const copy = row.querySelector('.product-copy');
@@ -2567,8 +2570,8 @@ foreach ($products as $product) {
             const priceCell = row.querySelector('.column-price');
             const costCell = row.querySelector('.column-cost');
             const profitCell = row.querySelector('.column-profit');
-            if (profitCell) profitCell.textContent = formatMoney(Number(product.unit_price || 0) - Number(product.cost_price || 0));
-            if (costCell) costCell.textContent = formatMoney(product.cost_price);
+            if (profitCell) profitCell.textContent = knownProductCost(product) ? formatMoney(Number(product.unit_price || 0) - Number(product.cost_price || 0)) : 'Not recorded';
+            if (costCell) costCell.textContent = knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded';
             if (priceCell) priceCell.textContent = formatMoney(product.unit_price);
             const stockCell = row.querySelector('.stock-cell');
             if (stockCell) {
@@ -2853,7 +2856,7 @@ foreach ($products as $product) {
             const lines = [header.map(csvCell).join(',')];
             filteredRows.forEach(row => {
                 const product = productsById[Number(row.dataset.productId)];
-                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, product.cost_price, product.unit_price, (Number(product.unit_price || 0) - Number(product.cost_price || 0)).toFixed(2), product.quantity_on_hand, product.next_expiration_date || '—', product.status].map(csvCell).join(','));
+                lines.push([product.product_name, product.sku, product.barcode, product.brand, product.category_name, knownProductCost(product) ? product.cost_price : 'Not recorded', product.unit_price, knownProductCost(product) ? (Number(product.unit_price || 0) - Number(product.cost_price)).toFixed(2) : 'Not recorded', product.quantity_on_hand, product.next_expiration_date || '—', product.status].map(csvCell).join(','));
             });
             const blob = new Blob([lines.join('\n')], {
                 type: 'text/csv;charset=utf-8'
@@ -3066,7 +3069,7 @@ foreach ($products as $product) {
                 });
                 const cost = document.getElementById('cost-price');
                 const selling = document.getElementById('selling-price');
-                if (cost.value === '' || !cost.validity.valid || Number(cost.value) < 0) {
+                if (!cost.validity.valid || (cost.value !== '' && Number(cost.value) < 0)) {
                     cost.closest('.form-group').classList.add('invalid');
                     valid = false;
                 }
@@ -3209,7 +3212,7 @@ foreach ($products as $product) {
                 ['Category', categoryText],
                 ['Individual Item Barcode', data.get('barcode') || 'Generate automatically'],
                 ['Receiving Package Barcode', data.get('case_barcode') || 'None'],
-                ['Cost Price', formatMoney(data.get('cost_price'))],
+                ['Cost Price', data.get('cost_price') === '' ? 'Not recorded' : formatMoney(data.get('cost_price'))],
                 ['Selling Price', formatMoney(data.get('selling_price'))],
                 ['Initial Quantity', `${data.get('initial_stock_quantity')} ${data.get('base_unit') || 'piece'}`],
                 ['Reorder / Safety', `${data.get('reorder_level')} / ${data.get('safety_stock')}`],
