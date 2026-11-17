@@ -13,7 +13,7 @@ const phpBinary = process.env.PHP_BINARY || 'php';
 
 function skip(reason) {
     console.log('Stock receiving scan browser workflow: skipped (' + reason + ')');
-    process.exit(0);
+    process.exit(process.env.CI ? 1 : 0);
 }
 
 if (process.env.RUN_DB_TESTS !== '1') {

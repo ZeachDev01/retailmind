@@ -8,7 +8,7 @@ const path = require('node:path');
 const {chromium} = require('playwright');
 if (process.env.RUN_DB_TESTS !== '1') {
     console.log('Forecast decision browser: skipped (set RUN_DB_TESTS=1; disposable MySQL database required)');
-    process.exit(0);
+    process.exit(process.env.CI ? 1 : 0);
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const php = process.env.PHP_BINARY || 'php';

@@ -8,8 +8,7 @@
 // user-visible outcome together with the submitted count, approval and stock
 // records. No test depends on a physical scanner.
 //
-// Skips (exit 0) when RUN_DB_TESTS is not 1 or no browser automation module is
-// installed, matching the opt-in database integration tests.
+// Missing prerequisites skip locally and fail in CI.
 
 const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -25,7 +24,7 @@ let serverLog = '';
 
 function skip(reason) {
     console.log('Inventory counts scan browser workflow: skipped (' + reason + ')');
-    process.exit(0);
+    process.exit(process.env.CI ? 1 : 0);
 }
 
 if (process.env.RUN_DB_TESTS !== '1') {

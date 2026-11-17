@@ -5,6 +5,58 @@ on:
   pull_request:
     branches: [ main, master ]
 jobs:
+  workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      database:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: ci-only-password
+          MARIADB_DATABASE: retailmind_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_ENV: local
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: retailmind_ci
+      DB_USER: root
+      DB_PASSWORD: ci-only-password
+      APP_ENV: development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, pdo_sqlite, gd, mbstring
+          coverage: none
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check prerequisite failure behavior
+        run: node src/backend/tests/browser_ci_prerequisites_test.js
+      - name: Initialize disposable database
+        run: >-
+          php -r 'require "src/backend/bootstrap/app.php";
+          App\Core\Database::connection()->exec(file_get_contents("src/backend/database/sql/schema.sql"));'
+      - name: Run application browser workflows
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: application-browser-failures
+          path: |
+            src/backend/storage/logs/
+            output/
+          retention-days: 7
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest

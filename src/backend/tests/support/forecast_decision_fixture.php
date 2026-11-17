@@ -17,13 +17,12 @@ if ($argv[1] === 'create') {
         $migration = require __DIR__ . '/../../database/migrations/' . $key . '.php';
         $migration['up']($pdo);
     }
-    $pdo->exec("INSERT INTO branches (branch_id,branch_name,branch_code) VALUES (1,'Decision Test Store','DECISION');
-        INSERT INTO roles (role_id,role_name) VALUES (3,'inventory_manager')");
+    $pdo->exec("INSERT INTO roles (role_id,role_name) VALUES (3,'inventory_manager')");
     $password = 'DecisionTest@2026';
-    $pdo->prepare('INSERT INTO users (user_id,full_name,username,password_hash,role_id,branch_id,must_change_password) VALUES (3,?,?,?,?,1,0)')
+    $pdo->prepare('INSERT INTO users (user_id,display_name,username,password_hash,role_id,must_change_password) VALUES (3,?,?,?,?,0)')
         ->execute(['Decision Test Manager', 'decision_manager', password_hash($password, PASSWORD_DEFAULT), 3]);
     $pdo->exec("INSERT INTO user_roles (user_id,role_id,is_primary) VALUES (3,3,1);
-        INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (1,'DECISION-ITEM','DECISION-ITEM','Decision Test Item',25,3,1);
+        INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (1,'DECISION-ITEM','DECISION-ITEM','Decision Test Item',25,3);
         INSERT INTO inventory (product_id,quantity_on_hand) VALUES (1,0)");
     echo json_encode(['password' => $password]);
     exit;
@@ -32,7 +31,7 @@ $pdo->exec("USE `{$database}`");
 switch ($argv[1]) {
     case 'queue_many':
         $pdo->exec("UPDATE products SET status='inactive' WHERE product_id IN (3,4)");
-        $product = $pdo->prepare('INSERT INTO products (sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level) VALUES (?,?,?,25,3,1,10)');
+        $product = $pdo->prepare('INSERT INTO products (sku,barcode,product_name,unit_price,cost_price,reorder_level) VALUES (?,?,?,25,3,10)');
         $inventory = $pdo->prepare('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (?,5)');
         for ($i = 0; $i < 1000; $i++) {
             $sku = 'QUEUE-' . str_pad((string)$i, 4, '0', STR_PAD_LEFT);
@@ -83,7 +82,7 @@ switch ($argv[1]) {
         $pdo->exec("UPDATE inventory SET quantity_on_hand=0;
             INSERT INTO ml_jobs (job_id,trigger_type,status,queued_at,completed_at) VALUES
                 (10,'forecast_generation','succeeded',NOW(),NOW());
-            INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id) VALUES (2,'UNRELATED','UNRELATED','Unrelated legacy product',25,3,1);
+            INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (2,'UNRELATED','UNRELATED','Unrelated legacy product',25,3);
             UPDATE products SET reorder_level=10,safety_stock=5 WHERE product_id=2;
             INSERT INTO inventory (product_id,quantity_on_hand) VALUES (2,5);
             INSERT INTO forecast_runs (forecast_run_id,model_name,model_version,forecast_period_days) VALUES (100,'Random Forest','legacy-test',7);
@@ -100,16 +99,16 @@ switch ($argv[1]) {
         for ($day = 1; $day <= 28; $day++) {
             $stmtF1->execute([$day, $day, $day <= 7 ? 2 : 0]);
         }
-        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
-            VALUES (3,'ZERO-ITEM','ZERO-ITEM','Zero Forecast Item',25,3,1,10,5,1,1);
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
+            VALUES (3,'ZERO-ITEM','ZERO-ITEM','Zero Forecast Item',25,3,10,5,1,1);
             INSERT INTO inventory (product_id,quantity_on_hand) VALUES (3,15)");
         $stmtF3 = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
             VALUES (10,3,CURDATE()-INTERVAL 1 DAY,CURDATE()+INTERVAL (? - 1) DAY,?,0, 'decision-test','High')");
         for ($day = 1; $day <= 28; $day++) {
             $stmtF3->execute([$day, $day]);
         }
-        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,branch_id,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
-            VALUES (4,'STALE-ITEM','STALE-ITEM','Stale Forecast Item',25,3,1,10,5,6,4);
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price,reorder_level,safety_stock,minimum_order_quantity,units_per_package)
+            VALUES (4,'STALE-ITEM','STALE-ITEM','Stale Forecast Item',25,3,10,5,6,4);
             INSERT INTO inventory (product_id,quantity_on_hand) VALUES (4,0)");
         $stmtF4 = $pdo->prepare("INSERT INTO demand_forecasts (job_id,product_id,forecast_origin,target_date,horizon_day,predicted_units,model_version,readiness_level)
             VALUES (10,4,CURDATE()-INTERVAL 5 DAY,CURDATE()+INTERVAL (? - 5) DAY,?,5, 'decision-test','High')");

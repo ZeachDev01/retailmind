@@ -9,7 +9,7 @@ const {chromium} = require('playwright');
 
 if (process.env.RUN_DB_TESTS !== '1') {
     console.log('Receiving empty catalog: skipped (RUN_DB_TESTS=1 and disposable MySQL required)');
-    process.exit(0);
+    process.exit(process.env.CI ? 1 : 0);
 }
 
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');

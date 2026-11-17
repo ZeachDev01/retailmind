@@ -395,16 +395,15 @@ $cleanup();
 
 try {
     $insertProduct = $pdo->prepare(
-        'INSERT INTO products (branch_id, sku, barcode, case_barcode, product_name, unit_price, cost_price,
+        'INSERT INTO products (sku, barcode, case_barcode, product_name, unit_price, cost_price,
                                units_per_package, base_unit, receiving_unit, status)
-         VALUES (?, ?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
+         VALUES (?, ?, ?, ?, 10.00, 5.00, ?, ?, ?, ?)'
     );
     $insertInventory = $pdo->prepare(
         'INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)'
     );
     foreach ($products as $key => $product) {
         $insertProduct->execute([
-            $storeId,
             $product['sku'],
             $product['barcode'],
             $product['case_barcode'],
@@ -433,8 +432,8 @@ try {
     }
 
     $insertUser = $pdo->prepare(
-        'INSERT INTO users (full_name, username, email, password_hash, role_id, status, session_version, must_change_password, branch_id)
-         VALUES (?, ?, ?, ?, ?, \'active\', 1, 0, ?)'
+        'INSERT INTO users (display_name, username, email, password_hash, role_id, status, session_version, must_change_password)
+         VALUES (?, ?, ?, ?, ?, \'active\', 1, 0)'
     );
     foreach ($staff as $key => $member) {
         $insertUser->execute([
@@ -443,7 +442,6 @@ try {
             $member['email'],
             password_hash('Scanwf-Test-Passw0rd!', PASSWORD_DEFAULT),
             $roleId($pdo, $member['role']),
-            $storeId,
         ]);
         $staffByUsername[$key] = [
             'user_id' => (int)$pdo->lastInsertId(),
