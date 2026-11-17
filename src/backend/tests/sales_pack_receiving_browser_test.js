@@ -119,9 +119,9 @@ const { chromium } = require('playwright');
         await receivedLoose.fill('4');
 
         const submitted = await page.evaluate(() => Object.fromEntries(new FormData(document.getElementById('receiving_form'))));
-        assert.equal(submitted['lines[0][quantity_mode]'], 'packs', 'Form submits the sealed-pack quantity mode');
-        assert.equal(submitted['lines[0][received_packs]'], '2', 'Form submits sealed packs');
-        assert.equal(submitted['lines[0][received_loose]'], '4', 'Form submits loose pieces');
+        assert.equal(submitted['lines[0][allocations][0][quantity_mode]'], 'packs', 'Form submits the sealed-pack quantity mode');
+        assert.equal(submitted['lines[0][allocations][0][received_packs]'], '2', 'Form submits sealed packs');
+        assert.equal(submitted['lines[0][allocations][0][received_loose]'], '4', 'Form submits loose pieces');
 
         // 3. Verify package conversion element text
         const conversionText = await line.locator('[data-field="package_conversion"]').textContent();

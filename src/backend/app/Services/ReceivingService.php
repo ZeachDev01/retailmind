@@ -104,7 +104,54 @@ class ReceivingService
             $results = [];
             foreach ($lines as $index => $line) {
                 try {
-                    $results[] = $this->receiveLine(array_replace($line, $shared, ['group_id' => $groupId]), $userId, $products[(int)$line['product_id']]);
+                    $productId = (int)$line['product_id'];
+                    $allocations = $line['allocations'] ?? [$line];
+                    if (!is_array($allocations) || !array_is_list($allocations) || $allocations === []) {
+                        throw new RuntimeException('Each product needs at least one valid batch.');
+                    }
+                    $productResults = [];
+                    $costs = [];
+                    foreach ($allocations as $allocation) {
+                        if (!is_array($allocation)) throw new RuntimeException('Each batch must contain receiving details.');
+                        $data = array_replace($allocation, $shared, ['product_id' => $productId, 'group_id' => $groupId,
+                            'pullout_id' => $line['pullout_id'] ?? null]);
+                        $result = $this->receiveLine($data, $userId, $products[$productId]);
+                        if (isset($line['allocations']) && $result['accepted_qty'] <= 0) {
+                            throw new RuntimeException('Each batch needs a positive accepted quantity.');
+                        }
+                        $products[$productId]['quantity_purchased'] += $result['accepted_qty'];
+                        if ($result['cost_price'] !== null && $result['accepted_qty'] > 0) {
+                            $costs[number_format($result['cost_price'], 2, '.', '')] = true;
+                        }
+                        $productResults[] = $result;
+                    }
+                    $choice = $this->text($line['current_product_cost'] ?? '', 'Current product cost', 20);
+                    if ($choice !== '' && !preg_match('/^\d{1,8}(?:\.\d{1,2})?$/D', $choice)) {
+                        throw new RuntimeException('Choose a valid Current product cost from the final batches.');
+                    }
+                    if ($choice !== '') $choice = number_format((float)$choice, 2, '.', '');
+                    if (($choice !== '' && !isset($costs[$choice])) || (count($costs) > 1 && $choice === '')) {
+                        throw new RuntimeException('Choose Current product cost from the final batches, then Review again.');
+                    }
+                    if ($choice === '' && count($costs) === 1) $choice = (string)array_key_first($costs);
+                    if ($choice !== '') {
+                        $known = $this->hasColumn('products', 'cost_known') ? ', cost_known = 1' : '';
+                        $this->pdo->prepare("UPDATE products SET cost_price = ?{$known} WHERE product_id = ?")->execute([$choice, $productId]);
+                    }
+                    if ($this->hasColumn('stock_receiving', 'current_product_cost')) {
+                        $metadata = $this->pdo->prepare('UPDATE stock_receiving SET current_product_cost = ?, quantity_mode = ?, cost_source = ? WHERE receiving_id = ?');
+                        foreach ($productResults as $n => &$result) {
+                            $source = trim((string)($allocations[$n]['cost_price'] ?? '')) !== '' ? 'explicit'
+                                : ($result['cost_price'] !== null ? 'product' : 'unknown');
+                            $mode = $result['pack_size_used'] !== null ? 'packs' : ($result['received_packages'] > 0 ? 'packages' : 'units');
+                            $metadata->execute([$choice !== '' ? $choice : null, $mode, $source, $result['receiving_id']]);
+                            $result += ['current_product_cost' => $choice !== '' ? (float)$choice : null, 'quantity_mode' => $mode, 'cost_source' => $source];
+                        }
+                        unset($result);
+                    } elseif (isset($line['allocations'])) {
+                        throw new RuntimeException('Receiving multiple batches requires the latest database schema.');
+                    }
+                    array_push($results, ...$productResults);
                 } catch (RuntimeException $e) {
                     if ($e instanceof PDOException) {
                         error_log((string)$e);
@@ -217,6 +264,10 @@ class ReceivingService
             || (isset($data['accepted_loose']) && $data['accepted_loose'] !== '')
             || (isset($data['damaged_loose']) && $data['damaged_loose'] !== '')
             || (isset($data['rejected_loose']) && $data['rejected_loose'] !== '');
+
+        if ($quantityMode === 'packs' && ((!$hasPacksInput && !$hasLooseInput) || $packSize === null || $packSize <= 1)) {
+            throw new RuntimeException('Enter sealed packs and loose pieces using a configured Sales Pack.');
+        }
 
         if ($hasPacksInput && ($packSize === null || $packSize <= 1)) {
             throw new RuntimeException('Cannot receive packs: product has no Sales Pack configured.');
@@ -404,16 +455,8 @@ class ReceivingService
                     'costPrice', 'batchNumber', 'expirationDate', 'supplier'), $userId
             );
 
-            $productUpdateParts = ['quantity_purchased = quantity_purchased + ?'];
-            $productUpdateParams = [$acceptedQty];
-            if ($costPrice !== null) {
-                $productUpdateParts[] = 'cost_price = ?';
-                $productUpdateParams[] = $costPrice;
-                if ($this->hasColumn('products', 'cost_known')) $productUpdateParts[] = 'cost_known = 1';
-            }
-            $productUpdateParams[] = $productId;
-            $this->pdo->prepare('UPDATE products SET ' . implode(', ', $productUpdateParts) . ' WHERE product_id = ?')
-                ->execute($productUpdateParams);
+            $this->pdo->prepare('UPDATE products SET quantity_purchased = quantity_purchased + ? WHERE product_id = ?')
+                ->execute([$acceptedQty, $productId]);
 
             if ($costPrice !== null) {
                 $this->pdo->prepare(
@@ -513,11 +556,14 @@ class ReceivingService
             JOIN users u ON sr.received_by = u.user_id';
         $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
         $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $allocationSelect = $this->hasColumn('stock_receiving', 'current_product_cost')
+            ? 'sr.quantity_mode, sr.cost_source, sr.current_product_cost,'
+            : 'NULL AS quantity_mode, NULL AS cost_source, NULL AS current_product_cost,';
         $packSelect = $this->hasColumn('stock_receiving', 'received_packs')
             ? 'sr.received_packs, sr.accepted_packs, sr.damaged_packs, sr.rejected_packs, sr.received_loose, sr.accepted_loose, sr.damaged_loose, sr.rejected_loose, sr.pack_size_used,'
             : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_qty AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
         $stmt = $this->pdo->prepare("SELECT
-                sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} sr.product_id, sr.received_qty, sr.received_packages,
+                sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} {$allocationSelect} sr.product_id, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
                 sr.cost_price, sr.total_cost, sr.received_by, sr.received_at,
                 sr.supplier, sr.invoice_number, sr.batch_number, sr.expiration_date,
@@ -582,7 +628,9 @@ class ReceivingService
                 'received_qty' => (int)$row['received_qty'],
                 'received_packages' => (int)$row['received_packages'],
                 'units_per_package_used' => (int)$row['units_per_package_used'],
-                'quantity_mode' => (int)$row['received_packages'] > 0 ? 'packages' : 'units',
+                'quantity_mode' => $row['quantity_mode'] ?? ((int)$row['received_packages'] > 0 ? 'packages' : ((int)($row['pack_size_used'] ?? 0) > 1 ? 'packs' : 'units')),
+                'cost_source' => $row['cost_source'],
+                'current_product_cost' => $row['current_product_cost'] !== null ? (float)$row['current_product_cost'] : null,
                 'accepted_qty' => (int)$row['accepted_qty'],
                 'damaged_qty' => (int)$row['damaged_qty'],
                 'received_packs' => (int)($row['received_packs'] ?? 0),

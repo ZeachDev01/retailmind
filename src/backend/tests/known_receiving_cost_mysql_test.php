@@ -77,6 +77,23 @@ try {
     $report = run_report($pdo, 'inventory_valuation', ['product_id' => $missing, 'category_id' => 0, 'from' => '2026-01-01', 'to' => '2026-12-31']);
     $row = $report['rows'][0];
     $assert($row['Cost Missing Qty'] === 3 && $row['Estimated Value'] === '0.00' && $row['Recorded Value'] === '0.00', 'Valuation keeps unknown quantities distinct from recorded free goods after a later catalog edit: ' . json_encode($row));
+    $unknown = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'selling_price' => 20, 'product_name' => 'Unknown allocations', 'cost_price' => '0'], 3);
+    $pdo->exec("UPDATE products SET cost_known=0 WHERE product_id=$unknown");
+    $receiving->receiveShoppingTrip([['product_id' => $unknown, 'allocations' => [['received_qty' => 2], ['received_qty' => 3]]]], [], 3);
+    $unknownHistory = $receiving->getGroupedReceivingHistory(3)[0]['lines'];
+    $assert(array_column($unknownHistory, 'cost_price') === [null, null]
+        && array_column($unknownHistory, 'cost_source') === ['unknown', 'unknown'], 'All-unknown allocations stay unknown in history');
+    $assert(!\App\Inventory\ProductCost::known($products->findProductBySearchTerm('Unknown allocations')), 'All-unknown delivery cannot turn missing cost into free goods');
+    $receiving->receiveShoppingTrip([['product_id' => $unknown, 'allocations' => [
+        ['received_qty' => 1, 'cost_price' => '0'], ['received_qty' => 2], ['received_qty' => 1, 'cost_price' => '0.00'],
+    ]]], [], 3);
+    $mixed = $receiving->getGroupedReceivingHistory(3)[0]['lines'];
+    $assert(array_column($mixed, 'cost_price') === [0.0, null, 0.0]
+        && array_column($mixed, 'current_product_cost') === [0.0, 0.0, 0.0], 'Deduplicated known zero applies automatically while a sibling remains unknown');
+    $receiving->receiveShoppingTrip([['product_id' => $positive, 'current_product_cost' => '6', 'allocations' => [
+        ['received_qty' => 1, 'cost_price' => '6'], ['received_qty' => 1],
+    ]]], [], 3);
+    $assert(array_column($receiving->getGroupedReceivingHistory(3)[0]['lines'], 'cost_price') === [6.0, 5.0], 'Blank sibling inherits the product cost before the delivery, not the previous allocation');
     echo "Known receiving costs: passed\n";
 } finally {
     $pdo = null;

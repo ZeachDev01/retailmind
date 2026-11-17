@@ -55,7 +55,7 @@ function fixture(action) {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const url = origin + '/components/report/stock_receiving.php';
         const state = () => JSON.parse(fixture('inventory_state'));
-        const before = state();
+        let before = state();
         const scan = async code => {
             await page.locator('#product_search_scan').fill(code);
             await Promise.all([page.waitForResponse(r => r.url().includes('product_code_lookup.php')), page.locator('#product_search_scan').press('Enter')]);
@@ -65,6 +65,115 @@ function fixture(action) {
             await page.locator('#receiving_next').click();
             await page.locator('#receiving_review').waitFor({state: 'visible'});
         };
+        await page.goto(url);
+        await scan('THEME-CASE');
+        await page.locator('#received_packages').fill('1');
+        await page.getByRole('button', {name:'Add another batch', exact:true}).click();
+        assert.equal(await page.locator('.receiving-product-group').count(), 1, 'one product group contains independent batches');
+        assert.equal(await page.locator('.receiving-line').count(), 2);
+        assert.equal(await page.locator('#batch_number_1').inputValue(), '', 'new batches never copy provenance');
+        assert.equal(await page.locator('#expiration_date_1').inputValue(), '');
+        await page.locator('#quantity_mode_1').selectOption('units');
+        await page.locator('#received_qty_1').fill('12');
+        await scan('THEME-PACK');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'received_qty_1', 'rescan focuses the edited allocation');
+        assert.equal(await page.locator('#received_qty_1').inputValue(), '12');
+        assert.equal(await page.locator('#summary_products').innerText(), '1');
+        assert.equal(await page.locator('#summary_accepted').innerText(), '36');
+        for (const [index, price, lot, expiry] of [[0, '6', 'MAY', '2027-05-31'], [1, '7', 'AUG', '2027-08-31']]) {
+            const row = page.locator('.receiving-line').nth(index);
+            await row.locator('summary').click();
+            await row.locator('[data-field="cost_price"]').fill(price);
+            await row.locator('[data-field="batch_number"]').fill(lot);
+            await row.locator('[data-field="expiration_date"]').fill(expiry);
+        }
+        for (const close of await page.getByRole('button', {name:'Dismiss notification',exact:true}).all()) await close.click();
+        await page.locator('#product_search_scan').fill('THEME-ITEM');
+        for (const theme of ['light', 'dark']) {
+            for (const width of [1440, 390]) {
+                await page.setViewportSize({width,height:1000});
+                await page.emulateMedia({reducedMotion:'reduce'});
+                await page.evaluate(t => {document.documentElement.dataset.theme=t; document.documentElement.style.colorScheme=t;}, theme);
+                assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'multi-batch editor fits ' + width + ' ' + theme);
+                await page.getByRole('button', {name:'Add another batch',exact:true}).focus();
+                fs.mkdirSync('output/issue-480', {recursive:true});
+                await page.getByRole('button', {name:'Add another batch',exact:true}).evaluate(button => button.blur());
+                await page.screenshot({path:`output/issue-480/batches-${width}-${theme}.png`,fullPage:true});
+            }
+        }
+        await page.setViewportSize({width:1440,height:1000});
+        await page.locator('#product_search_scan').fill('');
+        await review();
+        assert.equal(await page.locator('#current_product_cost_0').inputValue(), '', 'differing known costs require an explicit choice');
+        await page.locator('.btn-submit').click();
+        await page.waitForFunction(() => document.activeElement.id === 'current_product_cost_0');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'current_product_cost_0');
+        assert.equal(state().stock_receiving.length, before.stock_receiving.length, 'missing choice saves nothing');
+        await page.locator('#current_product_cost_0').selectOption('7.00');
+        await page.locator('#receiving_back').click();
+        await review();
+        assert.equal(await page.locator('#current_product_cost_0').inputValue(), '7.00', 'Review retains a valid explicit choice');
+        await page.locator('#receiving_back').click();
+        await page.locator('#cost_price_1').fill('8');
+        await review();
+        assert.equal(await page.locator('#current_product_cost_0').inputValue(), '', 'editing the selected cost invalidates the choice');
+        await page.locator('#receiving_back').click();
+        await page.locator('#cost_price_1').fill('7');
+        await page.getByRole('button', {name:'Add another batch',exact:true}).click();
+        await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('#receiving_review').isVisible(), false, 'an added empty batch blocks Review');
+        await page.locator('.receiving-line').nth(2).getByRole('button', {name:/Remove/}).click();
+        assert.equal(await page.locator('.receiving-line').count(), 2, 'removing one batch preserves siblings');
+        await page.getByRole('button', {name:'Add another batch',exact:true}).click();
+        await page.locator('#quantity_mode_2').selectOption('units');
+        await page.locator('#received_qty_2').fill('1');
+        await page.locator('.receiving-line').nth(2).locator('summary').click();
+        await page.locator('#cost_price_2').fill('9');
+        await review();
+        await page.locator('#current_product_cost_0').selectOption('9.00');
+        await page.locator('#receiving_back').click();
+        page.once('dialog', dialog => dialog.dismiss());
+        await page.locator('.receiving-line').nth(2).getByRole('button', {name:/Remove/}).click();
+        assert.equal(await page.locator('.receiving-line').count(), 3, 'cancelling removal preserves entered batch values');
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('.receiving-line').nth(2).getByRole('button', {name:/Remove/}).click();
+        await review();
+        assert.equal(await page.locator('#current_product_cost_0').inputValue(), '', 'removing the selected cost requires a new choice');
+        await page.locator('#current_product_cost_0').selectOption('7.00');
+        await page.evaluate(() => RetailMindInventoryDrafts.keep(document.getElementById('receiving_form')));
+        await page.reload();
+        await page.getByRole('button', {name:'Resume',exact:true}).click();
+        await page.locator('.receiving-line').nth(1).waitFor({state:'visible'});
+        assert.equal(await page.locator('.receiving-product-group').count(), 1);
+        assert.equal(await page.locator('.receiving-line').count(), 2, 'encrypted recovery preserves all allocations');
+        assert.equal(await page.locator('#batch_number').inputValue(), 'MAY');
+        assert.equal(await page.locator('#batch_number_1').inputValue(), 'AUG');
+        assert.equal(await page.locator('#quantity_mode').inputValue(), 'packages');
+        assert.equal(await page.locator('#received_packages').inputValue(), '1');
+        assert.equal(await page.locator('#quantity_mode_1').inputValue(), 'units');
+        assert.equal(await page.locator('#received_qty_1').inputValue(), '12');
+        await review();
+        assert.equal(await page.locator('#current_product_cost_0').inputValue(), '7.00', 'encrypted recovery keeps the valid current-cost choice');
+        await page.route('**/stock_receiving.php', route => route.request().method() === 'POST' ? route.abort('failed') : route.continue());
+        await page.locator('.btn-submit').click();
+        await page.waitForTimeout(400);
+        await page.unroute('**/stock_receiving.php');
+        await page.goto(url);
+        await page.getByRole('button', {name:'Resume',exact:true}).click();
+        await page.locator('.receiving-line').nth(1).waitFor({state:'visible'});
+        assert.equal(await page.locator('.receiving-line').count(), 2, 'uncertain response keeps both batches');
+        await review();
+        const [multiRequest, multiResponse] = await Promise.all([
+            page.waitForRequest(r => r.method() === 'POST' && r.url() === url, {timeout:20000}),
+            page.waitForResponse(r => r.request().method() === 'POST' && r.url() === url, {timeout:20000}),
+            page.locator('.btn-submit').click(),
+        ]);
+        assert.match(await multiResponse.text(), /Receiving entry saved/);
+        assert.equal(state().stock_receiving.length, before.stock_receiving.length + 2, 'one save persists two batches');
+        const multiReplay = await page.context().request.post(url, {form:Object.fromEntries(new URLSearchParams(multiRequest.postData()))});
+        assert.match(await multiReplay.text(), /Receiving entry saved/);
+        assert.equal(state().stock_receiving.length, before.stock_receiving.length + 2, 'multi-batch retries do not duplicate stock');
+        before = state();
         await page.goto(url);
         await scan('THEME-CASE');
         assert.equal(await page.locator('.receiving-line').count(), 1, JSON.stringify({errors, scan:await page.locator('#scan_status').innerText()}));

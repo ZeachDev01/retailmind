@@ -105,7 +105,7 @@ try {
                             <div class="receiving-entry-meta rh-grid rh-flex-1 rh-grid-cols-1 rh-items-start rh-gap-3 sm:rh-grid-cols-2 xl:rh-grid-cols-4">
                                 <div class="rh-flex rh-flex-wrap rh-items-center rh-gap-2 sm:rh-col-span-2 xl:rh-col-span-4">
                                 <strong class="entry-id rh-font-semibold">Entry #<?= $entry['group_id'] ?></strong>
-                                <span class="badge badge-info rh-text-xs rh-font-medium"><?= count($entry['lines']) ?> product(s) · <?= $entry['total_accepted_qty'] ?> accepted units</span>
+                                <span class="badge badge-info rh-text-xs rh-font-medium"><?= count(array_unique(array_column($entry['lines'], 'product_id'))) ?> product(s) · <?= $entry['total_accepted_qty'] ?> accepted units</span>
                                 <?php if ($entry['total_damaged_qty'] > 0): ?>
                                     <span class="badge badge-warning"><?= $entry['total_damaged_qty'] ?> damaged units</span>
                                 <?php endif; ?>
@@ -137,6 +137,7 @@ try {
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <?php $shownCurrentCosts = []; ?>
                                         <?php foreach ($entry['lines'] as $line): ?>
                                             <tr>
                                                 <td><?= htmlspecialchars($line['product_name']) ?></td>
@@ -177,10 +178,17 @@ try {
                                                     <?php else: ?>
                                                         <span class="cost-unknown">Not recorded</span>
                                                     <?php endif; ?>
+                                                    <?php if (!empty($line['cost_source']) && $line['cost_source'] !== 'unknown'): ?>
+                                                        <br><small><?= $line['cost_source'] === 'product' ? 'Saved product cost' : 'Entered for this batch' ?></small>
+                                                    <?php endif; ?>
+                                                    <?php if (!isset($shownCurrentCosts[$line['product_id']]) && $line['current_product_cost'] !== null): ?>
+                                                        <br><small>Current product cost: ₱<?= number_format($line['current_product_cost'], 2) ?></small>
+                                                        <?php $shownCurrentCosts[$line['product_id']] = true; ?>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
-                                                    <?= htmlspecialchars($line['batch_number'] ?: '-') ?><br>
-                                                    <small><?= htmlspecialchars($line['expiration_date'] ?: '-') ?></small>
+                                                    <?= htmlspecialchars($line['batch_number'] ?: 'Not recorded') ?><br>
+                                                    <small><?= htmlspecialchars($line['expiration_date'] ?: 'Not recorded') ?></small>
                                                 </td>
                                                 <td>
                                                     <?php if (!empty($line['pullout_id'])): ?>

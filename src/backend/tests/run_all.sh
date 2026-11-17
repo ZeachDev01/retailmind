@@ -26,7 +26,9 @@ php src/backend/tests/consolidated_sql_integration.php
 php src/backend/tests/procurement_schema_integration.php
 php -d max_input_vars=1000 src/backend/tests/receiving_submission_contract.php
 php src/backend/tests/known_receiving_cost_mysql_test.php
+php src/backend/tests/batch_receiving_mysql_test.php
 node src/backend/tests/known_receiving_cost_browser_test.js
+node src/backend/tests/inline_receiving_browser_test.js
 php src/backend/tests/role_capability_policy_contract.php
 php src/backend/tests/backup_workflow_route_contract.php
 php src/backend/tests/scheduled_backup_schedule_contract.php

@@ -273,6 +273,13 @@
 .receiving-review-quantities dt { font-size: .75rem; color: var(--muted); }
 .receiving-review-quantities dd { margin: .25rem 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
 .receiving-review-details { margin: .875rem 0 0; font-size: .8125rem; color: var(--muted); }
+.receiving-group-heading, .receiving-review-product > h3 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem; margin: 0; padding: 1rem 1.25rem; background: var(--theme-surface-soft, #f8fafc); border-bottom: 1px solid var(--border); }
+.receiving-group-heading h3, .receiving-review-product > h3 { font-size: 1rem; overflow-wrap: anywhere; }
+.receiving-group-heading h3 { margin: 0; }
+.receiving-group-total { font-size: .875rem; font-variant-numeric: tabular-nums; }
+.receiving-product-group .add-receiving-batch { margin: .75rem 1.25rem 1.25rem; }
+.receiving-product-group + .receiving-product-group, .receiving-review-product + .receiving-review-product { border-top: 1px solid var(--border); }
+.receiving-current-cost { margin: 0; padding: 1rem 1.25rem; }
 @media (max-width: 1100px) {
     .stock-receiving-page .receiving-form { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
     .receiving-line .form-grid,

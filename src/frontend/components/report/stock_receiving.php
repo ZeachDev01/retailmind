@@ -472,7 +472,8 @@ async function identifyReceivingProduct(code) {
             targetMode = 'packs';
         }
 
-        const existingRow = Array.from(lineContainer.children).find(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id));
+        const existingGroup = productGroup(product.product_id);
+        const existingRow = existingGroup?.lastEdited?.isConnected ? existingGroup.lastEdited : existingGroup?.querySelector('.receiving-line');
         if (existingRow) {
             if (!isLineTouched(existingRow) && !existingRow.dataset.modeEdited) {
                 const modeSelect = existingRow.querySelector('[data-field="quantity_mode"]');
@@ -662,13 +663,12 @@ function getLineQuantities(row, prod) {
 }
 
 function refreshDelivery() {
-    let products = 0, accepted = 0, cost = 0;
-    for (const row of lineContainer.children) {
+    let products = lineContainer.children.length, accepted = 0, cost = 0;
+    for (const row of receivingRows()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
         if (!prodId || !prod) continue;
-        products++;
         const quantities = getLineQuantities(row, prod);
         accepted += quantities.accepted;
         const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
@@ -683,6 +683,7 @@ function refreshDelivery() {
     if (emptyState) {
         emptyState.hidden = products > 0 || step === 3;
     }
+    refreshGroups();
     renderCatalog();
 }
 
@@ -715,7 +716,7 @@ function getStockState(quantityOnHand, reorderLevel, safetyStock) {
 
 function renderCatalog() {
     const query = productSearchScan.value.trim().toLowerCase();
-    const selected = new Set(Array.from(lineContainer.children, row => row.querySelector('[data-field="product_id"]').value));
+    const selected = new Set(Array.from(receivingRows(), row => row.querySelector('[data-field="product_id"]').value));
     const matches = productsCatalog.filter(p => {
         const matchesCategory = selectedCategory === 'all' || String(p.category_id || '') === selectedCategory;
         const matchesQuery = !query || [
@@ -840,24 +841,63 @@ function renderCatalog() {
     if (statusEl) statusEl.textContent = countStatus;
 }
 
+function receivingRows() {
+    return Array.from(lineContainer.querySelectorAll('.receiving-line'));
+}
+
+function productGroup(productId) {
+    return Array.from(lineContainer.children).find(group => group.dataset.productId === String(productId));
+}
+
+function effectiveCost(row) {
+    const product = productMap.get(row.dataset.productId);
+    const price = row.querySelector('[data-field="cost_price"]').value.trim()
+        || (knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '');
+    return /^\d{1,8}(?:\.\d{1,2})?$/.test(price) ? Number(price).toFixed(2) : '';
+}
+
+function groupCosts(group) {
+    return [...new Set(Array.from(group.querySelectorAll('.receiving-line'), effectiveCost).filter(value => value !== ''))];
+}
+
+function refreshGroups() {
+    for (const group of lineContainer.children) {
+        const rows = Array.from(group.querySelectorAll('.receiving-line'));
+        const product = productMap.get(group.dataset.productId);
+        group.querySelector('.receiving-group-total').textContent = rows.reduce((sum, row) => sum + getLineQuantities(row, product).accepted, 0) + ' accepted units';
+        const choice = group.querySelector('.current-product-cost');
+        const costs = groupCosts(group);
+        if (!costs.includes(choice.value)) { choice.value = ''; group.dataset.choiceExplicit = ''; }
+        if (costs.length === 1) choice.value = costs[0];
+        else if (group.dataset.choiceExplicit !== 'true') choice.value = '';
+    }
+}
+
 function renumberLines() {
     clearReceivingErrors();
-    const rows = Array.from(lineContainer.children);
-    const total = rows.length;
+    const rows = receivingRows();
+    for (const [groupIndex, group] of Array.from(lineContainer.children).entries()) {
+        group.querySelector('.current-product-cost').name = `lines[${groupIndex}][current_product_cost]`;
+    }
     for (const [index, row] of rows.entries()) {
-        const lineNum = index + 1;
+        const group = row.closest('.receiving-product-group');
+        const siblings = Array.from(group.querySelectorAll('.receiving-line'));
+        const allocationIndex = siblings.indexOf(row);
+        const groupIndex = Array.from(lineContainer.children).indexOf(group);
+        const lineNum = allocationIndex + 1;
+        const total = siblings.length;
         const numEl = row.querySelector('.line-number');
-        if (numEl) numEl.textContent = lineNum;
+        if (numEl) numEl.textContent = index + 1;
         row.setAttribute('aria-label', 'Product line ' + lineNum);
 
         const upBtn = row.querySelector('.move-line-up');
         if (upBtn) {
-            upBtn.disabled = index === 0 || !canReceive;
+            upBtn.disabled = (allocationIndex === 0 && !group.previousElementSibling) || !canReceive;
             upBtn.setAttribute('aria-label', `Move line ${lineNum} up`);
         }
         const downBtn = row.querySelector('.move-line-down');
         if (downBtn) {
-            downBtn.disabled = index === total - 1 || !canReceive;
+            downBtn.disabled = (allocationIndex === total - 1 && !group.nextElementSibling) || !canReceive;
             downBtn.setAttribute('aria-label', `Move line ${lineNum} down`);
         }
         const removeBtn = row.querySelector('.remove-receiving-line');
@@ -868,7 +908,9 @@ function renumberLines() {
         for (const field of row.querySelectorAll('[data-field]')) {
             field.id = index === 0 ? field.dataset.field : field.dataset.field + '_' + index;
             if (field.hasAttribute('name')) {
-                field.name = `lines[${index}][${field.dataset.field}]`;
+                field.name = ['product_id', 'pullout_id'].includes(field.dataset.field)
+                    ? `lines[${groupIndex}][${field.dataset.field}]`
+                    : `lines[${groupIndex}][allocations][${allocationIndex}][${field.dataset.field}]`;
             }
         }
         for (const label of row.querySelectorAll('label[for]')) {
@@ -881,13 +923,14 @@ function renumberLines() {
         if (costPrice && costHint) costPrice.setAttribute('aria-describedby', costHint.id);
     }
     if (activeLine && !activeLine.isConnected) {
-        activeLine = lineContainer.lastElementChild || null;
+        activeLine = receivingRows().at(-1) || null;
     }
     refreshDelivery();
 }
 
 function activateLine(row) {
     activeLine = row;
+    row.closest('.receiving-product-group').lastEdited = row;
 }
 
 function restoreField(field, value) {
@@ -924,8 +967,10 @@ function connectLine(row) {
 
     row.querySelector('.move-line-up')?.addEventListener('click', () => {
         const prev = row.previousElementSibling;
-        if (prev) {
-            lineContainer.insertBefore(row, prev);
+        const group = row.closest('.receiving-product-group');
+        if (prev || group.previousElementSibling) {
+            if (prev) row.parentElement.insertBefore(row, prev);
+            else lineContainer.insertBefore(group, group.previousElementSibling);
             renumberLines();
             const upBtn = row.querySelector('.move-line-up');
             if (upBtn && !upBtn.disabled) upBtn.focus();
@@ -935,8 +980,10 @@ function connectLine(row) {
 
     row.querySelector('.move-line-down')?.addEventListener('click', () => {
         const next = row.nextElementSibling;
-        if (next) {
-            lineContainer.insertBefore(next, row);
+        const group = row.closest('.receiving-product-group');
+        if (next || group.nextElementSibling) {
+            if (next) row.parentElement.insertBefore(next, row);
+            else lineContainer.insertBefore(group.nextElementSibling, group);
             renumberLines();
             const downBtn = row.querySelector('.move-line-down');
             if (downBtn && !downBtn.disabled) downBtn.focus();
@@ -946,13 +993,15 @@ function connectLine(row) {
 
     row.querySelector('.remove-receiving-line')?.addEventListener('click', () => {
         if (isLineTouched(row)) {
-            if (!window.confirm('Remove this product and its entered receiving details?')) return;
+            if (!window.confirm('Remove this batch and its entered receiving details?')) return;
         }
         activeScanLookup++;
         if (scanLookupController) scanLookupController.abort();
+        const group = row.closest('.receiving-product-group');
         row.remove();
+        if (!group.querySelector('.receiving-line')) group.remove();
         document.getElementById('entry_status').textContent = '';
-        activeLine = lineContainer.lastElementChild || null;
+        activeLine = receivingRows().at(-1) || null;
         renumberLines();
         if (lineContainer.children.length === 0) {
             if (step !== 1) showStep(1);
@@ -996,7 +1045,7 @@ function connectLine(row) {
     });
     row.addEventListener('dragend', () => {
         draggedRow = null;
-        for (const child of lineContainer.children) {
+        for (const child of receivingRows()) {
             child.classList.remove('is-dragging', 'drag-over-above', 'drag-over-below');
         }
     });
@@ -1022,10 +1071,16 @@ function connectLine(row) {
         if (!draggedRow || draggedRow === row) return;
         const isAbove = row.classList.contains('drag-over-above');
         row.classList.remove('drag-over-above', 'drag-over-below');
+        if (draggedRow.parentElement !== row.parentElement) {
+            const group = row.closest('.receiving-product-group');
+            lineContainer.insertBefore(draggedRow.closest('.receiving-product-group'), isAbove ? group : group.nextElementSibling);
+            renumberLines();
+            return;
+        }
         if (isAbove) {
-            lineContainer.insertBefore(draggedRow, row);
+            row.parentElement.insertBefore(draggedRow, row);
         } else {
-            lineContainer.insertBefore(draggedRow, row.nextElementSibling);
+            row.parentElement.insertBefore(draggedRow, row.nextElementSibling);
         }
         renumberLines();
     });
@@ -1036,7 +1091,17 @@ function knownProductCost(product) {
         && (Number(product.cost_price) > 0 || Number(product.cost_known) === 1);
 }
 
-function addReceivingLine(values = {}) {
+function addReceivingLine(values = {}, allocation = false) {
+    if (Array.isArray(values.allocations)) {
+        for (const batch of values.allocations) addReceivingLine({...batch, product_id: values.product_id, pullout_id: values.pullout_id}, true);
+        const group = productGroup(values.product_id);
+        if (group) {
+            group.querySelector('.current-product-cost').value = values.current_product_cost || '';
+            group.dataset.choiceExplicit = values.current_product_cost ? 'true' : '';
+        }
+        refreshDelivery();
+        return group;
+    }
     const productId = String(values.product_id || values.productId || '');
     if (!productId) return null;
     let product = productMap.get(productId);
@@ -1045,8 +1110,35 @@ function addReceivingLine(values = {}) {
         productMap.set(productId, product);
     }
 
-    if (Array.from(lineContainer.children).some(r => r.querySelector('[data-field="product_id"]').value === productId)) {
-        return null;
+    let group = productGroup(productId);
+    if (group && !allocation) return null;
+    if (!group) {
+        group = document.createElement('section');
+        group.className = 'receiving-product-group';
+        group.dataset.productId = productId;
+        const heading = document.createElement('div');
+        heading.className = 'receiving-group-heading';
+        const title = document.createElement('h3');
+        title.textContent = product.product_name;
+        const total = document.createElement('span');
+        total.className = 'receiving-group-total';
+        heading.append(title, total);
+        const batches = document.createElement('div');
+        batches.className = 'receiving-allocations';
+        const choice = document.createElement('input');
+        choice.type = 'hidden';
+        choice.className = 'current-product-cost';
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'btn btn-secondary add-receiving-batch';
+        add.textContent = 'Add another batch';
+        add.disabled = !canReceive;
+        add.addEventListener('click', () => {
+            const row = addReceivingLine({product_id: productId, pullout_id: group.querySelector('[data-field="pullout_id"]').value}, true);
+            visibleQuantityInput(row)?.focus();
+        });
+        group.append(heading, batches, choice, add);
+        lineContainer.append(group);
     }
 
     const row = lineTemplate.content.firstElementChild.cloneNode(true);
@@ -1071,7 +1163,7 @@ function addReceivingLine(values = {}) {
         }
     }
 
-    lineContainer.appendChild(row);
+    group.querySelector('.receiving-allocations').appendChild(row);
     connectLine(row);
     activateLine(row);
     renumberLines();
@@ -1096,6 +1188,10 @@ function addReceivingLine(values = {}) {
             badgeId.textContent = pulloutInput.value;
             badge.style.display = 'inline-block';
         }
+    }
+    if (values.current_product_cost !== undefined) {
+        group.querySelector('.current-product-cost').value = values.current_product_cost;
+        group.dataset.choiceExplicit = values.cost_choice_explicit || '';
     }
     updateQuantityMode(row);
     updateExtrasDisclosure(row);
@@ -1147,14 +1243,14 @@ function showStep(next, focus = true) {
 
 function validateProducts() {
     clearReceivingErrors();
-    const rows = Array.from(lineContainer.children);
+    const rows = receivingRows();
     if (rows.length === 0) {
         document.getElementById('entry_status').textContent = 'Add at least one product before continuing.';
         productSearchScan.focus();
         return false;
     }
-    const products = rows.map(row => row.querySelector('[data-field="product_id"]')?.value).filter(Boolean);
-    const valid = products.length === rows.length && new Set(products).size === products.length;
+    const products = Array.from(lineContainer.children).map(row => row.querySelector('[data-field="product_id"]')?.value).filter(Boolean);
+    const valid = products.length === lineContainer.children.length && new Set(products).size === products.length;
     document.getElementById('entry_status').textContent = valid ? '' : 'Add at least one product before continuing.';
     if (!valid) {
         productSearchScan.focus();
@@ -1198,7 +1294,7 @@ function receivingError(field, message) {
 function validateQuantities() {
     clearReceivingErrors();
     if (!canReceive) return true;
-    for (const [index, row] of Array.from(lineContainer.children).entries()) {
+    for (const [index, row] of receivingRows().entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
@@ -1265,9 +1361,20 @@ function validateQuantities() {
 }
 
 function renderReview() {
+    refreshGroups();
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
-    for (const row of lineContainer.children) {
+    const reviewGroups = new Map();
+    for (const [index, group] of Array.from(lineContainer.children).entries()) {
+        const section = document.createElement('section');
+        section.className = 'receiving-review-product';
+        const heading = document.createElement('h3');
+        heading.textContent = productMap.get(group.dataset.productId).product_name + ' · ' + group.querySelector('.receiving-group-total').textContent;
+        section.append(heading);
+        review.append(section);
+        reviewGroups.set(group.dataset.productId, section);
+    }
+    for (const row of receivingRows()) {
         const product = productMap.get(row.querySelector('[data-field="product_id"]').value);
         row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
         row.querySelector('[data-field="review_conversion"]').value = reviewConversion(row, product);
@@ -1284,7 +1391,7 @@ function renderReview() {
         shared.textContent = sharedDetails.join(' · ');
         review.append(shared);
     }
-    for (const [index, row] of Array.from(lineContainer.children).entries()) {
+    for (const [index, row] of receivingRows().entries()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
@@ -1294,7 +1401,7 @@ function renderReview() {
         header.className = 'receiving-review-header';
         const identity = document.createElement('div');
         const title = document.createElement('h3');
-        title.textContent = prod?.product_name || 'Product ' + (index + 1);
+        title.textContent = 'Batch ' + (Array.from(row.parentElement.children).indexOf(row) + 1);
         identity.append(title);
         if (prod?.sku) {
             const sku = document.createElement('span');
@@ -1356,7 +1463,38 @@ function renderReview() {
             detailText.textContent = details.join(' · ');
             section.append(detailText);
         }
-        review.append(section);
+        reviewGroups.get(String(prodId)).append(section);
+    }
+    for (const [index, group] of Array.from(lineContainer.children).entries()) {
+        const section = reviewGroups.get(group.dataset.productId);
+        const costs = groupCosts(group);
+        const choice = group.querySelector('.current-product-cost');
+        const container = document.createElement('div');
+        container.className = 'form-group receiving-current-cost';
+        if (costs.length > 1) {
+            const label = document.createElement('label');
+            const select = document.createElement('select');
+            select.id = 'current_product_cost_' + index;
+            label.htmlFor = select.id;
+            label.textContent = 'Current product cost';
+            select.add(new Option('Choose a batch cost', ''));
+            for (const cost of costs) {
+                const batches = Array.from(group.querySelectorAll('.receiving-line'))
+                    .flatMap((row, n) => effectiveCost(row) === cost ? ['Batch ' + (n + 1)] : []);
+                select.add(new Option('₱' + cost + ' / base unit · ' + batches.join(', '), cost));
+            }
+            select.value = choice.value;
+            select.addEventListener('change', () => {
+                choice.value = select.value;
+                group.dataset.choiceExplicit = select.value ? 'true' : '';
+                clearReceivingErrors();
+                window.RetailMindInventoryDrafts?.keep(form);
+            });
+            container.append(label, select);
+        } else {
+            container.textContent = costs.length ? 'Current product cost: ₱' + costs[0] + ' / base unit' : 'Current product cost unchanged · Cost not recorded';
+        }
+        section.append(container);
     }
 }
 
@@ -1382,7 +1520,7 @@ document.getElementById('receiving_next').addEventListener('click', async () => 
         if (!Array.isArray(catalog.products)) throw new Error('Catalog unavailable');
         const fresh = new Map(catalog.products.map(product => [String(product.product_id), product]));
         let changed = false;
-        for (const row of lineContainer.children) {
+        for (const row of receivingRows()) {
             const id = row.querySelector('[data-field="product_id"]').value;
             const prior = productMap.get(id), current = fresh.get(id);
             if (!current) { prior.unavailable = true; changed = true; continue; }
@@ -1415,14 +1553,14 @@ renderCatalog();
 renumberLines();
 
 const receivingDraftObserver = new MutationObserver(() => RetailMindInventoryDrafts?.keep(form));
-receivingDraftObserver.observe(lineContainer, {childList: true});
+receivingDraftObserver.observe(lineContainer, {childList: true, subtree: true});
 window.addEventListener('pagehide', () => receivingDraftObserver.disconnect(), {once: true});
 window.RetailMindInventoryDrafts?.register({
     eligible: candidate => candidate === form,
     submissionKind: () => 'receiving',
     capture(draft) {
-        draft.context = {...draft.context, step, lines: Array.from(lineContainer.children, row => ({...Object.fromEntries(
-            Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || ''}))};
+        draft.context = {...draft.context, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
+            Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || '', current_product_cost: row.closest('.receiving-product-group').querySelector('.current-product-cost').value, cost_choice_explicit: row.closest('.receiving-product-group').dataset.choiceExplicit || ''}))};
     },
     prepare(draft) {
         const lines = draft.context.lines || [];
@@ -1433,13 +1571,18 @@ window.RetailMindInventoryDrafts?.register({
         }
         for (const line of linesWithExcludedQuantity) {
             for (const name of ['received_qty', 'received_packages', 'received_packs', 'received_loose']) line[name] = '';
+            line.quantity_counts = '';
         }
         draft.values = draft.values.filter(item => {
-            const match = item.name.match(/^lines\[(\d+)\]\[(received_qty|received_packages|received_packs|received_loose)\]$/);
-            return !match || !linesWithExcludedQuantity.includes(lines[Number(match[1])]);
+            const match = item.name.match(/^lines\[(\d+)\](?:\[allocations\]\[(\d+)\])?\[(received_qty|received_packages|received_packs|received_loose|quantity_counts)\]$/);
+            if (!match) return true;
+            const productIds = [...new Set(lines.map(line => line.product_id))];
+            const line = match[2] === undefined ? lines[Number(match[1])]
+                : lines.filter(line => line.product_id === productIds[Number(match[1])])[Number(match[2])];
+            return !linesWithExcludedQuantity.includes(line);
         });
         lineContainer.replaceChildren();
-        for (const line of lines) addReceivingLine(line);
+        for (const line of lines) addReceivingLine(line, draft.context.allocations === true);
         if (linesWithExcludedQuantity.length > 0) {
             document.getElementById('entry_status').textContent = 'A saved draft used damaged or rejected quantities. Enter the good quantities received again; your draft is still kept.';
         }
@@ -1473,6 +1616,13 @@ form.addEventListener('submit', event => {
         return;
     }
     if (!validateQuantities()) { event.preventDefault(); return; }
+    for (const [index, group] of Array.from(lineContainer.children).entries()) {
+        if (groupCosts(group).length > 1 && !group.querySelector('.current-product-cost').value) {
+            event.preventDefault();
+            receivingError(document.getElementById('current_product_cost_' + index), 'Choose Current product cost from the batches.');
+            return;
+        }
+    }
     saving = true;
     try {
         sessionStorage.removeItem('retailmind_replenishment_snapshot');

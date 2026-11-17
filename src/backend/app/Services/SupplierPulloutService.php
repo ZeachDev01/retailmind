@@ -280,6 +280,9 @@ class SupplierPulloutService
             ? 'COALESCE(SUM(sr.accepted_packs), 0) AS total_replaced_packs, COALESCE(SUM(sr.accepted_loose), 0) AS total_replaced_loose,'
             : '0 AS total_replaced_packs, COALESCE(SUM(sr.accepted_qty), 0) AS total_replaced_loose,';
         $productPackSelect = $hasProductPackSize ? 'p.pack_size,' : 'NULL AS pack_size,';
+        $receiptIdentity = isset($srCols['group_id'])
+            ? "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END"
+            : 'sr.receiving_id';
 
         $sql = "SELECT sp.pullout_id, sp.product_id, sp.batch_id, sp.quantity, {$pulloutFormSelect} sp.reason,
                        sp.supplier, sp.pulled_by, sp.pulled_at, sp.notes,
@@ -287,7 +290,7 @@ class SupplierPulloutService
                        pb.batch_number, pb.expiration_date,
                        COALESCE(SUM(sr.accepted_qty), 0) AS total_replaced_qty,
                        {$receivingFormSelect}
-                       COUNT(sr.receiving_id) AS replacement_count,
+                       COUNT(DISTINCT {$receiptIdentity}) AS replacement_count,
                        u.display_name AS pulled_by_name
                 FROM supplier_pullouts sp
                 JOIN products p ON sp.product_id = p.product_id

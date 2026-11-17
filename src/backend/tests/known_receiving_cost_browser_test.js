@@ -90,7 +90,7 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱0.00/);
-        await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
+        await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('body').innerText(), /Receiving entry saved/);
         await page.goto(origin + '/components/report/receiving_history.php');
         await page.locator('.receiving-entry-card summary').first().click();

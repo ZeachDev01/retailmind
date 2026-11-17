@@ -1498,6 +1498,9 @@ DROP TABLE IF EXISTS `stock_receiving`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `stock_receiving` (
   `receiving_id` int(11) NOT NULL AUTO_INCREMENT,
+  `quantity_mode` varchar(20) DEFAULT NULL,
+  `cost_source` varchar(20) DEFAULT NULL,
+  `current_product_cost` decimal(10,2) DEFAULT NULL,
   `group_id` int(11) DEFAULT NULL,
   `product_id` int(11) NOT NULL,
   `received_qty` int(11) NOT NULL,
