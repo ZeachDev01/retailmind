@@ -332,7 +332,6 @@ html[data-theme="dark"] .analytics-tab.is-active {
 .stock-receiving-page .message { border-color:var(--border); border-radius:10px; }
 .stock-receiving-page .message.success { background:var(--theme-success-surface, #dcfce7); color:var(--theme-success-text, #166534); }
 .stock-receiving-page .message.error { background:var(--theme-danger-surface, #fee2e2); color:var(--theme-danger-text, #991b1b); }
-.receiving-form[data-step="1"] .receiving-quantity,
 .receiving-form[data-step="3"] .receiving-quantity,
 .receiving-form [hidden] {
     display: none !important;

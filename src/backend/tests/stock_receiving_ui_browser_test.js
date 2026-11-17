@@ -57,18 +57,18 @@ function fixture(action) {
         const navbar = await page.locator('.sidebar').innerHTML();
         assert.equal(await page.locator('.receiving-category-tile[data-category="all"]').getAttribute('aria-pressed'), 'true');
         assert.match(await page.locator('.receiving-category-tile[data-category="all"]').innerText(), /All/);
-        assert.equal(await page.locator('.receiving-catalog').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 3, '3-column responsive card grid');
+        assert.equal(await page.locator('.receiving-catalog').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2, '2-column responsive card grid');
         const firstCard = page.locator('.receiving-card').first();
         assert.match(await firstCard.locator('.receiving-card-stock').innerText(), /in stock|Out of stock|Low stock/);
         assert.match(await firstCard.locator('.receiving-card-pack').innerText(), /1 case = 24 pieces|1 package = 1 piece/);
-        assert.match(await firstCard.locator('.receiving-card-add').innerText(), /\+ Add to Delivery/);
+        assert.match(await firstCard.locator('.receiving-card-add').innerText(), /Add to delivery/);
         assert.equal(await firstCard.locator('.receiving-card-add').isDisabled(), false, 'depleted and in-stock items remain enabled for receiving replenishment');
         assert.equal(await page.locator('#summary_products').innerText(), '0');
-        assert.match(await page.locator('.receiving-accepted').innerText(), /Products added/);
+        assert.match(await page.locator('.receiving-accepted').innerText(), /Products/);
         // Verification 1: Empty start state and removal of dropdown / "Add another product" button
         assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 0, 'starts with 0 delivery lines');
         assert.equal(await page.locator('#delivery_empty_state').isVisible(), true, 'empty state visible');
-        assert.match(await page.locator('#delivery_empty_state').innerText(), /No products added\. Scan a barcode or add products from the catalog\./);
+        assert.match(await page.locator('#delivery_empty_state').innerText(), /No products added yet\. Scan a barcode or add a product from the catalog\./);
         assert.equal(await page.locator('select[name="product_id"]').count(), 0, 'select dropdown removed');
         assert.equal(await page.locator('#add_receiving_line').count(), 0, 'Add another product button removed');
         await page.locator('#receiving_next').click();
@@ -143,7 +143,6 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('.line-number').innerText(), '1');
         assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
 
-        await page.locator('#receiving_next').click();
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
         await page.locator('.receiving-extras summary').first().click();
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), true, 'extras disclosure opened on summary click');
@@ -156,7 +155,7 @@ function fixture(action) {
         assert.equal(await page.locator('#summary_accepted').innerText(), '12');
         assert.equal(await page.locator('#summary_cost').innerText(), '₱42.00');
         assert.equal(await page.locator('#package_conversion').innerText(), 'Accepted: 12 units.');
-        assert.equal(await page.locator('#receiving_back').innerText(), 'Add products');
+        assert.equal(await page.locator('#receiving_back').isVisible(), false);
         assert.equal(await page.locator('#receiving_return_products').count(), 0, 'one action returns to products');
 
         page.once('dialog', dialog => dialog.dismiss());
@@ -173,15 +172,16 @@ function fixture(action) {
         await page.goto(url);
         await page.locator('#product_search_scan').fill('Receiving test product 999');
         await page.getByRole('button', {name: 'Add Receiving test product 999', exact: true}).click();
-        await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('10');
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /Accepted/);
         assert.equal(await page.locator('#receiving_review .receiving-review-quantities dd').first().innerText(), '10 units');
         assert.equal(await page.locator('#receiving_review > p').count(), 0, 'blank receipt details stay out of review');
         assert.doesNotMatch(await page.locator('#receiving_review').innerText(), /Not supplied/);
-        assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: unknown; product cost unchanged/);
-        assert.equal(await page.locator('#receiving_back').innerText(), 'Back to quantities');
+        await page.locator('#receiving_review').waitFor({state:'visible'});
+        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱3.00 per unit/);
+        assert.equal(await page.locator('#receiving_back').innerText(), 'Back to editing');
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '3');
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
 
@@ -202,7 +202,6 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-line').count(), 1, 'unknown code preserves line');
 
         await page.goto(url + '?product_id=1');
-        await page.locator('#receiving_next').click();
         assert.equal(await page.locator('.receiving-extras').first().evaluate(el => el.open), false, 'extras disclosure collapsed by default');
         await page.locator('#received_qty').fill('10');
         await page.locator('#cost_price').evaluate(el => { el.value = 'invalid-cost'; });
@@ -216,8 +215,10 @@ function fixture(action) {
         await page.locator('#received_packages').fill('2');
         assert.equal(await page.locator('#received_qty').isDisabled(), true);
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         assert.equal(await page.locator('#receiving_review').isVisible(), true, 'inactive invalid unit quantity does not block package review');
-        assert.match(await page.locator('#receiving_review').innerText(), /48 accepted units/);
+        await page.locator('#receiving_review').waitFor({state:'visible'});
+        assert.match(await page.locator('#receiving_review').innerText(), /48 units/);
         await page.locator('#receiving_back').click();
         await page.locator('#quantity_mode').selectOption('units');
         await page.locator('#receiving_next').click();
@@ -264,7 +265,6 @@ function fixture(action) {
                         if (await page.locator('#receiving_lines .receiving-line').count() === 0) {
                             await page.locator('.receiving-card-add').first().click();
                         }
-                        await page.locator('#receiving_next').click();
                     }
                     if (step === 3) {
                         await page.locator('#received_qty').fill('5');
@@ -273,6 +273,7 @@ function fixture(action) {
                         }
                         await page.locator('#cost_price').fill('3.50');
                         await page.locator('#receiving_next').click();
+                        await page.locator('#receiving_review').waitFor({state:'visible'});
                     }
                     const layout = await page.evaluate(() => ({
                         overflow: document.documentElement.scrollWidth > innerWidth,
@@ -283,7 +284,7 @@ function fixture(action) {
                     }));
                     assert.equal(layout.overflow, false, `${theme} ${width}px step ${step}: no page overflow`);
                     assert.deepEqual(layout.unlabeled, []);
-                    assert.ok(layout.controls.every(control => control.height >= 44), `${theme} ${width}px step ${step}: 44px controls`);
+                    assert.ok(layout.controls.every(control => control.height >= 44), `${theme} ${width}px step ${step}: 44px controls ${JSON.stringify(layout.controls.filter(c => c.height < 44))}`);
                     const contrast = await page.evaluate(() => {
                         const rgb = color => color.match(/[\d.]+/g).slice(0, 3).map(Number);
                         const luminance = color => rgb(color).map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
@@ -344,7 +345,6 @@ function fixture(action) {
         await page.locator('#add_scanned_item').click();
         await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('could not be checked'));
         await page.unroute('**/product_code_lookup.php?**');
-        await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('invalid inactive units');
         await page.locator('#quantity_mode').selectOption('packages');
         await page.locator('#received_packages').fill('2');
@@ -355,16 +355,19 @@ function fixture(action) {
         await page.locator('#supplier').fill('Review test store');
         await page.locator('#invoice_number').fill('REVIEW-123');
         await page.locator('#receiving_next').click();
-        assert.equal(await page.locator('#receiving_review > p').innerText(), 'Shopping store: Review test store · Receipt: REVIEW-123');
-        assert.match(await page.locator('#receiving_review').innerText(), /Unit cost: ₱4.50 · Batch: B-99 · Expiry: 2028-06-30/);
+        await page.locator('#receiving_review').waitFor({state:'visible'});
+        assert.equal(await page.locator('#receiving_review > p').innerText(), 'Bought from: Review test store · Receipt: REVIEW-123');
+        await page.locator('#receiving_review').waitFor({state:'visible'});
+        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱4.50 per unit · Batch: B-99 · Expiry: 2028-06-30/);
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /B-99/);
         await page.getByRole('button', {name: 'Edit line 1'}).click();
-        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2');
+        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '1', 'edit line returns to editor');
         await page.locator('#receiving_next').click();
         await page.locator('[name="operation_token"]').evaluate(input => { input.value = 'invalid-ui-test'; });
-        await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
+        await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('.message.error').innerText(), /cannot be identified/);
-        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '2', 'server rejection restores to Step 2');
+        assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '1', 'server rejection restores to editor');
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'server rejection retains entered package quantity');
         assert.equal(await page.locator('#cost_price').inputValue(), '4.50', 'server rejection retains cost price');
         assert.equal(await page.locator('#batch_number').inputValue(), 'B-99', 'server rejection retains batch number');
@@ -376,14 +379,14 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         const [savedRequest] = await Promise.all([
             page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/report/stock_receiving.php')),
-            page.waitForNavigation(), page.locator('.btn-submit').click()
+            page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}), page.locator('.btn-submit').click()
         ]);
         assert.match(await page.locator('.message.success').innerText(), /48 accepted units/);
         const state = JSON.parse(fixture('inventory_state'));
         assert.ok(!state.stock_receiving.find(row => Number(row.product_id) === 1).notes, 'receipt persists no notes now that the field is removed');
         assert.equal(Number(state.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 58, 'package submission updates persisted stock once');
         const replay = await page.context().request.post(url, {form:Object.fromEntries(new URLSearchParams(savedRequest.postData()))});
-        assert.match(await replay.text(), /cannot be identified/);
+        assert.match(await replay.text(), /Receiving entry saved/);
         const replayState = JSON.parse(fixture('inventory_state'));
         assert.equal(Number(replayState.inventory.find(row => Number(row.product_id) === 1).quantity_on_hand), 58, 'replayed receipt never updates stock twice');
         await page.goto(url);
@@ -399,13 +402,13 @@ function fixture(action) {
         await touchPage.locator('.receiving-card-add').first().tap();
         await touchPage.locator('.receiving-card-add').nth(1).tap();
         assert.equal(await touchPage.locator('#receiving_lines .receiving-line').count(), 2, 'synthesized touch adds two products');
-        await touchPage.locator('#receiving_next').tap();
-        assert.equal(await touchPage.locator('.receiving-form').getAttribute('data-step'), '2');
+        assert.equal(await touchPage.locator('.receiving-form').getAttribute('data-step'), '1');
         await touchPage.locator('#received_qty').tap();
         await touchPage.locator('#received_qty').fill('1');
         await touchPage.locator('#received_qty_1').tap();
         await touchPage.locator('#received_qty_1').fill('2');
         await touchPage.locator('#receiving_next').tap();
+        await touchPage.locator('#receiving_review').waitFor({state:'visible'});
         assert.equal(await touchPage.locator('#receiving_review').isVisible(), true, 'synthesized touch completes review with multiple products');
         await touchContext.close();
         const readonlyPage = await browser.newPage();
@@ -423,8 +426,7 @@ function fixture(action) {
         assert.equal(await readonlyPage.locator('.move-line-up').isDisabled(), true, 'oversight move up disabled');
         assert.equal(await readonlyPage.locator('.move-line-down').isDisabled(), true, 'oversight move down disabled');
         assert.equal(await readonlyPage.locator('.remove-receiving-line').isDisabled(), true, 'oversight remove line disabled');
-        await readonlyPage.locator('#receiving_next').click();
-        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '2', 'oversight advances to Step 2');
+        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '1', 'oversight starts in editor');
         assert.equal(await readonlyPage.locator('#received_qty').isDisabled(), true, 'oversight quantity disabled');
         assert.equal(await readonlyPage.locator('#quantity_mode').isDisabled(), true, 'oversight mode selector disabled');
         assert.equal(await readonlyPage.locator('#expiration_date').isDisabled(), true, 'oversight expiry date disabled');
@@ -434,7 +436,7 @@ function fixture(action) {
         assert.equal(await readonlyPage.locator('#receiving_review').isVisible(), true, 'oversight review visible');
         assert.equal(await readonlyPage.locator('.btn-submit').isDisabled(), true, 'oversight submit action disabled');
         await readonlyPage.getByRole('button', {name: 'Edit line 1'}).click();
-        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '2', 'edit line jumps back to step 2 in oversight');
+        assert.equal(await readonlyPage.locator('.receiving-form').getAttribute('data-step'), '1', 'edit line returns to editor in oversight');
         await readonlyPage.close();
         assert.deepEqual(errors, []);
         fs.writeFileSync(path.join(output, 'measurements.json'), JSON.stringify({metrics, measurements, errors}, null, 2));

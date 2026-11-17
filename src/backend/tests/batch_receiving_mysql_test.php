@@ -33,7 +33,7 @@ try {
     $pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by) VALUES ('Inventory retry test', '2026-01-01', '2099-12-31', 'open', 1)");
     $products = new ProductService($pdo);
     $receiving = new ReceivingService($pdo);
-    $id = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Isolated batch loaf', 'initial_stock_quantity' => 20,
+    $id = $products->createProduct(['category_id' => 1, 'base_unit' => 'piece', 'cost_price' => 0, 'selling_price' => 20, 'product_name' => 'Isolated batch loaf', 'initial_stock_quantity' => 20, 'supplier_pullout_eligible' => 1,
         'expiration_date' => '2099-10-25'], 3);
     $receiving->receiveStock(['product_id' => $id, 'received_qty' => 30, 'expiration_date' => '2099-10-27'], 3);
     $products->purchaseStock(['search_term' => 'Isolated batch loaf', 'purchase_quantity' => 4,
@@ -48,7 +48,7 @@ try {
     $retryLines = [['product_id' => $id, 'received_qty' => 2]];
     $first = $receiving->receiveShoppingTrip($retryLines, $retryEntry, 3);
     $replayed = $receiving->receiveShoppingTrip($retryLines, $retryEntry, 3);
-    $assert($first === $replayed, 'Lost response retry must return the same saved receipt');
+    $assert(json_encode($first) === json_encode($replayed), 'Lost response retry must return the same saved receipt');
     $assert((int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = {$id}")->fetchColumn() === 56, 'Retry must add stock only once');
     $changedRejected = false;
     try { $receiving->receiveShoppingTrip([['product_id' => $id, 'received_qty' => 3]], $retryEntry, 3); }

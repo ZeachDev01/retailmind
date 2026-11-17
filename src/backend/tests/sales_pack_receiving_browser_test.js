@@ -106,8 +106,10 @@ const { chromium } = require('playwright');
 
         const line = page.locator('#receiving_lines .receiving-line').first();
         assert.ok(await line.isVisible(), 'Receiving line is added');
+        await line.locator('.receiving-extras summary').click();
         const costInput = line.locator('[data-field="cost_price"]');
-        assert.equal(await costInput.inputValue(), '10.00', 'New receiving line shows the saved product cost');
+        assert.equal(await costInput.inputValue(), '', 'New receiving line inherits cost without filling an override');
+        assert.match(await line.locator('[data-field="cost_hint"]').textContent(), /10.00/);
         assert.equal(await line.locator('[data-field="quantity_mode"]').inputValue(), 'packs', 'Default mode for pack-enabled product is packs');
 
         // 2. Enter 2 packs and 4 loose pieces
@@ -171,9 +173,9 @@ const { chromium } = require('playwright');
         });
         const isLooseFocused = await page.evaluate(() => {
             const active = document.activeElement;
-            return active && active.getAttribute('data-field') === 'received_loose';
+            return active && active.getAttribute('data-field') === 'received_qty';
         });
-        assert.ok(isLooseFocused, 'Unit barcode scan focuses received_loose entry field');
+        assert.ok(isLooseFocused, 'Untouched unit barcode scan chooses and focuses base units');
 
         console.log('Sales pack receiving browser test: all checks passed');
     } finally {

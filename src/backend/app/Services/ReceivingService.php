@@ -190,6 +190,14 @@ class ReceivingService
         if (!$product) {
             throw new RuntimeException('Active product not found.');
         }
+        $conversion = match ($quantityMode) {
+            'packages' => (string)($product['units_per_package'] ?? 0),
+            'packs' => (string)($product['pack_size'] ?? 0),
+            default => '1',
+        };
+        if (isset($data['review_conversion']) && $data['review_conversion'] !== '' && $data['review_conversion'] !== $conversion) {
+            throw new RuntimeException('Saved product conversion changed. Review this entry again before saving.');
+        }
         $fallbackCost = \App\Inventory\ProductCost::known($product) ? number_format((float)$product['cost_price'], 2, '.', '') : '';
         if ($costPrice === null && array_key_exists('cost_fallback', $data) && $data['cost_fallback'] !== $fallbackCost) {
             throw new RuntimeException('Saved product cost changed. Review this entry again before saving.');

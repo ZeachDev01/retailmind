@@ -10,6 +10,12 @@ const fixtureScript = path.join(__dirname, 'support', 'scan_workflow_fixture.php
 const receivingPath = '/components/report/stock_receiving.php';
 const historyPath = '/components/report/receiving_history.php';
 const phpBinary = process.env.PHP_BINARY || 'php';
+const database = 'retailmind_theme_test_' + require('node:crypto').randomBytes(6).toString('hex');
+const testEnv = {...process.env, DB_NAME:database, RM_THEME_TEST_DATABASE:database};
+function databaseFixture(action) {
+    const result = spawnSync(phpBinary, [path.join(__dirname, 'support', 'theme_fixture.php'), action, database], {encoding:'utf8'});
+    if (result.status !== 0) throw new Error(result.stderr || result.stdout);
+}
 
 function skip(reason) {
     console.log('Stock receiving scan browser workflow: skipped (' + reason + ')');
@@ -28,7 +34,7 @@ try {
 }
 
 function runFixture(...args) {
-    const result = spawnSync(phpBinary, [fixtureScript, ...args], { encoding: 'utf8', cwd: repoRoot });
+    const result = spawnSync(phpBinary, [fixtureScript, ...args], { encoding: 'utf8', cwd: repoRoot, env:testEnv });
     if (result.error || result.status !== 0 || !result.stdout.trim()) {
         throw new Error('Fixture failed: ' + (result.error?.message || result.stderr || result.stdout || result.status));
     }
@@ -93,12 +99,14 @@ async function selectProducts(page) {
     while (await page.locator('.receiving-form').getAttribute('data-step') !== '1') await page.locator('#receiving_back').click();
 }
 async function enterQuantities(page) {
-    if (await page.locator('.receiving-form').getAttribute('data-step') === '1') await page.locator('#receiving_next').click();
     await page.locator('.receiving-extras').evaluateAll(rows => rows.forEach(row => { row.open = true; }));
 }
 async function saveEntry(page, double = false) {
     await enterQuantities(page);
-    if (await page.locator('.receiving-form').getAttribute('data-step') === '2') await page.locator('#receiving_next').click();
+    if (await page.locator('.receiving-form').getAttribute('data-step') === '1') {
+        await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
+    }
     if (await page.locator('.receiving-form').getAttribute('data-step') !== '3') throw new Error('Cannot review: ' + await page.locator('#entry_status').innerText());
     await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), double
         ? page.evaluate(() => { const button = document.querySelector('.btn-submit'); button.click(); button.click(); })
@@ -149,12 +157,13 @@ async function main() {
     let fixture;
 
     try {
+        databaseFixture('create');
         fixture = runFixture('--create', '--token', token);
         runFixture('--seed-batches', '--token', token);
         const port = await freePort();
         const baseURL = 'http://127.0.0.1:' + port;
         server = spawn(phpBinary, ['-S', '127.0.0.1:' + port, '-t', path.join(repoRoot, 'src', 'frontend')], {
-            cwd: repoRoot,
+            env:testEnv, cwd: repoRoot,
             stdio: ['ignore', 'ignore', 'pipe']
         });
         server.stderr.resume();
@@ -228,7 +237,7 @@ async function main() {
             'Stock Receiving omits stock and replenishment actions');
 
         console.log('Shopping trip entry');
-        check(await page.getByRole('heading', { name: '1. Select products', exact: true }).isVisible(),
+        check(await page.getByRole('heading', { name: 'Receive stock', exact: true }).isVisible(),
             'receiving starts at product selection');
         if (!await page.locator('#receiving_next').count()) throw new Error('Guided receiving steps are unavailable.');
         check(await page.locator('#purchase_order_item_id, #replenishment_request_id, #scan_document_review').count() === 0,
@@ -273,12 +282,12 @@ async function main() {
         await page.goto(receivingPath);
         await scan(page, fixture.products.zero.barcode);
         await scan(page, fixture.products.zero.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Focused entry field'));
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('already added'));
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '',
             'duplicate scan preserves the existing line and never infers quantity');
         await page.locator('#receiving_next').focus();
         await page.keyboard.press('Enter');
-        check(await page.getByRole('heading', {name: '2. Enter quantities', exact: true}).isVisible(),
+        check(await page.getByRole('heading', {name: 'Receive stock', exact: true}).isVisible(),
             'keyboard continues to quantities');
         await page.locator('#receiving_next').click();
         check((await page.locator('#entry_status').innerText()).includes('positive whole-number'),
@@ -290,13 +299,13 @@ async function main() {
         await page.fill('#invoice_number', 'INV-REVIEW-' + token);
         await page.fill('#batch_number', 'BATCH-REVIEW-' + token);
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         check((await page.locator('#receiving_review').innerText()).includes('5 units')
             && (await page.locator('#receiving_review').innerText()).includes('Cost: ₱5.00 per unit'),
             'review shows accepted quantities and the saved product cost');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(before),
             'selection, quantities and review never write stock');
         await page.getByRole('button', {name: 'Edit line 1', exact: true}).click();
-        await page.locator('#receiving_back').click();
         check(await page.inputValue('#received_qty') === '5' && await page.inputValue('#supplier') === 'Reviewed shopping store',
             'edit and back preserve all draft values');
         await scan(page, 'UNKNOWN-' + token);
@@ -361,7 +370,7 @@ async function main() {
         await scan(page, fixture.products.direct.case_barcode);
         check(await eventually(page, id => document.getElementById('product_id')?.value === String(id),
             fixture.products.direct.product_id), 'a case barcode selects a product without purchasing history');
-        check(await page.locator('[data-field="cost_price"]').inputValue() === '5.00', 'receiving starts with the current product cost');
+        check(await page.locator('[data-field="cost_price"]').inputValue() === '' && (await page.locator('[data-field="cost_hint"]').textContent()).includes('5.00'), 'blank receiving cost shows the current product fallback');
         await enterQuantities(page);
         await page.fill('#cost_price', '');
         await page.fill('#received_packages', '2');
@@ -498,7 +507,7 @@ async function main() {
         } finally {
             runFixture('--open-period', '--token', token);
         }
-        const gate = spawn(phpBinary, [fixtureScript, '--hold-gate', '--token', token], { cwd: repoRoot });
+        const gate = spawn(phpBinary, [fixtureScript, '--hold-gate', '--token', token], { cwd: repoRoot, env:testEnv });
         try {
             await new Promise((resolve, reject) => {
                 gate.stdout.once('data', resolve);
@@ -657,7 +666,7 @@ async function main() {
         check(await page.locator('.receiving-line').nth(1).locator('[data-field="product_id"]').inputValue()
             === String(fixture.products.bulk_pack.product_id), 'cloned line labels remain associated with their fields');
         await scan(page, fixture.products.bulk_units.barcode);
-        check(await eventually(page, () => document.getElementById('scan_status').textContent.includes('Focused entry field'))
+        check(await eventually(page, () => document.getElementById('scan_status').textContent.includes('already added'))
             && await page.inputValue('#product_id_1') === String(fixture.products.bulk_pack.product_id)
             && await page.inputValue('#received_packages_1') === '2',
             'scanning an existing product explains duplicates and preserves both reviewed lines');
@@ -792,11 +801,10 @@ async function main() {
         await page.fill('#received_qty', '7');
         await selectProducts(page);
         await scan(page, fixture.products.bulk_units.sku);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('Focused entry field'));
+        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('already added'));
         check(await page.locator('.receiving-line').count() === 1,
             'duplicate scan focuses the existing line without adding another');
         await scan(page, fixture.products.bulk_pack.sku);
-        page.once('dialog', dialog => dialog.accept());
         await page.locator('.receiving-line').nth(1).getByRole('button', { name: /^Remove / }).click();
         check(await page.locator('.receiving-line').count() === 1 && await page.inputValue('#received_qty') === '7',
             'removing a line preserves the other entered product and quantity');
@@ -887,7 +895,7 @@ async function main() {
         const secondPort = await freePort();
         const secondURL = 'http://127.0.0.1:' + secondPort;
         secondServer = spawn(phpBinary, ['-S', '127.0.0.1:' + secondPort, '-t', path.join(repoRoot, 'src', 'frontend')], {
-            cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe']
+            env:testEnv, cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe']
         });
         secondServer.stderr.resume();
         await waitForHttp(secondURL + '/?login=1');
@@ -947,6 +955,7 @@ async function main() {
         await page.evaluate(() => window.scrollTo({top:0, left:0, behavior:'instant'}));
         await page.screenshot({ path: path.join(repoRoot, '.impeccable', 'review', 'mobile.png'), fullPage: true });
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         check(await page.locator('.btn-submit').isVisible() && !await page.locator('#supplier').isVisible()
             && (await page.locator('#receiving_review').innerText()).includes('48 units'),
             'only review exposes final save and summarizes saved case conversion');
@@ -1096,6 +1105,7 @@ async function main() {
         if (server) server.kill();
         if (secondServer) secondServer.kill();
         if (fixture) runFixture('--cleanup', '--token', token);
+        databaseFixture('cleanup');
     }
 }
 

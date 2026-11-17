@@ -3,7 +3,7 @@
 .stock-receiving-page .topbar { align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
 .stock-receiving-page .topbar h1 { font-size: clamp(1.65rem, 2vw, 2rem); letter-spacing: -.025em; }
 .stock-receiving-page .topbar p { color: var(--muted); margin: .5rem 0 0; }
-.stock-receiving-page .receiving-form { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); gap: 1rem; align-items: start; background: transparent; border: 0; padding: 0; }
+.stock-receiving-page .receiving-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, 1.2fr); gap: 1rem; align-items: start; background: transparent; border: 0; padding: 0; }
 .receiving-step-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 #receiving_selection, .delivery-editor, .receiving-summary { min-width: 0; background: var(--theme-surface, #fff); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 24px rgba(15, 23, 42, .04); }
 .receiving-form > fieldset:first-of-type { grid-column: 1; grid-row: 2 / span 2; min-width: 0; }
@@ -83,11 +83,11 @@
 .receiving-summary h3 { font-size: 1rem; margin: 0 0 1rem; }
 .receiving-summary .form-group label { font-size: .75rem; }
 .receiving-form .receiving-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; margin: 0; }
-.receiving-form .receiving-actions button { width: 100%; min-height: 40px; padding: .55rem .75rem; font-size: .875rem; font-weight: 600; line-height: 1.25; border-radius: 10px; white-space: normal; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
+.receiving-form .receiving-actions button { width: 100%; min-height: 44px; padding: .55rem .75rem; font-size: .875rem; font-weight: 600; line-height: 1.25; border-radius: 10px; white-space: normal; display: inline-flex; align-items: center; justify-content: center; text-align: center; }
 .receiving-form .receiving-actions button:only-child { grid-column: 1 / -1; }
 .receiving-form[data-step="3"] .receiving-actions { display: flex; flex-direction: column; gap: .5rem; }
 .receiving-form[data-step="3"] .receiving-actions .btn-submit { min-height: 44px; padding: .65rem .9rem; font-size: .9375rem; line-height: 1.3; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
-.receiving-form[data-step="3"] .receiving-actions #receiving_back { min-height: 36px; padding: .45rem .75rem; font-size: .8125rem; font-weight: 500; color: var(--muted, #64748b); background: transparent; border: 1px solid var(--border, #e2e8f0); }
+.receiving-form[data-step="3"] .receiving-actions #receiving_back { min-height: 44px; padding: .45rem .75rem; font-size: .8125rem; font-weight: 500; color: var(--muted, #64748b); background: transparent; border: 1px solid var(--border, #e2e8f0); }
 .receiving-form[data-step="3"] .receiving-actions #receiving_back:hover:not(:disabled) { background: var(--theme-surface-soft, #f8fafc); color: var(--text, #0f172a); border-color: var(--border-dark, #cbd5e1); }
 /* Delivery playlist */
 .delivery-empty-state {
@@ -239,6 +239,8 @@
 .receiving-form .receiving-line-heading h3 { margin: 0; }
 .receiving-line .form-section { margin-bottom: 1rem; }
 .receiving-line .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.receiving-form :is(input, select, button, summary, [tabindex]) { scroll-margin-block: 100px 24px; }
+.receiving-batch-details { margin-bottom: 1rem; }
 .receiving-line .form-section.receiving-quantity > .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .receiving-form .form-group label { font-size: .8125rem; }
 .receiving-form input, .receiving-form textarea { caret-color: var(--primary); }
@@ -282,6 +284,7 @@
     .receiving-form:not([data-step="1"]) .receiving-summary { grid-column: 1; grid-row: 3; }
 }
 @media (max-width: 767px) {
+    .receiving-form .receiving-line .receiving-batch-details { grid-template-columns: minmax(0, 1fr); }
     .stock-receiving-page .topbar { flex-wrap: wrap; }
     .stock-receiving-page .topbar h1 { font-size: 1.75rem; }
     .receiving-search-group { flex-wrap: wrap; }

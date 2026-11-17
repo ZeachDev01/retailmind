@@ -54,13 +54,16 @@ function fixture(action) {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         const url = origin + '/components/report/stock_receiving.php';
         await page.goto(url + '?product_id=1');
-        await page.locator('#receiving_next').click();
+        assert.equal(await page.locator('#received_qty').isVisible(), true, 'quantities are editable beside the catalog immediately');
+        assert.equal(await page.locator('#batch_number').isVisible(), true, 'lot does not need disclosure');
+        assert.equal(await page.locator('#expiration_date').isVisible(), true, 'expiry does not need disclosure');
         if (await page.locator('.receiving-extras').getAttribute('open') === null) await page.locator('.receiving-extras summary').click();
         assert.equal(await page.locator('#cost_price').inputValue(), '', 'legacy zero is never prefilled as intentional');
         assert.match(await page.locator('#cost_hint').innerText(), /Cost not recorded — enter cost if known/);
         await page.locator('#received_qty').fill('2');
         await page.locator('#cost_price').fill('0');
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱0/);
         await page.waitForFunction(() => Object.keys(localStorage).some(k => k.startsWith('retailmind:inventory:v1:')));
         await page.waitForTimeout(500);
@@ -68,6 +71,7 @@ function fixture(action) {
         await page.getByRole('button', {name: 'Resume', exact: true}).click();
         assert.equal(await page.locator('#cost_price').inputValue(), '0', 'explicit zero survives encrypted draft');
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱0/);
         assert.deepEqual(errors, []);
         for (const [width, theme] of [[390, 'light'], [768, 'dark'], [1440, 'light']]) {
@@ -80,11 +84,11 @@ function fixture(action) {
             await page.screenshot({path: path.join(output, `known-zero-${width}-${theme}.png`), fullPage: true});
         }
         await page.goto(url + '?product_id=2');
-        await page.locator('#receiving_next').click();
         if (await page.locator('.receiving-extras').getAttribute('open') === null) await page.locator('.receiving-extras summary').click();
         assert.match(await page.locator('#cost_hint').innerText(), /Blank uses saved cost: ₱0.00/);
         await page.locator('#received_qty').fill('1');
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱0.00/);
         await Promise.all([page.waitForNavigation(), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('body').innerText(), /Receiving entry saved/);
@@ -92,9 +96,9 @@ function fixture(action) {
         await page.locator('.receiving-entry-card summary').first().click();
         assert.match(await page.locator('body').innerText(), /₱0.00/, 'saved history preserves free goods');
         await page.goto(url + '?product_id=3');
-        await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('2');
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.equal(await page.locator('#summary_cost').innerText(), '₱10.00', 'blank positive cost uses saved fallback');
         await page.goto(origin + '/components/inventory_management/products.php');
         await page.locator('#product-add-trigger').click();

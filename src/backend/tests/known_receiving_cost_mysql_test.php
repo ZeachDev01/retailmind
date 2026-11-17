@@ -60,6 +60,14 @@ try {
         $assert(str_contains($e->getMessage(), 'Saved product cost changed'), 'Stale Review must explain how to recover');
     }
     $assert($receiving->countGroupedReceivingHistory(3) === $before, 'Stale Review must save nothing');
+    $pdo->exec("UPDATE products SET units_per_package=24 WHERE product_id=$positive");
+    try {
+        $receiving->receiveStock(['product_id' => $positive, 'quantity_mode' => 'packages', 'received_packages' => 2, 'review_conversion' => '12'], 3);
+        throw new LogicException('Stale package conversion must reject saving');
+    } catch (RuntimeException $e) {
+        $assert(str_contains($e->getMessage(), 'conversion changed'), 'Stale conversion must request another Review');
+    }
+    $assert($receiving->countGroupedReceivingHistory(3) === $before, 'Changed conversion must save nothing');
     $zeroPlan = (new \App\Services\BatchAllocationEngine($pdo))->planCombinedDemand($id, 'Free sample', 0, 1, null, 10, false, 3);
     $assert($zeroPlan['piece_batch_plan'][0]['unit_cost'] === 0.0 && $zeroPlan['piece_batch_plan'][0]['cost_status'] === 'recorded', 'Free goods retain recorded zero in allocations');
     $products->updateProductCatalogDetails($missing, ['product_name' => 'Missing sample', 'cost_price' => '20'], 3);

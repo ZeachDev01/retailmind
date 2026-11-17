@@ -64,6 +64,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Backend Services: `App\Forecasting\ReplenishmentQueueService`
 - **Stock Receiving & History**: `components/report/stock_receiving.php`, `receiving_history.php`
   - Backend Services: `App\Services\ReceivingService`
+  - Receiving keeps the catalog and inline quantities together, stacked on narrow screens, followed by Review. Lot and optional expiry stay visible; absent expiry is Not recorded. Review refreshes relevant conversions and inherited costs; the transaction checks the reviewed conversion again. Account-scoped encrypted recovery and operation tokens preserve drafts and prevent duplicate saves.
+  - Verification: `inline_receiving_browser_test.js`, `stock_receiving_ui_browser_test.js`, `stock_receiving_landscape_browser_test.js`, `stock_receiving_scan_browser_test.js`, `known_receiving_cost_mysql_test.php`, `supplier_replacement_receiving_test.php`.
 - **Inventory Control**:
   - Physical Counts: `components/inventory_management/inventory_counts.php` (`App\Services\InventoryCountService`)
   - Stock Issue Reviews: `components/inventory_management/stock_issues.php` (`App\Services\StockIssueService`)

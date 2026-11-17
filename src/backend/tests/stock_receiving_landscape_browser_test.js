@@ -48,7 +48,6 @@ function fixture(action) {
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name:'Log in', exact:true}).click()]);
         await page.goto(origin + '/components/report/stock_receiving.php');
         await page.locator('.receiving-card-add').first().click();
-        await page.locator('#receiving_next').click();
         await page.locator('#received_qty').fill('12');
         await page.locator('#supplier').fill('Landscape supplier ' + 'long-name-'.repeat(12));
         await page.locator('#invoice_number').fill('LANDSCAPE-470');
@@ -66,6 +65,7 @@ function fixture(action) {
                 assert.ok(bounds.y >= 0 && bounds.y + bounds.height <= height + 1, selector + ' can be scrolled into view: ' + JSON.stringify({width,height,bounds}));
             }
             await page.locator('#receiving_next').click();
+            await page.locator('#receiving_review').waitFor({state:'visible'});
             assert.equal(await page.locator('#receiving_review').isVisible(), true);
             await page.locator('.btn-submit').scrollIntoViewIfNeeded();
             const submit = await page.locator('.btn-submit').boundingBox();

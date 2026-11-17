@@ -248,6 +248,15 @@ if ($argv[1] === 'guidance_state') {
     echo json_encode($pdo->query('SELECT user_id, workspace, status FROM workspace_guidance ORDER BY user_id, workspace')->fetchAll(PDO::FETCH_ASSOC));
     exit;
 }
+if (in_array($argv[1], ['receiving_pack_config', 'receiving_conversion_changed', 'receiving_unavailable'], true)) {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec(match ($argv[1]) {
+        'receiving_pack_config' => "UPDATE products SET pack_size=6,pack_barcode='THEME-PACK',pack_price=150,units_per_package=24,case_barcode='THEME-CASE',receiving_unit='case' WHERE product_id=1",
+        'receiving_conversion_changed' => 'UPDATE products SET units_per_package=12,cost_price=5 WHERE product_id=1',
+        'receiving_unavailable' => "UPDATE products SET status='inactive' WHERE product_id=1",
+    });
+    exit;
+}
 if ($argv[1] === 'inventory_state') {
     $pdo->exec("USE `{$database}`");
     $state = [];

@@ -122,6 +122,12 @@ foreach ($products as &$product) {
     $product['product_image'] = product_image_url($product['product_image'] ?? null);
 }
 unset($product);
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['receiving_catalog'] ?? '') === '1') {
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+    header('Content-Type: application/json');
+    echo json_encode(['products' => $products]);
+    exit;
+}
 
 $categories = [];
 foreach ($products as $p) {
@@ -194,7 +200,7 @@ $categoryIcon = static function (string $categoryName): string {
         <?php endif; ?>
 
         <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?>>
-            <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">1. Select products</h2>
+            <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">Receive stock</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
             <fieldset class="receiving-fieldset-reset" <?= !$canReceive || !$products ? 'disabled' : '' ?>>
@@ -204,7 +210,7 @@ $categoryIcon = static function (string $categoryName): string {
                     <label for="product_search_scan">Scan barcode or search by name or SKU</label>
                     <div class="receiving-search-group">
                         <input type="search" id="product_search_scan" autocomplete="off" aria-describedby="scan_status product_search_status" placeholder="Scan barcode or search by name, SKU or barcode">
-                        <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to stock</button>
+                        <button type="button" class="btn btn-secondary" id="add_scanned_item">Add to delivery</button>
                     </div>
                     <small id="scan_status" role="status" aria-live="polite"></small>
                     <small id="product_search_status" role="status"></small>
@@ -272,6 +278,8 @@ $categoryIcon = static function (string $categoryName): string {
                     </div>
                     <input type="hidden" name="lines[0][product_id]" id="product_id" data-field="product_id" value="">
                     <input type="hidden" name="lines[0][pullout_id]" id="pullout_id" data-field="pullout_id" value="">
+                    <input type="hidden" name="review_conversion" data-field="review_conversion" value="">
+                    <input type="hidden" name="quantity_counts" data-field="quantity_counts" value="">
 
                     <div class="form-section receiving-quantity">
                         <div class="form-grid">
@@ -303,8 +311,18 @@ $categoryIcon = static function (string $categoryName): string {
                         <small class="receiving-quantity" id="package_conversion" data-field="package_conversion" role="status">Select a product to view conversion.</small>
                     </div>
 
+                    <div class="form-grid receiving-batch-details">
+                        <div class="form-group">
+                            <label for="batch_number">Batch / lot (optional)</label>
+                            <input type="text" name="batch_number" id="batch_number" data-field="batch_number" maxlength="100" placeholder="Batch #">
+                        </div>
+                        <div class="form-group">
+                            <label for="expiration_date">Expiry date (optional)</label>
+                            <input type="date" name="expiration_date" id="expiration_date" data-field="expiration_date">
+                        </div>
+                    </div>
                     <details class="receiving-quantity receiving-extras">
-                        <summary>Optional details</summary>
+                        <summary>Purchase cost</summary>
                         <div class="form-section">
                             <div class="form-grid">
                                 <div class="form-group">
@@ -313,20 +331,12 @@ $categoryIcon = static function (string $categoryName): string {
                                     <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
                                     <small id="cost_hint" data-field="cost_hint">Per base unit. Blank uses saved cost.</small>
                                 </div>
-                                <div class="form-group">
-                                    <label for="batch_number">Batch / lot</label>
-                                    <input type="text" name="batch_number" id="batch_number" data-field="batch_number" maxlength="100" placeholder="Batch #">
-                                </div>
-                                <div class="form-group">
-                                    <label for="expiration_date">Expiration date</label>
-                                    <input type="date" name="expiration_date" id="expiration_date" data-field="expiration_date">
-                                </div>
                             </div>
                         </div>
                     </details>
                 </section>
                 </template>
-                <p id="entry_status" role="alert"></p>
+                <p id="entry_status" role="alert" tabindex="-1"></p>
                 <section id="receiving_review" hidden aria-label="Review receiving entry"></section>
                 </div>
                 <section class="receiving-summary" aria-label="Delivery summary">
@@ -352,9 +362,9 @@ $categoryIcon = static function (string $categoryName): string {
                 </fieldset>
 
                 <div class="u-flex-wrap receiving-actions" id="receiving_actions">
-                    <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save receiving entry & update stock</button>
+                    <button type="submit" class="btn-submit" <?= !$canReceive ? 'disabled' : '' ?> hidden>Save receiving &amp; update stock</button>
                     <button type="button" class="btn btn-secondary" id="receiving_back" hidden>Add products</button>
-                    <button type="button" class="btn btn-primary" id="receiving_next">Continue</button>
+                    <button type="button" class="btn btn-primary" id="receiving_next">Review</button>
                 </div>
                 </div>
                 </section>
@@ -367,7 +377,7 @@ $categoryIcon = static function (string $categoryName): string {
     <div class="receiving-panel-heading"><h2 id="receiving_help_title">How to receive stock</h2><button type="button" class="btn btn-secondary" id="receiving_help_close">Close</button></div>
     <ol>
         <li><strong>Select products:</strong> scan a barcode, search by name or SKU, or choose a category and add products from the catalog.</li>
-        <li><strong>Enter quantities:</strong> continue to quantities, choose units, packages, or sealed packs, then enter the good quantities received. Add cost, batch, or expiry when needed.</li>
+        <li><strong>Enter quantities:</strong> choose units, packages, or sealed packs beside each selected product, then enter the good quantities received. Add cost, batch, or expiry when needed.</li>
         <li><strong>Review and save:</strong> check the delivery summary and receipt details, then save the entry to update stock.</li>
     </ol>
 </dialog>
@@ -385,7 +395,7 @@ receivingHelpDialog.addEventListener('click', event => { if (event.target === re
 function updateExtrasDisclosure(row) {
     const details = row?.querySelector('.receiving-extras');
     if (!details) return;
-    const hasValue = Array.from(details.querySelectorAll('input, textarea')).some(el => el.value.trim() !== '');
+    const hasValue = Array.from(details.querySelectorAll('input:not([type="hidden"]), textarea')).some(el => el.value.trim() !== '');
     if (hasValue || details.querySelector('[aria-invalid="true"]')) {
         details.open = true;
     }
@@ -397,8 +407,6 @@ const productCodeScan = productSearchScan;
 const productSearch = productSearchScan;
 let activeScanLookup = 0;
 let scanLookupController = null;
-let scanInputTimer = null;
-let lastScanInputAt = 0;
 const lineContainer = document.getElementById('receiving_lines');
 const lineTemplate = document.getElementById('receiving_line_template');
 let activeLine = null;
@@ -440,35 +448,42 @@ async function identifyReceivingProduct(code) {
             scanStatus.textContent = 'That code matches more than one product. Choose the product manually.';
             return;
         }
-        const product = result.product;
+        let product = productMap.get(String(result.product.product_id));
+        if (!product) {
+            const catalogResponse = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin'});
+            if (!catalogResponse.ok || catalogResponse.redirected) throw new Error('Catalog unavailable');
+            const catalog = await catalogResponse.json();
+            if (lookupId !== activeScanLookup) return;
+            product = catalog.products.find(item => String(item.product_id) === String(result.product.product_id));
+            if (!product) throw new Error('Product unavailable');
+        }
         const matchedPack = result.matched_code_kind === 'pack_barcode';
         const matchedCase = result.matched_code_kind === 'case_barcode';
         const hasPackConfig = Number(product.pack_size || 0) > 1;
+        if ((matchedPack && !hasPackConfig) || (matchedCase && !(Number.isInteger(Number(product.units_per_package)) && Number(product.units_per_package) > 0))) {
+            scanStatus.textContent = 'This barcode has no valid saved conversion. Ask your Administrator to correct the product, or enter its base units manually.';
+            return;
+        }
+        if (step === 3) showStep(1, false);
         let targetMode = 'units';
         if (matchedCase) {
             targetMode = 'packages';
-        } else if (matchedPack || (hasPackConfig && result.matched_code_kind === 'unit_barcode')) {
+        } else if (matchedPack && hasPackConfig) {
             targetMode = 'packs';
         }
 
         const existingRow = Array.from(lineContainer.children).find(row => row.querySelector('[data-field="product_id"]').value === String(product.product_id));
         if (existingRow) {
-            if (targetMode === 'packs' || targetMode === 'packages') {
+            if (!isLineTouched(existingRow) && !existingRow.dataset.modeEdited) {
                 const modeSelect = existingRow.querySelector('[data-field="quantity_mode"]');
                 if (modeSelect) {
                     modeSelect.value = targetMode;
                     updateQuantityMode(existingRow);
                 }
             }
-            const focusField = matchedPack
-                ? existingRow.querySelector('[data-field="received_packs"]')
-                : (matchedCase
-                    ? existingRow.querySelector('[data-field="received_packages"]')
-                    : (targetMode === 'packs'
-                        ? existingRow.querySelector('[data-field="received_loose"]')
-                        : existingRow.querySelector('[data-field="received_qty"]')));
+            const focusField = visibleQuantityInput(existingRow);
             focusField?.focus();
-            scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedPack ? 'pack barcode' : (matchedCase ? 'case barcode' : 'unit barcode')}. Focused entry field.`;
+            scanStatus.textContent = `${product.product_name} (${product.sku}) already added. Entered quantities preserved.`;
             return;
         }
 
@@ -481,13 +496,7 @@ async function identifyReceivingProduct(code) {
             quantity_mode: targetMode
         });
         if (!line) return;
-        const targetField = matchedPack
-            ? line.querySelector('[data-field="received_packs"]')
-            : (matchedCase
-                ? line.querySelector('[data-field="received_packages"]')
-                : (targetMode === 'packs'
-                    ? line.querySelector('[data-field="received_loose"]')
-                    : line.querySelector('[data-field="received_qty"]')));
+        const targetField = visibleQuantityInput(line);
         targetField?.focus();
         RetailMindUI.toast(`${product.product_name} added to delivery lines.`, 'success');
         productSearchScan.value = '';
@@ -581,6 +590,11 @@ function updatePackageConversion(row = activeLine) {
         convEl.textContent = `Accepted: ${total} units.`;
     }
     refreshDelivery();
+}
+
+function visibleQuantityInput(row) {
+    const mode = row.querySelector('[data-field="quantity_mode"]').value;
+    return row.querySelector('[data-field="' + (mode === 'packs' ? 'received_packs' : mode === 'packages' ? 'received_packages' : 'received_qty') + '"]');
 }
 
 function updateQuantityMode(row = activeLine) {
@@ -799,12 +813,13 @@ function renderCatalog() {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'btn btn-secondary receiving-card-add';
-        button.textContent = isAdded ? 'Added' : 'Add To Stock';
+        button.textContent = isAdded ? 'Added' : 'Add to delivery';
         button.setAttribute('aria-label', 'Add ' + p.product_name);
         button.disabled = isAdded;
         button.addEventListener('click', () => {
-            addReceivingLine({product_id: p.product_id});
+            const row = addReceivingLine({product_id: p.product_id});
             showStep(1, false);
+            if (row) visibleQuantityInput(row)?.focus();
         });
 
         body.append(name, meta, costStock, pack, button);
@@ -893,6 +908,8 @@ function isLineTouched(row) {
     return Boolean(
         field('received_qty')?.value.trim()
         || field('received_packages')?.value.trim()
+        || field('received_packs')?.value.trim()
+        || Number(field('received_loose')?.value || 0) !== 0
         || field('cost_price')?.value.trim()
         || field('batch_number')?.value.trim()
         || field('expiration_date')?.value.trim()
@@ -947,6 +964,7 @@ function connectLine(row) {
     });
 
     row.querySelector('[data-field="quantity_mode"]')?.addEventListener('change', () => {
+        row.dataset.modeEdited = 'true';
         activateLine(row);
         updateQuantityMode(row);
     });
@@ -1021,8 +1039,11 @@ function knownProductCost(product) {
 function addReceivingLine(values = {}) {
     const productId = String(values.product_id || values.productId || '');
     if (!productId) return null;
-    const product = productMap.get(productId);
-    if (!product) return null;
+    let product = productMap.get(productId);
+    if (!product) {
+        product = {product_id: productId, product_name: 'Unavailable product #' + productId, unavailable: true};
+        productMap.set(productId, product);
+    }
 
     if (Array.from(lineContainer.children).some(r => r.querySelector('[data-field="product_id"]').value === productId)) {
         return null;
@@ -1030,6 +1051,7 @@ function addReceivingLine(values = {}) {
 
     const row = lineTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.productId = productId;
+    if (values.mode_edited) row.dataset.modeEdited = values.mode_edited;
     row.querySelector('[data-field="product_id"]').value = productId;
     row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
     row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(product)
@@ -1037,18 +1059,7 @@ function addReceivingLine(values = {}) {
         : 'Cost not recorded — enter cost if known';
 
     const hasSalesPack = Number(product.pack_size || 0) > 1;
-    const unitsPerPkg = Number(product.units_per_package || 1);
-    const receivingUnit = product.receiving_unit || 'package';
-    const baseUnit = product.base_unit || 'piece';
-    const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
-    const packText = hasSalesPack
-        ? `1 Sales Pack = ${product.pack_size} ${baseLabel} · 1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`
-        : `1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`;
-
-    row.querySelector('.receiving-product-name').textContent = product.product_name;
-    row.querySelector('.receiving-product-sku').textContent = product.sku ? `(${product.sku})` : '';
-    row.querySelector('.receiving-product-pack').textContent = packText;
-    row.querySelector('.remove-receiving-line').setAttribute('aria-label', `Remove ${product.product_name}`);
+    updateProductIdentity(row, product);
 
     const qtyModeSelect = row.querySelector('[data-field="quantity_mode"]');
     if (qtyModeSelect) {
@@ -1065,6 +1076,13 @@ function addReceivingLine(values = {}) {
     activateLine(row);
     renumberLines();
 
+    // Inactive inputs stay disabled for saving, but their counts survive a rejected POST.
+    try {
+        const counts = JSON.parse(values.quantity_counts || '{}');
+        for (const name of ['received_qty', 'received_packages', 'received_packs', 'received_loose']) {
+            restoreField(row.querySelector('[data-field="' + name + '"]'), counts[name]);
+        }
+    } catch (_) { /* Older callers have no retained mode counts. */ }
     for (const [name, value] of Object.entries(values)) {
         if (name !== 'product_id' && value !== undefined && value !== null) {
             restoreField(row.querySelector('[data-field="' + name + '"]'), String(value));
@@ -1089,25 +1107,40 @@ function addReceivingLine(values = {}) {
     return row;
 }
 
+function updateProductIdentity(row, product) {
+    const hasSalesPack = Number(product.pack_size || 0) > 1;
+    const unitsPerPkg = Number(product.units_per_package || 1);
+    const receivingUnit = product.receiving_unit || 'package';
+    const baseUnit = product.base_unit || 'piece';
+    const baseLabel = unitsPerPkg === 1 ? baseUnit : (baseUnit.endsWith('s') ? baseUnit : baseUnit + 's');
+    const packText = hasSalesPack
+        ? `1 Sales Pack = ${product.pack_size} ${baseLabel} · 1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`
+        : `1 ${receivingUnit} = ${unitsPerPkg} ${baseLabel}`;
+
+    row.querySelector('.receiving-product-name').textContent = product.product_name;
+    row.querySelector('.receiving-product-sku').textContent = product.sku ? `(${product.sku})` : '';
+    row.querySelector('.receiving-product-pack').textContent = packText;
+    row.querySelector('.remove-receiving-line').setAttribute('aria-label', `Remove ${product.product_name}`);
+
+}
+
 function showStep(next, focus = true) {
     queueMicrotask(() => window.RetailMindInventoryDrafts?.keep(form));
-    step = next;
+    step = next === 3 ? 3 : 1;
     document.querySelector('.receiving-form').dataset.step = String(step);
-    const titles = ['1. Select products', '2. Enter quantities', '3. Review'];
-    document.getElementById('receiving_step_title').textContent = titles[step - 1];
+    document.getElementById('receiving_step_title').textContent = step === 3 ? 'Review receiving' : 'Receive stock';
     document.getElementById('receiving_selection').hidden = step !== 1;
     lineContainer.hidden = step === 3;
     const emptyState = document.getElementById('delivery_empty_state');
     if (emptyState) emptyState.hidden = lineContainer.children.length > 0 || step === 3;
     document.getElementById('receiving_review').hidden = step !== 3;
-    document.querySelector('.receiving-summary').hidden = step === 1;
+    document.querySelector('.receiving-summary').hidden = false;
     document.getElementById('delivery_title').textContent = step === 3 ? 'Check your delivery' : 'Delivery lines';
     document.getElementById('summary_status').textContent = step === 3 ? 'Review' : 'Draft';
     document.getElementById('receiving_back').hidden = step === 1;
-    document.getElementById('receiving_back').textContent = step === 2 ? 'Add products' : 'Back to quantities';
+    document.getElementById('receiving_back').textContent = 'Back to editing';
     document.getElementById('receiving_next').hidden = step === 3;
-    document.getElementById('receiving_next').textContent = step === 1 ? 'Continue' : 'Review entry';
-    (step === 1 ? document.getElementById('receiving_delivery_actions') : document.getElementById('receiving_actions')).append(document.getElementById('receiving_next'));
+    document.getElementById('receiving_next').textContent = 'Review';
     form.querySelector('.btn-submit').hidden = step !== 3;
     if (focus) document.getElementById('receiving_step_title').focus();
 }
@@ -1153,6 +1186,12 @@ function receivingError(field, message) {
     field.after(error);
     field.setAttribute('aria-invalid', 'true');
     field.setAttribute('aria-describedby', [field.getAttribute('aria-describedby'), error.id].filter(Boolean).join(' '));
+    const summary = document.getElementById('entry_status');
+    const link = document.createElement('a');
+    link.href = '#' + field.id;
+    link.textContent = summary.textContent || message;
+    link.addEventListener('click', event => { event.preventDefault(); field.focus(); });
+    summary.replaceChildren(link);
     field.focus();
 }
 
@@ -1166,7 +1205,13 @@ function validateQuantities() {
         const mode = field('quantity_mode')?.value || 'units';
         let invalid = null;
         let message = '';
-        if (mode === 'packs') {
+        if (!prod || prod.unavailable) {
+            invalid = field('quantity_mode');
+            message = 'This product is no longer available. Remove it or ask your Administrator to check it.';
+        } else if (!['units', 'packages', 'packs'].includes(mode) || (mode === 'packs' && !(Number(prod.pack_size) > 1))) {
+            invalid = field('quantity_mode');
+            message = 'Choose a supported quantity type with a saved conversion.';
+        } else if (mode === 'packs') {
             const packSize = Number(prod?.pack_size || 1);
             const receivedPacksField = field('received_packs');
             const receivedLooseField = field('received_loose');
@@ -1225,6 +1270,9 @@ function renderReview() {
     for (const row of lineContainer.children) {
         const product = productMap.get(row.querySelector('[data-field="product_id"]').value);
         row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
+        row.querySelector('[data-field="review_conversion"]').value = reviewConversion(row, product);
+        row.querySelector('[data-field="quantity_counts"]').value = JSON.stringify(Object.fromEntries(
+            ['received_qty', 'received_packages', 'received_packs', 'received_loose'].map(name => [name, row.querySelector('[data-field="' + name + '"]').value])));
     }
     const sharedDetails = [
         form.elements.supplier.value && 'Bought from: ' + form.elements.supplier.value,
@@ -1266,7 +1314,7 @@ function renderReview() {
         edit.textContent = 'Edit line ' + (index + 1);
         edit.addEventListener('click', () => {
             showStep(2, false);
-            row.scrollIntoView({behavior: 'smooth', block: 'center'});
+            row.scrollIntoView({behavior: 'instant', block: 'center'});
             const target = field('quantity_mode') || row.querySelector('input:not([type="hidden"]), select');
             target?.focus();
         });
@@ -1293,9 +1341,14 @@ function renderReview() {
         }
         const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
         const details = [
+            modeText + ': ' + (field('quantity_mode').value === 'packs'
+                ? field('received_packs').value + ' packs + ' + field('received_loose').value + ' loose; 1 pack = ' + prod.pack_size + ' base units'
+                : field('quantity_mode').value === 'packages'
+                    ? field('received_packages').value + ' packages; 1 ' + (prod.receiving_unit || 'package') + ' = ' + prod.units_per_package + ' base units'
+                    : field('received_qty').value + ' base units'),
             price ? 'Cost: ₱' + price + ' per unit' : 'Cost: Not recorded',
-            field('batch_number').value && 'Batch: ' + field('batch_number').value,
-            field('expiration_date').value && 'Expiry: ' + field('expiration_date').value,
+            'Batch: ' + (field('batch_number').value || 'Not recorded'),
+            'Expiry: ' + (field('expiration_date').value || 'Not recorded'),
         ].filter(Boolean);
         if (details.length) {
             const detailText = document.createElement('p');
@@ -1307,23 +1360,56 @@ function renderReview() {
     }
 }
 
-document.getElementById('receiving_back').addEventListener('click', () => showStep(step - 1));
-document.getElementById('receiving_next').addEventListener('click', () => {
+document.getElementById('receiving_back').addEventListener('click', () => showStep(1));
+function reviewConversion(row, product) {
+    const mode = row.querySelector('[data-field="quantity_mode"]').value;
+    return String(mode === 'packs' ? product.pack_size || 0 : mode === 'packages' ? product.units_per_package || 0 : 1);
+}
+
+let reviewing = false;
+document.getElementById('receiving_next').addEventListener('click', async () => {
+    if (reviewing) return;
     if (!validateProducts()) return;
-    if (step === 1) { showStep(2); return; }
-    if (validateQuantities()) { renderReview(); showStep(3); }
+    if (!validateQuantities()) return;
+    if (!canReceive) { renderReview(); showStep(3); return; }
+    reviewing = true;
+    const button = document.getElementById('receiving_next');
+    button.disabled = true;
+    try {
+        const response = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin', headers: {Accept: 'application/json'}});
+        if (!response.ok || response.redirected) throw new Error('Catalog unavailable');
+        const catalog = await response.json();
+        if (!Array.isArray(catalog.products)) throw new Error('Catalog unavailable');
+        const fresh = new Map(catalog.products.map(product => [String(product.product_id), product]));
+        let changed = false;
+        for (const row of lineContainer.children) {
+            const id = row.querySelector('[data-field="product_id"]').value;
+            const prior = productMap.get(id), current = fresh.get(id);
+            if (!current) { prior.unavailable = true; changed = true; continue; }
+            const inheritsCost = row.querySelector('[data-field="cost_price"]').value.trim() === '';
+            changed ||= reviewConversion(row, prior) !== reviewConversion(row, current)
+                || (inheritsCost && (knownProductCost(prior) !== knownProductCost(current) || Number(prior.cost_price) !== Number(current.cost_price)));
+            productMap.set(id, current);
+            updateProductIdentity(row, current);
+            row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(current) ? 'Blank uses saved cost: ₱' + Number(current.cost_price).toFixed(2) : 'Cost not recorded — enter cost if known';
+            updatePackageConversion(row);
+        }
+        if (!validateQuantities()) return;
+        if (changed) {
+            const status = document.getElementById('entry_status');
+            status.textContent = 'Product conversion or saved cost changed. Quantities kept. Check the updated values, then Review again.';
+            status.focus();
+            return;
+        }
+        renderReview(); showStep(3);
+    } catch (_) {
+        const status = document.getElementById('entry_status');
+        status.textContent = 'Current products could not be checked. Values kept. Check your connection and try Review again.';
+        status.focus();
+    } finally { reviewing = false; button.disabled = false; }
 });
 
-productSearchScan.addEventListener('input', () => {
-    renderCatalog();
-    const now = performance.now();
-    const isScannerBurst = now - lastScanInputAt < 80 && productSearchScan.value.trim().length >= 6;
-    lastScanInputAt = now;
-    clearTimeout(scanInputTimer);
-    if (isScannerBurst) {
-        scanInputTimer = setTimeout(() => identifyReceivingProduct(productSearchScan.value), 120);
-    }
-});
+productSearchScan.addEventListener('input', renderCatalog);
 
 renderCatalog();
 renumberLines();
@@ -1335,14 +1421,14 @@ window.RetailMindInventoryDrafts?.register({
     eligible: candidate => candidate === form,
     submissionKind: () => 'receiving',
     capture(draft) {
-        draft.context = {...draft.context, step, lines: Array.from(lineContainer.children, row => Object.fromEntries(
-            Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])))};
+        draft.context = {...draft.context, step, lines: Array.from(lineContainer.children, row => ({...Object.fromEntries(
+            Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || ''}))};
     },
     prepare(draft) {
         const lines = draft.context.lines || [];
         const linesWithExcludedQuantity = lines.filter(line => ['damaged_qty', 'damaged_packs', 'damaged_loose', 'rejected_packs', 'rejected_loose']
             .some(name => Number(line[name] || 0) > 0));
-        if (lines.some(line => !productMap.has(String(line.product_id)))) {
+        if (lines.some(line => !productMap.has(String(line.product_id)) || productMap.get(String(line.product_id)).unavailable)) {
             throw new Error('A selected Product is no longer available. Your draft is still kept; review the current catalog before resuming.');
         }
         for (const line of linesWithExcludedQuantity) {
