@@ -5255,6 +5255,7 @@ body.system-health-open {
 #create-barcode-feedback a {
     display: inline-block;
     margin-block-start: .25rem;
+    color: var(--primary);
 }
 
 @media (max-width: 720px) {
