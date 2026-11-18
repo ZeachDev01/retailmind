@@ -66,6 +66,12 @@ try {
             'manage_url' => app_url('components/inventory_management/products.php?manage_product=' . $product['product_id']),
         ];
     }
+    if ($addProduct && $barcodeKind === ProductCodeLookupService::KIND_UNIT_BARCODE && $result['outcome'] === 'unknown') {
+        require_once __DIR__ . '/../../../../backend/app/Services/OpenFoodFactsCatalog.php';
+        if (OpenFoodFactsCatalog::supports($code)) {
+            $result['catalog'] = OpenFoodFactsCatalog::lookup($code, $openFoodFactsRequest ?? null);
+        }
+    }
     echo json_encode(['success' => true] + $result, JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (Throwable $exception) {
     error_log((string)$exception);

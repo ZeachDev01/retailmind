@@ -148,6 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'brand' => $_POST['brand'] ?? '',
                 'category_id' => $_POST['category_id'] ?? '',
             ];
+            if (array_key_exists('declared_size', $_POST)) {
+                $updateData['declared_size'] = $_POST['declared_size'];
+            }
             if (isset($_POST['variant_label'])) {
                 $updateData['variant_label'] = $_POST['variant_label'];
             }
@@ -290,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
                 'brand' => $_POST['brand'] ?? '',
+                'declared_size' => $_POST['declared_size'] ?? null,
                 'category_id' => $_POST['category_id'] ?? '',
                 'cost_price' => $_POST['cost_price'] ?? '',
                 'selling_price' => $_POST['selling_price'] ?? 0,
@@ -359,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
-            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
+            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'declared_size', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
             if ($productHandoff) {
                 $retry['id'] = bin2hex(random_bytes(16));
                 $retry['values']['return_quantity_mode'] = $_POST['return_quantity_mode'] ?? '';
@@ -1603,6 +1607,14 @@ foreach ($products as $product) {
     <div id="add-product-scanner-reader"></div>
 </div>
 <div id="create-barcode-feedback" role="status" aria-atomic="true"></div>
+<div id="create-barcode-change" class="form-group" role="group" aria-labelledby="create-barcode-change-message" hidden>
+    <p id="create-barcode-change-message"></p>
+    <div class="product-create-lookup-actions">
+        <button type="button" class="btn btn-quiet" id="create-barcode-keep">Keep current barcode</button>
+        <button type="button" class="btn btn-quiet" id="create-barcode-keep-details">Keep entered details</button>
+        <button type="button" class="btn btn-quiet" id="create-barcode-start-new">Start a new draft</button>
+    </div>
+</div>
 <div id="create-print-options" hidden>
     <label class="u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" aria-controls="create-label-options"> Open printable barcode labels after saving</label>
     <div class="form-group" id="create-label-options" hidden>
@@ -1614,6 +1626,7 @@ foreach ($products as $product) {
 <div class="product-create-details">
 <div class="form-grid">
 <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
+<div class="form-group full"><label for="product-declared-size">Declared Size</label><input name="declared_size" id="product-declared-size" maxlength="100" placeholder="e.g. 330 mL"></div>
 <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
@@ -2316,7 +2329,7 @@ foreach ($products as $product) {
     ${canEditProduct ? '<p><button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button></p>' : ''}
     <div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
-        <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
+        <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Declared Size</span><strong>${escapeHtml(safe(product.declared_size))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Receiving Package Barcode</span><strong>${escapeHtml(safe(product.case_barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded'}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
@@ -2481,6 +2494,10 @@ foreach ($products as $product) {
                             <label class="form-field">
                                 <span>Brand</span>
                                 <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input">
+                            </label>
+                            <label class="form-group">
+                                <span>Declared Size</span>
+                                <input type="text" name="declared_size" id="edit-declared-size" maxlength="100" value="${escapeHtml(product.declared_size || '')}" class="form-input">
                             </label>
                             <label class="form-field">
                                 <span>Category</span>

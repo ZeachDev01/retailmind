@@ -1005,6 +1005,7 @@ CREATE TABLE `products` (
   `variant_label` varchar(100) DEFAULT NULL,
   `product_name` varchar(150) NOT NULL,
   `brand` varchar(100) DEFAULT NULL,
+  `declared_size` varchar(100) DEFAULT NULL,
   `category_id` int(11) DEFAULT NULL,
   `unit_price` decimal(10,2) NOT NULL,
   `cost_price` decimal(10,2) NOT NULL,

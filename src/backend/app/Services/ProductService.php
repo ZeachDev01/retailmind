@@ -99,6 +99,7 @@ class ProductService
         $barcode = trim((string)($data['barcode'] ?? ''));
         $productName = trim((string)($data['product_name'] ?? ''));
         $brand = trim((string)($data['brand'] ?? ''));
+        $declaredSize = self::declaredSize($data['declared_size'] ?? null);
         $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
         $enteredCost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
         $costPrice = $enteredCost ?? 0;
@@ -250,8 +251,8 @@ class ProductService
                     parent_product_id, variant_label, product_name, brand, category_id, unit_price, cost_price,
                     quantity_purchased, quantity_sold, reorder_level, supplier, preferred_supplier,
                     supplier_lead_time_days, safety_stock, minimum_order_quantity, units_per_package, base_unit, receiving_unit, expiration_date,
-                    warning_lead_time_days, supplier_pullout_eligible, product_image, status, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    warning_lead_time_days, supplier_pullout_eligible, product_image, status, created_by" . ($declaredSize === null ? "" : ", declared_size") . "
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?" . ($declaredSize === null ? "" : ", ?") . ")"
             );
             $stmt->execute([
                 $sku,
@@ -284,6 +285,7 @@ class ProductService
                 $productImage !== '' ? $productImage : null,
                 $status,
                 $userId,
+                ...($declaredSize === null ? [] : [$declaredSize]),
             ]);
             $productId = (int)$this->pdo->lastInsertId();
             $productColumns = \App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products');
@@ -1051,6 +1053,8 @@ class ProductService
 
             $brand = trim((string)($data['brand'] ?? ''));
             $brand = $brand !== '' ? $brand : null;
+            $changeSize = array_key_exists('declared_size', $data);
+            $declaredSize = self::declaredSize($data['declared_size'] ?? null);
 
             $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
             if ($categoryId !== null && $categoryId > 0) {
@@ -1212,7 +1216,8 @@ class ProductService
                      warning_lead_time_days = ?,
                      pack_size = ?,
                      pack_barcode = ?,
-                     pack_price = ?
+                     pack_price = ?" . ($changeSize ? ",
+                     declared_size = ?" : "") . "
                  WHERE product_id = ?"
             );
             $updateStmt->execute([
@@ -1232,6 +1237,7 @@ class ProductService
                 $newPackSize,
                 $newPackBarcode,
                 $newPackPrice,
+                ...($changeSize ? [$declaredSize] : []),
                 $productId,
             ]);
 
@@ -1354,6 +1360,16 @@ class ProductService
         }
 
         return $this->validateStockSetting($value, 'Expiry warning lead time', 1);
+    }
+
+    private static function declaredSize(mixed $value): ?string
+    {
+        if ($value === null) return null;
+        if (!is_string($value) || mb_strlen(trim($value)) > 100) {
+            throw new RuntimeException('Declared Size must be text of up to 100 characters.');
+        }
+        $value = trim($value);
+        return $value !== '' ? $value : null;
     }
 
     private function storeProductScope(): array
