@@ -41,13 +41,24 @@ class ProductCodeLookupService
      */
     public function lookup(string $code, bool $receiving = false): array
     {
+        return $this->resolve($code, $receiving);
+    }
+
+    /** Only an authorized Add Product request can disclose inactive matches. */
+    public function lookupForAddProduct(string $code, string $barcodeKind): array
+    {
+        return $this->resolve($code, false, $barcodeKind);
+    }
+
+    private function resolve(string $code, bool $receiving, ?string $barcodeKind = null): array
+    {
         $code = trim($code);
         if ($code === '') {
             return $this->result(self::OUTCOME_UNKNOWN, '', null, []);
         }
 
         [$scopeSql, $scopeParams] = $this->productScope();
-        $statusSql = $receiving ? '' : "AND p.status = 'active'";
+        $statusSql = $receiving || $barcodeKind !== null ? '' : "AND p.status = 'active'";
         // The match flags reuse the same comparison as the WHERE clause so the
         // reported kind always agrees with whatever the engine matched on.
         $statement = $this->pdo->prepare(
@@ -93,6 +104,9 @@ class ProductCodeLookupService
                 'quantity_on_hand' => (int)$row['quantity_on_hand'],
                 'kinds' => [],
             ];
+            if ($barcodeKind !== null) {
+                $products[$productId]['status'] = (string)$row['status'];
+            }
             $products[$productId]['kinds'] = array_values(array_unique(array_merge(
                 $products[$productId]['kinds'],
                 $this->matchedKinds($row)
@@ -121,7 +135,9 @@ class ProductCodeLookupService
         $kinds = $product['kinds'];
         unset($product['kinds']);
 
-        if ($receiving) {
+        if ($barcodeKind !== null && in_array($barcodeKind, $kinds, true)) {
+            $kinds = [$barcodeKind];
+        } elseif ($receiving || $barcodeKind !== null) {
             $barcodeKinds = array_values(array_diff($kinds, [self::KIND_SKU]));
             if (count($barcodeKinds) > 1) {
                 return $this->result(self::OUTCOME_AMBIGUOUS, $code, null, [[

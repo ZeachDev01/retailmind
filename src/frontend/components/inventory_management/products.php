@@ -1551,6 +1551,45 @@ foreach ($products as $product) {
                 <div class="rm-modal-body">
 <input type="hidden" name="creation_origin" value="<?= $receivingOrigin ? 'receiving' : 'products' ?>">
 <div id="product-create-error" role="alert" tabindex="-1" hidden></div>
+<div class="product-create-layout">
+<section class="product-create-lookup" aria-labelledby="create-barcode-heading">
+<h3 class="planning-section-title" id="create-barcode-heading">Barcode lookup</h3>
+<div class="form-group">
+    <label for="create-barcode-type">Barcode type</label>
+    <select id="create-barcode-type">
+        <option value="unit_barcode">Individual Item</option>
+        <option value="pack_barcode">Sales Pack</option>
+        <option value="case_barcode">Receiving Carton</option>
+    </select>
+</div>
+<div class="form-group" id="create-unit-lookup-field">
+    <label for="create-barcode-input">Individual Item Barcode</label>
+    <input name="barcode" id="create-barcode-input" maxlength="50" autocomplete="off" spellcheck="false" aria-describedby="create-barcode-help">
+    <small class="field-help" id="create-barcode-help">Leave blank to generate an internal barcode.</small>
+    <small class="field-error">This barcode is already used by another product.</small>
+</div>
+<div class="form-group" id="create-packaging-lookup-field" hidden>
+    <label for="create-packaging-lookup-code">Packaging Barcode</label>
+    <input id="create-packaging-lookup-code" maxlength="80" autocomplete="off" spellcheck="false">
+</div>
+<div class="product-create-lookup-actions">
+    <button type="button" class="btn btn-quiet" id="create-barcode-lookup" data-url="<?= htmlspecialchars(app_url('components/barcodeScanner/apiScanner/product_code_lookup.php')) ?>">Look up</button>
+    <button type="button" class="btn btn-quiet" id="add-product-scan-btn" aria-controls="add-product-scanner-section" aria-expanded="false"><i class="bi bi-camera" aria-hidden="true"></i> Scan</button>
+</div>
+<div id="add-product-scanner-section" hidden>
+    <button type="button" class="btn btn-quiet" id="stop-add-product-scan">Stop scanning</button>
+    <div id="add-product-scanner-reader"></div>
+</div>
+<div id="create-barcode-feedback" role="status" aria-atomic="true"></div>
+<div id="create-print-options" hidden>
+    <label class="u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" aria-controls="create-label-options"> Open printable barcode labels after saving</label>
+    <div class="form-group" id="create-label-options" hidden>
+        <label for="create-label-qty">Number of labels</label>
+        <input type="number" id="create-label-qty" name="label_quantity" value="1" min="1" max="200" disabled>
+    </div>
+</div>
+</section>
+<div class="product-create-details">
 <div class="form-grid">
 <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
 <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
@@ -1615,18 +1654,8 @@ foreach ($products as $product) {
     <p class="field-help" id="create-markup-status" role="status"></p>
 </details>
 </div>
-<div class="form-group full"><label for="create-barcode-input">Individual Item Barcode</label>
-                                <div class="u-flex-wrap"><input class="u-input-grow" name="barcode" id="create-barcode-input" maxlength="50" placeholder="Scan, enter, or leave blank"><button type="button" class="btn btn-quiet" id="add-product-scan-btn"><i class="bi bi-camera"></i> Scan</button></div><small class="field-help">RetailMind automatically creates a unique internal barcode when this is blank.</small><small class="field-error">This barcode is already used by another product.</small>
-                            </div>
-<div class="full" id="create-print-options" hidden>
-    <label class="u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" aria-controls="create-label-options"> Open printable barcode labels after saving</label>
-    <div class="form-group" id="create-label-options" hidden>
-        <label for="create-label-qty">Number of labels</label>
-        <input type="number" id="create-label-qty" name="label_quantity" value="1" min="1" max="200" disabled>
-    </div>
 </div>
-</div>
-<details class="product-create-options" id="create-receiving-options"><summary><span>Receiving package</span><span class="product-option-value" id="create-receiving-summary"></span></summary>
+<details class="product-create-options" id="create-receiving-options"<?= $receivingOrigin && !$productHandoff ? ' open' : '' ?>><summary><span>Receiving package</span><span class="product-option-value" id="create-receiving-summary"></span></summary>
 <div class="form-grid">
 <div class="form-group">
                                     <label for="product-receiving-unit">Receiving Unit</label>
@@ -1738,8 +1767,10 @@ foreach ($products as $product) {
 <div class="form-group full"><label class="u-checkbox-label" for="supplier-pullout-eligible"><input type="checkbox" id="supplier-pullout-eligible" name="supplier_pullout_eligible" value="1" aria-describedby="supplier-pullout-help"> Supplier Pullout Eligibility</label><small class="field-help" id="supplier-pullout-help">Enable only when the supplier accepts this Product for collection.</small></div>
 </div>
 </details>
+                        </div>
+                    </div>
                 </div>
-                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="product-create-reset">Reset</button><button type="submit" class="btn" id="product-create-save"<?= $productHandoff ? ' disabled' : '' ?>><i class="bi bi-check2"></i> Save Product</button></footer>
+                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="product-create-reset">Reset</button><button type="submit" class="btn" id="product-create-save"<?= $productHandoff ? ' disabled' : '' ?>><i class="bi bi-check2" aria-hidden="true"></i> Save Product</button></footer>
             </form>
         </section>
     </div>
@@ -1826,6 +1857,7 @@ foreach ($products as $product) {
     </div>
 
     <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
+    <script src="<?= htmlspecialchars(app_url('assets/js/product-create-barcode.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/product-create-barcode.js')) ?>" defer></script>
     <script>
         function knownProductCost(product) {
             return product.cost_price !== null && product.cost_price !== '' && (Number(product.cost_price) > 0 || Number(product.cost_known) === 1);
@@ -3159,6 +3191,11 @@ foreach ($products as $product) {
             if (invalid.length) {
                 event.preventDefault();
                 invalid.forEach(showProductFieldError);
+                if (invalid[0].id === 'create-barcode-input') {
+                    const type = document.getElementById('create-barcode-type');
+                    type.value = 'unit_barcode';
+                    type.dispatchEvent(new Event('change'));
+                }
                 for (let section = invalid[0].closest('details'); section; section = section.parentElement.closest('details')) {
                     section.open = true;
                 }
@@ -3167,7 +3204,7 @@ foreach ($products as $product) {
                 return;
             }
             saveButton.disabled = true;
-            saveButton.innerHTML = '<i class="bi bi-arrow-repeat"></i> Saving...';
+            saveButton.innerHTML = '<i class="bi bi-arrow-repeat" aria-hidden="true"></i> Saving...';
         });
 
         // Starting stock follows the product's Sales Pack configuration.
@@ -3418,7 +3455,7 @@ foreach ($products as $product) {
                 }
                 saving = false;
                 save.disabled = false;
-                save.innerHTML = '<i class="bi bi-check2"></i> Save Product';
+                save.innerHTML = '<i class="bi bi-check2" aria-hidden="true"></i> Save Product';
             });
             productModalOverlay.addEventListener('retailmind:overlayclose', async () => {
                 if (cancelling) return;
@@ -3484,7 +3521,10 @@ foreach ($products as $product) {
         }
 
         // Camera scan and internal barcode generation
-        const barcodeInput = document.getElementById('create-barcode-input');
+        document.addEventListener('DOMContentLoaded', () => {
+            addProductForm.barcodeLookup = RetailMindProductCreateBarcode.init(addProductForm);
+        });
+
         let productKeyboardCode = '';
         let productKeyboardAt = 0;
         let productScanQueue = Promise.resolve();
@@ -3520,6 +3560,7 @@ foreach ($products as $product) {
             const productForm = field.closest('#add-product-form, #product-edit-form');
             if (!productForm || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
             const barcodeField = ['barcode', 'case_barcode', 'pack_barcode'].includes(field.name);
+            if (productForm === addProductForm && (barcodeField || field.id === 'create-packaging-lookup-code')) return;
             const now = performance.now();
             if (event.key === 'Enter') {
                 if (barcodeField || (protectedScan?.field === field && protectedScan.count >= 3 && now - protectedScan.at < 80)) {
@@ -3566,38 +3607,6 @@ foreach ($products as $product) {
         }, true);
         window.addEventListener('blur', resetProductKeyboardScan);
         document.addEventListener('visibilitychange', resetProductKeyboardScan);
-        let productScanner = null;
-        document.getElementById('add-product-scan-btn').addEventListener('click', async () => {
-            const section = document.getElementById('add-product-scanner-section');
-            if (!window.Html5Qrcode) {
-                RetailMindUI.toast('The camera scanner library is unavailable.', 'error');
-                return;
-            }
-            section.hidden = false;
-            if (!productScanner) productScanner = new Html5Qrcode('add-product-scanner-reader');
-            try {
-                await productScanner.start({
-                    facingMode: 'environment'
-                }, {
-                    fps: 10,
-                    qrbox: {
-                        width: 250,
-                        height: 160
-                    }
-                }, async decoded => {
-                    barcodeInput.value = decoded;
-                    document.getElementById('add-product-scanner-result').textContent = `Detected: ${decoded}`;
-                    if (navigator.vibrate) navigator.vibrate(120);
-                    await productScanner.stop();
-                    section.hidden = true;
-                }, () => {});
-            } catch (error) {
-                console.error('Camera start failed:', error);
-                RetailMindUI.toast('The camera could not start. Allow camera permission for this site, or enter the code manually.', 'error', 'Camera unavailable');
-                section.hidden = true;
-            }
-        });
-
         const initialParams = new URLSearchParams(window.location.search);
         if (initialParams.get('q')) searchInput.value = initialParams.get('q');
         if (initialParams.get('category')) categoryFilter.value = initialParams.get('category');
@@ -3605,6 +3614,7 @@ foreach ($products as $product) {
         if (initialParams.get('status')) statusFilter.value = initialParams.get('status');
         applyFilters(false);
         updateBulkBar();
+        if (canEditProduct && initialParams.has('manage_product')) openProductDrawer(initialParams.get('manage_product'));
 
         // Product image preview
         const productImageInput = document.getElementById('product-image-input');
