@@ -3191,7 +3191,7 @@ foreach ($products as $product) {
             if (invalid.length) {
                 event.preventDefault();
                 invalid.forEach(showProductFieldError);
-                if (invalid[0].id === 'create-barcode-input') {
+                if (invalid[0].id === 'create-barcode-input' && invalid[0].closest('[hidden]')) {
                     const type = document.getElementById('create-barcode-type');
                     type.value = 'unit_barcode';
                     type.dispatchEvent(new Event('change'));
@@ -3522,7 +3522,7 @@ foreach ($products as $product) {
 
         // Camera scan and internal barcode generation
         document.addEventListener('DOMContentLoaded', () => {
-            addProductForm.barcodeLookup = RetailMindProductCreateBarcode.init(addProductForm);
+            addProductForm.barcodeLookup = window.RetailMindProductCreateBarcode?.init(addProductForm);
         });
 
         let productKeyboardCode = '';
@@ -3560,7 +3560,7 @@ foreach ($products as $product) {
             const productForm = field.closest('#add-product-form, #product-edit-form');
             if (!productForm || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
             const barcodeField = ['barcode', 'case_barcode', 'pack_barcode'].includes(field.name);
-            if (productForm === addProductForm && (barcodeField || field.id === 'create-packaging-lookup-code')) return;
+            if (productForm.barcodeLookup && (barcodeField || field.id === 'create-packaging-lookup-code')) return;
             const now = performance.now();
             if (event.key === 'Enter') {
                 if (barcodeField || (protectedScan?.field === field && protectedScan.count >= 3 && now - protectedScan.at < 80)) {
