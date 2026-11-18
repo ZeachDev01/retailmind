@@ -16,6 +16,8 @@ const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const output = path.resolve('output/issue-481');
 const php = process.env.PHP_BINARY || 'php';
 const env = {...process.env, BACKUP_STORAGE_PATH: fs.mkdtempSync(path.join(os.tmpdir(), 'rm-receiving-'))};
+const photoState = path.join(env.BACKUP_STORAGE_PATH, 'provider-photo.txt');
+const photoBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
 function fixture(action) {
     const result = spawnSync(php, ['src/backend/tests/support/' + (action.startsWith('receiving_code_') ? 'receiving_code_fixture.php' : action === 'create' ? 'receiving_ui_fixture.php' : 'theme_fixture.php'), action, database], {encoding: 'utf8', env});
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -24,6 +26,7 @@ function fixture(action) {
 (async () => {
     let server, browser;
     try {
+        fs.writeFileSync(photoState, 'ok');
         const data = JSON.parse(fixture('create'));
         fixture('open_fiscal_period');
         fixture('receiving_pack_config');
@@ -33,7 +36,7 @@ function fixture(action) {
         await new Promise(resolve => listener.close(resolve));
         const origin = 'http://127.0.0.1:' + port;
         server = spawn(php, ['-S', '127.0.0.1:' + port, '-t', 'src/frontend', 'src/backend/tests/support/theme_router.php'],
-            {env: {...env, RM_THEME_TEST_DATABASE: database, RM_TEST_PRODUCT_CATALOG: '1'}, stdio: ['ignore', 'ignore', 'pipe']});
+            {env: {...env, RM_THEME_TEST_DATABASE: database, RM_TEST_PRODUCT_CATALOG: '1', RM_TEST_PRODUCT_PHOTO_STATE: photoState}, stdio: ['ignore', 'ignore', 'pipe']});
         let logs = '';
         server.stderr.on('data', chunk => { logs += chunk; });
         for (let attempt = 0; attempt < 100; attempt++) {
@@ -44,6 +47,7 @@ function fixture(action) {
         browser = await chromium.launch({headless: true});
         const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
         await context.route('https://**/*', route => route.fulfill({body: ''}));
+        await context.route('https://images.openfoodfacts.org/**', route => route.fulfill({contentType:'image/png', body:photoBytes}));
         const page = await context.newPage();
         // Each navigation starts a separate scenario; draft persistence has its own test.
         await page.addInitScript(() => {
@@ -478,12 +482,27 @@ function fixture(action) {
         assert.equal(await page.locator('#product-name').inputValue(), 'Fixture Tea');
         assert.equal(await page.locator('#product-declared-size').inputValue(), '330 mL');
         assert.equal(await page.locator('#product-brand').inputValue(), 'Fixture Brand');
+        await page.getByRole('button', {name:'Remove photo', exact:true}).click();
+        await page.evaluate(() => RetailMindInventoryDrafts.keep(document.getElementById('add-product-form')));
+        await page.reload();
+        await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
+        assert.equal(await page.locator('#create-barcode-feedback').textContent(), '', 'restoring a Product draft does not rerun lookup');
+        assert.equal(await page.locator('#image-preview-container').isVisible(), false, 'a removed photo stays removed after reload');
+        await page.getByRole('button', {name:'Look up', exact:true}).click();
+        await page.locator('#create-photo-attribution').waitFor();
         await page.locator('#product-category-search').fill(category);
         await page.getByRole('option', {name:category, exact:true}).click();
         await page.locator('#cost-price').fill('4');
         await page.locator('#selling-price').fill('9');
+        fs.writeFileSync(photoState, 'missing');
         await saveProduct.click();
-        await page.waitForURL(current => current.pathname.endsWith('/stock_receiving.php') && current.searchParams.has('handoff')).catch(async error => {
+        const productPhotoRetry = page.getByRole('button', {name:'Retry photo', exact:true});
+        await productPhotoRetry.waitFor({timeout:15000});
+        assert.equal(await productBarcode.inputValue(), '012345678905');
+        assert.equal(await page.locator('#product-name').inputValue(), 'Fixture Tea');
+        fs.writeFileSync(photoState, 'ok');
+        await productPhotoRetry.click();
+        await page.waitForURL(current => current.pathname.endsWith('/stock_receiving.php') && current.searchParams.has('handoff'), {timeout:15000}).catch(async error => {
             const invalid = await page.locator('#add-product-form [aria-invalid=true]').evaluateAll(fields => fields.map(field => [field.name, field.validationMessage]));
             const message = await page.locator('#product-create-error').textContent();
             throw new Error(JSON.stringify({invalid,message,errors,url:page.url()}), {cause:error});
@@ -524,6 +543,7 @@ function fixture(action) {
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();
-        fixture('cleanup');
+        try { fixture('cleanup'); }
+        finally { fs.rmSync(env.BACKUP_STORAGE_PATH, {recursive:true, force:true}); }
     }
 })().catch(error => { console.error(error); process.exitCode = 1; });

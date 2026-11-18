@@ -3856,8 +3856,8 @@ foreach ($products as $product) {
                     syncReturnMode();
                     const lookup = addProductForm.barcodeLookup;
                     lookup?.sync();
-                    // An edited Product barcode must stay in the form until staff choose to look it up.
-                    if (!draft.retry && barcodeType.value === confirmedType && !barcodeField.disabled && barcodeField.value.trim() === originalCode) {
+                    // Restored drafts can contain deliberately cleared suggestions or photos.
+                    if (!persisted && !draft.retry && !barcodeField.disabled && barcodeField.value.trim() === originalCode) {
                         lookup?.lookup();
                     }
                     verified = true;
