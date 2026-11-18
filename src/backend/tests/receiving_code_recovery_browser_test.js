@@ -4,7 +4,8 @@ const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
 const {randomBytes} = require('node:crypto');
-const {spawn, spawnSync} = require('node:child_process');
+const {execFile, spawn, spawnSync} = require('node:child_process');
+const {promisify} = require('node:util');
 const {chromium} = require('playwright');
 
 if (process.env.RUN_DB_TESTS !== '1') {
@@ -41,7 +42,8 @@ function fixture(action) {
             if (attempt === 99) throw new Error(logs);
         }
         browser = await chromium.launch({headless: true});
-        const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+        const context = await browser.newContext({viewport: {width: 1440, height: 1000}});
+        const page = await context.newPage();
         // Each navigation starts a separate scenario; draft persistence has its own test.
         await page.addInitScript(() => {
             Object.keys(sessionStorage).filter(key => key.startsWith('receiving-draft:')).forEach(key => sessionStorage.removeItem(key));
@@ -217,6 +219,233 @@ function fixture(action) {
         await page.locator('#product_search_scan').fill('THEME-ITEM');
         await page.getByRole('button', {name:'Add Theme Test Item',exact:true}).click();
         await page.locator('#scan_package_confirmation').waitFor({state:'visible'});
+        await page.locator('#scan_cancel').click();
+        await page.locator('#supplier').fill('Original delivery');
+        await scan('ISSUE-482-CASE');
+        await page.getByLabel('Receiving case', {exact:true}).check();
+        await page.getByRole('button', {name:'Create product', exact:true}).press('Enter');
+        await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
+        assert.equal(await page.locator('#create-receiving-barcode').inputValue(), 'ISSUE-482-CASE');
+        await page.getByRole('button', {name:'Cancel', exact:true}).click();
+        await page.waitForURL('**/stock_receiving.php?*');
+        await page.waitForFunction(() => document.querySelector('#supplier').value === 'Original delivery');
+        assert.equal(await page.locator('#received_packages').inputValue(), '1');
+        assert.equal(await page.locator('#received_qty_1').inputValue(), '5');
+        assert.equal((await lookup('ISSUE-482-CASE')).outcome, 'unknown');
+        const createProduct = page.getByRole('button', {name:'Create product', exact:true});
+        await page.locator('#invoice_number').fill('RM-482');
+        await page.locator('#receiving_form [data-field="batch_number"]').nth(0).fill('Carton lot');
+        await page.locator('#receiving_form [data-field="expiration_date"]').nth(1).fill('2027-04-30');
+        await page.locator('#receiving_form .receiving-extras summary').first().click();
+        await page.locator('#receiving_form [data-field="cost_price"]').first().fill('3.10');
+        await page.locator('#receiving_next').click();
+        await page.getByLabel('Current product cost').selectOption('3.10');
+        await page.locator('#receiving_back').click();
+        await page.evaluate(() => {
+            const setItem = Storage.prototype.setItem;
+            window.allowDraftWrites = () => { Storage.prototype.setItem = setItem; };
+            Storage.prototype.setItem = function (key, value) {
+                if (this === localStorage && /:receiving-[a-f0-9]{32}$/.test(key)) throw new DOMException('Fixture quota', 'QuotaExceededError');
+                setItem.call(this, key, value);
+            };
+        });
+        await createProduct.click();
+        await page.waitForFunction(() => document.querySelector('#scan_recovery_message').textContent.includes('could not be saved'));
+        assert.equal(await page.locator('#invoice_number').inputValue(), 'RM-482');
+        await page.evaluate(() => window.allowDraftWrites());
+        await page.setViewportSize({width:390, height:844});
+        await page.emulateMedia({reducedMotion:'reduce', colorScheme:'dark'});
+        await createProduct.click();
+        const saveProduct = page.locator('#product-create-save');
+        await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
+        const handoffURL = page.url();
+        assert.equal(await page.evaluate(() => document.querySelector('.rm-modal').scrollWidth > document.querySelector('.rm-modal').clientWidth), false);
+        const handoffOutput = path.resolve('output/issue-482');
+        fs.mkdirSync(handoffOutput, {recursive:true});
+        await page.screenshot({path:path.join(handoffOutput, 'product-form-narrow.png')});
+        const [openedTab] = await Promise.all([
+            page.waitForEvent('popup'), page.evaluate(url => { window.open(url, '_blank'); }, handoffURL),
+        ]);
+        await openedTab.getByText('Open the original tab for this delivery.', {exact:false}).waitFor();
+        assert.equal(await openedTab.locator('#product-create-save').isDisabled(), true, 'an opener-cloned tab cannot use the same handoff');
+        await openedTab.close();
+        const otherTab = await page.context().newPage();
+        await otherTab.goto(handoffURL);
+        await otherTab.getByText('Open the original tab for this delivery.', {exact:false}).waitFor();
+        assert.equal(await otherTab.locator('#create-receiving-barcode').inputValue(), '');
+        assert.equal(await otherTab.locator('#product-create-save').isDisabled(), true);
+        await otherTab.goto(url);
+        await otherTab.locator('#supplier').fill('Other tab delivery');
+        const name = 'Receiving product saved as Sales Pack';
+        await page.locator('#product-name').fill(name + ' draft');
+        const category = await page.locator('#product-category option').nth(1).textContent();
+        await page.locator('#product-category-search').fill(category);
+        await page.getByRole('option', {name:category, exact:true}).click();
+        await page.locator('#cost-price').fill('4');
+        await page.locator('#selling-price').fill('9');
+        assert.equal(await page.locator('#units-per-package').inputValue(), '');
+        await Promise.all([page.waitForNavigation(), page.locator('#add-product-form').evaluate(form => form.submit())]);
+        await page.locator('#product-create-error').waitFor();
+        assert.match(await page.locator('#product-create-error').innerText(), /Enter how many individual items are in one receiving package/);
+        await page.locator('#product-name').fill(name);
+        await page.evaluate(() => RetailMindInventoryDrafts.keep(document.getElementById('add-product-form')));
+        await page.reload();
+        await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
+        assert.equal(await page.locator('#product-name').inputValue(), name, 'reload retains corrections made after the server error');
+        await page.locator('#create-receiving-barcode').fill('ISSUE-482-CHANGED-CASE');
+        await page.locator('#units-per-package').fill('12');
+        await page.locator('#create-sell-packs').check();
+        await page.locator('#create-pack-barcode').fill('ISSUE-482-FINAL-PACK');
+        await page.locator('#create-pack-size').fill('6');
+        await page.locator('#create-pack-price').fill('36');
+        await saveProduct.click();
+        await page.locator('#return-quantity-mode[aria-invalid="true"]').waitFor();
+        await page.getByLabel('Quantity type for this delivery').selectOption('packs');
+        for (const field of ['initial_stock_quantity', 'starting_packs', 'starting_loose']) {
+            await Promise.all([page.waitForNavigation(), page.locator('#add-product-form').evaluate((form, field) => {
+                form.elements[field].disabled = false;
+                form.elements[field].value = '1';
+                form.elements.creation_origin.value = 'products';
+                form.submit();
+            }, field)]);
+            await page.getByText('Starting stock must be zero', {exact:false}).waitFor();
+            assert.equal(await page.locator('#product-name').inputValue(), name);
+            assert.equal(await page.locator('#create-pack-barcode').inputValue(), 'ISSUE-482-FINAL-PACK');
+            assert.equal(await page.locator('#return-quantity-mode').inputValue(), 'packs');
+        }
+        await page.evaluate(() => {
+            const setItem = Storage.prototype.setItem;
+            window.allowProductDraftWrites = () => { Storage.prototype.setItem = setItem; };
+            Storage.prototype.setItem = function (key, value) {
+                if (this === localStorage && /:product-[a-f0-9]{32}$/.test(key)) throw new DOMException('Fixture quota', 'QuotaExceededError');
+                setItem.call(this, key, value);
+            };
+        });
+        const photo = page.locator('#product-image-input');
+        await photo.setInputFiles({name:'fixture.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVC0AAAAASUVORK5CYII=','base64')});
+        await page.route(handoffURL, route => route.request().method() === 'POST'
+            ? route.fulfill({status:422, json:{retryId:'fixture', error:'Fixture rejected product'}})
+            : route.continue());
+        await saveProduct.click();
+        await page.getByText('Fixture rejected product', {exact:true}).waitFor().catch(async error => {
+            const invalid = await page.locator('#add-product-form [aria-invalid=true]').evaluateAll(fields => fields.map(field => [field.name, field.validationMessage]));
+            const message = await page.locator('#product-create-error').textContent();
+            throw new Error(JSON.stringify({invalid,message,errors,expected:handoffURL,actual:page.url()}), {cause:error});
+        });
+        assert.equal(await photo.evaluate(field => field.files[0]?.name), 'fixture.png', 'server failure retains the photo when device storage is full');
+        await page.unroute(handoffURL);
+        await page.evaluate(() => window.allowProductDraftWrites());
+        await photo.setInputFiles([]);
+        // The product commits even while an existing delivery product is unavailable.
+        fixture('receiving_unavailable');
+        await saveProduct.click();
+        await page.waitForURL('**/stock_receiving.php?*').catch(async error => {
+            const invalid = await page.locator('#add-product-form [aria-invalid=true]').evaluateAll(fields => fields.map(field => [field.name, field.validationMessage]));
+            const message = await page.locator('#product-create-error').textContent();
+            throw new Error(JSON.stringify({invalid,message,errors}), {cause:error});
+        });
+        await page.getByRole('button', {name:'Retry restoration'}).waitFor({timeout:15000}).catch(async error => {
+            const status = await page.locator('#handoff_recovery').evaluateAll(nodes => nodes.map(node => node.outerHTML));
+            throw new Error(JSON.stringify({status, errors, url:page.url(), logs:logs.split('\n').slice(-15)}), {cause:error});
+        });
+        assert.equal(await page.locator('.receiving-form').evaluate(el => el.inert), true);
+        const handoffKeys = async () => page.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+            .filter(key => /:receiving-[a-f0-9]{32}$/.test(key)).map(key => [key, localStorage.getItem(key)])));
+        const kept = await handoffKeys();
+        assert.equal(Object.keys(kept).length, 1);
+        await page.getByRole('button', {name:'Retry restoration'}).click();
+        await page.getByRole('button', {name:'Retry restoration'}).waitFor();
+        assert.deepEqual(await handoffKeys(), kept);
+        const saved = await lookup('ISSUE-482-FINAL-PACK');
+        assert.equal(saved.outcome, 'match');
+        assert.equal(saved.matched_code_kind, 'pack_barcode');
+        const productId = Number(saved.product.product_id);
+        const state = JSON.parse(fixture('inventory_state'));
+        assert.equal(Number(state.inventory.find(row => Number(row.product_id) === productId).quantity_on_hand), 0);
+        assert.equal(state.stock_movements.some(row => Number(row.product_id) === productId), false);
+        assert.equal(state.stock_receiving.length, 0);
+        fixture('receiving_code_reset');
+        fixture('receiving_pack_config');
+        fixture('receiving_conversion_changed');
+        await page.getByRole('button', {name:'Retry restoration'}).click();
+        await page.locator('#handoff_recovery').waitFor({state:'hidden'});
+        const added = page.locator(`.receiving-product-group[data-product-id="${productId}"]`);
+        assert.equal(await added.locator('.receiving-line').count(), 1);
+        const quantity = added.locator('[data-field="received_packs"]');
+        assert.equal(await quantity.inputValue(), '');
+        assert.equal(await quantity.evaluate(field => document.activeElement === field), true);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        await page.screenshot({path:path.join(handoffOutput, 'returned-delivery-narrow.png')});
+        assert.equal(await page.locator('#received_packages').inputValue(), '1');
+        assert.equal(await page.locator('#received_qty_1').inputValue(), '5');
+        assert.equal(await page.locator('#supplier').inputValue(), 'Original delivery');
+        assert.equal(await page.locator('#invoice_number').inputValue(), 'RM-482');
+        assert.equal(await page.locator('#receiving_form [data-field="batch_number"]').nth(0).inputValue(), 'Carton lot');
+        assert.equal(await page.locator('#receiving_form [data-field="expiration_date"]').nth(1).inputValue(), '2027-04-30');
+        assert.equal(await page.locator('#receiving_form [data-field="cost_price"]').first().inputValue(), '3.10');
+        assert.match(await page.locator('#receiving_form [data-field="package_conversion"]').first().innerText(), /24 units/);
+        assert.equal(await otherTab.locator('#supplier').inputValue(), 'Other tab delivery');
+        await page.goto(handoffURL);
+        await page.locator('#handoff_recovery').waitFor({state:'hidden'});
+        assert.equal(await added.locator('.receiving-line').count(), 1);
+        await added.getByRole('button', {name:'Remove ' + name, exact:true}).click();
+        await page.evaluate(() => RetailMindInventoryDrafts.keep(document.getElementById('receiving_form')));
+        await page.reload();
+        await page.locator('#handoff_recovery').waitFor({state:'hidden'});
+        assert.equal(await added.count(), 0, 'consumed handoff never re-adds a removed product');
+
+        // The server commits a receipt whose response the browser never receives.
+        await page.locator('#receiving_next').click();
+        await page.getByText('Product conversion or saved cost changed.', {exact:false}).waitFor();
+        await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor();
+        assert.equal(await page.getByLabel('Current product cost').inputValue(), '3.10');
+        let lostResponse;
+        await page.route(url, async route => {
+            if (route.request().method() !== 'POST') return route.continue();
+            const response = await route.fetch();
+            lostResponse = await response.text();
+            await route.abort();
+        });
+        await page.locator('#receiving_form .btn-submit').click();
+        await page.locator('[data-navigation-status][role="alert"]').waitFor();
+        assert.match(lostResponse, /Receiving entry saved/);
+        assert.equal(Object.keys(await handoffKeys()).length, 1, 'uncertain receipt retains the encrypted handoff draft');
+        assert.equal(JSON.parse(fixture('inventory_state')).stock_receiving.length, 2, 'exactly the original two allocations were saved');
+        await page.unroute(url);
+        await otherTab.close();
+        fixture('receiving_code_handoff_fixtures');
+        const switchedAccount = await browser.newPage();
+        await switchedAccount.goto(origin + '/?login=1');
+        await switchedAccount.locator('#landing-login-username').fill('theme_second_manager');
+        await switchedAccount.locator('#landing-login-password').fill(data.password);
+        await Promise.all([switchedAccount.waitForURL(u => !u.search.includes('login=1')), switchedAccount.getByRole('button',{name:'Log in',exact:true}).click()]);
+        assert.equal((await switchedAccount.goto(handoffURL)).status(), 403);
+        await switchedAccount.close();
+
+        await page.goto(url + '?pullout_id=1');
+        await page.locator('#received_packs').fill('2');
+        await scan('ISSUE-482-PULLOUT');
+        await page.getByLabel('Sales Pack', {exact:true}).check();
+        await createProduct.click();
+        await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
+        assert.equal(await page.locator('#create-pack-barcode').inputValue(), 'ISSUE-482-PULLOUT');
+        await page.goBack();
+        await page.locator('#handoff_recovery').waitFor({state:'hidden'});
+        assert.match(await page.locator('.pullout-link-notice').innerText(), /Supplier Pullout #1/);
+        assert.equal(await page.locator('#received_packs').inputValue(), '2');
+        assert.equal(await page.locator('.receiving-line [data-field=pullout_id]').inputValue(), '1');
+        assert.equal((await lookup('ISSUE-482-PULLOUT')).outcome, 'unknown');
+
+        const registerAt = (Date.now() / 1000 + 0.5).toString();
+        const register = async (field, at) => JSON.parse((await promisify(execFile)(php, [
+            'src/backend/tests/support/receiving_code_fixture.php', 'receiving_code_race', database, field, at,
+        ], {env})).stdout);
+        const fields = ['barcode', 'case_barcode'];
+        const raced = await Promise.all(fields.map(field => register(field, registerAt)));
+        assert.equal(raced.filter(result => result.id).length, 1, JSON.stringify(raced));
+        assert.match((await register(fields[raced.findIndex(result => !result.id)], '0')).error, /barcode is already assigned/);
+        assert.equal((await lookup('ISSUE-482-SAME-CODE')).outcome, 'match');
         // Different authenticated workspaces cannot use receiving lookup to disclose inactive records.
         const cashier = await browser.newPage();
         await cashier.goto(origin + '/?login=1');

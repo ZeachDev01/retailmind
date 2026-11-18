@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/product_images.php';
+require_once __DIR__ . '/../../../backend/includes/receiving_product_handoff.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
@@ -10,9 +11,28 @@ require_role(['admin', 'super_admin', 'inventory_manager']);
 $canManageInventory = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 $canDirectAdjust = $canManageInventory;
 $productService = new ProductService($pdo);
-$receivingOrigin = ($_POST['creation_origin'] ?? $_GET['origin'] ?? '') === 'receiving';
-$productCreateRetry = $_SESSION['product_create_retry'] ?? null;
-unset($_SESSION['product_create_retry']);
+$handoffId = $_GET['handoff'] ?? $_POST['handoff_id'] ?? null;
+$productHandoff = $canManageInventory ? receiving_product_handoff($handoffId) : null;
+if ($handoffId !== null) {
+    if (!$productHandoff) {
+        http_response_code(403);
+        exit('This Add Product link is unavailable. Open Stock Receiving with the original account and resume your saved delivery.');
+    }
+    if ($productHandoff['state'] !== 'editing') {
+        header('Location: ' . receiving_product_return_url($handoffId, $productHandoff), true, 303);
+        exit;
+    }
+    if ($_SERVER['REQUEST_METHOD'] === 'POST'
+        && (($_POST['action'] ?? '') !== 'create' || !receiving_product_handoff_owns_tab($productHandoff, $_POST['handoff_tab'] ?? null))) {
+        http_response_code(403);
+        exit('Open Add Product in the tab that started this delivery.');
+    }
+}
+$receivingOrigin = $productHandoff !== null || ($_POST['creation_origin'] ?? $_GET['origin'] ?? '') === 'receiving';
+$productCreateRetry = $productHandoff ? null : ($_SESSION['product_create_retry'] ?? null);
+if (!$productHandoff) unset($_SESSION['product_create_retry']);
+$handoffProductDraftId = $productHandoff ? 'product-' . $handoffId : null;
+$handoffOperationToken = $productHandoff ? substr(hash('sha256', 'receiving-product:' . $handoffId), 0, 48) : null;
 
 function product_ids_from_request($value): array
 {
@@ -200,11 +220,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'create') {
         csrf_verify();
+        $handoffJson = $productHandoff && str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
+        if ($productHandoff) {
+            $_POST['operation_token'] = $handoffOperationToken;
+            $_POST['inventory_draft_id'] = $handoffProductDraftId;
+        }
         try {
+            $unitsPerPackage = $_POST['units_per_package'] ?? 1;
+            if ($productHandoff) {
+                $explicitCodes = array_filter([
+                    'units' => trim((string)($_POST['barcode'] ?? '')),
+                    'packages' => trim((string)($_POST['case_barcode'] ?? '')),
+                    'packs' => trim((string)($_POST['pack_barcode'] ?? '')),
+                ], static fn(string $code): bool => $code !== '');
+                if (!isset($explicitCodes['packages']) && $unitsPerPackage === '') $unitsPerPackage = 1;
+                if (isset($explicitCodes['packages']) && trim((string)($_POST['units_per_package'] ?? '')) === '') {
+                    throw new RuntimeException('Enter how many individual items are in one receiving package.');
+                }
+                $mode = array_search($productHandoff['code'], $explicitCodes, true);
+                if ($mode === false) {
+                    $mode = count($explicitCodes) <= 1 ? (array_key_first($explicitCodes) ?? 'units') : ($_POST['return_quantity_mode'] ?? '');
+                    if (!is_string($mode) || ($explicitCodes && !isset($explicitCodes[$mode]))) {
+                        throw new RuntimeException('Choose a quantity type for the delivery.');
+                    }
+                }
+            }
             $initialQuantity = filter_var($_POST['initial_stock_quantity'] ?? '0', FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 2147483647]]);
             if ($initialQuantity === false) {
                 throw new RuntimeException('Starting stock must be a whole number of zero or more.');
             }
+            $photoFingerprint = is_uploaded_file($_FILES['product_image']['tmp_name'] ?? '') ? hash_file('sha256', $_FILES['product_image']['tmp_name']) : '';
             $productImage = handle_product_photo_upload($_FILES['product_image'] ?? null) ?? '';
 
 
@@ -217,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $productId = $productService->createProduct([
-                'product_image_fingerprint' => !empty($_FILES['product_image']['tmp_name']) ? hash_file('sha256', $_FILES['product_image']['tmp_name']) : '',
+                'product_image_fingerprint' => $photoFingerprint,
                 'operation_token' => $_POST['operation_token'] ?? '',
                 'creation_origin' => $receivingOrigin ? 'receiving' : 'products',
                 'barcode' => $_POST['barcode'] ?? '',
@@ -231,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'supplier_lead_time_days' => trim((string)($_POST['supplier_lead_time_days'] ?? '')) === '' ? 0 : $_POST['supplier_lead_time_days'],
                 'safety_stock' => $_POST['safety_stock'] ?? 0,
                 'minimum_order_quantity' => $_POST['minimum_order_quantity'] ?? 1,
-                'units_per_package' => $_POST['units_per_package'] ?? 1,
+                'units_per_package' => $unitsPerPackage,
                 'base_unit' => $_POST['base_unit'] ?? 'piece',
                 'receiving_unit' => $_POST['receiving_unit'] ?? 'package',
                 'case_barcode' => $_POST['case_barcode'] ?? '',
@@ -239,12 +284,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'variant_label' => $_POST['variant_label'] ?? '',
                 'expiration_date' => $_POST['expiration_date'] ?? null,
                 'product_image' => $productImage,
-                'status' => $_POST['status'] ?? 'active',
+                'status' => $productHandoff ? 'active' : ($_POST['status'] ?? 'active'),
                 'initial_stock_quantity' => $initialQuantity,
                 'supplier_pullout_eligible' => $_POST['supplier_pullout_eligible'] ?? 0,
                 'warning_lead_time_days' => trim((string)($_POST['warning_lead_time_days'] ?? '')) === '' ? null : $_POST['warning_lead_time_days'],
                 'pack_size' => !empty($_POST['pack_size']) ? $_POST['pack_size'] : null,
-                'pack_barcode' => !empty($_POST['pack_barcode']) ? $_POST['pack_barcode'] : null,
+                'pack_barcode' => $_POST['pack_barcode'] ?? null,
                 'pack_price' => !empty($_POST['pack_price']) ? $_POST['pack_price'] : null,
                 'starting_packs' => $receivingOrigin ? ($_POST['starting_packs'] ?? 0) : $startingPacks,
                 'starting_loose' => $receivingOrigin ? ($_POST['starting_loose'] ?? 0) : $startingLoose,
@@ -258,7 +303,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $newProductStmt->execute([$productId]);
             $newProduct = $newProductStmt->fetch() ?: [];
-            log_activity($pdo, (int)$_SESSION['user_id'], 'Product creation', 'Products', $productId, null, $newProduct);
+            if ($productHandoff) {
+                $_SESSION['receiving_product_handoffs'][$handoffId]['state'] = 'returned';
+                $_SESSION['receiving_product_handoffs'][$handoffId]['product'] = ['id' => $productId, 'mode' => $mode];
+                unset($_SESSION['receiving_product_handoffs'][$handoffId]['retry']);
+            }
+            try {
+                log_activity($pdo, (int)$_SESSION['user_id'], 'Product creation', 'Products', $productId, null, $newProduct);
+            } catch (Throwable $e) {
+                error_log('Product creation activity log failed: ' . $e->getMessage());
+            }
+            if ($productHandoff) {
+                $returnUrl = receiving_product_return_url($handoffId, $productHandoff);
+                if ($handoffJson) {
+                    header('Content-Type: application/json');
+                    echo json_encode(['url' => $returnUrl]);
+                } else {
+                    header('Location: ' . $returnUrl, true, 303);
+                }
+                exit;
+            }
 
             $_SESSION['inventory_confirmed_draft'] = $_POST['inventory_draft_id'] ?? null;
             $labelQuantity = max(1, min(200, (int)($_POST['label_quantity'] ?? 1)));
@@ -273,7 +337,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
-            $_SESSION['product_create_retry'] = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again.' : '')];
+            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
+            if ($productHandoff) {
+                $retry['id'] = bin2hex(random_bytes(16));
+                $retry['values']['return_quantity_mode'] = $_POST['return_quantity_mode'] ?? '';
+                $_SESSION['receiving_product_handoffs'][$handoffId]['retry'] = $retry;
+                if ($handoffJson) {
+                    http_response_code(422);
+                    header('Content-Type: application/json');
+                    echo json_encode(['retryId' => $retry['id'], 'error' => $alert]);
+                } else {
+                    header('Location: ' . app_url('components/inventory_management/products.php') . '?handoff=' . $handoffId, true, 303);
+                }
+                exit;
+            }
+            $_SESSION['product_create_retry'] = $retry;
             if (in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE], true)) {
                 redirect_products('warning', $alert);
             }
@@ -1462,9 +1540,14 @@ foreach ($products as $product) {
                     <p>Enter the essentials. Expand settings when needed.</p>
                 </div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button>
             </header>
-            <form method="POST" id="add-product-form" data-retry="<?= htmlspecialchars(json_encode($productCreateRetry), ENT_QUOTES, 'UTF-8') ?>" novalidate enctype="multipart/form-data">
+            <form method="POST" id="add-product-form" data-retry="<?= htmlspecialchars(json_encode($productCreateRetry), ENT_QUOTES, 'UTF-8') ?>" novalidate enctype="multipart/form-data"<?= $productHandoff ? ' data-no-navigation data-inventory-draft-id="' . $handoffProductDraftId . '"' : '' ?>>
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create">
+                <?php if ($productHandoff): ?>
+                    <input type="hidden" name="handoff_id" value="<?= $handoffId ?>">
+                    <input type="hidden" name="handoff_tab">
+                    <input type="hidden" name="operation_token" value="<?= $handoffOperationToken ?>">
+                <?php endif; ?>
                 <div class="rm-modal-body">
 <input type="hidden" name="creation_origin" value="<?= $receivingOrigin ? 'receiving' : 'products' ?>">
 <div id="product-create-error" role="alert" tabindex="-1" hidden></div>
@@ -1546,7 +1629,12 @@ foreach ($products as $product) {
                                         <small class="field-error">Enter a custom receiving unit.</small>
                                     </div>
                                 </div>
-<div class="form-group"><label for="units-per-package">Items per Receiving Package</label><input type="number" min="1" id="units-per-package" name="units_per_package" value="1" required step="1" max="2147483647"><small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small></div>
+<div class="form-group">
+    <label for="units-per-package">Items per Receiving Package</label>
+    <input type="number" min="1" id="units-per-package" name="units_per_package" value="<?= $productHandoff ? '' : '1' ?>" <?= $productHandoff ? '' : 'required' ?> step="1" max="2147483647">
+    <small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small>
+    <?php if ($productHandoff): ?><small class="field-error">Enter a whole number of items per receiving package.</small><?php endif; ?>
+</div>
 <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
 </div>
 </details>
@@ -1570,6 +1658,18 @@ foreach ($products as $product) {
                             </div>
                             <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
                             </div><p class="field-help">If a pack is received and sold unchanged, register its barcode only as a Sales Pack barcode.</p>
+<?php if ($productHandoff): ?>
+<div class="form-group" id="product-return-mode" hidden>
+    <label for="return-quantity-mode">Quantity type for this delivery</label>
+    <select name="return_quantity_mode" id="return-quantity-mode" disabled>
+        <option value="">Choose quantity type</option>
+        <option value="units">Individual items</option>
+        <option value="packages">Receiving cases</option>
+        <option value="packs">Sales Packs</option>
+    </select>
+    <small class="field-error">Choose a quantity type for the delivery.</small>
+</div>
+<?php endif; ?>
 <details class="product-create-options"><summary>Brand, photo and variants</summary>
 <div class="form-grid">
 <div class="form-group"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
@@ -1623,7 +1723,7 @@ foreach ($products as $product) {
 </div>
 </details>
                 </div>
-                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="product-create-reset">Reset</button><button type="submit" class="btn" id="product-create-save"><i class="bi bi-check2"></i> Save Product</button></footer>
+                <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button type="button" class="btn btn-quiet" id="product-create-reset">Reset</button><button type="submit" class="btn" id="product-create-save"<?= $productHandoff ? ' disabled' : '' ?>><i class="bi bi-check2"></i> Save Product</button></footer>
             </form>
         </section>
     </div>
@@ -3112,12 +3212,18 @@ foreach ($products as $product) {
             }
         });
 
+        let handoffEditorReady = false, handoffRetryId = '';
         window.RetailMindInventoryDrafts?.register({
-            eligible: form => form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, .inline-form') ||
-                (form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value),
+            offer: draft => !addProductForm.elements.handoff_id && !/^product-[a-f0-9]{32}$/.test(draft.id),
+            eligible(form) {
+                if (form === addProductForm && form.elements.handoff_id) return handoffEditorReady;
+                return form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, .inline-form') ||
+                    (form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value);
+            },
             submissionKind: (form, action) => ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '',
             capture(draft, form) {
                 if (['product-edit-form', 'pack-reconcile-form'].includes(form.id)) draft.context.productId = currentDrawerProductId;
+                if (form === addProductForm && form.elements.handoff_id) draft.context.retryId = handoffRetryId;
             },
             async prepare(draft) {
                 if ((draft.context.productId || ['product-edit-form', 'pack-reconcile-form'].includes(draft.formId)) && !productsById[Number(draft.context.productId)]) {
@@ -3161,8 +3267,7 @@ foreach ($products as $product) {
                 if (Array.from(details.querySelectorAll('input, select')).some(field => field.type !== 'hidden' && field.type !== 'file' && (field.type === 'checkbox' ? field.checked : field.value !== field.defaultValue && field.value !== ''))) details.open = true;
             });
         }
-        const retry = JSON.parse(addProductForm.dataset.retry || 'null');
-        if (retry) {
+        function showProductCreateRetry(retry) {
             Object.entries(retry.values).forEach(([name, value]) => {
                 const field = addProductForm.elements[name];
                 if (!field && ['operation_token', 'inventory_draft_id'].includes(name)) {
@@ -3180,6 +3285,126 @@ foreach ($products as $product) {
             RetailMindUI.openOverlay(productModalOverlay);
             const error = document.getElementById('product-create-error');
             error.textContent = retry.error; error.hidden = false; error.focus();
+        }
+        const retry = JSON.parse(addProductForm.dataset.retry || 'null');
+        if (addProductForm.elements.handoff_id) {
+            const id = addProductForm.elements.handoff_id.value;
+            const csrf = addProductForm.elements.csrf_token.value;
+            const receivingUrl = <?= json_encode(app_url('components/report/stock_receiving.php')) ?>;
+            const save = document.getElementById('product-create-save');
+            const body = addProductForm.querySelector('.rm-modal-body');
+            const error = document.getElementById('product-create-error');
+            const reset = document.getElementById('product-create-reset');
+            const showError = message => { error.textContent = message; error.hidden = false; error.focus(); };
+            const handoffRequest = action => RetailMindInventoryDrafts.productHandoff(receivingUrl, csrf, action, id);
+            const modeFields = {units: 'barcode', packages: 'case_barcode', packs: 'pack_barcode'};
+            const returnMode = addProductForm.elements.return_quantity_mode;
+            let originalCode = '';
+            function syncReturnMode() {
+                const codes = Object.entries(modeFields).flatMap(([mode, name]) => {
+                    const field = addProductForm.elements[name];
+                    return !field.disabled && field.value.trim() ? [[mode, field.value.trim()]] : [];
+                });
+                const chooseMode = codes.length > 1 && !codes.some(([, code]) => code === originalCode);
+                const modes = new Set(codes.map(([mode]) => mode));
+                for (const option of Array.from(returnMode.options).slice(1)) option.hidden = option.disabled = !modes.has(option.value);
+                if (!modes.has(returnMode.value)) returnMode.value = '';
+                returnMode.closest('.form-group').hidden = returnMode.disabled = !chooseMode;
+                returnMode.required = chooseMode;
+                addProductForm.elements.units_per_package.required = modes.has('packages');
+            }
+            addProductForm.addEventListener('input', syncReturnMode);
+            sellSealedPacks.addEventListener('change', syncReturnMode);
+            addProductForm.addEventListener('reset', () => queueMicrotask(syncReturnMode));
+            let verified = false, cancelling = false, saving = false;
+            addProductForm.addEventListener('submit', event => {
+                if (!verified || cancelling || saving) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+            }, {capture: true});
+            addProductForm.addEventListener('submit', async event => {
+                if (event.defaultPrevented) return;
+                event.preventDefault();
+                saving = true;
+                try {
+                    const response = await fetch(addProductForm.getAttribute('action') || location.href, {
+                        method: 'POST', headers: {Accept: 'application/json'}, body: new FormData(addProductForm),
+                    });
+                    if (response.redirected && new URL(response.url).pathname === receivingUrl) {
+                        location.assign(response.url);
+                        return;
+                    }
+                    const result = await response.json();
+                    if (response.ok) {
+                        location.assign(result.url);
+                        return;
+                    }
+                    handoffRetryId = result.retryId;
+                    showError(result.error);
+                } catch (_) {
+                    showError('Check your connection and sign-in, then try Save Product again.');
+                }
+                saving = false;
+                save.disabled = false;
+                save.innerHTML = '<i class="bi bi-check2"></i> Save Product';
+            });
+            productModalOverlay.addEventListener('retailmind:overlayclose', async () => {
+                if (cancelling) return;
+                if (saving) {
+                    RetailMindUI.openOverlay(productModalOverlay);
+                    return;
+                }
+                if (!verified) {
+                    location.replace(receivingUrl + '?handoff=' + id);
+                    return;
+                }
+                cancelling = true;
+                try {
+                    const result = await handoffRequest('return');
+                    await RetailMindInventoryDrafts?.discard(addProductForm);
+                    location.replace(result.url);
+                } catch (_) {
+                    cancelling = false;
+                    RetailMindUI.openOverlay(productModalOverlay);
+                    showError('Could not return to Receiving. Check your connection and choose Cancel again.');
+                }
+            });
+            async function openReceivingProduct() {
+                RetailMindUI.openOverlay(productModalOverlay);
+                body.inert = true;
+                reset.disabled = true;
+                try {
+                    const draft = await handoffRequest('edit');
+                    if (cancelling) return;
+                    originalCode = draft.code;
+                    addProductForm.elements[modeFields[draft.mode]].value = originalCode;
+                    if (draft.mode === 'packs') sellSealedPacks.checked = true;
+                    syncPricingFields();
+                    revealProductOptions();
+                    handoffEditorReady = true;
+                    const persisted = await RetailMindInventoryDrafts?.restore('product-' + id);
+                    addProductForm.elements.handoff_tab.value = RetailMindInventoryDrafts.tabProof(id);
+                    body.inert = false;
+                    verified = true;
+                    reset.disabled = false;
+                    save.disabled = false;
+                    if (draft.retry) {
+                        handoffRetryId = draft.retry.id;
+                        if (persisted?.context.retryId === handoffRetryId) showError(draft.retry.error);
+                        else showProductCreateRetry(draft.retry);
+                    } else document.getElementById('product-name').focus();
+                    syncReturnMode();
+                } catch (_) {
+                    handoffEditorReady = false;
+                    body.inert = false;
+                    showError('Open the original tab for this delivery. If this is that tab, check your connection and reload.');
+                }
+            }
+            window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+            openReceivingProduct();
+        } else if (retry) {
+            showProductCreateRetry(retry);
         } else if (new URLSearchParams(location.search).get('origin') === 'receiving' && !new URLSearchParams(location.search).has('success')) {
             RetailMindUI.openOverlay(productModalOverlay);
         }

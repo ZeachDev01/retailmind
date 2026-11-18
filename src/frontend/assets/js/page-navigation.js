@@ -386,6 +386,7 @@
     }
 
     function submit(form, submitter) {
+        if (form.hasAttribute('data-no-navigation')) return false;
         const target = submitter?.getAttribute('formtarget') || form.target;
         const url = new URL(submitter?.getAttribute('formaction') || form.getAttribute('action') || location.href, location.href);
         const method = (submitter?.getAttribute('formmethod') || form.method || 'get').toLowerCase();

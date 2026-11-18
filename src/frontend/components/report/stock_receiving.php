@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/includes/csrf.php';
+require_once __DIR__ . '/../../../backend/includes/receiving_product_handoff.php';
 require_once __DIR__ . '/../../../backend/app/Services/ReceivingService.php';
 require_once __DIR__ . '/../../../backend/app/Services/SupplierPulloutService.php';
 header('Cache-Control: no-store');
@@ -17,6 +18,56 @@ $canReceive = has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INV
 $formValues = [];
 $prefillProductId = isset($_GET['product_id']) ? (int)$_GET['product_id'] : 0;
 $prefillPulloutId = isset($_GET['pullout_id']) ? (int)$_GET['pullout_id'] : 0;
+$handoffId = $_GET['handoff'] ?? null;
+if (isset($_POST['product_handoff_action'])) {
+    require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+    csrf_verify();
+    header('Content-Type: application/json');
+    $id = $_POST['handoff_id'] ?? null;
+    $tab = $_POST['handoff_tab'] ?? null;
+    $handoff = receiving_product_handoff($id);
+    $action = $_POST['product_handoff_action'];
+    if ($action === 'start' && !$handoff && is_string($id) && preg_match('/^[a-f0-9]{32}$/D', $id)
+        && is_string($tab) && preg_match('/^[a-f0-9]{64}$/D', $tab)) {
+        $code = is_string($_POST['code'] ?? null) ? trim($_POST['code']) : '';
+        $mode = $_POST['packaging'] ?? '';
+        if (in_array($mode, ['units', 'packages', 'packs'], true) && $code !== '' && strlen($code) <= ($mode === 'packages' ? 80 : 50)) {
+            $_SESSION['receiving_product_handoffs'] = array_filter($_SESSION['receiving_product_handoffs'] ?? [],
+                static fn(array $entry): bool => $entry['expires'] >= time());
+            $_SESSION['receiving_product_handoffs'][$id] = [
+                'user' => (int)$_SESSION['user_id'], 'tab' => hash('sha256', $tab), 'expires' => time() + 86400,
+                'code' => $code, 'mode' => $mode, 'pullout_id' => $prefillPulloutId, 'state' => 'editing', 'product' => null,
+            ];
+            echo json_encode(['url' => app_url('components/inventory_management/products.php') . '?handoff=' . $id]);
+            exit;
+        }
+    } elseif ($handoff && receiving_product_handoff_owns_tab($handoff, $tab)) {
+        if ($action === 'return') {
+            if ($handoff['state'] === 'editing') {
+                $_SESSION['receiving_product_handoffs'][$id]['state'] = 'returned';
+                $handoff['state'] = 'returned';
+            }
+            echo json_encode(['state' => $handoff['state'], 'product' => $handoff['product'], 'url' => receiving_product_return_url($id, $handoff)]);
+            exit;
+        }
+        if ($action === 'edit' && $handoff['state'] === 'editing') {
+            echo json_encode(['code' => $handoff['code'], 'mode' => $handoff['mode'], 'retry' => $handoff['retry'] ?? null]);
+            exit;
+        }
+        if ($action === 'consume' && $handoff['state'] !== 'editing') {
+            $_SESSION['receiving_product_handoffs'][$id]['state'] = 'consumed';
+            echo json_encode(['state' => 'consumed']);
+            exit;
+        }
+    }
+    http_response_code(409);
+    echo json_encode(['error' => 'This Add Product link is unavailable. Open Stock Receiving in the original tab and resume the saved delivery.']);
+    exit;
+}
+$returnHandoff = $canReceive && $handoffId !== null ? receiving_product_handoff($handoffId) : null;
+if ($returnHandoff) $prefillPulloutId = $returnHandoff['pullout_id'];
+$retainedDraftId = $_POST['inventory_draft_id'] ?? null;
+$retainedDraftId = is_string($retainedDraftId) && preg_match('/^receiving-[a-f0-9]{32}$/D', $retainedDraftId) ? $retainedDraftId : null;
 $linkedPullout = null;
 if ($prefillPulloutId > 0) {
     try {
@@ -28,7 +79,7 @@ if ($prefillPulloutId > 0) {
         $linkedPullout = null;
     }
 }
-if ($prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
+if ($handoffId === null && $prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $initialLine = ['product_id' => (string)$prefillProductId];
     if ($prefillPulloutId > 0) {
         $initialLine['pullout_id'] = (string)$prefillPulloutId;
@@ -187,7 +238,7 @@ $categoryIcon = static function (string $categoryName): string {
         <?php endif; ?>
 
         <?php if ($linkedPullout): ?>
-            <div class="message info pullout-link-notice" role="status">
+            <div class="message info pullout-link-notice" role="note">
                 <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
                 <?php
                 $linkedBreakdown = SupplierPulloutService::formatFormBreakdown((int)($linkedPullout['pulled_packs'] ?? 0), (int)($linkedPullout['pulled_loose'] ?? 0), (int)($linkedPullout['pack_size_used'] ?? ($linkedPullout['pack_size'] ?? 1)));
@@ -199,7 +250,14 @@ $categoryIcon = static function (string $categoryName): string {
             </div>
         <?php endif; ?>
 
-        <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?>>
+        <?php if ($canReceive && $handoffId !== null): ?>
+            <div id="handoff_recovery" class="message info" role="note">
+                <p id="handoff_status" role="alert" tabindex="-1">Restoring your delivery…</p>
+                <button type="button" class="btn btn-secondary" id="handoff_retry" hidden>Retry restoration</button>
+                <a data-no-navigation href="<?= htmlspecialchars(app_url('components/report/stock_receiving.php')) ?>">Open Stock Receiving</a>
+            </div>
+        <?php endif; ?>
+        <div class="receiving-form" data-step="1" <?= !$canReceive ? 'data-readonly="true"' : '' ?> <?= $canReceive && $handoffId !== null ? 'inert' : '' ?>>
             <h2 id="receiving_step_title" class="receiving-step-title" tabindex="-1">Receive stock</h2>
             <?php if (!$canReceive): ?><p>Switch to an authorized Inventory Manager workspace to record stock.</p><?php endif; ?>
             <noscript><p role="alert">Enable JavaScript to select products, review quantities, and save this receiving entry.</p></noscript>
@@ -231,6 +289,7 @@ $categoryIcon = static function (string $categoryName): string {
                         <div class="receiving-code-actions">
                             <button type="button" class="btn btn-secondary" id="scan_retry">Retry lookup</button>
                             <button type="button" class="btn btn-secondary" id="scan_find_existing">Find existing product</button>
+                            <button type="button" class="btn" id="scan_create_product" hidden>Create product</button>
                             <button type="button" class="btn btn-secondary" id="scan_back">Back</button>
                             <button type="button" class="btn btn-secondary" id="scan_cancel">Cancel</button>
                             <a id="scan_manage_product" href="../inventory_management/products.php" hidden>Review inactive products</a>
@@ -255,7 +314,9 @@ $categoryIcon = static function (string $categoryName): string {
                 <div id="receiving_catalog" class="receiving-catalog" aria-label="Available products"></div>
             </div>
             </fieldset>
-            <form method="POST" id="receiving_form" novalidate>
+            <form method="POST" id="receiving_form" novalidate
+                <?= $error && $retainedDraftId ? 'data-inventory-draft-id="' . $retainedDraftId . '"' : '' ?>
+                <?= $handoffId !== null ? 'action="' . htmlspecialchars(app_url('components/report/stock_receiving.php') . ($prefillPulloutId > 0 ? '?pullout_id=' . $prefillPulloutId : '')) . '"' : '' ?>>
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                 <input type="hidden" name="receiving_nonce" value="<?= htmlspecialchars($receivingNonce) ?>">
                 <input type="hidden" name="entry_mode" value="shopping_trip">
@@ -407,7 +468,7 @@ $categoryIcon = static function (string $categoryName): string {
 
 <script id="receiving_products_data" type="application/json"><?= json_encode($products, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?></script>
 <script>
-const productsCatalog = JSON.parse(document.getElementById('receiving_products_data').textContent);
+let productsCatalog = JSON.parse(document.getElementById('receiving_products_data').textContent);
 const canReceive = <?= json_encode((bool)$canReceive) ?>;
 const productMap = new Map(productsCatalog.map(p => [String(p.product_id), p]));
 const receivingHelpDialog = document.getElementById('receiving_help_dialog');
@@ -434,11 +495,20 @@ let pendingScan = null;
 const codeRecovery = document.getElementById('receiving_code_recovery');
 const scanClassification = document.getElementById('scan_classification');
 const scanConfirmation = document.getElementById('scan_package_confirmation');
-function keepScanRecovery() { window.RetailMindInventoryDrafts?.keep(document.getElementById('receiving_form')); }
+const scanCreate = document.getElementById('scan_create_product');
+const receivingEditor = document.querySelector('.receiving-form');
+const handoffRecovery = document.getElementById('handoff_recovery');
+const returnHandoffId = <?= json_encode(is_string($handoffId) && preg_match('/^[a-f0-9]{32}$/D', $handoffId) ? $handoffId : null) ?>;
+let restoringHandoff = !!handoffRecovery;
+let appliedHandoff = '';
+function keepScanRecovery() {
+    if (!restoringHandoff) window.RetailMindInventoryDrafts?.keep(form);
+}
 function showScanRecovery(code, outcome, message) {
     pendingScan = {code, outcome, packaging: '', finding: false};
     codeRecovery.hidden = false;
     scanClassification.hidden = outcome !== 'unknown';
+    scanCreate.hidden = true;
     scanConfirmation.hidden = true;
     for (const radio of scanClassification.querySelectorAll('input')) radio.checked = false;
     document.getElementById('scan_packaging_hint').textContent = '';
@@ -454,6 +524,7 @@ scanClassification.addEventListener('change', event => {
     pendingScan = {...pendingScan, productId: null};
     scanConfirmation.hidden = true;
     pendingScan.packaging = event.target.value;
+    scanCreate.hidden = !canReceive || pendingScan.outcome !== 'unknown';
     document.getElementById('scan_packaging_hint').textContent = event.target.value === 'packages'
         ? 'Scan the outer carton. Keep the item barcode separate and confirm the actual units per carton.'
         : event.target.value === 'packs' ? 'A Sales Pack needs its own size, barcode and price. If received and sold unchanged, use only its Sales Pack barcode.'
@@ -461,6 +532,52 @@ scanClassification.addEventListener('change', event => {
     keepScanRecovery();
 });
 document.getElementById('scan_retry').addEventListener('click', () => identifyReceivingProduct(pendingScan.code));
+function receivingHandoff(action, id, details) {
+    return RetailMindInventoryDrafts.productHandoff(form.action, form.elements.csrf_token.value, action, id, details);
+}
+async function loadReceivingCatalog() {
+    const response = await fetch('?receiving_catalog=1', {cache: 'no-store', headers: {Accept: 'application/json'}});
+    if (!response.ok || response.redirected) throw new Error('Check your connection and try again to refresh the catalog.');
+    const {products} = await response.json();
+    if (!Array.isArray(products)) throw new Error('Check your connection and try again to refresh the catalog.');
+    return products;
+}
+scanCreate.addEventListener('click', async () => {
+    if (pendingScan?.outcome !== 'unknown' || !pendingScan.packaging) return;
+    const {code, packaging} = pendingScan;
+    if (new TextEncoder().encode(code).length > (packaging === 'packages' ? 80 : 50)) {
+        const status = document.getElementById('scan_recovery_message');
+        status.textContent = 'This code is too long for the selected barcode field. Check the code and scan again.';
+        status.focus();
+        return;
+    }
+    receivingEditor.inert = true;
+    let id;
+    try {
+        id = crypto.randomUUID().replaceAll('-', '');
+        window.RetailMindInventoryDrafts?.tabProof(id, true);
+        if (!await window.RetailMindInventoryDrafts?.checkpoint(form, 'receiving-' + id)) throw new Error('Draft could not be kept');
+    } catch (_) {
+        receivingEditor.inert = false;
+        const status = document.getElementById('scan_recovery_message');
+        status.textContent = 'Delivery could not be saved on this device. Keep this page open, free browser storage or allow site storage, then try again.';
+        status.focus();
+        return;
+    }
+    try {
+        const result = await receivingHandoff('start', id, {code, packaging});
+        if (!form.isConnected) return;
+        const original = new URL(location.href);
+        original.searchParams.set('handoff', id);
+        history.replaceState(history.state, '', original);
+        location.assign(result.url);
+    } catch (_) {
+        receivingEditor.inert = false;
+        const status = document.getElementById('scan_recovery_message');
+        status.textContent = 'Add Product could not open. Your delivery is saved on this device. Check your connection and try again.';
+        status.focus();
+    }
+});
 document.getElementById('scan_find_existing').addEventListener('click', () => {
     pendingScan.finding = true;
     productSearchScan.value = '';
@@ -535,11 +652,9 @@ document.getElementById('scan_confirm_size').addEventListener('click', async () 
     const button = document.getElementById('scan_confirm_size');
     button.disabled = true;
     try {
-        const response = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin'});
-        if (!response.ok || response.redirected) throw new Error('Catalog unavailable');
-        const catalog = await response.json();
-        if (pendingScan !== scan) return;
-        const product = catalog.products.find(item => String(item.product_id) === scan.productId);
+        const products = await loadReceivingCatalog();
+        if (receivingEditor.inert || pendingScan !== scan) return;
+        const product = products.find(item => String(item.product_id) === scan.productId);
         if (!product) throw new Error('Product unavailable');
         const key = scan.packaging === 'packs' ? 'pack_size' : 'units_per_package';
         if (scan.size !== Number(product[key]) || (scan.packaging === 'packs' && (product.pack_barcode !== scan.packBarcode || Number(product.pack_price) !== scan.packPrice))) {
@@ -548,7 +663,7 @@ document.getElementById('scan_confirm_size').addEventListener('click', async () 
         }
         addRecoveredProduct(product, scan.packaging);
     } catch (_) {
-        if (pendingScan !== scan) return;
+        if (receivingEditor.inert || pendingScan !== scan) return;
         document.getElementById('scan_saved_size').textContent = 'Current product could not be checked. Code and delivery kept. Retry lookup or find the product again.';
         document.getElementById('scan_retry').focus();
     } finally { button.disabled = false; }
@@ -564,6 +679,7 @@ for (const label of lineTemplate.content.querySelectorAll('label[for]')) {
 
 
 async function identifyReceivingProduct(code) {
+    if (receivingEditor.inert) return;
     code = (code || '').trim();
     if (!code) {
         scanStatus.textContent = 'Scan or type a barcode or SKU first.';
@@ -583,7 +699,7 @@ async function identifyReceivingProduct(code) {
             signal: controller.signal
         });
         const result = await response.json();
-        if (lookupId !== activeScanLookup) return;
+        if (receivingEditor.inert || lookupId !== activeScanLookup) return;
         if (!response.ok || result.success === false) {
             scanStatus.textContent = result.error || 'The product code could not be checked right now. Try again or choose the product manually.';
             showScanRecovery(code, 'error', scanStatus.textContent);
@@ -606,11 +722,9 @@ async function identifyReceivingProduct(code) {
         }
         let product = productMap.get(String(result.product.product_id));
         if (!product) {
-            const catalogResponse = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin'});
-            if (!catalogResponse.ok || catalogResponse.redirected) throw new Error('Catalog unavailable');
-            const catalog = await catalogResponse.json();
-            if (lookupId !== activeScanLookup) return;
-            product = catalog.products.find(item => String(item.product_id) === String(result.product.product_id));
+            const products = await loadReceivingCatalog();
+            if (receivingEditor.inert || lookupId !== activeScanLookup) return;
+            product = products.find(item => String(item.product_id) === String(result.product.product_id));
             if (!product) throw new Error('Product unavailable');
         }
         const matchedPack = result.matched_code_kind === 'pack_barcode';
@@ -659,7 +773,7 @@ async function identifyReceivingProduct(code) {
             : (matchedCase ? 'packages / cases' : (targetMode === 'packs' ? 'sealed packs and loose pieces' : 'Base units'));
         scanStatus.textContent = `${product.product_name} (${product.sku}) selected. Matched by ${matchedBy}. Enter actual delivered ${formPrompt}.`;
     } catch (error) {
-        if (error.name === 'AbortError' || lookupId !== activeScanLookup) return;
+        if (receivingEditor.inert || error.name === 'AbortError' || lookupId !== activeScanLookup) return;
         scanStatus.textContent = 'The product code could not be checked right now. Try again or choose the product manually.';
         showScanRecovery(code, 'error', scanStatus.textContent);
     } finally {
@@ -692,7 +806,7 @@ function resetKeyboardReceivingCode() {
 document.addEventListener('keydown', event => {
     const editing = event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]');
     const dialogOpen = document.querySelector('dialog[open], .rm-modal-overlay.open, .command-overlay.open, .swal2-container');
-    if (!canReceive || event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey
+    if (!canReceive || receivingEditor.inert || event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey
         || document.hidden || editing || dialogOpen) {
         resetKeyboardReceivingCode();
         return;
@@ -1673,11 +1787,9 @@ document.getElementById('receiving_next').addEventListener('click', async () => 
     const button = document.getElementById('receiving_next');
     button.disabled = true;
     try {
-        const response = await fetch('?receiving_catalog=1', {cache: 'no-store', credentials: 'same-origin', headers: {Accept: 'application/json'}});
-        if (!response.ok || response.redirected) throw new Error('Catalog unavailable');
-        const catalog = await response.json();
-        if (!Array.isArray(catalog.products)) throw new Error('Catalog unavailable');
-        const fresh = new Map(catalog.products.map(product => [String(product.product_id), product]));
+        const products = await loadReceivingCatalog();
+        if (receivingEditor.inert) return;
+        const fresh = new Map(products.map(product => [String(product.product_id), product]));
         const priorProducts = new Map(productMap);
         let changed = false;
         for (const row of receivingRows()) {
@@ -1712,14 +1824,29 @@ productSearchScan.addEventListener('input', renderCatalog);
 renderCatalog();
 renumberLines();
 
-const receivingDraftObserver = new MutationObserver(() => RetailMindInventoryDrafts?.keep(form));
+const receivingDraftObserver = new MutationObserver(() => {
+    if (!restoringHandoff) window.RetailMindInventoryDrafts?.keep(form);
+});
 receivingDraftObserver.observe(lineContainer, {childList: true, subtree: true});
 window.addEventListener('pagehide', () => receivingDraftObserver.disconnect(), {once: true});
 window.RetailMindInventoryDrafts?.register({
     eligible: candidate => candidate === form,
+    adopt(draft) {
+        if (!/^receiving-[a-f0-9]{32}$/.test(draft.id)) return;
+        // Explicit recovery from another tab must not overwrite the handoff snapshot.
+        try { return !!RetailMindInventoryDrafts.tabProof(draft.id.slice('receiving-'.length)); }
+        catch (_) { return false; }
+    },
+    offer: () => !restoringHandoff,
     submissionKind: () => 'receiving',
     capture(draft) {
-        draft.context = {...draft.context, pendingScan, scanText: productSearchScan.value, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
+        const productBasis = {};
+        for (const group of lineContainer.children) {
+            const product = productMap.get(group.dataset.productId);
+            const {receiving_unit, units_per_package, pack_size, cost_price, cost_known} = product;
+            productBasis[group.dataset.productId] = {receiving_unit, units_per_package, pack_size, cost_price, cost_known};
+        }
+        draft.context = {...draft.context, appliedHandoff, pendingScan, productBasis, scanText: productSearchScan.value, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
             Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || '', current_product_cost: row.closest('.receiving-product-group').querySelector('.current-product-cost').value, cost_choice_explicit: row.closest('.receiving-product-group').dataset.choiceExplicit || ''}))};
     },
     prepare(draft) {
@@ -1729,6 +1856,12 @@ window.RetailMindInventoryDrafts?.register({
         if (lines.some(line => !productMap.has(String(line.product_id)) || productMap.get(String(line.product_id)).unavailable)) {
             throw new Error('A selected Product is no longer available. Your draft is still kept; review the current catalog before resuming.');
         }
+        for (const [id, basis] of Object.entries(draft.context.productBasis || {})) {
+            if (productMap.has(id)) productMap.set(id, {...productMap.get(id), ...basis});
+        }
+        appliedHandoff = draft.context.appliedHandoff || '';
+        pendingScan = null;
+        codeRecovery.hidden = true;
         for (const line of linesWithExcludedQuantity) {
             for (const name of ['received_qty', 'received_packages', 'received_packs', 'received_loose']) line[name] = '';
             line.quantity_counts = '';
@@ -1763,6 +1896,59 @@ window.RetailMindInventoryDrafts?.register({
             scanClassification.querySelector('input:checked')?.dispatchEvent(new Event('change', {bubbles: true}));
         }
     }
+});
+if (handoffRecovery) {
+    const retry = document.getElementById('handoff_retry');
+    const status = document.getElementById('handoff_status');
+    async function restoreReceivingHandoff() {
+        retry.hidden = true;
+        status.textContent = 'Restoring your delivery…';
+        try {
+            if (!returnHandoffId || !RetailMindInventoryDrafts.tabProof(returnHandoffId)) throw new Error('Open the original tab to return to this delivery.');
+            await navigator.locks.request('retailmind:receiving:' + returnHandoffId, async () => {
+                const result = await receivingHandoff('return', returnHandoffId);
+                const products = await loadReceivingCatalog();
+                productsCatalog = products;
+                productMap.clear();
+                for (const product of products) productMap.set(String(product.product_id), product);
+                const product = result.product;
+                const current = product && productMap.get(String(product.id));
+                if (result.state !== 'consumed' && product && !current) throw new Error('The new product is unavailable. Check Products, then retry.');
+                const draft = await window.RetailMindInventoryDrafts?.restore('receiving-' + returnHandoffId);
+                if (!draft) throw new Error('Check your connection and current Products, then retry. You can also open Stock Receiving and choose Resume for the saved delivery.');
+                let focus = null;
+                if (result.state !== 'consumed' && product && appliedHandoff !== returnHandoffId) {
+                    const mode = (product.mode === 'packs' && !(Number(current.pack_size) > 1 && current.pack_barcode))
+                        || (product.mode === 'packages' && !(Number(current.units_per_package) > 0)) ? 'units' : product.mode;
+                    const row = addReceivingLine({product_id: product.id, quantity_mode: mode});
+                    focus = row && visibleQuantityInput(row);
+                    pendingScan = null;
+                    codeRecovery.hidden = true;
+                    productSearchScan.value = '';
+                    renderCatalog();
+                    appliedHandoff = returnHandoffId;
+                    if (!await RetailMindInventoryDrafts.keep(form)) throw new Error('Allow browser storage or free space, then retry.');
+                }
+                if (result.state !== 'consumed') await receivingHandoff('consume', returnHandoffId);
+                await RetailMindInventoryDrafts.discard('product-' + returnHandoffId, <?= json_encode(app_url('components/inventory_management/products.php')) ?>);
+                restoringHandoff = false;
+                receivingEditor.inert = false;
+                handoffRecovery.hidden = true;
+                if (focus) focus.focus();
+                else if (pendingScan) document.getElementById('scan_recovery_message').focus();
+                else document.getElementById('receiving_step_title').focus();
+            });
+        } catch (error) {
+            status.textContent = 'Could not restore the delivery. ' + error.message;
+            retry.hidden = false;
+            status.focus();
+        }
+    }
+    retry.addEventListener('click', restoreReceivingHandoff);
+    restoreReceivingHandoff();
+}
+window.addEventListener('pageshow', event => {
+    if (event.persisted && new URLSearchParams(location.search).has('handoff')) location.reload();
 });
 let retainedValues = <?= json_encode($formValues, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
 for (const name of ['supplier', 'invoice_number']) restoreField(form.elements.namedItem(name), retainedValues[name]);

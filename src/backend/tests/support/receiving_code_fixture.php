@@ -25,3 +25,24 @@ if ($argv[1] === 'receiving_code_multiple') {
 if ($argv[1] === 'receiving_code_reset') {
     $pdo->exec("UPDATE products SET barcode='THEME-BARCODE',status='active',case_barcode='THEME-CASE',pack_barcode='THEME-PACK' WHERE product_id=1");
 }
+if ($argv[1] === 'receiving_code_handoff_fixtures') {
+    $pdo->exec("INSERT INTO users (user_id, first_name, display_name, username, password_hash, role_id, must_change_password)
+        SELECT 5, 'Second', 'Second Inventory Manager', 'theme_second_manager', password_hash, role_id, 0 FROM users WHERE user_id=3");
+    $pdo->exec('INSERT INTO user_roles (user_id, role_id, is_primary) VALUES (5,3,1)');
+    $pdo->exec("INSERT INTO supplier_pullouts (product_id, batch_id, quantity, pulled_loose, reason, supplier, pulled_by)
+        SELECT 1, batch_id, 1, 1, 'Fixture pullout', 'Original supplier', 3 FROM product_batches WHERE product_id=1 LIMIT 1");
+}
+if ($argv[1] === 'receiving_code_race') {
+    require_once __DIR__ . '/../../app/Services/ProductService.php';
+    $field = $argv[3];
+    $categoryId = (int)$pdo->query('SELECT MIN(category_id) FROM categories')->fetchColumn();
+    while (microtime(true) < (float)$argv[4]) usleep(1000);
+    try {
+        echo json_encode(['id' => (new ProductService($pdo))->createProduct([
+            'product_name' => 'Concurrent code ' . $field, 'category_id' => $categoryId, 'base_unit' => 'piece',
+            'cost_price' => '3', 'selling_price' => '9', $field => 'ISSUE-482-SAME-CODE',
+        ], 3)]);
+    } catch (Throwable $exception) {
+        echo json_encode(['error' => $exception->getMessage()]);
+    }
+}

@@ -137,17 +137,12 @@ class ProductService
         if (strlen($barcode) > 50) {
             throw new RuntimeException('Barcode must not exceed 50 characters.');
         }
-        $this->assertBarcodeAvailable($barcode);
         if ($caseBarcode !== '') {
             if (strlen($caseBarcode) > 80) throw new RuntimeException('Case barcode must not exceed 80 characters.');
             if ($caseBarcode === $barcode) throw new RuntimeException('Case barcode must be distinct from piece barcode.');
-            $this->assertBarcodeAvailable($caseBarcode);
         }
 
         $sku = trim((string)($data['sku'] ?? '')) ?: $barcode;
-        if ($sku !== $barcode) {
-            $this->assertBarcodeAvailable($sku);
-        }
 
         $packConfig = $this->validatePackConfiguration(
             $data,
@@ -241,6 +236,10 @@ class ProductService
             StoreWriteGate::begin($this->pdo);
         }
         try {
+            // The Store write gate serializes checks across barcode columns and the ensuing insert.
+            foreach (array_unique(array_filter([$barcode, $sku, $caseBarcode, $packBarcode], static fn($code) => $code !== null && $code !== '')) as $code) {
+                $this->assertBarcodeAvailable($code);
+            }
             $stmt = $this->pdo->prepare(
                 "INSERT INTO products (
                     sku, barcode, case_barcode, pack_size, pack_barcode, pack_price,
@@ -729,7 +728,7 @@ class ProductService
         return $stmt->fetch() ?: null;
     }
 
-    private function assertBarcodeAvailable(string $barcode, ?int $excludeProductId = null): void
+    public function assertBarcodeAvailable(string $barcode, ?int $excludeProductId = null): void
     {
         $excludeSql = $excludeProductId !== null ? ' AND product_id != ?' : '';
         $params = [$barcode, $barcode, $barcode, $barcode];
@@ -766,8 +765,7 @@ class ProductService
         float $sellingPrice,
         ?string $pieceBarcode = null,
         ?string $sku = null,
-        ?string $caseBarcode = null,
-        ?int $excludeProductId = null
+        ?string $caseBarcode = null
     ): ?array {
         $hasPackSize = array_key_exists('pack_size', $data) && $data['pack_size'] !== null && $data['pack_size'] !== '';
         $hasPackBarcode = array_key_exists('pack_barcode', $data) && $data['pack_barcode'] !== null && trim((string)$data['pack_barcode']) !== '';
@@ -803,8 +801,6 @@ class ProductService
         if ($caseBarcode !== null && $caseBarcode !== '' && $packBarcode === $caseBarcode) {
             throw new RuntimeException('Pack barcode must be distinct from case barcode.');
         }
-        $this->assertBarcodeAvailable($packBarcode, $excludeProductId);
-
         $rawPrice = $data['pack_price'];
         if ((!is_string($rawPrice) && !is_int($rawPrice) && !is_float($rawPrice)) || !is_numeric($rawPrice)) {
             throw new RuntimeException('Pack price must be a valid positive amount.');
@@ -1040,8 +1036,7 @@ class ProductService
                 $sellingPrice,
                 $existing['barcode'],
                 $existing['sku'],
-                $existing['case_barcode'],
-                $productId
+                $existing['case_barcode']
             );
 
             // Check if product currently has sealed packs
@@ -1084,6 +1079,7 @@ class ProductService
             StoreWriteGate::begin($this->pdo);
         }
         try {
+            if ($hasPackInput && $newPackBarcode !== null) $this->assertBarcodeAvailable($newPackBarcode, $productId);
             if ($newPackSize !== null) {
                 // Existing batches without explicit forms preserve loose stock evidence (never infer packs)
                 $this->pdo->prepare(

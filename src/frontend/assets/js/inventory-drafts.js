@@ -1,7 +1,7 @@
 /* Private device-local recovery; never posts an inventory operation on resume. */
 window.RetailMindInventoryDrafts?.destroy?.();
 window.RetailMindInventoryDrafts = (() => {
-    let config, key, prefix, busy = 0, restoring = false, active = false;
+    let config, key, prefix, ready, busy = 0, restoring = false, active = false;
     const lifetime = new AbortController();
     let observer;
     let adapter = {};
@@ -23,6 +23,31 @@ window.RetailMindInventoryDrafts = (() => {
         if (duration > 0) noticeTimer = setTimeout(() => status.remove(), duration);
     }
     function token() { return Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join(''); }
+    function tabProof(id, create = false) {
+        const storageKey = 'retailmind:receiving:' + id;
+        let name = /^retailmind-inventory-([a-f0-9]{32})$/.exec(window.name)?.[1];
+        if (create) {
+            // Opened tabs can inherit sessionStorage, but they start with their own window name.
+            if (!name) window.name = 'retailmind-inventory-' + (name = token().slice(0, 32));
+            sessionStorage.setItem(storageKey, name + ':' + token().slice(0, 32));
+        }
+        const [owner, secret] = (sessionStorage.getItem(storageKey) || '').split(':');
+        return name && owner === name && secret ? secret + name : '';
+    }
+    async function productHandoff(url, csrf, action, id, details = {}) {
+        const proof = tabProof(id);
+        if (!proof) throw new Error('Open the original tab to return to this delivery.');
+        const response = await fetch(url, {method: 'POST', body: new URLSearchParams({
+            ...details, product_handoff_action: action, handoff_id: id, handoff_tab: proof, csrf_token: csrf,
+        })});
+        if (!response.headers.get('content-type')?.includes('application/json') || response.redirected) {
+            throw new Error('Sign in with the original account and try again.');
+        }
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+        return result;
+    }
+    function storagePrefix(pathname) { return 'retailmind:inventory:v1:' + config.user + ':' + pathname + ':'; }
     function identity(form) {
         return form.dataset.inventoryDraftId || (form.dataset.inventoryDraftId = form.id ||
             [form.querySelector('[name="action"]')?.value || 'entry', form.querySelector('[name="adjustment_id"], [name="count_id"]')?.value || ''].join(':'));
@@ -44,7 +69,7 @@ window.RetailMindInventoryDrafts = (() => {
         prepare(form);
         const values = [];
         for (const field of form.elements) {
-            if (!field.name || ['csrf_token','receiving_nonce'].includes(field.name) || ['submit','button','reset'].includes(field.type)) continue;
+            if (!field.name || ['csrf_token','receiving_nonce','handoff_tab'].includes(field.name) || ['submit','button','reset'].includes(field.type)) continue;
             const item = {name: field.name, value: field.value, checked: field.checked};
             if (field.multiple) item.selected = Array.from(field.selectedOptions, option => option.value);
             if (field.type === 'file') {
@@ -64,6 +89,39 @@ window.RetailMindInventoryDrafts = (() => {
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const ciphertext = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, key, encoder.encode(JSON.stringify(draft)));
         localStorage.setItem(prefix + draft.id, JSON.stringify({iv: encode(iv), ciphertext: encode(new Uint8Array(ciphertext))}));
+    }
+    async function read(storageKey) {
+        const stored = JSON.parse(localStorage.getItem(storageKey));
+        if (!stored) return null;
+        const plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));
+        return JSON.parse(decoder.decode(plain));
+    }
+    async function checkpoint(form, id) {
+        if (!await ready || !active || restoring || !eligible(form)) return false;
+        if (id === identity(form)) return keep(form);
+        try {
+            const draft = await capture(form);
+            draft.id = id;
+            draft.values.find(item => item.name === 'inventory_draft_id').value = id;
+            await persist(draft);
+            await discardCopy(form, draft);
+            form.dataset.inventoryDraftId = id;
+            form.elements.inventory_draft_id.value = id;
+            return true;
+        } catch (_) { return false; }
+    }
+    async function discardCopy(form, copy) {
+        const id = identity(form);
+        await snapshots.get(id)?.catch(() => {});
+        try {
+            const original = localStorage.getItem(prefix + id);
+            const source = await read(prefix + id);
+            // Another tab may have saved to the old slot. Remove only our operation's copy.
+            const operation = draft => draft?.values.find(item => item.name === 'operation_token')?.value;
+            if (operation(copy) && operation(source) === operation(copy) && localStorage.getItem(prefix + id) === original) {
+                localStorage.removeItem(prefix + id);
+            }
+        } catch (_) { /* Both encrypted copies remain recoverable. */ }
     }
     async function keep(form, submitting = false) {
         if (!active || restoring || !eligible(form)) return;
@@ -93,17 +151,18 @@ window.RetailMindInventoryDrafts = (() => {
                 notice('Unsaved values kept on this device. Inventory changes only after server confirmation.');
                 if (noticeKey) localStorage.setItem(noticeKey, '1');
             }
-        } catch (_) { notice('Draft could not be kept. Keep this page open; these values may be lost if you close it.', true); }
+            return true;
+        } catch (_) { notice('Draft could not be kept. Keep this page open; these values may be lost if you close it.', true); return false; }
         finally { busy--; }
     }
-    async function discard(formOrId) {
+    async function discard(formOrId, pathname = location.pathname) {
         const id = typeof formOrId === 'string' ? formOrId : identity(formOrId);
         await snapshots.get(id)?.catch(() => {});
         if (typeof formOrId !== 'string' && formOrId.elements.operation_token) formOrId.elements.operation_token.value = token();
-        try { localStorage.removeItem(prefix + id); document.querySelectorAll('[data-recovery-id]').forEach(panel => { if (panel.dataset.recoveryId === id) panel.remove(); }); }
+        try { localStorage.removeItem(storagePrefix(pathname) + id); document.querySelectorAll('[data-recovery-id]').forEach(panel => { if (panel.dataset.recoveryId === id) panel.remove(); }); }
         catch (_) { notice('Draft could not be discarded. Browser storage is unavailable.', true); }
     }
-    async function resume(draft) {
+    async function resume(draft, exact = false) {
         if (restoring) return false;
         restoring = true;
         try {
@@ -131,6 +190,7 @@ window.RetailMindInventoryDrafts = (() => {
                         return false;
                     }
                     if (status.completed) {
+                        if (exact) throw new Error('This operation was already saved.');
                         await discard(draft.id);
                         notice('This inventory operation was already saved. No stock change was repeated. Review its saved record.');
                         return true;
@@ -142,6 +202,8 @@ window.RetailMindInventoryDrafts = (() => {
             await adapter.prepare?.(restoredDraft);
             const form = Array.from(document.forms).find(item => eligible(item) && (identity(item) === draft.id || (draft.formId && item.id === draft.formId)));
             if (!form) throw new Error('The form is no longer available with your current access.');
+            const adopt = adapter.adopt?.(draft, form);
+            if (adopt) form.dataset.inventoryDraftId = draft.id;
             prepare(form);
             if (draft.context.submittedFingerprint) submitted.set(form, {token:operationToken, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
             if (draft.context.operationKind) form.dataset.inventorySubmissionKind = draft.context.operationKind;
@@ -159,7 +221,7 @@ window.RetailMindInventoryDrafts = (() => {
                 } else if (field.multiple) {
                     for (const option of field.options) option.selected = (item.selected || []).includes(option.value);
                 } else if (['checkbox','radio'].includes(field.type)) field.checked = !!item.checked;
-                else field.value = item.value;
+                else field.value = adopt === false && item.name === 'inventory_draft_id' ? identity(form) : item.value;
                 field.dispatchEvent(new Event('input', {bubbles: true}));
                 field.dispatchEvent(new Event('retailmind:fieldrestore'));
             }
@@ -173,15 +235,14 @@ window.RetailMindInventoryDrafts = (() => {
     async function offer(storageKey) {
         if (location.pathname.endsWith('/products.php') && storageKey === prefix + 'entry:') return;
         try {
-            const stored = JSON.parse(localStorage.getItem(storageKey));
-            let plain;
+            let draft;
             try {
-                plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));
+                draft = await read(storageKey);
             } catch (_) {
                 // A matching user ID alone does not establish ownership after an account or installation change.
                 return;
             }
-            const draft = JSON.parse(decoder.decode(plain));
+            if (!draft || adapter.offer?.(draft) === false) return;
             if (config.confirmed && config.confirmedForm === draft.id && draft.context.latestSubmittedFingerprint === await fingerprint(draft.values)) { await discard(draft.id); return; }
             const retained = Array.from(document.forms).find(form => identity(form) === draft.id && form.elements.operation_token?.value === draft.values.find(item => item.name === 'operation_token')?.value);
             if (retained && draft.context.submittedFingerprint) {
@@ -221,7 +282,7 @@ window.RetailMindInventoryDrafts = (() => {
         notice('Your older receiving draft was moved into private recovery. Review receipt history before retrying an older entry.');
     }
     async function initialize() {
-        prefix = 'retailmind:inventory:v1:' + config.user + ':' + location.pathname + ':';
+        prefix = storagePrefix(location.pathname);
         for (const form of document.forms) if (eligible(form)) prepare(form);
         try {
             if (!config.key || !crypto.subtle) throw new Error('Secure storage unavailable');
@@ -247,7 +308,9 @@ window.RetailMindInventoryDrafts = (() => {
                 keep(form, true).then(() => setTimeout(() => { resubmitting.add(form); form.requestSubmit(submitter); }, 0));
             }, {capture: true, signal: lifetime.signal});
             window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } }, {signal: lifetime.signal});
+            return true;
         } catch (_) {
+            active = false;
             config.key = null;
             if (!location.pathname.endsWith('/products.php')) {
                 notice('Draft recovery is unavailable. Use HTTPS and allow browser storage. Keep this page open until the server confirms saving.', true);
@@ -261,9 +324,16 @@ window.RetailMindInventoryDrafts = (() => {
             config = options;
             window.addEventListener('pagehide', destroy, {once:true, signal:lifetime.signal});
             window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); }, {signal:lifetime.signal});
-            document.addEventListener('DOMContentLoaded', initialize, {once:true, signal:lifetime.signal});
+            ready = new Promise(resolve => document.addEventListener('DOMContentLoaded', () => resolve(initialize()), {once:true, signal:lifetime.signal}));
         },
-        discard, keep, identity, destroy,
+        discard, keep, identity, destroy, checkpoint, tabProof, productHandoff,
+        async restore(id) {
+            if (!await ready || !active) return false;
+            try {
+                const draft = await read(prefix + id);
+                return draft?.id === id && await resume(draft, true) ? draft : false;
+            } catch (_) { return false; }
+        },
         async flush() {
             for (;;) {
                 const pending = Array.from(snapshots.values());

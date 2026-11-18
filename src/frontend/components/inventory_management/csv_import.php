@@ -98,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $beforeStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
                         $beforeStmt->execute([(int)$prod['product_id']]);
                         $beforeProduct = $beforeStmt->fetch();
+                        if ($barcode !== $beforeProduct['barcode']) $productService->assertBarcodeAvailable($barcode, $product_id);
                         if ($cost_price === null && \App\Inventory\ProductCost::known($beforeProduct)) $cost_price = (float)$beforeProduct['cost_price'];
 
                         // Update existing
@@ -148,6 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         );
                     } else {
                         // Insert new
+                        $productService->assertBarcodeAvailable($sku);
+                        if ($barcode !== $sku) $productService->assertBarcodeAvailable($barcode);
                         $ins = $pdo->prepare("INSERT INTO products (sku, barcode, product_name, brand, category_id,
                                             unit_price, cost_price, reorder_level, supplier, preferred_supplier,
                                             supplier_lead_time_days, safety_stock, minimum_order_quantity,
