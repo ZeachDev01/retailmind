@@ -93,18 +93,58 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
 $summary = $activationService->getApprovalSummary();
 
-$formatError = static function ($val): string {
-    if ($val === null || !is_numeric($val) || !is_finite((float)$val) || (float)$val < 0) {
-        return 'Not available';
-    }
-    return number_format((float)$val * 100, 2) . '% error (' . number_format((float)$val, 4) . ')';
+$reviewEscape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$reviewNumber = static fn($value): ?float => is_numeric($value) && is_finite((float)$value) && (float)$value >= 0 ? (float)$value : null;
+$reviewPercent = static fn($value): string => $reviewNumber($value) === null ? 'Not available' : number_format($value * 100, 2) . '%';
+$reviewUnits = static fn($value): string => $reviewNumber($value) === null ? 'Not available' : rtrim(rtrim(number_format($value, 2), '0'), '.') . ' units';
+$approved = $summary['approved_version'];
+$isPaused = $summary['is_recommendations_suspended'];
+$isObservationMode = $summary['is_observation_mode'];
+$hasCandidate = $summary['has_candidate'];
+$canApprove = $summary['can_approve'];
+$isApproved = $summary['is_current_approved'] ?? false;
+$isRejected = $summary['review_rejected'] ?? false;
+$blocker = $summary['approval_blocker'] ?? '';
+$horizons = $summary['candidate_quality']['horizons'] ?? [];
+$wape28 = $reviewNumber($horizons[28]['wape'] ?? null);
+$baseline28 = $reviewNumber($horizons[28]['baseline_wape'] ?? null);
+$observation = $summary['observation_progress'] ?? [];
+$coverage = $summary['products'] ?? [];
+$reviewDates = $summary['product_review_dates'] ?? [];
+$testDates = $summary['evaluation_periods'] ?? [];
+$recoveryAvailable = $approved !== '' || $isPaused;
+$trainingMessage = match ($summary['training_status']) {
+    'running' => 'Training in progress. Results will appear here when the model is ready for review.',
+    'queued' => 'Model training is queued.',
+    'failed', 'interrupted' => 'Model training did not finish. The Super Administrator can check the training status.',
+    default => match ($summary['setup_state'] ?? null) {
+        'collecting' => 'Waiting for more usable sales history.',
+        'ready' => 'Sales history is ready. Waiting for a training run.',
+        default => '',
+    },
 };
-
-$formatUnits = static function ($val): string {
-    if ($val === null || !is_numeric($val) || !is_finite((float)$val) || (float)$val < 0) {
-        return 'Not available';
+$statusTitle = match (true) {
+    !$hasCandidate => 'No model to review yet',
+    $isApproved && $isPaused => 'Forecast suggestions paused',
+    $isApproved && $isObservationMode => 'Approved model',
+    $isApproved => 'Approved model in use',
+    $canApprove => 'Ready for review',
+    $isRejected => 'Model rejected',
+    empty($observation['observation_complete']) => 'Model under testing',
+    default => 'Model review blocked',
+};
+$reviewBars = static function (array $rows) use ($reviewEscape): void {
+    $max = max(array_column($rows, 'value'));
+    foreach ($rows as $index => $row) {
+        $width = $max > 0 ? $row['value'] / $max * 100 : 0;
+        ?>
+        <div class="model-review-bar">
+            <span><?= $reviewEscape($row['label']) ?></span>
+            <span class="model-review-track" aria-hidden="true"><i class="<?= $index === 0 ? 'is-model' : '' ?>" style="width: <?= $width ?>%"></i></span>
+            <strong><?= $reviewEscape($row['display']) ?></strong>
+        </div>
+        <?php
     }
-    return number_format((float)$val, 2) . ' units';
 };
 ?>
 <!DOCTYPE html>
@@ -113,131 +153,164 @@ $formatUnits = static function ($val): string {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Model Review &amp; Approval</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
-    <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/registers.css')) ?>">
-    <style>
-        .badge-status { display: inline-block; padding: 0.35rem 0.75rem; border-radius: 9999px; font-weight: 600; font-size: 0.85rem; }
-        .badge-under-evaluation { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); border: 1px solid var(--border, #fcd34d); }
-        .badge-awaiting-approval { background: var(--color-info-subtle, #e0f2fe); color: var(--color-info-text, #075985); border: 1px solid var(--color-info-border, #bae6fd); }
-        .badge-approved { background: var(--color-success-subtle, #dcfce7); color: var(--color-success-text, #166534); border: 1px solid var(--color-success-border, #86efac); }
-        .progress-bar-container { background: var(--color-bg-subtle, #e5e7eb); border-radius: 8px; overflow: hidden; height: 16px; margin: 0.5rem 0; width: 100%; max-width: 400px; }
-        .progress-bar-fill { background: var(--color-primary, #2563eb); height: 100%; transition: width 0.3s ease; }
-        .limitations-list { padding-left: 1.25rem; margin: 0.5rem 0; line-height: 1.6; }
-        .limitations-list li { margin-bottom: 0.35rem; }
-        .approval-form-card { background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #e5e7eb); border-radius: 8px; padding: 1.25rem; margin-top: 1rem; }
-        .incumbent-box { background: var(--color-bg-subtle, #f9fafb); border: 1px solid var(--border-color, #e5e7eb); border-radius: 6px; padding: 0.75rem 1rem; margin-top: 0.75rem; }
-    </style>
+    <link rel="stylesheet" href="<?= $reviewEscape(theme_url('assets/css/style.css')) ?>">
+    <link rel="stylesheet" href="<?= $reviewEscape(theme_url('assets/css/registers.css')) ?>">
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
+    <script src="<?= $reviewEscape(app_url('assets/js/model-review.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/model-review.js')) ?>" defer></script>
 </head>
 <body class="forecast-workspace model-review-page">
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content">
-        <header class="page-heading">
-            <div>
-                <h1>Model Review &amp; Approval</h1>
-            </div>
-        </header>
+        <header class="page-heading"><div><h1>Model Review</h1></div></header>
         <?php forecast_workflow('review'); ?>
 
-        <?php if ($message): ?>
-            <div id="review-feedback" class="alert <?= htmlspecialchars($messageClass) ?>" role="status"><?= htmlspecialchars($message) ?></div>
-        <?php endif; ?>
+        <div class="model-review-content">
+            <?php if ($message): ?>
+                <div id="review-feedback" class="alert <?= $reviewEscape($messageClass) ?>" role="status"><?= $reviewEscape($message) ?></div>
+            <?php endif; ?>
 
-        <div class="card-grid" style="margin-bottom: 1.5rem;">
-            <article class="stat-card with-icon">
-                <span class="stat-icon"><i class="bi bi-cpu" aria-hidden="true"></i></span>
-                <div class="label">Candidate Model</div>
-                <div class="value" style="font-size: 1.1rem;"><?= htmlspecialchars($summary['candidate_version'] ?: 'None') ?></div>
-                <div class="hint"><?= htmlspecialchars($summary['status_label'] ?? 'No candidate') ?></div>
-            </article>
-
-            <article class="stat-card with-icon status-healthy">
-                <span class="stat-icon"><i class="bi bi-check2-circle" aria-hidden="true"></i></span>
-                <div class="label">Approved Store Model</div>
-                <div class="value" style="font-size: 1.1rem;"><?= htmlspecialchars($summary['approved_version'] ?: 'None yet (First model)') ?></div>
-                <div class="hint">Approved version for Store forecasting</div>
-            </article>
-
-            <article class="stat-card with-icon">
-                <span class="stat-icon"><i class="bi bi-clock-history" aria-hidden="true"></i></span>
-                <div class="label">Observation Progress</div>
-                <div class="value"><?= (int)($summary['observation_progress']['usable_days'] ?? 0) ?> / <?= (int)($summary['observation_progress']['required_days'] ?? 28) ?></div>
-                <div class="hint">Completed usable target dates</div>
-            </article>
-
-            <article class="stat-card with-icon <?= !empty($summary['is_recommendations_suspended']) ? 'status-warning' : (!empty($summary['approved_version']) ? 'status-healthy' : 'status-neutral') ?>">
-                <span class="stat-icon"><i class="bi bi-cart-check" aria-hidden="true"></i></span>
-                <div class="label">Forecast Guidance Approval</div>
-                <div class="value"><?= !empty($summary['is_recommendations_suspended']) ? 'Paused' : (!empty($summary['approved_version']) ? 'Approved' : 'No approved model') ?></div>
-                <div class="hint"><?= !empty($summary['is_recommendations_suspended']) ? 'Suggestions suspended locally' : (!empty($summary['approved_version']) ? 'Check Demand Forecast for current Product coverage' : 'Stock rules in effect until model approved') ?></div>
-            </article>
-        </div>
-
-        <!-- Candidate Qualification & Status Banner -->
-            <details class="forecast-details"><summary id="status-heading">Approval status details</summary>
-            <div style="margin: 0.75rem 0;">
-                <?php if ($summary['overall_status'] === 'awaiting_approval'): ?>
-                    <span class="badge-status badge-awaiting-approval">Awaiting approval</span>
-                    <p style="margin-top: 0.5rem;">All automated technical checks have passed. Candidate is qualified and awaiting local Administrator approval.</p>
-                <?php elseif ($summary['overall_status'] === 'approved'): ?>
-                    <span class="badge-status badge-approved">Selected as approved model</span>
-                    <p style="margin-top: 0.5rem;">Operational status: <strong><?= htmlspecialchars($summary['operational_status']) ?></strong></p>
-                <?php else: ?>
-                    <span class="badge-status badge-under-evaluation">Under evaluation</span>
-                    <p style="margin-top: 0.5rem;">Candidate is currently under evaluation. Required performance holdout checks or prospective observation days remain incomplete.</p>
-                <?php endif; ?>
-            </div>
-            </details>
-
-        <!-- Governance Actions & Operational Controls -->
-        <section class="dashboard-section" aria-labelledby="actions-heading">
-            <h2 id="actions-heading"><i class="bi bi-sliders" aria-hidden="true"></i> Model actions</h2>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem;">
-                <!-- Candidate Decision Box -->
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1.05rem;">Approve or reject</h3>
-                    <?php if (!empty($summary['can_approve'])): ?>
-                        <form method="post" style="margin-bottom: 1rem;">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="approve">
-                            <input type="hidden" name="model_version" value="<?= htmlspecialchars($summary['candidate_version']) ?>">
-                            <div class="form-group" style="margin-bottom: 0.75rem;">
-                                <label for="justification">Operational Approval Notes</label>
-                                <input type="text" id="justification" name="justification" autocomplete="off" placeholder="e.g. Verified 28-day holdout and prospective observation" class="w-full" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary w-full">
-                                <i class="bi bi-check-lg" aria-hidden="true"></i> Approve &amp; Activate Model
-                            </button>
-                        </form>
-
-                        <form method="post">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="reject">
-                            <input type="hidden" name="model_version" value="<?= htmlspecialchars($summary['candidate_version']) ?>">
-                            <div class="form-group" style="margin-bottom: 0.75rem;">
-                                <label for="reject-reason">Rejection Reason</label>
-                                <input type="text" id="reject-reason" name="reason" autocomplete="off" placeholder="e.g. Unstable variance on promotional items" class="w-full" required>
-                            </div>
-                            <button type="submit" class="btn btn-secondary w-full">
-                                <i class="bi bi-x-lg" aria-hidden="true"></i> Reject Candidate
-                            </button>
-                        </form>
-                    <?php elseif (!empty($summary['is_current_approved'])): ?>
-                        <p class="text-success"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Model <strong><?= htmlspecialchars($summary['candidate_version']) ?></strong> is selected as approved. Check product coverage before buying.</p>
-                    <?php else: ?>
-                        <p class="text-warning"><i class="bi bi-lock-fill" aria-hidden="true"></i> Approval is blocked until technical checks and observation are complete.</p>
+            <section class="dashboard-section model-review-panel" aria-labelledby="review-heading">
+                <header>
+                    <h2 id="review-heading"><?= $reviewEscape($statusTitle) ?></h2>
+                    <?php if ($canApprove): ?>
+                        <p>All checks passed · <?= (int)$observation['usable_days'] ?> usable days reviewed</p>
+                    <?php elseif ($hasCandidate && !$isApproved && !$isRejected && empty($observation['observation_complete'])): ?>
+                        <p><?= (int)$observation['usable_days'] ?> of <?= (int)$observation['required_days'] ?> usable Store days reviewed.
+                            <?php forecast_help('review-usable-days', 'Open days with reliable sales records count, including verified zero sales. Closed days and stockouts are excluded.', 'About usable Store days'); ?>
+                        </p>
+                        <progress class="model-review-progress" aria-label="Usable Store days reviewed" value="<?= (int)$observation['usable_days'] ?>" max="<?= (int)$observation['required_days'] ?>"></progress>
                     <?php endif; ?>
-                </div>
+                    <?php if (!$isApproved && $blocker !== ''): ?>
+                        <p><?= $reviewEscape($blocker) ?></p>
+                    <?php endif; ?>
+                    <?php if ($isPaused || $isObservationMode || $approved === ''): ?>
+                        <p><?= $isPaused && !$isApproved ? 'Forecast-based suggestions are paused. Buying suggestions use stock rules.' : 'Buying suggestions currently use stock rules.' ?></p>
+                    <?php endif; ?>
+                    <?php if ($trainingMessage !== '' && !$canApprove): ?>
+                        <p class="model-review-system"><i class="bi bi-clock-history" aria-hidden="true"></i> <?= $reviewEscape($trainingMessage) ?></p>
+                    <?php endif; ?>
+                    <?php if (!$hasCandidate || $isApproved): ?>
+                        <a class="btn btn-primary" href="<?= $reviewEscape(app_url($isApproved ? 'components/report/predictions.php' : 'components/report/data_readiness.php')) ?>">
+                            <?= $isApproved ? 'View demand forecast' : 'Check data readiness' ?>
+                        </a>
+                    <?php endif; ?>
+                </header>
 
-                <!-- Operational Controls & Recovery Box -->
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1.05rem;">Buying suggestions &amp; recovery</h3>
+                <?php if ($hasCandidate): ?>
+                    <div class="model-review-evidence">
+                        <?php if ($wape28 !== null && $baseline28 !== null): ?>
+                            <section class="model-review-chart" aria-labelledby="review-error-heading">
+                                <div class="model-review-context">
+                                    <h3 id="review-error-heading">28-day forecast error</h3>
+                                    <?php forecast_help('review-chart-help', 'This compares the model with sales from the matching weekday of the previous week.'
+                                        . ($testDates['start'] && $testDates['end'] ? ' Sales data window: ' . $testDates['start'] . ' to ' . $testDates['end'] . '.' : ''), 'About this forecast comparison'); ?>
+                                </div>
+                                <p class="text-muted">Lower error is better.</p>
+                                <?php
+                                $comparison = [
+                                    ['label' => $isApproved ? 'Approved model' : 'New model', 'value' => $wape28, 'display' => $reviewPercent($wape28)],
+                                    ['label' => 'Repeat last week', 'value' => $baseline28, 'display' => $reviewPercent($baseline28)],
+                                ];
+                                $incumbentWape = $reviewNumber($summary['incumbent_comparison']['horizons'][28]['wape'] ?? null);
+                                if ($incumbentWape !== null) {
+                                    $comparison[] = ['label' => 'Current approved model', 'value' => $incumbentWape, 'display' => $reviewPercent($incumbentWape)];
+                                }
+                                $reviewBars($comparison);
+                                ?>
+                            </section>
+                        <?php else: ?>
+                            <p>No completed forecast error comparison yet.</p>
+                        <?php endif; ?>
 
+                        <details class="forecast-details model-review-metrics" name="model-review-evidence" data-review-metrics>
+                            <summary>Technical metrics</summary>
+                            <?php if ($horizons): ?>
+                                <div class="model-review-context">
+                                    <div class="model-review-switch" role="group" aria-label="Forecast horizon" hidden>
+                                        <?php foreach ([7, 14, 28] as $days): ?>
+                                            <button type="button" class="btn btn-secondary" data-review-horizon="<?= $days ?>" aria-pressed="<?= $days === 28 ? 'true' : 'false' ?>"><?= $days ?> days</button>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <?php forecast_help('review-metrics-help', 'Model: ' . $summary['candidate_version'] . '. The WAPE limit is the maximum forecast error allowed for the selected horizon.', 'About the model and WAPE limit'); ?>
+                                </div>
+                                <?php
+                                $measures = [
+                                    'wape' => ['WAPE (%)', 'Total absolute forecast error as a share of recorded sales. Lower is better.', $reviewPercent],
+                                    'mae' => ['MAE (units)', 'Average absolute difference between forecast and actual sales, in units. Lower is better.', $reviewUnits],
+                                    'rmse' => ['RMSE (units)', 'Forecast error in units that gives larger errors more weight. Lower is better.', $reviewUnits],
+                                ];
+                                ?>
+                                <?php foreach ([7, 14, 28] as $days): $metrics = $horizons[$days] ?? []; ?>
+                                    <div class="model-review-metric-period" data-review-period="<?= $days ?>">
+                                        <h4 class="model-review-period-heading"><?= $days ?> days ahead</h4>
+                                        <?php if (!$metrics): ?>
+                                            <p>Test results are unavailable for this horizon.</p>
+                                        <?php else: ?>
+                                            <div class="data-table-shell">
+                                                <table class="data-table model-review-table" aria-label="<?= $days ?>-day forecast metrics">
+                                                    <thead><tr><th scope="col">Measure</th><th scope="col">Model</th><th scope="col">Repeat last week</th></tr></thead>
+                                                    <tbody>
+                                                        <?php foreach ($measures as $key => [$label, $help, $format]): ?>
+                                                            <tr>
+                                                                <th scope="row"><?= $reviewEscape($label) ?> <?php forecast_help("review-{$key}-{$days}", $help, "How to read {$key}"); ?></th>
+                                                                <td><?= $format($metrics[$key] ?? null) ?></td>
+                                                                <td><?= $format($metrics['baseline_' . $key] ?? null) ?></td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <p class="model-review-check">
+                                                <strong><?= $reviewEscape(ucfirst($metrics['gate_status'])) ?></strong> · WAPE limit <?= $reviewPercent($metrics['max_wape_limit']) ?>
+                                                <?php if ($metrics['gate_status'] !== 'passed' && $metrics['gate_reason'] !== ''): ?> — <?= $reviewEscape($metrics['gate_reason']) ?><?php endif; ?>
+                                            </p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p>Test results are unavailable for this model.</p>
+                            <?php endif; ?>
+                        </details>
+
+                        <?php require __DIR__ . '/model_review_products.php'; ?>
+
+                        <?php if ($canApprove): ?>
+                            <section class="model-review-decision" aria-labelledby="review-decision-heading">
+                                <div class="model-review-context">
+                                    <h3 id="review-decision-heading">Model decision</h3>
+                                    <?php forecast_help('review-decision-help', 'Approval selects this model for Store forecasting. Stock and orders stay as they are with either decision.', 'What a model decision changes'); ?>
+                                </div>
+                                <p>Approval queues a forecast update. Rejection keeps the current setup.</p>
+                                <div class="model-review-note-actions">
+                                    <?php foreach ([
+                                        'approve' => ['Approve and activate', 'justification', 'Reason for approval', 'btn-primary'],
+                                        'reject' => ['Reject model', 'reason', 'Reason for rejection', 'btn-secondary'],
+                                    ] as $action => [$label, $field, $fieldLabel, $buttonClass]): ?>
+                                        <details class="model-review-action" name="model-review-decision">
+                                            <summary class="btn <?= $buttonClass ?>"><?= $label ?></summary>
+                                            <form method="post">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="action" value="<?= $action ?>">
+                                                <input type="hidden" name="model_version" value="<?= $reviewEscape($summary['candidate_version']) ?>">
+                                                <label for="review-<?= $action ?>-note"><?= $fieldLabel ?></label>
+                                                <input id="review-<?= $action ?>-note" name="<?= $field ?>" type="text" required>
+                                                <button type="submit" class="btn <?= $buttonClass ?>">Confirm <?= $action === 'approve' ? 'approval' : 'rejection' ?></button>
+                                            </form>
+                                        </details>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <?php if ($recoveryAvailable): ?>
+                <details class="forecast-details model-review-recovery">
+                    <summary>Buying suggestions &amp; recovery</summary>
                     <!-- Pause/Resume -->
                     <div style="margin-bottom: 1.25rem;">
-                        <label style="font-weight: 600; font-size: 0.9rem;">Buying suggestions</label>
                         <p style="font-size: 0.85rem; color: var(--muted, #626b7a); margin: 0.25rem 0 0.5rem 0;">
                             Stock rules remain available while forecast suggestions are paused.
                         </p>
@@ -250,24 +323,26 @@ $formatUnits = static function ($val): string {
                                     <input type="text" id="pause-reason" name="reason" autocomplete="off" placeholder="Reason for pause (e.g. Store inventory audit)" class="w-full" required>
                                 </div>
                                 <button type="submit" class="btn btn-secondary w-full">
-                                    <i class="bi bi-pause-circle" aria-hidden="true"></i> Pause Purchasing Suggestions
+                                    <i class="bi bi-pause-circle" aria-hidden="true"></i> Pause forecast-based suggestions
                                 </button>
                             </form>
-                        <?php else: ?>
+                        <?php elseif ($summary['can_resume']): ?>
                             <form method="post">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="resume">
                                 <button type="submit" class="btn btn-primary w-full">
-                                    <i class="bi bi-play-circle" aria-hidden="true"></i> Resume Purchasing Suggestions
+                                    <i class="bi bi-play-circle" aria-hidden="true"></i> Resume forecast-based suggestions
                                 </button>
                             </form>
+                        <?php else: ?>
+                            <p>Resuming requires a compatible approved model available for Store forecasting.</p>
                         <?php endif; ?>
                     </div>
 
                     <!-- Rollback to Previous Model -->
                     <?php if (!empty($summary['can_rollback'])): ?>
                         <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 1rem;">
-                            <label style="font-weight: 600; font-size: 0.9rem;">Reversible Rollback</label>
+                            <h3>Previous model</h3>
                             <p style="font-size: 0.85rem; color: var(--muted, #626b7a); margin: 0.25rem 0 0.5rem 0;">
                                 Restore previously approved model: <strong><?= htmlspecialchars($summary['previous_version']) ?></strong>
                             </p>
@@ -285,162 +360,27 @@ $formatUnits = static function ($val): string {
                         </div>
                     <?php elseif (!empty($summary['previous_version'])): ?>
                         <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 1rem;">
-                            <label style="font-weight: 600; font-size: 0.9rem;">Reversible Rollback</label>
+                            <h3>Previous model</h3>
                             <p style="font-size: 0.85rem; color: var(--theme-warning-text, #92400e); margin: 0.25rem 0 0.5rem 0;">
                                 Rollback to previous model <strong><?= htmlspecialchars($summary['previous_version']) ?></strong> unavailable: <?= htmlspecialchars($summary['rollback_validation']['reason'] ?? 'Incompatible artifact') ?>
                             </p>
                         </div>
                     <?php endif; ?>
-                </div>
-            </div>
-        </section>
 
-        <!-- Activation Consequences & Operational Role -->
-<details class="forecast-details"><summary id="consequences-heading">What approval changes</summary>
+                </details>
+            <?php endif; ?>
 
-            <div class="incumbent-box" style="line-height: 1.6;">
-                <p>Forecasts estimate sales. Replenishment Recommendations suggest buying quantities after stock and buying rules are considered. Staff decide what to buy; approval does not place orders or change stock.</p>
-                <p style="margin-bottom: 0;"><strong>Operational coverage &amp; fallback:</strong> Approval enables forecast-backed suggestions for eligible products. Other products keep using stock rules.</p>
-            </div>
-        </details>
-
-        <!-- Product Coverage and Input Blockers -->
-        <section class="dashboard-section" aria-labelledby="products-heading">
-            <h2 id="products-heading"><i class="bi bi-box-seam" aria-hidden="true"></i> Product coverage <?php forecast_help('coverage-scope-help', 'Products without enough sales history use stock rules instead of forecasts.', 'About product coverage'); ?></h2>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; margin-top: 1rem;">
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-check-circle text-success" aria-hidden="true"></i> Covered Products (<?= (int)($summary['products']['covered_count'] ?? 0) ?>)</h3>
-                    <?php if (empty($summary['products']['covered'])): ?>
-                        <p class="text-muted" style="font-size: 0.9rem;">No products currently covered in candidate model.</p>
-                    <?php else: ?>
-                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
-                            <?php foreach ($summary['products']['covered'] as $cp): ?>
-                                <li><strong><?= htmlspecialchars($cp['product_name']) ?></strong> (<?= htmlspecialchars($cp['sku']) ?>)</li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
-                </div>
-
-                <div class="approval-form-card">
-                    <h3 style="margin-top: 0; font-size: 1rem;"><i class="bi bi-exclamation-triangle text-warning" aria-hidden="true"></i> Excluded Products &amp; Blockers (<?= (int)($summary['products']['excluded_count'] ?? 0) ?>)</h3>
-                    <?php if (empty($summary['products']['excluded'])): ?>
-                        <p class="text-muted" style="font-size: 0.9rem;">All active products meet data prerequisites.</p>
-                    <?php else: ?>
-                        <ul style="padding-left: 1.25rem; font-size: 0.9rem; line-height: 1.5;">
-                            <?php foreach ($summary['products']['excluded'] as $ep): ?>
-                                <li>
-                                    <strong><?= htmlspecialchars($ep['product_name']) ?></strong> (<?= htmlspecialchars($ep['sku']) ?>):
-                                    <br><span style="color: var(--theme-warning-text, #92400e);"><?= htmlspecialchars($ep['exclusion_reason']) ?></span>
-                                    <br><span style="font-size: 0.85rem; color: var(--muted, #626b7a);"><?= htmlspecialchars($ep['blocked_next_action']) ?></span>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </section>
-
-        <!-- Prospective Observation Holdout -->
-        <section class="dashboard-section" aria-labelledby="obs-heading">
-            <h2 id="obs-heading"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Observation progress</h2>
-            <p class="section-description">28 usable days of actual Store sales required. <?php forecast_help('observation-help', 'Missing or Stockout Day targets do not advance observation. Recorded closures pause progress without resetting it.', 'About observation progress'); ?></p>
-
-            <div style="margin: 0.75rem 0;">
-                <div style="display: flex; justify-content: space-between; max-width: 400px; font-weight: 600; font-size: 0.9rem;">
-                    <span>Completed Target Dates:</span>
-                    <span><?= (int)($summary['observation_progress']['usable_days'] ?? 0) ?> / 28 days</span>
-                </div>
-                <div class="progress-bar-container">
-                    <?php
-                    $pct = min(100, max(0, round(((int)($summary['observation_progress']['usable_days'] ?? 0) / 28) * 100)));
-                    ?>
-                    <div class="progress-bar-fill" style="width: <?= $pct ?>%;"></div>
-                </div>
-                <p style="font-size: 0.9rem; color: var(--muted, #626b7a);">
-                    <?= htmlspecialchars($summary['observation_progress']['explanation'] ?? '') ?>
-                </p>
-            </div>
-        </section>
-
-        <!-- Compare with approved model Box -->
-        <section class="dashboard-section" aria-labelledby="incumbent-heading">
-            <h2 id="incumbent-heading"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Compare with approved model</h2>
-            <div class="incumbent-box">
-                <p style="margin: 0; font-size: 0.95rem;"><?= htmlspecialchars($summary['incumbent_comparison']['status_message'] ?? '') ?></p>
-                <?php if (!empty($summary['incumbent_comparison']['available'])): ?>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem;">
-                        <strong>Approved Model (<?= htmlspecialchars($summary['incumbent_comparison']['version']) ?>) 28-day WAPE:</strong>
-                        <?= $formatError($summary['incumbent_comparison']['horizons'][28]['wape'] ?? null) ?>
-                        vs <strong>Candidate 28-day WAPE:</strong>
-                        <?= $formatError($summary['candidate_quality']['horizons'][28]['wape'] ?? null) ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </section>
-
-        <!-- Supporting Technical Details & Holdout Metrics -->
-<details class="forecast-details"><summary id="eval-heading">Technical checks &amp; error metrics</summary>
-
-            <p class="section-description">
-                Evaluation compares candidate predictions against recorded Store sales in units and against the <strong><?= htmlspecialchars($summary['comparison_method'] ?? 'Weekly Seasonal Naive') ?></strong> baseline across 3 chronological 28-day holdout folds (<?= htmlspecialchars($summary['evaluation_periods']['start'] ?? '') ?> to <?= htmlspecialchars($summary['evaluation_periods']['end'] ?? '') ?>).
-                <br><em>Note: WAPE measures relative prediction error (lower is better); it is an error metric, not an accuracy percentage. Raw MAE and RMSE reflect deviation in units sold.</em>
-            </p>
-
-            <div class="data-table-shell">
-                <div class="data-table-scroll" tabindex="0" role="region" aria-labelledby="eval-heading">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Forecast Horizon</th>
-                                <th scope="col">Candidate Error (WAPE)</th>
-                                <th scope="col">Candidate MAE</th>
-                                <th scope="col">Repeat Last Week (WAPE)</th>
-                                <th scope="col">Baseline MAE</th>
-                                <th scope="col">Quality Gate Limit</th>
-                                <th scope="col">Outcome</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php if (empty($summary['candidate_quality']['horizons'])): ?>
-                            <tr><td colspan="7" style="text-align: center;">No completed chronological evaluations recorded for this candidate.</td></tr>
-                        <?php else: ?>
-                            <?php foreach ([7, 14, 28] as $horizon): ?>
-                                <?php $hData = $summary['candidate_quality']['horizons'][$horizon] ?? null; ?>
-                                <tr>
-                                    <td><strong><?= $horizon ?> days ahead</strong></td>
-                                    <td><?= $hData ? $formatError($hData['wape']) : 'Not available' ?></td>
-                                    <td><?= $hData ? $formatUnits($hData['mae']) : 'Not available' ?></td>
-                                    <td><?= $hData ? $formatError($hData['baseline_wape']) : 'Not available' ?></td>
-                                    <td><?= $hData ? $formatUnits($hData['baseline_mae']) : 'Not available' ?></td>
-                                    <td><?= $hData && $hData['max_wape_limit'] !== null ? $formatError($hData['max_wape_limit']) : 'Missing threshold' ?></td>
-                                    <td>
-                                        <?php if (!$hData || ($hData['gate_status'] ?? '') === 'blocked'): ?>
-                                            <span class="tag tag-warning">Blocked: Missing threshold</span>
-                                        <?php elseif (($hData['gate_status'] ?? '') === 'passed'): ?>
-                                            <span class="tag tag-success">Passed</span>
-                                        <?php else: ?>
-                                            <span class="tag tag-danger">Failed</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </details>
-
-        <!-- Governance Rules and Limitations Box -->
-<details class="forecast-details"><summary id="limitations-heading">Model limitations &amp; safeguards</summary>
-
-            <ul class="limitations-list">
-                <?php foreach (($summary['limitations'] ?? []) as $limitation): ?>
-                    <li><?= htmlspecialchars($limitation) ?></li>
-                <?php endforeach; ?>
-            </ul>
-        </details>
+            <?php if ($hasCandidate): ?>
+                <details class="forecast-details model-review-limitations">
+                    <summary>Model limitations</summary>
+                    <ul>
+                        <?php foreach ($summary['limitations'] as $limitation): ?>
+                            <li><?= $reviewEscape($limitation) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
+        </div>
     </main>
 </div>
 </body>

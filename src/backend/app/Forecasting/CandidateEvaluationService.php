@@ -144,7 +144,7 @@ class CandidateEvaluationService
                   AND df.predicted_units >= 0
                   {$originCondition}
                   {$prospectiveCondition}
-                ORDER BY df.target_date ASC
+                ORDER BY df.target_date ASC, df.horizon_day ASC
             ");
             $stmt->execute([$modelVersion, $asOfDate]);
             $forecasts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -174,6 +174,9 @@ class CandidateEvaluationService
 
         $historyService = new DemandHistoryService();
         $byHorizon = [];
+        $productResults = [];
+        $seenProductDates = [];
+        $reviewDates = [];
 
         foreach ($forecasts as $fc) {
             $pid = (int)$fc['product_id'];
@@ -203,8 +206,17 @@ class CandidateEvaluationService
                 continue;
             }
 
-            $targetDates[$date] = true;
             $actual = (float)$day['valid_sales_units'];
+            // Compare one forecast per Product per day, on the first 28 usable Store dates.
+            if ((count($reviewDates) < 28 || isset($reviewDates[$date])) && !isset($seenProductDates[$pid][$date]) && $h >= 1 && $h <= 28) {
+                $reviewDates[$date] = true;
+                $seenProductDates[$pid][$date] = true;
+                $productResults[$pid] ??= ['forecast' => 0.0, 'actual' => 0.0, 'days' => 0];
+                $productResults[$pid]['forecast'] += $pred;
+                $productResults[$pid]['actual'] += $actual;
+                $productResults[$pid]['days']++;
+            }
+            $targetDates[$date] = true;
             $byHorizon[$h]['actuals'][] = $actual;
             $byHorizon[$h]['preds'][] = $pred;
         }
@@ -261,6 +273,8 @@ class CandidateEvaluationService
             'closures_paused' => $closuresEncountered,
             'stockouts_excluded' => $stockoutsEncountered,
             'missing_excluded' => $missingEncountered,
+            'product_results' => $productResults,
+            'product_review_dates' => ['start' => array_key_first($reviewDates), 'end' => array_key_last($reviewDates)],
             'metrics_by_horizon' => $metrics
         ];
     }

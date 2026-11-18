@@ -107,6 +107,14 @@ $pdo->exec("
         status VARCHAR(20) DEFAULT 'active'
     );
 
+    CREATE TABLE product_batches (
+        product_id INT,
+        expiration_date DATE,
+        remaining_quantity INT,
+        sealed_quantity INT,
+        loose_quantity INT
+    );
+
     CREATE TABLE sales (
         sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
         sale_date DATETIME,
@@ -362,19 +370,9 @@ assert_true(isset($summary['candidate_quality']['horizons'][28]), '28-day horizo
 assert_true($summary['candidate_quality']['horizons'][28]['max_wape_limit'] === 0.35, '28-day threshold limit snapshot is 0.35');
 assert_true($summary['candidate_quality']['horizons'][28]['gate_status'] === 'passed', '28-day horizon status is passed');
 
-// 3.5 Product coverage & exclusion naming
-assert_true($summary['products']['covered_count'] >= 0, 'Covered products count reported');
-assert_true($summary['products']['excluded_count'] >= 1, 'Excluded immature products count reported');
-$excludedP2 = null;
-foreach ($summary['products']['excluded'] as $ex) {
-    if ($ex['product_id'] === 2) {
-        $excludedP2 = $ex;
-        break;
-    }
-}
-assert_true($excludedP2 !== null, 'Immature Product 2 explicitly named in excluded products');
-assert_true(str_contains($excludedP2['exclusion_reason'], 'accumulated usable days'), 'Product 2 exclusion reason names accumulated usable days requirement');
-assert_true(str_contains($excludedP2['blocked_next_action'], 'stock rules'), 'Product 2 explains blocked next action and stock rules fallback');
+// 3.5 Historic runs can have observation results without recorded training coverage.
+assert_true(!$summary['products']['available'], 'A run without a coverage record is marked unavailable');
+assert_true($summary['products']['excluded_count'] === 0, 'Current training eligibility is not reported as candidate exclusions');
 
 // 3.6 Limitations
 assert_true(count($summary['limitations']) >= 4, 'Model limitations enumerated');
@@ -453,9 +451,8 @@ for ($i = 1; $i <= 28; $i++) {
 
 // 5.1 Replacement summary with incumbent comparison
 $summaryV2 = $activationService->getApprovalSummary($candidateV2, '2026-10-28');
-assert_true($summaryV2['incumbent_comparison']['available'] === true, 'Matching incumbent comparison is now available');
+assert_true($summaryV2['incumbent_comparison']['available'] === false, 'Different or unrecorded test windows do not produce an incumbent comparison');
 assert_true($summaryV2['incumbent_comparison']['version'] === $candidateV1, 'Incumbent version matches previous approved model (V1)');
-assert_true($summaryV2['incumbent_comparison']['horizons'][28]['wape'] === 0.24, 'Incumbent 28-day WAPE is 0.24');
 assert_true($summaryV2['candidate_quality']['horizons'][28]['wape'] === 0.20, 'Candidate 28-day WAPE is 0.20');
 assert_true($summaryV2['can_approve'] === true, 'Replacement candidate is ready to approve');
 

@@ -215,6 +215,36 @@ const fixture = action => {
         // -------------------------------------------------------------
         console.log('Testing Administrator persona on Demand Forecast landing page...');
         await login('admin');
+        await page.goto(origin + '/components/report/forecast_exceptions.php');
+        const affected = page.locator('.forecast-affected-products');
+        assert.equal(await affected.getAttribute('open'), null, 'The Admin product list starts closed');
+        const attention = page.getByRole('region', {name: 'Needs your action', exact: true});
+        assert.equal(await attention.getByRole('heading', {name: 'Needs your action', exact: true}).isVisible(), true);
+        assert.equal(await attention.getByText('No model review is available right now.', {exact: true}).isVisible(), true);
+        assert.equal(await attention.getByText('No approved model yet. Buying suggestions use stock rules.', {exact: true}).isVisible(), true);
+        assert.equal(await page.locator('.main-content .forecast-notice').count(), 0, 'Store status uses the neutral action panel');
+        assert.equal(await page.getByRole('link', {name: 'Review model', exact: true}).count(), 0, 'No review action without an eligible candidate');
+        await affected.locator('summary').press('Enter');
+        assert.equal(await affected.locator('.readiness-status-line').first().innerText(), 'Store-wide');
+        const productDetails = affected.getByRole('link', {name: /View product details for/}).first();
+        assert.match(await productDetails.getAttribute('href'), /product_investigation\.php\?product_id=1$/);
+        for (const width of [1440, 390, 320]) {
+            await page.setViewportSize({width, height: 900});
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Expanded Admin exceptions fit ' + width);
+            if (process.env.FORECAST_SCREENSHOTS && width !== 320) {
+                await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'admin-affected-products-' + width + '.png'), fullPage: true});
+            }
+        }
+        await affected.locator('#filter-search').fill('NoExceptionProductMatches');
+        await affected.getByRole('button', {name: 'Filter', exact: true}).click();
+        await page.waitForURL(url => url.searchParams.get('search') === 'NoExceptionProductMatches');
+        await affected.getByText('No matches. Clear the filters.', {exact: true}).waitFor();
+        await affected.getByRole('link', {name: 'Clear', exact: true}).click();
+        await page.waitForURL(url => url.searchParams.get('products') === '1');
+        await productDetails.click();
+        await page.waitForURL('**/product_investigation.php?product_id=1');
+
+        await page.setViewportSize({width: 1440, height: 900});
         await page.goto(origin + '/components/report/predictions.php');
         await page.waitForLoadState('domcontentloaded');
 
@@ -230,17 +260,20 @@ const fixture = action => {
         assert.equal(await adminStudioNav.locator('a[aria-current="page"]').innerText(), 'Demand forecast', 'Demand Forecast is the active Admin destination');
         assert.equal(await adminStudioNav.locator('a[href*="ml_settings.php"]').count(), 0, 'Administrator navigation excludes Model Training');
         assert.equal(await adminStudioNav.locator('a[href*="forecast_import.php"]').count(), 0, 'Administrator navigation excludes history import');
-        const related = page.locator('.forecast-related');
-        assert.equal(await related.getAttribute('open'), null, 'Extra destinations start collapsed');
-        await related.locator('summary').click();
-        const navText = await page.locator('.forecasting-nav-chips').innerText();
-        for (const label of ['Forecast Exceptions', 'Data Readiness', 'Model Review & Approval', 'Store Calendar', 'Promotions']) assert.ok(navText.includes(label));
-        await related.locator('summary').click();
+        assert.equal(await page.locator('.forecast-tools, .forecast-performance').count(), 0, 'Demand Forecast omits the extra tools and model details');
         assert.equal(await page.locator('.forecast-studio-nav a[href$="replenishment_queue.php"]').count(), 0, 'Administrator studio navigation excludes Inventory Manager buying actions');
         assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0, 'Demand Forecast has no redundant top generate action');
         const s1Heading = page.locator('#heading-usability');
         const s2Heading = page.locator('#heading-actions');
-        assert.match(await s1Heading.innerText(), /Forecast status/);
+        assert.equal(await s1Heading.innerText(), 'No product forecasts yet');
+        const statusAction = page.locator('.forecast-status-action');
+        assert.equal(await statusAction.innerText(), 'Check data readiness');
+        assert.match(await statusAction.getAttribute('href'), /data_readiness\.php$/);
+        const qualityHeading = page.locator('th .forecast-quality-line');
+        const qualityLabel = await qualityHeading.locator('span').first().boundingBox();
+        const qualityHelp = await qualityHeading.locator('button').boundingBox();
+        assert.ok(qualityHelp.x >= qualityLabel.x + qualityLabel.width, 'Quality help sits beside the heading');
+        assert.ok(Math.abs(qualityLabel.y + qualityLabel.height / 2 - qualityHelp.y - qualityHelp.height / 2) < 2, 'Quality heading and help are vertically aligned');
         assert.match(await s2Heading.innerText(), /Forecast checks/);
         const checks = page.locator('.forecast-actions');
         if (await checks.getAttribute('open') === null) await s2Heading.click();
@@ -253,21 +286,7 @@ const fixture = action => {
         assert.equal(await checks.locator('.tooltip-box').first().isVisible(), true, 'Full check details remain keyboard accessible');
         await issueHelp.press('Escape');
         assert.equal(await checks.locator('.tooltip-box').first().isVisible(), false, 'Check details dismiss with Escape');
-        const performance = page.locator('details').filter({has: page.locator('#heading-performance')});
-        assert.equal(await performance.getAttribute('open'), null, 'Technical performance starts collapsed');
-        const productPosition = await page.locator('#product-forecasts').evaluate(el => el.getBoundingClientRect().top);
-        const detailPosition = await performance.evaluate(el => el.getBoundingClientRect().top);
-        assert.ok(productPosition < detailPosition, 'Products precede technical metrics');
-        await performance.locator('summary').click();
-        assert.match(await performance.innerText(), /Still collecting evidence|Evaluation Evidence/);
-        assert.match(await performance.innerText(), /Daily errors/);
-        await performance.locator('summary').click();
         assert.equal(await page.locator('.forecast-bars').count(), 0, 'Missing forecasts are not graphed as zero');
-        const coverageHelp = page.getByRole('button', {name: 'About forecast availability'});
-        await coverageHelp.focus();
-        assert.equal(await page.locator('#coverage-help').isVisible(), true);
-        await coverageHelp.press('Escape');
-        assert.equal(await page.locator('#coverage-help').isVisible(), false);
 
         // Check Section 4: Product Forecasts Table & Search
         const searchInput = page.locator('input[type="search"][name="search"]');
@@ -326,9 +345,9 @@ const fixture = action => {
 
         // Usability and sections visible
         await checkWorkflow('inventory_manager', 'Inventory Manager');
-        assert.match(await page.locator('#heading-usability').innerText(), /Forecast status/);
+        assert.equal(await page.locator('#heading-usability').innerText(), 'No product forecasts yet');
         assert.match(await page.locator('#heading-actions').innerText(), /Forecast checks/);
-        assert.equal(await page.locator('#heading-performance').isVisible(), false, 'Technical details remain collapsed for Inventory Manager');
+        assert.equal(await page.locator('#heading-performance').count(), 0, 'Demand Forecast omits technical details for Inventory Manager');
 
         // Generate Now button MUST NOT be present for Inventory Manager
         assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0,
@@ -348,12 +367,31 @@ const fixture = action => {
 
         fixture('forecast_workspace');
         await page.reload();
-        assert.match(await page.locator('.forecast-status-content > p').innerText(), /Review expected sales and buying suggestions/);
+        assert.equal(await page.locator('#heading-usability').innerText(), 'Forecasts are ready');
+        assert.equal(await page.locator('.forecast-status-action').innerText(), 'See what to reorder');
         assert.equal(await page.locator('.forecast-actions').getAttribute('open'), null, 'Supporting forecast checks start collapsed');
         assert.equal(await page.locator('.forecast-bar-row').count(), 1, 'Usable demand produces a real comparison chart');
         assert.equal(await page.locator('.page-heading-actions').count(), 0, 'Demand Forecast has no redundant top action group');
         const row = page.locator('#product-forecasts tbody tr').first();
         assert.match(await row.innerText(), /14[\s\S]*28[\s\S]*56/);
+        for (const width of [1440, 390, 320]) {
+            await page.setViewportSize({width, height: 900});
+            const quality = row.locator('.forecast-quality-line');
+            const badge = await quality.locator('.status-badge').boundingBox();
+            const help = quality.locator('.info-tooltip-trigger');
+            const trigger = await help.boundingBox();
+            assert.ok(trigger.x >= badge.x + badge.width, 'Quality help sits beside its badge');
+            assert.ok(Math.abs(badge.y + badge.height / 2 - trigger.y - trigger.height / 2) < 2, 'Quality badge and help are vertically aligned');
+            await help.evaluate(el => el.blur());
+            await help.focus();
+            assert.equal(await quality.locator('.tooltip-box').isVisible(), true, 'Quality help opens at ' + width + 'px');
+            await help.press('Escape');
+            assert.equal(await quality.locator('.tooltip-box').isVisible(), false);
+            if (process.env.FORECAST_SCREENSHOTS && width !== 320) {
+                await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, 'prediction-quality-' + width + '.png'), fullPage: true});
+            }
+        }
+        await page.setViewportSize({width: 1440, height: 900});
         await page.locator('.forecast-bar-row a').click();
         await page.waitForURL('**/product_investigation.php?product_id=1');
         await page.waitForLoadState('domcontentloaded');

@@ -209,6 +209,7 @@ function render_model_review(PDO $pdo, string $role = 'admin', array $post = [])
         include __DIR__ . '/../../frontend/components/administrator/model_review.php';
     } catch (Throwable $e) {
         ob_end_clean();
+        echo $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
         echo "TRACE:
 " . $e->getTraceAsString() . "
 ";
@@ -220,6 +221,12 @@ function render_model_review(PDO $pdo, string $role = 'admin', array $post = [])
 // =========================================================================
 echo "--- Test 1: Empty / Initial Candidate Rendering (Under evaluation) ---\n";
 // =========================================================================
+$empty = render_model_review($pdo, 'admin');
+assert_test(str_contains($empty, 'No model to review yet') && str_contains($empty, 'Check data readiness'), 'Empty state leads to readiness');
+assert_test(!str_contains($empty, 'Pause forecast-based suggestions'), 'Empty state omits inapplicable recovery controls');
+$pdo->exec("INSERT INTO ml_jobs (trigger_type, status, lease_expires_at) VALUES ('model_retraining', 'running', '2099-01-01')");
+assert_test(str_contains(render_model_review($pdo, 'admin'), 'Training in progress'), 'Running training has a visible status');
+$pdo->exec("DELETE FROM ml_jobs WHERE trigger_type = 'model_retraining'");
 $candidateV1 = 'store_rf_v20261102';
 $fixtureGovernance = new App\Forecasting\StoreModelGovernanceService($pdo);
 require_once __DIR__ . '/support/governance_fixture.php';
@@ -245,17 +252,22 @@ $html1 = render_model_review($pdo, 'admin');
 
 assert_test(str_contains($html1, 'Model Review &amp; Approval'), 'Page title is rendered');
 assert_test(str_contains($html1, $candidateV1), 'Candidate model version is rendered');
-assert_test(str_contains($html1, 'None yet (First model)'), 'First model identifies no previous approved model');
-assert_test(str_contains($html1, 'Under evaluation'), 'Status shows "Under evaluation" while observation days remain incomplete');
-assert_test(str_contains($html1, 'Approval is blocked until technical checks and observation are complete'), 'Approval is disabled with safe explanation');
-assert_test(!str_contains($html1, 'Approve &amp; Activate Model</button>'), 'Approve button is not active when under evaluation');
-assert_test(str_contains($html1, 'Weekly Seasonal Naive'), 'Weekly Seasonal Naive baseline comparison method named');
-assert_test(str_contains($html1, '19.00% error'), 'WAPE is rendered as error percentage');
-assert_test(str_contains($html1, '26.00% error'), '28-day WAPE is rendered as error percentage');
-assert_test(str_contains($html1, 'First Store model qualification'), 'First Store model explicitly notes absence of previous incumbent comparison');
-assert_test(str_contains($html1, 'BEV-COLA') || str_contains($html1, 'SNK-CHIP'), 'Products are listed in coverage/exclusions');
-assert_test(str_contains($html1, 'stock rules'), 'Excluded products explain fallback to stock rules');
+assert_test(str_contains($html1, 'Model under testing'), 'Incomplete observation shows a testing state');
+assert_test(str_contains($html1, '0 of 28 usable Store days reviewed'), 'Observation progress explains what the system is waiting for');
+assert_test(!str_contains($html1, 'Approve and activate'), 'Approve controls are absent during testing');
+assert_test(str_contains($html1, 'Repeat last week'), 'The weekly baseline is labelled in everyday language');
+assert_test(str_contains($html1, '19.00%') && str_contains($html1, '26.00%'), 'WAPE is rendered as a percentage');
+assert_test(!str_contains($html1, 'Current approved model'), 'First model omits incumbent comparison');
+assert_test(str_contains($html1, 'Coverage details unavailable'), 'Legacy training with no coverage record has an explicit unavailable state');
+assert_test(str_contains($html1, 'stock rules'), 'Current buying guidance is visible');
 assert_test(str_contains($html1, 'error metric, not an accuracy percentage'), 'Limitations clarify WAPE is an error metric');
+
+$metadata = json_decode($pdo->query('SELECT metrics_json FROM model_training_runs ORDER BY training_run_id DESC LIMIT 1')->fetchColumn(), true);
+$metadata['metadata']['included_products'] = [1];
+$metadata['metadata']['excluded_products'] = [2];
+$metadata['metadata']['exclusion_reasons'] = [2 => 'Insufficient usable sales history'];
+$pdo->prepare('UPDATE model_training_runs SET metrics_json = ? WHERE training_run_id = (SELECT MAX(training_run_id) FROM model_training_runs)')
+    ->execute([json_encode($metadata, JSON_THROW_ON_ERROR)]);
 
 // =========================================================================
 echo "\n--- Test 2: Qualified Model Rendering (Awaiting approval) ---\n";
@@ -271,12 +283,17 @@ for ($i = 1; $i <= 28; $i++) {
     $pdo->prepare("INSERT INTO sale_items (sale_id, product_id, quantity, unit_price, total_price) VALUES (?, 1, 8, 100.0, 800.0)")->execute([5000 + $i]);
 }
 
+// The display uses one prediction per day when observation runs overlap.
+$pdo->prepare("INSERT INTO demand_forecasts (job_id, product_id, forecast_origin, target_date, horizon_day, predicted_units, model_version) VALUES (17, 1, '2026-09-29', '2026-10-01', 2, 999, ?)")->execute([$candidateV1]);
 $evalObs = (new CandidateEvaluationService($pdo))->evaluateCompletedTargetDates($pdo, $candidateV1, (new DateTime('now', new DateTimeZone('Asia/Manila')))->modify('-1 day')->format('Y-m-d'));
 $html2 = render_model_review($pdo, 'admin');
 
-assert_test(str_contains($html2, 'Awaiting approval'), 'Status transitions to "Awaiting approval" after 28 observation days');
-assert_test(str_contains($html2, 'Approve &amp; Activate Model'), 'Approve button is enabled when candidate is qualified');
-assert_test(str_contains($html2, 'Reject Candidate'), 'Reject button is enabled for qualified candidate');
+assert_test(str_contains($html2, 'Ready for review'), 'Completed qualified model is ready for review');
+assert_test(str_contains($html2, 'Approve and activate'), 'Approve control is available when qualified');
+assert_test(str_contains($html2, 'Reject model'), 'Reject control is available when qualified');
+assert_test(str_contains($html2, '1 included · 1 excluded') && str_contains($html2, 'Insufficient usable sales history'), 'Coverage and exclusions come from the selected training run');
+assert_test(str_contains($html2, '280 units') && str_contains($html2, '224 units') && str_contains($html2, '56 units higher'), 'Product results compare matched forecasts and actual sales');
+assert_test(str_contains($html2, 'RMSE (units)') && str_contains($html2, 'How to read wape'), 'Technical breakdown includes RMSE and measure help');
 assert_test(str_contains($html2, 'name="csrf_token"'), 'Forms include CSRF protection token');
 
 // =========================================================================
@@ -298,11 +315,10 @@ assert_test($stmtApproved->fetchColumn() === $candidateV1, 'Candidate V1 is acti
 
 // Check rendering of approved model
 $htmlApproved = render_model_review($pdo, 'admin');
-assert_test(str_contains($htmlApproved, 'Selected as approved model'), 'Status shows "Selected as approved model"');
+assert_test(str_contains($htmlApproved, 'Approved model in use'), 'Approval status identifies the active model');
 assert_test(!str_contains($htmlApproved, 'Available for replenishment') && !str_contains($htmlApproved, 'Active operational guidance'), 'Approval without current saved forecasts never claims usable buying guidance');
-assert_test(str_contains($htmlApproved, 'Pause Purchasing Suggestions'), 'Pause button is visible for operational controls');
-preg_match('/<section class="forecast-status-summary".*?<\/section>/s', $htmlApproved, $approvedStatus);
-assert_test(str_contains($approvedStatus[0] ?? '', 'Check product coverage and current forecasts before buying.') && !str_contains($approvedStatus[0] ?? '', 'Check the failed requirements'), 'Approved model points to current coverage instead of failed approval requirements');
+assert_test(str_contains($htmlApproved, 'Pause forecast-based suggestions'), 'Pause button is available in forecast recovery');
+assert_test(str_contains($htmlApproved, 'View demand forecast') && !str_contains($htmlApproved, 'Approve and activate'), 'Approved model links to the current forecast');
 
 // =========================================================================
 echo "\n--- Test 4: Local Pause & Resume Actions ---\n";
@@ -348,8 +364,7 @@ for ($i = 1; $i <= 28; $i++) {
 (new CandidateEvaluationService($pdo))->evaluateCompletedTargetDates($pdo, $candidateV2, (new DateTime('now', new DateTimeZone('Asia/Manila')))->modify('-1 day')->format('Y-m-d'));
 
 $htmlV2 = render_model_review($pdo, 'admin');
-assert_test(str_contains($htmlV2, 'Matching incumbent comparison against approved model ' . $candidateV1), 'Matching incumbent comparison is displayed');
-assert_test(str_contains($htmlV2, 'Approved Model (' . $candidateV1 . ') 28-day WAPE:'), 'Approved incumbent 28-day WAPE displayed for comparison');
+assert_test(!str_contains($htmlV2, 'Current approved model'), 'Incumbent error stays hidden when comparable test evidence is unavailable');
 
 // Approve replacement model
 render_model_review($pdo, 'admin', [

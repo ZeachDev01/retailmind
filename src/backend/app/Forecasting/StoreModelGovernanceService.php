@@ -266,10 +266,7 @@ class StoreModelGovernanceService
             || preg_match('/demo|kaggle/i', $version)) {
             return $invalid('No compatible non-demo Store model version configured.');
         }
-        $statement = $this->pdo->prepare("SELECT metrics_json FROM model_training_runs WHERE model_version = ? AND status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
-        $statement->execute([$version]);
-        $metrics = json_decode((string)$statement->fetchColumn(), true);
-        $metadata = $metrics['metadata'] ?? [];
+        $metadata = $this->getTrainingMetadata($version);
         $features = ['product_id', 'horizon_day', 'lag_1', 'lag_7', 'lag_14', 'lag_28',
             'rolling_mean_7', 'rolling_std_7', 'rolling_mean_28', 'rolling_std_28',
             'day_of_week', 'day_of_month', 'month', 'is_weekend'];
@@ -877,17 +874,41 @@ class StoreModelGovernanceService
         $approvedModel = $status['approved_model_version'];
         $previousModel = $status['previous_model_version'];
 
-        // Determine candidate model version
+        $trainingStatus = '';
+        try {
+            $trainingStatus = $this->pdo->query("SELECT
+                CASE WHEN status = 'running' AND lease_expires_at < CURRENT_TIMESTAMP THEN 'interrupted' ELSE status END
+                FROM ml_jobs WHERE trigger_type = 'model_retraining' ORDER BY job_id DESC LIMIT 1")->fetchColumn() ?: '';
+        } catch (Throwable) {
+        }
+        $guidance = [
+            'is_recommendations_suspended' => $status['is_recommendations_suspended'],
+            'is_observation_mode' => $status['is_observation_mode'],
+            'can_resume' => $status['is_recommendations_suspended'] && !$status['is_observation_mode']
+                && $approvedModel !== '' && $this->validateActiveModelForGuidance($approvedModel)['valid'],
+            'training_status' => $trainingStatus,
+        ];
+
+        // Prefer the candidate the scheduler is already observing.
+        if ($modelVersion === null || trim($modelVersion) === '') {
+            $observed = $this->getSetting('ml_observation_candidate_version')
+                ?? $this->getSetting('ml_candidate_under_observation');
+            if ($observed && $observed !== $approvedModel
+                && !(new ForecastingSchedulerService($this->pdo))->isCandidateRejected($observed)) {
+                $modelVersion = $observed;
+            }
+        }
+
         if ($modelVersion === null || trim($modelVersion) === '') {
             try {
-                $stmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+                $stmt = $this->pdo->query("SELECT model_version FROM model_training_runs WHERE status = 'completed' AND model_version NOT LIKE '%demo%' AND model_version NOT LIKE '%kaggle%' ORDER BY training_run_id DESC LIMIT 1");
                 $modelVersion = (string)($stmt->fetchColumn() ?: '');
             } catch (Throwable) {
                 $modelVersion = '';
             }
             if ($modelVersion === '') {
                 try {
-                    $stmt = $this->pdo->query("SELECT model_version FROM ml_model_evaluations ORDER BY evaluation_id DESC LIMIT 1");
+                    $stmt = $this->pdo->query("SELECT model_version FROM ml_model_evaluations WHERE model_version NOT LIKE '%demo%' AND model_version NOT LIKE '%kaggle%' ORDER BY evaluation_id DESC LIMIT 1");
                     $modelVersion = (string)($stmt->fetchColumn() ?: '');
                 } catch (Throwable) {
                     $modelVersion = '';
@@ -895,8 +916,12 @@ class StoreModelGovernanceService
             }
         }
 
+        if ($modelVersion === '' && $approvedModel !== '') {
+            $modelVersion = $approvedModel;
+        }
+
         if ($modelVersion === '') {
-            return [
+            return $guidance + [
                 'has_candidate' => false,
                 'candidate_version' => '',
                 'approved_version' => $approvedModel,
@@ -907,7 +932,9 @@ class StoreModelGovernanceService
                 'message' => 'No completed candidate model training is available for review yet.',
                 'can_approve' => false,
                 'can_reject' => false,
-                'can_rollback' => ($previousModel !== ''),
+                'can_rollback' => false,
+                'setup_state' => in_array($trainingStatus, ['', 'blocked', 'succeeded'], true)
+                    ? ForecastSetupStatus::snapshot($this->pdo, $asOfDate)['state'] : null,
                 'limitations' => $this->getStandardLimitations(),
             ];
         }
@@ -938,8 +965,11 @@ class StoreModelGovernanceService
                 'max_wape_limit' => $maxWape,
                 'gate_outcome' => $row['candidate_gate_outcome'] ?? 'pending',
                 'gate_status' => $row['gate_status'] ?? 'blocked',
+                'gate_reason' => $row['gate_reason'] ?? '',
             ];
         }
+
+        $metadata = $this->getTrainingMetadata($modelVersion);
 
         // 2. Incumbent Model Comparison
         $incumbentComparison = [
@@ -951,7 +981,9 @@ class StoreModelGovernanceService
 
         if ($approvedModel !== '' && $approvedModel !== $modelVersion) {
             $incumbentEvals = $this->evaluationService->getEvaluationsByModelVersion($approvedModel);
-            if (!empty($incumbentEvals)) {
+            $candidateFolds = $this->comparisonFolds($metadata);
+            $incumbentFolds = $this->comparisonFolds($this->getTrainingMetadata($approvedModel));
+            if ($incumbentEvals && $candidateFolds && $candidateFolds === $incumbentFolds) {
                 $incumbentHorizons = [];
                 foreach ($incumbentEvals as $iRow) {
                     $ih = (int)$iRow['horizon_days'];
@@ -969,22 +1001,33 @@ class StoreModelGovernanceService
                     'horizons' => $incumbentHorizons,
                 ];
             } else {
-                $incumbentComparison['status_message'] = "Approved model {$approvedModel} lacks recorded holdout evaluations for comparison.";
+                $incumbentComparison['status_message'] = 'No matching test periods and Product coverage for the approved model.';
             }
         }
 
-        // 3. Observation Progress (28 target dates holdout)
-        $obsProgress = $this->evaluationService->getCandidateObservationProgress($modelVersion, $asOfDate);
-
-        // 4. Products Covered and Excluded with Blocked Actions
-        $productSummary = $this->getProductCoverageSummary($asOfDate, $modelVersion);
-
-        // 5. Readiness and Status Wording
         $readiness = $this->validateActivationReadiness($modelVersion, $asOfDate);
+        $obsProgress = $readiness['observation_details'];
+        $productSummary = $this->getProductCoverageSummary($metadata, $obsProgress['product_results'] ?? []);
         $isCurrentApproved = ($approvedModel === $modelVersion);
         $automatedTechPassed = $readiness['checks']['quality_gates_passed'] && $readiness['checks']['observation_period_completed'] && $readiness['checks']['not_demo_artifact'] && $readiness['checks']['valid_version_format'];
         $isQualified = $automatedTechPassed && $readiness['checks']['not_rejected']
             && ($readiness['review_details']['technical_review']['decision'] ?? null) !== 'rejected';
+
+        $technicalRejected = ($readiness['review_details']['technical_review']['decision'] ?? null) === 'rejected';
+        $approvalBlocker = '';
+        if (!$readiness['checks']['not_rejected'] || $technicalRejected) {
+            $approvalBlocker = 'This model was rejected during review.';
+        } elseif (!$readiness['checks']['not_demo_artifact']) {
+            $approvalBlocker = 'Only models trained on Store data can be approved.';
+        } elseif (!$qualityResult['passed']) {
+            $approvalBlocker = 'The model has not passed all forecast error checks.';
+        } elseif ($isQualified && !$isCurrentApproved) {
+            $artifact = $this->validateModelArtifactCompatibility($modelVersion, 'Activation');
+            if (!$artifact['valid']) {
+                $isQualified = false;
+                $approvalBlocker = 'The model file is unavailable or incompatible. Contact the Super Administrator.';
+            }
+        }
 
         if ($isCurrentApproved) {
             $overallStatus = 'approved';
@@ -1014,8 +1057,11 @@ class StoreModelGovernanceService
             $latestJob = $jobStmt->fetch(PDO::FETCH_ASSOC) ?: null;
         } catch (Throwable) {}
 
-        return [
+        return $guidance + [
             'has_candidate' => true,
+            'approval_blocker' => $approvalBlocker,
+            'review_rejected' => !$readiness['checks']['not_rejected'] || $technicalRejected,
+            'product_review_dates' => $obsProgress['product_review_dates'] ?? [],
             'candidate_version' => $modelVersion,
             'approved_version' => $approvedModel,
             'previous_version' => $previousModel,
@@ -1029,11 +1075,10 @@ class StoreModelGovernanceService
             'can_rollback' => $canRollback,
             'rollback_validation' => $rollbackValidation,
             'is_recommendations_suspended' => $status['is_recommendations_suspended'],
-            'is_observation_mode' => $status['is_observation_mode'],
             'comparison_method' => "Weekly Seasonal Naive (repeating last week's recorded sales for the matching day of the week)",
             'evaluation_periods' => [
-                'start' => $dataWindowStart ?? 'Chronological start',
-                'end' => $dataWindowEnd ?? 'Chronological end',
+                'start' => $dataWindowStart,
+                'end' => $dataWindowEnd,
                 'holdouts' => '3 chronological 28-day holdout folds (84 days total)',
             ],
             'candidate_quality' => [
@@ -1082,61 +1127,51 @@ class StoreModelGovernanceService
         ];
     }
 
-    private function getProductCoverageSummary(string $asOfDate, string $candidateVersion): array
+    private function getTrainingMetadata(string $version): array
     {
-        $covered = [];
-        $excluded = [];
+        $statement = $this->pdo->prepare("SELECT metrics_json FROM model_training_runs WHERE model_version = ? AND status = 'completed' ORDER BY training_run_id DESC LIMIT 1");
+        $statement->execute([$version]);
+        $metrics = json_decode((string)$statement->fetchColumn(), true);
+        return is_array($metrics['metadata'] ?? null) ? $metrics['metadata'] : [];
+    }
 
-        try {
-            $stmt = $this->pdo->query("SELECT product_id, sku, product_name, status FROM products ORDER BY product_id ASC");
-            $products = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } catch (Throwable) {
-            $products = [];
+    private function comparisonFolds(array $metadata): array
+    {
+        if (($metadata['dataset_kind'] ?? '') !== 'store') {
+            return [];
         }
-
-        $eligibilityService = new StoreTrainingEligibilityService();
-
-        foreach ($products as $p) {
-            $pid = (int)$p['product_id'];
-            $name = $p['product_name'] ?: "Product #{$pid}";
-            $sku = $p['sku'] ?: "SKU-{$pid}";
-
-            try {
-                $eval = $eligibilityService->evaluateProductEligibility($this->pdo, $pid, $asOfDate);
-            } catch (Throwable $e) {
-                $eval = ['eligible' => false, 'reason' => $e->getMessage(), 'accumulated_usable_days' => 0];
+        $folds = [];
+        foreach ($metadata['folds'] ?? [] as $fold) {
+            if (empty($fold['validation_start']) || empty($fold['validation_end']) || empty($fold['included_products'])
+                || !is_array($fold['included_products'])) {
+                return [];
             }
+            $products = $fold['included_products'];
+            sort($products);
+            $folds[$fold['validation_start']] = [$fold['validation_end'], $products];
+        }
+        ksort($folds);
+        return $folds;
+    }
 
-            if (!empty($eval['eligible'])) {
-                $covered[] = [
-                    'product_id' => $pid,
-                    'sku' => $sku,
-                    'product_name' => $name,
-                    'accumulated_usable_days' => $eval['accumulated_usable_days'] ?? 140,
-                    'status' => 'Ready for training',
-                    'guidance' => 'Included in candidate model evaluation and eligible for operational forecasts upon approval.',
-                ];
-            } else {
-                $days = $eval['accumulated_usable_days'] ?? 0;
-                $reason = $eval['reason'] ?? "Insufficient usable history (has {$days}/140 accumulated days)";
-                $needed = max(0, 140 - $days);
-                $blockedAction = $needed > 0
-                    ? "Accumulate {$needed} more usable sales days; replenishment continues on stock rules."
-                    : "Resolve recent feature window / holdout gap; replenishment continues on stock rules.";
-
-                $excluded[] = [
-                    'product_id' => $pid,
-                    'sku' => $sku,
-                    'product_name' => $name,
-                    'accumulated_usable_days' => $days,
-                    'status' => 'Insufficient Data',
-                    'exclusion_reason' => $reason,
-                    'blocked_next_action' => $blockedAction,
-                ];
-            }
+    private function getProductCoverageSummary(array $metadata, array $results): array
+    {
+        $available = is_array($metadata['included_products'] ?? null) && is_array($metadata['excluded_products'] ?? null);
+        $names = $this->pdo->query('SELECT product_id, sku, product_name FROM products')
+            ->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+        $covered = $excluded = [];
+        $includedIds = $available ? $metadata['included_products'] : array_keys($results);
+        foreach (array_unique($includedIds) as $id) {
+            $covered[] = ($names[$id] ?? ['sku' => '', 'product_name' => "Product #{$id}"])
+                + ['product_id' => $id, 'result' => $results[$id] ?? null];
+        }
+        foreach (array_unique($available ? $metadata['excluded_products'] : []) as $id) {
+            $excluded[] = ($names[$id] ?? ['sku' => '', 'product_name' => "Product #{$id}"])
+                + ['product_id' => $id, 'exclusion_reason' => $metadata['exclusion_reasons'][$id] ?? ''];
         }
 
         return [
+            'available' => $available,
             'covered' => $covered,
             'excluded' => $excluded,
             'covered_count' => count($covered),

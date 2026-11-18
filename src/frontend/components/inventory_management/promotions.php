@@ -100,9 +100,6 @@ $promotionValue = static fn(string $key, string $default = ''): string => htmlsp
     <main class="main-content">
         <header class="page-heading">
             <h1>Discounts &amp; Promotions</h1>
-            <div class="page-heading-actions">
-                <a href="<?= htmlspecialchars(theme_url('components/report/predictions.php')) ?>" class="btn btn-secondary"><i class="bi bi-graph-up" aria-hidden="true"></i> Forecasting</a>
-            </div>
         </header>
 
         <?php if ($message): ?>

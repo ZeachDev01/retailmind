@@ -289,9 +289,8 @@ $assert(str_contains($operation, "forecast_workflow('train')") && str_contains($
 $calendarFile = file_get_contents(__DIR__ . '/../../frontend/components/administrator/store_calendar.php');
 $assert(str_contains($calendarFile, 'components/report/predictions.php'), 'Store Calendar contains contextual link to predictions.php');
 
-// Promotions contains contextual link to Demand Forecast
 $promotionsFile = file_get_contents(__DIR__ . '/../../frontend/components/inventory_management/promotions.php');
-$assert(str_contains($promotionsFile, 'components/report/predictions.php'), 'Promotions contains contextual link to predictions.php');
+$assert(!str_contains($promotionsFile, 'components/report/predictions.php'), 'Promotions omits the contextual Forecasting shortcut');
 
 // Data Readiness contains a contextual link to Demand Forecast.
 $readinessFile = file_get_contents(__DIR__ . '/../../frontend/components/report/data_readiness.php');
