@@ -3637,7 +3637,9 @@ foreach ($products as $product) {
                     const draft = await handoffRequest('edit');
                     if (cancelling) return;
                     originalCode = draft.code;
-                    addProductForm.elements[modeFields[draft.mode]].value = originalCode;
+                    const barcodeField = addProductForm.elements[modeFields[draft.mode]];
+                    barcodeField.value = originalCode;
+                    barcodeField.dispatchEvent(new Event('retailmind:fieldrestore'));
                     if (draft.mode === 'packs') sellSealedPacks.checked = true;
                     syncPricingFields();
                     revealProductOptions();

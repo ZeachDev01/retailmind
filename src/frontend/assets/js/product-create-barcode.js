@@ -187,9 +187,12 @@ window.RetailMindProductCreateBarcode = {
             unit.focus();
             if (code) lookup();
         });
-        control('create-barcode-start-new').addEventListener('click', () => {
+        control('create-barcode-start-new').addEventListener('click', async event => {
             const code = candidateCode;
-            window.RetailMindInventoryDrafts?.discard(form);
+            const button = event.currentTarget;
+            button.disabled = true;
+            await window.RetailMindInventoryDrafts?.discard(form);
+            button.disabled = false;
             form.reset();
             queueMicrotask(() => {
                 type.value = 'unit_barcode';
@@ -286,6 +289,12 @@ window.RetailMindProductCreateBarcode = {
             unit.focus();
         });
         packaging.addEventListener('input', () => setCode(type.value, packaging.value));
+        unit.addEventListener('retailmind:fieldrestore', () => {
+            clearCatalog();
+            clearFeedback();
+            change.hidden = true;
+            committedCode = unit.value.trim();
+        });
         form.addEventListener('focusin', event => {
             if (event.target === unit && !committedCode) committedCode = unit.value.trim();
         });
