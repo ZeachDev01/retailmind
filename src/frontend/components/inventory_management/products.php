@@ -233,13 +233,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'create_category') {
         csrf_verify();
+        $categoryJson = str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
+        if ($categoryJson) header('Content-Type: application/json; charset=UTF-8');
         try {
             $categoryName = trim((string)($_POST['category_name'] ?? ''));
-            $productService->createCategory(['category_name' => $categoryName], (int)$_SESSION['user_id']);
+            $categoryId = $productService->createCategory(['category_name' => $categoryName], (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Added category ' . $categoryName);
+            if ($categoryJson) {
+                echo json_encode(['success' => true, 'category' => ['category_id' => $categoryId, 'category_name' => $categoryName]]);
+                exit;
+            }
             redirect_products('success', 'Category added successfully.');
         } catch (Throwable $e) {
-            redirect_products('error', \App\Support\OperatorAlert::message($e, 'The category could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.'));
+            $alert = \App\Support\OperatorAlert::message($e, 'The category could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
+            if ($categoryJson) {
+                http_response_code(422);
+                echo json_encode(['success' => false, 'error' => $alert]);
+                exit;
+            }
+            redirect_products('error', $alert);
         }
     }
 
@@ -552,6 +564,13 @@ foreach ($products as $product) {
             overflow-y: auto;
             overflow-x: hidden;
             overscroll-behavior: contain;
+        }
+
+        #create-category-suggestion {
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: start;
         }
 
         #add-product-modal .form-group,
@@ -1627,9 +1646,17 @@ foreach ($products as $product) {
 <div class="form-grid">
 <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
 <div class="form-group full"><label for="product-declared-size">Declared Size</label><input name="declared_size" id="product-declared-size" maxlength="100" placeholder="e.g. 330 mL"></div>
-<div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
+<div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" aria-describedby="create-category-status" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
-                                </select><small class="field-error">Select a category.</small></div>
+                                </select><small class="field-error">Select a category.</small>
+    <small class="field-help" id="create-category-status" role="status" hidden></small>
+    <div class="product-create-lookup-actions">
+        <button type="button" class="btn btn-small btn-quiet" id="create-category-suggestion" hidden></button>
+        <?php if ($canManageInventory): ?>
+            <button type="button" class="btn btn-small btn-quiet" id="product-add-category" aria-haspopup="dialog">Add Category</button>
+        <?php endif; ?>
+    </div>
+</div>
 <div class="form-group">
                                     <label for="product-base-unit">Base Unit</label>
                                     <select id="product-base-unit" data-unit-field="base_unit">
@@ -1818,8 +1845,9 @@ foreach ($products as $product) {
                     <p>Create a clear category for organizing and filtering products.</p>
                 </div><button type="button" class="rm-close" data-close-modal aria-label="Close add category"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </header>
-            <form method="POST">
+            <form method="POST" action="products.php" id="add-category-form">
                 <div class="rm-modal-body"><?= csrf_field() ?><input type="hidden" name="action" value="create_category">
+                    <p id="add-category-error" class="alert alert-danger" role="alert" tabindex="-1" hidden></p>
                     <div class="form-group"><label for="create-category-name">Category Name</label><input type="text" id="create-category-name" name="category_name" required maxlength="100" placeholder="Example: Beverages"></div>
                 </div>
                 <footer class="rm-modal-actions"><button type="button" class="btn btn-quiet" data-close-modal>Cancel</button><button class="btn btn-success" type="submit">Save Category</button></footer>
@@ -3128,6 +3156,94 @@ foreach ($products as $product) {
 
         // Product creation and validation
         const addProductForm = document.getElementById('add-product-form');
+        const productModalOverlay = addProductForm.closest('.rm-modal-overlay');
+        const productCategory = addProductForm.elements.category_id;
+        const categoryStatus = document.getElementById('create-category-status');
+        const categorySuggestion = document.getElementById('create-category-suggestion');
+        const inlineAddCategory = document.getElementById('product-add-category');
+        const categoryModal = document.getElementById('add-category-modal');
+        const categoryForm = document.getElementById('add-category-form');
+        const categoryError = document.getElementById('add-category-error');
+        const selectProductCategory = id => {
+            productCategory.value = id;
+            productCategory.dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('product-category-search').focus();
+        };
+
+        addProductForm.addEventListener('product-create:catalog-match', event => {
+            const tags = event.detail.product.category_tags || [];
+            const exactNames = tags.filter(tag => tag.startsWith('en:')).map(tag => tag.slice(3).replaceAll('-', ' '));
+            const mappedNames = tags.includes('en:teas') ? ['tea & coffee'] : [];
+            const options = Array.from(productCategory.options).filter(option => option.value && !option.disabled);
+            const exact = options.filter(option => exactNames.includes(option.text.trim().toLowerCase()));
+            const matches = exact.length ? exact : options.filter(option => mappedNames.includes(option.text.trim().toLowerCase()));
+            const match = matches.length === 1 ? matches[0] : null;
+            categorySuggestion.value = match?.value || '';
+            categorySuggestion.textContent = match ? `Use ${match.text}` : '';
+            categorySuggestion.hidden = !match || match.value === productCategory.value;
+            categoryStatus.textContent = matches.length > 1 ? 'Choose a Store Category.' : 'No matching Store Category. Search or add one.';
+            categoryStatus.hidden = !tags.length || !!match;
+        });
+        addProductForm.addEventListener('product-create:catalog-clear', () => {
+            categorySuggestion.value = '';
+            categorySuggestion.hidden = categoryStatus.hidden = true;
+        });
+        productCategory.addEventListener('change', () => {
+            categorySuggestion.hidden = !categorySuggestion.value || categorySuggestion.value === productCategory.value;
+        });
+        categorySuggestion.addEventListener('click', () => selectProductCategory(categorySuggestion.value));
+
+        inlineAddCategory?.addEventListener('click', () => {
+            openModal('add-category-modal');
+            productModalOverlay.inert = true;
+            categoryForm.elements.category_name.focus();
+        });
+        categoryModal.addEventListener('retailmind:overlayclose', () => {
+            categoryError.hidden = true;
+            if (!productModalOverlay.inert) return;
+            productModalOverlay.inert = false;
+            inlineAddCategory.focus({ preventScroll: true });
+        });
+        categoryForm.addEventListener('submit', async event => {
+            if (!productModalOverlay.inert) return;
+            event.preventDefault();
+            const saveCategory = categoryForm.querySelector('[type="submit"]');
+            if (saveCategory.disabled) return;
+            saveCategory.disabled = true;
+            saveCategory.classList.add('btn-loading');
+            categoryError.hidden = true;
+            const fallback = 'The category could not be saved. Try again.';
+            try {
+                const response = await fetch(categoryForm.getAttribute('action'), {
+                    method: 'POST', body: new FormData(categoryForm), headers: { Accept: 'application/json' }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    categoryError.textContent = result.error || fallback;
+                } else {
+                    const { category_id: id, category_name: name } = result.category;
+                    categoriesData.push(result.category);
+                    [productCategory, categoryFilter, document.getElementById('bulk-category-select')].forEach(select => {
+                        select.add(new Option(name, id));
+                    });
+                    categoryForm.reset();
+                    if (productModalOverlay.inert) {
+                        closeModal(categoryForm);
+                        selectProductCategory(id);
+                        categoryStatus.hidden = true;
+                    }
+                    return;
+                }
+            } catch {
+                categoryError.textContent = fallback;
+            } finally {
+                saveCategory.disabled = false;
+                saveCategory.classList.remove('btn-loading');
+            }
+            if (!productModalOverlay.inert) return;
+            categoryError.hidden = false;
+            categoryError.focus();
+        });
         const saveButton = document.getElementById('product-create-save');
         const productCreationOrigin = addProductForm.elements.creation_origin.value;
         const unitSelects = addProductForm.querySelectorAll('[data-unit-field]');
@@ -3445,7 +3561,6 @@ foreach ($products as $product) {
             addProductForm.querySelectorAll('[aria-invalid]').forEach(field => field.removeAttribute('aria-invalid'));
         }));
 
-        const productModalOverlay = document.getElementById('add-product-modal');
         document.getElementById('product-create-reset').addEventListener('click', async event => {
             event.preventDefault();
             if (await RetailMindUI.confirm({title: 'Clear entered data', message: 'Discard this Product draft?', confirmText: 'Discard', danger: true})) {
@@ -3460,6 +3575,7 @@ foreach ($products as $product) {
         window.RetailMindInventoryDrafts?.register({
             offer: draft => !addProductForm.elements.handoff_id && !/^product-[a-f0-9]{32}$/.test(draft.id),
             eligible(form) {
+                if (form === categoryForm && productModalOverlay.inert) return false;
                 if (form === addProductForm && form.elements.handoff_id) return handoffEditorReady;
                 return form.matches('#add-product-form, #product-edit-form, #pack-reconcile-form, .inline-form') ||
                     (form.method.toLowerCase() === 'post' && !form.hidden && form.id !== 'generate-barcode-form' && !!form.querySelector('[name="action"]')?.value);
