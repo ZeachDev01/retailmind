@@ -1,0 +1,103 @@
+<!-- Throwaway prototype: compare inline form, guided steps, and side-by-side lookup on Add Product. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add Product · RetailMind prototype</title>
+<link rel="stylesheet" href="/assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/products.prototype.css">
+<script src="/products.prototype.js" defer></script>
+</head>
+<body>
+<aside class="rail" aria-label="Workspace preview">
+  <span class="brand" aria-label="RetailMind"><i aria-hidden="true" class="bi bi-shop"></i></span>
+  <i aria-hidden="true" class="bi bi-grid"></i><i aria-hidden="true" class="bi bi-archive active"></i><i aria-hidden="true" class="bi bi-truck"></i><i aria-hidden="true" class="bi bi-clipboard-data"></i>
+  <span class="avatar">IM</span>
+</aside>
+<div class="workspace">
+  <header class="workspace-head"><strong>Inventory Management</strong><span><i aria-hidden="true" class="bi bi-person-circle"></i> Inventory Manager</span></header>
+  <main>
+    <div class="page-title"><h1>Products</h1><button type="button" class="primary" id="open"><i aria-hidden="true" class="bi bi-plus-lg"></i> Add Product</button></div>
+    <div class="catalog">
+      <table><thead><tr><th>Product</th><th>Category</th><th>On hand</th><th>Selling price</th></tr></thead>
+      <tbody><tr><td>555 Sardines 155 g <small>0748485200019</small></td><td>Canned Goods</td><td>36 cans</td><td>₱28.00</td></tr><tr><td>Lucky Me! Pancit Canton <small>Demo product</small></td><td>Instant Noodles</td><td>21 sachets</td><td>₱16.00</td></tr><tr><td>Wilkins Water 500 mL <small>Demo product</small></td><td>Beverages</td><td>48 bottles</td><td>₱20.00</td></tr></tbody></table>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="overlay">
+  <section class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="title" data-variant="a" data-step="0">
+    <header class="panel-head"><div><h2 id="title">Add Product</h2><p id="guide">Scan the barcode, then verify the product details.</p></div><button type="button" class="icon" id="close" aria-label="Close Add Product"><i aria-hidden="true" class="bi bi-x-lg"></i></button></header>
+    <div class="steps" id="steps" aria-label="Add Product steps"><button type="button" data-step="0">1. Barcode</button><button type="button" data-step="1">2. Product details</button><button type="button" data-step="2">3. Price &amp; packaging</button></div>
+    <form id="product-form" novalidate>
+      <div class="panel-body" id="body">
+        <section class="lookup" aria-labelledby="lookup-title">
+          <h3 id="lookup-title"><i aria-hidden="true" class="bi bi-upc-scan"></i> Barcode lookup</h3>
+          <div class="fields">
+            <label class="wide">Barcode type<select id="kind"><option value="unit">Individual Item</option><option value="pack">Sales Pack</option><option value="case">Receiving Carton</option></select></label>
+            <div class="wide">
+              <label for="barcode">Barcode</label>
+              <div class="row scan-row"><input id="barcode" inputmode="numeric" autocomplete="off" placeholder="Scan or enter barcode"><button type="button" id="lookup">Look up</button><button type="button" id="scan"><i aria-hidden="true" class="bi bi-upc-scan"></i> Scan</button></div>
+            </div>
+          </div>
+          <div id="lookup-status" class="notice" role="status" hidden></div>
+          <div class="lookup-actions" id="existing-actions" hidden><button type="button" id="manage">View existing Product</button></div>
+          <div id="package-next" class="lookup-actions" hidden><button type="button" id="scan-unit">Scan individual item</button></div>
+          <div class="photo" id="photo" hidden>
+            <img id="photo-image" src="/products.prototype-tuna.jpg" alt="Front of the Century Tuna can">
+            <div><strong>Product photo</strong><small id="photo-credit"><a href="https://world.openfoodfacts.org/product/0748485100401" target="_blank" rel="noreferrer">Open Food Facts contributors</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA</a></small><div class="row photo-buttons"><button type="button" class="text-button" id="replace-photo">Replace</button><button type="button" class="text-button" id="remove-photo">Remove</button></div></div>
+          </div>
+          <input type="file" id="photo-file" accept="image/*" hidden>
+          <button type="button" class="text-button" id="add-photo"><i aria-hidden="true" class="bi bi-image"></i> Add photo</button>
+        </section>
+        <section class="details" aria-labelledby="details-title">
+          <h3 id="details-title">Product details</h3>
+          <div class="fields">
+            <label class="wide">Product name <span>*</span><input id="name" placeholder="e.g. Century Tuna 155 g" required></label>
+            <label>Brand<input id="brand" placeholder="Optional"></label>
+            <label>Package size<input id="size" placeholder="e.g. 155 g"></label>
+            <div class="field"><label for="category">Category <span>*</span></label><input id="category" list="categories" placeholder="Search store categories" required autocomplete="off"><datalist id="categories"><option value="Beverages"><option value="Canned Goods"><option value="Instant Noodles"><option value="Snacks"><option value="Household"></datalist>
+              <div class="row category-actions"><button type="button" id="category-suggestion" class="text-button" hidden></button><button type="button" id="add-category" class="text-button">+ Add Category</button></div><small id="category-help" hidden>Choose a store category.</small></div>
+            <label>Base Unit <span>*</span><select id="unit" required><option value="">Select unit</option><option>Piece</option><option>Can</option><option>Sachet</option><option>Bottle</option></select></label>
+          </div>
+          <div class="notice" id="field-suggestion" hidden><span id="field-suggestion-text"></span> <button type="button" class="text-button" id="use-suggestions">Use suggestions</button></div>
+        </section>
+        <section class="pricing" aria-labelledby="pricing-title">
+          <h3 id="pricing-title">Pricing</h3>
+          <div class="fields">
+            <label>Cost Price per Base Unit <span>*</span><input id="cost" type="number" min="0" step=".01" placeholder="₱ 0.00" required></label>
+            <label>Selling Price per Base Unit <span>*</span><input id="price" type="number" min=".01" step=".01" placeholder="₱ 0.00" required></label>
+          </div>
+        </section>
+        <section class="packaging" aria-label="Packaging">
+          <details id="pack">
+            <summary>Sales Pack <small id="pack-summary">Optional</small></summary>
+            <label class="check"><input type="checkbox" id="sell-pack"> Sell sealed packs</label>
+            <div class="fields" id="pack-fields" hidden><label class="wide">Sales Pack Barcode<input id="pack-code" inputmode="numeric"></label><label>Base Units per pack<input id="pack-size" type="number" min="2" step="1"></label><label>Selling Price per pack<input id="pack-price" type="number" min=".01" step=".01"></label></div>
+          </details>
+          <details id="case">
+            <summary>Receiving Carton <small id="case-summary">Optional</small></summary>
+            <div class="fields"><label>Receiving Package Barcode<input id="case-code" inputmode="numeric"></label><label>Base Units per carton<input id="case-size" type="number" min="2" step="1"></label></div>
+          </details>
+        </section>
+      </div>
+      <footer class="panel-foot"><p id="form-status" role="status"></p><div class="row footer-actions"><button type="button" id="reset">Reset</button><button type="button" id="back" hidden>Back</button><button type="button" class="primary" id="next" hidden>Continue <i aria-hidden="true" class="bi bi-arrow-right"></i></button><button type="submit" class="primary" id="save"><i aria-hidden="true" class="bi bi-check-lg"></i> Save Product</button></div></footer>
+    </form>
+  </section>
+</div>
+
+<nav class="switcher" aria-label="Prototype controls">
+  <button type="button" id="previous-layout" aria-label="Previous layout"><i aria-hidden="true" class="bi bi-chevron-left"></i></button>
+  <span id="layout-label" aria-live="polite">A · Inline form</span>
+  <button type="button" id="next-layout" aria-label="Next layout"><i aria-hidden="true" class="bi bi-chevron-right"></i></button>
+  <span class="divider"></span><button type="button" id="demo"><i aria-hidden="true" class="bi bi-sliders"></i> Demo cases</button>
+</nav>
+
+<dialog id="demo-dialog"><header><h2>Demo cases</h2><button type="button" data-dismiss class="icon" aria-label="Close demo cases"><i aria-hidden="true" class="bi bi-x-lg"></i></button></header>
+  <p>Try a scan and see how the form responds.</p>
+  <div id="cases" class="case-list"></div>
+</dialog>
+<dialog id="action-dialog"><header><h2 id="action-title"></h2><button type="button" data-dismiss class="icon" aria-label="Close"><i aria-hidden="true" class="bi bi-x-lg"></i></button></header><div id="action-content"></div><div id="action-buttons" class="row dialog-actions"></div></dialog>
+</body>
+</html>
