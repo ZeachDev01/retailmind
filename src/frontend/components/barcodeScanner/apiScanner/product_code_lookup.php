@@ -14,12 +14,18 @@ if (!is_logged_in()) {
 }
 
 validate_current_session($pdo);
-if (array_intersect(current_workspace_roles(), ['admin', 'inventory_manager']) === []) {
+$context = $_GET['context'] ?? '';
+$addProduct = $context === 'add_product';
+$canLookup = $addProduct
+    ? has_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY)
+    : array_intersect(current_workspace_roles(), ['admin', 'inventory_manager']) !== [];
+if (!$canLookup) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Access denied: your role does not have permission to look up products.']);
     exit;
 }
 
+$lookupUserId = $_SESSION['user_id'];
 App\Core\Session::closeWrite();
 
 // Identification only: this endpoint never writes, never exposes an update
@@ -31,16 +37,54 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
     exit;
 }
 
-$code = trim((string)($_GET['code'] ?? ''));
+$code = is_string($_GET['code'] ?? null) ? trim($_GET['code']) : '';
 if ($code === '') {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Enter or scan a product code.']);
     exit;
 }
 
+$barcodeKind = $_GET['barcode_type'] ?? '';
+if ($addProduct && !in_array($barcodeKind, [
+    ProductCodeLookupService::KIND_UNIT_BARCODE,
+    ProductCodeLookupService::KIND_PACK_BARCODE,
+    ProductCodeLookupService::KIND_CASE_BARCODE,
+], true)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Select the barcode type to check.']);
+    exit;
+}
+
 try {
     $lookup = new ProductCodeLookupService($pdo);
-    echo json_encode(['success' => true] + $lookup->lookup($code, ($_GET['context'] ?? '') === 'receiving'));
+    $result = $addProduct ? $lookup->lookupForAddProduct($code, $barcodeKind) : $lookup->lookup($code, $context === 'receiving');
+    if ($addProduct && $result['product'] !== null) {
+        $product = $result['product'];
+        $result['product'] = [
+            'product_id' => $product['product_id'],
+            'product_name' => $product['product_name'],
+            'status' => $product['status'],
+            'manage_url' => app_url('components/inventory_management/products.php?manage_product=' . $product['product_id']),
+        ];
+    }
+    if ($addProduct && $barcodeKind === ProductCodeLookupService::KIND_UNIT_BARCODE && $result['outcome'] === 'unknown') {
+        require_once __DIR__ . '/../../../../backend/app/Services/OpenFoodFactsCatalog.php';
+        if (OpenFoodFactsCatalog::supports($code)) {
+            $result['catalog'] = OpenFoodFactsCatalog::lookup($code, $openFoodFactsRequest ?? null);
+            $photoUrl = $result['catalog']['product']['photo_url'] ?? null;
+            if ($photoUrl !== null) {
+                App\Core\Session::start();
+                if ($lookupUserId === ($_SESSION['user_id'] ?? null)) {
+                    $photos = $_SESSION['open_food_facts_photos'] ?? [];
+                    unset($photos[$code]);
+                    $photos[$code] = ['url' => $photoUrl, 'source' => $result['catalog']['source']['product_url']];
+                    $_SESSION['open_food_facts_photos'] = array_slice($photos, -20, null, true);
+                }
+                App\Core\Session::closeWrite();
+            }
+        }
+    }
+    echo json_encode(['success' => true] + $result, JSON_INVALID_UTF8_SUBSTITUTE);
 } catch (Throwable $exception) {
     error_log((string)$exception);
     http_response_code(500);
