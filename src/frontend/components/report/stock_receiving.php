@@ -432,7 +432,7 @@ $categoryIcon = static function (string $categoryName): string {
                                     <input type="hidden" name="review_cost_units" data-field="review_cost_units">
                                     <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
                                     <small id="cost_hint" data-field="cost_hint">Per base unit. Blank uses saved cost.</small>
-                                    <small data-field="cost_preview"></small>
+                                    <small data-field="cost_preview" role="status"></small>
                                     <small data-field="cost_change" role="status"></small>
                                 </div>
                             </div>
@@ -958,9 +958,12 @@ function refreshDelivery(quotes = null) {
         const cost = quotes?.get(row) ?? draftCost(row, prod);
         accepted += cost.accepted_qty;
         costs.push(cost);
-        field('cost_preview').textContent = cost.unit_cents === null ? ''
-            : (cost.rounding_difference ? 'Approx. ' : '') + money(cost.unit_cents) + ' / ' + (prod.base_unit || 'unit')
-                + ' · Batch total ' + money(cost.total_cents);
+        const preview = cost.too_large ? 'Batch total is too large.'
+            : cost.unit_cents === null ? ''
+                : (cost.rounding_difference ? 'Approx. ' : '') + money(cost.unit_cents) + ' / ' + (prod.base_unit || 'unit')
+                    + ' · Batch total ' + money(cost.total_cents);
+        const previewField = field('cost_preview');
+        if (previewField.textContent !== preview) previewField.textContent = preview;
     }
     for (const [name, value] of Object.entries({products, accepted})) {
         document.getElementById('summary_' + name).textContent = value;
@@ -1169,6 +1172,7 @@ function draftCost(row, product = productMap.get(row.dataset.productId)) {
     const quantity = BigInt(accepted_qty);
     const unit_cents = (cents + divisor / 2n) / divisor;
     const total_cents = (cents * quantity + divisor / 2n) / divisor;
+    if (total_cents > 9999999999n) return {accepted_qty, unit_cents: null, total_cents: null, too_large: true};
     return {accepted_qty, unit_cents, total_cents, rounding_difference: unit_cents * quantity !== total_cents};
 }
 
@@ -1253,7 +1257,8 @@ function renumberLines() {
         }
         const costHint = row.querySelector('[data-field="cost_hint"]');
         const costPrice = row.querySelector('[data-field="cost_price"]');
-        if (costPrice && costHint) costPrice.setAttribute('aria-describedby', costHint.id);
+        const costPreview = row.querySelector('[data-field="cost_preview"]');
+        costPrice.setAttribute('aria-describedby', costHint.id + ' ' + costPreview.id);
     }
     if (activeLine && !activeLine.isConnected) {
         activeLine = receivingRows().at(-1) || null;
@@ -1721,6 +1726,10 @@ function validateQuantities() {
             if (!invalid && selectedCostUnits(row, prod) === '0') {
                 invalid = field('cost_basis');
                 message = 'Choose a purchase cost basis configured for this product.';
+            }
+            if (!invalid && draftCost(row, prod).too_large) {
+                invalid = cost;
+                message = 'Total purchase cost is too large.';
             }
         }
         if (invalid) {

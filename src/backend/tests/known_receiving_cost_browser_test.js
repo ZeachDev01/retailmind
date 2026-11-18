@@ -88,6 +88,7 @@ function fixture(action) {
         await page.goto(url + '?product_id=2');
         if (await page.locator('.receiving-extras').getAttribute('open') === null) await page.locator('.receiving-extras summary').click();
         assert.match(await page.locator('#cost_hint').innerText(), /Blank uses saved cost: ₱0.00/);
+        assert.deepEqual(await page.locator('#cost_basis option').evaluateAll(options => options.map(option => option.value)), ['units']);
         await page.locator('#received_qty').fill('1');
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state: 'visible'});
@@ -148,6 +149,7 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         await page.waitForFunction(() => document.getElementById('entry_status').textContent.includes('changed'));
         assert.equal(await page.locator('#receiving_review').isVisible(), false, 'cost basis staleness is independent of quantity mode');
+        assert.match(await basis.locator('option[value="packs"]').innerText(), /Sales Pack.*6/);
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state: 'visible'});
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('.btn-submit').click()]);
@@ -155,6 +157,7 @@ function fixture(action) {
         await page.goto(origin + '/components/report/receiving_history.php');
         await page.locator('.receiving-entry-card summary').first().click();
         assert.match(await page.locator('.receiving-entry-card').first().innerText(), /₱100\.00.*24.*₱100\.00/s);
+        assert.match(await page.locator('.receiving-entry-card').first().innerText(), /Approx\. ₱4\.17/);
         await page.goto(origin + '/components/inventory_management/products.php');
         await page.locator('#product-add-trigger').click();
         await page.locator('#add-product-btn').click();

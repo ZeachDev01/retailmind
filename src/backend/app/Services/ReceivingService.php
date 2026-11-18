@@ -55,21 +55,7 @@ class ReceivingService
         }
         $submission = new InventorySubmission($this->pdo, $userId, 'receiving', $entry + ['lines' => $lines]);
         if (($completed = $submission->completed()) !== null) return $completed;
-        if ($lines === [] || !array_is_list($lines)) {
-            throw new RuntimeException('Add at least one product line before saving the shopping entry.');
-        }
-        $products = [];
-        foreach ($lines as $index => $line) {
-            if (!is_array($line)) {
-                throw new RuntimeException('Each product line must contain receiving details.');
-            }
-            $productId = $this->wholeNumber($line['product_id'] ?? 0, 'Product on line ' . ($index + 1));
-            if ($productId <= 0) throw new RuntimeException('Choose a product on line ' . ($index + 1) . '.');
-            if (isset($products[$productId])) {
-                throw new RuntimeException('Duplicate product on line ' . ($index + 1) . '. Remove the duplicate line or choose another product.');
-            }
-            $products[$productId] = true;
-        }
+        $productIds = $this->deliveryProductIds($lines);
         $shared = [
             'supplier' => $entry['supplier'] ?? '',
             'invoice_number' => $entry['invoice_number'] ?? '',
@@ -87,12 +73,7 @@ class ReceivingService
                 return $completed;
             }
             // Resolve every fallback from the catalog before any delivery line updates it.
-            [$scopeSql, $scopeParams] = $this->productScope();
-            $productStmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql} FOR UPDATE");
-            foreach ($products as $productId => $_) {
-                $productStmt->execute(array_merge([$productId], $scopeParams));
-                $products[$productId] = $productStmt->fetch(PDO::FETCH_ASSOC) ?: null;
-            }
+            $products = $this->deliveryProducts($productIds, true);
             $groupStmt = $this->pdo->prepare("INSERT INTO stock_receiving_groups (received_by, supplier, invoice_number, notes) VALUES (?, ?, ?, ?)");
             $groupStmt->execute([
                 $userId,
@@ -106,14 +87,10 @@ class ReceivingService
             foreach ($lines as $index => $line) {
                 try {
                     $productId = (int)$line['product_id'];
-                    $allocations = $line['allocations'] ?? [$line];
-                    if (!is_array($allocations) || !array_is_list($allocations) || $allocations === []) {
-                        throw new RuntimeException('Each product needs at least one valid batch.');
-                    }
+                    $allocations = $this->deliveryAllocations($line);
                     $productResults = [];
                     $costs = [];
                     foreach ($allocations as $allocation) {
-                        if (!is_array($allocation)) throw new RuntimeException('Each batch must contain receiving details.');
                         $data = array_replace($allocation, $shared, ['product_id' => $productId, 'group_id' => $groupId,
                             'pullout_id' => $line['pullout_id'] ?? null]);
                         $result = $this->receiveLine($data, $userId, $products[$productId]);
@@ -182,28 +159,71 @@ class ReceivingService
 
     public function reviewShoppingTrip(array $lines, int $userId): array
     {
-        [$scopeSql, $scopeParams] = $this->productScope();
-        $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql}");
+        if (!$this->hasColumn('stock_receiving', 'current_product_cost')) {
+            throw new RuntimeException('Receiving multiple batches requires the latest database schema.');
+        }
+        $products = $this->deliveryProducts($this->deliveryProductIds($lines));
         $review = [];
-        foreach ($lines as $line) {
-            if (!is_array($line) || !is_array($line['allocations'] ?? null) || !array_is_list($line['allocations']) || !$line['allocations']) {
-                throw new RuntimeException('Each product needs at least one valid batch.');
-            }
-            $productId = $this->wholeNumber($line['product_id'] ?? 0, 'Product');
-            $stmt->execute(array_merge([$productId], $scopeParams));
-            $product = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        foreach ($lines as $index => $line) {
+            $product = $products[(int)$line['product_id']];
             $batches = [];
-            foreach ($line['allocations'] as $allocation) {
-                if (!is_array($allocation)) throw new RuntimeException('Each batch must contain receiving details.');
-                $quote = $this->receiveLine(array_replace($allocation, ['product_id' => $productId,
-                    'pullout_id' => $line['pullout_id'] ?? null]), $userId, $product, true);
-                if ($quote['accepted_qty'] <= 0) throw new RuntimeException('Each batch needs a positive accepted quantity.');
-                $product['quantity_purchased'] += $quote['accepted_qty'];
-                $batches[] = $quote;
+            foreach ($this->deliveryAllocations($line) as $batchIndex => $allocation) {
+                try {
+                    $quote = $this->receiveLine(array_replace($allocation, ['product_id' => $line['product_id'],
+                        'pullout_id' => $line['pullout_id'] ?? null]), $userId, $product, true);
+                    if ($quote['accepted_qty'] <= 0) throw new RuntimeException('Each batch needs a positive accepted quantity.');
+                    $product['quantity_purchased'] += $quote['accepted_qty'];
+                    $batches[] = $quote;
+                } catch (RuntimeException $e) {
+                    throw new RuntimeException('Line ' . ($index + 1) . ', batch ' . ($batchIndex + 1) . ': ' . $e->getMessage(), 0, $e);
+                }
             }
             $review[] = $batches;
         }
         return $review;
+    }
+
+    private function deliveryProductIds(array $lines): array
+    {
+        if ($lines === [] || !array_is_list($lines)) {
+            throw new RuntimeException('Add at least one product line before saving the shopping entry.');
+        }
+        $products = [];
+        foreach ($lines as $index => $line) {
+            if (!is_array($line)) throw new RuntimeException('Each product line must contain receiving details.');
+            $productId = $this->wholeNumber($line['product_id'] ?? 0, 'Product on line ' . ($index + 1));
+            if ($productId <= 0) throw new RuntimeException('Choose a product on line ' . ($index + 1) . '.');
+            if (isset($products[$productId])) {
+                throw new RuntimeException('Duplicate product on line ' . ($index + 1) . '. Remove the duplicate line or choose another product.');
+            }
+            $products[$productId] = true;
+        }
+        return array_keys($products);
+    }
+
+    private function deliveryProducts(array $productIds, bool $lock = false): array
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $sql = "SELECT p.* FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql}";
+        $stmt = $this->pdo->prepare($sql . ($lock ? ' FOR UPDATE' : ''));
+        $products = [];
+        foreach ($productIds as $productId) {
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $products[$productId] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        return $products;
+    }
+
+    private function deliveryAllocations(array $line): array
+    {
+        $allocations = $line['allocations'] ?? [$line];
+        if (!is_array($allocations) || !array_is_list($allocations) || $allocations === []) {
+            throw new RuntimeException('Each product needs at least one valid batch.');
+        }
+        foreach ($allocations as $allocation) {
+            if (!is_array($allocation)) throw new RuntimeException('Each batch must contain receiving details.');
+        }
+        return $allocations;
     }
 
     private static function costConversions(array $product): array
@@ -306,6 +326,10 @@ class ReceivingService
         }
         if ($costUnits === 0) {
             throw new RuntimeException('Choose a purchase cost basis configured for this product.');
+        }
+        $hasCostBasis = $this->hasColumn('stock_receiving', 'cost_basis');
+        if (!$hasCostBasis && $basis !== 'units' && $costInput !== '') {
+            throw new RuntimeException('Package purchase costs require the latest database schema.');
         }
 
         $packSize = isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null;
@@ -505,10 +529,6 @@ class ReceivingService
         $hasPacks = $this->hasColumn('stock_receiving', 'received_packs');
         $packCols = $hasPacks ? ', received_packs, accepted_packs, damaged_packs, rejected_packs, received_loose, accepted_loose, damaged_loose, rejected_loose, pack_size_used' : '';
         $packPlaceholders = $hasPacks ? ', ?, ?, ?, ?, ?, ?, ?, ?, ?' : '';
-        $hasCostBasis = $this->hasColumn('stock_receiving', 'cost_basis');
-        if (!$hasCostBasis && $basis !== 'units' && $costInput !== '') {
-            throw new RuntimeException('Package purchase costs require the latest database schema.');
-        }
         $costCols = $hasCostBasis ? ', entered_cost, cost_basis, cost_units_used' : '';
         $costPlaceholders = $hasCostBasis ? ', ?, ?, ?' : '';
 
@@ -763,6 +783,8 @@ class ReceivingService
                 'entered_cost' => $row['entered_cost'] !== null ? (float)$row['entered_cost'] : null,
                 'cost_basis' => $row['cost_basis'],
                 'cost_units_used' => $row['cost_units_used'] !== null ? (int)$row['cost_units_used'] : null,
+                'rounding_difference' => (int)$row['cost_units_used'] > 1 && $row['cost_price'] !== null
+                    && self::cents((string)$row['cost_price']) * (int)$row['accepted_qty'] !== self::cents((string)$row['total_cost']),
                 'batch_number' => $row['batch_number'],
                 'expiration_date' => $row['expiration_date'],
                 'discrepancy_type' => $row['discrepancy_type'],

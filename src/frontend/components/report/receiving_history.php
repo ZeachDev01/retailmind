@@ -181,7 +181,7 @@ try {
                                                 </td>
                                                 <td>
                                                     <?php if ($line['cost_price'] !== null): ?>
-                                                        ₱<?= number_format($line['cost_price'], 2) ?> / base unit<br>
+                                                        <?= $line['rounding_difference'] ? 'Approx. ' : '' ?>₱<?= number_format($line['cost_price'], 2) ?> / base unit<br>
                                                     <?php endif; ?>
                                                     <?php if ($line['total_cost'] !== null): ?>
                                                         <strong>Batch total</strong> ₱<?= number_format($line['total_cost'], 2) ?>

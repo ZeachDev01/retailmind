@@ -301,7 +301,7 @@ async function main() {
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state:'visible'});
         check((await page.locator('#receiving_review').innerText()).includes('5 units')
-            && (await page.locator('#receiving_review').innerText()).includes('Cost: ₱5.00 per unit'),
+            && /Cost: ₱5\.00 per \S+ \(saved\) · Batch total: ₱25\.00/.test(await page.locator('#receiving_review').innerText()),
             'review shows accepted quantities and the saved product cost');
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(before),
             'selection, quantities and review never write stock');

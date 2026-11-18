@@ -510,8 +510,7 @@ function run_report(PDO $pdo, string $report, array $filters): array
                     $hasEstimate = false;
                     foreach ($batches as $b) {
                         $bQty = (int)$b['remaining_quantity'];
-                        if ((int)$b['accepted_qty'] > 0 && $b['total_cost'] !== null
-                            && ($b['sr_cost'] !== null || (float)$b['total_cost'] > 0)) {
+                        if ((int)$b['accepted_qty'] > 0 && (float)$b['total_cost'] > 0) {
                             $recordedVal += (float)$b['total_cost'] * ($bQty / (int)$b['accepted_qty']);
                         } elseif ($b['batch_cost'] !== null) {
                             $recordedVal += $bQty * (float)$b['batch_cost'];

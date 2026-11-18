@@ -118,6 +118,9 @@ $assert(run_report($pdo, 'inventory_valuation', $cartonFilters)['rows'][0]['Reco
 $pdo->exec("UPDATE inventory SET quantity_on_hand=12 WHERE product_id=20; UPDATE product_batches SET remaining_quantity=12 WHERE batch_id=20");
 $assert(run_report($pdo, 'inventory_valuation', $cartonFilters)['rows'][0]['Recorded Value'] === '50.00',
     'Valuation prorates the recorded batch amount when only part remains');
+$pdo->exec("UPDATE stock_receiving SET total_cost=0 WHERE receiving_id=20");
+$assert(run_report($pdo, 'inventory_valuation', $cartonFilters)['rows'][0]['Recorded Value'] === '50.04',
+    'A legacy receipt without a recorded amount can still use its batch unit cost');
 
 // --- Test Case 3: Explicit zero batch cost vs default-zero / missing cost ---
 // Product 3: Explicit recorded zero purchase cost (e.g. promotional free goods or free sample received at 0.00)
