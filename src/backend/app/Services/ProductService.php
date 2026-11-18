@@ -13,6 +13,8 @@ require_once __DIR__ . '/../../includes/functions.php';
 
 class ProductService
 {
+    private const IDENTIFIER_FIELDS = ['barcode', 'pack_barcode', 'case_barcode', 'sku'];
+
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
@@ -142,7 +144,9 @@ class ProductService
             if ($caseBarcode === $barcode) throw new RuntimeException('Case barcode must be distinct from piece barcode.');
         }
 
-        $sku = trim((string)($data['sku'] ?? '')) ?: $barcode;
+        $sku = trim((string)($data['sku'] ?? ''));
+        $automaticSku = $sku === '';
+        if ($automaticSku) $sku = $barcode;
 
         $packConfig = $this->validatePackConfiguration(
             $data,
@@ -282,9 +286,15 @@ class ProductService
                 $userId,
             ]);
             $productId = (int)$this->pdo->lastInsertId();
-            if (isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products')['cost_known'])) {
+            $productColumns = \App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products');
+            if (isset($productColumns['cost_known'])) {
                 $this->pdo->prepare('UPDATE products SET cost_known = ? WHERE product_id = ?')->execute([(int)($enteredCost !== null), $productId]);
             }
+            if (isset($productColumns['sku_follows_barcode'])) {
+                $this->pdo->prepare('UPDATE products SET sku_follows_barcode = ? WHERE product_id = ?')->execute([(int)$automaticSku, $productId]);
+            }
+            if ($caseBarcode !== '') $this->assertBarcodeAvailable($caseBarcode, $productId, ['case_barcode']);
+            if ($packBarcode !== null) $this->assertBarcodeAvailable($packBarcode, $productId, ['pack_barcode']);
             $this->pdo->prepare("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (?, ?)")
                 ->execute([$productId, $initialStock]);
 
@@ -380,10 +390,9 @@ class ProductService
         $this->fiscalPeriodGuard->assertOpenForDate($purchaseDate, 'purchase_history', 'purchase history');
         $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
 
-        $existingProduct = $this->findProductBySearchTerm($searchTerm);
-
         StoreWriteGate::begin($this->pdo);
         try {
+            $existingProduct = $this->findProductBySearchTerm($searchTerm);
             if ($existingProduct) {
                 $balanceStmt = $this->pdo->prepare(
                     'SELECT i.quantity_on_hand, p.quantity_purchased FROM products p
@@ -465,10 +474,11 @@ class ProductService
                 }
                 $updateParts[] = 'status = ?';
                 $params[] = $status;
-                $updateParts[] = 'sku = ?';
-                $params[] = $existingProduct['sku'];
-                $updateParts[] = 'barcode = ?';
-                $params[] = $existingProduct['barcode'] ?: $existingProduct['sku'];
+                if ((string)$existingProduct['barcode'] === '' && (string)$existingProduct['sku'] !== '') {
+                    $this->assertBarcodeAvailable($existingProduct['sku'], (int)$existingProduct['product_id'], ['barcode', 'sku']);
+                    $updateParts[] = 'barcode = ?';
+                    $params[] = $existingProduct['sku'];
+                }
 
                 $params[] = $existingProduct['product_id'];
                 $this->pdo->prepare('UPDATE products SET ' . implode(', ', $updateParts) . ' WHERE product_id = ?')
@@ -682,12 +692,14 @@ class ProductService
 
             $barcode = $this->generateUniqueInternalBarcode();
             $sku = trim((string)($product['sku'] ?? ''));
-            if ($sku === '') {
-                $sku = $barcode;
-            }
+            $automaticSku = $sku === '';
+            if ($automaticSku) $sku = $barcode;
 
             $this->pdo->prepare('UPDATE products SET barcode = ?, sku = ? WHERE product_id = ?')
                 ->execute([$barcode, $sku, $productId]);
+            if ($automaticSku && isset(\App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products')['sku_follows_barcode'])) {
+                $this->pdo->prepare('UPDATE products SET sku_follows_barcode = 1 WHERE product_id = ?')->execute([$productId]);
+            }
 
             log_activity(
                 $this->pdo,
@@ -728,20 +740,106 @@ class ProductService
         return $stmt->fetch() ?: null;
     }
 
-    public function assertBarcodeAvailable(string $barcode, ?int $excludeProductId = null): void
+    public function assertBarcodeAvailable(string $barcode, ?int $productId = null, array $replacingFields = []): void
     {
-        $excludeSql = $excludeProductId !== null ? ' AND product_id != ?' : '';
-        $params = [$barcode, $barcode, $barcode, $barcode];
-        if ($excludeProductId !== null) {
-            $params[] = $excludeProductId;
+        $match = static fn(array $fields): string => implode(' OR ', array_map(static fn(string $field): string => "$field = ?", $fields));
+        $fields = self::IDENTIFIER_FIELDS;
+        $where = '(' . $match($fields) . ')';
+        $params = array_fill(0, count($fields), $barcode);
+        if ($productId !== null) {
+            $otherFields = array_values(array_diff($fields, $replacingFields));
+            $where = "($where AND product_id <> ?) OR (product_id = ? AND (" . $match($otherFields) . '))';
+            $params = array_merge($params, [$productId, $productId], array_fill(0, count($otherFields), $barcode));
         }
-        $stmt = $this->pdo->prepare(
-            "SELECT product_id FROM products WHERE (barcode = ? OR sku = ? OR case_barcode = ? OR pack_barcode = ?){$excludeSql} LIMIT 1"
-        );
+        $stmt = $this->pdo->prepare("SELECT product_id FROM products WHERE $where LIMIT 1" . $this->rowLock());
         $stmt->execute($params);
-        if ($stmt->fetch()) {
-            throw new RuntimeException('That barcode is already assigned to another product.');
+        $owner = $stmt->fetchColumn();
+        if ($owner !== false) {
+            throw new RuntimeException($productId === (int)$owner
+                ? 'That barcode matches another barcode or the SKU on this product.'
+                : 'That barcode is already assigned to another product.');
         }
+    }
+
+    public function correctProductBarcode(int $productId, array $data, int $userId): array
+    {
+        if (function_exists('require_capability')) {
+            require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
+        }
+        $role = function_exists('current_role') ? current_role() : ($_SESSION['role'] ?? null);
+        if ($role !== 'inventory_manager') {
+            throw new RuntimeException('Only the active Inventory Manager workspace can correct product barcodes.');
+        }
+
+        $field = $data['barcode_field'] ?? '';
+        $code = $data['replacement_barcode'] ?? '';
+        $previous = $data['previous_barcode'] ?? null;
+        if (!in_array($field, ['barcode', 'pack_barcode', 'case_barcode'], true) || !is_string($code) || !is_string($previous)) {
+            throw new RuntimeException('Select a barcode type and enter the replacement barcode.');
+        }
+        $code = trim($code);
+        $limit = $field === 'barcode' ? 50 : 80;
+        if ($code === '' || strlen($code) > $limit || preg_match('/[\x00-\x1F\x7F]/', $code)) {
+            throw new RuntimeException("Enter a valid replacement barcode of up to $limit characters.");
+        }
+
+        return StoreWriteGate::run($this->pdo, function () use ($productId, $field, $code, $previous, $data, $userId): array {
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
+            $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE p.product_id = ?{$scopeSql}" . $this->rowLock());
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$product) {
+                throw new RuntimeException('Product not found.');
+            }
+            if (!array_key_exists('sku_follows_barcode', $product)) {
+                throw new RuntimeException('Ask your Administrator to apply Database Updates before correcting barcodes.');
+            }
+            if ((string)$product[$field] !== $previous) {
+                throw new RuntimeException('This barcode changed after you opened the product. Reload and review the current barcode.');
+            }
+            $sameCode = $this->pdo->prepare("SELECT 1 FROM products WHERE product_id = ? AND $field = ?");
+            $sameCode->execute([$productId, $code]);
+            if ($sameCode->fetchColumn()) {
+                throw new RuntimeException('Enter a different replacement barcode.');
+            }
+            if ($field === 'pack_barcode' && ((int)$product['pack_size'] < 2 || $product['pack_price'] === null)) {
+                throw new RuntimeException('Set up the Sales Pack in Edit product before correcting its barcode.');
+            }
+
+            $before = array_intersect_key($product, array_flip([...self::IDENTIFIER_FIELDS, 'sku_follows_barcode']));
+            $after = $before;
+            $after[$field] = $code;
+            $replacing = [$field];
+            if ($field === 'barcode') {
+                $origin = $product['sku_follows_barcode'];
+                if ($origin === null) {
+                    $decision = $data['sku_decision'] ?? '';
+                    if (!in_array($decision, ['keep', 'replace'], true)) {
+                        throw new RuntimeException('The SKU origin is unknown. Choose whether to keep the current SKU or use the replacement barcode as the SKU.');
+                    }
+                    $origin = (int)($decision === 'replace');
+                    $after['sku_follows_barcode'] = $origin;
+                }
+                if ((int)$origin === 1) {
+                    $after['sku'] = $code;
+                    $replacing[] = 'sku';
+                }
+            }
+            $this->assertBarcodeAvailable($code, $productId, $replacing);
+            $this->pdo->prepare("UPDATE products SET $field = ?, sku = ?, sku_follows_barcode = ? WHERE product_id = ?")
+                ->execute([$code, $after['sku'], $after['sku_follows_barcode'], $productId]);
+
+            log_activity($this->pdo, $userId, 'Product barcode corrected', 'Products', $productId, $before, $after);
+            $notice = 'Barcode corrected. Reprint affected labels.';
+            if ($before['sku'] !== $after['sku']) {
+                $notice .= ' Update CSV files that use the old SKU before importing them.';
+            } elseif ($field === 'barcode' && $previous !== '') {
+                $skuMatch = $this->pdo->prepare('SELECT 1 FROM products WHERE product_id = ? AND sku = ?');
+                $skuMatch->execute([$productId, $previous]);
+                if ($skuMatch->fetchColumn()) $notice .= ' The previous barcode still identifies this product as its SKU.';
+            }
+            return ['product' => ['product_id' => $productId] + $after, 'notice' => $notice];
+        });
     }
 
     public function generateUniqueInternalBarcode(): string
@@ -920,166 +1018,174 @@ class ProductService
             throw new RuntimeException('Invalid product selected.');
         }
 
-        [$scopeSql, $scopeParams] = $this->storeProductScope();
-        $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE p.product_id = ?{$scopeSql}");
-        $stmt->execute(array_merge([$productId], $scopeParams));
-        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$existing) {
-            throw new RuntimeException('Product not found.');
-        }
-
-        $productName = trim((string)($data['product_name'] ?? ''));
-        if ($productName === '') {
-            throw new RuntimeException('Product name is required.');
-        }
-
-        $hasParent = !empty($existing['parent_product_id']) && (int)$existing['parent_product_id'] > 0;
-        if ($hasParent) {
-            $variantLabel = trim((string)($data['variant_label'] ?? ''));
-            if ($variantLabel === '') {
-                throw new RuntimeException('Variant label is required for variant products.');
-            }
-            if (mb_strlen($variantLabel) > 100) {
-                throw new RuntimeException('Variant label must not exceed 100 characters.');
-            }
-        } else {
-            $variantLabel = $existing['variant_label'];
-        }
-
-        $brand = trim((string)($data['brand'] ?? ''));
-        $brand = $brand !== '' ? $brand : null;
-
-        $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
-        if ($categoryId !== null && $categoryId > 0) {
-            $catStmt = $this->pdo->prepare("SELECT category_id FROM categories WHERE category_id = ?");
-            $catStmt->execute([$categoryId]);
-            if (!$catStmt->fetch()) {
-                throw new RuntimeException('Selected category was not found.');
-            }
-        } else {
-            $categoryId = null;
-        }
-
-        $productImage = array_key_exists('product_image', $data) && $data['product_image'] !== null && $data['product_image'] !== ''
-            ? trim((string)$data['product_image'])
-            : $existing['product_image'];
-
-        $hasSellingPrice = array_key_exists('selling_price', $data) || array_key_exists('unit_price', $data);
-        $enteredCost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
-        $costPrice = $enteredCost ?? (float)($existing['cost_price'] ?? 0);
-        $warning = null;
-
-        if ($hasSellingPrice) {
-            $rawPrice = $data['selling_price'] ?? $data['unit_price'];
-            $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
-            if ($trimmedPrice === null || $trimmedPrice === '' || !is_numeric($trimmedPrice)) {
-                throw new RuntimeException('Selling price must be a valid number greater than 0.');
-            }
-            $sellingPrice = round((float)$trimmedPrice, 2);
-            if (!is_finite($sellingPrice) || $sellingPrice <= 0) {
-                throw new RuntimeException('Selling price must be greater than PHP 0.');
-            }
-            if ($sellingPrice > 999999999.99) {
-                throw new RuntimeException('Selling price is out of range.');
-            }
-        } else {
-            $sellingPrice = (float)$existing['unit_price'];
-        }
-        if ($costPrice > 0 && $sellingPrice < $costPrice) {
-            $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
-        }
-
-        $hasStatus = array_key_exists('status', $data);
-        if ($hasStatus) {
-            $rawStatus = is_string($data['status']) ? trim($data['status']) : $data['status'];
-            if ($rawStatus !== 'active' && $rawStatus !== 'inactive') {
-                throw new RuntimeException("Status must be strictly 'active' or 'inactive'.");
-            }
-            $status = $rawStatus;
-        } else {
-            $status = $existing['status'] ?? 'active';
-        }
-
-        $hasUnitsPerPackage = array_key_exists('units_per_package', $data);
-        $unitsPerPackage = $hasUnitsPerPackage
-            ? $this->validateStockSetting($data['units_per_package'], 'Units per package', 1)
-            : (int)$existing['units_per_package'];
-
-        $hasMinOrderQty = array_key_exists('minimum_order_quantity', $data);
-        $minimumOrderQuantity = $hasMinOrderQty
-            ? $this->validateStockSetting($data['minimum_order_quantity'], 'Minimum order quantity', 1)
-            : (int)$existing['minimum_order_quantity'];
-
-        $hasReorderLevel = array_key_exists('reorder_level', $data);
-        $reorderLevel = $hasReorderLevel
-            ? $this->validateStockSetting($data['reorder_level'], 'Reorder level', 0)
-            : (int)$existing['reorder_level'];
-
-        $hasSafetyStock = array_key_exists('safety_stock', $data);
-        $safetyStock = $hasSafetyStock
-            ? $this->validateStockSetting($data['safety_stock'], 'Safety stock', 0)
-            : (int)$existing['safety_stock'];
-
-        $hasWarningLeadTime = array_key_exists('warning_lead_time_days', $data);
-        $warningLeadTimeDays = $hasWarningLeadTime
-            ? $this->validateWarningLeadTime($data['warning_lead_time_days'])
-            : (isset($existing['warning_lead_time_days']) && $existing['warning_lead_time_days'] !== null && $existing['warning_lead_time_days'] !== '' ? (int)$existing['warning_lead_time_days'] : null);
-
-        $existingPackSize = isset($existing['pack_size']) && $existing['pack_size'] !== null ? (int)$existing['pack_size'] : null;
-        $existingPackBarcode = $existing['pack_barcode'] !== null && $existing['pack_barcode'] !== '' ? (string)$existing['pack_barcode'] : null;
-        $existingPackPrice = isset($existing['pack_price']) && $existing['pack_price'] !== null ? (float)$existing['pack_price'] : null;
-
-        $hasPackInput = array_key_exists('pack_size', $data) || array_key_exists('pack_barcode', $data) || array_key_exists('pack_price', $data);
-        if ($hasPackInput) {
-            $packConfig = $this->validatePackConfiguration(
-                $data,
-                $sellingPrice,
-                $existing['barcode'],
-                $existing['sku'],
-                $existing['case_barcode']
-            );
-
-            // Check if product currently has sealed packs
-            $sealedStmt = $this->pdo->prepare(
-                "SELECT COALESCE(SUM(sealed_quantity), 0) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
-            );
-            $sealedStmt->execute([$productId]);
-            $sealedPacks = (int)$sealedStmt->fetchColumn();
-
-            if ($sealedPacks > 0) {
-                if ($packConfig === null) {
-                    throw new RuntimeException("Cannot remove Sales Pack configuration while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
-                }
-                if ($packConfig['pack_size'] !== $existingPackSize) {
-                    throw new RuntimeException("Cannot modify pack contents count while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
-                }
-            }
-
-            $newPackSize = $packConfig !== null ? $packConfig['pack_size'] : null;
-            $newPackBarcode = $packConfig !== null ? $packConfig['pack_barcode'] : null;
-            $newPackPrice = $packConfig !== null ? $packConfig['pack_price'] : null;
-        } else {
-            $newPackSize = $existingPackSize;
-            $newPackBarcode = $existingPackBarcode;
-            $newPackPrice = $existingPackPrice;
-
-            if ($hasSellingPrice && $newPackSize !== null && $newPackPrice !== null && $newPackPrice >= round($newPackSize * $sellingPrice, 2)) {
-                throw new RuntimeException(sprintf(
-                    'Pack price (₱%s) must be lower than contents count times piece price (%d × ₱%s = ₱%s).',
-                    number_format($newPackPrice, 2),
-                    $newPackSize,
-                    number_format($sellingPrice, 2),
-                    number_format($newPackSize * $sellingPrice, 2)
-                ));
-            }
-        }
-
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
         }
         try {
-            if ($hasPackInput && $newPackBarcode !== null) $this->assertBarcodeAvailable($newPackBarcode, $productId);
+            [$scopeSql, $scopeParams] = $this->storeProductScope();
+            $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE p.product_id = ?{$scopeSql}" . $this->rowLock());
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$existing) {
+                throw new RuntimeException('Product not found.');
+            }
+
+            $productName = trim((string)($data['product_name'] ?? ''));
+            if ($productName === '') {
+                throw new RuntimeException('Product name is required.');
+            }
+
+            $hasParent = !empty($existing['parent_product_id']) && (int)$existing['parent_product_id'] > 0;
+            if ($hasParent) {
+                $variantLabel = trim((string)($data['variant_label'] ?? ''));
+                if ($variantLabel === '') {
+                    throw new RuntimeException('Variant label is required for variant products.');
+                }
+                if (mb_strlen($variantLabel) > 100) {
+                    throw new RuntimeException('Variant label must not exceed 100 characters.');
+                }
+            } else {
+                $variantLabel = $existing['variant_label'];
+            }
+
+            $brand = trim((string)($data['brand'] ?? ''));
+            $brand = $brand !== '' ? $brand : null;
+
+            $categoryId = (($data['category_id'] ?? '') !== '') ? (int)$data['category_id'] : null;
+            if ($categoryId !== null && $categoryId > 0) {
+                $catStmt = $this->pdo->prepare("SELECT category_id FROM categories WHERE category_id = ?");
+                $catStmt->execute([$categoryId]);
+                if (!$catStmt->fetch()) {
+                    throw new RuntimeException('Selected category was not found.');
+                }
+            } else {
+                $categoryId = null;
+            }
+
+            $productImage = array_key_exists('product_image', $data) && $data['product_image'] !== null && $data['product_image'] !== ''
+                ? trim((string)$data['product_image'])
+                : $existing['product_image'];
+
+            $hasSellingPrice = array_key_exists('selling_price', $data) || array_key_exists('unit_price', $data);
+            $enteredCost = \App\Inventory\ProductCost::input($data['cost_price'] ?? null);
+            $costPrice = $enteredCost ?? (float)($existing['cost_price'] ?? 0);
+            $warning = null;
+
+            if ($hasSellingPrice) {
+                $rawPrice = $data['selling_price'] ?? $data['unit_price'];
+                $trimmedPrice = is_string($rawPrice) ? trim($rawPrice) : $rawPrice;
+                if ($trimmedPrice === null || $trimmedPrice === '' || !is_numeric($trimmedPrice)) {
+                    throw new RuntimeException('Selling price must be a valid number greater than 0.');
+                }
+                $sellingPrice = round((float)$trimmedPrice, 2);
+                if (!is_finite($sellingPrice) || $sellingPrice <= 0) {
+                    throw new RuntimeException('Selling price must be greater than PHP 0.');
+                }
+                if ($sellingPrice > 999999999.99) {
+                    throw new RuntimeException('Selling price is out of range.');
+                }
+            } else {
+                $sellingPrice = (float)$existing['unit_price'];
+            }
+            if ($costPrice > 0 && $sellingPrice < $costPrice) {
+                $warning = sprintf('Warning: Selling price (₱%s) is below cost price (₱%s).', number_format($sellingPrice, 2), number_format($costPrice, 2));
+            }
+
+            $hasStatus = array_key_exists('status', $data);
+            if ($hasStatus) {
+                $rawStatus = is_string($data['status']) ? trim($data['status']) : $data['status'];
+                if ($rawStatus !== 'active' && $rawStatus !== 'inactive') {
+                    throw new RuntimeException("Status must be strictly 'active' or 'inactive'.");
+                }
+                $status = $rawStatus;
+            } else {
+                $status = $existing['status'] ?? 'active';
+            }
+
+            $hasUnitsPerPackage = array_key_exists('units_per_package', $data);
+            $unitsPerPackage = $hasUnitsPerPackage
+                ? $this->validateStockSetting($data['units_per_package'], 'Units per package', 1)
+                : (int)$existing['units_per_package'];
+
+            $hasMinOrderQty = array_key_exists('minimum_order_quantity', $data);
+            $minimumOrderQuantity = $hasMinOrderQty
+                ? $this->validateStockSetting($data['minimum_order_quantity'], 'Minimum order quantity', 1)
+                : (int)$existing['minimum_order_quantity'];
+
+            $hasReorderLevel = array_key_exists('reorder_level', $data);
+            $reorderLevel = $hasReorderLevel
+                ? $this->validateStockSetting($data['reorder_level'], 'Reorder level', 0)
+                : (int)$existing['reorder_level'];
+
+            $hasSafetyStock = array_key_exists('safety_stock', $data);
+            $safetyStock = $hasSafetyStock
+                ? $this->validateStockSetting($data['safety_stock'], 'Safety stock', 0)
+                : (int)$existing['safety_stock'];
+
+            $hasWarningLeadTime = array_key_exists('warning_lead_time_days', $data);
+            $warningLeadTimeDays = $hasWarningLeadTime
+                ? $this->validateWarningLeadTime($data['warning_lead_time_days'])
+                : (isset($existing['warning_lead_time_days']) && $existing['warning_lead_time_days'] !== null && $existing['warning_lead_time_days'] !== '' ? (int)$existing['warning_lead_time_days'] : null);
+
+            $existingPackSize = isset($existing['pack_size']) && $existing['pack_size'] !== null ? (int)$existing['pack_size'] : null;
+            $existingPackBarcode = $existing['pack_barcode'] !== null && $existing['pack_barcode'] !== '' ? (string)$existing['pack_barcode'] : null;
+            $existingPackPrice = isset($existing['pack_price']) && $existing['pack_price'] !== null ? (float)$existing['pack_price'] : null;
+
+            $hasPackInput = array_key_exists('pack_size', $data) || array_key_exists('pack_barcode', $data) || array_key_exists('pack_price', $data);
+            if ($hasPackInput) {
+                if (array_key_exists('previous_pack_barcode', $data) && (string)$existingPackBarcode !== $data['previous_pack_barcode']) {
+                    throw new RuntimeException('The Sales Pack barcode changed after you opened the product. Reload and review the current barcode.');
+                }
+                $packConfig = $this->validatePackConfiguration(
+                    $data,
+                    $sellingPrice,
+                    $existing['barcode'],
+                    $existing['sku'],
+                    $existing['case_barcode']
+                );
+
+                // Check if product currently has sealed packs
+                $sealedStmt = $this->pdo->prepare(
+                    "SELECT COALESCE(SUM(sealed_quantity), 0) FROM product_batches WHERE product_id = ? AND remaining_quantity > 0"
+                );
+                $sealedStmt->execute([$productId]);
+                $sealedPacks = (int)$sealedStmt->fetchColumn();
+
+                if ($sealedPacks > 0) {
+                    if ($packConfig === null) {
+                        throw new RuntimeException("Cannot remove Sales Pack configuration while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
+                    }
+                    if ($packConfig['pack_size'] !== $existingPackSize) {
+                        throw new RuntimeException("Cannot modify pack contents count while {$sealedPacks} sealed pack(s) exist in stock. Reconcile sealed stock to zero first.");
+                    }
+                }
+
+                $newPackSize = $packConfig !== null ? $packConfig['pack_size'] : null;
+                $newPackBarcode = $packConfig !== null ? $packConfig['pack_barcode'] : null;
+                $newPackPrice = $packConfig !== null ? $packConfig['pack_price'] : null;
+            } else {
+                $newPackSize = $existingPackSize;
+                $newPackBarcode = $existingPackBarcode;
+                $newPackPrice = $existingPackPrice;
+
+                if ($hasSellingPrice && $newPackSize !== null && $newPackPrice !== null && $newPackPrice >= round($newPackSize * $sellingPrice, 2)) {
+                    throw new RuntimeException(sprintf(
+                        'Pack price (₱%s) must be lower than contents count times piece price (%d × ₱%s = ₱%s).',
+                        number_format($newPackPrice, 2),
+                        $newPackSize,
+                        number_format($sellingPrice, 2),
+                        number_format($newPackSize * $sellingPrice, 2)
+                    ));
+                }
+            }
+
+            if ($hasPackInput && $newPackBarcode !== null && $newPackBarcode !== $existingPackBarcode) {
+                $this->assertBarcodeAvailable($newPackBarcode, $productId, ['pack_barcode']);
+                if ($existingPackBarcode !== null) {
+                    $warning = trim(($warning ?? '') . ' Sales Pack barcode changed. Reprint affected labels.');
+                }
+            }
             if ($newPackSize !== null) {
                 // Existing batches without explicit forms preserve loose stock evidence (never infer packs)
                 $this->pdo->prepare(

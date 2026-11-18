@@ -11,6 +11,8 @@ $pdo->exec('CREATE TABLE products (product_id INTEGER PRIMARY KEY, sku TEXT UNIQ
 $pdo->exec('ALTER TABLE products ADD COLUMN cost_known INTEGER NOT NULL DEFAULT 0');
 $pdo->exec('ALTER TABLE products ADD COLUMN case_barcode TEXT');
 $pdo->exec('ALTER TABLE products ADD COLUMN pack_barcode TEXT');
+$skuMigration = require __DIR__ . '/../database/migrations/202611180003_product_sku_provenance.php';
+$skuMigration['up']($pdo);
 $pdo->exec('CREATE TABLE inventory (product_id INTEGER PRIMARY KEY REFERENCES products(product_id), quantity_on_hand INTEGER)');
 $pdo->exec('CREATE TABLE scheduled_demand_drivers (product_id INTEGER REFERENCES products(product_id), driver_type TEXT, effective_date TEXT, scheduled_at TEXT, details_json TEXT)');
 $pdo->exec('CREATE TABLE activity_log (user_id INTEGER, action TEXT)');
@@ -53,6 +55,13 @@ $check((int)$pdo->query("SELECT cost_known FROM products WHERE sku = 'FREE'")->f
 $check((int)$pdo->query("SELECT cost_known FROM products WHERE sku = 'UNKNOWN'")->fetchColumn() === 0, 'Imported blank is unknown');
 $pdo->exec("UPDATE products SET case_barcode = 'REGISTERED-CASE' WHERE sku = 'FREE'");
 $check($run("header\nNEW,REGISTERED-CASE,Duplicate case identifier,Brand,,25,0\n") === [0, 1], 'Import refuses an existing case identifier');
+$check($run("header\n,CSV-AUTO,Auto SKU,Brand,,25,0\nCSV-CUSTOM,CSV-CUSTOM,Explicit SKU,Brand,,25,0\n") === [2, 0], 'Both SKU assignment modes import');
+$check((int)$pdo->query("SELECT sku_follows_barcode FROM products WHERE sku = 'CSV-AUTO'")->fetchColumn() === 1, 'An omitted SKU follows the barcode');
+$check($pdo->query("SELECT sku_follows_barcode FROM products WHERE sku = 'CSV-CUSTOM'")->fetchColumn() === 0, 'A supplied matching SKU is custom');
+$pdo->exec("UPDATE products SET pack_barcode = 'OWN-PACK' WHERE sku = 'CSV-AUTO'");
+$check($run("header\nCSV-AUTO,OWN-PACK,Same product conflict,Brand,,25,0\n") === [0, 1], 'Import refuses a package identifier on the same product');
+$check($run("header\nCSV-AUTO,CSV-REPLACEMENT,Keep stable SKU,Brand,,25,0\n") === [1, 0], 'Import preserves the explicitly referenced SKU');
+$check($pdo->query("SELECT sku_follows_barcode FROM products WHERE sku = 'CSV-AUTO'")->fetchColumn() === 0, 'A barcode update carrying a fixed SKU clears automatic provenance');
 $pdo->exec('DROP TABLE scheduled_demand_drivers');
 $check($run("header\nFAIL-1,FAIL-1,Failure product,Brand,New category,45,30\n") === [0, 1], 'Missing driver table must fail the row');
 $check((int)$pdo->query("SELECT COUNT(*) FROM products WHERE sku = 'FAIL-1'")->fetchColumn() === 0, 'Failed row must roll back product');

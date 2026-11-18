@@ -63,15 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         continue;
                     }
 
+                    // Keep generated IDs and all writes for this row in the same transaction.
+                    App\Store\StoreWriteGate::begin($pdo);
                     if ($barcode === '') {
                         $barcode = $productService->generateUniqueInternalBarcode();
                     }
-                    if ($sku === '') {
-                        $sku = $barcode;
-                    }
-
-                    // Keep generated IDs and all writes for this row in the same transaction.
-                    App\Store\StoreWriteGate::begin($pdo);
+                    $automaticSku = $sku === '';
+                    if ($automaticSku) $sku = $barcode;
+                    $productColumns = \App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products');
 
                     // Get or create category
                     $category_id = null;
@@ -98,7 +97,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         $beforeStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
                         $beforeStmt->execute([(int)$prod['product_id']]);
                         $beforeProduct = $beforeStmt->fetch();
-                        if ($barcode !== $beforeProduct['barcode']) $productService->assertBarcodeAvailable($barcode, $product_id);
+                        $barcodeChanged = $barcode !== $beforeProduct['barcode'];
+                        if ($barcodeChanged) $productService->assertBarcodeAvailable($barcode, $product_id, ['barcode']);
+                        if ($barcodeChanged && isset($productColumns['sku_follows_barcode'])) {
+                            // CSV updates identify the Product by a fixed, explicitly supplied SKU.
+                            $pdo->prepare('UPDATE products SET sku_follows_barcode = 0 WHERE product_id = ?')->execute([$product_id]);
+                        }
                         if ($cost_price === null && \App\Inventory\ProductCost::known($beforeProduct)) $cost_price = (float)$beforeProduct['cost_price'];
 
                         // Update existing
@@ -122,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $units_per_package,
                             $sku,
                         ]);
-                        if ($cost_price !== null && isset(\App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products')['cost_known'])) {
+                        if ($cost_price !== null && isset($productColumns['cost_known'])) {
                             $pdo->prepare('UPDATE products SET cost_known = 1 WHERE sku = ?')->execute([$sku]);
                         }
                         $afterStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
@@ -174,6 +178,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                             $_SESSION['user_id'],
                         ]);
                         $product_id = $pdo->lastInsertId();
+                        if (isset($productColumns['sku_follows_barcode'])) {
+                            $pdo->prepare('UPDATE products SET sku_follows_barcode = ? WHERE product_id = ?')->execute([(int)$automaticSku, $product_id]);
+                        }
 
                         $driverService = new \App\Store\ScheduledDemandDriverService();
                         $driverService->recordDriver(
@@ -186,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
                         );
 
 
-                        if ($cost_price !== null && isset(\App\Services\BatchAllocationEngine::getTableColumns($pdo, 'products')['cost_known'])) {
+                        if ($cost_price !== null && isset($productColumns['cost_known'])) {
                             $pdo->prepare('UPDATE products SET cost_known = 1 WHERE sku = ?')->execute([$sku]);
                         }
                         $afterStmt = $pdo->prepare('SELECT * FROM products WHERE product_id = ?');
