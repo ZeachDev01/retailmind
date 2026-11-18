@@ -216,4 +216,3 @@ const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
         rmSync(storage, { recursive: true, force: true });
     }
 })().catch(error => { console.error(error); process.exitCode = 1; });
-
