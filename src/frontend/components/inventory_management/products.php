@@ -818,20 +818,20 @@ foreach ($products as $product) {
         .product-edit-intro { margin: 0 0 1.5rem; color: var(--muted); font-size: .85rem; line-height: 1.5; }
         .product-edit-section { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
         .product-edit-section > legend { margin-bottom: 1rem; font-size: 1rem; }
-        #product-edit-form .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
-        #product-edit-form .form-field > span:first-child,
-        #product-edit-form .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
+        :is(#product-edit-form, #barcode-correction-form) .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
+        :is(#product-edit-form, #barcode-correction-form) .form-field > span:first-child,
+        :is(#product-edit-form, #barcode-correction-form) .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
         #product-edit-form .form-grid { align-items: end; }
         #product-edit-form small { display: block; color: var(--muted); font-size: .76rem; font-weight: 400; }
-        #product-edit-form .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
-        #product-edit-form .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-        #product-edit-form .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
+        :is(#product-edit-form, #barcode-correction-form) .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
+        :is(#product-edit-form, #barcode-correction-form) .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        :is(#product-edit-form, #barcode-correction-form) .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
         #product-edit-form input[type="number"] { font-variant-numeric: tabular-nums; }
         #product-edit-form input[type="file"] { font-size: .8rem; }
         #product-edit-form input::file-selector-button { margin-right: .65rem; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--text); font: inherit; cursor: pointer; }
         .product-edit-required { color: var(--theme-danger-text, #b91c1c); }
-        #product-edit-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
-        #product-edit-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
+        #product-edit-error, #barcode-correction-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
+        #product-edit-error, #barcode-correction-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
         #selling-price-warning { color: var(--theme-warning-text, #92400e); background: var(--theme-warning-surface, #fef3c7); }
         .product-edit-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: .75rem; margin: 0; padding: 1rem 0; padding-bottom: max(1rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card-bg); }
         .product-edit-actions .btn { min-height: 44px; }
@@ -2312,15 +2312,16 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Items per Sales Pack</span><strong>${Number(product.pack_size)} ${escapeHtml(product.base_unit || 'piece')}(s)</strong></div><div class="detail-item"><span>Sales Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
         <div class="detail-item"><span>Sales Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
             const info = document.getElementById('product-panel-info');
-            info.innerHTML = `${notice ? `<p id="barcode-correction-notice" class="alert alert-success" role="status" tabindex="-1">${escapeHtml(notice)}</p>` : ''}<div class="detail-grid">
+            info.innerHTML = `${notice ? `<p id="barcode-correction-notice" class="alert alert-success" role="status" tabindex="-1">${escapeHtml(notice)}</p>` : ''}
+    ${canEditProduct ? '<p><button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button></p>' : ''}
+    <div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Receiving Package Barcode</span><strong>${escapeHtml(safe(product.case_barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded'}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${productPhotoPreview(product)}</strong></div>
-    </div>
-    ${canEditProduct ? '<div class="product-quantity-actions"><button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button></div>' : ''}`;
+    </div>`;
             info.querySelector('#correct-barcode-btn')?.addEventListener('click', () => enterBarcodeCorrection(product));
             const footer = document.getElementById('product-drawer-footer');
             footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
