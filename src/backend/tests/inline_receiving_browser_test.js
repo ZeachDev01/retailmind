@@ -63,7 +63,11 @@ function fixture(action) {
         };
         const review = async () => {
             await page.locator('#receiving_next').click();
-            await page.locator('#receiving_review').waitFor({state: 'visible'});
+            try {
+                await page.locator('#receiving_review').waitFor({state: 'visible', timeout: 15000});
+            } catch (error) {
+                throw new Error('Review did not open. ' + await page.locator('#entry_status').textContent(), {cause: error});
+            }
         };
         await page.goto(url);
         await scan('THEME-CASE');

@@ -1670,7 +1670,7 @@ function receivingError(field, message) {
     field.focus();
 }
 
-function validateQuantities() {
+function validateQuantities(checkCostConfiguration = true) {
     clearReceivingErrors();
     if (!canReceive) return true;
     for (const [index, row] of receivingRows().entries()) {
@@ -1723,11 +1723,11 @@ function validateQuantities() {
                 invalid = cost;
                 message = 'Enter a non-negative purchase cost with at most two decimal places, or leave it blank.';
             }
-            if (!invalid && selectedCostUnits(row, prod) === '0') {
+            if (!invalid && checkCostConfiguration && selectedCostUnits(row, prod) === '0') {
                 invalid = field('cost_basis');
                 message = 'Choose a purchase cost basis configured for this product.';
             }
-            if (!invalid && draftCost(row, prod).too_large) {
+            if (!invalid && checkCostConfiguration && draftCost(row, prod).too_large) {
                 invalid = cost;
                 message = 'Total purchase cost is too large.';
             }
@@ -1905,12 +1905,15 @@ async function loadReviewCosts() {
             ['received_qty', 'received_packages', 'received_packs', 'received_loose'].map(name => [name, row.querySelector('[data-field="' + name + '"]').value])));
     }
     const data = new FormData(form);
-    const snapshot = new URLSearchParams(data).toString();
+    const snapshot = fields => new URLSearchParams(Array.from(fields).filter(([name]) =>
+        name.startsWith('lines[') || name === 'supplier' || name === 'invoice_number')).toString();
+    const reviewedFields = snapshot(data);
     data.set('preview_costs', '1');
     const response = await fetch(form.action, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
-    if (receivingEditor.inert || snapshot !== new URLSearchParams(new FormData(form)).toString()) return null;
+    if (receivingEditor.inert) return null;
+    if (reviewedFields !== snapshot(new FormData(form))) throw new Error('Delivery changed during Review. Review again.');
     const costs = result.costs.flat();
     const rows = receivingRows();
     if (costs.length !== rows.length) throw new Error('The receiving entry is incomplete. Split it into smaller entries and try again.');
@@ -1921,7 +1924,7 @@ let reviewing = false;
 document.getElementById('receiving_next').addEventListener('click', async () => {
     if (reviewing) return;
     if (!validateProducts()) return;
-    if (!validateQuantities()) return;
+    if (!validateQuantities(false)) return;
     if (!canReceive) { renderReview(); showStep(3); return; }
     reviewing = true;
     const button = document.getElementById('receiving_next');

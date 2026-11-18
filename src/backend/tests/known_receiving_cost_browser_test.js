@@ -145,11 +145,15 @@ function fixture(action) {
         await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.equal(await page.locator('#summary_cost').innerText(), '₱200.00', 'fresh Review uses the new cost conversion');
         await page.locator('#receiving_back').click();
+        await page.locator('#cost_price').fill('60000000');
+        assert.match(await page.locator('#cost_preview').innerText(), /too large/);
         fixture('receiving_pack_config');
         await page.locator('#receiving_next').click();
         await page.waitForFunction(() => document.getElementById('entry_status').textContent.includes('changed'));
         assert.equal(await page.locator('#receiving_review').isVisible(), false, 'cost basis staleness is independent of quantity mode');
         assert.match(await basis.locator('option[value="packs"]').innerText(), /Sales Pack.*6/);
+        assert.equal(await page.locator('#summary_cost').innerText(), '₱60,000,000.00', 'stale draft cost bounds must not block a fresh conversion');
+        await page.locator('#cost_price').fill('100');
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state: 'visible'});
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('.btn-submit').click()]);
