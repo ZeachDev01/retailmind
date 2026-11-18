@@ -1675,6 +1675,7 @@ foreach ($products as $product) {
     <label for="units-per-package">Items per Receiving Package</label>
     <input type="number" min="1" id="units-per-package" name="units_per_package" value="<?= $productHandoff ? '' : '1' ?>" <?= $productHandoff ? '' : 'required' ?> step="1" max="2147483647">
     <small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small>
+    <button type="button" class="btn btn-quiet" id="create-carton-item-scan" hidden>Enter or scan Individual Item</button>
     <?php if ($productHandoff): ?><small class="field-error">Enter a whole number of items per receiving package.</small><?php endif; ?>
 </div>
 <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>

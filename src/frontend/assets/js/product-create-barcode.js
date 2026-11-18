@@ -20,6 +20,7 @@ window.RetailMindProductCreateBarcode = {
         const lookupButton = control('create-barcode-lookup');
         const feedback = control('create-barcode-feedback');
         const sellingPacks = control('create-sell-packs');
+        const cartonItemScan = control('create-carton-item-scan');
         const scan = control('add-product-scan-btn');
         const scannerSection = control('add-product-scanner-section');
         const stopScan = control('stop-add-product-scan');
@@ -39,11 +40,22 @@ window.RetailMindProductCreateBarcode = {
             const isUnit = type.value === 'unit_barcode';
             control('create-unit-lookup-field').hidden = !isUnit;
             control('create-packaging-lookup-field').hidden = isUnit;
+            cartonItemScan.hidden = type.value !== 'case_barcode' || !fields.case_barcode.value.trim();
             if (!isUnit) {
                 const field = fields[type.value];
                 packaging.value = field.value;
                 packaging.maxLength = field.maxLength;
                 packaging.labels[0].textContent = labels[type.value] + ' Barcode';
+            }
+        }
+
+        function focusPackagingDetails(kind) {
+            if (kind === 'case_barcode') {
+                control('create-receiving-options').open = true;
+                control('units-per-package').focus();
+            } else if (kind === 'pack_barcode') {
+                const size = control('create-pack-size');
+                (size.validity.valid ? control('create-pack-price') : size).focus();
             }
         }
 
@@ -66,6 +78,7 @@ window.RetailMindProductCreateBarcode = {
             }
             setCode(kind, code);
             lookup();
+            return kind !== 'unit_barcode';
         }
 
         async function lookup() {
@@ -78,6 +91,7 @@ window.RetailMindProductCreateBarcode = {
                 (field === unit ? unit : packaging).focus();
                 return;
             }
+            focusPackagingDetails(kind);
             feedback.textContent = 'Checking Store products…';
             try {
                 const url = new URL(lookupButton.dataset.url, window.location.href);
@@ -101,6 +115,8 @@ window.RetailMindProductCreateBarcode = {
                 } else {
                     feedback.textContent = result.outcome === 'ambiguous'
                         ? 'This barcode matches more than one Store identifier. Check the Products list.'
+                        : kind === 'case_barcode' ? 'No Store product uses this code. Enter the number of items per carton.'
+                        : kind === 'pack_barcode' ? 'No Store product uses this code. Enter the Sales Pack size and price.'
                         : 'No Store product uses this code. Continue entering product details.';
                 }
             } catch (_) {
@@ -109,6 +125,12 @@ window.RetailMindProductCreateBarcode = {
         }
 
         type.addEventListener('change', () => { clearFeedback(); sync(); });
+        cartonItemScan.addEventListener('click', () => {
+            if (!scannerSection.hidden) stopCamera();
+            type.value = 'unit_barcode';
+            type.dispatchEvent(new Event('change', { bubbles: true }));
+            unit.focus();
+        });
         packaging.addEventListener('input', () => setCode(type.value, packaging.value));
         form.addEventListener('input', event => {
             if (event.target === fields[type.value]) {
@@ -176,8 +198,8 @@ window.RetailMindProductCreateBarcode = {
                 camera ??= new window.Html5Qrcode('add-product-scanner-reader');
                 openingCamera = camera.start({ facingMode: 'environment' }, { fps: 10 }, decoded => {
                     if (stoppingCamera || scannerSection.hidden) return;
-                    checkScannedCode(type.value, String(decoded).trim());
-                    stopCamera(true);
+                    const directed = checkScannedCode(type.value, String(decoded).trim());
+                    stopCamera(!directed && control('create-barcode-change')?.hidden !== false);
                 }, () => {});
                 await openingCamera;
             } catch (error) {
