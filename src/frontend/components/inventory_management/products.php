@@ -3625,6 +3625,7 @@ foreach ($products as $product) {
             addProductForm.querySelectorAll('[aria-invalid]').forEach(field => field.removeAttribute('aria-invalid'));
         }));
 
+        const barcodeType = document.getElementById('create-barcode-type');
         document.getElementById('product-create-reset').addEventListener('click', async event => {
             event.preventDefault();
             if (await RetailMindUI.confirm({title: 'Clear entered data', message: 'Discard this Product draft?', confirmText: 'Discard', danger: true})) {
@@ -3647,7 +3648,10 @@ foreach ($products as $product) {
             submissionKind: (form, action) => ({create:'createProduct', reconcile_sales_pack_stock:'reconcileStock'})[action] || '',
             capture(draft, form) {
                 if (['product-edit-form', 'pack-reconcile-form'].includes(form.id)) draft.context.productId = currentDrawerProductId;
-                if (form === addProductForm && form.elements.handoff_id) draft.context.retryId = handoffRetryId;
+                if (form === addProductForm && form.elements.handoff_id) {
+                    draft.context.retryId = handoffRetryId;
+                    draft.context.barcodeType = barcodeType.value;
+                }
             },
             async prepare(draft) {
                 if ((draft.context.productId || ['product-edit-form', 'pack-reconcile-form'].includes(draft.formId)) && !productsById[Number(draft.context.productId)]) {
@@ -3743,6 +3747,7 @@ foreach ($products as $product) {
             };
             const handoffRequest = action => RetailMindInventoryDrafts.productHandoff(receivingUrl, csrf, action, id);
             const modeFields = {units: 'barcode', packages: 'case_barcode', packs: 'pack_barcode'};
+            const barcodeTypes = {units: 'unit_barcode', packages: 'case_barcode', packs: 'pack_barcode'};
             const returnMode = addProductForm.elements.return_quantity_mode;
             let originalCode = '';
             function syncReturnMode() {
@@ -3831,20 +3836,33 @@ foreach ($products as $product) {
                     revealProductOptions();
                     handoffEditorReady = true;
                     const persisted = await RetailMindInventoryDrafts?.restore('product-' + id);
+                    RetailMindUI.closeSearchDropdown(brand);
                     addProductForm.elements.handoff_tab.value = RetailMindInventoryDrafts.tabProof(id);
+                    const confirmedType = barcodeTypes[draft.mode];
+                    const restoredType = persisted?.context?.barcodeType;
+                    barcodeType.value = Object.values(barcodeTypes).includes(restoredType) ? restoredType : confirmedType;
                     body.inert = false;
-                    verified = true;
-                    reset.disabled = false;
-                    save.disabled = false;
                     if (draft.retry) {
                         handoffRetryId = draft.retry.id;
-                        if (persisted?.context.retryId === handoffRetryId) showError(draft.retry.error, draft.retry.photoError);
-                        else showProductCreateRetry(draft.retry);
-                    } else if (draft.mode === 'packages') {
+                        if (persisted?.context?.retryId === handoffRetryId) showError(draft.retry.error, draft.retry.photoError);
+                        else {
+                            showProductCreateRetry(draft.retry);
+                            addProductForm.elements.barcode.dispatchEvent(new Event('retailmind:fieldrestore'));
+                        }
+                    } else if (barcodeType.value === 'case_barcode') {
                         receivingOptions.open = true;
                         receivingSize.focus();
                     } else document.getElementById('product-name').focus();
                     syncReturnMode();
+                    const lookup = addProductForm.barcodeLookup;
+                    lookup?.sync();
+                    // Restored drafts can contain deliberately cleared suggestions or photos.
+                    if (!persisted && !draft.retry && !barcodeField.disabled && barcodeField.value.trim() === originalCode) {
+                        lookup?.lookup();
+                    }
+                    verified = true;
+                    reset.disabled = false;
+                    save.disabled = false;
                 } catch (_) {
                     handoffEditorReady = false;
                     body.inert = false;
