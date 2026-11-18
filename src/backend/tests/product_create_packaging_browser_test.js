@@ -65,7 +65,7 @@ const fixture = action => {
             await field.press('Enter');
         }
         const cartonCode = '012345678905';
-        const unitCode = '87654328';
+        const unitCode = '87654325';
         const packCode = '34567890';
         const internalCartonCode = '0001234567864';
         const carton = dialog.getByLabel('Receiving Carton Barcode', { exact: true });
