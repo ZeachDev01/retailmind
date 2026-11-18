@@ -79,7 +79,9 @@ const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
             const upload = () => dialog.getByLabel('Product photo', { exact: true }).setInputFiles({ name: 'upload.gif', mimeType: 'image/gif', buffer: gif });
             const fillDetails = async name => {
                 await dialog.getByLabel('Product Name').fill(name);
-                await dialog.locator('#product-category').selectOption({ index: 1 }, { force: true });
+                const category = await dialog.locator('#product-category option').nth(1).textContent();
+                await dialog.locator('#product-category-search').fill(category);
+                await dialog.getByRole('option', { name: category, exact: true }).click();
                 await dialog.locator('#cost-price').fill('20');
                 await dialog.locator('#selling-price').fill('25');
             };

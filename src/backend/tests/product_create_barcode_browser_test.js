@@ -96,6 +96,19 @@ const fixture = action => {
             assert.equal(requests.at(-1).get('barcode_type'), 'unit_barcode');
             assert.equal(await details.inputValue(), 'Keep these details');
 
+            if (width === 1440) {
+                await unit.fill('THEME');
+                await unit.pressSequentially('-ITEM');
+                await unit.press('Enter');
+                await dialog.getByText('Replace 0000012345678 with THEME-ITEM?', { exact: true }).waitFor();
+                await dialog.getByRole('button', { name: 'Keep current barcode' }).click();
+                await unit.press('End');
+                await unit.pressSequentially('THEME-ITEM');
+                await unit.press('Enter');
+                await dialog.getByText('Replace 0000012345678 with THEME-ITEM?', { exact: true }).waitFor();
+                await dialog.getByRole('button', { name: 'Keep current barcode' }).click();
+            }
+
             await unit.fill('012345678905');
             await lookup.click();
             await dialog.getByRole('button', { name: 'Keep entered details' }).click();
@@ -227,6 +240,26 @@ const fixture = action => {
         assert.equal(await catalogDialog.locator('#product-brand').inputValue(), 'Fixture Brand');
         assert.equal(await catalogDialog.locator('#cost-price').inputValue(), '');
         assert.equal(await catalogDialog.locator('#selling-price').inputValue(), '');
+        await manager.evaluate(() => window.RetailMindInventoryDrafts.flush());
+        await manager.reload({ waitUntil: 'domcontentloaded' });
+        await manager.locator('[data-recovery-id="add-product-form"]').getByRole('button', { name: 'Resume', exact: true }).click();
+        await catalogSize.waitFor();
+        assert.equal(await catalogSize.inputValue(), '330 mL');
+        const clearProviderValues = async () => {
+            await checkCode('12345670');
+            await choose('Keep entered details');
+            await catalogFeedback.getByText(/No catalog match/).waitFor();
+            assert.equal(await catalogName.inputValue(), 'Edited Partial Fixture');
+            assert.equal(await catalogDialog.locator('#product-brand').inputValue(), '');
+        };
+        const restoreMatch = async () => {
+            await checkCode('012345678905');
+            await choose('Keep entered details');
+            await catalogFeedback.getByText(/Open Food Facts match/).waitFor();
+        };
+        await clearProviderValues();
+        assert.equal(await catalogSize.inputValue(), '', 'Provider size clears after encrypted draft recovery');
+        await restoreMatch();
         await catalogSize.fill('330 milliliters');
         const category = await manager.locator('#product-category option').nth(1).textContent();
         const selectCategory = async () => {
@@ -236,10 +269,17 @@ const fixture = action => {
         await selectCategory();
         await catalogDialog.locator('#cost-price').fill('2');
         await catalogDialog.locator('#selling-price').fill('5');
-        await Promise.all([
-            manager.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-            catalogDialog.getByRole('button', { name: 'Save Product', exact: true }).click()
-        ]);
+        const saveCatalog = catalogDialog.getByRole('button', { name: 'Save Product', exact: true });
+        await catalogDialog.locator('[name="catalog_photo"]').evaluate(field => {
+            field.value = 'https://images.openfoodfacts.org/images/products/11111115/front_en.4.400.jpg';
+        });
+        await Promise.all([manager.waitForURL('**/products.php?warning=*'), saveCatalog.click()]);
+        await catalogDialog.getByRole('button', { name: 'Retry photo', exact: true }).waitFor();
+        assert.equal(await catalogDialog.locator('#product-brand').inputValue(), 'Fixture Brand');
+        await clearProviderValues();
+        assert.equal(await catalogSize.inputValue(), '330 milliliters', 'Manager-edited size survives a server retry');
+        await restoreMatch();
+        await Promise.all([manager.waitForNavigation({ waitUntil: 'domcontentloaded' }), saveCatalog.click()]);
         await manager.getByRole('button', { name: 'Manage Edited Partial Fixture' }).click();
         const product = manager.locator('#product-drawer');
         await product.getByText('330 milliliters', { exact: true }).waitFor();

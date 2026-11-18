@@ -110,6 +110,18 @@ async function competeForBarcode() {
         const geometry = await page.locator('#product-drawer-body').evaluate(el => ({ width: el.clientWidth, scroll: el.scrollWidth }));
         assert(geometry.scroll <= geometry.width + 1, 'Correction controls fit the mobile drawer');
         await replacement.fill('001234000001');
+        await replacement.press('Escape');
+        const discard = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
+        await discard.waitFor();
+        await page.keyboard.press('Escape');
+        await discard.waitFor({ state: 'hidden' });
+        assert.equal(await replacement.inputValue(), '001234000001');
+        await page.getByRole('button', { name: 'Close product details', exact: true }).click();
+        await discard.getByRole('button', { name: 'Discard and close' }).click();
+        await page.locator('#product-drawer').waitFor({ state: 'hidden' });
+        await page.getByRole('button', { name: 'Manage Theme Test Item', exact: true }).click();
+        await launch();
+        await replacement.fill('001234000001');
         await replacement.press('Enter');
         assert.equal(await error.isVisible(), false, 'Scanner Enter does not submit the correction');
         await save();
