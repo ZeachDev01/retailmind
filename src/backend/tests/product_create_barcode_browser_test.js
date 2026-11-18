@@ -155,9 +155,103 @@ const fixture = action => {
             await page.close();
         }
 
-        fixture('receiving_unavailable');
         const manager = await browser.newPage();
         await signIn(manager, 'inventory_manager');
+        await manager.goto(productsUrl);
+        await manager.locator('#product-add-trigger').click();
+        await manager.locator('#add-product-btn').click();
+        const catalogDialog = manager.getByRole('dialog', { name: 'Add Product' });
+        const catalogFeedback = catalogDialog.locator('#create-barcode-feedback');
+        const catalogUnit = catalogDialog.getByLabel('Individual Item Barcode');
+        const catalogName = catalogDialog.getByLabel('Product Name');
+        const catalogSize = catalogDialog.getByLabel('Declared Size');
+        const catalogLookup = catalogDialog.getByRole('button', { name: 'Look up', exact: true });
+        const checkCode = async code => {
+            await catalogUnit.fill(code);
+            await catalogLookup.click();
+        };
+        const choose = label => catalogDialog.getByRole('button', { name: label, exact: true }).click();
+        const lookups = url => url.href.startsWith(lookupUrl);
+        const earliest = Promise.withResolvers();
+        const release = Promise.withResolvers();
+        const delivered = Promise.withResolvers();
+        const delayMatch = async route => {
+            if (!route.request().url().includes('code=012345678905')) return route.continue();
+            const response = await route.fetch();
+            earliest.resolve();
+            await release.promise;
+            await route.fulfill({ response });
+            delivered.resolve();
+        };
+        await manager.route(lookups, delayMatch);
+        await checkCode('012345678905');
+        await earliest.promise;
+        await catalogName.fill('Manager entered');
+        await checkCode('87654325');
+        await choose('Keep current barcode');
+        assert.equal(await catalogUnit.inputValue(), '012345678905');
+        assert.equal(await catalogName.inputValue(), 'Manager entered');
+        await checkCode('87654325');
+        await choose('Start a new draft');
+        await catalogFeedback.getByText(/Open Food Facts match/).waitFor();
+        assert.equal(await catalogName.inputValue(), 'Partial Fixture');
+        assert.equal(await catalogSize.inputValue(), '');
+        release.resolve();
+        await delivered.promise;
+        await manager.unroute(lookups, delayMatch);
+        assert.equal(await catalogName.inputValue(), 'Partial Fixture');
+        assert.equal(await catalogSize.inputValue(), '');
+
+        await catalogName.fill('Edited Partial Fixture');
+        await checkCode('12345670');
+        await choose('Keep entered details');
+        await catalogFeedback.getByText(/No catalog match/).waitFor();
+        await checkCode('23456785');
+        await choose('Keep entered details');
+        await catalogFeedback.getByText(/Open Food Facts is unavailable/).waitFor();
+        await checkCode('34567890');
+        await choose('Keep entered details');
+        await catalogFeedback.getByText(/Open Food Facts is unavailable/).waitFor();
+        await manager.context().setOffline(true);
+        await catalogLookup.click();
+        await catalogFeedback.getByText(/offline/).waitFor();
+        assert.equal(await catalogUnit.inputValue(), '34567890');
+        assert.equal(await catalogName.inputValue(), 'Edited Partial Fixture');
+        await manager.context().setOffline(false);
+
+        await checkCode('012345678905');
+        await choose('Keep entered details');
+        await catalogFeedback.getByText(/Open Food Facts match/).waitFor();
+        assert.equal(await catalogName.inputValue(), 'Edited Partial Fixture');
+        assert.equal(await catalogSize.inputValue(), '330 mL');
+        assert.equal(await catalogDialog.locator('#product-brand').inputValue(), 'Fixture Brand');
+        assert.equal(await catalogDialog.locator('#cost-price').inputValue(), '');
+        assert.equal(await catalogDialog.locator('#selling-price').inputValue(), '');
+        await catalogSize.fill('330 milliliters');
+        const category = await manager.locator('#product-category option').nth(1).textContent();
+        const selectCategory = async () => {
+            await manager.locator('#product-category-search').fill(category);
+            await manager.getByRole('option', { name: category, exact: true }).click();
+        };
+        await selectCategory();
+        await catalogDialog.locator('#cost-price').fill('2');
+        await catalogDialog.locator('#selling-price').fill('5');
+        await Promise.all([
+            manager.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+            catalogDialog.getByRole('button', { name: 'Save Product', exact: true }).click()
+        ]);
+        await manager.getByRole('button', { name: 'Manage Edited Partial Fixture' }).click();
+        const product = manager.locator('#product-drawer');
+        await product.getByText('330 milliliters', { exact: true }).waitFor();
+        assert.match(await product.innerText(), /Fixture Brand/);
+        assert.match(await product.innerText(), /330 milliliters/);
+        assert.match(await product.innerText(), /012345678905/);
+        await product.getByRole('button', { name: 'Edit product catalog details' }).click();
+        await product.getByLabel('Declared Size').fill('0.33 L');
+        await product.getByRole('button', { name: 'Save changes' }).click();
+        await product.getByText('0.33 L', { exact: true }).waitFor();
+
+        fixture('receiving_unavailable');
         await manager.goto(productsUrl);
         await manager.locator('#product-add-trigger').click();
         await manager.locator('#add-product-btn').click();
@@ -171,9 +265,7 @@ const fixture = action => {
         assert.equal(oldResult.outcome, 'inactive');
         assert.equal(oldResult.product, null, 'Receiving still withholds inactive details');
 
-        const category = await manager.locator('#product-category option').nth(1).textContent();
-        await manager.locator('#product-category-search').fill(category);
-        await manager.getByRole('option', { name: category, exact: true }).click();
+        await selectCategory();
         await manager.getByLabel('Product Name').fill('Duplicate inactive barcode test');
         await manager.locator('#cost-price').fill('2');
         await manager.locator('#selling-price').fill('5');
@@ -197,7 +289,7 @@ const fixture = action => {
         assert.equal((await denied.json()).product, undefined, 'An Administrator cannot obtain inactive details via Add Product');
         const ordinary = await admin.request.get(lookupUrl + '?code=THEME-BARCODE');
         assert.equal((await ordinary.json()).outcome, 'unknown', 'Ordinary lookup still excludes inactive Products');
-        console.log('Add Product barcode lookup: desktop/mobile layout, manual lookup, wedge and camera scans, authorization and duplicate protection passed');
+        console.log('Add Product barcode lookup: layout, manual/wedge/camera lookup, catalog match/miss/error/offline, draft choices, stale responses, persistence and authorization passed');
     } finally {
         try {
             if (browser) await browser.close();
