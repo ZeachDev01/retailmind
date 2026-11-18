@@ -5616,9 +5616,17 @@ body.system-health-open {
         flex-direction: column;
     }
 
+    body:has(.admin-mobile-topbar[data-workspace="admin"]) .main-content :is(.page-heading, .topbar, .section-header) {
+        align-items: stretch;
+    }
+
+    body:has(.admin-mobile-topbar[data-workspace="admin"]) .main-content :is(.page-heading, .topbar) > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+
     .page-heading-actions,
-    .topbar > div:last-child,
-    .section-header > div:last-child {
+    .section-header > div:last-child:not(:first-child) {
         justify-content: flex-start;
     }
 
@@ -5664,6 +5672,14 @@ body.system-health-open {
 
     canvas {
         max-height: 360px;
+    }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+    body:has(.admin-mobile-topbar[data-workspace="admin"]) .main-content :is(.page-heading, .topbar, .section-header) {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
     }
 }
 
@@ -5741,8 +5757,7 @@ body.products-page .products-quick-action strong {
     }
 
     .page-heading-actions,
-    .topbar > div:last-child,
-    .section-header > div:last-child,
+    .section-header > div:last-child:not(:first-child),
     .bulk-bar,
     .table-pagination,
     .modal-actions,
@@ -5753,8 +5768,7 @@ body.products-page .products-quick-action strong {
     }
 
     .page-heading-actions > *,
-    .topbar > div:last-child > *,
-    .section-header > div:last-child > *,
+    .section-header > div:last-child:not(:first-child) > *,
     .bulk-bar > *,
     .table-pagination > *,
     .modal-actions > *,
@@ -6527,3 +6541,40 @@ body.admin-dashboard-page .mobile-role-label {
 }
 
 body.products-page .catalog-icon-button { min-width:44px; min-height:44px; height:44px; }
+
+/* Cashier headings share a tablet row without inheriting column flex bases. */
+body:has([data-workspace="cashier"]) .main-content > .topbar > * {
+    min-width: 0;
+    max-width: 100%;
+    flex-basis: auto;
+}
+
+body:has([data-workspace="cashier"]) .main-content > .topbar h1 {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: 0;
+}
+
+body:has([data-workspace="cashier"]) .main-content > .topbar .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 44px;
+}
+
+@media (min-width: 641px) {
+    body:has([data-workspace="cashier"]) .main-content > .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: .75rem 1rem;
+    }
+}
+
+@media (max-width: 1180px), (pointer: coarse) {
+    body:has([data-workspace="cashier"]) .main-content :is(.btn, .history-tab, .stock-tab-pill) {
+        min-height: 44px;
+    }
+}

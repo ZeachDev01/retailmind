@@ -295,7 +295,7 @@
 
 .pos-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(390px, 0.85fr);
+    grid-template-columns: minmax(0, 1.3fr) minmax(420px, .95fr);
     gap: 1rem;
     align-items: start;
 }
@@ -3079,7 +3079,8 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
 .cashier-pos-page .cart-table th:nth-child(2) { text-align: center; }
 .cashier-pos-page .cart-actions { justify-content: center; }
 .cashier-pos-page .cart-empty-cell { white-space: normal; }
-.cashier-pos-page .quick-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cashier-pos-page .quick-product-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr)); }
+.cashier-pos-page .quick-product-grid.compact { grid-template-columns: repeat(auto-fill, minmax(min(100%, 9rem), 1fr)); }
 .cashier-pos-page .quick-product-image { height: 164px; aspect-ratio: auto; font-size: 1.8rem; }
 .cashier-pos-page .quick-product-stepper button {
     border: 1px solid var(--cashier-border);
@@ -3131,8 +3132,8 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     .cashier-pos-page .checkout-total { flex-direction: row; align-items: center; }
 }
 
-/* Keep the desktop checkout workspace on tablets, in either orientation. */
-@media (min-width: 768px) {
+/* Keep both POS panes usable on tablets and smaller landscape screens. */
+@media (min-width: 768px), (min-width: 640px) and (orientation: landscape) {
     body.cashier-pos-page {
         height: var(--cashier-visible-height, 100dvh);
         overflow: hidden;
@@ -3194,7 +3195,8 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     }
 }
 
-@media (min-width: 768px) and (max-width: 1180px) {
+@media (min-width: 768px) and (max-width: 1180px),
+       (min-width: 640px) and (max-width: 767px) and (orientation: landscape) {
     .cashier-pos-page .pos-grid,
     body.cashier-pos-page.pos-fullscreen .pos-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3209,7 +3211,7 @@ body.pos-fullscreen .pos-panel { border-radius: 12px; }
     }
 
     .cashier-pos-page .quick-product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
         max-height: none;
         overflow: visible;
     }
@@ -3378,7 +3380,6 @@ body.cashier-pos-page .quick-add-section {
 .cashier-pos-page .checkout-total-value { font-weight: 600; }
 
 /* POS unslop pass 6: let the sale total lead */
-.cashier-pos-page .pos-grid { grid-template-columns: minmax(0, 1.3fr) minmax(420px, .95fr); }
 .cashier-pos-page .pos-workspace { min-width: 0; }
 .cashier-pos-page .checkout-panel { min-width: 0; }
 .cashier-pos-page .cart-empty-cell { color: var(--pos-secondary); }
@@ -3445,6 +3446,14 @@ body.cashier-pos-page .quick-add-section {
     transition: color 160ms ease-out, background-color 160ms ease-out, border-color 160ms ease-out;
 }
 
-@media (max-width: 1100px) {
+@media (min-width: 640px) and (max-width: 1180px) and (orientation: landscape) {
+    .cashier-pos-page .pos-panel,
+    .cashier-pos-page .quick-add-section { padding: 12px; }
+
+    .cashier-pos-page .pos-grid,
+    .cashier-pos-page .pos-workspace { gap: 12px; }
+}
+
+@media (max-width: 639px), (max-width: 767px) and (orientation: portrait) {
     .cashier-pos-page .pos-grid { grid-template-columns: minmax(0, 1fr); }
 }

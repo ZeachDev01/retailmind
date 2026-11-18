@@ -174,7 +174,13 @@ window.RetailMindInventoryDrafts = (() => {
         if (location.pathname.endsWith('/products.php') && storageKey === prefix + 'entry:') return;
         try {
             const stored = JSON.parse(localStorage.getItem(storageKey));
-            const plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));
+            let plain;
+            try {
+                plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: decode(stored.iv)}, key, decode(stored.ciphertext));
+            } catch (_) {
+                // A matching user ID alone does not establish ownership after an account or installation change.
+                return;
+            }
             const draft = JSON.parse(decoder.decode(plain));
             if (config.confirmed && config.confirmedForm === draft.id && draft.context.latestSubmittedFingerprint === await fingerprint(draft.values)) { await discard(draft.id); return; }
             const retained = Array.from(document.forms).find(form => identity(form) === draft.id && form.elements.operation_token?.value === draft.values.find(item => item.name === 'operation_token')?.value);

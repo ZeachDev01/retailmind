@@ -39,8 +39,9 @@
     margin-bottom: 1rem;
 }
 
-.gcash-session-header {
+#gcash-workspace .gcash-session-header {
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem 1.25rem;
@@ -2117,7 +2118,7 @@ html[data-theme="dark"] .gcash-empty-state {
 }
 
 @media (max-width: 600px) {
-    .gcash-session-header {
+    #gcash-workspace .gcash-session-header {
         flex-direction: column;
         align-items: flex-start;
     }

@@ -82,8 +82,12 @@ const fixture = action => {
             'report/data_readiness.php', 'administrator/model_review.php', 'report/predictions.php',
             'report/forecast_exceptions.php', 'administrator/shift_report.php', 'report/receiving_history.php',
             'invoice/sales.php', 'report/report_generation.php?report=gross_profit',
-            'cashier/refund_corrections.php', 'notification/notifications.php'];
-        for (const viewport of [{width:320,height:740}, {width:390,height:844}, {width:844,height:390},
+            'cashier/refund_corrections.php', 'notification/notifications.php',
+            'auth/user_info.php', 'auth/preferences.php', 'auth/help.php',
+            'administrator/store_settings.php?section=remote-access',
+            'administrator/store_settings.php?section=attention-thresholds'];
+        for (const viewport of [{width:320,height:740}, {width:375,height:667}, {width:390,height:844},
+            {width:768,height:1024}, {width:844,height:390},
             {width:640,height:360}, {width:800,height:480}, {width:960,height:600},
             {width:1024,height:768}, {width:1280,height:800}, {width:1366,height:768}]) {
             await page.setViewportSize(viewport);
@@ -104,6 +108,26 @@ const fixture = action => {
                 }
                 const heading = await page.locator('main h1').first().boundingBox();
                 if (heading) assert(heading.y >= header.y + header.height, route + ': heading clears fixed header');
+                if (viewport.width <= 900) {
+                    const pageHeading = page.locator('main .page-heading, main .topbar').first();
+                    if (await pageHeading.count() && heading && route !== 'administrator/gcash_overview.php') {
+                        const box = await pageHeading.boundingBox();
+                        assert(Math.abs(heading.x - box.x) <= 2, route + ': title aligns with content');
+                    }
+                    if (route === 'administrator/gcash_overview.php') {
+                        assert((await page.locator('main .topbar').boundingBox()).height < 120, 'GCash header has no stretched flex basis');
+                        assert((await page.locator('.gcash-session-logo').boundingBox()).width <= 88, 'GCash logo keeps its intrinsic size');
+                        const logo = await page.locator('.gcash-session-logo').boundingBox();
+                        assert(logo.x < heading.x && Math.abs(logo.y + logo.height / 2 - heading.y - heading.height / 2) <= 2,
+                            'GCash logo and title stay in one row');
+                    }
+                    if (route === 'system_administrator/fiscal_periods.php') {
+                        assert((await page.locator('.fiscal-rollover-control').boundingBox()).height <= 64, 'Auto rollover stays in one row');
+                    }
+                }
+                if ([375, 768].includes(viewport.width)) {
+                    await page.screenshot({path:path.join(output, route.replace(/[^a-z0-9]/gi, '-') + '-' + viewport.width + '.png')});
+                }
                 assert.deepEqual(errors.splice(0), [], route + ': no JavaScript errors');
             }
             if (!await page.locator('.mobile-header-search').isVisible()) continue;
@@ -140,11 +164,33 @@ const fixture = action => {
                 assert.equal(cards[0], cards[1], 'Store status uses two columns when phone width permits');
             }
         }
+        for (const viewport of [{width:375,height:667}, {width:768,height:1024}]) {
+            await page.setViewportSize(viewport);
+            for (const route of routes) {
+                await visit(route);
+                await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+                await fits('Dark ' + route + '/' + viewport.width);
+            }
+            await visit('report/report_generation.php');
+            const reports = await page.locator('#report option').evaluateAll(options => options.map(option => option.value));
+            for (const report of reports) {
+                await visit('report/report_generation.php?report=' + report);
+                await fits(report + '/' + viewport.width);
+            }
+            await visit('administrator/gcash_overview.php');
+            for (const tab of await page.locator('.gcash-section-nav [role="tab"]').all()) {
+                await tab.scrollIntoViewIfNeeded();
+                await tab.tap();
+                await page.locator('#' + await tab.getAttribute('aria-controls')).waitFor({state:'visible'});
+                assert.equal(await tab.getAttribute('aria-selected'), 'true');
+                await fits('GCash ' + await tab.innerText() + '/' + viewport.width);
+            }
+        }
         await page.setViewportSize({width:1280,height:900});
         await visit('administrator/dashboard.php');
         await fits('Desktop dashboard');
         assert(await page.locator('.global-topbar').isVisible(), 'Desktop navigation remains available');
-        console.log('Administrator small-screen layout: passed (21 routes; 320/390 portrait, 844 landscape, and 640x360/800x480/960x600/1024x768/1280x800/1366x768; search/menu touch; desktop dashboard; artifacts ' + output + ')');
+        console.log('Administrator small-screen layout: passed (' + routes.length + ' routes; 320/375/390/768 portrait, 844 landscape, and 640x360/800x480/960x600/1024x768/1280x800/1366x768; search/menu touch; desktop dashboard; artifacts ' + output + ')');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

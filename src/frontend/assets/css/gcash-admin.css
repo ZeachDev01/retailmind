@@ -271,9 +271,11 @@
     #gcash-outstanding-reviews .gcash-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@media (max-width: 767px) {
+@media (max-width: 900px) {
     #gcash-admin-workspace .topbar { flex-direction: column; align-items: stretch; gap: .625rem; margin-bottom: .75rem; }
     #gcash-admin-workspace .topbar > div:first-child { flex: 0 1 auto; }
+}
+@media (max-width: 767px) {
     #gcash-admin-workspace .gcash-overview-section, #gcash-admin-workspace #gcash-reporting-scope { padding: 1rem; }
     #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
     #gcash-admin-workspace :is(.gcash-filter-bar, .gcash-filter-scope-row) > .gcash-filter-actions { grid-column: 1 / -1; }

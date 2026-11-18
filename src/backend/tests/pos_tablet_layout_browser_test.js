@@ -5,7 +5,11 @@ const { chromium } = require('playwright');
 
 (async () => {
     const source = fs.readFileSync('src/frontend/components/cashier/pos.php', 'utf8');
-    const between = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
+    const between = (start, end) => {
+        const from = source.indexOf(start), to = source.indexOf(end, from);
+        assert.ok(from >= 0 && to > from, `POS fixture source boundaries exist: ${start}`);
+        return source.slice(from, to);
+    };
     assert.ok(!/Html5Qrcode|start-scanner|scannerResult|scanner-area/.test(source), 'camera UI, dependency and handlers are removed');
     const markup = source.slice(source.indexOf('<div class="pos-grid">'), source.indexOf('</main>'))
         .replace(/<\?[\s\S]*?\?>/g, '');
@@ -27,11 +31,13 @@ const { chromium } = require('playwright');
             const quickProducts = Array.from({length: 24}, (_, i) => ({product_id: i + 1, name: i ? 'Peanut Butter 340g' : 'Long Grain Rice 1kg', price: 125, quantity_on_hand: 50, sku: 'GROCERY-001', category_name: 'Grocery', ...(i === 0 ? {pack_size: 12, pack_price: 1400, sealed_packs: 4} : {})}));
             const quickProductById = new Map(quickProducts.map(p => [p.product_id, p]));
             const checkoutButton = document.getElementById('checkout-button'), holdSaleButton = document.getElementById('hold-sale-btn'), voidSaleButton = document.getElementById('void-sale-btn'), clearCartButton = document.getElementById('clear-cart-btn');
+            const closeShiftAction = document.getElementById('close-shift-action'), closeShiftReason = document.getElementById('close-shift-reason');
             function getLowStockThreshold() { return 0; }
             function getDiscountAmount() { return 0; }
             function getNetTotal() { return getCartTotal(); }
             function getCartItemCount() { return Object.values(cart).reduce((n, item) => n + item.qty, 0); }
             function updatePaymentFields() {}
+            function schedulePromotionRefresh() {}
             function persistCart() {}
             function cartChangesAllowed() { return true; }
             function showCartMessage() {}
@@ -39,11 +45,12 @@ const { chromium } = require('playwright');
             ${between('function updateQuickProductAvailability(', 'function getDiscountAmount(')}
             ${between('function renderCart(', 'function updatePaymentFields(')}
             ${between('function updateCartQty(', 'async function clearCart(')}
+            ${between("document.getElementById('cart-body')?.addEventListener('click'", 'function renderCart(')}
             renderQuickProducts();
             function populateCart() { cart = Object.fromEntries(quickProducts.slice(0, 8).map(p => [p.product_id, {name: p.name, qty: 1, price: p.price, stock: 50, sku: p.sku}])); renderCart(); }
             populateCart();
         ` });
-        for (const viewport of [{ width: 768, height: 1024 }, { width: 820, height: 1180 }, { width: 834, height: 1194 }, { width: 1024, height: 768 }, { width: 1180, height: 820 }, { width: 1194, height: 834 }, { width: 1366, height: 1024 }, { width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+        for (const viewport of [{ width: 640, height: 360 }, { width: 720, height: 480 }, { width: 800, height: 480 }, { width: 960, height: 600 }, { width: 1024, height: 600 }, { width: 768, height: 1024 }, { width: 820, height: 1180 }, { width: 834, height: 1194 }, { width: 1024, height: 768 }, { width: 1100, height: 800 }, { width: 1180, height: 820 }, { width: 1181, height: 820 }, { width: 1194, height: 834 }, { width: 1366, height: 1024 }, { width: 1440, height: 900 }, { width: 767, height: 1024 }, { width: 390, height: 844 }]) {
             await page.setViewportSize(viewport);
             for (const fullscreen of [false, true]) {
                 await page.evaluate(fullscreen => document.body.classList.toggle('pos-fullscreen', fullscreen), fullscreen);
@@ -92,7 +99,7 @@ const { chromium } = require('playwright');
                 assert.ok(empty.x >= table.x && empty.x + empty.width <= table.x + table.width, `${label}: empty state fits pane`);
                 if (process.env.POS_LAYOUT_CAPTURE) await page.screenshot({ path: `${process.env.TEMP}/pos-empty-${viewport.width}-${fullscreen}.png` });
                 await page.evaluate(() => populateCart());
-                if (viewport.width >= 768) {
+                if (viewport.width >= 768 || (viewport.width >= 640 && viewport.width > viewport.height)) {
                     assert.ok(product.x + product.width <= checkout.x + 1, `${label}: products stay left of checkout`);
                     assert.ok(Math.abs(product.y - checkout.y) < 1, `${label}: panes align at the top`);
                     assert.ok(checkout.x + checkout.width <= viewport.width, `${label}: checkout fits viewport`);
