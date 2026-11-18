@@ -41,7 +41,7 @@ $table = static fn(string $name, array $columns): array => ['ddl' => "CREATE TAB
 $current = [
     'roles' => $table('roles', ['role_id', 'role_name']),
     'users' => $table('users', ['user_id', 'first_name', 'last_name', 'display_name']),
-    'products' => $table('products', ['product_id', 'product_name']),
+    'products' => $table('products', ['product_id', 'product_name', 'sku_follows_barcode']),
     'held_sales' => $table('held_sales', ['held_sale_id']),
     'held_sale_items' => $table('held_sale_items', ['held_sale_item_id', 'held_sale_id', 'cart_key', 'line_position', 'product_id', 'selling_form', 'pack_size', 'product_name', 'quantity', 'price', 'server_price', 'stock', 'reorder_level', 'safety_stock', 'sku', 'barcode', 'product_image']),
     'cashier_shifts' => $table('cashier_shifts', ['shift_id']),
@@ -62,7 +62,7 @@ ksort($older, SORT_STRING);
 $currentRows = [
     'roles' => [['role_id' => '1', 'role_name' => 'super_admin']],
     'users' => [['user_id' => '1', 'first_name' => 'Old', 'last_name' => 'Name', 'display_name' => 'Old Name']],
-    'products' => [['product_id' => '10', 'product_name' => 'Widget']],
+    'products' => [['product_id' => '10', 'product_name' => 'Widget', 'sku_follows_barcode' => '1']],
     'held_sales' => [['held_sale_id' => '1']],
     'held_sale_items' => [],
     'cashier_shifts' => [['shift_id' => '1']],
@@ -103,7 +103,9 @@ try {
     // without an adapter: the destination structure wins and the new column is blank.
     $behind = $current;
     $behind['users'] = $table('users', ['user_id', 'first_name', 'last_name']);
+    $behind['products'] = $table('products', ['product_id', 'product_name']);
     $behindRows = $currentRows;
+    unset($behindRows['products'][0]['sku_follows_barcode']);
     $behindRows['users'] = [['user_id' => '1', 'first_name' => 'Old', 'last_name' => 'Name']];
     $behindSql = $sqlFor($behind, $behindRows);
     $behindPackage = StorePackageFormat::encode($behindSql, [], $behind, str_repeat('8', 32), 'mariadb',
@@ -112,9 +114,10 @@ try {
     $additiveReport = $additive['compatibility'];
     $assert($additiveReport['status'] === 'upgradable', 'Destination-only additions are upgradable: ' . $additiveReport['message']);
     $assert($additiveReport['adapter'] === null, 'Safe additions need no structure adapter');
-    $assert($additiveReport['changes']['columns_added'] === ['users.display_name'], 'The report names the newer destination column');
+    $assert($additiveReport['changes']['columns_added'] === ['products.sku_follows_barcode', 'users.display_name'], 'The report names the newer destination columns');
     $assert($additiveReport['missing_migrations'] === [], 'A behind package reports no missing migration');
     $assert($additive['rows']['users'] === $behindRows['users'], 'A behind package keeps its rows unchanged');
+    $assert($additive['rows']['products'] === $behindRows['products'], 'An older Product stays eligible for restore with its SKU origin unknown');
 
     // An older package is classified and adapted before it reaches replacement.
     $olderSql = $sqlFor($older, $olderRows);
