@@ -240,11 +240,13 @@ const fixture = action => {
         assert.equal(await catalogDialog.locator('#product-brand').inputValue(), 'Fixture Brand');
         assert.equal(await catalogDialog.locator('#cost-price').inputValue(), '');
         assert.equal(await catalogDialog.locator('#selling-price').inputValue(), '');
+        await catalogUnit.fill('12345670');
         await manager.evaluate(() => window.RetailMindInventoryDrafts.flush());
         await manager.reload({ waitUntil: 'domcontentloaded' });
         await manager.locator('[data-recovery-id="add-product-form"]').getByRole('button', { name: 'Resume', exact: true }).click();
         await catalogSize.waitFor();
         assert.equal(await catalogSize.inputValue(), '330 mL');
+        assert.equal(await catalogUnit.inputValue(), '12345670', 'Restore the typed barcode before asking whether to replace the previous one');
         const clearProviderValues = async () => {
             await checkCode('12345670');
             await choose('Keep entered details');

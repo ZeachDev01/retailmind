@@ -3665,6 +3665,7 @@ foreach ($products as $product) {
                 if (form === addProductForm) {
                     const values = draft.values;
                     form.elements.catalog_detail_values.value = values.find(item => item.name === 'catalog_detail_values')?.value ?? '';
+                    form.barcodeLookup?.restoreBarcode();
                     RetailMindUI.closeSearchDropdown(brand);
                     if (!values.some(item => item.name === 'sell_sealed_packs')) sellSealedPacks.checked = Number(packSizeInput.value) > 1;
                     if (!values.some(item => item.name === 'cost_entry_mode')) {

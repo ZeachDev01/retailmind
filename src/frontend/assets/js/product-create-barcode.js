@@ -37,7 +37,7 @@ window.RetailMindProductCreateBarcode = {
             ['brand', control('product-brand'), 'Brand']
         ];
         const providerValues = form.elements.catalog_detail_values;
-        let committedCode = unit.value.trim();
+        let committedCode = restoredUnitCode();
         let candidateCode;
         let catalogMatch;
         let requestId = 0;
@@ -92,6 +92,19 @@ window.RetailMindProductCreateBarcode = {
         function readProviderValues() {
             try { return JSON.parse(providerValues.value) ?? {}; }
             catch (_) { return {}; }
+        }
+
+        function restoredUnitCode() {
+            const { barcode } = readProviderValues();
+            return typeof barcode === 'string' && barcode ? barcode : unit.value.trim();
+        }
+
+        function restoreBarcode() {
+            clearSuggestions();
+            catalogMatch = null;
+            clearFeedback();
+            change.hidden = true;
+            committedCode = restoredUnitCode();
         }
 
         function clearSuggestions() {
@@ -211,6 +224,7 @@ window.RetailMindProductCreateBarcode = {
         function showCatalog(code, catalog) {
             if (catalog.status === 'found') {
                 catalogMatch = catalog;
+                providerValues.value = JSON.stringify({ ...readProviderValues(), barcode: code });
                 feedback.textContent = 'Open Food Facts match. Compare the details with the package.';
                 renderSuggestions(catalog.product);
                 form.dispatchEvent(new CustomEvent('product-create:catalog-match', {
@@ -295,13 +309,7 @@ window.RetailMindProductCreateBarcode = {
             unit.focus();
         });
         packaging.addEventListener('input', () => setCode(type.value, packaging.value));
-        unit.addEventListener('retailmind:fieldrestore', () => {
-            clearSuggestions();
-            catalogMatch = null;
-            clearFeedback();
-            change.hidden = true;
-            committedCode = unit.value.trim();
-        });
+        unit.addEventListener('retailmind:fieldrestore', restoreBarcode);
         form.addEventListener('focusin', event => {
             if (event.target === unit && !committedCode) committedCode = unit.value.trim();
         });
@@ -427,6 +435,6 @@ window.RetailMindProductCreateBarcode = {
         });
         modal.addEventListener('retailmind:overlayopen', sync);
         sync();
-        return { lookup, sync };
+        return { lookup, sync, restoreBarcode };
     }
 };
