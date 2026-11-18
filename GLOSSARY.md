@@ -336,6 +336,9 @@ _Avoid_: Reorder level, required purchase quantity
 The atomic, single physical item sold to retail customers and tracked in inventory counts (e.g. piece, sachet, can, bottle, stick).
 _Avoid_: Selling unit, retail unit, loose unit
 
+**Barcode Lookup Suggestion**:
+Draft Product details found using a scanned barcode, such as name, brand, declared package size, front photo, and a suggested Store category. Before saving the Product, the Inventory Manager verifies the details against the physical item, chooses the Store category, and sets the prices.
+
 **Receiving Unit**:
 The bulk commercial container or package used when purchasing goods from suppliers or supermarkets (e.g. case, box, ream, carton, pack).
 _Avoid_: Bulk unit, supplier unit, container
