@@ -36,8 +36,8 @@ window.RetailMindProductCreateBarcode = {
             ['declared_size', control('product-declared-size'), 'Declared Size'],
             ['brand', control('product-brand'), 'Brand']
         ];
-        const providerValues = new Map();
-        let committedCode = unit.value.trim();
+        const providerValues = form.elements.catalog_detail_values;
+        let committedCode = restoredUnitCode();
         let candidateCode;
         let catalogMatch;
         let requestId = 0;
@@ -80,13 +80,31 @@ window.RetailMindProductCreateBarcode = {
                 sellingPacks.checked = true;
                 sellingPacks.dispatchEvent(new Event('change', { bubbles: true }));
             }
-            field.value = code;
-            field.dispatchEvent(new Event('input', { bubbles: true }));
+            useValue(field, code);
         }
 
         function useValue(field, value) {
             field.value = value;
             field.dispatchEvent(new Event('input', { bubbles: true }));
+            window.RetailMindUI?.closeSearchDropdown(field);
+        }
+
+        function readProviderValues() {
+            try { return JSON.parse(providerValues.value) ?? {}; }
+            catch (_) { return {}; }
+        }
+
+        function restoredUnitCode() {
+            const { barcode } = readProviderValues();
+            return typeof barcode === 'string' && barcode ? barcode : unit.value.trim();
+        }
+
+        function restoreBarcode() {
+            clearSuggestions();
+            catalogMatch = null;
+            clearFeedback();
+            change.hidden = true;
+            committedCode = restoredUnitCode();
         }
 
         function clearSuggestions() {
@@ -100,7 +118,7 @@ window.RetailMindProductCreateBarcode = {
                 if (!value || field.value.trim() === value) continue;
                 const apply = () => {
                     useValue(field, value);
-                    providerValues.set(field, field.value);
+                    providerValues.value = JSON.stringify({ ...readProviderValues(), [key]: field.value });
                 };
                 const detail = field.closest('details');
                 if (detail) detail.open = true;
@@ -125,10 +143,11 @@ window.RetailMindProductCreateBarcode = {
 
         function clearCatalog() {
             clearSuggestions();
-            for (const [field, value] of providerValues) {
-                if (field.value === value) useValue(field, '');
+            const values = readProviderValues();
+            providerValues.value = '';
+            for (const [key, field] of catalogFields) {
+                if (field.value === values[key]) useValue(field, '');
             }
-            providerValues.clear();
             catalogMatch = null;
             form.dispatchEvent(new CustomEvent('product-create:catalog-clear'));
         }
@@ -205,6 +224,7 @@ window.RetailMindProductCreateBarcode = {
         function showCatalog(code, catalog) {
             if (catalog.status === 'found') {
                 catalogMatch = catalog;
+                providerValues.value = JSON.stringify({ ...readProviderValues(), barcode: code });
                 feedback.textContent = 'Open Food Facts match. Compare the details with the package.';
                 renderSuggestions(catalog.product);
                 form.dispatchEvent(new CustomEvent('product-create:catalog-match', {
@@ -289,18 +309,21 @@ window.RetailMindProductCreateBarcode = {
             unit.focus();
         });
         packaging.addEventListener('input', () => setCode(type.value, packaging.value));
-        unit.addEventListener('retailmind:fieldrestore', () => {
-            clearCatalog();
-            clearFeedback();
-            change.hidden = true;
-            committedCode = unit.value.trim();
-        });
+        unit.addEventListener('retailmind:fieldrestore', restoreBarcode);
         form.addEventListener('focusin', event => {
             if (event.target === unit && !committedCode) committedCode = unit.value.trim();
         });
         form.addEventListener('input', event => {
             const field = event.target;
-            if (providerValues.has(field) && providerValues.get(field) !== field.value) providerValues.delete(field);
+            const catalogField = catalogFields.find(([, input]) => input === field);
+            if (catalogField && providerValues.value) {
+                const [key] = catalogField;
+                const values = readProviderValues();
+                if (Object.hasOwn(values, key) && values[key] !== field.value) {
+                    delete values[key];
+                    providerValues.value = JSON.stringify(values);
+                }
+            }
             if (field === unit && unit.value.trim() !== committedCode) {
                 change.hidden = true;
                 clearSuggestions();
@@ -318,7 +341,7 @@ window.RetailMindProductCreateBarcode = {
             }
         }, true);
         form.addEventListener('reset', () => {
-            providerValues.clear();
+            providerValues.value = '';
             clearCatalog();
             clearFeedback();
             change.hidden = true;
@@ -340,15 +363,20 @@ window.RetailMindProductCreateBarcode = {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 const scanned = burst?.code;
+                const replacesCode = !burst?.previous || field.value === scanned ||
+                    (kind === 'unit_barcode' && burst.previous === committedCode && burst.appending);
                 burst = null;
                 if (kind !== type.value) {
                     type.value = kind;
                     sync();
                 }
-                if (scanned?.length >= 3) checkScannedCode(kind, scanned);
+                if (scanned?.length >= 3 && replacesCode) checkScannedCode(kind, scanned);
                 else lookup();
             } else if (event.key.length === 1 && /^[\x21-\x7E]$/.test(event.key)) {
-                burst ??= { field, code: '', at: now };
+                burst ??= {
+                    field, code: '', at: now, previous: field.value,
+                    appending: field.selectionStart === field.value.length
+                };
                 if (burst.code.length <= field.maxLength) burst.code += event.key;
                 burst.at = now;
             } else if (event.key !== 'Shift') burst = null;
@@ -407,6 +435,6 @@ window.RetailMindProductCreateBarcode = {
         });
         modal.addEventListener('retailmind:overlayopen', sync);
         sync();
-        return { lookup, sync };
+        return { lookup, sync, restoreBarcode };
     }
 };

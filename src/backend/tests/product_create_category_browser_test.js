@@ -82,7 +82,7 @@ function fixture(action) {
         assert.equal(await picker.evaluate(el => el === document.activeElement), true);
         await productDialog.getByLabel('Cost Price').fill('4');
         await productDialog.getByLabel('Selling Price').fill('9');
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), save.press('Enter')]);
+        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), save.click()]);
         await page.getByRole('button', { name: 'Manage Fixture Tea' }).click();
         await page.locator('#product-drawer').getByText('Tea & Coffee', { exact: true }).waitFor();
 

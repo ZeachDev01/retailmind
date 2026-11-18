@@ -420,6 +420,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $photoError = in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE, PRODUCT_PHOTO_PROVIDER_MESSAGE], true);
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
             $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'declared_size', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'catalog_photo', 'catalog_photo_barcode', 'catalog_photo_source', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!$photoError && !empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : ''), 'photoError' => $photoError];
+            $catalogDetailValues = $_POST['catalog_detail_values'] ?? '';
+            if (is_string($catalogDetailValues) && strlen($catalogDetailValues) <= 4096) {
+                $retry['values']['catalog_detail_values'] = $catalogDetailValues;
+            }
             if ($productHandoff) {
                 $retry['id'] = bin2hex(random_bytes(16));
                 $retry['values']['return_quantity_mode'] = $_POST['return_quantity_mode'] ?? '';
@@ -1847,6 +1851,7 @@ foreach ($products as $product) {
 <details class="product-create-options"><summary><span>Brand and variants</span><span class="product-option-value" id="create-brand-summary"></span></summary>
 <div class="form-grid">
 <div class="form-group full"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
+<input type="hidden" name="catalog_detail_values">
 <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown data-search-empty-label name="parent_product_id" id="parent-product-id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>
@@ -3080,57 +3085,40 @@ foreach ($products as $product) {
 
         const drawerOverlay = document.getElementById('product-drawer');
         if (drawerOverlay) {
-            drawerOverlay.querySelector('[data-close-drawer]')?.addEventListener('click', async event => {
-                if (isEditingProduct && isDrawerDirty) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    const discard = await RetailMindUI.confirm({
-                        title: 'Discard unsaved changes?',
-                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
-                        confirmText: 'Discard and close',
-                        danger: true
-                    });
-                    if (!discard) return;
-                    isDrawerDirty = false;
-                    RetailMindUI.closeOverlay(drawerOverlay);
-                }
-            }, true);
-
-            drawerOverlay.addEventListener('click', async event => {
-                if (event.target === drawerOverlay && isEditingProduct && isDrawerDirty) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    const discard = await RetailMindUI.confirm({
-                        title: 'Discard unsaved changes?',
-                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
-                        confirmText: 'Discard and close',
-                        danger: true
-                    });
-                    if (!discard) return;
-                    isDrawerDirty = false;
-                    RetailMindUI.closeOverlay(drawerOverlay);
-                }
-            }, true);
-        }
-
-        window.addEventListener('keydown', async event => {
-            if (event.key === 'Escape' && isEditingProduct && isDrawerDirty) {
-                const overlay = document.getElementById('product-drawer');
-                if (overlay && !overlay.hidden && overlay.classList.contains('open')) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    const discard = await RetailMindUI.confirm({
-                        title: 'Discard unsaved changes?',
-                        message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
-                        confirmText: 'Discard and close',
-                        danger: true
-                    });
-                    if (!discard) return;
-                    isDrawerDirty = false;
-                    RetailMindUI.closeOverlay(overlay);
-                }
+            let closeGuards;
+            let confirmingClose = false;
+            async function confirmDirtyDrawerClose(event) {
+                if (!isEditingProduct || !isDrawerDirty || confirmingClose) return;
+                confirmingClose = true;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                const discard = await RetailMindUI.confirm({
+                    title: 'Discard unsaved changes?',
+                    message: 'You have unsaved changes in the product editor. Are you sure you want to discard them?',
+                    confirmText: 'Discard and close',
+                    danger: true
+                });
+                confirmingClose = false;
+                if (!discard) return;
+                isDrawerDirty = false;
+                RetailMindUI.closeOverlay(drawerOverlay);
             }
-        }, true);
+
+            drawerOverlay.addEventListener('retailmind:overlayopen', event => {
+                if (event.target !== drawerOverlay) return;
+                closeGuards = new AbortController();
+                const options = {capture: true, signal: closeGuards.signal};
+                drawerOverlay.addEventListener('click', event => {
+                    if (event.target === drawerOverlay || event.target.closest('[data-close-drawer]')) confirmDirtyDrawerClose(event);
+                }, options);
+                drawerOverlay.addEventListener('keydown', event => {
+                    if (event.key === 'Escape') confirmDirtyDrawerClose(event);
+                }, options);
+            });
+            drawerOverlay.addEventListener('retailmind:overlayclose', event => {
+                if (event.target === drawerOverlay) closeGuards?.abort();
+            });
+        }
 
         window.addEventListener('beforeunload', event => {
             if (isEditingProduct && isDrawerDirty) {
@@ -3676,6 +3664,9 @@ foreach ($products as $product) {
                 if (form.id === 'pack-reconcile-form') updateReconcilePreview();
                 if (form === addProductForm) {
                     const values = draft.values;
+                    form.elements.catalog_detail_values.value = values.find(item => item.name === 'catalog_detail_values')?.value ?? '';
+                    form.barcodeLookup?.restoreBarcode();
+                    RetailMindUI.closeSearchDropdown(brand);
                     if (!values.some(item => item.name === 'sell_sealed_packs')) sellSealedPacks.checked = Number(packSizeInput.value) > 1;
                     if (!values.some(item => item.name === 'cost_entry_mode')) {
                         costEntryMode.value = 'piece';
@@ -3836,7 +3827,6 @@ foreach ($products as $product) {
                     revealProductOptions();
                     handoffEditorReady = true;
                     const persisted = await RetailMindInventoryDrafts?.restore('product-' + id);
-                    RetailMindUI.closeSearchDropdown(brand);
                     addProductForm.elements.handoff_tab.value = RetailMindInventoryDrafts.tabProof(id);
                     const confirmedType = barcodeTypes[draft.mode];
                     const restoredType = persisted?.context?.barcodeType;
