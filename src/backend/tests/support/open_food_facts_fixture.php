@@ -15,8 +15,8 @@ return static function (string $url): array {
             'categories_tags' => ['en:teas'],
             'image_front_url' => 'https://images.openfoodfacts.org/images/products/001/234/567/8905/front_en.4.400.jpg',
         ],
-        '87654328' => ['code' => $code, 'product_name' => 'Partial Fixture'],
-        '23456789' => ['code' => '012345678905', 'product_name' => 'Wrong Barcode'],
+        '87654325' => ['code' => $code, 'product_name' => 'Partial Fixture'],
+        '23456785' => ['code' => '012345678905', 'product_name' => 'Wrong Barcode'],
         default => null,
     };
     if ($code === '34567890') return [503, 'unavailable'];
