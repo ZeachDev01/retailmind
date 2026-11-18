@@ -5162,27 +5162,25 @@ body.system-health-open {
 .data-table .product-cell { min-width: 250px; }
 
 /* Add Product keeps purchase costing separate from sealed-pack selling. */
-#add-product-modal .pricing-mode-switch { display: flex; gap: 4px; padding: 4px; margin: .4rem 0 .8rem; border: 1px solid var(--border); border-radius: 12px; background: var(--theme-surface-soft, #f8fafc); }
-#add-product-modal .pricing-mode-switch button { display: flex; flex: 1; gap: 12px; align-items: center; min-width: 0; min-height: 68px; padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+#add-product-modal .create-cost-method-label { margin-bottom: .4rem; font-weight: 600; }
+#add-product-modal .pricing-mode-switch { display: flex; gap: .5rem; }
+#add-product-modal .pricing-mode-switch button { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 0; min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--theme-surface, #fff); color: var(--text); font: inherit; font-size: .875rem; font-weight: 600; text-align: left; cursor: pointer; }
+#add-product-modal .pricing-mode-switch button::before { content: ''; box-sizing: border-box; flex: 0 0 1rem; height: 1rem; border: 1px solid currentColor; border-radius: 50%; }
 #add-product-modal .pricing-mode-switch button:hover { background: var(--theme-hover, #eff6ff); }
-#add-product-modal .pricing-mode-switch button[aria-pressed="true"] { border-color: var(--primary); background: var(--theme-surface, #fff); color: var(--primary); }
+#add-product-modal .pricing-mode-switch button[aria-pressed="true"] { border-color: var(--primary); background: var(--theme-hover, #eff6ff); color: var(--primary); }
+#add-product-modal .pricing-mode-switch button[aria-pressed="true"]::before { border-width: 4px; }
 #add-product-modal .pricing-mode-switch button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-#add-product-modal .pricing-mode-switch strong { display: block; font-size: .875rem; }
-#add-product-modal .pricing-mode-switch small { display: block; margin-top: 3px; color: var(--muted); font-size: .75rem; line-height: 1.4; }
-#add-product-modal .pricing-mode-switch i { font-size: 1.25rem; }
-#add-product-modal #purchase-pack-fields { margin-bottom: .6rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
 #add-product-modal #cost-price[readonly] { background: var(--theme-surface-soft, #f8fafc); font-weight: 650; }
 #add-product-modal .pricing-markup { margin-top: .5rem; }
-#add-product-modal .pricing-markup summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: .82rem; }
+#add-product-modal .pricing-markup summary { width: fit-content; color: var(--primary); cursor: pointer; font-size: .875rem; }
 #add-product-modal .pricing-markup summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
-#add-product-modal .pricing-markup-row { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
-#add-product-modal .pricing-markup-row .form-group { flex: 0 1 180px; min-width: 0; }
-#add-product-modal .pricing-markup-row .btn { margin-top: 28px; min-height: 44px; }
+#add-product-modal .pricing-markup-row { display: flex; align-items: end; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+#add-product-modal .pricing-markup-row .form-group { flex: 1 1 9rem; min-width: 0; }
+#add-product-modal .pricing-markup-row .btn { min-height: 44px; }
 #add-product-modal #purchase-pack-fields[hidden], #add-product-modal #sales-pack-fields[hidden] { display: none; }
 
 @media (max-width: 640px) {
-    #add-product-modal .pricing-mode-switch button { gap: 8px; padding: 10px 8px; }
-    #add-product-modal .pricing-mode-switch small { font-size: .75rem; }
+    #add-product-modal .pricing-mode-switch button { padding-inline: .5rem; }
     #add-product-modal .wizard-step-indicator { font-size: .75rem; }
 }
 .product-name-line { display: flex; align-items: center; gap: .7rem; }
@@ -5220,7 +5218,17 @@ body.system-health-open {
 
 /* Compact shared product creation: essentials first, optional settings below. */
 #add-product-modal .product-create-options { border-top: 1px solid var(--border); padding-block: .75rem; }
-#add-product-modal .product-create-options > summary { cursor: pointer; font-weight: 600; padding-block: .35rem; min-height: 44px; box-sizing: border-box; }
+#add-product-modal .product-create-options > summary { display: flex; align-items: center; gap: .65rem; cursor: pointer; font-weight: 600; padding-block: .35rem; min-height: 44px; box-sizing: border-box; }
+#add-product-modal .product-create-options > summary::-webkit-details-marker { display: none; }
+#add-product-modal .product-create-options > summary::after { content: ''; margin-inline-start: auto; width: .45rem; height: .45rem; flex: 0 0 auto; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(-45deg); }
+#add-product-modal .product-create-options[open] > summary::after { transform: rotate(45deg); }
+#add-product-modal .product-option-value { margin-inline-start: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .875rem; font-weight: 400; color: var(--muted); }
+#add-product-modal .product-option-value:empty { display: none; }
+#add-product-modal .product-create-options > summary:has(.product-option-value:not(:empty))::after { margin-inline-start: 0; }
+#add-product-modal #create-label-options { margin-top: .5rem; max-width: 12rem; }
+#add-product-modal #create-opening-quantity:has(#stock-sales-packs-wrapper:not([hidden])) { grid-column: 1 / -1; }
+#add-product-modal .create-photo-preview { display: flex; align-items: center; gap: .75rem; margin-top: .5rem; }
+#add-product-modal #image-preview { object-fit: contain; border: 1px solid var(--border); border-radius: 8px; }
 #add-product-modal .product-create-options[open] > summary { margin-bottom: .75rem; }
 #add-product-modal summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 #add-product-modal #product-create-error { color: var(--theme-danger-text, #b91c1c); margin-bottom: 1rem; }

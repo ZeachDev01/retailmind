@@ -259,6 +259,9 @@ function fixture(action) {
         const saveProduct = page.locator('#product-create-save');
         await page.waitForFunction(() => document.querySelector('#product-create-save')?.disabled === false);
         const handoffURL = page.url();
+        assert.equal(await page.getByLabel('Items per Receiving Package', {exact:true}).evaluate(field => document.activeElement === field), true, 'Case handoff opens package settings and focuses its conversion');
+        assert.equal(await page.getByText('Opening stock', {exact:true}).isVisible(), false);
+        assert.equal(await page.getByLabel('Open printable barcode labels after saving').isVisible(), false);
         assert.equal(await page.evaluate(() => document.querySelector('.rm-modal').scrollWidth > document.querySelector('.rm-modal').clientWidth), false);
         const handoffOutput = path.resolve('output/issue-482');
         fs.mkdirSync(handoffOutput, {recursive:true});

@@ -126,7 +126,7 @@ Use the same compact product-details form from Products and Receiving. Remove th
 | Also sell sealed packs | Separate expandable configuration with all existing size/barcode/price constraints. Preserve sealed-pack/loose-unit accounting. |
 | Brand | Optional. |
 | Photo and family/variants | Expandable; choosing a parent family still requires the variant label. Keep standalone-product creation simple. |
-| Purchase-pack cost and markup tools | Preserve optional pricing aids and existing validation; do not make every product use them. |
+| Purchase-pack cost and markup tools | Show both cost methods in the pricing area and place the optional markup tool beside Selling Price per Piece. See the agreed pricing flow below. |
 | Reorder level, safety stock, minimum quantity, lead time | Preserve in expandable Planning with established defaults; these feed recommendations. |
 | Product supplier name | Omit from normal creation; use delivery Bought from for actual purchase source. Preserve existing supplier data/import compatibility and planning lead time. |
 | Expiry warning days | Preserve optional override and established default. |
@@ -135,6 +135,24 @@ Use the same compact product-details form from Products and Receiving. Remove th
 | Barcode printing | Preserve standalone option; receiving-origin save returns to the delivery first. |
 
 Observed implementation gap to fix: the existing form requires category/prices while `ProductService::createProduct()` currently permits null category and defaults missing prices to zero. The new form must not weaken intended rules; enforce the agreed creation rules at the server boundary while checking affected callers/fixtures.
+
+### Add Product pricing flow
+
+Agreed on 2026-11-18 for the shared Products and Receiving form. This supersedes the cost-mode switching behavior in the [earlier pricing spec](product-create-pricing-modes.md).
+
+- Show **By piece** and **From purchase pack** above **Cost Price per Piece**. Default to **By piece**, with one editable cost field. In pack mode, show **Purchase Pack Cost** and **Pieces per Purchase Pack** and display a read-only result as soon as both inputs are valid. PHP 120 divided by 12 pieces displays PHP 10.00 per piece.
+- Keep the entered manual cost and the two pack inputs while switching methods. With PHP 12 entered manually and PHP 10 calculated from the pack, switching back to **By piece** restores PHP 12. If there was no manual cost and the pack calculation is valid, carry its result into the editable field. An explicitly entered zero counts as a manual cost.
+- If either active pack input is missing or invalid, show guidance in the result area, such as **Enter pieces per purchase pack**. On **Save Product**, focus the first invalid input and retain all entered values. Save uses the cost from the active method.
+- Place **Use markup** beside **Selling Price per Piece**. Only **Apply markup** replaces the selling price with the calculated amount. Selling price remains editable and survives cost edits and method switches.
+- Keep **Receiving package** and **Also sell sealed packs** separate from the pricing controls.
+
+### Optional product settings
+
+- Keep the four optional sections collapsed on a fresh catalog form. Show the configured package, brand, and opening quantity on their section headers. Closing or reopening a section keeps entered values. On Save, open the section containing the first invalid field and focus that field.
+- Keep the receiving unit, package count, and optional package barcode together. A case handoff from Stock Receiving opens this section and focuses **Items per Receiving Package**. Purchase-pack costing does not set that count.
+- Show the product photo as a compact preview after selection. Show **Variant Label** only after a **Product Family** is selected. It is required for that family and retained if the selector is toggled before saving.
+- Keep **Opening stock** for catalog creation and show its optional expiry field when the opening quantity is positive. Put barcode label printing by **Individual Item Barcode** and show its quantity only when printing is selected. Stock Receiving collects the delivered quantities after product creation and returns to the delivery before any label printing.
+- Group the replenishment fields in **Planning and expiry**, followed by the expiry warning override and the separate supplier pullout setting.
 
 ## 4. Purchase-cost entry and current product cost
 

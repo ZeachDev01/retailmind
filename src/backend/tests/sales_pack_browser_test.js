@@ -8,8 +8,12 @@ const { chromium } = require('playwright');
     const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/products.php'), 'utf8');
     const start = source.indexOf('<div class="rm-modal-overlay" id="add-product-modal"');
     const end = source.indexOf('<div class="rm-modal-overlay" id="add-category-modal"', start);
-    const markup = source.slice(start, end).replace(/<\?php[\s\S]*?\?>/g, '').replace(/<\?=[\s\S]*?\?>/g, '');
-    const wizard = source.slice(source.indexOf('// Product creation and validation'), source.indexOf('// Camera scan and internal barcode generation'));
+    const markup = source.slice(start, end)
+        .replace(/<\?php if \(\$productHandoff\): \?>[\s\S]*?<\?php endif; \?>/g, '')
+        .replace(/value="<\?= \$productHandoff \? '' : '1' \?>"/, 'value="1"')
+        .replace(/<\?php[\s\S]*?\?>|<\?=[\s\S]*?\?>/g, '');
+    const wizard = source.slice(source.indexOf('// Product creation and validation'), source.indexOf('// Camera scan and internal barcode generation'))
+        .replace(/<\?= json_encode\(app_url\('components\/report\/stock_receiving\.php'\)\) \?>/, '"/stock_receiving.php"');
     const css = fs.readFileSync(path.join(frontend, 'assets/css/style.css'), 'utf8') + source.match(/<style>([\s\S]*?)<\/style>/)[1];
     const browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
 
@@ -31,18 +35,16 @@ const { chromium } = require('playwright');
                 document.getElementById('product-category').innerHTML = '<option value="1">Biscuits</option>';
             });
             await page.addScriptTag({ content: wizard });
-            await page.evaluate(() => { RetailMindUI.openOverlay(document.getElementById('add-product-modal')); document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }); });
+            await page.evaluate(() => RetailMindUI.openOverlay(document.getElementById('add-product-modal')));
+            await page.getByRole('button', { name: 'By piece', exact: true }).waitFor({ state: 'visible', timeout: 2000 });
+            assert.equal(await page.getByRole('button', { name: 'From purchase pack', exact: true }).isVisible(), true);
+            await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
 
-            // Panel 1: Name and Category
             await page.locator('#product-name').fill('Chocolate Biscuits 12s');
             assert.equal(await page.getByRole('combobox', {name: 'Parent Product Family', exact: true}).inputValue(), 'Standalone product', 'Standalone is visible as the default parent family');
             await page.locator('#product-category').selectOption('1', { force: true });
-            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
 
-            // Panel 2: Barcodes & Identifiers (optional fields, can proceed directly)
-            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
-
-            // Panel 3: Pricing & Units & Sales Pack configuration
+            // Pricing and Sales Pack configuration.
             await page.locator('#cost-price').fill('8.00');
             await page.locator('#selling-price').fill('10.00');
 
@@ -66,7 +68,6 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#cost-price').getAttribute('readonly'), '', 'Computed cost is read-only');
             assert.equal(await page.locator('#selling-price').inputValue(), '10.00', 'Pack costing preserves manually entered selling price');
             assert.equal(await page.evaluate(() => new FormData(document.getElementById('add-product-form')).has('pack_size')), false, 'Purchase cost does not enable Sales Packs');
-            await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
             assert.equal(await page.locator('#stock-sales-packs-wrapper').isVisible(), false, 'Purchase packs alone do not enable sealed stock');
             await page.evaluate(() => document.querySelectorAll('#add-product-form .product-create-options').forEach(details => { details.open = true; }));
             await capture('pack');
@@ -83,7 +84,7 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#cost-price').inputValue(), '12.00');
             assert.equal(await page.locator('#selling-price').inputValue(), '12.50', 'Cost edits do not reapply markup');
             await page.locator('[data-cost-mode="piece"]').click();
-            assert.equal(await page.locator('#cost-price').inputValue(), '12.00', 'Computed cost carries into By piece');
+            assert.equal(await page.locator('#cost-price').inputValue(), '8.00', 'Switching back restores the entered manual cost');
             await page.locator('#cost-price').fill('9.50');
             await page.locator('#create-pack-markup').fill('20');
             assert.equal(await page.locator('#cost-price').inputValue(), '9.50', 'Markup never overwrites a manual per-item cost');
@@ -92,8 +93,11 @@ const { chromium } = require('playwright');
             assert.equal(await page.locator('#cost-price').inputValue(), '12.00', 'Returning By pack recomputes from its inputs');
             for (const invalid of ['', '0', '1.5', '2147483648']) {
                 await page.locator('#create-purchase-pack-size').fill(invalid);
-                await page.evaluate(() => { document.getElementById('add-product-form').dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})); document.getElementById('product-create-save').disabled=false; document.getElementById('product-create-save').classList.remove('btn-loading'); });
-            assert.ok(await page.locator('#add-product-form .invalid').count() > 0, 'Invalid configuration blocks saving');
+                assert.match(await page.locator('#pack-price-suggested').textContent(), /Enter pieces per purchase pack/);
+                await page.getByRole('button', {name:'Save Product'}).click();
+                assert.equal(await page.locator('#create-purchase-pack-size').evaluate(field => document.activeElement === field), true);
+                assert.equal(await page.locator('#create-pack-cost').inputValue(), '144.00');
+                assert.equal(await page.locator('#selling-price').inputValue(), '12.50');
             }
             await page.locator('#create-purchase-pack-size').fill('12');
             await page.locator('#create-pack-cost').fill('96.00');
