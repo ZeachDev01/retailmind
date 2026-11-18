@@ -5217,6 +5217,60 @@ body.system-health-open {
 
 
 /* Compact shared product creation: essentials first, optional settings below. */
+.product-create-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+    align-items: start;
+    gap: 1.5rem;
+}
+
+.product-create-lookup,
+.product-create-details {
+    min-width: 0;
+}
+
+.product-create-lookup {
+    padding-inline-end: 1.5rem;
+    border-inline-end: 1px solid var(--border);
+}
+
+.product-create-lookup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-block: .5rem;
+}
+
+#create-barcode-feedback {
+    margin-block: .75rem;
+    overflow-wrap: anywhere;
+}
+
+#create-barcode-feedback:not(:empty) {
+    padding: .75rem;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+}
+
+#create-barcode-feedback a {
+    display: inline-block;
+    margin-block-start: .25rem;
+    color: var(--primary);
+}
+
+@media (max-width: 720px) {
+    .product-create-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1rem;
+    }
+
+    .product-create-lookup {
+        padding: 0 0 1rem;
+        border-inline-end: 0;
+        border-block-end: 1px solid var(--border);
+    }
+}
+
 #add-product-modal .product-create-options { border-top: 1px solid var(--border); padding-block: .75rem; }
 #add-product-modal .product-create-options > summary { display: flex; align-items: center; gap: .65rem; cursor: pointer; font-weight: 600; padding-block: .35rem; min-height: 44px; box-sizing: border-box; }
 #add-product-modal .product-create-options > summary::-webkit-details-marker { display: none; }

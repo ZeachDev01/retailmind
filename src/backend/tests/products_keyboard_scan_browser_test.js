@@ -8,7 +8,7 @@ const fullScript = source.slice(source.indexOf('<script>') + 8, source.lastIndex
     .replace(/<\?=[\s\S]*?\?>/g, 'null');
 new (require('node:vm').Script)(fullScript, { filename: 'products.inline.js' });
 const start = source.indexOf('        let productKeyboardCode');
-const script = source.slice(start, source.indexOf('        let productScanner', start))
+const script = source.slice(start, source.indexOf('        const initialParams', start))
     .replace(/<\?= json_encode\(app_url\('components\/barcodeScanner\/apiScanner\/product_code_lookup.php'\)\) \?>/, "'/lookup'");
 (async () => {
     const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
