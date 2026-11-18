@@ -339,9 +339,28 @@ $categoryIcon = static function (string $categoryName): string {
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <p>No products added yet. Scan a barcode or add a product from the catalog.</p>
                 </div>
-                <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
+                <fieldset class="receiving-fieldset-reset">
                 <div id="receiving_lines"></div>
                 </fieldset>
+                <template id="receiving_group_template">
+                    <section class="receiving-product-group">
+                        <h3 class="receiving-group-heading">
+                            <button type="button" class="receiving-group-toggle" aria-expanded="false">
+                                <span class="receiving-group-copy">
+                                    <span class="receiving-group-name"></span>
+                                    <span class="receiving-group-total"></span>
+                                    <span class="receiving-group-status" hidden></span>
+                                </span>
+                                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        </h3>
+                        <div class="receiving-group-editor" hidden>
+                            <div class="receiving-allocations"></div>
+                            <button type="button" class="btn btn-secondary add-receiving-batch" <?= !$canReceive ? 'disabled' : '' ?>>Add another batch</button>
+                        </div>
+                        <input type="hidden" class="current-product-cost">
+                    </section>
+                </template>
                 <template id="receiving_line_template">
                 <section class="receiving-line" aria-label="Product line 1" draggable="true">
                     <div class="receiving-line-heading playlist-row-header">
@@ -481,7 +500,7 @@ $categoryIcon = static function (string $categoryName): string {
     <div class="receiving-panel-heading"><h2 id="receiving_help_title">How to receive stock</h2><button type="button" class="btn btn-secondary" id="receiving_help_close">Close</button></div>
     <ol>
         <li><strong>Select products:</strong> scan a barcode, search by name or SKU, or choose a category and add products from the catalog.</li>
-        <li><strong>Enter quantities:</strong> choose units, packages, or sealed packs beside each selected product, then enter the good quantities received. Add cost, batch, or expiry when needed.</li>
+        <li><strong>Enter quantities:</strong> open a product row and choose units, packages, or sealed packs. Enter the good quantities received and add cost, batch, or expiry when needed.</li>
         <li><strong>Review and save:</strong> check the delivery summary and receipt details, then save the entry to update stock.</li>
     </ol>
 </dialog>
@@ -633,7 +652,7 @@ function addRecoveredProduct(product, mode) {
     pendingScan = null;
     codeRecovery.hidden = true;
     showStep(1, false);
-    if (row) visibleQuantityInput(row)?.focus();
+    if (row) focusReceivingQuantity(row);
     scanStatus.textContent = row === existing ? 'Product already added. Entered quantities and mode preserved.'
         : 'Existing product selected. No identifier was attached. Enter actual delivered quantities.';
     keepScanRecovery();
@@ -766,8 +785,7 @@ async function identifyReceivingProduct(code) {
         const existingGroup = productGroup(product.product_id);
         const existingRow = existingGroup?.lastEdited?.isConnected ? existingGroup.lastEdited : existingGroup?.querySelector('.receiving-line');
         if (existingRow) {
-            const focusField = visibleQuantityInput(existingRow);
-            focusField?.focus();
+            focusReceivingQuantity(existingRow);
             scanStatus.textContent = `${product.product_name} (${product.sku}) already added. Entered quantities preserved.`;
             return;
         }
@@ -781,8 +799,7 @@ async function identifyReceivingProduct(code) {
             quantity_mode: targetMode
         });
         if (!line) return;
-        const targetField = visibleQuantityInput(line);
-        targetField?.focus();
+        focusReceivingQuantity(line);
         RetailMindUI.toast(`${product.product_name} added to delivery lines.`, 'success');
         productSearchScan.value = '';
         const matchedBy = result.matched_code_kind === 'sku'
@@ -861,25 +878,22 @@ function updatePackageConversion(row = activeLine) {
     const convEl = field('package_conversion');
     if (!convEl) return;
 
-    if (mode === 'packs') {
-        const packSize = Number(prod.pack_size || 1);
-        const receivedPacksInput = Number(field('received_packs')?.value || 0);
-        const receivedLooseInput = Number(field('received_loose')?.value || 0);
-        const acceptedTotal = (receivedPacksInput * packSize) + receivedLooseInput;
-        convEl.textContent = `Accepted: ${acceptedTotal} units (${receivedPacksInput} packs, ${receivedLooseInput} loose pieces).`;
-    } else {
-        const packageMode = mode === 'packages';
-        const total = packageMode
-            ? Number(field('received_packages')?.value || 0) * Number(prod.units_per_package || 1)
-            : Number(field('received_qty')?.value || 0);
-        convEl.textContent = `Accepted: ${total} units.`;
-    }
+    const quantity = getLineQuantities(row, prod);
+    const packs = mode === 'packs' ? ` (${quantity.primary} packs, ${quantity.loose} loose pieces)` : '';
+    convEl.textContent = quantity.issue
+        ? (quantity.issue.missing ? '' : quantity.issue.message)
+        : `Accepted: ${quantity.accepted} units${packs}.`;
     refreshDelivery();
 }
 
 function visibleQuantityInput(row) {
     const mode = row.querySelector('[data-field="quantity_mode"]').value;
     return row.querySelector('[data-field="' + (mode === 'packs' ? 'received_packs' : mode === 'packages' ? 'received_packages' : 'received_qty') + '"]');
+}
+
+function focusReceivingQuantity(row) {
+    activateLine(row);
+    visibleQuantityInput(row)?.focus();
 }
 
 function updateQuantityMode(row = activeLine) {
@@ -932,18 +946,39 @@ const form = document.getElementById('receiving_form');
 
 function getLineQuantities(row, prod) {
     const field = name => row.querySelector('[data-field="' + name + '"]');
-    const mode = field('quantity_mode')?.value || 'units';
+    const modeField = field('quantity_mode');
+    const mode = modeField.value;
+    const issue = (input, message, missing = false) => ({mode, accepted: 0, issue: {input, message, missing}});
+    if (!prod || prod.unavailable) {
+        return issue(modeField, 'This product is no longer available. Remove it or ask your Administrator to check it.');
+    }
+    const packSize = Number(prod.pack_size);
+    if (!['units', 'packages', 'packs'].includes(mode) || (mode === 'packs' && (!Number.isInteger(packSize) || packSize <= 1))) {
+        return issue(modeField, 'Choose a supported quantity type with a saved conversion.');
+    }
+    const input = visibleQuantityInput(row);
+    const primary = Number(input.value);
     if (mode === 'packs') {
-        const packSize = Number(prod.pack_size || 1);
-        const value = name => /^\d+$/.test(field(name)?.value) ? Number(field(name).value) : 0;
-        const total = (value('received_packs') * packSize) + value('received_loose');
-        return {total, accepted: total};
+        const looseField = field('received_loose');
+        const loose = Number(looseField.value);
+        if (!/^\d+$/.test(input.value)) {
+            return issue(input, 'Enter received packs as a whole number from zero upward.', input.value === '' && ['', '0'].includes(looseField.value));
+        }
+        if (!/^\d+$/.test(looseField.value)) {
+            return issue(looseField, 'Enter received loose pieces as a whole number from zero upward.');
+        }
+        const accepted = primary * packSize + loose;
+        if (accepted === 0) return issue(input, 'Enter at least one received pack or loose piece.');
+        if (accepted > 2147483647) return issue(input, 'Resulting unit quantity is too large.');
+        return {mode, primary, loose, accepted};
     }
 
-    const packages = mode === 'packages';
-    const quantity = field(packages ? 'received_packages' : 'received_qty').value;
-    const total = /^\d+$/.test(quantity) ? Number(quantity) * (packages ? Number(prod.units_per_package || 1) : 1) : 0;
-    return {total, accepted: total};
+    const pack = mode === 'packages' ? Number(prod.units_per_package || 1) : 1;
+    const accepted = primary * pack;
+    if (!/^\d+$/.test(input.value) || primary <= 0 || !Number.isInteger(pack) || pack <= 0 || accepted > 2147483647) {
+        return issue(input, 'Enter a positive whole-number bought quantity within range and use a valid saved pack size.', input.value === '');
+    }
+    return {mode, primary, accepted};
 }
 
 function refreshDelivery(quotes = null) {
@@ -1122,7 +1157,7 @@ function renderCatalog() {
             }
             const row = addReceivingLine({product_id: p.product_id});
             showStep(1, false);
-            if (row) visibleQuantityInput(row)?.focus();
+            if (row) focusReceivingQuantity(row);
         });
 
         body.append(name, meta, costStock, pack, button);
@@ -1194,14 +1229,34 @@ function groupCosts(group, quotes) {
     return [...new Set(Array.from(group.querySelectorAll('.receiving-line'), row => effectiveCost(row, quotes)).filter(Boolean))];
 }
 
+function countedReceivingUnits(count, unit) {
+    const label = count === 1 || /s$/i.test(unit) ? unit : unit + (/(?:ch|sh|x)$/i.test(unit) ? 'es' : 's');
+    return count.toLocaleString('en-PH') + ' ' + label;
+}
+
 function refreshGroups(quotes) {
     for (const group of lineContainer.children) {
         const rows = Array.from(group.querySelectorAll('.receiving-line'));
         const product = productMap.get(group.dataset.productId);
         const batches = rows.map(row => quotes?.get(row) ?? draftCost(row, product));
-        const total = purchaseTotal(batches);
-        group.querySelector('.receiving-group-total').textContent = batches.reduce((sum, cost) => sum + cost.accepted_qty, 0)
-            + ' accepted units · ' + total.label + ' ' + total.value;
+        const quantities = rows.map(row => getLineQuantities(row, product));
+        const problem = quantities.find(quantity => quantity.issue && !quantity.issue.missing) ?? quantities.find(quantity => quantity.issue);
+        group.quantityIssue = problem?.issue;
+        const entered = quantities[0];
+        const baseUnit = product.base_unit || 'unit';
+        const accepted = batches.reduce((sum, cost) => sum + cost.accepted_qty, 0);
+        let breakdown = '';
+        if (rows.length > 1) breakdown = rows.length + ' batches';
+        else if (entered?.mode === 'packs' && !entered.issue) {
+            breakdown = countedReceivingUnits(entered.primary, 'sealed pack') + ' + ' + countedReceivingUnits(entered.loose, 'loose ' + baseUnit);
+        } else if (entered?.mode === 'packages' && !entered.issue) {
+            breakdown = countedReceivingUnits(entered.primary, product.receiving_unit || 'package');
+        }
+        const acceptedText = countedReceivingUnits(accepted, 'accepted ' + baseUnit);
+        group.querySelector('.receiving-group-total').textContent = [breakdown, accepted ? acceptedText : ''].filter(Boolean).join(' · ');
+        const status = group.querySelector('.receiving-group-status');
+        status.textContent = problem ? (problem.issue.missing ? 'Enter quantity' : 'Check quantity') : '';
+        status.hidden = !problem;
         const choice = group.querySelector('.current-product-cost');
         const costs = groupCosts(group, quotes);
         if (!costs.includes(choice.value)) { choice.value = ''; group.dataset.choiceExplicit = ''; }
@@ -1266,9 +1321,20 @@ function renumberLines() {
     refreshDelivery();
 }
 
+function openReceivingGroup(group) {
+    for (const item of lineContainer.children) {
+        const toggle = item.querySelector('.receiving-group-toggle');
+        const expanded = item === group;
+        toggle.setAttribute('aria-expanded', String(expanded));
+        item.querySelector('.receiving-group-editor').hidden = !expanded;
+    }
+}
+
 function activateLine(row) {
     activeLine = row;
-    row.closest('.receiving-product-group').lastEdited = row;
+    const group = row.closest('.receiving-product-group');
+    group.lastEdited = row;
+    if (group.querySelector('.receiving-group-editor').hidden) openReceivingGroup(group);
 }
 
 function restoreField(field, value) {
@@ -1358,8 +1424,9 @@ function connectLine(row) {
             if (step !== 1) showStep(1);
             productSearchScan.focus();
         } else if (activeLine) {
-            const btn = activeLine.querySelector('.remove-receiving-line');
-            if (btn) btn.focus();
+            const remaining = group.isConnected ? group : activeLine.closest('.receiving-product-group');
+            if (!group.isConnected) openReceivingGroup(remaining);
+            remaining.querySelector('.receiving-group-toggle').focus();
         }
     });
 
@@ -1396,42 +1463,35 @@ function connectLine(row) {
     });
     row.addEventListener('dragend', () => {
         draggedRow = null;
-        for (const child of receivingRows()) {
+        for (const child of lineContainer.querySelectorAll('.receiving-line, .receiving-group-toggle')) {
             child.classList.remove('is-dragging', 'drag-over-above', 'drag-over-below');
         }
     });
-    row.addEventListener('dragover', event => {
+    connectReceivingDropTarget(row, row.closest('.receiving-product-group'), row);
+}
+
+function connectReceivingDropTarget(target, group, row = null) {
+    target.addEventListener('dragover', event => {
+        if (!draggedRow || draggedRow === row || (!row && group.contains(draggedRow))) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
-        if (!draggedRow || draggedRow === row) return;
-        const rect = row.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        if (event.clientY < midY) {
-            row.classList.add('drag-over-above');
-            row.classList.remove('drag-over-below');
-        } else {
-            row.classList.add('drag-over-below');
-            row.classList.remove('drag-over-above');
-        }
+        const rect = target.getBoundingClientRect();
+        const above = event.clientY < rect.top + rect.height / 2;
+        target.classList.toggle('drag-over-above', above);
+        target.classList.toggle('drag-over-below', !above);
     });
-    row.addEventListener('dragleave', () => {
-        row.classList.remove('drag-over-above', 'drag-over-below');
+    target.addEventListener('dragleave', () => {
+        target.classList.remove('drag-over-above', 'drag-over-below');
     });
-    row.addEventListener('drop', event => {
+    target.addEventListener('drop', event => {
+        if (!draggedRow || draggedRow === row || (!row && group.contains(draggedRow))) return;
         event.preventDefault();
-        if (!draggedRow || draggedRow === row) return;
-        const isAbove = row.classList.contains('drag-over-above');
-        row.classList.remove('drag-over-above', 'drag-over-below');
-        if (draggedRow.parentElement !== row.parentElement) {
-            const group = row.closest('.receiving-product-group');
+        const isAbove = target.classList.contains('drag-over-above');
+        target.classList.remove('drag-over-above', 'drag-over-below');
+        if (!row || draggedRow.parentElement !== row.parentElement) {
             lineContainer.insertBefore(draggedRow.closest('.receiving-product-group'), isAbove ? group : group.nextElementSibling);
-            renumberLines();
-            return;
-        }
-        if (isAbove) {
-            row.parentElement.insertBefore(draggedRow, row);
         } else {
-            row.parentElement.insertBefore(draggedRow, row.nextElementSibling);
+            row.parentElement.insertBefore(draggedRow, isAbove ? row : row.nextElementSibling);
         }
         renumberLines();
     });
@@ -1494,31 +1554,23 @@ function addReceivingLine(values = {}, allocation = false) {
     let group = productGroup(productId);
     if (group && !allocation) return null;
     if (!group) {
-        group = document.createElement('section');
-        group.className = 'receiving-product-group';
+        group = document.getElementById('receiving_group_template').content.firstElementChild.cloneNode(true);
         group.dataset.productId = productId;
-        const heading = document.createElement('div');
-        heading.className = 'receiving-group-heading';
-        const title = document.createElement('h3');
-        title.textContent = product.product_name;
-        const total = document.createElement('span');
-        total.className = 'receiving-group-total';
-        heading.append(title, total);
-        const batches = document.createElement('div');
-        batches.className = 'receiving-allocations';
-        const choice = document.createElement('input');
-        choice.type = 'hidden';
-        choice.className = 'current-product-cost';
-        const add = document.createElement('button');
-        add.type = 'button';
-        add.className = 'btn btn-secondary add-receiving-batch';
-        add.textContent = 'Add another batch';
-        add.disabled = !canReceive;
-        add.addEventListener('click', () => {
-            const row = addReceivingLine({product_id: productId, pullout_id: group.querySelector('[data-field="pullout_id"]').value}, true);
-            visibleQuantityInput(row)?.focus();
+        group.querySelector('.receiving-group-name').textContent = product.product_name;
+        const toggle = group.querySelector('.receiving-group-toggle');
+        const editor = group.querySelector('.receiving-group-editor');
+        editor.id = 'receiving_group_' + productId;
+        toggle.setAttribute('aria-controls', editor.id);
+        toggle.addEventListener('click', () => {
+            const opening = editor.hidden;
+            openReceivingGroup(opening ? group : null);
+            if (opening && canReceive) group.quantityIssue?.input.focus();
         });
-        group.append(heading, batches, choice, add);
+        connectReceivingDropTarget(toggle, group);
+        group.querySelector('.add-receiving-batch').addEventListener('click', () => {
+            const row = addReceivingLine({product_id: productId, pullout_id: group.querySelector('[data-field="pullout_id"]').value}, true);
+            focusReceivingQuantity(row);
+        });
         lineContainer.append(group);
     }
 
@@ -1650,6 +1702,8 @@ function clearReceivingErrors() {
 }
 
 function receivingError(field, message) {
+    const group = field.closest('.receiving-product-group');
+    if (group) openReceivingGroup(group);
     const details = field.closest('details');
     if (details) {
         details.open = true;
@@ -1665,7 +1719,12 @@ function receivingError(field, message) {
     const link = document.createElement('a');
     link.href = '#' + field.id;
     link.textContent = summary.textContent || message;
-    link.addEventListener('click', event => { event.preventDefault(); field.focus(); });
+    link.addEventListener('click', event => {
+        event.preventDefault();
+        if (group) openReceivingGroup(group);
+        if (details) details.open = true;
+        field.focus();
+    });
     summary.replaceChildren(link);
     field.focus();
 }
@@ -1677,44 +1736,9 @@ function validateQuantities(checkCostConfiguration = true) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
-        const mode = field('quantity_mode')?.value || 'units';
-        let invalid = null;
-        let message = '';
-        if (!prod || prod.unavailable) {
-            invalid = field('quantity_mode');
-            message = 'This product is no longer available. Remove it or ask your Administrator to check it.';
-        } else if (!['units', 'packages', 'packs'].includes(mode) || (mode === 'packs' && !(Number(prod.pack_size) > 1))) {
-            invalid = field('quantity_mode');
-            message = 'Choose a supported quantity type with a saved conversion.';
-        } else if (mode === 'packs') {
-            const packSize = Number(prod?.pack_size || 1);
-            const receivedPacksField = field('received_packs');
-            const receivedLooseField = field('received_loose');
-            const receivedPacksValue = receivedPacksField ? receivedPacksField.value.trim() : '';
-            const receivedLooseValue = receivedLooseField ? receivedLooseField.value.trim() : '';
-            if (!/^\d+$/.test(receivedPacksValue)) {
-                invalid = receivedPacksField;
-                message = 'Enter received packs as a whole number from zero upward.';
-            } else if (!/^\d+$/.test(receivedLooseValue)) {
-                invalid = receivedLooseField;
-                message = 'Enter received loose pieces as a whole number from zero upward.';
-            } else if (Number(receivedPacksValue) === 0 && Number(receivedLooseValue) === 0) {
-                invalid = receivedPacksField;
-                message = 'Enter at least one received pack or loose piece.';
-            } else if (((Number(receivedPacksValue) * packSize) + Number(receivedLooseValue)) > 2147483647) {
-                invalid = receivedPacksField;
-                message = 'Resulting unit quantity is too large.';
-            }
-        } else {
-            const packages = mode === 'packages';
-            const quantity = field(packages ? 'received_packages' : 'received_qty');
-            const pack = packages ? Number(prod?.units_per_package || 1) : 1;
-            const total = Number(quantity.value) * pack;
-            if (!/^\d+$/.test(quantity.value) || Number(quantity.value) <= 0 || !Number.isInteger(pack) || pack <= 0 || total > 2147483647) {
-                invalid = quantity;
-                message = 'Enter a positive whole-number bought quantity within range and use a valid saved pack size.';
-            }
-        }
+        const {issue} = getLineQuantities(row, prod);
+        let invalid = issue?.input ?? null;
+        let message = issue?.message ?? '';
         if (!invalid) {
             invalid = Array.from(row.querySelectorAll('input, select, textarea')).find(input => !input.checkValidity());
             message = invalid?.validationMessage || '';
@@ -1758,7 +1782,11 @@ function renderReview(quotes = null) {
         const section = document.createElement('section');
         section.className = 'receiving-review-product';
         const heading = document.createElement('h3');
-        heading.textContent = productMap.get(group.dataset.productId).product_name + ' · ' + group.querySelector('.receiving-group-total').textContent;
+        const batches = Array.from(group.querySelectorAll('.receiving-line'), row => quotes?.get(row) ?? draftCost(row));
+        const accepted = batches.reduce((sum, cost) => sum + cost.accepted_qty, 0);
+        const total = purchaseTotal(batches);
+        heading.textContent = productMap.get(group.dataset.productId).product_name + ' · ' + accepted
+            + ' accepted units · ' + total.label + ' ' + total.value;
         section.append(heading);
         review.append(section);
         reviewGroups.set(group.dataset.productId, section);
@@ -1803,6 +1831,7 @@ function renderReview(quotes = null) {
         edit.textContent = 'Edit line ' + (index + 1);
         edit.addEventListener('click', () => {
             showStep(2, false);
+            openReceivingGroup(row.closest('.receiving-product-group'));
             row.scrollIntoView({behavior: 'instant', block: 'center'});
             const target = field('quantity_mode') || row.querySelector('input:not([type="hidden"]), select');
             target?.focus();

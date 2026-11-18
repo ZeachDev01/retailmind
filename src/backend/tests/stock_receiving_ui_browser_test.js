@@ -103,6 +103,49 @@ function fixture(action) {
         assert.equal(await prepop.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
         assert.equal(await second.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[1][product_id]');
 
+        const firstToggle = page.locator('.receiving-group-toggle').first();
+        const secondToggle = page.locator('.receiving-group-toggle').nth(1);
+        assert.equal(await firstToggle.getAttribute('aria-expanded'), 'false');
+        assert.equal(await prepop.locator('[data-field="batch_number"]').isVisible(), false);
+        assert.match(await firstToggle.innerText(), /Enter quantity/);
+        await firstToggle.press('Enter');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'received_qty');
+        await page.locator('#received_qty').fill('abc');
+        assert.doesNotMatch(await page.locator('#package_conversion').innerText(), /NaN/);
+        await secondToggle.click();
+        assert.match(await firstToggle.innerText(), /Check quantity/);
+        await page.locator('#receiving_next').click();
+        assert.equal(await firstToggle.getAttribute('aria-expanded'), 'true');
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'received_qty');
+        await page.locator('#quantity_mode').selectOption('packages');
+        await page.locator('#received_packages').fill('2');
+        await secondToggle.click();
+        assert.match(await firstToggle.innerText(), /2 cases · 48 accepted pieces/);
+        assert.equal(await page.locator('#received_packages').isVisible(), false);
+        assert.equal(await page.locator('#received_packages').inputValue(), '2');
+        assert.equal(await page.locator('.receiving-group-editor:visible').count(), 1);
+        fs.mkdirSync(output, {recursive:true});
+        for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
+            await page.setViewportSize({width, height:1000});
+            await page.evaluate(theme => {
+                document.documentElement.dataset.theme = theme;
+                document.documentElement.style.colorScheme = theme;
+            }, theme);
+            assert.equal(await firstToggle.evaluate(row => row.getBoundingClientRect().height >= 44 && row.scrollWidth <= row.clientWidth), true);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+            await page.locator('.delivery-editor').screenshot({path:path.join(output, `compact-${width}-${theme}.png`)});
+        }
+        await page.setViewportSize({width:1440, height:1000});
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.documentElement.style.colorScheme = 'light'; });
+        await page.locator('#product_search_scan').fill('THEME-CASE');
+        await page.locator('#product_search_scan').press('Enter');
+        await page.waitForFunction(() => document.activeElement.id === 'received_packages');
+        assert.equal(await page.locator('#received_packages').inputValue(), '2', 'rescan reopens without changing the input');
+        assert.equal(await secondToggle.getAttribute('aria-expanded'), 'false');
+        await page.locator('#received_packages').clear();
+        await page.locator('#quantity_mode').selectOption('units');
+        await page.locator('#received_qty').clear();
+
         // Verification 4: Move up / Move down reordering with boundary disabling and sequential updates
         await prepop.locator('.move-line-down').click();
         const row1 = page.locator('#receiving_lines .receiving-line').nth(0);
@@ -125,12 +168,14 @@ function fixture(action) {
         assert.equal(await back2.locator('input[data-field="product_id"]').getAttribute('name'), 'lines[1][product_id]');
 
         // Verification 5: HTML5 Drag-and-Drop reordering
+        await secondToggle.click();
         await page.evaluate(() => {
             const lines = document.querySelectorAll('#receiving_lines .receiving-line');
+            const target = document.querySelector('.receiving-group-toggle');
             const dt = new DataTransfer();
             lines[1].dispatchEvent(new DragEvent('dragstart', {dataTransfer: dt, bubbles: true}));
-            lines[0].dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, clientY: lines[0].getBoundingClientRect().top}));
-            lines[0].dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true}));
+            target.dispatchEvent(new DragEvent('dragover', {dataTransfer: dt, bubbles: true, clientY: target.getBoundingClientRect().top}));
+            target.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true}));
             lines[1].dispatchEvent(new DragEvent('dragend', {dataTransfer: dt, bubbles: true}));
         });
         assert.match(await page.locator('#receiving_lines .receiving-line').first().locator('.receiving-product-name').innerText(), /Receiving test product 999/);
@@ -138,6 +183,7 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('input[data-field="product_id"]').getAttribute('name'), 'lines[0][product_id]');
 
         // Verification 6: Immediate deletion of untouched line and confirmed deletion of touched line
+        await secondToggle.click();
         await page.locator('#receiving_lines .receiving-line').nth(1).locator('.remove-receiving-line').click();
         assert.equal(await page.locator('#receiving_lines .receiving-line').count(), 1, 'untouched line deleted immediately');
         assert.equal(await page.locator('#receiving_lines .receiving-line').first().locator('.line-number').innerText(), '1');
@@ -180,7 +226,7 @@ function fixture(action) {
         assert.equal(await page.locator('#receiving_review > p').count(), 0, 'blank receipt details stay out of review');
         assert.doesNotMatch(await page.locator('#receiving_review').innerText(), /Not supplied/);
         await page.locator('#receiving_review').waitFor({state:'visible'});
-        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱3.00 per unit/);
+        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱3.00 per piece/);
         assert.equal(await page.locator('#receiving_back').innerText(), 'Back to editing');
         assert.equal(await page.locator('.receiving-form').getAttribute('data-step'), '3');
         assert.equal(await page.locator('.sidebar').innerHTML(), navbar, 'receiving steps preserve navigation');
@@ -358,7 +404,7 @@ function fixture(action) {
         await page.locator('#receiving_review').waitFor({state:'visible'});
         assert.equal(await page.locator('#receiving_review > p').innerText(), 'Bought from: Review test store · Receipt: REVIEW-123');
         await page.locator('#receiving_review').waitFor({state:'visible'});
-        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱4.50 per unit · Batch: B-99 · Expiry: 2028-06-30/);
+        assert.match(await page.locator('#receiving_review').innerText(), /Cost: ₱4.50 per piece · Batch total: ₱216.00 · Batch: B-99 · Expiry: 2028-06-30/);
         await page.locator('#receiving_review').waitFor({state:'visible'});
         assert.match(await page.locator('#receiving_review').innerText(), /B-99/);
         await page.getByRole('button', {name: 'Edit line 1'}).click();
@@ -377,6 +423,7 @@ function fixture(action) {
             await page.locator('.swal2-confirm').click();
         }
         await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state:'visible'});
         const [savedRequest] = await Promise.all([
             page.waitForRequest(request => request.method() === 'POST' && request.url().includes('/report/stock_receiving.php')),
             page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}), page.locator('.btn-submit').click()
@@ -403,8 +450,10 @@ function fixture(action) {
         await touchPage.locator('.receiving-card-add').nth(1).tap();
         assert.equal(await touchPage.locator('#receiving_lines .receiving-line').count(), 2, 'synthesized touch adds two products');
         assert.equal(await touchPage.locator('.receiving-form').getAttribute('data-step'), '1');
+        await touchPage.locator('.receiving-group-toggle').first().tap();
         await touchPage.locator('#received_qty').tap();
         await touchPage.locator('#received_qty').fill('1');
+        await touchPage.locator('.receiving-group-toggle').nth(1).tap();
         await touchPage.locator('#received_qty_1').tap();
         await touchPage.locator('#received_qty_1').fill('2');
         await touchPage.locator('#receiving_next').tap();

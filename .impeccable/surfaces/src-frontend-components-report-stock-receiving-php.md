@@ -17,7 +17,7 @@ OWN-WORLD: Existing navy navigation, Action Blue controls, semantic states, syst
 
 STORY: Add to delivery selects a product. Inline quantities calculate accepted base units. Save receiving & update stock commits only after Review.
 
-FIRST VIEWPORT: Searchable catalog on the left; selected product quantities and visible lot/expiry on the right, with receipt details and Review below. Narrow screens stack these areas. Focus moves to the visible quantity after a completed scan; rescans retain values.
+FIRST VIEWPORT: Searchable catalog on the left and compact product rows on the right. One product can open for quantity, lot/expiry and batch editing, with receipt details and Review below. Narrow screens stack these areas. Focus moves to the visible quantity after a completed scan; rescans retain values.
 
 FORM: User-selected split catalog within the established interface. seed: none (user-selected direction).
 
@@ -42,3 +42,9 @@ Each product has one group with a calculated accepted total and independent batc
 ## Code recovery — #481
 
 An inline recovery section below scan status uses the existing form typography, secondary actions, theme border and Action Blue focus. Unknown codes require explicit packaging classification; existing cartons show saved-size confirmation with base-unit and configuration recovery. Native radio labels keep 44px targets, actions wrap on narrow screens, and programmatic focus remains visible. No global tokens, dependencies or shipping assets were added. Final 1440px/dark and 390px/light confirmation captures were inspected against the incumbent system; classification coverage also includes both themes and reduced motion. Verification, independent review fixes, the failed TestSprite status and device limits are recorded in `docs/verification/receiving-code-recovery-481.md`; captures are under ignored `output/issue-481/`.
+
+## Compact delivery lines
+
+Each product row keeps the entered quantity and accepted total visible when folded. Multiple batches show their count and accepted total. The open editor keeps lot and expiry together below quantity. Missing or invalid quantity stays visible on the row, and opening it takes staff to the field that needs attention. Scanning or adding opens the corresponding product, and folding a row retains its batch entries.
+
+Playwright checks quantity summaries, keyboard focus, retained inputs, reordering, and viewport fit. Compact-row captures are under ignored `output/playwright/stock-receiving/`. The existing receiving and rescan flow passed [TestSprite](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/test-cases/86af457c-c7b6-40b8-ac12-7d222e6053b5).

@@ -100,8 +100,9 @@ When an unknown package code is followed by **Find existing product**, show the 
 
 Replace **Select products → Enter quantities → Review** with **Receive stock → Review**. Search/catalog and selected products remain reachable together.
 
-- Keep one group per selected product, initially with one batch allocation. Show product identity, applicable quantity mode, visible quantity inputs, saved conversion, and calculated accepted base units.
-- Show **Batch / lot (optional)** and **Expiry date (optional)** directly below quantity, side by side on desktop and stacked on narrow screens. They must not require an expand action.
+- Keep one compact, keyboard-accessible row per selected product, initially with one batch allocation. Show the product name, entered packs or receiving packages where applicable, and accepted Base Units. For multiple allocations, show the batch count and accepted total instead of the individual counts.
+- Allow at most one product editor to be open. Keep all entries when closing it. Adding or scanning opens the product and focuses the matching quantity field. A collapsed row shows **Enter quantity** or **Check quantity** for an incomplete or invalid allocation. Opening it focuses the field that needs attention.
+- In the open editor, show product identity, applicable quantity mode, quantity inputs, saved conversion, and calculated accepted Base Units. Show **Batch / lot (optional)** and **Expiry date (optional)** directly below quantity, side by side on desktop and stacked on narrow screens. Keep Purchase cost and Add another batch within that editor.
 - Missing expiry is **Not recorded**, including in Review; it never means No expiry. Do not invent dates, copy dates/lot across allocations, or introduce a mandatory date policy. Preserve current date validation and independent batch provenance.
 - Only **Add another batch** creates another allocation. Each has its own quantity/mode, optional lot, optional expiry, and optional cost. Do not automatically merge allocations by product/date.
 - Product totals sum allocations exactly once; delivery totals sum products. Do not introduce a second editable total that can disagree with the allocations.

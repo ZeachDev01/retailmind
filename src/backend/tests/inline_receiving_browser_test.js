@@ -86,6 +86,12 @@ function fixture(action) {
         assert.equal(await page.locator('#received_qty_1').inputValue(), '12');
         assert.equal(await page.locator('#summary_products').innerText(), '1');
         assert.equal(await page.locator('#summary_accepted').innerText(), '36');
+        const productToggle = page.locator('.receiving-group-toggle');
+        await productToggle.click();
+        assert.match(await productToggle.innerText(), /2 batches · 36 accepted pieces/);
+        assert.equal(await page.locator('#received_qty_1').isVisible(), false);
+        assert.equal(await page.getByRole('button', {name:'Add another batch', exact:true}).isVisible(), false);
+        await productToggle.click();
         await page.locator('#quantity_mode').selectOption('units');
         await page.locator('#received_qty').fill('12');
         await page.locator('.receiving-line').first().locator('summary').click();
@@ -207,6 +213,11 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-line').count(), 1);
         await page.locator('#quantity_mode').selectOption('packs');
         await page.locator('#received_packs').fill('3');
+        await page.locator('#received_loose').fill('2');
+        await productToggle.click();
+        assert.match(await productToggle.innerText(), /3 sealed packs \+ 2 loose pieces · 20 accepted pieces/);
+        assert.equal(await page.locator('#received_packs').isVisible(), false);
+        await productToggle.click();
         await page.locator('#quantity_mode').selectOption('packages');
         assert.equal(await page.locator('#received_packages').inputValue(), '2', 'switching modes keeps original counts');
         await page.locator('#quantity_mode').selectOption('packs');
