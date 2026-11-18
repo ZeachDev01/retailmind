@@ -47,6 +47,10 @@ jobs:
         run: >-
           php -r 'require "src/backend/bootstrap/app.php";
           App\Core\Database::connection()->exec(file_get_contents("src/backend/database/sql/schema.sql"));'
+      - name: Run receiving cost database regression
+        env:
+          RUN_DB_TESTS: '1'
+        run: php src/backend/tests/known_receiving_cost_mysql_test.php
       - name: Run application browser workflows
         run: npm run test:e2e
       - uses: actions/upload-artifact@v4
