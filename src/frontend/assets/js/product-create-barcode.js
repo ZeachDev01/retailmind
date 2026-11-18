@@ -24,6 +24,17 @@ window.RetailMindProductCreateBarcode = {
         const scannerSection = control('add-product-scanner-section');
         const stopScan = control('stop-add-product-scan');
         const modal = form.closest('.rm-modal-overlay');
+        const change = control('create-barcode-change');
+        const keep = control('create-barcode-keep');
+        const catalogFields = [
+            ['name', control('product-name'), 'Product Name'],
+            ['declared_size', control('product-declared-size'), 'Declared Size'],
+            ['brand', control('product-brand'), 'Brand']
+        ];
+        const providerValues = new Map();
+        let committedCode = unit.value.trim();
+        let candidateCode;
+        let catalogMatch;
         let requestId = 0;
         let burst;
         let camera;
@@ -57,11 +68,145 @@ window.RetailMindProductCreateBarcode = {
             field.dispatchEvent(new Event('input', { bubbles: true }));
         }
 
+        function useValue(field, value) {
+            field.value = value;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function clearSuggestions() {
+            form.querySelectorAll('[data-catalog-suggestion]').forEach(button => button.remove());
+        }
+
+        function renderSuggestions(product, fillEmpty = true) {
+            clearSuggestions();
+            for (const [key, field, label] of catalogFields) {
+                const value = product[key];
+                if (!value || field.value.trim() === value) continue;
+                const apply = () => {
+                    useValue(field, value);
+                    providerValues.set(field, field.value);
+                };
+                const detail = field.closest('details');
+                if (detail) detail.open = true;
+                if (fillEmpty && !field.value.trim()) {
+                    apply();
+                    continue;
+                }
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-quiet product-catalog-suggestion';
+                button.dataset.catalogSuggestion = '';
+                button.textContent = 'Apply ' + label + ' suggestion · ' + value;
+                button.addEventListener('click', () => {
+                    if (unit.value.trim() !== committedCode) return;
+                    apply();
+                    field.focus();
+                    button.remove();
+                });
+                field.closest('.form-group').append(button);
+            }
+        }
+
+        function clearCatalog() {
+            clearSuggestions();
+            for (const [field, value] of providerValues) {
+                if (field.value === value) useValue(field, '');
+            }
+            providerValues.clear();
+            catalogMatch = null;
+            form.dispatchEvent(new CustomEvent('product-create:catalog-clear'));
+        }
+
+        function populated() {
+            return Array.from(form.elements).some(field => {
+                if (!field.name || field === unit || field.type === 'hidden') return false;
+                if (field.type === 'file') return field.files.length > 0;
+                if (field.type === 'checkbox' || field.type === 'radio') return field.checked !== field.defaultChecked;
+                if (field.tagName === 'SELECT') {
+                    const first = Array.from(field.options).find(option => option.defaultSelected) ?? field.options[0];
+                    return !!first && field.value !== first.value;
+                }
+                return 'defaultValue' in field && field.value !== field.defaultValue && field.value !== '';
+            }) || !!catalogMatch;
+        }
+
+        function acceptUnitCode(code) {
+            if (code === committedCode) return true;
+            if (committedCode && populated()) {
+                clearFeedback();
+                clearSuggestions();
+                candidateCode = code;
+                // Keep the previous barcode paired with its details until the choice is made.
+                useValue(unit, committedCode);
+                control('create-barcode-change-message').textContent = code
+                    ? 'Replace ' + committedCode + ' with ' + code + '?'
+                    : 'Remove the current Individual Item barcode?';
+                change.hidden = false;
+                keep.focus();
+                return false;
+            }
+            if (committedCode) clearCatalog();
+            committedCode = code;
+            return true;
+        }
+
+        function useUnitCode(code) {
+            if (!acceptUnitCode(code)) return;
+            setCode('unit_barcode', code);
+            lookup();
+        }
+
+        keep.addEventListener('click', () => {
+            change.hidden = true;
+            feedback.textContent = 'Current barcode kept.';
+            if (catalogMatch) renderSuggestions(catalogMatch.product, false);
+            unit.focus();
+        });
+        control('create-barcode-keep-details').addEventListener('click', () => {
+            const code = candidateCode;
+            change.hidden = true;
+            clearCatalog();
+            committedCode = code;
+            setCode('unit_barcode', code);
+            unit.focus();
+            if (code) lookup();
+        });
+        control('create-barcode-start-new').addEventListener('click', () => {
+            const code = candidateCode;
+            window.RetailMindInventoryDrafts?.discard(form);
+            form.reset();
+            queueMicrotask(() => {
+                type.value = 'unit_barcode';
+                sync();
+                unit.focus();
+                if (code) useUnitCode(code);
+            });
+        });
+
+        function showCatalog(code, catalog) {
+            if (catalog.status === 'found') {
+                catalogMatch = catalog;
+                feedback.textContent = 'Open Food Facts match. Compare the details with the package.';
+                renderSuggestions(catalog.product);
+                form.dispatchEvent(new CustomEvent('product-create:catalog-match', {
+                    detail: { barcode: code, product: catalog.product, source: catalog.source }
+                }));
+            } else {
+                feedback.textContent = catalog.status === 'not_found'
+                    ? 'No catalog match. Continue entering product details.'
+                    : 'Open Food Facts is unavailable. Try again or continue entering product details.';
+            }
+        }
+
         function checkScannedCode(kind, code) {
             const maxLength = fields[kind].maxLength;
             if (!code || code.length > maxLength) {
                 clearFeedback();
                 feedback.textContent = `Scan a barcode of ${maxLength} characters or fewer.`;
+                return;
+            }
+            if (kind === 'unit_barcode') {
+                useUnitCode(code);
                 return;
             }
             setCode(kind, code);
@@ -72,6 +217,8 @@ window.RetailMindProductCreateBarcode = {
             const kind = type.value;
             const field = fields[kind];
             const code = field.value.trim();
+            if (kind === 'unit_barcode' && !acceptUnitCode(code)) return;
+            change.hidden = true;
             const current = ++requestId;
             if (!code || code.length > field.maxLength) {
                 feedback.textContent = code ? `Use ${field.maxLength} characters or fewer.` : 'Enter or scan a barcode to look it up.';
@@ -98,25 +245,55 @@ window.RetailMindProductCreateBarcode = {
                         link.textContent = 'Manage Product';
                         feedback.append(document.createElement('br'), link);
                     }
+                } else if (result.catalog) {
+                    showCatalog(code, result.catalog);
                 } else {
                     feedback.textContent = result.outcome === 'ambiguous'
                         ? 'This barcode matches more than one Store identifier. Check the Products list.'
                         : 'No Store product uses this code. Continue entering product details.';
                 }
             } catch (_) {
-                if (current === requestId) feedback.textContent = 'Store lookup is unavailable. Try again or continue entering product details.';
+                if (current !== requestId) return;
+                feedback.textContent = navigator.onLine === false
+                    ? 'You’re offline. Continue entering product details or retry when connected.'
+                    : 'Store lookup is unavailable. Try again or continue entering product details.';
             }
         }
 
-        type.addEventListener('change', () => { clearFeedback(); sync(); });
+        type.addEventListener('change', () => { change.hidden = true; clearFeedback(); sync(); });
         packaging.addEventListener('input', () => setCode(type.value, packaging.value));
+        form.addEventListener('focusin', event => {
+            if (event.target === unit && !committedCode) committedCode = unit.value.trim();
+        });
         form.addEventListener('input', event => {
-            if (event.target === fields[type.value]) {
+            const field = event.target;
+            if (providerValues.has(field) && providerValues.get(field) !== field.value) providerValues.delete(field);
+            if (field === unit && unit.value.trim() !== committedCode) {
+                change.hidden = true;
+                clearSuggestions();
+            }
+            if (field === fields[type.value]) {
                 clearFeedback();
                 sync();
             }
         });
-        form.addEventListener('reset', () => queueMicrotask(() => { clearFeedback(); sync(); }));
+        form.addEventListener('submit', event => {
+            if (!change.hidden || !acceptUnitCode(unit.value.trim())) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                keep.focus();
+            }
+        }, true);
+        form.addEventListener('reset', () => {
+            providerValues.clear();
+            clearCatalog();
+            clearFeedback();
+            change.hidden = true;
+            queueMicrotask(() => {
+                committedCode = unit.value.trim();
+                sync();
+            });
+        });
         lookupButton.addEventListener('click', lookup);
 
         form.addEventListener('keydown', event => {
@@ -158,7 +335,7 @@ window.RetailMindProductCreateBarcode = {
                 openingCamera = null;
                 stoppingCamera = false;
                 scan.disabled = false;
-                if (restoreFocus && modal.classList.contains('open')) scan.focus();
+                if (restoreFocus && change.hidden && modal.classList.contains('open')) scan.focus();
             }
         }
 
@@ -191,6 +368,7 @@ window.RetailMindProductCreateBarcode = {
         stopScan.addEventListener('click', () => stopCamera(true));
         modal.addEventListener('retailmind:overlayclose', () => {
             burst = null;
+            change.hidden = true;
             clearFeedback();
             if (!scannerSection.hidden) stopCamera();
         });

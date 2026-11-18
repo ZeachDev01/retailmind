@@ -11,4 +11,7 @@ if (!str_ends_with($file, '.php')) return false;
 require_once __DIR__ . '/../../bootstrap/app.php';
 $_ENV['DB_NAME'] = $_SERVER['DB_NAME'] = $database;
 $_ENV['APP_ENV'] = 'development'; // Includes the existing development-only forecast view.
+if (getenv('RM_TEST_PRODUCT_CATALOG') === '1') {
+    $openFoodFactsRequest = require __DIR__ . '/open_food_facts_fixture.php';
+}
 require $file;

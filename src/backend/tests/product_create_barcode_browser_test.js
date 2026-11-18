@@ -14,7 +14,7 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const storage = mkdtempSync(path.join(os.tmpdir(), 'rm-product-lookup-'));
-const env = { ...process.env, BACKUP_STORAGE_PATH: storage, RM_THEME_TEST_DATABASE: database };
+const env = { ...process.env, RM_TEST_PRODUCT_CATALOG: '1', BACKUP_STORAGE_PATH: storage, RM_THEME_TEST_DATABASE: database };
 const fixture = action => {
     const result = spawnSync('php', [path.join(__dirname, 'support/theme_fixture.php'), action, database], { encoding: 'utf8', env });
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -96,8 +96,20 @@ const fixture = action => {
             assert.equal(requests.at(-1).get('barcode_type'), 'unit_barcode');
             assert.equal(await details.inputValue(), 'Keep these details');
 
+            await unit.fill('012345678905');
+            await lookup.click();
+            await dialog.getByRole('button', { name: 'Keep entered details' }).click();
+            await feedback.getByText(/Open Food Facts match/).waitFor();
+            assert.equal(await details.inputValue(), 'Keep these details');
+            assert.equal(await dialog.getByLabel('Declared Size').inputValue(), '330 mL');
+            await dialog.getByRole('button', { name: /Apply.*Fixture Tea/ }).click();
+            assert.equal(await details.inputValue(), 'Fixture Tea');
+            await details.fill('Keep these details');
+
             await unit.fill('THEME-ITEM');
             await lookup.click();
+            await dialog.getByRole('button', { name: 'Keep entered details' }).click();
+            assert.equal(await dialog.getByLabel('Declared Size').inputValue(), '');
             const manage = feedback.getByRole('link', { name: 'Manage Product' });
             await manage.waitFor();
             assert.match(await feedback.innerText(), /Theme Test Item.*Store SKU.*Active/s);
@@ -159,11 +171,14 @@ const fixture = action => {
         assert.equal(oldResult.outcome, 'inactive');
         assert.equal(oldResult.product, null, 'Receiving still withholds inactive details');
 
-        await manager.locator('#product-category').evaluate(field => { field.selectedIndex = 1; });
+        const category = await manager.locator('#product-category option').nth(1).textContent();
+        await manager.locator('#product-category-search').fill(category);
+        await manager.getByRole('option', { name: category, exact: true }).click();
         await manager.getByLabel('Product Name').fill('Duplicate inactive barcode test');
         await manager.locator('#cost-price').fill('2');
         await manager.locator('#selling-price').fill('5');
         await manager.getByRole('button', { name: 'Save Product', exact: true }).click();
+        await manager.locator('#create-barcode-input[aria-invalid="true"]').waitFor();
         assert.equal(await manager.locator('#create-barcode-input').getAttribute('aria-invalid'), 'true');
         await Promise.all([
             manager.waitForNavigation({ waitUntil: 'domcontentloaded' }),
