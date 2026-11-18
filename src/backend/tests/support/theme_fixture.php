@@ -8,6 +8,63 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['barcode_correction_setup', 'barcode_correction_state', 'barcode_correction_claim'], true)) {
+    require_once __DIR__ . '/../../app/Services/ProductService.php';
+    require_once __DIR__ . '/../../app/Services/ProductCodeLookupService.php';
+    $pdo->exec("USE `{$database}`");
+    $_SESSION['role'] = 'inventory_manager';
+    $service = new ProductService($pdo);
+    $base = ['category_id' => (int)$pdo->query('SELECT MIN(category_id) FROM categories')->fetchColumn(),
+        'base_unit' => 'piece', 'cost_price' => 1, 'selling_price' => 10];
+    if ($argv[1] === 'barcode_correction_setup') {
+        $pdo->exec("UPDATE products SET sku=barcode, case_barcode='OLD-CARTON', pack_size=6, pack_barcode='OLD-PACK', pack_price=30 WHERE product_id=1");
+        $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity,sealed_quantity,loose_quantity)
+            VALUES (1,'CORRECTION',10,10,1,4)");
+        $ids = [];
+        foreach ([
+            'automatic' => ['barcode' => '001234000002'],
+            'custom' => ['barcode' => '001234000003', 'sku' => '001234000003'],
+            'legacy' => ['barcode' => '001234000004'],
+            'active' => ['barcode' => 'ACTIVE-ITEM', 'sku' => 'ACTIVE-SKU'],
+            'inactive' => ['barcode' => 'INACTIVE-ITEM', 'sku' => 'INACTIVE-SKU', 'status' => 'inactive'],
+        ] as $name => $fields) {
+            $ids[$name] = $service->createProduct($base + $fields + ['product_name' => ucfirst($name) . ' barcode fixture'], 3);
+        }
+        $pdo->prepare('UPDATE products SET sku_follows_barcode = NULL WHERE product_id = ?')->execute([$ids['legacy']]);
+        echo json_encode($ids, JSON_THROW_ON_ERROR);
+    } elseif ($argv[1] === 'barcode_correction_claim') {
+        $claim = $argv[3] ?? '';
+        if (!in_array($claim, ['pack', 'item'], true)) throw new RuntimeException('Invalid claim fixture.');
+        if (($argv[4] ?? '') === 'barrier') {
+            echo "ready\n";
+            flush();
+            if (trim((string)fgets(STDIN)) !== 'go') throw new RuntimeException('Worker barrier failed.');
+        }
+        try {
+            if ($claim === 'pack') {
+                $service->correctProductBarcode(1, ['barcode_field' => 'pack_barcode', 'previous_barcode' => 'NEW-PACK', 'replacement_barcode' => 'SHARED-CLAIM'], 3);
+            } else {
+                $service->createProduct($base + ['product_name' => 'Concurrent barcode fixture', 'barcode' => 'SHARED-CLAIM'], 3);
+            }
+            echo json_encode('saved', JSON_THROW_ON_ERROR);
+        } catch (PDOException $exception) {
+            if (!in_array($exception->errorInfo[1] ?? 0, [1205, 1213], true)) throw $exception;
+            echo json_encode('busy', JSON_THROW_ON_ERROR);
+        } catch (RuntimeException $exception) {
+            if ($exception->getMessage() !== 'That barcode is already assigned to another product.') throw $exception;
+            echo json_encode('conflict', JSON_THROW_ON_ERROR);
+        }
+    } else {
+        echo json_encode([
+            'identifiers' => $pdo->query('SELECT product_id, sku, barcode, case_barcode, pack_barcode, sku_follows_barcode FROM products ORDER BY product_id')->fetchAll(PDO::FETCH_ASSOC),
+            'audit' => $pdo->query("SELECT user_id, record_id, previous_value, new_value FROM activity_log WHERE action='Product barcode corrected' ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC),
+            'batch' => $pdo->query("SELECT quantity, remaining_quantity, sealed_quantity, loose_quantity FROM product_batches WHERE batch_number='CORRECTION'")->fetch(PDO::FETCH_ASSOC),
+            'sale' => $pdo->query('SELECT product_id, quantity FROM sale_items WHERE sale_id=1')->fetch(PDO::FETCH_ASSOC),
+            'stock' => (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=1')->fetchColumn(),
+        ], JSON_THROW_ON_ERROR);
+    }
+    exit;
+}
 if ($argv[1] === 'forecast_workspace') {
     $pdo->exec("USE `{$database}`");
     $pdo->exec("INSERT INTO platform_settings (setting_key,setting_value) VALUES ('ml_approved_model_version','workspace-test') ON DUPLICATE KEY UPDATE setting_value='workspace-test';

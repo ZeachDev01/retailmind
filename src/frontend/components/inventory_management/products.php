@@ -101,6 +101,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
 
+    if ($action === 'correct_barcode') {
+        csrf_verify();
+        header('Content-Type: application/json; charset=UTF-8');
+        if (current_role() !== 'inventory_manager') {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Only the active Inventory Manager workspace can correct product barcodes.']);
+            exit;
+        }
+        try {
+            $result = $productService->correctProductBarcode((int)($_POST['product_id'] ?? 0), $_POST, (int)$_SESSION['user_id']);
+            echo json_encode(['success' => true] + $result);
+        } catch (Throwable $e) {
+            http_response_code(422);
+            $alert = \App\Support\OperatorAlert::message($e, 'The barcode could not be corrected. Reload the product and try again.');
+            echo json_encode(['success' => false, 'error' => $alert]);
+        }
+        exit;
+    }
+
     if ($action === 'update_catalog_details') {
         $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
             || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json');
@@ -129,6 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'brand' => $_POST['brand'] ?? '',
                 'category_id' => $_POST['category_id'] ?? '',
             ];
+            if (array_key_exists('declared_size', $_POST)) {
+                $updateData['declared_size'] = $_POST['declared_size'];
+            }
             if (isset($_POST['variant_label'])) {
                 $updateData['variant_label'] = $_POST['variant_label'];
             }
@@ -164,6 +186,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (array_key_exists('pack_price', $_POST)) {
                 $updateData['pack_price'] = trim((string)$_POST['pack_price']) === '' ? null : $_POST['pack_price'];
+            }
+            if (isset($_POST['previous_pack_barcode'])) {
+                $updateData['previous_pack_barcode'] = $_POST['previous_pack_barcode'];
             }
             $uploadedPhoto = handle_product_photo_upload($_FILES['product_image'] ?? null);
             if ($uploadedPhoto !== null) {
@@ -268,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'barcode' => $_POST['barcode'] ?? '',
                 'product_name' => $_POST['product_name'] ?? '',
                 'brand' => $_POST['brand'] ?? '',
+                'declared_size' => $_POST['declared_size'] ?? null,
                 'category_id' => $_POST['category_id'] ?? '',
                 'cost_price' => $_POST['cost_price'] ?? '',
                 'selling_price' => $_POST['selling_price'] ?? 0,
@@ -337,7 +363,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->rollBack();
             }
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
-            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
+            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'declared_size', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
             if ($productHandoff) {
                 $retry['id'] = bin2hex(random_bytes(16));
                 $retry['values']['return_quantity_mode'] = $_POST['return_quantity_mode'] ?? '';
@@ -796,20 +822,20 @@ foreach ($products as $product) {
         .product-edit-intro { margin: 0 0 1.5rem; color: var(--muted); font-size: .85rem; line-height: 1.5; }
         .product-edit-section { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
         .product-edit-section > legend { margin-bottom: 1rem; font-size: 1rem; }
-        #product-edit-form .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
-        #product-edit-form .form-field > span:first-child,
-        #product-edit-form .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
+        :is(#product-edit-form, #barcode-correction-form) .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
+        :is(#product-edit-form, #barcode-correction-form) .form-field > span:first-child,
+        :is(#product-edit-form, #barcode-correction-form) .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
         #product-edit-form .form-grid { align-items: end; }
         #product-edit-form small { display: block; color: var(--muted); font-size: .76rem; font-weight: 400; }
-        #product-edit-form .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
-        #product-edit-form .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-        #product-edit-form .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
+        :is(#product-edit-form, #barcode-correction-form) .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
+        :is(#product-edit-form, #barcode-correction-form) .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        :is(#product-edit-form, #barcode-correction-form) .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
         #product-edit-form input[type="number"] { font-variant-numeric: tabular-nums; }
         #product-edit-form input[type="file"] { font-size: .8rem; }
         #product-edit-form input::file-selector-button { margin-right: .65rem; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--text); font: inherit; cursor: pointer; }
         .product-edit-required { color: var(--theme-danger-text, #b91c1c); }
-        #product-edit-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
-        #product-edit-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
+        #product-edit-error, #barcode-correction-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
+        #product-edit-error, #barcode-correction-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
         #selling-price-warning { color: var(--theme-warning-text, #92400e); background: var(--theme-warning-surface, #fef3c7); }
         .product-edit-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: .75rem; margin: 0; padding: 1rem 0; padding-bottom: max(1rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card-bg); }
         .product-edit-actions .btn { min-height: 44px; }
@@ -1581,6 +1607,14 @@ foreach ($products as $product) {
     <div id="add-product-scanner-reader"></div>
 </div>
 <div id="create-barcode-feedback" role="status" aria-atomic="true"></div>
+<div id="create-barcode-change" class="form-group" role="group" aria-labelledby="create-barcode-change-message" hidden>
+    <p id="create-barcode-change-message"></p>
+    <div class="product-create-lookup-actions">
+        <button type="button" class="btn btn-quiet" id="create-barcode-keep">Keep current barcode</button>
+        <button type="button" class="btn btn-quiet" id="create-barcode-keep-details">Keep entered details</button>
+        <button type="button" class="btn btn-quiet" id="create-barcode-start-new">Start a new draft</button>
+    </div>
+</div>
 <div id="create-print-options" hidden>
     <label class="u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" aria-controls="create-label-options"> Open printable barcode labels after saving</label>
     <div class="form-group" id="create-label-options" hidden>
@@ -1592,6 +1626,7 @@ foreach ($products as $product) {
 <div class="product-create-details">
 <div class="form-grid">
 <div class="form-group full"><label for="product-name">Product Name *</label><input name="product_name" id="product-name" required maxlength="180" autocomplete="off"><small class="field-error">Enter a product name.</small></div>
+<div class="form-group full"><label for="product-declared-size">Declared Size</label><input name="declared_size" id="product-declared-size" maxlength="100" placeholder="e.g. 330 mL"></div>
 <div class="form-group"><label for="product-category">Category *</label><select data-search-dropdown name="category_id" id="product-category" required>
                                     <option value="">Select category</option><?php foreach ($categories as $category): ?><option value="<?= (int)$category['category_id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option><?php endforeach; ?>
                                 </select><small class="field-error">Select a category.</small></div>
@@ -1870,7 +1905,8 @@ foreach ($products as $product) {
         const csrfToken = <?= json_encode(csrf_token()) ?>;
         const categoriesData = <?= json_encode(array_values($categories), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
         const productsById = Object.fromEntries(productData.map(product => [Number(product.product_id), product]));
-        const existingBarcodes = new Set(productData.flatMap(product => [product.barcode, product.sku, product.case_barcode, product.pack_barcode]).map(b => String(b || '').trim().toLowerCase()).filter(Boolean));
+        const catalogBarcodes = () => new Set(productData.flatMap(product => [product.barcode, product.sku, product.case_barcode, product.pack_barcode]).map(b => String(b || '').trim().toLowerCase()).filter(Boolean));
+        let existingBarcodes = catalogBarcodes();
         const existingProductNames = new Set(productData.map(product => String(product.product_name || '').trim().toLowerCase()).filter(Boolean));
         const productRows = Array.from(document.querySelectorAll('#product-table-body tr'));
         const searchInput = document.getElementById('product-search');
@@ -2279,7 +2315,7 @@ foreach ($products as $product) {
             return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" width="160" height="160" data-icon-fallback>` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>`;
         }
 
-        function renderProductDrawerReadOnly(product) {
+        function renderProductDrawerReadOnly(product, notice = '') {
             isEditingProduct = false;
             isDrawerDirty = false;
             document.getElementById('product-drawer-title').textContent = product.product_name + (product.variant_label ? ` — ${product.variant_label}` : '');
@@ -2289,14 +2325,126 @@ foreach ($products as $product) {
             const packItems = product.pack_size && Number(product.pack_size) > 1 ? `
         <div class="detail-item"><span>Items per Sales Pack</span><strong>${Number(product.pack_size)} ${escapeHtml(product.base_unit || 'piece')}(s)</strong></div><div class="detail-item"><span>Sales Pack Barcode</span><strong>${escapeHtml(safe(product.pack_barcode, 'None'))}</strong></div>
         <div class="detail-item"><span>Sales Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
-            document.getElementById('product-panel-info').innerHTML = `<div class="detail-grid">
+            const info = document.getElementById('product-panel-info');
+            info.innerHTML = `${notice ? `<p id="barcode-correction-notice" class="alert alert-success" role="status" tabindex="-1">${escapeHtml(notice)}</p>` : ''}
+    ${canEditProduct ? '<p><button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button></p>' : ''}
+    <div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
-        <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
+        <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Declared Size</span><strong>${escapeHtml(safe(product.declared_size))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
         <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
+        <div class="detail-item"><span>Receiving Package Barcode</span><strong>${escapeHtml(safe(product.case_barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded'}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${productPhotoPreview(product)}</strong></div>
     </div>`;
+            info.querySelector('#correct-barcode-btn')?.addEventListener('click', () => enterBarcodeCorrection(product));
+            const footer = document.getElementById('product-drawer-footer');
+            footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
+            footer.innerHTML += `<a class="btn btn-quiet" href="../report/stock_receiving.php"><i class="bi bi-box-arrow-in-down"></i> Stock Receiving</a>`;
+            const generate = footer.querySelector('.drawer-generate');
+            if (generate) generate.addEventListener('click', () => generateBarcode(generate.dataset.productId));
             renderProductDrawerQuantity(product);
+        }
+
+        function enterBarcodeCorrection(product) {
+            isEditingProduct = true;
+            isDrawerDirty = false;
+            setProductDrawerTab('info');
+            const info = document.getElementById('product-panel-info');
+            info.innerHTML = `
+                <form id="barcode-correction-form">
+                    <input type="hidden" name="action" value="correct_barcode">
+                    <input type="hidden" name="product_id" value="${Number(product.product_id)}">
+                    <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}">
+                    <input type="hidden" name="previous_barcode">
+                    <fieldset class="settings-fieldset product-edit-section">
+                        <legend>Correct barcode</legend>
+                        <p id="barcode-correction-error" class="alert alert-danger" role="alert" tabindex="-1" hidden></p>
+                        <label class="form-field">
+                            <span>Barcode type</span>
+                            <select name="barcode_field" class="form-input">
+                                <option value="barcode">Individual Item</option>
+                                ${Number(product.pack_size) > 1 ? '<option value="pack_barcode">Sales Pack</option>' : ''}
+                                <option value="case_barcode">Receiving Package</option>
+                            </select>
+                        </label>
+                        <p class="field-help" id="current-correction-code"></p>
+                        <label class="form-field">
+                            <span>Replacement barcode</span>
+                            <input type="text" name="replacement_barcode" class="form-input" autocomplete="off" spellcheck="false" required>
+                        </label>
+                        <p class="field-help" data-automatic-sku hidden>The SKU follows the Individual Item barcode. Both will change.</p>
+                        <div data-legacy-sku hidden>
+                            <p class="field-help" id="legacy-sku-origin">The origin of SKU <strong>${escapeHtml(product.sku || '')}</strong> is unknown. Choose how to handle it.</p>
+                            <label class="form-field">
+                                <span>Legacy SKU decision</span>
+                                <select name="sku_decision" class="form-input" aria-describedby="legacy-sku-origin" disabled>
+                                    <option value="">Choose what to do</option>
+                                    <option value="keep">Keep current SKU</option>
+                                    <option value="replace">Use replacement barcode as SKU</option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
+                    <div class="product-edit-actions">
+                        <button type="button" class="btn btn-secondary" data-cancel-correction>Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save corrected barcode</button>
+                    </div>
+                </form>`;
+            const form = info.querySelector('form');
+            const fields = form.elements;
+            const errorBox = form.querySelector('#barcode-correction-error');
+            const save = form.querySelector('[type="submit"]');
+            const updateType = () => {
+                const individual = fields.barcode_field.value === 'barcode';
+                const legacy = individual && product.sku_follows_barcode == null;
+                fields.previous_barcode.value = product[fields.barcode_field.value] || '';
+                fields.replacement_barcode.value = '';
+                fields.replacement_barcode.maxLength = individual ? 50 : 80;
+                form.querySelector('#current-correction-code').textContent = 'Current barcode: ' + (fields.previous_barcode.value || 'Not assigned');
+                form.querySelector('[data-automatic-sku]').hidden = !individual || Number(product.sku_follows_barcode) !== 1;
+                form.querySelector('[data-legacy-sku]').hidden = !legacy;
+                fields.sku_decision.disabled = !legacy;
+                fields.sku_decision.value = '';
+                errorBox.hidden = true;
+            };
+            updateType();
+            fields.barcode_field.addEventListener('change', updateType);
+            fields.replacement_barcode.addEventListener('keydown', event => {
+                if (event.key === 'Enter') event.preventDefault();
+            });
+            form.addEventListener('input', () => { isDrawerDirty = true; });
+            form.querySelector('[data-cancel-correction]').addEventListener('click', async () => {
+                await cancelProductEdit();
+                info.querySelector('#correct-barcode-btn')?.focus();
+            });
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                errorBox.hidden = true;
+                save.disabled = true;
+                try {
+                    const response = await fetch('products.php', {
+                        method: 'POST',
+                        body: new FormData(form),
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const result = await response.json();
+                    if (!result.success) throw new Error(result.error || 'The barcode could not be corrected.');
+                    Object.assign(product, result.product);
+                    updateProductTableRow(product);
+                    if (form.isConnected) {
+                        renderProductDrawerReadOnly(product, result.notice);
+                        info.querySelector('#barcode-correction-notice')?.focus();
+                    }
+                } catch (error) {
+                    errorBox.textContent = error instanceof TypeError || error instanceof SyntaxError
+                        ? 'The barcode could not be saved. Check your connection and try again.' : error.message;
+                    errorBox.hidden = false;
+                    errorBox.focus();
+                } finally {
+                    save.disabled = false;
+                }
+            });
+            fields.barcode_field.focus();
         }
 
         function enterProductEditMode() {
@@ -2322,6 +2470,7 @@ foreach ($products as $product) {
                 <form id="product-edit-form" novalidate enctype="multipart/form-data">
                     <div id="product-edit-error" class="alert alert-danger" role="alert" hidden></div>
                     <input type="hidden" name="action" value="update_catalog_details">
+                    <input type="hidden" name="previous_pack_barcode" value="${escapeHtml(product.pack_barcode || '')}">
                     <input type="hidden" name="product_id" value="${product.product_id}">
                     <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}">
 
@@ -2346,6 +2495,10 @@ foreach ($products as $product) {
                             <label class="form-field">
                                 <span>Brand</span>
                                 <input type="text" name="brand" id="edit-brand" list="brand-suggestions-list" value="${escapeHtml(product.brand || '')}" class="form-input">
+                            </label>
+                            <label class="form-group">
+                                <span>Declared Size</span>
+                                <input type="text" name="declared_size" id="edit-declared-size" maxlength="100" value="${escapeHtml(product.declared_size || '')}" class="form-input">
                             </label>
                             <label class="form-field">
                                 <span>Category</span>
@@ -2653,6 +2806,7 @@ foreach ($products as $product) {
         }
 
         function updateProductTableRow(product) {
+            existingBarcodes = catalogBarcodes();
             const row = document.querySelector(`tr[data-product-id="${product.product_id}"]`);
             if (!row) return;
             row.dataset.name = (product.product_name || '').toLowerCase();
@@ -2661,6 +2815,7 @@ foreach ($products as $product) {
             row.dataset.price = String(product.unit_price || 0);
             row.dataset.cost = knownProductCost(product) ? String(product.cost_price) : '';
             row.dataset.status = product.status;
+            row.dataset.barcode = String(product.barcode || '').toLowerCase();
             row.dataset.search = [product.product_name, product.variant_label || '', product.sku || '', product.barcode || '', product.brand || ''].join(' ').toLowerCase();
             const copy = row.querySelector('.product-copy');
             if (copy) {
@@ -2806,11 +2961,6 @@ foreach ($products as $product) {
             currentDrawerProductId = Number(id);
             renderProductDrawerReadOnly(product);
 
-            const footer = document.getElementById('product-drawer-footer');
-            footer.innerHTML = product.barcode ? `<a class="btn btn-warning" target="_blank" href="print_barcodes.php?product_id=${Number(product.product_id)}&quantity=1"><i class="bi bi-printer"></i> Print Barcode</a>` : `<button type="button" class="btn btn-success drawer-generate" data-product-id="${Number(product.product_id)}"><i class="bi bi-upc"></i> Generate Barcode</button>`;
-            footer.innerHTML += `<a class="btn btn-quiet" href="../report/stock_receiving.php"><i class="bi bi-box-arrow-in-down"></i> Stock Receiving</a>`;
-            const generate = footer.querySelector('.drawer-generate');
-            if (generate) generate.addEventListener('click', () => generateBarcode(generate.dataset.productId));
             setProductDrawerTab('info');
             RetailMindUI.openOverlay(document.getElementById('product-drawer'));
         }

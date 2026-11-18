@@ -64,9 +64,9 @@ const fixture = action => {
             await field.pressSequentially(code);
             await field.press('Enter');
         }
-        const cartonCode = '0001234567895';
-        const unitCode = '0001234567888';
-        const packCode = '0001234567871';
+        const cartonCode = '012345678905';
+        const unitCode = '87654328';
+        const packCode = '34567890';
         const internalCartonCode = '0001234567864';
         const carton = dialog.getByLabel('Receiving Carton Barcode', { exact: true });
         const cartonSize = dialog.getByLabel('Items per Receiving Package', { exact: true });
@@ -82,6 +82,7 @@ const fixture = action => {
         await expect(item).toHaveValue('');
         await scan(item, unitCode);
         await expect(item).toHaveValue(unitCode);
+        await expect(dialog.getByLabel('Product Name')).toHaveValue('Partial Fixture');
         await expect(dialog.getByLabel('Receiving Package Barcode (optional)', { exact: true })).toHaveValue(cartonCode);
         await expect(cartonSize).toHaveValue('24');
         await type.selectOption('pack_barcode');

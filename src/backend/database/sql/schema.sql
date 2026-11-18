@@ -1005,6 +1005,7 @@ CREATE TABLE `products` (
   `variant_label` varchar(100) DEFAULT NULL,
   `product_name` varchar(150) NOT NULL,
   `brand` varchar(100) DEFAULT NULL,
+  `declared_size` varchar(100) DEFAULT NULL,
   `category_id` int(11) DEFAULT NULL,
   `unit_price` decimal(10,2) NOT NULL,
   `cost_price` decimal(10,2) NOT NULL,
@@ -1026,6 +1027,7 @@ CREATE TABLE `products` (
   `status` enum('active','inactive') DEFAULT 'active',
   `created_by` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `sku_follows_barcode` tinyint(1) DEFAULT NULL,
   PRIMARY KEY (`product_id`),
   UNIQUE KEY `sku` (`sku`),
   UNIQUE KEY `barcode` (`barcode`),
@@ -2165,3 +2167,4 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611120001_supplier_pullout_eligibility','Explicit Product eligibility for Supplier Pullouts, default off') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180001_receiving_allocations','Preserve receiving allocation modes, cost provenance and current-cost choices') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180002_receiving_cost_basis','Preserve the entered purchase amount and its receiving cost conversion') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180003_product_sku_provenance','Record whether a Product SKU follows its Individual Item barcode') ON DUPLICATE KEY UPDATE description=VALUES(description);
