@@ -7,6 +7,11 @@ return static function (string $url): array {
 
     $code = $parts[1];
     $product = match ($code) {
+        '11111115', '22222220', '33333335', '44444440', '55555555' => [
+            'code' => $code,
+            'product_name' => 'Fixture Tea ' . $code,
+            'image_front_url' => 'https://images.openfoodfacts.org/images/products/' . $code . '/front_en.4.400.jpg',
+        ],
         '012345678905' => [
             'code' => '0012345678905',
             'product_name' => 'Fixture Tea',

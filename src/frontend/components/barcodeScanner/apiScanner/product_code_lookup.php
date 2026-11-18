@@ -25,6 +25,7 @@ if (!$canLookup) {
     exit;
 }
 
+$lookupUserId = $_SESSION['user_id'];
 App\Core\Session::closeWrite();
 
 // Identification only: this endpoint never writes, never exposes an update
@@ -70,6 +71,17 @@ try {
         require_once __DIR__ . '/../../../../backend/app/Services/OpenFoodFactsCatalog.php';
         if (OpenFoodFactsCatalog::supports($code)) {
             $result['catalog'] = OpenFoodFactsCatalog::lookup($code, $openFoodFactsRequest ?? null);
+            $photoUrl = $result['catalog']['product']['photo_url'] ?? null;
+            if ($photoUrl !== null) {
+                App\Core\Session::start();
+                if ($lookupUserId === ($_SESSION['user_id'] ?? null)) {
+                    $photos = $_SESSION['open_food_facts_photos'] ?? [];
+                    unset($photos[$code]);
+                    $photos[$code] = ['url' => $photoUrl, 'source' => $result['catalog']['source']['product_url']];
+                    $_SESSION['open_food_facts_photos'] = array_slice($photos, -20, null, true);
+                }
+                App\Core\Session::closeWrite();
+            }
         }
     }
     echo json_encode(['success' => true] + $result, JSON_INVALID_UTF8_SUBSTITUTE);

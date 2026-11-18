@@ -62,7 +62,7 @@ class ProductService
         return $stmt->fetch() ?: null;
     }
 
-    public function createProduct(array $data, int $userId): int
+    public function createProduct(array $data, int $userId, ?callable $preparePhoto = null): int
     {
         if (trim((string)($data['product_name'] ?? '')) === '') throw new RuntimeException('Product name is required.');
         $category = filter_var($data['category_id'] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
@@ -85,11 +85,11 @@ class ProductService
                 }
             }
         }
-        return $this->createProductRecord($data, $userId);
+        return $this->createProductRecord($data, $userId, $preparePhoto);
     }
 
     // Imports retain optional historical fields; normal creation requires the essentials above.
-    private function createProductRecord(array $data, int $userId): int
+    private function createProductRecord(array $data, int $userId, ?callable $preparePhoto = null): int
     {
         if (function_exists('require_capability')) {
             require_capability(App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
@@ -236,6 +236,9 @@ class ProductService
             $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
         }
 
+        $photoSource = null;
+        if ($preparePhoto !== null) [$productImage, $photoSource] = $preparePhoto();
+
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {
             StoreWriteGate::begin($this->pdo);
@@ -289,6 +292,9 @@ class ProductService
             ]);
             $productId = (int)$this->pdo->lastInsertId();
             $productColumns = \App\Services\BatchAllocationEngine::getTableColumns($this->pdo, 'products');
+            if ($photoSource !== null) {
+                $this->pdo->prepare('UPDATE products SET product_image_source = ? WHERE product_id = ?')->execute([$photoSource, $productId]);
+            }
             if (isset($productColumns['cost_known'])) {
                 $this->pdo->prepare('UPDATE products SET cost_known = ? WHERE product_id = ?')->execute([(int)($enteredCost !== null), $productId]);
             }
@@ -473,6 +479,7 @@ class ProductService
                 if ($productImage !== '') {
                     $updateParts[] = 'product_image = ?';
                     $params[] = $productImage;
+                    if (isset($existingProduct['product_image_source'])) $updateParts[] = 'product_image_source = NULL';
                 }
                 $updateParts[] = 'status = ?';
                 $params[] = $status;
@@ -1220,6 +1227,9 @@ class ProductService
                      declared_size = ?" : "") . "
                  WHERE product_id = ?"
             );
+            if ($productImage !== $existing['product_image'] && isset($existing['product_image_source'])) {
+                $this->pdo->prepare('UPDATE products SET product_image_source = NULL WHERE product_id = ?')->execute([$productId]);
+            }
             $updateStmt->execute([
                 $productName,
                 $variantLabel,

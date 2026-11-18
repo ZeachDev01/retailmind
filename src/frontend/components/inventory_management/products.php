@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/includes/receiving_product_handoff.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
+require_once __DIR__ . '/../../../backend/app/Services/OpenFoodFactsCatalog.php';
 header('Cache-Control: no-store');
 require_role(['admin', 'super_admin', 'inventory_manager']);
 
@@ -53,43 +54,44 @@ function redirect_products(string $type, string $message): void
 const PRODUCT_PHOTO_LIMIT_MESSAGE = 'Choose a product photo that is a JPEG, PNG, GIF, or WebP image no larger than 5MB, then try again.';
 const PRODUCT_PHOTO_UPLOAD_MESSAGE = 'The product photo could not be uploaded. Choose another file and try again.';
 const PRODUCT_PHOTO_SAVE_MESSAGE = 'The product photo could not be saved. Try again. Tell your Administrator if this keeps happening.';
+const PRODUCT_PHOTO_PROVIDER_MESSAGE = 'The Open Food Facts photo could not be saved. Retry the photo or save without it.';
+const PRODUCT_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 function handle_product_photo_upload(?array $file): ?string
 {
     if (empty($file) || empty($file['name'])) {
         return null;
     }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException(PRODUCT_PHOTO_UPLOAD_MESSAGE);
+    }
+    return store_product_photo($file['tmp_name'], (int)$file['size'], true);
+}
+
+function store_product_photo(string $file, int $size, bool $uploaded): string
+{
     $allowedMimes = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/gif' => 'gif',
         'image/webp' => 'webp',
     ];
-    $maxSize = 5 * 1024 * 1024; // 5MB
-
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        throw new RuntimeException(PRODUCT_PHOTO_UPLOAD_MESSAGE);
-    }
-    if (($file['size'] ?? 0) > $maxSize) {
-        throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
-    }
-
-    $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($file['tmp_name']);
-    if (!isset($allowedMimes[$mime])) {
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file);
+    if ($size <= 0 || $size > PRODUCT_PHOTO_MAX_BYTES || !isset($allowedMimes[$mime]) || !@getimagesize($file)) {
         throw new RuntimeException(PRODUCT_PHOTO_LIMIT_MESSAGE);
     }
 
     $ext = $allowedMimes[$mime];
     $filename = bin2hex(random_bytes(16)) . '.' . $ext;
-    $uploadDir = __DIR__ . '/../../../backend/storage/images';
+    $uploadDir = $GLOBALS['app']['storage_path'] . '/images';
     $uploadPath = $uploadDir . '/' . $filename;
 
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0755, true);
+    if (!is_dir($uploadDir) && !@mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
     }
-
-    if (!move_uploaded_file($file['tmp_name'], $uploadPath)) {
+    $saved = $uploaded ? @move_uploaded_file($file, $uploadPath) : @copy($file, $uploadPath);
+    if (!$saved) {
+        if (!$uploaded && is_file($uploadPath)) @unlink($uploadPath);
         throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
     }
 
@@ -250,6 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['operation_token'] = $handoffOperationToken;
             $_POST['inventory_draft_id'] = $handoffProductDraftId;
         }
+        $stagedPhoto = '';
         try {
             $unitsPerPackage = $_POST['units_per_package'] ?? 1;
             if ($productHandoff) {
@@ -274,9 +277,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($initialQuantity === false) {
                 throw new RuntimeException('Starting stock must be a whole number of zero or more.');
             }
-            $photoFingerprint = is_uploaded_file($_FILES['product_image']['tmp_name'] ?? '') ? hash_file('sha256', $_FILES['product_image']['tmp_name']) : '';
-            $productImage = handle_product_photo_upload($_FILES['product_image'] ?? null) ?? '';
+            $upload = $_FILES['product_image'] ?? null;
+            $hasUpload = !empty($upload['name']);
+            if ($hasUpload) $_POST['catalog_photo'] = '';
+            $catalogPhoto = is_string($_POST['catalog_photo'] ?? null) ? $_POST['catalog_photo'] : '';
+            $photoFingerprint = $hasUpload && is_uploaded_file($upload['tmp_name'])
+                ? hash_file('sha256', $upload['tmp_name'])
+                : ($catalogPhoto === '' ? '' : hash('sha256', 'open-food-facts:' . $catalogPhoto));
+            $catalogRequest = $openFoodFactsRequest ?? null;
+            $imageRequest = $openFoodFactsImageRequest ?? null;
+            $preparePhoto = static function () use ($hasUpload, $upload, $catalogPhoto, $catalogRequest, $imageRequest, &$stagedPhoto): array {
+                if ($hasUpload) return [$stagedPhoto = handle_product_photo_upload($upload), null];
+                $code = trim((string)($_POST['barcode'] ?? ''));
+                $match = $_SESSION['open_food_facts_photos'][$code] ?? null;
+                if ($match === null && OpenFoodFactsCatalog::supports($code)) {
+                    $lookup = OpenFoodFactsCatalog::lookup($code, $catalogRequest);
+                    $match = [
+                        'url' => $lookup['product']['photo_url'] ?? null,
+                        'source' => $lookup['source']['product_url'] ?? null,
+                    ];
+                }
+                if (($match['url'] ?? null) !== $catalogPhoto) throw new RuntimeException(PRODUCT_PHOTO_PROVIDER_MESSAGE);
 
+                $body = OpenFoodFactsCatalog::downloadPhoto($match['url'], PRODUCT_PHOTO_MAX_BYTES, $imageRequest);
+                if ($body === null || ($temporary = tmpfile()) === false) throw new RuntimeException(PRODUCT_PHOTO_PROVIDER_MESSAGE);
+                try {
+                    if (fwrite($temporary, $body) !== strlen($body)) throw new RuntimeException(PRODUCT_PHOTO_SAVE_MESSAGE);
+                    $stagedPhoto = store_product_photo(stream_get_meta_data($temporary)['uri'], strlen($body), false);
+                    return [$stagedPhoto, $match['source']];
+                } catch (RuntimeException $exception) {
+                    throw new RuntimeException(PRODUCT_PHOTO_PROVIDER_MESSAGE, 0, $exception);
+                } finally {
+                    fclose($temporary);
+                }
+            };
 
             $hasPackConfig = !empty($_POST['pack_size']) && (int)$_POST['pack_size'] > 1;
             $startingPacks = null;
@@ -309,7 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'parent_product_id' => $_POST['parent_product_id'] ?? 0,
                 'variant_label' => $_POST['variant_label'] ?? '',
                 'expiration_date' => $_POST['expiration_date'] ?? null,
-                'product_image' => $productImage,
+                'product_image' => '',
                 'status' => $productHandoff ? 'active' : ($_POST['status'] ?? 'active'),
                 'initial_stock_quantity' => $initialQuantity,
                 'supplier_pullout_eligible' => $_POST['supplier_pullout_eligible'] ?? 0,
@@ -319,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'pack_price' => !empty($_POST['pack_price']) ? $_POST['pack_price'] : null,
                 'starting_packs' => $receivingOrigin ? ($_POST['starting_packs'] ?? 0) : $startingPacks,
                 'starting_loose' => $receivingOrigin ? ($_POST['starting_loose'] ?? 0) : $startingLoose,
-            ], (int)$_SESSION['user_id']);
+            ], (int)$_SESSION['user_id'], $hasUpload || $catalogPhoto !== '' ? $preparePhoto : null);
 
             $newProductStmt = $pdo->prepare(
                 "SELECT p.*, i.quantity_on_hand
@@ -362,8 +396,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            if ($stagedPhoto !== '') {
+                try {
+                    $photoRecord = $pdo->prepare('SELECT 1 FROM products WHERE product_image = ? LIMIT 1');
+                    $photoRecord->execute([$stagedPhoto]);
+                    if (!$photoRecord->fetchColumn()) @unlink($GLOBALS['app']['storage_path'] . '/images/' . basename($stagedPhoto));
+                } catch (PDOException $cleanupError) {
+                    error_log('Product photo cleanup could not confirm whether it was saved: ' . $cleanupError->getMessage());
+                }
+            }
+            $photoError = in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE, PRODUCT_PHOTO_PROVIDER_MESSAGE], true);
             $alert = \App\Support\OperatorAlert::message($e, 'The product could not be saved. Check the details and try again. Tell your Administrator if this keeps happening.');
-            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'declared_size', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'product_image', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : '')];
+            $retry = ['values' => array_intersect_key($_POST, array_flip(['operation_token', 'inventory_draft_id', 'creation_origin', 'product_name', 'declared_size', 'category_id', 'base_unit', 'cost_price', 'selling_price', 'barcode', 'cost_entry_mode', 'manual_cost_price', 'pack_cost', 'purchase_pack_size', 'pack_markup_percent', 'receiving_unit', 'units_per_package', 'case_barcode', 'sell_sealed_packs', 'pack_size', 'pack_price', 'pack_barcode', 'brand', 'parent_product_id', 'variant_label', 'catalog_photo', 'catalog_photo_barcode', 'catalog_photo_source', 'initial_stock_quantity', 'starting_packs', 'starting_loose', 'expiration_date', 'print_after_create', 'label_quantity', 'minimum_order_quantity', 'reorder_level', 'safety_stock', 'supplier_lead_time_days', 'warning_lead_time_days', 'supplier_pullout_eligible'])), 'error' => $alert . (!$photoError && !empty($_FILES['product_image']['name']) ? ' Choose your photo again if it was not restored.' : ''), 'photoError' => $photoError];
             if ($productHandoff) {
                 $retry['id'] = bin2hex(random_bytes(16));
                 $retry['values']['return_quantity_mode'] = $_POST['return_quantity_mode'] ?? '';
@@ -371,14 +415,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($handoffJson) {
                     http_response_code(422);
                     header('Content-Type: application/json');
-                    echo json_encode(['retryId' => $retry['id'], 'error' => $alert]);
+                    echo json_encode(['retryId' => $retry['id'], 'error' => $alert, 'photoError' => $photoError]);
                 } else {
                     header('Location: ' . app_url('components/inventory_management/products.php') . '?handoff=' . $handoffId, true, 303);
                 }
                 exit;
             }
             $_SESSION['product_create_retry'] = $retry;
-            if (in_array($e->getMessage(), [PRODUCT_PHOTO_LIMIT_MESSAGE, PRODUCT_PHOTO_UPLOAD_MESSAGE, PRODUCT_PHOTO_SAVE_MESSAGE], true)) {
+            if ($photoError) {
                 redirect_products('warning', $alert);
             }
             redirect_products('error', $alert);
@@ -1615,6 +1659,31 @@ foreach ($products as $product) {
         <button type="button" class="btn btn-quiet" id="create-barcode-start-new">Start a new draft</button>
     </div>
 </div>
+<div class="form-group product-create-photo">
+    <label for="product-image-input">Product photo</label>
+    <input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="product-photo-help">
+    <small class="field-help" id="product-photo-help">JPEG, PNG, GIF or WebP. Up to 5 MB.</small>
+    <input type="hidden" name="catalog_photo">
+    <input type="hidden" name="catalog_photo_barcode">
+    <input type="hidden" name="catalog_photo_source">
+    <div id="image-preview-container" hidden>
+        <img id="image-preview" alt="Product photo preview" width="128" height="128" referrerpolicy="no-referrer">
+        <small id="create-photo-attribution" class="field-help" hidden>
+            <a target="_blank" rel="noopener noreferrer">Open Food Facts</a> · <a href="<?= htmlspecialchars(OpenFoodFactsCatalog::PHOTO_LICENSE_URL) ?>" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>
+        </small>
+        <div class="product-create-lookup-actions">
+            <button type="button" class="btn btn-quiet" id="replace-image-btn">Replace photo</button>
+            <button type="button" class="btn btn-quiet" id="clear-image-btn">Remove photo</button>
+        </div>
+    </div>
+    <div id="create-photo-recovery" hidden>
+        <p id="create-photo-error" role="status"></p>
+        <div class="product-create-lookup-actions">
+            <button type="button" class="btn btn-quiet" id="retry-product-photo">Retry photo</button>
+            <button type="button" class="btn btn-quiet" id="save-without-product-photo">Save without photo</button>
+        </div>
+    </div>
+</div>
 <div id="create-print-options" hidden>
     <label class="u-checkbox-label"><input class="u-width-auto" type="checkbox" name="print_after_create" value="1" aria-controls="create-label-options"> Open printable barcode labels after saving</label>
     <div class="form-group" id="create-label-options" hidden>
@@ -1747,18 +1816,9 @@ foreach ($products as $product) {
     <small class="field-error">Choose a quantity type for the delivery.</small>
 </div>
 <?php endif; ?>
-<details class="product-create-options"><summary><span>Brand, photo and variants</span><span class="product-option-value" id="create-brand-summary"></span></summary>
+<details class="product-create-options"><summary><span>Brand and variants</span><span class="product-option-value" id="create-brand-summary"></span></summary>
 <div class="form-grid">
 <div class="form-group full"><label for="product-brand">Brand</label><input name="brand" id="product-brand" maxlength="120" list="product-brand-suggestions" autocomplete="off"><datalist id="product-brand-suggestions"><?php foreach ($brandSuggestions as $brand): ?><option value="<?= htmlspecialchars($brand, ENT_QUOTES, 'UTF-8') ?>"></option><?php endforeach; ?></datalist></div>
-<div class="form-group full">
-    <label for="product-image-input">Product photo</label>
-    <input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="product-photo-help">
-    <small class="field-help" id="product-photo-help">JPEG, PNG, GIF or WebP. Up to 5 MB.</small>
-    <div id="image-preview-container" class="create-photo-preview" hidden>
-        <img id="image-preview" alt="Product photo preview" width="64" height="64">
-        <button type="button" class="btn btn-quiet" id="clear-image-btn">Remove photo</button>
-    </div>
-</div>
 <div class="form-group"><label for="parent-product-id">Parent Product Family</label><select data-search-dropdown data-search-empty-label name="parent_product_id" id="parent-product-id">
                                     <option value="">Standalone product</option><?php foreach ($variantParents as $parent): ?><option value="<?= (int)$parent['product_id'] ?>"><?= htmlspecialchars($parent['product_name'] . ' (' . $parent['sku'] . ')') ?></option><?php endforeach; ?>
                                 </select></div>
@@ -2311,7 +2371,10 @@ foreach ($products as $product) {
         }, true);
 
         function productPhotoPreview(product) {
-            return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" width="160" height="160" data-icon-fallback>` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>`;
+            const source = /^https:\/\/world\.openfoodfacts\.org\/product\/[0-9]+$/.test(product.product_image_source || '')
+                ? `<small class="field-help"><a href="${escapeHtml(product.product_image_source)}" target="_blank" rel="noopener noreferrer">Open Food Facts</a> · <a href="<?= htmlspecialchars(OpenFoodFactsCatalog::PHOTO_LICENSE_URL) ?>" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a></small>`
+                : '';
+            return `<span class="product-photo-preview">${product.product_image ? `<img src="${escapeHtml(product.product_image)}" alt="${escapeHtml(product.product_name)}" width="160" height="160" data-icon-fallback>` : ''}<i class="bi bi-box-seam" aria-hidden="true" ${product.product_image ? 'hidden' : ''}></i></span>${source}`;
         }
 
         function renderProductDrawerReadOnly(product, notice = '') {
@@ -2612,7 +2675,7 @@ foreach ($products as $product) {
                 if (!file || !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) return;
                 const reader = new FileReader();
                 reader.onload = () => {
-                    if (event.target.files[0] === file) preview.innerHTML = productPhotoPreview({...product, product_image: reader.result});
+                    if (event.target.files[0] === file) preview.innerHTML = productPhotoPreview({...product, product_image: reader.result, product_image_source: null});
                 };
                 reader.readAsDataURL(file);
             });
@@ -3543,6 +3606,10 @@ foreach ($products as $product) {
             RetailMindUI.openOverlay(productModalOverlay);
             const error = document.getElementById('product-create-error');
             error.textContent = retry.error; error.hidden = false; error.focus();
+            queueMicrotask(() => {
+                updateProductPhotoPreview();
+                showProductPhotoRecovery(retry.photoError);
+            });
         }
         const retry = JSON.parse(addProductForm.dataset.retry || 'null');
         if (addProductForm.elements.handoff_id) {
@@ -3553,7 +3620,10 @@ foreach ($products as $product) {
             const body = addProductForm.querySelector('.rm-modal-body');
             const error = document.getElementById('product-create-error');
             const reset = document.getElementById('product-create-reset');
-            const showError = message => { error.textContent = message; error.hidden = false; error.focus(); };
+            const showError = (message, photoError = false) => {
+                error.textContent = message; error.hidden = false; error.focus();
+                showProductPhotoRecovery(photoError);
+            };
             const handoffRequest = action => RetailMindInventoryDrafts.productHandoff(receivingUrl, csrf, action, id);
             const modeFields = {units: 'barcode', packages: 'case_barcode', packs: 'pack_barcode'};
             const returnMode = addProductForm.elements.return_quantity_mode;
@@ -3599,7 +3669,7 @@ foreach ($products as $product) {
                         return;
                     }
                     handoffRetryId = result.retryId;
-                    showError(result.error);
+                    showError(result.error, result.photoError);
                 } catch (_) {
                     showError('Check your connection and sign-in, then try Save Product again.');
                 }
@@ -3649,7 +3719,7 @@ foreach ($products as $product) {
                     save.disabled = false;
                     if (draft.retry) {
                         handoffRetryId = draft.retry.id;
-                        if (persisted?.context.retryId === handoffRetryId) showError(draft.retry.error);
+                        if (persisted?.context.retryId === handoffRetryId) showError(draft.retry.error, draft.retry.photoError);
                         else showProductCreateRetry(draft.retry);
                     } else if (draft.mode === 'packages') {
                         receivingOptions.open = true;
@@ -3770,32 +3840,118 @@ foreach ($products as $product) {
         const productImageInput = document.getElementById('product-image-input');
         const imagePreviewContainer = document.getElementById('image-preview-container');
         const imagePreview = document.getElementById('image-preview');
-        const clearImageBtn = document.getElementById('clear-image-btn');
+        const photoAttribution = document.getElementById('create-photo-attribution');
+        const photoRecovery = document.getElementById('create-photo-recovery');
+        const photoPreviewError = document.getElementById('create-photo-error');
+        const catalogPhoto = addProductForm.elements.catalog_photo;
+        const catalogPhotoBarcode = addProductForm.elements.catalog_photo_barcode;
+        const catalogPhotoSource = addProductForm.elements.catalog_photo_source;
+        const photoBarcode = addProductForm.elements.barcode;
+        let removedPhotoBarcode = '';
+        let failedPhotoSave = false;
+        let uploadPreview = '';
+
+        function showProductPhotoRecovery(failed = false) {
+            failedPhotoSave = failed;
+            photoPreviewError.textContent = '';
+            photoRecovery.hidden = !failed;
+        }
 
         function updateProductPhotoPreview() {
-            const previous = imagePreview.getAttribute('src');
-            if (previous) URL.revokeObjectURL(previous);
-            imagePreview.removeAttribute('src');
-            imagePreviewContainer.hidden = true;
             const file = productImageInput.files[0];
-            if (!file) return;
-            if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+            const suggested = !file && !!catalogPhoto.value && photoBarcode.value.trim() === catalogPhotoBarcode.value;
+            if (uploadPreview) URL.revokeObjectURL(uploadPreview);
+            uploadPreview = file ? URL.createObjectURL(file) : '';
+            const src = uploadPreview || (suggested ? catalogPhoto.value : '');
+            if (src && imagePreview.getAttribute('src') !== src) {
+                imagePreview.hidden = false;
+                imagePreview.src = src;
+            } else if (!src) imagePreview.removeAttribute('src');
+            imagePreviewContainer.hidden = !src;
+            photoAttribution.hidden = !suggested;
+            if (suggested) {
+                const sourceLink = photoAttribution.querySelector('a');
+                const source = catalogPhotoSource.value;
+                if (/^https:\/\/world\.openfoodfacts\.org\/product\/[0-9]+$/.test(source)) sourceLink.href = source;
+                else sourceLink.removeAttribute('href');
+            }
+        }
+
+        function clearCatalogPhoto() {
+            catalogPhoto.value = catalogPhotoBarcode.value = catalogPhotoSource.value = '';
+            catalogPhoto.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+
+        function removeProductPhoto() {
+            removedPhotoBarcode = photoBarcode.value.trim();
+            productImageInput.value = '';
+            clearCatalogPhoto();
+            productImageInput.dispatchEvent(new Event('input', {bubbles: true}));
+            showProductPhotoRecovery();
+            updateProductPhotoPreview();
+        }
+
+        productImageInput.addEventListener('change', () => {
+            const file = productImageInput.files[0];
+            if (file && (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
                 RetailMindUI.toast(PRODUCT_PHOTO_LIMIT_MESSAGE, 'warning');
                 productImageInput.value = '';
-                return;
+            } else if (file) {
+                removedPhotoBarcode = photoBarcode.value.trim();
+                clearCatalogPhoto();
+                showProductPhotoRecovery();
             }
-            imagePreview.src = URL.createObjectURL(file);
-            imagePreviewContainer.hidden = false;
-        }
-        productImageInput.addEventListener('change', updateProductPhotoPreview);
-        productImageInput.addEventListener('retailmind:fieldrestore', updateProductPhotoPreview);
-        addProductForm.addEventListener('reset', () => queueMicrotask(updateProductPhotoPreview));
-
-        clearImageBtn.addEventListener('click', () => {
-            productImageInput.value = '';
-            productImageInput.dispatchEvent(new Event('input', {bubbles: true}));
             updateProductPhotoPreview();
+        });
+        productImageInput.addEventListener('retailmind:fieldrestore', updateProductPhotoPreview);
+        catalogPhotoBarcode.addEventListener('retailmind:fieldrestore', () => queueMicrotask(updateProductPhotoPreview));
+        photoBarcode.addEventListener('input', updateProductPhotoPreview);
+        addProductForm.addEventListener('reset', () => queueMicrotask(() => {
+            removedPhotoBarcode = '';
+            showProductPhotoRecovery();
+            updateProductPhotoPreview();
+        }));
+        addProductForm.addEventListener('product-create:catalog-clear', () => {
+            removedPhotoBarcode = '';
+            clearCatalogPhoto();
+            showProductPhotoRecovery();
+            updateProductPhotoPreview();
+        });
+        addProductForm.addEventListener('product-create:catalog-match', event => {
+            const {barcode, product, source} = event.detail;
+            if (productImageInput.files.length || barcode === removedPhotoBarcode) return;
+            catalogPhoto.value = product.photo_url || '';
+            catalogPhotoBarcode.value = barcode;
+            catalogPhotoSource.value = source.product_url;
+            catalogPhoto.dispatchEvent(new Event('input', {bubbles: true}));
+            showProductPhotoRecovery();
+            updateProductPhotoPreview();
+        });
+        imagePreview.addEventListener('error', () => {
+            if (imagePreviewContainer.hidden || photoAttribution.hidden) return;
+            imagePreview.hidden = true;
+            if (!failedPhotoSave) photoPreviewError.textContent = 'The front photo preview could not load.';
+            photoRecovery.hidden = false;
+        });
+        document.getElementById('replace-image-btn').addEventListener('click', () => productImageInput.click());
+        document.getElementById('clear-image-btn').addEventListener('click', () => {
+            removeProductPhoto();
             productImageInput.focus();
+        });
+        document.getElementById('save-without-product-photo').addEventListener('click', () => {
+            removeProductPhoto();
+            addProductForm.requestSubmit(document.getElementById('product-create-save'));
+        });
+        document.getElementById('retry-product-photo').addEventListener('click', () => {
+            if (failedPhotoSave) {
+                if (catalogPhoto.value || productImageInput.files.length) {
+                    addProductForm.requestSubmit(document.getElementById('product-create-save'));
+                } else productImageInput.click();
+            } else {
+                imagePreview.removeAttribute('src');
+                showProductPhotoRecovery();
+                updateProductPhotoPreview();
+            }
         });
     </script>
 </body>
