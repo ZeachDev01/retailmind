@@ -1501,6 +1501,9 @@ CREATE TABLE `stock_receiving` (
   `quantity_mode` varchar(20) DEFAULT NULL,
   `cost_source` varchar(20) DEFAULT NULL,
   `current_product_cost` decimal(10,2) DEFAULT NULL,
+  `entered_cost` decimal(10,2) DEFAULT NULL,
+  `cost_basis` varchar(20) DEFAULT NULL,
+  `cost_units_used` int(11) DEFAULT NULL,
   `group_id` int(11) DEFAULT NULL,
   `product_id` int(11) NOT NULL,
   `received_qty` int(11) NOT NULL,
@@ -2161,3 +2164,4 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_
 
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611120001_supplier_pullout_eligibility','Explicit Product eligibility for Supplier Pullouts, default off') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180001_receiving_allocations','Preserve receiving allocation modes, cost provenance and current-cost choices') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180002_receiving_cost_basis','Preserve the entered purchase amount and its receiving cost conversion') ON DUPLICATE KEY UPDATE description=VALUES(description);

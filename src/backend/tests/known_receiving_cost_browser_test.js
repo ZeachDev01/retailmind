@@ -13,10 +13,12 @@ if (process.env.RUN_DB_TESTS !== '1') {
 }
 const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const output = path.resolve('output/issue-477');
+const packageOutput = path.resolve('output/issue-483');
 const php = process.env.PHP_BINARY || 'php';
 const env = {...process.env, BACKUP_STORAGE_PATH: fs.mkdtempSync(path.join(os.tmpdir(), 'rm-receiving-'))};
 function fixture(action) {
-    const result = spawnSync(php, ['src/backend/tests/support/known_cost_fixture.php', action, database], {encoding: 'utf8', env});
+    const fixtureFile = action === 'create' ? 'known_cost_fixture.php' : 'theme_fixture.php';
+    const result = spawnSync(php, ['src/backend/tests/support/' + fixtureFile, action, database], {encoding: 'utf8', env});
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 }
@@ -100,6 +102,59 @@ function fixture(action) {
         await page.locator('#receiving_next').click();
         await page.locator('#receiving_review').waitFor({state: 'visible'});
         assert.equal(await page.locator('#summary_cost').innerText(), '₱10.00', 'blank positive cost uses saved fallback');
+        await page.goto(url + '?product_id=1');
+        await page.locator('.receiving-extras summary').click();
+        await page.locator('#received_qty').fill('24');
+        await page.locator('#cost_price').fill('40');
+        const basis = page.locator('#cost_basis');
+        await basis.focus();
+        await basis.press('ArrowDown');
+        assert.equal(await basis.inputValue(), 'packages');
+        assert.equal(await page.locator('#cost_price').inputValue(), '', 'switching basis requires a fresh amount');
+        assert.match(await basis.locator('option:checked').innerText(), /case.*24/i);
+        await page.locator('#cost_price').fill('100');
+        assert.equal(await page.locator('#summary_cost').innerText(), '₱100.00');
+        await page.waitForTimeout(500);
+        await page.reload();
+        await page.getByRole('button', {name: 'Resume', exact: true}).click();
+        assert.equal(await basis.inputValue(), 'packages');
+        assert.equal(await page.locator('#cost_price').inputValue(), '100');
+        await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
+        assert.match(await page.locator('#receiving_review').innerText(), /₱100\.00.*case.*₱4\.17.*₱100\.00/s);
+        assert.match(await page.locator('#receiving_review').innerText(), /rounded/i);
+        for (const [width, theme] of [[1440, 'light'], [390, 'dark']]) {
+            await page.setViewportSize({width, height: 900});
+            await page.emulateMedia({reducedMotion: 'reduce'});
+            await page.evaluate(value => {
+                document.documentElement.dataset.theme = value;
+                document.documentElement.style.colorScheme = value;
+            }, theme);
+            assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+            fs.mkdirSync(packageOutput, {recursive: true});
+            await page.screenshot({path: path.join(packageOutput, `review-${width}-${theme}.png`), fullPage: true});
+        }
+        fixture('receiving_conversion_changed');
+        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('.btn-submit').click()]);
+        assert.match(await page.locator('.message.error').innerText(), /purchase cost conversion changed/i);
+        assert.equal(await basis.inputValue(), 'packages');
+        assert.equal(await page.locator('#received_qty').inputValue(), '24');
+        assert.equal(await page.locator('#cost_price').inputValue(), '100');
+        await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
+        assert.equal(await page.locator('#summary_cost').innerText(), '₱200.00', 'fresh Review uses the new cost conversion');
+        await page.locator('#receiving_back').click();
+        fixture('receiving_pack_config');
+        await page.locator('#receiving_next').click();
+        await page.waitForFunction(() => document.getElementById('entry_status').textContent.includes('changed'));
+        assert.equal(await page.locator('#receiving_review').isVisible(), false, 'cost basis staleness is independent of quantity mode');
+        await page.locator('#receiving_next').click();
+        await page.locator('#receiving_review').waitFor({state: 'visible'});
+        await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('.btn-submit').click()]);
+        assert.match(await page.locator('body').innerText(), /Receiving entry saved/);
+        await page.goto(origin + '/components/report/receiving_history.php');
+        await page.locator('.receiving-entry-card summary').first().click();
+        assert.match(await page.locator('.receiving-entry-card').first().innerText(), /₱100\.00.*24.*₱100\.00/s);
         await page.goto(origin + '/components/inventory_management/products.php');
         await page.locator('#product-add-trigger').click();
         await page.locator('#add-product-btn').click();

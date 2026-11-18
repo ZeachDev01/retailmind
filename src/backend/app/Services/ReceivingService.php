@@ -11,6 +11,7 @@ require_once __DIR__ . '/../../includes/functions.php';
 
 class ReceivingService
 {
+    private const MAX_COST_CENTS = 9999999999;
     private PDO $pdo;
     private NotificationService $notificationService;
     private FiscalPeriodGuardService $fiscalPeriodGuard;
@@ -121,7 +122,7 @@ class ReceivingService
                         }
                         $products[$productId]['quantity_purchased'] += $result['accepted_qty'];
                         if ($result['cost_price'] !== null && $result['accepted_qty'] > 0) {
-                            $costs[number_format($result['cost_price'], 2, '.', '')] = true;
+                            $costs[self::decimal(self::cents((string)$result['cost_price']))] = true;
                         }
                         $productResults[] = $result;
                     }
@@ -129,7 +130,7 @@ class ReceivingService
                     if ($choice !== '' && !preg_match('/^\d{1,8}(?:\.\d{1,2})?$/D', $choice)) {
                         throw new RuntimeException('Choose a valid Current product cost from the final batches.');
                     }
-                    if ($choice !== '') $choice = number_format((float)$choice, 2, '.', '');
+                    if ($choice !== '') $choice = self::decimal(self::cents($choice));
                     if (($choice !== '' && !isset($costs[$choice])) || (count($costs) > 1 && $choice === '')) {
                         throw new RuntimeException('Choose Current product cost from the final batches, then Review again.');
                     }
@@ -140,12 +141,10 @@ class ReceivingService
                     }
                     if ($this->hasColumn('stock_receiving', 'current_product_cost')) {
                         $metadata = $this->pdo->prepare('UPDATE stock_receiving SET current_product_cost = ?, quantity_mode = ?, cost_source = ? WHERE receiving_id = ?');
-                        foreach ($productResults as $n => &$result) {
-                            $source = trim((string)($allocations[$n]['cost_price'] ?? '')) !== '' ? 'explicit'
-                                : ($result['cost_price'] !== null ? 'product' : 'unknown');
+                        foreach ($productResults as &$result) {
                             $mode = $result['pack_size_used'] !== null ? 'packs' : ($result['received_packages'] > 0 ? 'packages' : 'units');
-                            $metadata->execute([$choice !== '' ? $choice : null, $mode, $source, $result['receiving_id']]);
-                            $result += ['current_product_cost' => $choice !== '' ? (float)$choice : null, 'quantity_mode' => $mode, 'cost_source' => $source];
+                            $metadata->execute([$choice !== '' ? $choice : null, $mode, $result['cost_source'], $result['receiving_id']]);
+                            $result += ['current_product_cost' => $choice !== '' ? (float)$choice : null, 'quantity_mode' => $mode];
                         }
                         unset($result);
                     } elseif (isset($line['allocations'])) {
@@ -181,7 +180,56 @@ class ReceivingService
         return $results;
     }
 
-    private function receiveLine(array $data, int $userId, ?array $product): array
+    public function reviewShoppingTrip(array $lines, int $userId): array
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare("SELECT p.* FROM products p WHERE product_id = ? AND status = 'active'{$scopeSql}");
+        $review = [];
+        foreach ($lines as $line) {
+            if (!is_array($line) || !is_array($line['allocations'] ?? null) || !array_is_list($line['allocations']) || !$line['allocations']) {
+                throw new RuntimeException('Each product needs at least one valid batch.');
+            }
+            $productId = $this->wholeNumber($line['product_id'] ?? 0, 'Product');
+            $stmt->execute(array_merge([$productId], $scopeParams));
+            $product = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            $batches = [];
+            foreach ($line['allocations'] as $allocation) {
+                if (!is_array($allocation)) throw new RuntimeException('Each batch must contain receiving details.');
+                $quote = $this->receiveLine(array_replace($allocation, ['product_id' => $productId,
+                    'pullout_id' => $line['pullout_id'] ?? null]), $userId, $product, true);
+                if ($quote['accepted_qty'] <= 0) throw new RuntimeException('Each batch needs a positive accepted quantity.');
+                $product['quantity_purchased'] += $quote['accepted_qty'];
+                $batches[] = $quote;
+            }
+            $review[] = $batches;
+        }
+        return $review;
+    }
+
+    private static function costConversions(array $product): array
+    {
+        $conversions = ['units' => 1];
+        $caseSize = (int)($product['units_per_package'] ?? 0);
+        $caseName = trim($product['receiving_unit'] ?? '');
+        if ($caseSize > 1 || ($caseSize === 1 && (!empty($product['case_barcode']) || !in_array($caseName, ['', 'package'], true)))) {
+            $conversions['packages'] = $caseSize;
+        }
+        if ((int)($product['pack_size'] ?? 0) > 1) $conversions['packs'] = (int)$product['pack_size'];
+        return $conversions;
+    }
+
+    private static function cents(string $amount): int
+    {
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');
+        return (int)$whole * 100 + (int)str_pad($fraction, 2, '0');
+    }
+
+    private static function decimal(int $cents): string
+    {
+        return sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
+    }
+
+    private function receiveLine(array $data, int $userId, ?array $product, bool $review = false): array
     {
         $productId = $this->wholeNumber($data['product_id'] ?? 0, 'Product');
         $quantityMode = $data['quantity_mode'] ?? 'units';
@@ -198,7 +246,6 @@ class ReceivingService
         if ($costInput !== '' && !preg_match('/^\d{1,8}(?:\.\d{1,2})?$/D', $costInput)) {
             throw new RuntimeException('Purchase cost must be a non-negative amount with at most two decimal places.');
         }
-        $costPrice = $costInput === '' ? null : (float)$costInput;
         $supplier = $this->text($data['supplier'] ?? '', 'Shopping store', 150);
         $invoiceNumber = $this->text($data['invoice_number'] ?? '', 'Receipt reference', 100);
         $batchNumber = $this->text($data['batch_number'] ?? '', 'Batch number', 100);
@@ -245,12 +292,20 @@ class ReceivingService
         if (isset($data['review_conversion']) && $data['review_conversion'] !== '' && $data['review_conversion'] !== $conversion) {
             throw new RuntimeException('Saved product conversion changed. Review this entry again before saving.');
         }
-        $fallbackCost = \App\Inventory\ProductCost::known($product) ? number_format((float)$product['cost_price'], 2, '.', '') : '';
-        if ($costPrice === null && array_key_exists('cost_fallback', $data) && $data['cost_fallback'] !== $fallbackCost) {
+        $fallbackCost = \App\Inventory\ProductCost::known($product) ? self::decimal(self::cents((string)$product['cost_price'])) : '';
+        if ($costInput === '' && array_key_exists('cost_fallback', $data) && $data['cost_fallback'] !== $fallbackCost) {
             throw new RuntimeException('Saved product cost changed. Review this entry again before saving.');
         }
-        if ($costPrice === null && $fallbackCost !== '') {
-            $costPrice = (float)$product['cost_price'];
+        $basis = $data['cost_basis'] ?? 'units';
+        if (!is_string($basis) || !in_array($basis, ['units', 'packages', 'packs'], true)) {
+            throw new RuntimeException('Choose a valid purchase cost basis.');
+        }
+        $costUnits = $costInput === '' ? 1 : (self::costConversions($product)[$basis] ?? 0);
+        if (isset($data['review_cost_units']) && $data['review_cost_units'] !== '' && $data['review_cost_units'] !== (string)$costUnits) {
+            throw new RuntimeException('Saved purchase cost conversion changed. Review this entry again before saving.');
+        }
+        if ($costUnits === 0) {
+            throw new RuntimeException('Choose a purchase cost basis configured for this product.');
         }
 
         $packSize = isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null;
@@ -379,6 +434,41 @@ class ReceivingService
         if ($acceptedQty <= 0 && $damagedQty <= 0 && $rejectedQty <= 0) {
             throw new RuntimeException('At least one delivered unit must be accepted or reported damaged.');
         }
+        $amount = $costInput !== '' ? $costInput : $fallbackCost;
+        $costPrice = null;
+        $totalCost = '0.00';
+        $unitCents = $totalCents = null;
+        $roundingDifference = false;
+        if ($amount !== '') {
+            $amountCents = self::cents($amount);
+            $whole = intdiv($amountCents, $costUnits);
+            if ($acceptedQty > 0 && $whole > intdiv(self::MAX_COST_CENTS, $acceptedQty)) {
+                throw new RuntimeException('Total purchase cost is too large.');
+            }
+            // Splitting off the whole cents keeps the largest valid remainder product within a signed 64-bit integer.
+            $remainder = $amountCents % $costUnits;
+            $half = intdiv($costUnits, 2);
+            $totalCents = $whole * $acceptedQty + intdiv($remainder * $acceptedQty + $half, $costUnits);
+            if ($totalCents > self::MAX_COST_CENTS) {
+                throw new RuntimeException('Total purchase cost is too large.');
+            }
+            $unitCents = $whole + intdiv($remainder + $half, $costUnits);
+            $costPrice = self::decimal($unitCents);
+            $totalCost = self::decimal($totalCents);
+            $roundingDifference = $unitCents * $acceptedQty !== $totalCents;
+        }
+        $cost = [
+            'accepted_qty' => $acceptedQty,
+            'cost_price' => $costPrice === null ? null : (float)$costPrice,
+            'total_cost' => $costPrice === null ? null : (float)$totalCost,
+            'entered_cost' => $costInput === '' ? null : (float)$costInput,
+            'cost_basis' => $amount === '' ? null : ($costInput === '' ? 'units' : $basis),
+            'cost_units_used' => $amount === '' ? null : $costUnits,
+            'cost_source' => $costInput !== '' ? 'explicit' : ($amount !== '' ? 'product' : 'unknown'),
+            'rounding_difference' => $roundingDifference,
+        ];
+        if ($review) return $cost + ['unit_cents' => $unitCents, 'total_cents' => $totalCents];
+
         if ($acceptedQty > 0) {
             $this->fiscalPeriodGuard->assertOpenNow('purchase_history', 'purchase history');
             $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
@@ -402,11 +492,6 @@ class ReceivingService
             $discrepancyQty = $rejectedQty;
         }
 
-        $totalCost = $costPrice !== null ? $costPrice * $acceptedQty : 0;
-        if ($totalCost > 99999999.99) {
-            throw new RuntimeException('Total purchase cost is too large.');
-        }
-
         $groupId = isset($data['group_id']) && (int)$data['group_id'] > 0 ? (int)$data['group_id'] : null;
 
         $hasPullout = $this->hasColumn('stock_receiving', 'pullout_id');
@@ -420,13 +505,19 @@ class ReceivingService
         $hasPacks = $this->hasColumn('stock_receiving', 'received_packs');
         $packCols = $hasPacks ? ', received_packs, accepted_packs, damaged_packs, rejected_packs, received_loose, accepted_loose, damaged_loose, rejected_loose, pack_size_used' : '';
         $packPlaceholders = $hasPacks ? ', ?, ?, ?, ?, ?, ?, ?, ?, ?' : '';
+        $hasCostBasis = $this->hasColumn('stock_receiving', 'cost_basis');
+        if (!$hasCostBasis && $basis !== 'units' && $costInput !== '') {
+            throw new RuntimeException('Package purchase costs require the latest database schema.');
+        }
+        $costCols = $hasCostBasis ? ', entered_cost, cost_basis, cost_units_used' : '';
+        $costPlaceholders = $hasCostBasis ? ', ?, ?, ?' : '';
 
         $stmt = $this->pdo->prepare("INSERT INTO stock_receiving (
                                    group_id, {$pulloutCol}product_id, received_qty, received_packages, units_per_package_used, accepted_qty, damaged_qty, cost_price, total_cost, received_by,
                                    supplier, invoice_number,
                                    batch_number, expiration_date, discrepancy_type, discrepancy_qty,
-                                   discrepancy_notes, notes{$packCols}
-                               ) VALUES (?, {$pulloutPlaceholder}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{$packPlaceholders})");
+                                   discrepancy_notes, notes{$packCols}{$costCols}
+                               ) VALUES (?, {$pulloutPlaceholder}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{$packPlaceholders}{$costPlaceholders})");
 
         $params = [$groupId];
         if ($hasPullout) {
@@ -446,6 +537,7 @@ class ReceivingService
                 $receivedLoose, $acceptedLoose, $damagedLoose, $rejectedLoose, $packSizeUsed
             ]);
         }
+        if ($hasCostBasis) array_push($params, $costInput !== '' ? $costInput : null, $cost['cost_basis'], $cost['cost_units_used']);
         $stmt->execute($params);
 
         $receivingId = (int)$this->pdo->lastInsertId();
@@ -493,10 +585,7 @@ class ReceivingService
             'recorded_by' => $recording['display_name'],
             'received_at' => $recording['received_at'],
             'receiving_id' => $receivingId,
-            'cost_price' => $costPrice,
-            'total_cost' => $costPrice !== null ? $totalCost : null,
             'received_qty' => $receivedQty,
-            'accepted_qty' => $acceptedQty,
             'damaged_qty' => $damagedQty,
             'rejected_qty' => $rejectedQty,
             'discrepancy_type' => $discrepancyType,
@@ -512,7 +601,7 @@ class ReceivingService
             'damaged_loose' => $damagedLoose,
             'rejected_loose' => $rejectedLoose,
             'pack_size_used' => $packSizeUsed,
-        ];
+        ] + $cost;
     }
 
     public function getActiveProducts(): array
@@ -521,17 +610,22 @@ class ReceivingService
         $knownSelect = $this->hasColumn('products', 'cost_known') ? 'p.cost_known' : '0 AS cost_known';
         $stmt = $this->pdo->prepare("SELECT p.product_id, p.sku, p.product_name, p.cost_price, {$knownSelect}, p.units_per_package, p.pack_size, p.pack_barcode, p.pack_price, p.base_unit, p.receiving_unit, p.category_id, c.category_name, p.barcode, p.case_barcode, p.variant_label, p.product_image, COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand, p.reorder_level, p.safety_stock FROM products p LEFT JOIN categories c ON p.category_id = c.category_id LEFT JOIN inventory i ON p.product_id = i.product_id WHERE p.status = 'active'{$scopeSql} ORDER BY p.product_name");
         $stmt->execute($scopeParams);
-        return $stmt->fetchAll();
+        $products = $stmt->fetchAll();
+        foreach ($products as &$product) $product['cost_conversions'] = self::costConversions($product);
+        unset($product);
+        return $products;
     }
 
     public function getReceivingHistory(?int $userId): array
     {
         $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $costSelect = $this->historyCostColumns();
         $packSelect = $this->hasColumn('stock_receiving', 'received_packs')
             ? 'sr.received_packs, sr.accepted_packs, sr.damaged_packs, sr.rejected_packs, sr.received_loose, sr.accepted_loose, sr.damaged_loose, sr.rejected_loose, sr.pack_size_used,'
             : '0 AS received_packs, 0 AS accepted_packs, 0 AS damaged_packs, 0 AS rejected_packs, sr.received_qty AS received_loose, sr.accepted_qty AS accepted_loose, sr.damaged_qty AS damaged_loose, 0 AS rejected_loose, NULL AS pack_size_used,';
         $stmt = $this->pdo->prepare("SELECT sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} sr.received_qty, sr.accepted_qty, sr.damaged_qty,
-                               sr.cost_price, sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
+                               {$costSelect} sr.cost_price, CASE WHEN sr.cost_price IS NOT NULL OR sr.total_cost > 0 THEN sr.total_cost END AS total_cost,
+                               sr.received_packages, sr.units_per_package_used, sr.batch_number, sr.expiration_date, sr.discrepancy_type,
                                sr.discrepancy_qty, sr.received_at, sr.supplier, sr.invoice_number,
                                p.sku, p.product_name, u.display_name
                         FROM stock_receiving sr
@@ -542,6 +636,13 @@ class ReceivingService
                         LIMIT 20");
         $stmt->execute([$userId, $userId]);
         return $stmt->fetchAll();
+    }
+
+    private function historyCostColumns(): string
+    {
+        return $this->hasColumn('stock_receiving', 'cost_basis')
+            ? 'sr.entered_cost, sr.cost_basis, sr.cost_units_used,'
+            : 'NULL AS entered_cost, NULL AS cost_basis, NULL AS cost_units_used,';
     }
 
     /** Returns one page of complete receipts plus one next-page probe. */
@@ -556,6 +657,7 @@ class ReceivingService
             JOIN users u ON sr.received_by = u.user_id';
         $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
         $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
+        $costSelect = $this->historyCostColumns();
         $allocationSelect = $this->hasColumn('stock_receiving', 'current_product_cost')
             ? 'sr.quantity_mode, sr.cost_source, sr.current_product_cost,'
             : 'NULL AS quantity_mode, NULL AS cost_source, NULL AS current_product_cost,';
@@ -565,7 +667,7 @@ class ReceivingService
         $stmt = $this->pdo->prepare("SELECT
                 sr.receiving_id, sr.group_id, {$pulloutSelect} {$packSelect} {$allocationSelect} sr.product_id, sr.received_qty, sr.received_packages,
                 sr.units_per_package_used, sr.accepted_qty, sr.damaged_qty,
-                sr.cost_price, sr.total_cost, sr.received_by, sr.received_at,
+                {$costSelect} sr.cost_price, sr.total_cost, sr.received_by, sr.received_at,
                 sr.supplier, sr.invoice_number, sr.batch_number, sr.expiration_date,
                 sr.discrepancy_type, sr.discrepancy_qty, sr.discrepancy_notes, sr.notes,
                 p.sku, p.product_name,
@@ -594,6 +696,8 @@ class ReceivingService
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $groups = [];
+        $totals = [];
+        $productTotals = [];
         foreach ($rows as $row) {
             $hasGroup = $row['group_id'] !== null;
             $groupKey = $hasGroup ? 'g_' . (int)$row['group_id'] : 'r_' . (int)$row['receiving_id'];
@@ -612,12 +716,24 @@ class ReceivingService
                     'total_received_qty' => 0,
                     'total_accepted_qty' => 0,
                     'total_damaged_qty' => 0,
+                    'has_unknown_cost' => false,
                     'lines' => [],
                 ];
             }
             $groups[$groupKey]['total_received_qty'] += (int)$row['received_qty'];
             $groups[$groupKey]['total_accepted_qty'] += (int)$row['accepted_qty'];
             $groups[$groupKey]['total_damaged_qty'] += (int)$row['damaged_qty'];
+            $productId = (int)$row['product_id'];
+            $productTotals[$groupKey][$productId] ??= ['cents' => null, 'has_unknown_cost' => false];
+            $hasRecordedTotal = $row['cost_price'] !== null || (float)$row['total_cost'] > 0;
+            if ($hasRecordedTotal) {
+                $cents = self::cents((string)$row['total_cost']);
+                $totals[$groupKey] = ($totals[$groupKey] ?? 0) + $cents;
+                $productTotals[$groupKey][$productId]['cents'] = ($productTotals[$groupKey][$productId]['cents'] ?? 0) + $cents;
+            } elseif ((int)$row['accepted_qty'] > 0) {
+                $groups[$groupKey]['has_unknown_cost'] = true;
+                $productTotals[$groupKey][$productId]['has_unknown_cost'] = true;
+            }
             $groups[$groupKey]['lines'][] = [
                 'receiving_id' => (int)$row['receiving_id'],
                 'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
@@ -643,7 +759,10 @@ class ReceivingService
                 'rejected_loose' => (int)($row['rejected_loose'] ?? 0),
                 'pack_size_used' => isset($row['pack_size_used']) && $row['pack_size_used'] !== null ? (int)$row['pack_size_used'] : null,
                 'cost_price' => $row['cost_price'] !== null ? (float)$row['cost_price'] : null,
-                'total_cost' => $row['cost_price'] !== null ? (float)$row['total_cost'] : null,
+                'total_cost' => $hasRecordedTotal ? (float)$row['total_cost'] : null,
+                'entered_cost' => $row['entered_cost'] !== null ? (float)$row['entered_cost'] : null,
+                'cost_basis' => $row['cost_basis'],
+                'cost_units_used' => $row['cost_units_used'] !== null ? (int)$row['cost_units_used'] : null,
                 'batch_number' => $row['batch_number'],
                 'expiration_date' => $row['expiration_date'],
                 'discrepancy_type' => $row['discrepancy_type'],
@@ -656,6 +775,16 @@ class ReceivingService
             ];
         }
 
+        foreach ($groups as $key => &$group) {
+            $group['total_cost'] = isset($totals[$key]) ? (float)self::decimal($totals[$key]) : null;
+            foreach ($productTotals[$key] as $id => $productTotal) {
+                $group['product_costs'][$id] = [
+                    'total_cost' => $productTotal['cents'] !== null ? (float)self::decimal($productTotal['cents']) : null,
+                    'has_unknown_cost' => $productTotal['has_unknown_cost'],
+                ];
+            }
+        }
+        unset($group);
         return array_values($groups);
     }
 

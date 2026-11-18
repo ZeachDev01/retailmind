@@ -94,6 +94,7 @@ if ($handoffId === null && $prefillProductId > 0 && $_SERVER['REQUEST_METHOD'] =
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     require_capability(\App\Authorization\RoleCapabilityPolicy::MUTATE_INVENTORY);
     verify_csrf_token($_POST['csrf_token'] ?? '');
+    $previewCosts = ($_POST['preview_costs'] ?? '') === '1';
 
     try {
         $nonce = $_POST['receiving_nonce'] ?? '';
@@ -127,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'damaged_loose' => $_POST['damaged_loose'] ?? null,
             'rejected_loose' => $_POST['rejected_loose'] ?? null,
             'cost_price' => $_POST['cost_price'] ?? '',
+            'cost_basis' => $_POST['cost_basis'] ?? 'units',
             'supplier' => $_POST['supplier'] ?? '',
             'invoice_number' => $_POST['invoice_number'] ?? '',
             'batch_number' => $_POST['batch_number'] ?? '',
@@ -137,6 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'notes' => $_POST['notes'] ?? '',
             'pullout_id' => $_POST['pullout_id'] ?? ($_POST['lines'][0]['pullout_id'] ?? null),
             ]];
+        }
+        if ($previewCosts) {
+            header('Content-Type: application/json');
+            echo json_encode(['costs' => $receivingService->reviewShoppingTrip($lines, (int)$_SESSION['user_id'])], JSON_THROW_ON_ERROR);
+            exit;
         }
         $results = $receivingService->receiveShoppingTrip($lines, $entry, (int)$_SESSION['user_id']);
 
@@ -156,6 +163,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('Receiving activity log failed: ' . $e->getMessage());
         }
     } catch (Throwable $e) {
+        if ($previewCosts) {
+            http_response_code(422);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => \App\Support\OperatorAlert::message($e, 'Purchase costs could not be checked. Try Review again.')]);
+            exit;
+        }
         $formValues = $_POST;
         if (isset($formValues['lines']) && is_array($formValues['lines'])) {
             $formValues['lines'] = array_values($formValues['lines']);
@@ -410,10 +423,17 @@ $categoryIcon = static function (string $categoryName): string {
                         <div class="form-section">
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label for="cost_price">Purchase cost / base unit</label>
+                                    <label for="cost_basis">Cost basis</label>
+                                    <select name="cost_basis" id="cost_basis" data-field="cost_basis"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="cost_price">Purchase cost</label>
                                     <input type="hidden" name="cost_fallback" data-field="cost_fallback">
+                                    <input type="hidden" name="review_cost_units" data-field="review_cost_units">
                                     <input type="text" inputmode="decimal" name="cost_price" id="cost_price" data-field="cost_price" aria-describedby="cost_hint" placeholder="Uses saved product cost">
                                     <small id="cost_hint" data-field="cost_hint">Per base unit. Blank uses saved cost.</small>
+                                    <small data-field="cost_preview"></small>
+                                    <small data-field="cost_change" role="status"></small>
                                 </div>
                             </div>
                         </div>
@@ -427,7 +447,7 @@ $categoryIcon = static function (string $categoryName): string {
                 <div class="receiving-panel-heading"><h2>Delivery summary</h2><span id="summary_status" class="receiving-count">Draft</span></div>
                 <div class="receiving-summary-body">
                     <div class="receiving-accepted"><strong id="summary_products">0</strong><span>Products</span></div>
-                    <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted" class="receiving-total-accepted">0</dd></div><div><dt>Known cost</dt><dd id="summary_cost">₱0.00</dd></div></dl>
+                    <dl class="receiving-totals"><div><dt>Accepted units</dt><dd id="summary_accepted" class="receiving-total-accepted">0</dd></div><div><dt id="summary_cost_label">Purchase total</dt><dd id="summary_cost">Not recorded</dd></div></dl>
                     <p class="receiving-summary-note">Only good items are added to stock. Blank costs use the saved product cost, when available.</p>
                 <fieldset class="receiving-fieldset-reset" <?= !$canReceive ? 'disabled' : '' ?>>
                 <div class="form-section receiving-quantity">
@@ -926,28 +946,34 @@ function getLineQuantities(row, prod) {
     return {total, accepted: total};
 }
 
-function refreshDelivery() {
-    let products = lineContainer.children.length, accepted = 0, cost = 0;
+function refreshDelivery(quotes = null) {
+    const products = lineContainer.children.length;
+    let accepted = 0;
+    const costs = [];
     for (const row of receivingRows()) {
         const field = name => row.querySelector('[data-field="' + name + '"]');
         const prodId = field('product_id')?.value;
         const prod = productMap.get(String(prodId));
         if (!prodId || !prod) continue;
-        const quantities = getLineQuantities(row, prod);
-        accepted += quantities.accepted;
-        const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
-        if (/^\d{1,8}(?:\.\d{1,2})?$/.test(price)) cost += Math.round(Number(price) * 100) * quantities.accepted;
+        const cost = quotes?.get(row) ?? draftCost(row, prod);
+        accepted += cost.accepted_qty;
+        costs.push(cost);
+        field('cost_preview').textContent = cost.unit_cents === null ? ''
+            : (cost.rounding_difference ? 'Approx. ' : '') + money(cost.unit_cents) + ' / ' + (prod.base_unit || 'unit')
+                + ' · Batch total ' + money(cost.total_cents);
     }
     for (const [name, value] of Object.entries({products, accepted})) {
         document.getElementById('summary_' + name).textContent = value;
     }
-    document.getElementById('summary_cost').textContent = '₱' + (cost / 100).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    const total = purchaseTotal(costs);
+    document.getElementById('summary_cost_label').textContent = total.label;
+    document.getElementById('summary_cost').textContent = total.value;
     document.getElementById('delivery_count').textContent = products + (products === 1 ? ' product' : ' products');
     const emptyState = document.getElementById('delivery_empty_state');
     if (emptyState) {
         emptyState.hidden = products > 0 || step === 3;
     }
-    refreshGroups();
+    refreshGroups(quotes);
     renderCatalog();
 }
 
@@ -1122,24 +1148,58 @@ function productGroup(productId) {
     return Array.from(lineContainer.children).find(group => group.dataset.productId === String(productId));
 }
 
-function effectiveCost(row) {
-    const product = productMap.get(row.dataset.productId);
-    const price = row.querySelector('[data-field="cost_price"]').value.trim()
-        || (knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '');
-    return /^\d{1,8}(?:\.\d{1,2})?$/.test(price) ? Number(price).toFixed(2) : '';
+function money(cents, grouped = true) {
+    cents = BigInt(cents);
+    const whole = cents / 100n;
+    return (grouped ? '₱' + whole.toLocaleString('en-PH') : whole.toString()) + '.' + String(cents % 100n).padStart(2, '0');
 }
 
-function groupCosts(group) {
-    return [...new Set(Array.from(group.querySelectorAll('.receiving-line'), effectiveCost).filter(value => value !== ''))];
+function draftCost(row, product = productMap.get(row.dataset.productId)) {
+    const accepted_qty = getLineQuantities(row, product).accepted;
+    const entered = row.querySelector('[data-field="cost_price"]').value.trim();
+    const basis = row.querySelector('[data-field="cost_basis"]').value;
+    const amount = entered || (knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '');
+    const units = entered ? product.cost_conversions[basis] : 1;
+    if (!units || accepted_qty > 2147483647 || !/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)) {
+        return {accepted_qty, unit_cents: null, total_cents: null};
+    }
+    const [whole, fraction = ''] = amount.split('.');
+    const cents = BigInt(whole + fraction.padEnd(2, '0'));
+    const divisor = BigInt(units);
+    const quantity = BigInt(accepted_qty);
+    const unit_cents = (cents + divisor / 2n) / divisor;
+    const total_cents = (cents * quantity + divisor / 2n) / divisor;
+    return {accepted_qty, unit_cents, total_cents, rounding_difference: unit_cents * quantity !== total_cents};
 }
 
-function refreshGroups() {
+function purchaseTotal(costs) {
+    const accepted = costs.filter(cost => cost.accepted_qty > 0);
+    const known = accepted.filter(cost => cost.total_cents !== null);
+    return {
+        label: known.length && known.length < accepted.length ? 'Known cost' : 'Purchase total',
+        value: known.length ? money(known.reduce((sum, cost) => sum + BigInt(cost.total_cents), 0n)) : 'Not recorded',
+    };
+}
+
+function effectiveCost(row, quotes) {
+    const cost = quotes?.get(row) ?? draftCost(row);
+    return cost.accepted_qty > 0 && cost.unit_cents !== null ? money(cost.unit_cents, false) : '';
+}
+
+function groupCosts(group, quotes) {
+    return [...new Set(Array.from(group.querySelectorAll('.receiving-line'), row => effectiveCost(row, quotes)).filter(Boolean))];
+}
+
+function refreshGroups(quotes) {
     for (const group of lineContainer.children) {
         const rows = Array.from(group.querySelectorAll('.receiving-line'));
         const product = productMap.get(group.dataset.productId);
-        group.querySelector('.receiving-group-total').textContent = rows.reduce((sum, row) => sum + getLineQuantities(row, product).accepted, 0) + ' accepted units';
+        const batches = rows.map(row => quotes?.get(row) ?? draftCost(row, product));
+        const total = purchaseTotal(batches);
+        group.querySelector('.receiving-group-total').textContent = batches.reduce((sum, cost) => sum + cost.accepted_qty, 0)
+            + ' accepted units · ' + total.label + ' ' + total.value;
         const choice = group.querySelector('.current-product-cost');
-        const costs = groupCosts(group);
+        const costs = groupCosts(group, quotes);
         if (!costs.includes(choice.value)) { choice.value = ''; group.dataset.choiceExplicit = ''; }
         if (costs.length === 1) choice.value = costs[0];
         else if (group.dataset.choiceExplicit !== 'true') choice.value = '';
@@ -1236,7 +1296,20 @@ function connectLine(row) {
     row.addEventListener('focusin', () => activateLine(row));
     row.addEventListener('input', clearReceivingErrors, {capture: true});
     row.addEventListener('change', clearReceivingErrors, {capture: true});
-    row.querySelector('[data-field="cost_price"]')?.addEventListener('input', refreshDelivery);
+    const price = row.querySelector('[data-field="cost_price"]');
+    const costChange = row.querySelector('[data-field="cost_change"]');
+    price.addEventListener('input', () => {
+        costChange.textContent = '';
+        refreshDelivery();
+    });
+    row.querySelector('[data-field="cost_basis"]').addEventListener('change', () => {
+        if (price.value.trim()) {
+            price.value = '';
+            costChange.textContent = 'Cost cleared. Enter the amount for the new basis.';
+        }
+        updateCostBasis(row, productMap.get(row.dataset.productId));
+        refreshDelivery();
+    });
 
     row.querySelector('.move-line-up')?.addEventListener('click', () => {
         const prev = row.previousElementSibling;
@@ -1364,6 +1437,36 @@ function knownProductCost(product) {
         && (Number(product.cost_price) > 0 || Number(product.cost_known) === 1);
 }
 
+function costBasisName(product, basis) {
+    return basis === 'packages' ? (product.receiving_unit || 'package')
+        : basis === 'packs' ? 'Sales Pack' : (product.base_unit || 'base unit');
+}
+
+function selectedCostUnits(row, product) {
+    if (!row.querySelector('[data-field="cost_price"]').value.trim()) return '1';
+    const basis = row.querySelector('[data-field="cost_basis"]').value;
+    return String(product.cost_conversions[basis] || 0);
+}
+
+function updateCostBasis(row, product, selected) {
+    const select = row.querySelector('[data-field="cost_basis"]');
+    selected ||= select.value || 'units';
+    select.replaceChildren();
+    if (!Object.hasOwn(product.cost_conversions, selected)) {
+        const unavailable = new Option('Saved cost basis unavailable', selected);
+        unavailable.disabled = true;
+        select.add(unavailable);
+    }
+    for (const [basis, units] of Object.entries(product.cost_conversions)) {
+        const conversion = basis === 'units' ? '' : ' (' + units + ' × ' + costBasisName(product, 'units') + ')';
+        select.add(new Option('Per ' + costBasisName(product, basis) + conversion, basis));
+    }
+    select.value = selected;
+    row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(product)
+        ? 'Blank uses saved cost: ₱' + Number(product.cost_price).toFixed(2) + ' per ' + costBasisName(product, 'units')
+        : 'Cost not recorded — enter cost if known';
+}
+
 function addReceivingLine(values = {}, allocation = false) {
     if (Array.isArray(values.allocations)) {
         for (const batch of values.allocations) addReceivingLine({...batch, product_id: values.product_id, pullout_id: values.pullout_id}, true);
@@ -1379,7 +1482,7 @@ function addReceivingLine(values = {}, allocation = false) {
     if (!productId) return null;
     let product = productMap.get(productId);
     if (!product) {
-        product = {product_id: productId, product_name: 'Unavailable product #' + productId, unavailable: true};
+        product = {product_id: productId, product_name: 'Unavailable product #' + productId, cost_conversions: {units: 1}, unavailable: true};
         productMap.set(productId, product);
     }
 
@@ -1419,9 +1522,7 @@ function addReceivingLine(values = {}, allocation = false) {
     if (values.mode_edited) row.dataset.modeEdited = values.mode_edited;
     row.querySelector('[data-field="product_id"]').value = productId;
     row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
-    row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(product)
-        ? 'Blank uses saved cost: ₱' + Number(product.cost_price).toFixed(2)
-        : 'Cost not recorded — enter cost if known';
+    updateCostBasis(row, product, values.cost_basis);
 
     const hasSalesPack = Number(product.pack_size || 0) > 1;
     updateProductIdentity(row, product);
@@ -1449,7 +1550,7 @@ function addReceivingLine(values = {}, allocation = false) {
         }
     } catch (_) { /* Older callers have no retained mode counts. */ }
     for (const [name, value] of Object.entries(values)) {
-        if (name !== 'product_id' && value !== undefined && value !== null) {
+        if (!['product_id', 'cost_basis'].includes(name) && value !== undefined && value !== null) {
             restoreField(row.querySelector('[data-field="' + name + '"]'), String(value));
         }
     }
@@ -1617,6 +1718,10 @@ function validateQuantities() {
                 invalid = cost;
                 message = 'Enter a non-negative purchase cost with at most two decimal places, or leave it blank.';
             }
+            if (!invalid && selectedCostUnits(row, prod) === '0') {
+                invalid = field('cost_basis');
+                message = 'Choose a purchase cost basis configured for this product.';
+            }
         }
         if (invalid) {
             showStep(2, false);
@@ -1633,8 +1738,10 @@ function validateQuantities() {
     return true;
 }
 
-function renderReview() {
-    refreshGroups();
+let reviewQuotes = null;
+function renderReview(quotes = null) {
+    reviewQuotes = quotes;
+    refreshDelivery(quotes);
     const review = document.getElementById('receiving_review');
     review.replaceChildren();
     const reviewGroups = new Map();
@@ -1646,13 +1753,6 @@ function renderReview() {
         section.append(heading);
         review.append(section);
         reviewGroups.set(group.dataset.productId, section);
-    }
-    for (const row of receivingRows()) {
-        const product = productMap.get(row.querySelector('[data-field="product_id"]').value);
-        row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
-        row.querySelector('[data-field="review_conversion"]').value = reviewConversion(row, product);
-        row.querySelector('[data-field="quantity_counts"]').value = JSON.stringify(Object.fromEntries(
-            ['received_qty', 'received_packages', 'received_packs', 'received_loose'].map(name => [name, row.querySelector('[data-field="' + name + '"]').value])));
     }
     const sharedDetails = [
         form.elements.supplier.value && 'Bought from: ' + form.elements.supplier.value,
@@ -1719,14 +1819,23 @@ function renderReview() {
             pulloutInfo.textContent = 'Linked replacement: Supplier Pullout #' + pulloutIdVal;
             section.append(pulloutInfo);
         }
-        const price = field('cost_price').value.trim() || (knownProductCost(prod) ? Number(prod.cost_price).toFixed(2) : '');
+        const cost = quotes?.get(row) ?? draftCost(row, prod);
+        const basis = cost.cost_basis || field('cost_basis').value;
+        const basisAmount = cost.entered_cost !== null && cost.entered_cost !== undefined && basis !== 'units'
+            ? 'Entered: ₱' + cost.entered_cost.toFixed(2) + ' per ' + costBasisName(prod, basis)
+                + ' (' + cost.cost_units_used + ' × ' + costBasisName(prod, 'units') + ')'
+            : '';
         const details = [
             modeText + ': ' + (field('quantity_mode').value === 'packs'
                 ? field('received_packs').value + ' packs + ' + field('received_loose').value + ' loose; 1 pack = ' + prod.pack_size + ' base units'
                 : field('quantity_mode').value === 'packages'
                     ? field('received_packages').value + ' packages; 1 ' + (prod.receiving_unit || 'package') + ' = ' + prod.units_per_package + ' base units'
                     : field('received_qty').value + ' base units'),
-            price ? 'Cost: ₱' + price + ' per unit' : 'Cost: Not recorded',
+            basisAmount,
+            cost.unit_cents === null ? 'Cost: Not recorded'
+                : 'Cost: ' + money(cost.unit_cents) + ' per ' + costBasisName(prod, 'units')
+                    + (cost.cost_source === 'product' ? ' (saved)' : '') + ' · Batch total: ' + money(cost.total_cents),
+            cost.rounding_difference ? 'Unit cost is rounded. The batch total uses the entered amount.' : '',
             'Batch: ' + (field('batch_number').value || 'Not recorded'),
             'Expiry: ' + (field('expiration_date').value || 'Not recorded'),
         ].filter(Boolean);
@@ -1740,7 +1849,7 @@ function renderReview() {
     }
     for (const [index, group] of Array.from(lineContainer.children).entries()) {
         const section = reviewGroups.get(group.dataset.productId);
-        const costs = groupCosts(group);
+        const costs = groupCosts(group, quotes);
         const choice = group.querySelector('.current-product-cost');
         const container = document.createElement('div');
         container.className = 'form-group receiving-current-cost';
@@ -1753,7 +1862,7 @@ function renderReview() {
             select.add(new Option('Choose a batch cost', ''));
             for (const cost of costs) {
                 const batches = Array.from(group.querySelectorAll('.receiving-line'))
-                    .flatMap((row, n) => effectiveCost(row) === cost ? ['Batch ' + (n + 1)] : []);
+                    .flatMap((row, n) => effectiveCost(row, quotes) === cost ? ['Batch ' + (n + 1)] : []);
                 select.add(new Option('₱' + cost + ' / base unit · ' + batches.join(', '), cost));
             }
             select.value = choice.value;
@@ -1777,6 +1886,28 @@ function reviewConversion(row, product) {
     return String(mode === 'packs' ? product.pack_size || 0 : mode === 'packages' ? product.units_per_package || 0 : 1);
 }
 
+async function loadReviewCosts() {
+    for (const row of receivingRows()) {
+        const product = productMap.get(row.dataset.productId);
+        row.querySelector('[data-field="cost_fallback"]').value = knownProductCost(product) ? Number(product.cost_price).toFixed(2) : '';
+        row.querySelector('[data-field="review_conversion"]').value = reviewConversion(row, product);
+        row.querySelector('[data-field="review_cost_units"]').value = selectedCostUnits(row, product);
+        row.querySelector('[data-field="quantity_counts"]').value = JSON.stringify(Object.fromEntries(
+            ['received_qty', 'received_packages', 'received_packs', 'received_loose'].map(name => [name, row.querySelector('[data-field="' + name + '"]').value])));
+    }
+    const data = new FormData(form);
+    const snapshot = new URLSearchParams(data).toString();
+    data.set('preview_costs', '1');
+    const response = await fetch(form.action, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error);
+    if (receivingEditor.inert || snapshot !== new URLSearchParams(new FormData(form)).toString()) return null;
+    const costs = result.costs.flat();
+    const rows = receivingRows();
+    if (costs.length !== rows.length) throw new Error('The receiving entry is incomplete. Split it into smaller entries and try again.');
+    return new Map(rows.map((row, index) => [row, costs[index]]));
+}
+
 let reviewing = false;
 document.getElementById('receiving_next').addEventListener('click', async () => {
     if (reviewing) return;
@@ -1798,23 +1929,26 @@ document.getElementById('receiving_next').addEventListener('click', async () => 
             if (!current) { prior.unavailable = true; changed = true; continue; }
             const inheritsCost = row.querySelector('[data-field="cost_price"]').value.trim() === '';
             changed ||= reviewConversion(row, prior) !== reviewConversion(row, current)
+                || selectedCostUnits(row, prior) !== selectedCostUnits(row, current)
                 || (inheritsCost && (knownProductCost(prior) !== knownProductCost(current) || Number(prior.cost_price) !== Number(current.cost_price)));
             productMap.set(id, current);
             updateProductIdentity(row, current);
-            row.querySelector('[data-field="cost_hint"]').textContent = knownProductCost(current) ? 'Blank uses saved cost: ₱' + Number(current.cost_price).toFixed(2) : 'Cost not recorded — enter cost if known';
+            updateCostBasis(row, current);
             updatePackageConversion(row);
         }
-        if (!validateQuantities()) return;
         if (changed) {
             const status = document.getElementById('entry_status');
             status.textContent = 'Product conversion or saved cost changed. Quantities kept. Check the updated values, then Review again.';
             status.focus();
             return;
         }
-        renderReview(); showStep(3);
-    } catch (_) {
+        if (!validateQuantities()) return;
+        const quotes = await loadReviewCosts();
+        if (quotes) { renderReview(quotes); showStep(3); }
+    } catch (error) {
         const status = document.getElementById('entry_status');
-        status.textContent = 'Current products could not be checked. Values kept. Check your connection and try Review again.';
+        status.textContent = error.message && !(error instanceof TypeError || error instanceof SyntaxError)
+            ? error.message : 'Current products could not be checked. Values kept. Check your connection and try Review again.';
         status.focus();
     } finally { reviewing = false; button.disabled = false; }
 });
@@ -1843,8 +1977,8 @@ window.RetailMindInventoryDrafts?.register({
         const productBasis = {};
         for (const group of lineContainer.children) {
             const product = productMap.get(group.dataset.productId);
-            const {receiving_unit, units_per_package, pack_size, cost_price, cost_known} = product;
-            productBasis[group.dataset.productId] = {receiving_unit, units_per_package, pack_size, cost_price, cost_known};
+            const {receiving_unit, units_per_package, pack_size, cost_price, cost_known, cost_conversions} = product;
+            productBasis[group.dataset.productId] = {receiving_unit, units_per_package, pack_size, cost_price, cost_known, cost_conversions};
         }
         draft.context = {...draft.context, appliedHandoff, pendingScan, productBasis, scanText: productSearchScan.value, step, allocations: true, lines: Array.from(receivingRows(), row => ({...Object.fromEntries(
             Array.from(row.querySelectorAll('[data-field]'), field => [field.dataset.field, field.value])), mode_edited: row.dataset.modeEdited || '', current_product_cost: row.closest('.receiving-product-group').querySelector('.current-product-cost').value, cost_choice_explicit: row.closest('.receiving-product-group').dataset.choiceExplicit || ''}))};
@@ -1975,7 +2109,7 @@ form.addEventListener('submit', event => {
     }
     if (!validateQuantities()) { event.preventDefault(); return; }
     for (const [index, group] of Array.from(lineContainer.children).entries()) {
-        if (groupCosts(group).length > 1 && !group.querySelector('.current-product-cost').value) {
+        if (groupCosts(group, reviewQuotes).length > 1 && !group.querySelector('.current-product-cost').value) {
             event.preventDefault();
             receivingError(document.getElementById('current_product_cost_' + index), 'Choose Current product cost from the batches.');
             return;

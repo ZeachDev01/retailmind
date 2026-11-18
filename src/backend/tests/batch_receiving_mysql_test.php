@@ -33,6 +33,35 @@ try {
     $pdo->exec("INSERT INTO fiscal_periods (period_name, start_date, end_date, status, created_by) VALUES ('Inventory retry test', '2026-01-01', '2099-12-31', 'open', 1)");
     $products = new ProductService($pdo);
     $receiving = new ReceivingService($pdo);
+    $packageProduct = $products->createProduct(['category_id' => 1, 'base_unit' => 'bottle',
+        'receiving_unit' => 'carton', 'units_per_package' => 24, 'pack_size' => 6, 'pack_price' => 30, 'pack_barcode' => 'COST-PACK-6',
+        'cost_price' => '0', 'selling_price' => 20, 'product_name' => 'Carton cost bottles'], 3);
+    $carton = ['cost_price' => '100.00', 'cost_basis' => 'packages'];
+    $deliveryWithCartons = [['product_id' => $packageProduct, 'allocations' => [
+        $carton + ['received_qty' => 24, 'total_cost' => '99.00'],
+        $carton + ['quantity_mode' => 'packages', 'received_packages' => 2],
+        $carton + ['received_qty' => 1],
+        ['quantity_mode' => 'packs', 'received_packs' => 1, 'received_loose' => 1, 'cost_price' => '25', 'cost_basis' => 'packs'],
+        ['received_qty' => 3, 'cost_price' => '4.17'],
+    ]]];
+    $prices = [100.0, 200.0, 4.17, 29.17, 12.51];
+    $cartonEntry = ['operation_token' => str_repeat('c', 48)];
+    $saved = $receiving->receiveShoppingTrip($deliveryWithCartons, $cartonEntry, 3);
+    $assert(json_encode($receiving->receiveShoppingTrip($deliveryWithCartons, $cartonEntry, 3)) === json_encode($saved),
+        'Retry replays the exact purchase records');
+    $assert(array_column($saved, 'total_cost') === $prices, 'One final cent rounding per batch preserves cartons, partial packages and Sales Packs');
+    $history = $receiving->getGroupedReceivingHistory(3)[0];
+    $assert($history['total_cost'] === 345.85 && array_column($history['lines'], 'total_cost') === $prices
+        && array_column($history['lines'], 'cost_basis') === ['packages', 'packages', 'packages', 'packs', 'units']
+        && array_column($history['lines'], 'cost_units_used') === [24, 24, 24, 6, 1]
+        && array_column($history['lines'], 'entered_cost') === [100.0, 100.0, 100.0, 25.0, 4.17],
+        'History sums recorded purchase amounts and reproduces the entered bases');
+    $assert(array_map('floatval', $pdo->query("SELECT total_cost FROM purchase_history WHERE product_id={$packageProduct} ORDER BY purchase_id")->fetchAll(PDO::FETCH_COLUMN)) === $prices,
+        'Purchase history stores the actual amount per batch');
+    $quote = $receiving->reviewShoppingTrip([['product_id' => $packageProduct, 'allocations' => [
+        ['received_qty' => 1, 'cost_price' => '0.12', 'cost_basis' => 'packages'],
+    ]]], 3)[0][0];
+    $assert($quote['total_cents'] === 1 && $quote['unit_cents'] === 1, 'An exact half-cent rounds up once in Review');
     $multi = $products->createProduct(['category_id' => 1, 'base_unit' => 'bottle', 'cost_price' => '5', 'selling_price' => 20, 'product_name' => 'Independent bottles'], 3);
     $delivery = [['product_id' => $multi, 'current_product_cost' => '7.00', 'allocations' => [
         ['received_qty' => 12, 'batch_number' => 'MAY', 'expiration_date' => '2027-05-31', 'cost_price' => '6'],
@@ -54,6 +83,8 @@ try {
         array_replace($delivery[0], ['allocations' => [$delivery[0]['allocations'][0], []]]),
         array_replace($delivery[0], ['allocations' => []]),
         array_replace($delivery[0], ['allocations' => [['quantity_mode' => 'packs', 'received_qty' => 1]]]),
+        array_replace($delivery[0], ['allocations' => [['received_qty' => 1, 'cost_basis' => 'packages', 'cost_price' => '1.00']]]),
+        array_replace($delivery[0], ['allocations' => [['received_qty' => 2, 'cost_price' => '99999999.99']]]),
         array_replace($delivery[0], ['allocations' => [['received_qty' => 2147483647], ['received_qty' => 1]]]),
     ] as $invalidGroup) {
         $rejected = false;
@@ -124,7 +155,7 @@ try {
         ['received_qty' => 2, 'cost_price' => '9', 'batch_number' => 'FIRST', 'expiration_date' => '2099-11-01'],
         ['received_qty' => 3, 'cost_price' => '9.00', 'batch_number' => 'FAIL'],
     ]]];
-    $atomicEntry = ['operation_token' => str_repeat('b', 48)];
+    $atomicEntry = ['operation_token' => str_repeat('b', 48), 'invoice_number' => 'ATOMIC-RETRY'];
     $failed = false;
     try {
         $receiving->receiveShoppingTrip($atomicLines, $atomicEntry, 3);
@@ -139,7 +170,7 @@ try {
     }
     $saved = $receiving->receiveShoppingTrip($atomicLines, $atomicEntry, 3);
     $assert(json_encode($receiving->receiveShoppingTrip($atomicLines, $atomicEntry, 3)) === json_encode($saved), 'Rolled-back multi-batch submissions can retry with the original token');
-    $assert($receiving->getGroupedReceivingHistory(3)[0]['total_accepted_qty'] === 5, 'Successful retry commits every allocation exactly once');
+    $assert($receiving->getGroupedReceivingHistory(3, 1, 'ATOMIC-RETRY')[0]['total_accepted_qty'] === 5, 'Successful retry commits every allocation exactly once');
     echo "Batch receiving MySQL: passed (opening, receiving, legacy purchase, preserved dates, batch readers, transaction rollback)\n";
 } finally {
     $pdo = null;

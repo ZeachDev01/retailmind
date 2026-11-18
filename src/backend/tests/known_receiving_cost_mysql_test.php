@@ -41,9 +41,11 @@ try {
         ['product_id' => $positive, 'received_qty' => 3],
         ['product_id' => $id, 'received_qty' => 1],
     ], [], 3);
-    $lines = $receiving->getGroupedReceivingHistory(3)[0]['lines'];
+    $partial = $receiving->getGroupedReceivingHistory(3)[0];
+    $lines = $partial['lines'];
     $assert(array_column($lines, 'cost_price') === [null, null, 5.0, 0.0], 'Missing, legacy, positive and known zero must stay distinct');
     $assert(array_column($lines, 'total_cost') === [null, null, 15.0, 0.0], 'Partial totals must preserve missing lines alongside known cost');
+    $assert($partial['total_cost'] === 15.0 && $partial['has_unknown_cost'], 'Delivery subtotal reports known cost when other costs are missing');
     $products->updateProductCatalogDetails($legacy, ['product_name' => 'Legacy sample', 'cost_price' => ''], 3);
     $assert(!\App\Inventory\ProductCost::known($products->findProductBySearchTerm('Legacy sample')), 'Blank edit must preserve unknown provenance');
     $products->updateProductCatalogDetails($legacy, ['product_name' => 'Legacy sample', 'cost_price' => '0'], 3);
@@ -87,9 +89,12 @@ try {
     $receiving->receiveShoppingTrip([['product_id' => $unknown, 'allocations' => [
         ['received_qty' => 1, 'cost_price' => '0'], ['received_qty' => 2], ['received_qty' => 1, 'cost_price' => '0.00'],
     ]]], [], 3);
-    $mixed = $receiving->getGroupedReceivingHistory(3)[0]['lines'];
+    $mixedReceipt = $receiving->getGroupedReceivingHistory(3)[0];
+    $mixed = $mixedReceipt['lines'];
     $assert(array_column($mixed, 'cost_price') === [0.0, null, 0.0]
         && array_column($mixed, 'current_product_cost') === [0.0, 0.0, 0.0], 'Deduplicated known zero applies automatically while a sibling remains unknown');
+    $assert($mixedReceipt['product_costs'][$unknown] === ['total_cost' => 0.0, 'has_unknown_cost' => true],
+        'A known zero is a real subtotal even with an unknown sibling');
     $receiving->receiveShoppingTrip([['product_id' => $positive, 'current_product_cost' => '6', 'allocations' => [
         ['received_qty' => 1, 'cost_price' => '6'], ['received_qty' => 1],
     ]]], [], 3);

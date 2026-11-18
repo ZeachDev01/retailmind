@@ -2027,3 +2027,18 @@ PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611130001_user_last_workspace','Remember each user account’s last-used workspace') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611180002_receiving_cost_basis: Preserve the original amount without rewriting legacy rows.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='entered_cost'), 'ALTER TABLE `stock_receiving` ADD COLUMN `entered_cost` DECIMAL(10,2) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='cost_basis'), 'ALTER TABLE `stock_receiving` ADD COLUMN `cost_basis` VARCHAR(20) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='stock_receiving' AND column_name='cost_units_used'), 'ALTER TABLE `stock_receiving` ADD COLUMN `cost_units_used` INT NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180002_receiving_cost_basis','Preserve the entered purchase amount and its receiving cost conversion') ON DUPLICATE KEY UPDATE description=VALUES(description);

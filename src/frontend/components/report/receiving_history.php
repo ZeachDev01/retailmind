@@ -118,6 +118,10 @@ try {
                             <span class="btn btn-secondary inspect-btn rh-shrink-0 rh-gap-2"><span class="history-toggle-label">View Details</span><svg class="history-chevron rh-h-4 rh-w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
                         </summary>
                         <div class="receiving-entry-body" id="entry_body_<?= $entry['entry_key'] ?>">
+                            <p class="history-entry-notes">
+                                <strong><?= $entry['total_cost'] !== null && $entry['has_unknown_cost'] ? 'Known cost' : 'Purchase total' ?></strong>
+                                <?= $entry['total_cost'] !== null ? '₱' . number_format($entry['total_cost'], 2) : 'Not recorded' ?>
+                            </p>
                             <?php if ($entry['notes']): ?>
                                 <p class="history-entry-notes"><strong>Entry notes:</strong> <?= htmlspecialchars($entry['notes']) ?></p>
                             <?php endif; ?>
@@ -131,13 +135,16 @@ try {
                                             <th scope="col">Accepted</th>
                                             <th scope="col">Damaged</th>
                                             <th scope="col">Quantity Mode &amp; Conversion</th>
-                                            <th scope="col">Cost per base unit (PHP)</th>
+                                            <th scope="col">Purchase cost</th>
                                             <th scope="col">Batch / Expiry</th>
                                             <th scope="col">Discrepancy / Notes</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <?php $shownCurrentCosts = []; ?>
+                                        <?php
+                                        $shownProductCosts = [];
+                                        $batchCounts = array_count_values(array_column($entry['lines'], 'product_id'));
+                                        ?>
                                         <?php foreach ($entry['lines'] as $line): ?>
                                             <tr>
                                                 <td><?= htmlspecialchars($line['product_name']) ?></td>
@@ -174,16 +181,30 @@ try {
                                                 </td>
                                                 <td>
                                                     <?php if ($line['cost_price'] !== null): ?>
-                                                        ₱<?= number_format((float)$line['cost_price'], 2) ?>
+                                                        ₱<?= number_format($line['cost_price'], 2) ?> / base unit<br>
+                                                    <?php endif; ?>
+                                                    <?php if ($line['total_cost'] !== null): ?>
+                                                        <strong>Batch total</strong> ₱<?= number_format($line['total_cost'], 2) ?>
                                                     <?php else: ?>
                                                         <span class="cost-unknown">Not recorded</span>
                                                     <?php endif; ?>
-                                                    <?php if (!empty($line['cost_source']) && $line['cost_source'] !== 'unknown'): ?>
+                                                    <?php if ($line['entered_cost'] !== null && $line['cost_basis'] !== 'units'): ?>
+                                                        <br><small>Entered ₱<?= number_format($line['entered_cost'], 2) ?> per <?= $line['cost_basis'] === 'packs' ? 'Sales Pack' : 'receiving package' ?>
+                                                            (<?= $line['cost_units_used'] ?> base units)</small>
+                                                    <?php elseif (!empty($line['cost_source']) && $line['cost_source'] !== 'unknown'): ?>
                                                         <br><small><?= $line['cost_source'] === 'product' ? 'Saved product cost' : 'Entered for this batch' ?></small>
                                                     <?php endif; ?>
-                                                    <?php if (!isset($shownCurrentCosts[$line['product_id']]) && $line['current_product_cost'] !== null): ?>
-                                                        <br><small>Current product cost: ₱<?= number_format($line['current_product_cost'], 2) ?></small>
-                                                        <?php $shownCurrentCosts[$line['product_id']] = true; ?>
+                                                    <?php if (!isset($shownProductCosts[$line['product_id']])): ?>
+                                                        <?php
+                                                        $shownProductCosts[$line['product_id']] = true;
+                                                        $productCost = $entry['product_costs'][$line['product_id']];
+                                                        ?>
+                                                        <?php if ($batchCounts[$line['product_id']] > 1 && $productCost['total_cost'] !== null): ?>
+                                                            <br><small><?= $productCost['has_unknown_cost'] ? 'Product known cost' : 'Product total' ?> ₱<?= number_format($productCost['total_cost'], 2) ?></small>
+                                                        <?php endif; ?>
+                                                        <?php if ($line['current_product_cost'] !== null): ?>
+                                                            <br><small>Current product cost: ₱<?= number_format($line['current_product_cost'], 2) ?></small>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
                                                 </td>
                                                 <td>

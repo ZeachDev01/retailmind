@@ -108,6 +108,17 @@ $assert(($row2['Recorded Value'] ?? '') === '100.00', 'Batch linked to receiving
 $assert(($row2['Estimated Value'] ?? '') === '0.00', 'Estimated value is 0.00');
 $assert(($row2['Valuation Status'] ?? '') === 'recorded', 'Status is recorded');
 
+$pdo->exec("INSERT INTO products VALUES (20, 1, 'C24', NULL, 'Carton Bottles', 1, 4.17, 15.00, 0)");
+$pdo->exec("INSERT INTO inventory VALUES (20, 24)");
+$pdo->exec("INSERT INTO stock_receiving VALUES (20, 4.17, 100.00, 24, 24)");
+$pdo->exec("INSERT INTO product_batches VALUES (20, 20, 20, 'CARTON', 24, 4.17, '2027-01-01')");
+$cartonFilters = ['store_id' => 1, 'product_id' => 20, 'category_id' => 0, 'from' => '2026-10-01', 'to' => '2026-10-28'];
+$assert(run_report($pdo, 'inventory_valuation', $cartonFilters)['rows'][0]['Recorded Value'] === '100.00',
+    'Valuation reproduces the recorded carton amount even when the batch has a rounded unit cost');
+$pdo->exec("UPDATE inventory SET quantity_on_hand=12 WHERE product_id=20; UPDATE product_batches SET remaining_quantity=12 WHERE batch_id=20");
+$assert(run_report($pdo, 'inventory_valuation', $cartonFilters)['rows'][0]['Recorded Value'] === '50.00',
+    'Valuation prorates the recorded batch amount when only part remains');
+
 // --- Test Case 3: Explicit zero batch cost vs default-zero / missing cost ---
 // Product 3: Explicit recorded zero purchase cost (e.g. promotional free goods or free sample received at 0.00)
 $pdo->exec("INSERT INTO products VALUES (3, 1, 'P3', NULL, 'Explicit Zero Cost', 1, 0.00, 10.00, 0)");
