@@ -5281,8 +5281,10 @@ body.system-health-open {
 #add-product-modal .product-create-options > summary:has(.product-option-value:not(:empty))::after { margin-inline-start: 0; }
 #add-product-modal #create-label-options { margin-top: .5rem; max-width: 12rem; }
 #add-product-modal #create-opening-quantity:has(#stock-sales-packs-wrapper:not([hidden])) { grid-column: 1 / -1; }
-#add-product-modal .create-photo-preview { display: flex; align-items: center; gap: .75rem; margin-top: .5rem; }
-#add-product-modal #image-preview { object-fit: contain; border: 1px solid var(--border); border-radius: 8px; }
+#add-product-modal .product-create-photo { margin-top: 1rem; }
+#add-product-modal #image-preview-container { margin-top: .75rem; }
+#add-product-modal #create-photo-attribution { margin-top: .35rem; }
+#add-product-modal #image-preview { display: block; max-width: 100%; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; }
 #add-product-modal .product-create-options[open] > summary { margin-bottom: .75rem; }
 #add-product-modal summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 #add-product-modal #product-create-error { color: var(--theme-danger-text, #b91c1c); margin-bottom: 1rem; }

@@ -2069,3 +2069,10 @@ PREPARE rm_stmt FROM @rm_sql;
 EXECUTE rm_stmt;
 DEALLOCATE PREPARE rm_stmt;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180004_product_declared_size','Store the size printed on the Individual Item separately from operational units') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+-- 202611180005_product_image_source: keep attribution for Open Food Facts Product photos.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='products' AND column_name='product_image_source'), 'ALTER TABLE `products` ADD COLUMN `product_image_source` VARCHAR(255) NULL DEFAULT NULL', 'DO 0');
+PREPARE rm_product_image_source FROM @rm_sql;
+EXECUTE rm_product_image_source;
+DEALLOCATE PREPARE rm_product_image_source;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180005_product_image_source','Keep attribution for saved Open Food Facts Product photos') ON DUPLICATE KEY UPDATE description=VALUES(description);

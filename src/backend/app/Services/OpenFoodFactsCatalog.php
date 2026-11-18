@@ -3,6 +3,7 @@
 final class OpenFoodFactsCatalog
 {
     private const ORIGIN = 'https://world.openfoodfacts.org';
+    public const PHOTO_LICENSE_URL = 'https://creativecommons.org/licenses/by-sa/3.0/';
     private const FIELDS = 'code,product_name,brands,quantity,categories_tags,image_front_url';
 
     public static function supports(string $code): bool
@@ -33,11 +34,6 @@ final class OpenFoodFactsCatalog
 
         $tags = $product['categories_tags'] ?? [];
         $photo = $product['image_front_url'] ?? null;
-        $photoParts = is_string($photo) ? parse_url($photo) : false;
-        $allowedPhoto = $photoParts && ($photoParts['scheme'] ?? '') === 'https'
-            && in_array($photoParts['host'] ?? '', ['images.openfoodfacts.org', 'static.openfoodfacts.org'], true)
-            && !isset($photoParts['user']) && !isset($photoParts['port'])
-            && str_starts_with($photoParts['path'] ?? '', '/images/products/');
 
         return [
             'status' => 'found',
@@ -46,12 +42,12 @@ final class OpenFoodFactsCatalog
                 'brand' => self::text($product['brands'] ?? null, 100),
                 'declared_size' => self::text($product['quantity'] ?? null, 100),
                 'category_tags' => is_array($tags) ? array_values(array_filter($tags, 'is_string')) : [],
-                'photo_url' => $allowedPhoto ? $photo : null,
+                'photo_url' => is_string($photo) && self::isPhotoUrl($photo) ? $photo : null,
             ],
             'source' => [
                 'name' => 'Open Food Facts',
                 'product_url' => self::ORIGIN . '/product/' . $returnedCode,
-                'photo_license_url' => 'https://creativecommons.org/licenses/by-sa/3.0/',
+                'photo_license_url' => self::PHOTO_LICENSE_URL,
             ],
         ];
     }
@@ -63,7 +59,19 @@ final class OpenFoodFactsCatalog
         return $value !== '' && mb_strlen($value) <= $limit ? $value : null;
     }
 
-    private static function request(string $url): array
+    private static function isPhotoUrl(string $url): bool
+    {
+        return preg_match('~^https://(?:images|static)\.openfoodfacts\.org/images/products/(?:[0-9]+/)*[0-9]+/[a-z0-9_][a-z0-9_.-]*\.(?:jpe?g|png|gif|webp)$~D', $url) === 1;
+    }
+
+    public static function downloadPhoto(string $url, int $limit, ?callable $request = null): ?string
+    {
+        if (!self::isPhotoUrl($url)) return null;
+        [$status, $body] = $request ? $request($url) : self::request($url, $limit, 'image/*');
+        return $status === 200 && is_string($body) && strlen($body) <= $limit ? $body : null;
+    }
+
+    private static function request(string $url, int $limit = 65536, string $accept = 'application/json'): array
     {
         if (!function_exists('curl_init')) return [0, null];
 
@@ -73,9 +81,10 @@ final class OpenFoodFactsCatalog
             CURLOPT_CONNECTTIMEOUT_MS => 1500,
             CURLOPT_TIMEOUT_MS => 3500,
             CURLOPT_USERAGENT => 'RetailMind/1.0 (https://github.com/ZeachDev01/retailmind)',
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body): int {
-                if (strlen($body) + strlen($chunk) > 65536) return 0;
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_HTTPHEADER => ['Accept: ' . $accept],
+            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body, $limit): int {
+                if (strlen($body) + strlen($chunk) > $limit) return 0;
                 $body .= $chunk;
                 return strlen($chunk);
             },
