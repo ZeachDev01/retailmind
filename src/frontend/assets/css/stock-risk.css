@@ -20,7 +20,8 @@
 .stock-risk .sr-search input { width:100%; min-width:0; border:0; border-radius:9px; min-height:42px; background:transparent; color:var(--text); padding:10px 0; font-size:.84rem; caret-color:var(--primary); }
 .stock-risk .sr-search input::placeholder { color:var(--muted); opacity:1; }
 .stock-risk select { color:var(--text); background:var(--sr-surface); border:1px solid var(--border); border-radius:9px; min-height:42px; padding:8px 10px; font-size:.84rem; max-width:100%; }
-.stock-risk .sr-review-period { margin-left:auto; display:flex; align-items:center; gap:4px; }
+.stock-risk :is(.sr-metric-tools,.sr-metric-label) { display:flex; align-items:center; gap:6px; }
+.stock-risk .sr-metric-tools { flex:none; flex-wrap:wrap; max-width:100%; color:var(--muted); font-size:.78rem; }
 .stock-risk .sr-mobile-sort { display:none; }
 .stock-risk .sr-table-scroll { overflow:auto; scrollbar-color:var(--border) transparent; scrollbar-width:thin; }
 .stock-risk .sr-table { width:100%; border-collapse:collapse; margin:0; font-size:.86rem; }
@@ -30,6 +31,13 @@
 .stock-risk .sr-table td { padding:16px 14px; vertical-align:middle; border-bottom:1px solid var(--border); }
 .stock-risk .sr-table tbody > tr[data-risk-row]:hover { background:var(--sr-soft); }
 .stock-risk .sr-num { text-align:right; font-variant-numeric:tabular-nums; }
+.stock-risk .sr-table td.sr-90-day-sales { min-width:270px; }
+.stock-risk .sr-sales-chart { position:relative; height:38px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+.stock-risk .sr-sales-chart canvas { position:absolute; inset:0; }
+.stock-risk .sr-sales-periods { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); text-align:center; white-space:normal; margin:0; }
+.stock-risk .sr-sales-periods > div { display:grid; grid-template-rows:subgrid; grid-row:span 2; padding-inline:2px; }
+.stock-risk .sr-sales-periods dd { margin:4px 0 0; font-variant-numeric:tabular-nums; }
+.stock-risk .sr-sales-range,.stock-risk .sr-sales-coverage { display:block; line-height:1.35; }
 .stock-risk .sr-product { min-width:140px; max-width:250px; }
 .stock-risk .sr-product-link { display:block; text-align:left; font-weight:600; color:var(--primary); background:transparent; border:0; padding:0; overflow-wrap:anywhere; }
 .stock-risk .sr-product-link:hover { text-decoration:underline; text-underline-offset:3px; }
@@ -104,6 +112,7 @@
     .stock-risk .sr-table tr[data-risk-row] { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); padding:16px; gap:14px 8px; border-bottom:1px solid var(--border); }
     .stock-risk .sr-table tr[data-risk-row] td { padding:0; border:0; text-align:left; }
     .stock-risk .sr-table tr[data-risk-row] td:first-child { grid-column:1/3; }
+    .stock-risk .sr-table td.sr-90-day-sales { grid-row:4; grid-column:1/-1; min-width:0; }
     .stock-risk .sr-table tr[data-risk-row] .sr-status { grid-column:1/3; align-self:center; }
     .stock-risk .sr-table tr[data-risk-row] .sr-row-action { grid-column:3; grid-row:1; justify-self:end; align-self:start; }
     .stock-risk .sr-table td[data-label]::before { content:attr(data-label); display:block; color:var(--muted); font-size:.7rem; margin-bottom:6px; }

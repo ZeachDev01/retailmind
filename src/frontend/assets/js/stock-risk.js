@@ -4,6 +4,8 @@
     const rows = Array.from(root.querySelectorAll('[data-risk-row]'));
     const search = root.querySelector('#risk-search');
     const stockFilter = root.querySelector('#movement-stock');
+    const salesMetric = root.querySelector('#movement-sales-metric');
+    const salesCharts = new Map();
     const reportButton = root.querySelector('#movement-report');
     const body = root.querySelector('#risk-table-body');
     const sorters = Array.from(root.querySelectorAll('[data-risk-sort]'));
@@ -12,6 +14,7 @@
     const drawer = root.querySelector('#movement-drawer');
     const detailBody = root.querySelector('#movement-detail-body');
     const collator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
+    const numberFormat = new Intl.NumberFormat('en-PH');
     let page = 1;
     let sort = 'days';
     let direction = 1;
@@ -20,6 +23,53 @@
     function matchingRows() {
         const query = search.value.trim().toLowerCase();
         return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0) && row.dataset.search.includes(query));
+    }
+    function renderSales() {
+        if (!root.getClientRects().length) return;
+        const metric = salesMetric.value;
+        const unit = metric === 'days' ? 'selling days' : 'base units sold';
+        const color = getComputedStyle(root).getPropertyValue('--primary').trim() || '#2563eb';
+        for (const [row, chart] of salesCharts) {
+            if (!row.hidden) continue;
+            chart.canvas.parentElement.hidden = true;
+            chart.destroy();
+            salesCharts.delete(row);
+        }
+        rows.filter(row => !row.hidden).forEach(row => {
+            const values = Array.from(row.querySelectorAll('.sr-sales-value'), value => {
+                const amount = value.dataset[metric] === '' ? null : Number(value.dataset[metric]);
+                value.textContent = amount === null ? '—' : numberFormat.format(amount);
+                value.nextElementSibling.textContent = amount === null ? unit + ' unavailable' : unit;
+                return value.dataset.coverage === 'unavailable' ? null : amount;
+            });
+            if (!window.Chart) return;
+            const canvas = row.querySelector('.sr-sales-chart canvas');
+            const chart = salesCharts.get(row);
+            try {
+                if (chart) {
+                    chart.data.datasets[0].data = values;
+                    chart.data.datasets[0].backgroundColor = color;
+                    chart.update();
+                    return;
+                }
+                const context = canvas.getContext('2d');
+                if (!context) return;
+                canvas.parentElement.hidden = false;
+                salesCharts.set(row, new window.Chart(context, {
+                    type:'bar',
+                    data:{labels:values.map((_, index) => index), datasets:[{data:values, backgroundColor:color, maxBarThickness:36}]},
+                    options:{
+                        maintainAspectRatio:false, animation:false, events:[],
+                        plugins:{legend:{display:false}},
+                        scales:{x:{display:false}, y:{display:false, beginAtZero:true}}
+                    }
+                }));
+            } catch {
+                canvas.parentElement.hidden = true;
+                salesCharts.delete(row);
+                window.Chart.getChart?.(canvas)?.destroy();
+            }
+        });
     }
     function render() {
         const matching = matchingRows();
@@ -33,9 +83,13 @@
         root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
         previous.disabled = page === 1;
         next.disabled = page === pages;
+        renderSales();
     }
     search.addEventListener('input', () => { page = 1; render(); });
     stockFilter.addEventListener('change', () => { page = 1; render(); });
+    salesMetric.addEventListener('change', renderSales);
+    root.addEventListener('retailmind:stockmovementopen', renderSales);
+    window.addEventListener('retailmind:themechange', renderSales);
     function outsideDrawer(event) {
         if (event.target !== drawer) return;
         const rect = drawer.getBoundingClientRect();
