@@ -34,7 +34,8 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
         $recent_movements[] = ['product_name' => $name, 'sku' => 'SKU-' . $i, 'change_qty' => 3 - $i,
             'reason' => 'adjustment', 'moved_by_name' => 'Inventory Manager', 'moved_at' => sprintf('2026-11-%02d 10:00:00', 11 - $i)];
     }
-    $productCategories = ['Food']; $chartDataJson = '{}';
+    $productCategories = ['Food'];
+    $chartDataJson = '{"status":{"labels":["In stock"],"values":[3],"keys":["in-stock"]},"categories":{"labels":["Food"],"values":[30]}}';
     $_SESSION['display_name'] = 'Inventory Reviewer <test>';
     $movementPeriod = \\App\\Inventory\\StockMovementReader::period('2026-11-12');
     $pdo = new PDO('sqlite::memory:');
@@ -440,7 +441,10 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             assert.deepEqual(errors, []);
             await page.close();
         }
-        const direct = await browser.newPage({viewport:{width:1440, height:1000}});
+        const directWidth = 320;
+        const direct = await browser.newPage({viewport:{width:directWidth, height:1000}});
+        const directErrors = [];
+        direct.on('pageerror', error => directErrors.push(error.message));
         await direct.addInitScript(() => { window.RetailMindUI = {}; });
         const styles = ['style.css', 'inventory.css', 'stock-risk.css']
             .map(file => '<link rel="stylesheet" href="/assets/css/' + file + '">').join('');
@@ -449,22 +453,24 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             + html.replace('<script>', '<script src="/assets/js/stock-risk.js"></script><script>');
         await direct.route('https://retailmind.test/**', route => {
             const {pathname} = new URL(route.request().url());
-            if (pathname === '/overview') return route.fulfill({body:directHtml, contentType:'text/html'});
+            if (pathname === '/overview') return route.fulfill({body:directHtml, contentType:'text/html; charset=utf-8'});
             if (pathname.startsWith('/assets/')) return route.fulfill({path:path.join(frontend, pathname)});
             return route.abort();
         });
         await direct.goto('https://retailmind.test/overview?tab=movement');
+        assert.deepEqual(directErrors, []);
         assert.equal(await direct.getByRole('tab', {name:'Stock Movement', exact:true}).getAttribute('aria-selected'), 'true');
         assert.deepEqual(
-            (await drawnBarPixels(await assertRowPeriods(direct, coverageExamples[1], 'units', 1440))).map(count => count > 0),
+            (await drawnBarPixels(await assertRowPeriods(direct, coverageExamples[1], 'units', directWidth))).map(count => count > 0),
             [false, false, true], 'A direct link renders after the deferred local chart bundle loads'
         );
         await direct.route('**/assets/vendor/chartjs/chart.umd.min.js', route => route.abort());
         await direct.goto('https://retailmind.test/overview#stock-movement');
-        const fallback = await assertRowPeriods(direct, coverageExamples[1], 'units', 1440);
+        const fallback = await assertRowPeriods(direct, coverageExamples[1], 'units', directWidth);
         assert.equal(await fallback.locator('canvas').isVisible(), false, 'Exact figures remain readable when the chart bundle is unavailable');
         await direct.getByLabel('Sales metric', {exact:true}).selectOption('days');
-        await assertRowPeriods(direct, coverageExamples[1], 'days', 1440);
+        await assertRowPeriods(direct, coverageExamples[1], 'days', directWidth);
+        assert.deepEqual(directErrors, []);
         await direct.close();
         console.log('Inventory overview clarity: passed');
     } finally {

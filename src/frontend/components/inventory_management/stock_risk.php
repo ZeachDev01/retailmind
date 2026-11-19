@@ -36,7 +36,7 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             <div class="sr-metric-tools">
                 <div class="sr-metric-label">
                     <label for="movement-sales-metric">Sales metric</label>
-                    <span class="info-tooltip sr-coverage-guide"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip">Bars compare periods within each product. <?= htmlspecialchars($coverageNote) ?></span></span>
+                    <span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip">Bars compare periods within each product. <?= htmlspecialchars($coverageNote) ?></span></span>
                 </div>
                 <select id="movement-sales-metric" aria-controls="risk-table-body"><option value="units">Units sold (base units)</option><option value="days">Selling days</option></select>
             </div>
@@ -49,7 +49,7 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             <thead><tr>
                 <th scope="col" aria-sort="none"><button type="button" data-risk-sort="name">Product<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                 <th scope="col" class="sr-num" aria-sort="none"><button type="button" data-risk-sort="stock">Stock<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
-                <th scope="col" class="sr-90-day-sales" aria-sort="none"><button type="button" data-risk-sort="sales" aria-label="90-day sales, sort by latest units sold" title="Sort by latest units sold">90-day sales<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
+                <th scope="col" aria-sort="none"><button type="button" data-risk-sort="sales" aria-label="90-day sales, sort by latest units sold" title="Sort by latest units sold">90-day sales<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                 <th scope="col" class="sr-num" aria-sort="ascending"><button type="button" data-risk-sort="days">Selling days<i class="bi bi-arrow-up" aria-hidden="true"></i></button><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About selling days" aria-describedby="movement-days-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-days-help" role="tooltip">Distinct days with recorded sales in the latest 30 days. Multiple purchases on one day count as one day. Quantity sold is measured separately.</span></span></th>
                 <th scope="col">Status <?php $statusGuideId = 'movement-status-help'; include __DIR__ . '/stock_movement_status_help.php'; ?></th><th scope="col">Trend</th><th scope="col" aria-label="Product details"></th>
             </tr></thead>
