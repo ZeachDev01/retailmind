@@ -5,6 +5,7 @@ const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 
 const frontend = path.resolve(__dirname, '../../frontend');
+const php = process.env.PHP_BINARY || 'php';
 const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/inventory_overview.php'), 'utf8');
 const statusHelp = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_movement_status_help.php'), 'utf8');
 const riskView = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_risk.php'), 'utf8')
@@ -12,8 +13,8 @@ const riskView = fs.readFileSync(path.join(frontend, 'components/inventory_manag
 const template = source.slice(source.indexOf('<body'))
     .replace("<?php include __DIR__ . '/stock_risk.php'; ?>", riskView)
     .replace(/<\?php include[^?]+\?>/g, '')
-    .replace(/^<script src=.*stock-risk\.js.*<\/script>\r?$/gm, '');
-const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8', input: `<?php
+    .replace(/^<script src=.*(?:stock-risk|info-tooltip)\.js.*<\/script>\r?$/gm, '');
+const html = execFileSync(php, [], {encoding: 'utf8', input: `<?php
     require_once ${JSON.stringify(path.resolve(__dirname, '../bootstrap/app.php').replaceAll('\\', '/'))};
     function app_url($path) { return $path; }
     function format_display_datetime($value) { return $value; }
@@ -51,6 +52,12 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             'received' => 8, 'sale_out' => -10, 'returns' => 2, 'other' => -2];
     }
 ?>${template}`});
+const navigationScript = fs.readFileSync(path.join(frontend, 'assets/js/page-navigation.js'), 'utf8');
+const pageHtml = '<!doctype html><html><head><title>Stock Overview</title></head>' + html.replace('<div class="app-shell">', shell =>
+    `${shell}<!--rm-shell-start--><script data-workspace="admin">${navigationScript}</script><!--rm-shell-end-->`);
+const navigationFixture = path.join(__dirname, 'support/navigation_response_fixture.php');
+const fullPage = execFileSync(php, [navigationFixture], {encoding: 'utf8', input: pageHtml});
+const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8', input: pageHtml});
 
 (async () => {
     const browser = await chromium.launch({headless: true});
@@ -61,7 +68,19 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             const page = await browser.newPage({viewport: {width, height: 1000}});
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
-            await page.setContent('<!doctype html><html><head></head>' + html);
+            const overviewUrl = 'http://retailmind.test/retailmind/src/frontend/components/inventory_management/inventory_overview.php';
+            let refreshRequests = 0;
+            await page.route(url => url.pathname.endsWith('/inventory_overview.php'), route => {
+                if (route.request().headers()['x-retailmind-navigation'] === '1') {
+                    refreshRequests++;
+                    return route.fulfill({contentType: 'application/vnd.retailmind.page+json', body: partialPage});
+                }
+                return route.fulfill({contentType: 'text/html; charset=utf-8', body: fullPage});
+            });
+            await page.addInitScript(() => {
+                window.RetailMindUI = {hasUnsavedChanges: () => false, dismissOverlays() {}, initPageContent() {}};
+            });
+            await page.goto(overviewUrl);
             assert.equal(await page.locator('#overview-forecast').count(), 0, 'Stock Movement replaces the forecast comparison');
             for (const file of ['theme.css', 'style.css', 'inventory.css', 'stock-risk.css']) {
                 await page.addStyleTag({path: path.join(frontend, 'assets/css', file)});
@@ -71,9 +90,6 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.addStyleTag({content: iconCss + `\n@font-face{font-family:bootstrap-icons;src:url(data:font/woff2;base64,${iconFont}) format('woff2')}`});
             await page.addScriptTag({path: path.join(frontend, 'assets/js/stock-risk.js')});
             await page.addScriptTag({path: path.join(frontend, 'assets/js/info-tooltip.js')});
-            // The shared shell normally loads this before the page script.
-            await page.evaluate(() => { window.RetailMindUI = {}; });
-            await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
             assert.equal(await page.getByRole('heading', {name: 'Demand Forecast vs Current Stock', exact: true}).count(), 0, 'Stock Overview omits the forecast comparison card');
             assert.equal(await page.getByText('No forecasts available. Check Demand Forecasting.', {exact: true}).count(), 0, 'Stock Overview omits the forecast empty state');
             assert.equal(await page.locator('#overview-panel-movements').isVisible(), true, 'Movements are visible on first entry');
@@ -269,17 +285,29 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             }
             assert.equal(await page.locator('#overviewStatusChart').count(), 0, 'Offline charts present their fallback');
             assert.equal(await page.locator('.overview-chart-fallback').first().isVisible(), true, 'Charts remain visible');
-            const returnRefreshes = await page.evaluate(() => {
-                let calls = 0;
-                window.RetailMindNavigation = {navigate(url, options) {
-                    if (url === location.href && options.history === 'none') calls++;
-                }};
+            for (const [name, selected] of [['Stock Movement', 'Stock Movement'], ['Products', 'Total products'], ['Stock Overview', 'Stock Overview']]) {
+                await page.getByRole('tab', {name, exact: true}).click();
+                await page.reload();
+                assert.equal(await page.getByRole('tab', {name: selected, exact: true}).getAttribute('aria-selected'), 'true', `${name} remains selected after reload`);
+            }
+            await page.goto(overviewUrl + '?source=legacy#stock-risk');
+            assert.equal(await page.getByRole('tab', {name: 'Stock Movement', exact: true}).getAttribute('aria-selected'), 'true', 'Legacy Stock Movement links still open the tab');
+            await page.getByRole('tab', {name: 'Products', exact: true}).click();
+            const stockFilter = page.getByLabel('Filter by stock status');
+            await stockFilter.selectOption('out');
+            const historyLength = await page.evaluate(() => history.length);
+            const previousRequests = refreshRequests;
+            await page.evaluate(() => {
+                window.addEventListener('retailmind:pagechange', () => { window.inventoryRefreshComplete = true; }, {once: true});
                 window.dispatchEvent(new Event('blur'));
                 window.dispatchEvent(new Event('focus'));
                 window.dispatchEvent(new Event('focus'));
-                return calls;
             });
-            assert.equal(returnRefreshes, 1, 'Returning to inventory fetches a fresh view once without adding history');
+            await page.waitForFunction(() => window.inventoryRefreshComplete, null, {timeout: 5000});
+            assert.equal(refreshRequests, previousRequests + 1, 'Returning to inventory fetches a fresh view once');
+            assert.equal(await page.evaluate(() => history.length), historyLength, 'Refreshing does not add browser history');
+            assert.equal(await page.getByRole('tab', {name: 'Out of stock', exact: true}).getAttribute('aria-selected'), 'true', 'Returning to the page refreshes filtered Products in place');
+            assert.equal(await stockFilter.inputValue(), 'out');
             assert.deepEqual(errors, []);
             await page.close();
         }

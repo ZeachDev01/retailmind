@@ -84,6 +84,8 @@ Retire the obsolete procurement workflow completely, including its reachable rou
 - A recommendation may help select a product for receiving, but must never prefill actual received quantities, create an order/request, or mutate stock. Unplanned purchases receive equal support.
 - Receiving History is a dedicated page. Identify products, actual received/accepted/damaged quantities, the pack conversion used, available batch/expiry and shopping details, optional costs, recording staff, and time. Associate lines saved together with the same shopping entry, reusing existing storage where sufficient and adding only the minimal grouping storage if needed.
 - Receiving History is distinct from customer Receipt History. Reuse authorized history visibility; it must not become a cashier-facing inventory-write surface.
+- Receiving History shows one row per shopping entry, newest first. Opening an entry shows its individual receiving lines on a separate page. Back to History restores the search and history page. Previous Entry and Next Entry follow that search across page boundaries.
+- The detail table shows 25 lines per page by default, with 50 and 100 available. Product A–Z is the default order. Product, SKU, delivered units, accepted units, damaged units, and expiry can sort all lines before pagination. Missing expiry dates sort last in either direction.
 - Make inventory execution prominent in Inventory Manager navigation. Keep forecasting reports secondary, and place Stock Issue review with inventory control rather than burying it among forecasting reports.
 
 ### Shared stock-write boundary and cashier integration

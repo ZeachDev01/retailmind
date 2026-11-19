@@ -16,6 +16,15 @@ $search = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
 $pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
 $pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$entryKey = $_GET['entry'] ?? null;
+$entry = null;
+$neighbors = null;
+$sortColumns = ['product_name', 'sku', 'received_qty', 'accepted_qty', 'damaged_qty', 'expiration_date'];
+$sort = in_array($_GET['sort'] ?? null, $sortColumns, true) ? $_GET['sort'] : 'product_name';
+$direction = ($_GET['direction'] ?? null) === 'desc' ? 'desc' : 'asc';
+$itemPageSize = filter_var($_GET['item_length'] ?? 25, FILTER_VALIDATE_INT);
+$itemPageSize = in_array($itemPageSize, [25, 50, 100], true) ? $itemPageSize : 25;
+$itemPage = filter_var($_GET['item_page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 $totalRows = 0;
 $totalPages = 1;
 $hasNext = false;
@@ -23,17 +32,63 @@ try {
     if (preg_match('/\A.{0,200}\z/us', $search) !== 1) {
         throw new InvalidArgumentException('Keep your search to 200 characters.');
     }
-    $totalRows = $receivingService->countGroupedReceivingHistory($historyUserId, $search);
-    $totalPages = max(1, (int)ceil($totalRows / $pageSize));
-    $page = min($page, $totalPages);
-    $entries = $receivingService->getGroupedReceivingHistory($historyUserId, $page, $search, $pageSize);
-    $entries = array_slice($entries, 0, $pageSize);
-    $hasNext = $page < $totalPages;
+    if ($entryKey === null) {
+        $totalRows = $receivingService->countGroupedReceivingHistory($historyUserId, $search);
+        $totalPages = max(1, (int)ceil($totalRows / $pageSize));
+        $page = min($page, $totalPages);
+        $entries = array_slice($receivingService->getGroupedReceivingHistory($historyUserId, $page, $search, $pageSize), 0, $pageSize);
+        $hasNext = $page < $totalPages;
+    } else {
+        if (is_string($entryKey) && preg_match('/\A[gr]_[1-9][0-9]{0,19}\z/', $entryKey) === 1) {
+            $neighbors = $receivingService->getReceivingHistoryNeighbors($historyUserId, $search, $entryKey);
+            if ($neighbors !== null) {
+                $entry = $receivingService->getGroupedReceivingHistory($historyUserId, entryKey: $entryKey)[0] ?? null;
+            }
+        }
+        if ($entry === null) {
+            http_response_code(404);
+            $error = 'Receiving entry not found.';
+        }
+    }
 } catch (InvalidArgumentException $e) {
     $error = $e->getMessage();
 } catch (Throwable $e) {
     error_log('Receiving history could not be loaded: ' . $e);
     $error = 'Failed to load receiving history. Please refresh or try again.';
+}
+
+$historyTitle = $canReceive ? 'My Receiving History' : 'Store Receiving History';
+$title = $entry !== null ? 'Entry #' . $entry['group_id'] : $historyTitle;
+$historyFilters = ['page' => $page, 'length' => $pageSize, 'q' => $search === '' ? null : $search];
+$url = static fn(array $params = []): string => '?' . http_build_query($params + $historyFilters);
+
+if ($entry !== null) {
+    $lines = $entry['lines'];
+    $batchCounts = array_count_values(array_column($lines, 'product_id'));
+    $firstProductLines = array_column(array_reverse($lines), 'receiving_id', 'product_id');
+    usort($lines, static function (array $left, array $right) use ($sort, $direction): int {
+        $a = $left[$sort];
+        $b = $right[$sort];
+        if ($sort === 'expiration_date' && (!$a || !$b)) {
+            $result = (int)!$a <=> (int)!$b;
+        } else {
+            $result = is_int($a) ? $a <=> $b : strnatcasecmp($a, $b);
+            $result *= $direction === 'desc' ? -1 : 1;
+        }
+        return $result ?: $left['receiving_id'] <=> $right['receiving_id'];
+    });
+    $itemCount = count($lines);
+    $itemLastPage = max(1, (int)ceil($itemCount / $itemPageSize));
+    $itemPage = min($itemPage, $itemLastPage);
+    $itemOffset = ($itemPage - 1) * $itemPageSize;
+    $itemRows = array_slice($lines, $itemOffset, $itemPageSize);
+    $detailFilters = ['entry' => $entryKey, 'sort' => $sort, 'direction' => $direction, 'item_length' => $itemPageSize];
+    $detailUrl = static fn(array $params = []): string => $url($params + $detailFilters);
+    $itemHeaders = [
+        'product_name' => 'Product', 'sku' => 'SKU', 'received_qty' => 'Delivered',
+        'accepted_qty' => 'Accepted', 'damaged_qty' => 'Damaged', 'quantity_mode' => 'Quantity Mode & Conversion',
+        'cost_price' => 'Purchase cost', 'expiration_date' => 'Batch / Expiry', 'notes' => 'Discrepancy / Notes',
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -41,53 +96,50 @@ try {
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receiving History</title>
+    <title><?= htmlspecialchars($title) ?></title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/reports.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/reports.css')) ?>">
-    <style>
-        /* Page-scoped Tailwind utilities, compiled with preflight disabled. */
-        /* tailwind:start */
-        .rh-sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border-width:0!important}.rh-pointer-events-none{pointer-events:none!important}.rh-absolute{position:absolute!important}.rh-relative{position:relative!important}.rh-bottom-0{bottom:0!important}.rh-left-3{left:.75rem!important}.rh-top-0{top:0!important}.rh-top-1{top:.25rem!important}.rh-m-0{margin:0!important}.rh-my-auto{margin-top:auto!important;margin-bottom:auto!important}.rh-mb-0{margin-bottom:0!important}.rh-mb-1{margin-bottom:.25rem!important}.rh-mb-5{margin-bottom:1.25rem!important}.rh-mb-6{margin-bottom:1.5rem!important}.rh-mt-1{margin-top:.25rem!important}.rh-block{display:block!important}.rh-flex{display:flex!important}.rh-grid{display:grid!important}.rh-h-4{height:1rem!important}.rh-h-5{height:1.25rem!important}.rh-min-h-11{min-height:2.75rem!important}.rh-w-4{width:1rem!important}.rh-w-5{width:1.25rem!important}.rh-w-full{width:100%!important}.rh-min-w-0{min-width:0!important}.rh-flex-1{flex:1 1 0%!important}.rh-flex-\[1_1_20rem\]{flex:1 1 20rem!important}.rh-shrink-0{flex-shrink:0!important}.-rh-translate-y-1{--tw-translate-y:-0.25rem!important;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))!important}.rh-grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))!important}.rh-flex-col{flex-direction:column!important}.rh-flex-wrap{flex-wrap:wrap!important}.rh-items-start{align-items:flex-start!important}.rh-items-center{align-items:center!important}.rh-items-stretch{align-items:stretch!important}.rh-gap-2{gap:.5rem!important}.rh-gap-3{gap:.75rem!important}.rh-gap-4{gap:1rem!important}.rh-space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0!important;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)))!important;margin-bottom:calc(.75rem*var(--tw-space-y-reverse))!important}.rh-rounded-\[10px\]{border-radius:10px!important}.rh-rounded-\[14px\]{border-radius:14px!important}.rh-border{border-width:1px!important}.rh-border-solid{border-style:solid!important}.rh-border-\[var\(--border\)\]{border-color:var(--border)!important}.rh-border-\[var\(--muted\)\]{border-color:var(--muted)!important}.rh-bg-\[var\(--theme-surface\,\#fff\)\]{background-color:var(--theme-surface,#fff)!important}.rh-p-3{padding:.75rem!important}.rh-p-4{padding:1rem!important}.rh-py-3{padding-top:.75rem!important;padding-bottom:.75rem!important}.rh-pl-10{padding-left:2.5rem!important}.rh-pr-3{padding-right:.75rem!important}.rh-text-2xl{font-size:1.5rem!important;line-height:2rem!important}.rh-text-base{font-size:1rem!important;line-height:1.5rem!important}.rh-text-sm{font-size:.875rem!important;line-height:1.25rem!important}.rh-text-xs{font-size:.75rem!important;line-height:1rem!important}.rh-font-bold{font-weight:700!important}.rh-font-medium{font-weight:500!important}.rh-font-semibold{font-weight:600!important}.rh-tabular-nums{--tw-numeric-spacing:tabular-nums!important;font-variant-numeric:var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction)!important}.rh-text-\[var\(--muted\)\]{color:var(--muted)!important}.rh-text-\[var\(--text\)\]{color:var(--text)!important}@media (min-width:640px){.sm\:rh-col-span-2{grid-column:span 2/span 2!important}.sm\:rh-grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))!important}.sm\:rh-flex-row{flex-direction:row!important}.sm\:rh-flex-wrap{flex-wrap:wrap!important}}@media (min-width:1024px){.lg\:rh-flex-row{flex-direction:row!important}.lg\:rh-items-center{align-items:center!important}}@media (min-width:1280px){.xl\:rh-col-span-4{grid-column:span 4/span 4!important}.xl\:rh-grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))!important}.xl\:rh-flex-row{flex-direction:row!important}.xl\:rh-items-center{align-items:center!important}.xl\:rh-justify-between{justify-content:space-between!important}}
-        /* tailwind:end */
-        .receiving-history-page .history-chevron { transition: transform 220ms ease-out; }
-        .receiving-history-page summary[aria-expanded="true"] .history-chevron { transform: rotate(180deg); }
-        .receiving-history-page .history-table th:nth-child(n+3):nth-child(-n+5),
-        .receiving-history-page .history-table th:nth-child(7) { text-align: right; }
-        .receiving-history-page .history-table tbody tr:hover { background: var(--theme-surface-soft, #f8fafc); }
-        @media (prefers-reduced-motion: reduce) {
-            .receiving-history-page .history-chevron { transition: none; }
-        }
-    </style>
 </head>
 <body class="receiving-history-page">
 <a class="history-skip-link" href="#main-content">Skip to receiving history</a>
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="main-content" tabindex="-1">
-        <header class="rh-mb-6 rh-flex rh-flex-col rh-gap-4 xl:rh-flex-row xl:rh-items-center xl:rh-justify-between">
-            <div>
-                <h1 class="rh-m-0 rh-text-2xl rh-font-bold"><?= $canReceive ? 'My Receiving History' : 'Store Receiving History' ?></h1>
-            </div>
+        <header class="history-heading">
+            <h1><?= htmlspecialchars($title) ?></h1>
+            <?php if ($entryKey !== null): ?>
+                <nav class="history-entry-navigation" aria-label="Receiving entry navigation">
+                    <a class="btn btn-secondary" href="<?= htmlspecialchars($url()) ?>">Back to History</a>
+                    <?php if ($entry !== null && $neighbors['previous_entry'] !== null): ?>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['entry' => $neighbors['previous_entry']])) ?>" rel="prev">Previous Entry</a>
+                    <?php endif; ?>
+                    <?php if ($entry !== null && $neighbors['next_entry'] !== null): ?>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['entry' => $neighbors['next_entry']])) ?>" rel="next">Next Entry</a>
+                    <?php endif; ?>
+                </nav>
+            <?php endif; ?>
         </header>
 
-        <form class="rh-mb-5 rh-flex rh-flex-wrap rh-items-center rh-gap-2 rh-rounded-[14px] rh-border rh-border-solid rh-border-[var(--border)] rh-bg-[var(--theme-surface,#fff)] rh-p-3" method="get" role="search" aria-label="Receiving history">
-            <input type="hidden" name="length" value="<?= $pageSize ?>">
-            <div class="rh-relative rh-min-w-0 rh-flex-[1_1_20rem]">
-                <label class="rh-sr-only" for="history_search">Search receiving history</label>
-                <svg class="rh-pointer-events-none rh-absolute rh-bottom-0 rh-left-3 rh-top-0 rh-my-auto rh-h-5 rh-w-5 rh-text-[var(--muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-                <input class="rh-m-0 rh-min-h-11 rh-w-full rh-rounded-[10px] rh-border rh-border-solid rh-border-[var(--muted)] rh-bg-[var(--theme-surface,#fff)] rh-py-3 rh-pl-10 rh-pr-3 rh-text-base rh-text-[var(--text)]" type="search" id="history_search" name="q" value="<?= htmlspecialchars($search) ?>" autocomplete="off" maxlength="200" placeholder="Product, SKU, store, receipt, or staff…">
-            </div>
-            <button type="submit" class="btn btn-primary">Search</button>
-            <?php if ($search !== ''): ?>
-                <a class="btn btn-secondary" href="receiving_history.php">Clear search</a>
-            <?php endif; ?>
-        </form>
+        <?php if ($entryKey === null): ?>
+            <form class="history-search" method="get" role="search" aria-label="Receiving history">
+                <input type="hidden" name="length" value="<?= $pageSize ?>">
+                <div class="history-search-field">
+                    <label class="sr-only" for="history_search">Search receiving history</label>
+                    <svg class="history-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+                    <input type="search" id="history_search" name="q" value="<?= htmlspecialchars($search) ?>" autocomplete="off" maxlength="200" placeholder="Product, SKU, store, receipt, or staff…">
+                </div>
+                <button type="submit" class="btn btn-primary">Search</button>
+                <?php if ($search !== ''): ?>
+                    <a class="btn btn-secondary" href="receiving_history.php">Clear search</a>
+                <?php endif; ?>
+            </form>
+        <?php endif; ?>
 
         <?php if ($error): ?>
             <div class="message error history-section" role="alert">
                 <p><?= htmlspecialchars($error) ?></p>
             </div>
-        <?php elseif (empty($entries)): ?>
+        <?php elseif ($entry === null && empty($entries)): ?>
             <div class="empty-state history-section" role="status">
                 <h2><?= $search !== '' ? 'No matching receipts' : ($page > 1 ? 'No more receipts' : 'No receiving records found') ?></h2>
                 <p><?= $search !== '' ? 'Try a different product, store, receipt, or staff name.' : ($page > 1 ? 'Return to the previous page to see earlier results.' : ($canReceive ? 'You have not recorded any stock receipts yet.' : 'No stock receipts found for this store.')) ?></p>
@@ -95,185 +147,182 @@ try {
                     <a class="btn btn-primary" href="stock_receiving.php">Record bought stock</a>
                 <?php endif; ?>
             </div>
-        <?php else: ?>
-            <p class="history-results" role="status">Page <?= $page ?> · <?= count($entries) ?> receipt<?= count($entries) === 1 ? '' : 's' ?><?= $search !== '' ? ' matching “' . htmlspecialchars($search) . '”' : '' ?></p>
-
-            <div class="receiving-history-container rh-min-w-0 rh-space-y-3" aria-label="Receiving History entries">
-                <?php foreach ($entries as $index => $entry): ?>
-                    <details class="receiving-entry-card rh-mb-0 rh-rounded-[14px]" id="entry_<?= $entry['entry_key'] ?>">
-                        <summary class="receiving-entry-header rh-flex rh-flex-col rh-items-stretch rh-gap-3 rh-bg-[var(--theme-surface,#fff)] rh-p-4 lg:rh-flex-row lg:rh-items-center" aria-controls="entry_body_<?= $entry['entry_key'] ?>" aria-expanded="false">
-                            <div class="receiving-entry-meta rh-grid rh-flex-1 rh-grid-cols-1 rh-items-start rh-gap-3 sm:rh-grid-cols-2 xl:rh-grid-cols-4">
-                                <div class="rh-flex rh-flex-wrap rh-items-center rh-gap-2 sm:rh-col-span-2 xl:rh-col-span-4">
-                                <strong class="entry-id rh-font-semibold">Entry #<?= $entry['group_id'] ?></strong>
-                                <span class="badge badge-info rh-text-xs rh-font-medium"><?= count(array_unique(array_column($entry['lines'], 'product_id'))) ?> product(s) · <?= $entry['total_accepted_qty'] ?> accepted units</span>
-                                <?php if ($entry['total_damaged_qty'] > 0): ?>
-                                    <span class="badge badge-warning"><?= $entry['total_damaged_qty'] ?> damaged units</span>
-                                <?php endif; ?>
-                                </div>
-                                <span class="entry-store rh-min-w-0 rh-text-sm"><strong class="rh-mb-1 rh-block rh-text-xs rh-font-medium rh-text-[var(--muted)]">Store</strong> <?= htmlspecialchars($entry['supplier'] ?: 'Not supplied') ?></span>
-                                <span class="entry-reference rh-min-w-0 rh-text-sm"><strong class="rh-mb-1 rh-block rh-text-xs rh-font-medium rh-text-[var(--muted)]">Receipt</strong> <?= htmlspecialchars($entry['invoice_number'] ?: 'Not supplied') ?></span>
-                                <span class="entry-staff rh-min-w-0 rh-text-sm"><strong class="rh-mb-1 rh-block rh-text-xs rh-font-medium rh-text-[var(--muted)]">Recorded by</strong> <?= htmlspecialchars($entry['recorded_by']) ?></span>
-                                <span class="entry-time rh-min-w-0 rh-text-sm rh-tabular-nums"><strong class="rh-mb-1 rh-block rh-text-xs rh-font-medium rh-text-[var(--muted)]">Date &amp; Time</strong> <?= htmlspecialchars($entry['received_at']) ?></span>
-                            </div>
-                            <span class="btn btn-secondary inspect-btn rh-shrink-0 rh-gap-2"><span class="history-toggle-label">View Details</span><svg class="history-chevron rh-h-4 rh-w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
-                        </summary>
-                        <div class="receiving-entry-body" id="entry_body_<?= $entry['entry_key'] ?>">
-                            <p class="history-entry-notes">
-                                <strong><?= $entry['total_cost'] !== null && $entry['has_unknown_cost'] ? 'Known cost' : 'Purchase total' ?></strong>
-                                <?= $entry['total_cost'] !== null ? '₱' . number_format($entry['total_cost'], 2) : 'Not recorded' ?>
-                            </p>
-                            <?php if ($entry['notes']): ?>
-                                <p class="history-entry-notes"><strong>Entry notes:</strong> <?= htmlspecialchars($entry['notes']) ?></p>
-                            <?php endif; ?>
-                            <div class="u-table-scroll" tabindex="0" role="region" aria-label="Products in entry #<?= $entry['group_id'] ?>">
-                                <table class="history-table rh-tabular-nums">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">Product</th>
-                                            <th scope="col">SKU</th>
-                                            <th scope="col">Delivered</th>
-                                            <th scope="col">Accepted</th>
-                                            <th scope="col">Damaged</th>
-                                            <th scope="col">Quantity Mode &amp; Conversion</th>
-                                            <th scope="col">Purchase cost</th>
-                                            <th scope="col">Batch / Expiry</th>
-                                            <th scope="col">Discrepancy / Notes</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php
-                                        $shownProductCosts = [];
-                                        $batchCounts = array_count_values(array_column($entry['lines'], 'product_id'));
-                                        ?>
-                                        <?php foreach ($entry['lines'] as $line): ?>
-                                            <tr>
-                                                <td><?= htmlspecialchars($line['product_name']) ?></td>
-                                                <td><code><?= htmlspecialchars($line['sku']) ?></code></td>
-                                                <td>
-                                                    <?= $line['received_qty'] ?>
-                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['received_packs'] ?> pack(s), <?= (int)$line['received_loose'] ?> loose</small>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?= $line['accepted_qty'] ?>
-                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['accepted_packs'] ?> pack(s), <?= (int)$line['accepted_loose'] ?> loose</small>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?= $line['damaged_qty'] ?>
-                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['damaged_packs'] > 0 || (int)$line['damaged_loose'] > 0)): ?>
-                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]"><?= (int)$line['damaged_packs'] ?> pack(s), <?= (int)$line['damaged_loose'] ?> loose</small>
-                                                    <?php endif; ?>
-                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['rejected_packs'] > 0 || (int)$line['rejected_loose'] > 0)): ?>
-                                                        <br><small class="rh-text-xs rh-text-[var(--muted)]">Rejected: <?= (int)$line['rejected_packs'] ?> pack(s), <?= (int)$line['rejected_loose'] ?> loose</small>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                                        Sales packs (<?= (int)$line['received_packs'] ?> pack(s) × <?= (int)$line['pack_size_used'] ?> + <?= (int)$line['received_loose'] ?> loose = <?= $line['received_qty'] ?> units)
-                                                    <?php elseif ($line['received_packages'] > 0): ?>
-                                                        Packages / cases (<?= $line['received_packages'] ?> package(s) × <?= $line['units_per_package_used'] ?> = <?= $line['received_qty'] ?> units)
-                                                    <?php else: ?>
-                                                        Base units (<?= $line['received_qty'] ?> unit(s))
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?php if ($line['cost_price'] !== null): ?>
-                                                        <?= $line['rounding_difference'] ? 'Approx. ' : '' ?>₱<?= number_format($line['cost_price'], 2) ?> / base unit<br>
-                                                    <?php endif; ?>
-                                                    <?php if ($line['total_cost'] !== null): ?>
-                                                        <strong>Batch total</strong> ₱<?= number_format($line['total_cost'], 2) ?>
-                                                    <?php else: ?>
-                                                        <span class="cost-unknown">Not recorded</span>
-                                                    <?php endif; ?>
-                                                    <?php if ($line['entered_cost'] !== null && $line['cost_basis'] !== 'units'): ?>
-                                                        <br><small>Entered ₱<?= number_format($line['entered_cost'], 2) ?> per <?= $line['cost_basis'] === 'packs' ? 'Sales Pack' : 'receiving package' ?>
-                                                            (<?= $line['cost_units_used'] ?> base units)</small>
-                                                    <?php elseif (!empty($line['cost_source']) && $line['cost_source'] !== 'unknown'): ?>
-                                                        <br><small><?= $line['cost_source'] === 'product' ? 'Saved product cost' : 'Entered for this batch' ?></small>
-                                                    <?php endif; ?>
-                                                    <?php if (!isset($shownProductCosts[$line['product_id']])): ?>
-                                                        <?php
-                                                        $shownProductCosts[$line['product_id']] = true;
-                                                        $productCost = $entry['product_costs'][$line['product_id']];
-                                                        ?>
-                                                        <?php if ($batchCounts[$line['product_id']] > 1 && $productCost['total_cost'] !== null): ?>
-                                                            <br><small><?= $productCost['has_unknown_cost'] ? 'Product known cost' : 'Product total' ?> ₱<?= number_format($productCost['total_cost'], 2) ?></small>
-                                                        <?php endif; ?>
-                                                        <?php if ($line['current_product_cost'] !== null): ?>
-                                                            <br><small>Current product cost: ₱<?= number_format($line['current_product_cost'], 2) ?></small>
-                                                        <?php endif; ?>
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <?= htmlspecialchars($line['batch_number'] ?: 'Not recorded') ?><br>
-                                                    <small><?= htmlspecialchars($line['expiration_date'] ?: 'Not recorded') ?></small>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($line['pullout_id'])): ?>
-                                                        <span class="badge badge-info">Replacement (Pullout #<?= (int)$line['pullout_id'] ?>)</span><br>
-                                                    <?php endif; ?>
-                                                    <?= htmlspecialchars(implode(' · ', array_filter([$line['discrepancy_notes'], $line['notes']]))) ?: '-' ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </details>
-                <?php endforeach; ?>
+        <?php elseif ($entry === null): ?>
+            <div class="u-table-scroll history-table-panel receiving-history-container" tabindex="0" role="region" aria-label="Receiving History entries">
+                <table class="history-list-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Entry</th>
+                            <th scope="col">Date &amp; Time</th>
+                            <th scope="col">Store</th>
+                            <th scope="col">Receipt</th>
+                            <th scope="col">Recorded by</th>
+                            <th scope="col" class="history-quantity">Products</th>
+                            <th scope="col" class="history-quantity">Accepted</th>
+                            <th scope="col" class="history-quantity">Damaged</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($entries as $record): ?>
+                            <tr id="entry_<?= $record['entry_key'] ?>">
+                                <th scope="row"><a class="history-entry-link" href="<?= htmlspecialchars($url(['entry' => $record['entry_key']])) ?>">Entry #<?= $record['group_id'] ?></a></th>
+                                <td><?= htmlspecialchars($record['received_at']) ?></td>
+                                <td><?= htmlspecialchars($record['supplier'] ?: 'Not supplied') ?></td>
+                                <td><?= htmlspecialchars($record['invoice_number'] ?: 'Not supplied') ?></td>
+                                <td><?= htmlspecialchars($record['recorded_by']) ?></td>
+                                <td class="history-quantity"><?= count(array_unique(array_column($record['lines'], 'product_id'))) ?></td>
+                                <td class="history-quantity"><?= $record['total_accepted_qty'] ?></td>
+                                <td class="history-quantity"><?= $record['total_damaged_qty'] ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
+        <?php else: ?>
+            <dl class="history-entry-summary history-section">
+                <div><dt>Date &amp; Time</dt><dd><?= htmlspecialchars($entry['received_at']) ?></dd></div>
+                <div><dt>Store</dt><dd><?= htmlspecialchars($entry['supplier'] ?: 'Not supplied') ?></dd></div>
+                <div><dt>Receipt</dt><dd><?= htmlspecialchars($entry['invoice_number'] ?: 'Not supplied') ?></dd></div>
+                <div><dt>Recorded by</dt><dd><?= htmlspecialchars($entry['recorded_by']) ?></dd></div>
+                <div>
+                    <dt><?= $entry['total_cost'] !== null && $entry['has_unknown_cost'] ? 'Known cost' : 'Purchase total' ?></dt>
+                    <dd><?= $entry['total_cost'] !== null ? '₱' . number_format($entry['total_cost'], 2) : 'Not recorded' ?></dd>
+                </div>
+                <?php if ($entry['notes']): ?>
+                    <div class="history-notes"><dt>Entry notes</dt><dd><?= htmlspecialchars($entry['notes']) ?></dd></div>
+                <?php endif; ?>
+            </dl>
+            <div class="history-item-toolbar">
+                <p>Showing <?= $itemOffset + 1 ?> to <?= $itemOffset + count($itemRows) ?> of <?= $itemCount ?> items</p>
+                <form method="get" class="history-page-length">
+                    <?php foreach ($detailFilters + $historyFilters as $name => $value): ?>
+                        <?php if ($name !== 'item_length' && $value !== null): ?>
+                            <input type="hidden" name="<?= htmlspecialchars($name) ?>" value="<?= htmlspecialchars((string)$value) ?>">
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    <label for="history_item_length">Items per page</label>
+                    <select id="history_item_length" name="item_length">
+                        <?php foreach ([25, 50, 100] as $size): ?>
+                            <option value="<?= $size ?>" <?= $size === $itemPageSize ? 'selected' : '' ?>><?= $size ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-secondary">Apply</button>
+                </form>
+            </div>
+            <div class="u-table-scroll history-table-panel" tabindex="0" role="region" aria-label="Items in entry #<?= $entry['group_id'] ?>">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <?php foreach ($itemHeaders as $key => $label): ?>
+                                <th scope="col"<?= $sort === $key ? ' aria-sort="' . ($direction === 'asc' ? 'ascending' : 'descending') . '"' : '' ?>>
+                                    <?php if (in_array($key, $sortColumns, true)): ?>
+                                        <?php $nextDirection = $sort === $key && $direction === 'asc' ? 'desc' : 'asc'; ?>
+                                        <?php if ($key === 'expiration_date'): ?>Batch / <?php endif; ?>
+                                        <a class="history-sort-link" href="<?= htmlspecialchars($detailUrl(['sort' => $key, 'direction' => $nextDirection])) ?>"><?= $key === 'expiration_date' ? 'Expiry' : htmlspecialchars($label) ?></a>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($label) ?>
+                                    <?php endif; ?>
+                                </th>
+                            <?php endforeach; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($itemRows as $line): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($line['product_name']) ?></td>
+                                <td><code><?= htmlspecialchars($line['sku']) ?></code></td>
+                                <td>
+                                    <?= $line['received_qty'] ?>
+                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                        <br><small class="history-quantity-note"><?= (int)$line['received_packs'] ?> pack(s), <?= (int)$line['received_loose'] ?> loose</small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= $line['accepted_qty'] ?>
+                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                        <br><small class="history-quantity-note"><?= (int)$line['accepted_packs'] ?> pack(s), <?= (int)$line['accepted_loose'] ?> loose</small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= $line['damaged_qty'] ?>
+                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['damaged_packs'] > 0 || (int)$line['damaged_loose'] > 0)): ?>
+                                        <br><small class="history-quantity-note"><?= (int)$line['damaged_packs'] ?> pack(s), <?= (int)$line['damaged_loose'] ?> loose</small>
+                                    <?php endif; ?>
+                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['rejected_packs'] > 0 || (int)$line['rejected_loose'] > 0)): ?>
+                                        <br><small class="history-quantity-note">Rejected: <?= (int)$line['rejected_packs'] ?> pack(s), <?= (int)$line['rejected_loose'] ?> loose</small>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
+                                        Sales packs (<?= (int)$line['received_packs'] ?> pack(s) × <?= (int)$line['pack_size_used'] ?> + <?= (int)$line['received_loose'] ?> loose = <?= $line['received_qty'] ?> units)
+                                    <?php elseif ($line['received_packages'] > 0): ?>
+                                        Packages / cases (<?= $line['received_packages'] ?> package(s) × <?= $line['units_per_package_used'] ?> = <?= $line['received_qty'] ?> units)
+                                    <?php else: ?>
+                                        Base units (<?= $line['received_qty'] ?> unit(s))
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($line['cost_price'] !== null): ?>
+                                        <?= $line['rounding_difference'] ? 'Approx. ' : '' ?>₱<?= number_format($line['cost_price'], 2) ?> / base unit<br>
+                                    <?php endif; ?>
+                                    <?php if ($line['total_cost'] !== null): ?>
+                                        <strong>Batch total</strong> ₱<?= number_format($line['total_cost'], 2) ?>
+                                    <?php else: ?>
+                                        <span class="cost-unknown">Not recorded</span>
+                                    <?php endif; ?>
+                                    <?php if ($line['entered_cost'] !== null && $line['cost_basis'] !== 'units'): ?>
+                                        <br><small>Entered ₱<?= number_format($line['entered_cost'], 2) ?> per <?= $line['cost_basis'] === 'packs' ? 'Sales Pack' : 'receiving package' ?>
+                                            (<?= $line['cost_units_used'] ?> base units)</small>
+                                    <?php elseif (!empty($line['cost_source']) && $line['cost_source'] !== 'unknown'): ?>
+                                        <br><small><?= $line['cost_source'] === 'product' ? 'Saved product cost' : 'Entered for this batch' ?></small>
+                                    <?php endif; ?>
+                                    <?php if ($firstProductLines[$line['product_id']] === $line['receiving_id']): ?>
+                                        <?php $productCost = $entry['product_costs'][$line['product_id']]; ?>
+                                        <?php if ($batchCounts[$line['product_id']] > 1 && $productCost['total_cost'] !== null): ?>
+                                            <br><small><?= $productCost['has_unknown_cost'] ? 'Product known cost' : 'Product total' ?> ₱<?= number_format($productCost['total_cost'], 2) ?></small>
+                                        <?php endif; ?>
+                                        <?php if ($line['current_product_cost'] !== null): ?>
+                                            <br><small>Current product cost: ₱<?= number_format($line['current_product_cost'], 2) ?></small>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= htmlspecialchars($line['batch_number'] ?: 'Not recorded') ?><br>
+                                    <small><?= htmlspecialchars($line['expiration_date'] ?: 'Not recorded') ?></small>
+                                </td>
+                                <td>
+                                    <?php if (!empty($line['pullout_id'])): ?>
+                                        <span class="badge badge-info">Replacement (Pullout #<?= (int)$line['pullout_id'] ?>)</span><br>
+                                    <?php endif; ?>
+                                    <?= htmlspecialchars(implode(' · ', array_filter([$line['discrepancy_notes'], $line['notes']]))) ?: '-' ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if ($itemLastPage > 1): ?>
+                <nav class="history-entry-navigation history-item-pagination" aria-label="Item pages">
+                    <?php if ($itemPage > 1): ?>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['item_page' => $itemPage - 1])) ?>" rel="prev">Previous Item Page</a>
+                    <?php endif; ?>
+                    <span class="history-page-number">Page <?= $itemPage ?> of <?= $itemLastPage ?></span>
+                    <?php if ($itemPage < $itemLastPage): ?>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['item_page' => $itemPage + 1])) ?>" rel="next">Next Item Page</a>
+                    <?php endif; ?>
+                </nav>
+            <?php endif; ?>
         <?php endif; ?>
-        <?php if (!$error): ?>
+        <?php if (!$error && $entryKey === null): ?>
             <?php
             $rows = $entries;
             $paginationFilters = ['q' => $search];
             $paginationLabel = 'Receiving history pages';
-            $url = static fn(array $params): string => '?' . http_build_query($params + $paginationFilters + ['length' => $pageSize]);
             require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
             ?>
         <?php endif; ?>
     </main>
 </div>
 
-<script>
-document.querySelectorAll('details.receiving-entry-card').forEach(details => {
-    const summary = details.querySelector('summary');
-    const label = details.querySelector('.history-toggle-label');
-    let animation;
-    let expanded = details.open;
-    const sync = () => {
-        summary.setAttribute('aria-expanded', String(expanded));
-        label.textContent = expanded ? 'Hide Details' : 'View Details';
-    };
-    summary.addEventListener('click', event => {
-        event.preventDefault();
-        const start = details.getBoundingClientRect().height;
-        if (animation) animation.cancel();
-        expanded = !expanded;
-        sync();
-        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            details.open = expanded;
-            return;
-        }
-        details.open = true;
-        const end = expanded ? details.getBoundingClientRect().height : summary.getBoundingClientRect().height + 2;
-        animation = details.animate({height: [start + 'px', end + 'px']}, {duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)'});
-        animation.onfinish = () => {
-            details.open = expanded;
-            animation = null;
-        };
-    });
-    details.addEventListener('toggle', () => {
-        if (!animation) {
-            expanded = details.open;
-            sync();
-        }
-    });
-});
-</script>
 </body>
 </html>

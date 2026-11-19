@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 
 use App\Core\Database;
 
-$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'seed-batches', 'checkout-setup', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
+$options = getopt('', ['token:', 'create', 'cleanup', 'state', 'seed-batches', 'seed-large-history', 'checkout-setup', 'seed-guidance', 'hold-gate', 'close-period', 'open-period', 'fail-purchase', 'allow-purchase', 'delay-purchase', 'purchase-product:']);
 
 $token = preg_replace('/[^A-Za-z0-9]/', '', (string)($options['token'] ?? ''));
 if (strlen($token) < 4 || strlen($token) > 12) {
@@ -171,6 +171,27 @@ if (array_key_exists('seed-batches', $options)) {
         FROM inventory i JOIN products p ON p.product_id = i.product_id
         WHERE p.sku IN ({$placeholders}) AND i.quantity_on_hand > 0")->execute($skus);
     echo json_encode(['ok' => true]) . PHP_EOL;
+    exit(0);
+}
+
+if (array_key_exists('seed-large-history', $options)) {
+    $owner = $pdo->prepare('SELECT user_id FROM users WHERE username = ?');
+    $owner->execute([$staff['manager']['username']]);
+    $managerId = (int)$owner->fetchColumn();
+    $product = $pdo->prepare('SELECT product_id FROM products WHERE sku = ?');
+    $product->execute([$products['bulk_units']['sku']]);
+    $productId = (int)$product->fetchColumn();
+    $pdo->beginTransaction();
+    $pdo->prepare('INSERT INTO stock_receiving_groups (received_by, invoice_number) VALUES (?, ?)')
+        ->execute([$managerId, 'LARGE-' . $token]);
+    $groupId = (int)$pdo->lastInsertId();
+    $insert = $pdo->prepare('INSERT INTO stock_receiving (group_id, product_id, received_by, received_qty, accepted_qty, batch_number, expiration_date) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    for ($quantity = 1; $quantity <= 100; $quantity++) {
+        $expiry = $quantity <= 2 ? '2030-01-0' . $quantity : null;
+        $insert->execute([$groupId, $productId, $managerId, $quantity, $quantity, 'Batch ' . $quantity, $expiry]);
+    }
+    $pdo->commit();
+    echo json_encode(['entry' => 'g_' . $groupId]) . PHP_EOL;
     exit(0);
 }
 

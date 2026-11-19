@@ -36,6 +36,7 @@ $assert = static function (bool $condition, string $message): void {
 $fixture = runFixture($phpBinary, $fixtureScript, ['--create', '--token', $token]);
 
 try {
+    runFixture($phpBinary, $fixtureScript, ['--seed-batches', '--token', $token]);
     $pdo = Database::connection();
     $service = new ReceivingService($pdo);
 
@@ -155,6 +156,11 @@ try {
         }
     }
     $assert($inspectedGroup !== null, 'found entry 1 in history');
+    $entryKey = 'g_' . $groupIdOne;
+    $assert($service->getReceivingHistoryNeighbors($managerTwoId, '', $entryKey) === null
+        && $service->getGroupedReceivingHistory($managerTwoId, entryKey: $entryKey) === [], 'another manager cannot open an entry by key');
+    $assert($service->getReceivingHistoryNeighbors(null, 'INV-ONE-' . $token, $entryKey) === ['previous_entry' => null, 'next_entry' => null]
+        && count($service->getGroupedReceivingHistory(null, entryKey: $entryKey)) === 1, 'oversight can open a matching entry by key');
     $assert(count($inspectedGroup['lines']) === 2, 'inspected entry contains 2 product lines');
     $assert($inspectedGroup['total_accepted_qty'] === 52, 'inspected entry total accepted units is 4 + 48 = 52');
     $assert($inspectedGroup['total_damaged_qty'] === 1, 'inspected entry total damaged is 1');

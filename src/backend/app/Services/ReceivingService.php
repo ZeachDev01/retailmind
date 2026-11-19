@@ -665,17 +665,54 @@ class ReceivingService
             : 'NULL AS entered_cost, NULL AS cost_basis, NULL AS cost_units_used,';
     }
 
-    /** Returns one page of complete receipts plus one next-page probe. */
-    public function getGroupedReceivingHistory(?int $userId = null, int $page = 1, string $search = '', int $pageSize = 20): array
+    private const HISTORY_ENTRY_KEY = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
+    private const HISTORY_FROM = 'FROM stock_receiving sr
+        LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
+        JOIN products p ON sr.product_id = p.product_id
+        JOIN users u ON sr.received_by = u.user_id';
+    private const HISTORY_ORDER = 'entry_time DESC, display_id DESC, entry_key DESC';
+
+    private function matchingReceivingEntriesSql(): string
+    {
+        return 'SELECT ' . self::HISTORY_ENTRY_KEY . ' AS entry_key,
+                    MAX(COALESCE(srg.received_at, sr.received_at)) AS entry_time,
+                    MAX(COALESCE(sr.group_id, sr.receiving_id)) AS display_id
+                ' . self::HISTORY_FROM . "
+                WHERE (? IS NULL OR sr.received_by = ?)
+                GROUP BY entry_key
+                HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
+                    COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
+                    u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0";
+    }
+
+    public function getReceivingHistoryNeighbors(?int $userId, string $search, string $entryKey): ?array
+    {
+        $matches = $this->matchingReceivingEntriesSql();
+        $order = self::HISTORY_ORDER;
+        $stmt = $this->pdo->prepare("SELECT previous_entry, next_entry FROM (
+                SELECT entry_key, LAG(entry_key) OVER (ORDER BY {$order}) AS previous_entry,
+                    LEAD(entry_key) OVER (ORDER BY {$order}) AS next_entry
+                FROM ({$matches}) matching_entries
+            ) ordered_entries WHERE entry_key = ?");
+        $stmt->execute([$userId, $userId, $search, $entryKey]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    /** Returns a scoped entry by key, or one filtered page plus one next-page probe. */
+    public function getGroupedReceivingHistory(?int $userId = null, int $page = 1, string $search = '', int $pageSize = 20, ?string $entryKey = null): array
     {
         $pageSize = min(100, max(1, $pageSize));
         $offset = (min(100000, max(1, $page)) - 1) * $pageSize;
         $limit = $pageSize + 1;
-        $from = 'FROM stock_receiving sr
-            LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
-            JOIN products p ON sr.product_id = p.product_id
-            JOIN users u ON sr.received_by = u.user_id';
-        $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
+        $from = self::HISTORY_FROM;
+        $key = self::HISTORY_ENTRY_KEY;
+        $order = self::HISTORY_ORDER;
+        $scope = [$userId, $userId];
+        // Fetch a complete entry by its stable key, even if new entries have moved it to another page.
+        $pageJoin = $entryKey === null
+            ? 'JOIN (' . $this->matchingReceivingEntriesSql() . " ORDER BY {$order} LIMIT {$limit} OFFSET {$offset}) history_page ON history_page.entry_key = {$key}"
+            : '';
+        $entryFilter = $entryKey === null ? '' : "AND {$key} = ?";
         $pulloutSelect = $this->hasColumn('stock_receiving', 'pullout_id') ? 'sr.pullout_id,' : 'NULL AS pullout_id,';
         $costSelect = $this->historyCostColumns();
         $allocationSelect = $this->hasColumn('stock_receiving', 'current_product_cost')
@@ -696,23 +733,11 @@ class ReceivingService
                 srg.invoice_number AS group_invoice, srg.notes AS group_notes,
                 u.display_name AS recorded_by
             {$from}
-            JOIN (
-                SELECT {$key} AS entry_key
-                {$from}
-                WHERE (? IS NULL OR sr.received_by = ?)
-                GROUP BY entry_key
-                HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
-                    COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
-                    u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
-                ORDER BY MAX(COALESCE(srg.received_at, sr.received_at)) DESC,
-                    MAX(COALESCE(sr.group_id, sr.receiving_id)) DESC, entry_key DESC
-                LIMIT {$limit} OFFSET {$offset}
-            ) history_page ON history_page.entry_key = {$key}
-            WHERE (? IS NULL OR sr.received_by = ?)
+            {$pageJoin}
+            WHERE (? IS NULL OR sr.received_by = ?) {$entryFilter}
             ORDER BY COALESCE(srg.received_at, sr.received_at) DESC, COALESCE(sr.group_id, sr.receiving_id) DESC,
-                history_page.entry_key DESC, sr.receiving_id ASC");
-        // One extra complete receipt lets the page offer Next without a separate count query.
-        $stmt->execute([$userId, $userId, $search, $userId, $userId]);
+                {$key} DESC, sr.receiving_id ASC");
+        $stmt->execute($entryKey === null ? [...$scope, $search, ...$scope] : [...$scope, $entryKey]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $groups = [];
@@ -812,19 +837,8 @@ class ReceivingService
 
     public function countGroupedReceivingHistory(?int $userId = null, string $search = ''): int
     {
-        $key = "CASE WHEN sr.group_id IS NULL THEN CONCAT('r_', sr.receiving_id) ELSE CONCAT('g_', sr.group_id) END";
-        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM (
-                SELECT {$key} AS entry_key
-                FROM stock_receiving sr
-                LEFT JOIN stock_receiving_groups srg ON srg.group_id = sr.group_id
-                JOIN products p ON sr.product_id = p.product_id
-                JOIN users u ON sr.received_by = u.user_id
-                WHERE (? IS NULL OR sr.received_by = ?)
-                GROUP BY entry_key
-                HAVING MAX(LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', p.product_name, p.sku,
-                    COALESCE(srg.supplier, sr.supplier), COALESCE(srg.invoice_number, sr.invoice_number),
-                    u.display_name, sr.received_at, sr.batch_number, sr.discrepancy_notes, sr.notes, srg.notes)))) > 0
-            ) receiving_history");
+        $matches = $this->matchingReceivingEntriesSql();
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM ({$matches}) receiving_history");
         $stmt->execute([$userId, $userId, $search]);
         return (int)$stmt->fetchColumn();
     }

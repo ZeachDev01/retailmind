@@ -252,6 +252,9 @@ _Avoid_: Stock issue approval, inventory adjustment (when referring to administr
 The Inventory Manager's record of goods brought into the Store, including bulk purchases made by the owner at a supermarket. Quantities may be entered as individual units or packs/cases; supplier and receipt details are optional, and no purchase request, purchase order, or Administrator approval is required. Only good items are recorded: damaged or rejected goods stay with the supplier and enter no stock, and damage found after receiving is reported as a Stock Issue.
 _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 
+**Shopping Entry**:
+A saved record of goods brought into the Store together through Stock Receiving. It can contain multiple products or batches, with an optional supplier receipt reference.
+
 **Replenishment Recommendation**:
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity

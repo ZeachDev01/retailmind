@@ -96,7 +96,10 @@ function fixture(action) {
         await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:20000}), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('body').innerText(), /Receiving entry saved/);
         await page.goto(origin + '/components/report/receiving_history.php');
-        await page.locator('.receiving-entry-card summary').first().click();
+        await Promise.all([
+            page.waitForURL(url => url.searchParams.has('entry')),
+            page.locator('.history-entry-link').first().click()
+        ]);
         assert.match(await page.locator('body').innerText(), /₱0.00/, 'saved history preserves free goods');
         await page.goto(url + '?product_id=3');
         await page.locator('#received_qty').fill('2');
@@ -159,9 +162,12 @@ function fixture(action) {
         await Promise.all([page.waitForNavigation({waitUntil: 'domcontentloaded'}), page.locator('.btn-submit').click()]);
         assert.match(await page.locator('body').innerText(), /Receiving entry saved/);
         await page.goto(origin + '/components/report/receiving_history.php');
-        await page.locator('.receiving-entry-card summary').first().click();
-        assert.match(await page.locator('.receiving-entry-card').first().innerText(), /₱100\.00.*24.*₱100\.00/s);
-        assert.match(await page.locator('.receiving-entry-card').first().innerText(), /Approx\. ₱4\.17/);
+        await Promise.all([
+            page.waitForURL(url => url.searchParams.has('entry')),
+            page.locator('.history-entry-link').first().click()
+        ]);
+        assert.match(await page.locator('main').innerText(), /₱100\.00.*24.*₱100\.00/s);
+        assert.match(await page.locator('main').innerText(), /Approx\. ₱4\.17/);
         await page.goto(origin + '/components/inventory_management/products.php');
         await page.locator('#product-add-trigger').click();
         await page.locator('#add-product-btn').click();

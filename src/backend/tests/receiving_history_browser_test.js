@@ -12,6 +12,8 @@ const token = 'rh' + Date.now().toString(36);
 const fixturePath = path.join(__dirname, 'support/scan_workflow_fixture.php');
 const artifacts = path.join(root, 'output/playwright/receiving-history');
 const history = '/components/report/receiving_history.php';
+const entryRows = '.receiving-history-container tbody tr';
+const itemRows = '.history-table tbody tr';
 function fixture(action) {
     const run = spawnSync(process.env.PHP_BINARY || 'php', [fixturePath, action, '--token', token], {cwd:root, encoding:'utf8'});
     assert.equal(run.status, 0, run.stderr);
@@ -21,6 +23,7 @@ async function main() {
     let server, browser, data;
     try {
         data = fixture('--create');
+        fixture('--seed-batches');
         const port = await new Promise(resolve => {
             const probe = net.createServer().listen(0, '127.0.0.1', () => {
                 const port = probe.address().port;
@@ -42,12 +45,21 @@ async function main() {
         await page.fill('#landing-login-password', data.staff.manager.password);
         await Promise.all([page.waitForURL('**/inventory_management/**'), page.getByRole('button', {name:'Log in', exact:true}).click()]);
         await page.goto(history);
+        const dismissGuidance = page.getByRole('button', {name:'Not now', exact:true});
+        if (await dismissGuidance.isVisible()) {
+            await dismissGuidance.click();
+            await dismissGuidance.waitFor({state:'hidden'});
+        }
+        const follow = async link => {
+            const target = new URL(await link.getAttribute('href'), page.url()).href;
+            await Promise.all([page.waitForURL(target), link.click()]);
+        };
         assert.equal(await page.locator('main > header').getByRole('link', {
             name: /^(Record bought stock|Check stock|Review recommendations)$/
         }).count(), 0, 'receiving history header has no stock workflow shortcuts');
-        assert.equal(await page.locator('.receiving-entry-card').count(), 1, 'fixture contains one legacy receipt');
+        assert.equal(await page.locator(entryRows).count(), 1, 'fixture contains one legacy receipt');
         for (let i = 0; i < 22; i++) {
-            await page.goto('/components/report/stock_receiving.php');
+            await page.goto('/components/report/stock_receiving.php', {waitUntil:'domcontentloaded'});
             const form = {
                 csrf_token: await page.inputValue('[name="csrf_token"]'),
                 receiving_nonce: await page.inputValue('[name="receiving_nonce"]'),
@@ -60,58 +72,87 @@ async function main() {
                 receiving_complete:'1'
             };
             const response = await context.request.post('/components/report/stock_receiving.php', {form});
-            assert((await response.text()).includes('Shopping entry saved.'), 'receipt persisted');
+            assert((await response.text()).includes('Receiving entry saved.'), 'receipt persisted');
         }
-        await page.goto(history);
-        assert.equal(await page.locator('.receiving-entry-card').count(), 10);
-        console.log('Bounded history and fixture creation passed.');
-        const firstIds = await page.locator('.receiving-entry-card').evaluateAll(cards => cards.map(card => card.id));
-        await page.getByRole('link', {name:'Next page'}).click();
-        await page.waitForURL('**page=2');
-        assert.equal(await page.locator('.receiving-entry-card').count(), 10);
-        assert((await page.locator('.receiving-entry-card').evaluateAll(cards => cards.map(card => card.id))).every(id => !firstIds.includes(id)));
-        const secondIds = await page.locator('.receiving-entry-card').evaluateAll(cards => cards.map(card => card.id));
-        await page.getByRole('link', {name:'Next page'}).click();
-        await page.waitForURL('**page=3');
-        assert.equal(await page.locator('.receiving-entry-card').count(), 3);
-        const thirdIds = await page.locator('.receiving-entry-card').evaluateAll(cards => cards.map(card => card.id));
-        assert.equal(new Set([...firstIds, ...secondIds, ...thirdIds]).size, 23, 'all receipts appear once across three pages');
-        assert.equal(await page.getByRole('link', {name:'Next page'}).count(), 0);
-        assert.equal(await page.locator('.history-pagination [aria-current="page"]').textContent(), 'Page 3 · 10 per page');
-        await page.getByRole('link', {name:'Previous page'}).click();
-        await page.waitForURL('**page=2');
-        await page.fill('#history_search', token + '-21');
-        await page.getByRole('button', {name:'Search', exact:true}).click();
-        await page.waitForURL('**?q=' + token + '-21');
-        assert.equal(await page.locator('.receiving-entry-card').count(), 1);
-        assert.equal(await page.locator('.history-table tbody tr').count(), 2);
-        const summary = page.locator('.receiving-entry-header');
-        assert.equal(await summary.getAttribute('aria-expanded'), 'false', 'receipts start collapsed');
-        assert.equal(await page.locator('.history-toggle-label').textContent(), 'View Details');
-        await summary.first().focus();
+        const large = fixture('--seed-large-history');
+        const filteredHistory = history + '?q=' + token;
+        fs.mkdirSync(artifacts, {recursive:true});
+        await page.goto(filteredHistory);
+        await page.setViewportSize({width:1280, height:900});
+        assert(await page.locator(entryRows).filter({hasText:'Long store'}).first().locator('td').nth(1).evaluate(cell =>
+            cell.scrollWidth > cell.clientWidth && getComputedStyle(cell).textOverflow === 'ellipsis'
+        ), 'long store names stay on a single history row');
+        await page.screenshot({path:path.join(artifacts, 'history-1280.png')});
+        await page.setViewportSize({width:390, height:900});
+        assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        await page.screenshot({path:path.join(artifacts, 'history-390.png')});
+        await page.setViewportSize({width:1280, height:900});
+        assert.equal(await page.locator(entryRows).count(), 10);
+        const firstIds = await page.locator(entryRows).evaluateAll(rows => rows.map(row => row.id));
+        assert.equal(await page.locator(itemRows).count(), 0, 'list renders no item rows, even for a large entry');
+        await page.locator('#entry_' + large.entry + ' a').first().focus();
         await page.keyboard.press('Enter');
-        await page.waitForFunction(() => document.querySelector('.receiving-entry-header').getAttribute('aria-expanded') === 'true');
-        await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
-        assert.equal(await page.locator('.history-toggle-label').textContent(), 'Hide Details');
-        assert.equal((await page.locator('.history-table tbody tr').first().locator('td').nth(6).textContent()).trim(), '₱7.50');
-        await page.keyboard.press('Space');
-        await page.waitForFunction(() => !document.querySelector('.receiving-entry-card').open);
-        await summary.click();
-        await page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));
-        await summary.focus();
-        await page.keyboard.press('Shift');
-        assert(await summary.evaluate(el => getComputedStyle(el).outlineStyle !== 'none'));
-        await page.emulateMedia({reducedMotion:'reduce'});
-        await summary.click();
-        assert.equal(await page.locator('.receiving-entry-card').getAttribute('open'), null, 'reduced motion closes immediately');
-        await summary.click();
-        assert.equal(await summary.getAttribute('aria-expanded'), 'true');
-        await page.emulateMedia({reducedMotion:'no-preference'});
+        await page.waitForURL(url => url.searchParams.get('entry') === large.entry);
+        assert.equal(await page.locator(itemRows).count(), 25, 'the detail starts at 25 items');
+        assert.equal(await page.locator('.history-table th[aria-sort="ascending"]').innerText(), 'Product');
+        await follow(page.getByRole('link', {name:'Delivered', exact:true}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '1');
+        await follow(page.getByRole('link', {name:'Delivered', exact:true}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '100', 'sort includes rows from later pages');
+        await follow(page.getByRole('link', {name:'Next Item Page'}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '75');
+        await page.getByLabel('Items per page', {exact:true}).selectOption('50');
+        await Promise.all([
+            page.waitForURL(url => url.searchParams.get('item_length') === '50'),
+            page.getByRole('button', {name:'Apply', exact:true}).click()
+        ]);
+        assert.equal(await page.locator(itemRows).count(), 50);
+        await page.getByLabel('Items per page', {exact:true}).selectOption('100');
+        await Promise.all([
+            page.waitForURL(url => url.searchParams.get('item_length') === '100'),
+            page.getByRole('button', {name:'Apply', exact:true}).click()
+        ]);
+        assert.equal(await page.locator(itemRows).count(), 100);
+        await follow(page.getByRole('link', {name:'Expiry', exact:true}));
+        assert.match(await page.locator(itemRows).first().innerText(), /2030-01-01/);
+        await follow(page.getByRole('link', {name:'Expiry', exact:true}));
+        assert.match(await page.locator(itemRows).first().innerText(), /2030-01-02/);
+        assert.match(await page.locator(itemRows).last().locator('td').nth(7).innerText(), /Not recorded/);
+        await follow(page.getByRole('link', {name:'Back to History'}));
+
+        await follow(page.getByRole('link', {name:/^Next/}));
+        await page.waitForURL(url => url.searchParams.get('page') === '2');
+        const secondIds = await page.locator(entryRows).evaluateAll(rows => rows.map(row => row.id));
+        assert.equal(secondIds.length, 10);
+        await follow(page.locator(entryRows).first().getByRole('link'));
+        await follow(page.getByRole('link', {name:'Previous Entry'}));
+        assert.equal(new URL(page.url()).searchParams.get('entry'), firstIds.at(-1).replace('entry_', ''));
+        await follow(page.getByRole('link', {name:'Next Entry'}));
+        assert.equal(new URL(page.url()).searchParams.get('entry'), secondIds[0].replace('entry_', ''));
+        await follow(page.getByRole('link', {name:'Back to History'}));
+        assert.equal(new URL(page.url()).searchParams.get('page'), '2');
+        assert.equal(new URL(page.url()).searchParams.get('q'), token);
+        await follow(page.getByRole('link', {name:/^Next/}));
+        const thirdIds = await page.locator(entryRows).evaluateAll(rows => rows.map(row => row.id));
+        assert.equal(thirdIds.length, 4);
+        assert.equal(new Set([...firstIds, ...secondIds, ...thirdIds]).size, 24);
+        assert.match(thirdIds.at(-1), /^entry_r_/, 'legacy lines are still listed');
+        await follow(page.locator(entryRows).last().getByRole('link'));
+        assert.equal(await page.locator(itemRows).count(), 1, 'legacy entries still open');
+        assert.equal(await page.getByRole('link', {name:'Next Entry'}).count(), 0);
+
+        await page.goto(history + '?q=' + token + '-21');
+        assert.equal(await page.locator(entryRows).count(), 1);
+        await follow(page.locator(entryRows).getByRole('link'));
+        assert.equal(await page.locator(itemRows).count(), 2);
+        assert.match(await page.locator(itemRows).first().locator('td').first().innerText(), /Shopping Cases/);
+        assert.match(await page.locator(itemRows).last().locator('td').nth(6).innerText(), /₱7\.50/);
+        assert.equal(await page.getByRole('link', {name:'Next Entry'}).count(), 0, 'entry links respect the search');
+        assert.equal((await context.request.get(history + '?q=absent-' + token + '&entry=' + large.entry)).status(), 404);
         assert(await page.evaluate(() => {
             const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
             return new Set(ids).size === ids.length;
         }));
-        fs.mkdirSync(artifacts, {recursive:true});
         for (const theme of ['light', 'dark']) {
             await page.locator('[data-account-menu-open]:visible').last().click();
             await page.locator('.sidebar-preferences-menu > summary').click();
@@ -170,12 +211,13 @@ async function main() {
             await page.setViewportSize({width:1280, height:900});
             console.log(theme + ' contrast, responsive layouts and screenshots passed.');
         }
+        await follow(page.getByRole('link', {name:'Back to History'}));
         await page.fill('#history_search', 'absent-' + token);
         await page.getByRole('button', {name:'Search', exact:true}).click();
         await page.getByRole('heading', {name:'No matching receipts'}).waitFor();
-        await page.getByRole('link', {name:'Clear search'}).click();
+        await follow(page.getByRole('link', {name:'Clear search'}));
         await page.waitForURL('**/receiving_history.php');
-        assert.equal(await page.locator('.receiving-entry-card').count(), 10);
+        assert.equal(await page.locator(entryRows).count(), 10);
         await page.goto(history + '?q=' + 'x'.repeat(201));
         await page.waitForFunction(() => [...document.querySelectorAll('.message.error, .swal2-html-container')]
             .some(el => el.getClientRects().length && el.textContent.includes('200 characters')));
@@ -188,12 +230,7 @@ async function main() {
         await page.evaluate(() => document.documentElement.style.fontSize = '200%');
         assert(await page.evaluate(() => document.querySelector('main').getBoundingClientRect().right <= innerWidth));
         await page.evaluate(() => document.documentElement.style.fontSize = '');
-        await context.setOffline(true);
-        await summary.first().focus();
-        await page.keyboard.press('Enter');
-        await page.waitForFunction(() => document.querySelector('.receiving-entry-card').open);
-        assert.equal(await summary.first().getAttribute('aria-expanded'), 'true');
-        console.log('Receiving history: empty search, 22 new receipts plus legacy receipt, pagination, keyboard, themes, and 320/390/1280px layouts passed.');
+        console.log('Receiving history: 100-item sort and paging, filtered entry navigation, legacy entries, keyboard, themes and responsive layouts passed.');
     } finally {
         if (browser) await browser.close();
         if (server) server.kill();

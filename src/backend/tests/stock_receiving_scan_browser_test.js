@@ -401,10 +401,10 @@ async function main() {
         check(successText.includes(fixture.products.direct.product_name)
             && successText.includes('Scan WF Manager') && successText.includes(directReceipt.received_at),
             'success identifies product, recording staff and time');
-        await page.goto(historyPath);
-        const historyCard = page.locator('.receiving-entry-card').filter({ hasText: fixture.products.direct.sku });
-        check((await historyCard.innerText()).includes('Scan WF Manager')
-            && (await historyCard.innerText()).includes(directReceipt.received_at),
+        await page.goto(historyPath + '?q=' + encodeURIComponent(fixture.products.direct.sku));
+        const historyRow = page.locator('.receiving-history-container tbody tr').first();
+        check((await historyRow.innerText()).includes('Scan WF Manager')
+            && (await historyRow.innerText()).includes(directReceipt.received_at),
             'history identifies recording staff and time');
         await context.request.post(receivingPath, { form: duplicateForm });
         check(JSON.stringify(runFixture('--state', '--token', token)) === JSON.stringify(state),
@@ -726,50 +726,40 @@ async function main() {
         await page.setViewportSize({ width: 1280, height: 720 });
 
         await page.goto(historyPath);
-        const tripCardId = await page.locator('.receiving-entry-card').filter({ hasText: 'SHOP-' + token }).getAttribute('id');
-        const tripCard = page.locator('#' + tripCardId);
-        await tripCard.locator('summary').click();
-        const tripCardText = await tripCard.innerText();
-        check(tripCardText.includes('Shopping trip store')
-            && tripCardText.includes('SHOP-' + token)
-            && tripCardText.includes('Scan WF Manager')
-            && tripCardText.includes('2 package(s) × 24 = 48 units')
-            && tripCardText.includes('SHOP-UNITS-' + token)
-            && tripCardText.includes('2028-12-31')
-            && tripCardText.includes('₱5.00'),
-            'receiving history inspects store, receipt, staff, pack conversion, batch, expiry, and saved cost');
-        const inspectBtn = tripCard.locator('.inspect-btn');
-        await inspectBtn.click();
-        check(await tripCard.getAttribute('open') === null, 'inspect button toggles details card closed');
-        await inspectBtn.click();
-        check(await tripCard.getAttribute('open') !== null, 'inspect button toggles details card open');
-        const tripSummary = tripCard.locator('summary');
-        await tripSummary.focus();
+        const tripRow = page.locator('.receiving-history-container tbody tr').filter({hasText: 'SHOP-' + token});
+        const entryLink = tripRow.getByRole('link');
+        await entryLink.focus();
         await page.keyboard.press('Enter');
-        check(await tripCard.getAttribute('open') === null
-            && await tripSummary.getAttribute('aria-expanded') !== 'true',
-            'keyboard collapse preserves native disclosure state');
-        await page.keyboard.press('Space');
-        check(await tripCard.getAttribute('open') !== null, 'keyboard reopens receiving details');
-        const receiptReference = tripCard.locator('.entry-reference');
-        const originalReference = await receiptReference.textContent();
-        await receiptReference.evaluate(el => { el.textContent = 'Receipt: ' + 'X'.repeat(100); });
+        await page.waitForURL(url => url.searchParams.has('entry'));
+        const detailText = await page.locator('main').innerText();
+        check(detailText.includes('Shopping trip store')
+            && detailText.includes('SHOP-' + token)
+            && detailText.includes('Scan WF Manager')
+            && detailText.includes('2 package(s) × 24 = 48 units')
+            && detailText.includes('SHOP-UNITS-' + token)
+            && detailText.includes('2028-12-31')
+            && detailText.includes('₱5.00'),
+            'receiving history inspects store, receipt, staff, pack conversion, batch, expiry, and saved cost');
+        const receiptReference = page.locator('.history-entry-summary dd').nth(2);
+        await receiptReference.evaluate(el => { el.textContent = 'X'.repeat(100); });
         for (const width of [320, 375, 1280]) {
             await page.setViewportSize({ width, height: 844 });
-            check(await inspectBtn.evaluate(btn => {
-                const bounds = btn.getBoundingClientRect();
-                const card = btn.closest('details').getBoundingClientRect();
-                return bounds.left >= card.left && bounds.right <= card.right
-                    && card.right <= innerWidth;
-            }), 'long receipt reference keeps inspect control inside card at ' + width + 'px');
+            check(await page.getByRole('link', {name:'Back to History'}).evaluate(link => {
+                const bounds = link.getBoundingClientRect();
+                return bounds.left >= 0 && bounds.right <= innerWidth
+                    && document.documentElement.scrollWidth <= innerWidth;
+            }), 'long receipt reference keeps history navigation inside the viewport at ' + width + 'px');
         }
-        await receiptReference.evaluate((el, text) => { el.textContent = text; }, originalReference);
+        await Promise.all([
+            page.waitForURL(url => !url.searchParams.has('entry')),
+            page.getByRole('link', {name:'Back to History'}).click()
+        ]);
         await page.fill('#history_search', 'SHOP-' + token);
         await Promise.all([page.waitForURL(url => url.searchParams.get('q') === 'SHOP-' + token), page.locator('#history_search').press('Enter')]);
-        check(await tripCard.isVisible(), 'matching card remains visible when filtering history');
+        check(await tripRow.isVisible(), 'matching entry remains visible when filtering history');
         await page.fill('#history_search', 'NONEXISTENT_QUERY_' + token);
         await Promise.all([page.waitForURL(url => url.searchParams.get('q') === 'NONEXISTENT_QUERY_' + token), page.locator('#history_search').press('Enter')]);
-        check(!await tripCard.isVisible() && await page.getByRole('heading', { name: 'No matching receipts' }).isVisible(),
+        check(!await tripRow.isVisible() && await page.getByRole('heading', { name: 'No matching receipts' }).isVisible(),
             'non-matching search explains the empty result');
         await page.getByRole('link', { name: 'Clear search' }).click();
 
@@ -785,7 +775,10 @@ async function main() {
             && await oversightPage.locator('main').getByRole('link', { name: 'Record bought stock', exact: true }).count() === 0,
             'Administrator sees refreshed guidance without an inventory execution action');
         await oversightPage.goto(historyPath);
-        await oversightPage.locator('.receiving-entry-card').filter({hasText: 'SHOP-' + token}).locator('summary').click();
+        await Promise.all([
+            oversightPage.waitForURL(url => url.searchParams.has('entry')),
+            oversightPage.locator('.receiving-history-container tbody tr').filter({hasText: 'SHOP-' + token}).getByRole('link').click()
+        ]);
         const oversightText = await oversightPage.locator('main').innerText();
         check(oversightText.includes('SHOP-' + token)
             && oversightText.includes('Shopping trip store')

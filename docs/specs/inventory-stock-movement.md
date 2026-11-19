@@ -2,6 +2,8 @@
 
 Implemented 2026-11-12 after the confirmed design discussion and interactive layout review. This replaces the calendar-month comparison and the earlier [Stock Risk implementation](inventory-stock-risk-consolidation.md).
 
+The next iteration adds a Chart.js comparison to each Product row and three Units sold columns to the report summary. Every report will still include full Product details. [Follow-up specification and acceptance tests](https://github.com/ZeachDev01/retailmind/issues/494).
+
 ## Periods and quantities
 
 - Three consecutive, non-overlapping 30-day periods ending yesterday in Philippine time. Exact date ranges and month names identify each period; today is excluded from sales and trend.

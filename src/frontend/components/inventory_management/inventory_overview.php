@@ -794,6 +794,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const productEmpty = document.getElementById('overview-product-empty');
     const productRows = Array.from(document.querySelectorAll('[data-overview-product-row]'));
     const productSearch = document.getElementById('overview-product-search');
+    const stockFilter = document.getElementById('overview-filter-select');
     const categoryFilter = document.getElementById('overview-category-filter');
     const selectAll = document.getElementById('overview-select-all');
     const productPagination = document.getElementById('overview-product-pagination');
@@ -802,6 +803,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const previousPageButton = document.getElementById('overview-page-previous');
     const nextPageButton = document.getElementById('overview-page-next');
     const productPageSize = 10;
+    const stockMovementHashes = ['#stock-risk', '#stock-movement'];
     let activeProductView = 'all';
     let productPage = 1;
     function rowMatchesView(row, view) {
@@ -830,7 +832,7 @@ document.addEventListener('DOMContentLoaded', function () {
         productsTab.textContent = selectedMetric
             ? selectedMetric.querySelector('.overview-metric-copy span').textContent.trim()
             : 'Products';
-        document.getElementById('overview-filter-select').value = view;
+        stockFilter.value = view;
         document.querySelectorAll('[data-overview-view]').forEach(function (button) {
             button.classList.toggle('is-active', button.dataset.overviewView === view);
         });
@@ -842,6 +844,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setOverviewTab(view) {
+        const url = new URL(location.href);
+        if (view === 'summary') url.searchParams.delete('tab');
+        else url.searchParams.set('tab', view === 'risk' ? 'movement' : view);
+        if (view === 'products' && activeProductView !== 'all') url.searchParams.set('stock_status', activeProductView);
+        else url.searchParams.delete('stock_status');
+        if (stockMovementHashes.includes(url.hash)) url.hash = '';
+        if (url.href !== location.href) history.replaceState(history.state, '', url);
+
         document.getElementById('overview-risk').hidden = view !== 'risk';
         document.querySelectorAll('#overview-product-tabs [data-overview-page-tab]').forEach(function (tab) {
             const active = tab.dataset.overviewPageTab === view;
@@ -882,7 +892,14 @@ document.addEventListener('DOMContentLoaded', function () {
         pageTabs[next].click();
         pageTabs[next].focus();
     }));
-    if (['risk', 'movement'].includes(new URL(location.href).searchParams.get('tab')) || ['#stock-risk', '#stock-movement'].includes(location.hash)) showStockRisk();
+    const overviewParams = new URLSearchParams(location.search);
+    const initialTab = overviewParams.get('tab');
+    if (['risk', 'movement'].includes(initialTab) || stockMovementHashes.includes(location.hash)) {
+        showStockRisk();
+    } else if (initialTab === 'products') {
+        const status = overviewParams.get('stock_status');
+        showProductView(Array.from(stockFilter.options).some(option => option.value === status) ? status : 'all');
+    }
 
     document.getElementById('overview-back').addEventListener('click', function () {
         showOverviewSummary();
@@ -955,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function () {
         productPage = 1;
         renderProductPage();
     });
-    document.getElementById('overview-filter-select').addEventListener('change', function () {
+    stockFilter.addEventListener('change', function () {
         showProductView(this.value);
     });
 
