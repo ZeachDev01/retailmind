@@ -63,10 +63,12 @@
 .stock-risk .sr-detail-section h4 { font-size:.88rem; margin:0 0 10px; }
 .stock-risk .sr-period-table { width:100%; border-collapse:collapse; font-size:.76rem; margin:0; }
 .stock-risk .sr-period-table :is(th,td) { padding:10px 7px; border-bottom:1px solid var(--border); }
-.stock-risk .sr-period-table th { text-align:left; color:var(--muted); font-weight:500; font-size:.72rem; text-transform:none; letter-spacing:0; background:transparent; }
+.stock-risk .sr-period-table th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; background:transparent; }
+.stock-risk .sr-period-table thead th { color:var(--muted); font-size:.72rem; }
 .stock-risk .sr-period-table .sr-num { text-align:right; }
 .stock-risk .sr-period-table .sr-recent { background:var(--theme-info-surface,#eff6ff); }
 .stock-risk .sr-period-table .sr-caption { display:block; font-size:.7rem; margin-top:3px; }
+.stock-risk .sr-coverage-note { margin:10px 0; line-height:1.5; }
 .stock-risk .sr-trend-basis { font-size:.76rem; color:var(--muted); margin:10px 0 0; line-height:1.6; }
 .stock-risk .sr-flow { margin:0; }
 .stock-risk .sr-flow > div { display:flex; justify-content:space-between; gap:16px; padding:6px 0; }

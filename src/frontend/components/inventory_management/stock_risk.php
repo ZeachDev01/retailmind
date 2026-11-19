@@ -10,6 +10,8 @@ $criteria = [
     'stockout' => ['orange', 'box', 'Out of stock now or during the 90-day review. Fast/Slow and trend unavailable.'],
 ];
 $movementLabels = ['fast' => 'Fast-Moving', 'slow' => 'Slow-Moving', 'dead' => 'Dead Stock', 'limited' => 'Limited history', 'stockout' => 'Stockout affected'];
+$coverageLabels = ['complete' => '', 'partial' => 'Partial', 'unavailable' => 'History unavailable', 'unknown' => 'Coverage unknown'];
+$coverageNote = '0 means no sales were recorded. A dash (—) means no figure is available. Partial means the product was created during the period. History unavailable means the period predates the product. Coverage unknown means the creation date is missing.';
 $movementStore = ['store_name' => 'Shalom Store'];
 if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings')) {
     try {
@@ -77,21 +79,33 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             <p class="sr-report-scope"></p>
             <?php if (trim((string)($_SESSION['display_name'] ?? '')) !== ''): ?><p class="sr-report-preparer">Prepared by <?= htmlspecialchars($_SESSION['display_name']) ?></p><?php endif; ?>
         </header>
+        <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
     </template>
     <?php foreach ($riskRows as $row):
         $id = (int)$row['product_id'];
         [$color, $icon, $criterion] = $criteria[$row['movement_kind']];
-        $created = substr((string)($row['created_at'] ?? ''), 0, 10);
     ?>
     <template id="risk-detail-<?= $id ?>"><article class="sr-detail">
         <header class="sr-detail-heading"><h3 id="movement-detail-title"><?= htmlspecialchars($row['product_name']) ?></h3><p class="sr-caption"><?= htmlspecialchars($row['sku'] ?? '') ?> · <?= htmlspecialchars($row['category_name'] ?? 'Uncategorized') ?></p></header>
         <div class="sr-detail-status"><span class="sr-badge sr-<?= $color ?>"><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><?= htmlspecialchars($row['movement_label']) ?></span></div>
         <div class="sr-stock-now"><span>Stock now</span><strong><?= number_format((int)$row['quantity_on_hand']) ?></strong></div>
-        <section class="sr-detail-section"><h4>Sales across 90 days</h4><table class="sr-period-table"><thead><tr><th scope="col">Period</th><th scope="col" class="sr-num">Sold</th><th scope="col" class="sr-num">Selling days</th></tr></thead><tbody>
-            <?php foreach ($movementPeriod['windows'] as $i => $window): $unavailable = $created === '' || $created >= $window['end']; ?>
-            <tr <?= $i === 0 ? 'class="sr-recent"' : '' ?>><td><?= htmlspecialchars($window['label']) ?><?php if ($i === 0): ?><span class="sr-caption">Latest 30 days</span><?php endif; ?></td><td class="sr-num"><?= $unavailable && $row['period_sales'][$i] === 0 ? '—' : number_format($row['period_sales'][$i]) ?></td><td class="sr-num"><?= $unavailable && $row['period_days'][$i] === 0 ? '—' : $row['period_days'][$i] ?></td></tr>
+        <section class="sr-detail-section"><h4>Sales across 90 days</h4><table class="sr-period-table"><thead><tr><th scope="col">Period</th><th scope="col" class="sr-num">Units sold<span class="sr-caption">Base units</span></th><th scope="col" class="sr-num">Selling days</th></tr></thead><tbody>
+            <?php foreach ($row['sales_periods'] as $salesPeriod):
+                $latest = $salesPeriod['end'] === $movementPeriod['end'];
+                $coverageLabel = $coverageLabels[$salesPeriod['coverage']];
+            ?>
+            <tr <?= $latest ? 'class="sr-recent"' : '' ?>>
+                <th scope="row">
+                    <?= htmlspecialchars($salesPeriod['label']) ?>
+                    <?php if ($coverageLabel !== ''): ?><span class="sr-caption"><?= htmlspecialchars($coverageLabel) ?></span><?php endif; ?>
+                    <?php if ($latest): ?><span class="sr-caption">Latest 30 days</span><?php endif; ?>
+                </th>
+                <td class="sr-num"><?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?></td>
+                <td class="sr-num"><?= $salesPeriod['selling_days'] ?? '—' ?></td>
+            </tr>
             <?php endforeach; ?>
         </tbody></table>
+        <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
         <?php if ($row['trend'] !== null): ?><p class="sr-trend-basis"><?= $row['selling_days'] ?> selling days now · <?= number_format($row['previous_average'], 1) ?> average in the previous two periods.</p><?php endif; ?>
         </section>
         <section class="sr-detail-section"><h4>Stock flow <span class="sr-caption">· Latest 30 days</span></h4><dl class="sr-flow">

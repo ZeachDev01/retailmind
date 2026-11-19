@@ -153,11 +153,12 @@
             section.className = 'sr-report-product';
             section.append(root.querySelector('#risk-detail-' + row.dataset.productId).content.cloneNode(true));
             section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            section.querySelector('.sr-coverage-note').remove();
             section.querySelectorAll('details').forEach(el => { el.open = true; });
             snapshot.append(section);
         });
         // Shared calculation limitations belong once in a complete report.
-        const basis = Array.from(snapshot.querySelector('.sr-report-product .sr-basis')).slice(0,2).map(el => el.textContent).join(' ');
+        const basis = Array.from(snapshot.querySelector('.sr-report-product').querySelectorAll('.sr-basis')).map(el => el.textContent).join(' ');
         snapshot.querySelectorAll('.sr-basis').forEach(el => el.remove());
         const note = report.document.createElement('p');
         note.className = 'sr-caption';
