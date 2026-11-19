@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../bootstrap/app.php';
+require_once __DIR__ . '/support/stock_movement_schema.php';
 
 use App\Inventory\StockMovementReader;
 
@@ -16,13 +17,11 @@ foreach (['2026-11-12', '2027-01-01', '2028-03-01'] as $today) {
     }
 }
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-$pdo->exec('CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, sale_date TEXT);
-    CREATE TABLE sale_items (sale_id INTEGER, product_id INTEGER, quantity INTEGER, selling_form TEXT, pack_size INTEGER);
-    CREATE TABLE stock_movements (movement_id INTEGER PRIMARY KEY, product_id INTEGER, change_qty INTEGER, reason TEXT, moved_at TEXT)');
+createStockMovementSchema($pdo);
 $products = [];
 foreach (range(1,17) as $id) {
     $products[] = ['product_id' => $id, 'product_name' => 'Product ' . $id, 'quantity_on_hand' => match($id) {1=>90,6,11=>20,7,17=>0,default=>100},
-        'created_at' => match($id) {5=>'2026-10-29',8=>'',12=>'2026-11-12',13=>'2026-11-13',15=>'2026-08-14',16=>'2026-08-15',default=>'2026-01-01'},
+        'created_at' => match($id) {5=>'2026-10-29',8=>'',12=>'2026-11-12',13=>'2026-11-13',15=>'2026-08-14',16=>'2026-09-12',default=>'2026-01-01'},
         'status' => $id === 10 ? 'inactive' : 'active', 'expired_quantity' => $id === 4 ? 4 : 0];
 }
 $saleId = 0;
@@ -39,12 +38,15 @@ $sale(1,'2026-09-13 00:00:00');
 $sale(1,'2026-08-14 00:00:00',2);
 $sale(1,'2026-08-13 23:59:59',100);
 $sale(1,'2026-11-12 00:00:00',10);
+$sale(5,'2026-10-29 12:00:00',6);
+$sale(8,'2026-09-13 00:00:00',4);
 $sale(17,'2026-11-12 00:00:00');
 foreach (range(13,22) as $day) $sale(2,sprintf('2026-10-%02d 12:00:00',$day));
 foreach (range(13,21) as $day) $sale(3,sprintf('2026-10-%02d 12:00:00',$day));
 $sale(6,'2026-10-20 12:00:00');
 $sale(7,'2026-10-20 12:00:00');
 $sale(9,'2026-09-13 00:00:00',2);
+$sale(12,'2026-09-13 00:00:00',3);
 foreach (range(13,22) as $day) $sale(14,sprintf('2026-10-%02d 12:00:00',$day));
 $sale(14,'2026-10-12 23:59:59');
 $sale(14,'2026-09-12 23:59:59');
@@ -57,6 +59,23 @@ $rows = StockMovementReader::read($pdo, $products, $period);
 $byId = array_column($rows, null, 'product_id');
 $expect(count($rows) === 15 && !isset($byId[10]) && !isset($byId[13]), 'Exclude inactive and future-created products.');
 $expect($byId[1]['period_sales'] === [47,1,2] && $byId[1]['period_days'] === [1,1,1], 'Bulk quantity, packs and multiple receipts on one day must count as one selling day.');
+$expect(array_column($byId[1]['sales_periods'] ?? [], 'label') === [
+    'Aug 14, 2026 – Sep 12, 2026', 'Sep 13, 2026 – Oct 12, 2026', 'Oct 13, 2026 – Nov 11, 2026',
+], 'Sales history details must present exact periods oldest first.');
+$expect(array_column($byId[1]['sales_periods'], 'units_sold') === [2, 1, 47]
+    && array_column($byId[1]['sales_periods'], 'selling_days') === [1, 1, 1], 'Coverage details must use recorded units and distinct selling days.');
+$expect(array_column($byId[5]['sales_periods'], 'coverage') === ['unavailable', 'unavailable', 'partial']
+    && array_column($byId[5]['sales_periods'], 'units_sold') === [null, null, 6]
+    && array_column($byId[5]['sales_periods'], 'selling_days') === [null, null, 1], 'A new product must distinguish unavailable periods from recorded partial history.');
+$expect(array_column($byId[8]['sales_periods'], 'coverage') === ['unknown', 'unknown', 'unknown']
+    && array_column($byId[8]['sales_periods'], 'units_sold') === [null, 4, null]
+    && array_column($byId[8]['sales_periods'], 'selling_days') === [null, 1, null], 'An unknown creation date must preserve positive values and withhold unsupported zeros.');
+$expect($byId[15]['sales_periods'][0]['coverage'] === 'complete' && $byId[15]['sales_periods'][0]['units_sold'] === 0
+    && $byId[15]['sales_periods'][0]['selling_days'] === 0, 'A product created on the first day has complete coverage and confirmed zeros.');
+$expect(array_column($byId[16]['sales_periods'], 'coverage') === ['partial', 'complete', 'complete']
+    && $byId[16]['sales_periods'][0]['units_sold'] === 0, 'Creation on the final displayed day still gives partial coverage.');
+$expect($byId[12]['sales_periods'][1]['coverage'] === 'unavailable' && $byId[12]['sales_periods'][1]['units_sold'] === 3,
+    'Keep inconsistent sales records visible and mark the unavailable coverage.');
 $expect($byId[1]['movement_kind'] === 'slow' && $byId[1]['trend'] === 0, 'Bulk buying must not turn a product Fast-Moving.');
 $expect($byId[2]['selling_days'] === 10 && $byId[2]['movement_kind'] === 'fast', 'Ten distinct selling days is Fast-Moving.');
 $expect($byId[3]['selling_days'] === 9 && $byId[3]['movement_kind'] === 'slow', 'Nine distinct selling days is Slow-Moving.');

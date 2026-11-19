@@ -15,6 +15,7 @@ const template = source.slice(source.indexOf('<body'))
     .replace(/^<script src=.*stock-risk\.js.*<\/script>\r?$/gm, '');
 const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8', input: `<?php
     require_once ${JSON.stringify(path.resolve(__dirname, '../bootstrap/app.php').replaceAll('\\', '/'))};
+    require_once ${JSON.stringify(path.resolve(__dirname, 'support/stock_movement_schema.php').replaceAll('\\', '/'))};
     function app_url($path) { return $path; }
     function format_display_datetime($value) { return $value; }
     $products = [];
@@ -36,26 +37,59 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
     $productCategories = ['Food']; $chartDataJson = '{}';
     $_SESSION['display_name'] = 'Inventory Reviewer <test>';
     $movementPeriod = \\App\\Inventory\\StockMovementReader::period('2026-11-12');
-    $riskRows = [];
+    $pdo = new PDO('sqlite::memory:');
+    createStockMovementSchema($pdo);
+    $sale = $pdo->prepare('INSERT INTO sales (sale_date) VALUES (?)');
+    $saleItem = $pdo->prepare("INSERT INTO sale_items VALUES (?, ?, ?, 'piece', NULL)");
+    $stockMovement = $pdo->prepare("INSERT INTO stock_movements (product_id, change_qty, reason, moved_at) VALUES (?, ?, ?, ?)");
+    $recordSale = static function (int $productId, string $date, int $units) use ($pdo, $sale, $saleItem, $stockMovement): void {
+        $sale->execute([$date]);
+        $saleItem->execute([$pdo->lastInsertId(), $productId, $units]);
+        $stockMovement->execute([$productId, -$units, 'sale', $date]);
+    };
+    $movementProducts = [];
     foreach (range(1, 13) as $i) {
-        $kind = $i === 1 ? 'dead' : ($i === 2 ? 'limited' : ($i === 3 || $i === 13 ? 'stockout' : ($i >= 10 ? 'fast' : 'slow')));
-        $days = $i === 1 ? 0 : $i;
-        $riskRows[] = ['product_id' => 100 + $i, 'product_name' => 'Movement Product ' . $i, 'sku' => 'MOVE-' . $i,
+        $id = 100 + $i;
+        $movementProducts[] = ['product_id' => $id, 'product_name' => 'Movement Product ' . $i, 'sku' => 'MOVE-' . $i,
             'category_name' => $i % 2 ? 'Personal Care' : 'Beverages', 'quantity_on_hand' => $i === 13 ? 0 : $i * 10,
-            'created_at' => $i === 2 ? '2026-10-29' : '2026-01-01',
-            'period_sales' => [$i === 1 ? 0 : $i * 3, $i, $i], 'period_days' => [$days, $i === 1 ? 0 : 1, $i === 1 ? 0 : 2],
-            'recent_sales' => $i === 1 ? 0 : $i * 3, 'selling_days' => $days, 'total_sales' => $i === 1 ? 0 : $i * 5,
-            'trend' => in_array($kind, ['limited','stockout']) ? null : ($i === 1 ? 0 : 1), 'previous_average' => $i === 1 ? 0 : 1.5,
-            'movement_kind' => $kind, 'movement_label' => ['dead'=>'Dead Stock','limited'=>'Limited history','stockout'=>'Stockout affected','fast'=>'Fast-Moving','slow'=>'Slow-Moving'][$kind],
-            'history_note' => 'Recorded history.', 'balance' => $i * 10 + 2, 'remaining' => $i === 13 ? 0 : $i * 10,
-            'received' => 8, 'sale_out' => -10, 'returns' => 2, 'other' => -2];
+            'created_at' => match ($i) { 2 => '2026-10-29', 4 => null, default => '2026-01-01' }];
+        if ($i === 1) continue;
+        if ($i !== 2) $recordSale($id, '2026-09-13', $i);
+        if ($i !== 2 && $i !== 4) {
+            $recordSale($id, '2026-08-14', 1);
+            $recordSale($id, '2026-09-12', $i - 1);
+        }
+        foreach (range(1, $i) as $day) {
+            $recordSale($id, $i === 2 ? '2026-10-' . (28 + $day) : sprintf('2026-10-%02d', 12 + $day), 3);
+        }
+        $stockMovement->execute([$id, $i === 3 ? 50 : 8, 'purchase', '2026-11-10']);
     }
+    $riskRows = \\App\\Inventory\\StockMovementReader::read($pdo, $movementProducts, $movementPeriod);
 ?>${template}`});
 
 (async () => {
     const browser = await chromium.launch({headless: true});
     const output = path.resolve('output/playwright/inventory-overview');
     fs.mkdirSync(output, {recursive: true});
+    const periodRanges = ['Aug 14, 2026 – Sep 12, 2026', 'Sep 13, 2026 – Oct 12, 2026', 'Oct 13, 2026 – Nov 11, 2026'];
+    const coverageExamples = [
+        {product: 1, coverage: ['', '', ''], units: ['0', '0', '0'], days: ['0', '0', '0']},
+        {product: 2, coverage: ['History unavailable', 'History unavailable', 'Partial'], units: ['—', '—', '6'], days: ['—', '—', '2']},
+        {product: 4, coverage: ['Coverage unknown', 'Coverage unknown', 'Coverage unknown'], units: ['—', '4', '12'], days: ['—', '1', '4']},
+    ];
+    async function assertPeriodDetails(details, example) {
+        const table = details.getByRole('table');
+        assert.match(await table.getByRole('columnheader', {name: /Units sold/}).innerText(), /base units/i);
+        assert.equal(await table.getByRole('columnheader', {name: 'Selling days', exact: true}).count(), 1);
+        const rows = table.locator('tbody').getByRole('row');
+        assert.equal(await rows.count(), 3);
+        for (const [index, range] of periodRanges.entries()) {
+            const row = rows.nth(index);
+            const heading = (await row.getByRole('rowheader').innerText()).replace(/\s+/g, ' ');
+            assert.equal(heading, [range, example.coverage[index], index === 2 ? 'Latest 30 days' : ''].filter(Boolean).join(' '));
+            assert.deepEqual(await row.getByRole('cell').allInnerTexts(), [example.units[index], example.days[index]]);
+        }
+    }
     try {
         for (const width of [1440, 390]) {
             const page = await browser.newPage({viewport: {width, height: 1000}});
@@ -163,11 +197,9 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.getByRole('button', {name:'View details for Movement Product 2',exact:true}).click();
             assert.equal(await page.locator('#movement-drawer').evaluate(el=>el.open),true);
             assert.equal(await page.locator('#movement-detail-title').innerText(),'Movement Product 2');
-            assert.equal(await page.locator('#movement-detail-body .sr-period-table tbody tr').count(),3);
-            assert.match(await page.locator('#movement-detail-body').innerText(),/Oct 13, 2026 – Nov 11, 2026/);
-            assert.match(await page.locator('#movement-detail-body').innerText(),/Sep 13, 2026 – Oct 12, 2026/);
-            assert.match(await page.locator('#movement-detail-body').innerText(),/Aug 14, 2026 – Sep 12, 2026/);
-            assert.equal(await page.locator('#movement-detail-body .sr-period-table tbody tr').nth(1).locator('td').nth(1).innerText(),'2','Recorded sales remain visible even with limited history');
+            const drawerDetails = page.locator('#movement-detail-body');
+            await assertPeriodDetails(drawerDetails, coverageExamples[1]);
+            assert.match(await drawerDetails.innerText(), /0 means no sales were recorded.*A dash.*means no figure is available.*Partial means.*Coverage unknown means/s);
             await page.locator('#movement-drawer').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
             const drawerBounds = await page.locator('#movement-drawer').boundingBox();
             assert.ok(drawerBounds.x >= 0 && drawerBounds.x + drawerBounds.width <= width + 1,'Right drawer fits the viewport');
@@ -191,6 +223,13 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
                 await page.mouse.click(20,20);
                 await page.waitForFunction(()=>!document.getElementById('movement-drawer').open && document.body.style.overflow === '');
             }
+            for (const example of coverageExamples.filter(example => example.product !== 2)) {
+                await page.getByLabel('Search Stock Movement products', {exact:true}).fill('MOVE-' + example.product);
+                await page.getByRole('button', {name:'Open details for Movement Product ' + example.product, exact:true}).click();
+                await assertPeriodDetails(drawerDetails, example);
+                await page.getByRole('button', {name:'Close product details',exact:true}).click();
+                await page.waitForFunction(()=>!document.getElementById('movement-drawer').open && document.body.style.overflow === '');
+            }
             await page.getByLabel('Search Stock Movement products', {exact:true}).fill('missing');
             assert.equal(await page.locator('#risk-empty').isVisible(),true);
             assert.equal(await page.getByRole('button',{name:'Generate Report',exact:true}).isDisabled(),true);
@@ -210,6 +249,14 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await report.waitForLoadState();
             assert.equal(await report.locator('[data-risk-row]').count(),13,'Report includes all matching pages');
             assert.equal(await report.locator('.sr-report-product').count(),13,'Report includes drawer details for every product');
+            for (const example of coverageExamples) {
+                const details = report.locator('.sr-report-product').filter({
+                    has: report.getByRole('heading', {name:'Movement Product ' + example.product, exact:true})
+                });
+                await assertPeriodDetails(details, example);
+            }
+            assert.equal(await report.getByText('0 means no sales were recorded.', {exact:false}).count(),1,'The report explains coverage once');
+            assert.equal(await report.getByText('Forecast-only imports are excluded.', {exact:false}).count(),1,'The report includes the shared calculation basis');
             assert.equal(await report.locator('.sr-report-brand strong').innerText(),'Shalom Store');
             assert.equal(await report.locator('.sr-report-letterhead h1').innerText(),'Stock Movement Report');
             assert.match(await report.locator('.sr-report-stamp').innerText(),/PHT/);
