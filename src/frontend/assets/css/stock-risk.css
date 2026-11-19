@@ -124,7 +124,6 @@
 body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#0f172a; font:14px/1.5 "Segoe UI",Arial,sans-serif; }
 .stock-movement-report .sr-report-actions { max-width:1040px; margin:0 auto 16px; display:flex; justify-content:flex-end; }
 .stock-movement-report .sr-report { --text:#0f172a; --muted:#475569; --border:#dbe1e8; --card-bg:#fff; --sr-soft:#f8fafc; --primary:#1e3a8a; max-width:1040px; margin:auto; padding:36px; background:#fff; border:1px solid #dbe1e8; border-radius:4px; }
-.stock-movement-report .sr-records { border:0; border-radius:0; overflow:visible; }
 .stock-movement-report .sr-report-letterhead { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 20px; padding-bottom:18px; margin-bottom:22px; border-bottom:2.5px solid #1e3a8a; break-inside:avoid; }
 .stock-movement-report .sr-report-brand { display:flex; flex-direction:column; gap:3px; overflow-wrap:anywhere; }
 .stock-movement-report .sr-report-brand strong { font-size:19px; color:#0f172a; }
@@ -134,14 +133,19 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
 .stock-movement-report .sr-report-letterhead h1 { grid-column:1/-1; font-size:30px; font-weight:750; letter-spacing:-.02em; line-height:1.2; color:#0f172a; margin:18px 0 4px; }
 .stock-movement-report .sr-report-letterhead p { grid-column:1/-1; margin:0; color:#475569; font-size:12px; }
 .stock-movement-report .sr-report-letterhead .sr-period-label { font-size:14px; font-weight:600; color:#0f172a; }
-.stock-movement-report .sr-table-scroll { overflow:visible; }
-.stock-movement-report .sr-table { min-width:0; font-size:12px; }
+.stock-movement-report .sr-table-scroll { overflow:auto; }
+.stock-movement-report .sr-table { min-width:760px; font-size:12px; }
 .stock-movement-report .sr-table thead { position:static; clip-path:none; width:auto; height:auto; overflow:visible; display:table-header-group; }
 .stock-movement-report .sr-table tbody { display:table-row-group; }
 .stock-movement-report .sr-table tr[data-risk-row] { display:table-row; break-inside:avoid; }
-.stock-movement-report .sr-table tr[data-risk-row] td { display:table-cell; padding:10px 9px; border-bottom:1px solid #dbe1e8; }
-.stock-movement-report .sr-table th { padding:9px; font-size:11px; color:#334155; background:#f1f5f9; }
-.stock-movement-report .sr-table td[data-label]::before { display:none; }
+.stock-movement-report .sr-table tr[data-risk-row] :is(th,td) { display:table-cell; padding:10px 9px; border-bottom:1px solid #dbe1e8; }
+.stock-movement-report .sr-table thead th { padding:9px; font-size:11px; color:#334155; background:#f1f5f9; }
+.stock-movement-report .sr-table tbody th { background:transparent; color:var(--text); font-size:inherit; text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.stock-movement-report .sr-table tr[data-risk-row] .sr-num { text-align:right; }
+.stock-movement-report .sr-table .sr-report-units { text-align:center; }
+.stock-movement-report .sr-table .sr-report-period { white-space:normal; min-width:90px; }
+.stock-movement-report .sr-table .sr-num .sr-caption { display:block; font-size:11px; }
+.stock-movement-report .sr-table .sr-num .sr-report-days-total { display:inline; }
 .stock-movement-report .sr-table tbody > tr[data-risk-row]:hover { background:transparent; }
 .stock-movement-report .sr-report-product { border-top:1px solid #cbd5e1; padding:24px 0; break-inside:avoid; }
 .stock-movement-report .sr-detail { display:grid; grid-template-columns:1fr 1fr; column-gap:32px; max-width:none; }
@@ -162,8 +166,6 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
     .stock-movement-report .sr-report-letterhead { grid-template-columns:1fr; }
     .stock-movement-report .sr-report-stamp { text-align:left; }
     .stock-movement-report .sr-report-letterhead h1 { font-size:25px; }
-    .stock-movement-report .sr-table-scroll { overflow:auto; }
-    .stock-movement-report .sr-table { min-width:620px; }
     .stock-movement-report .sr-detail { grid-template-columns:1fr; }
 }
 @media print {
@@ -173,10 +175,11 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
     .stock-movement-report .sr-report { max-width:none; padding:0; border:0; border-radius:0; }
     .stock-movement-report .sr-report-letterhead { break-after:avoid; }
     .stock-movement-report .sr-table-scroll { overflow:visible; }
+    .stock-movement-report .sr-table { min-width:0; }
     .stock-movement-report .sr-detail { grid-template-columns:1fr 1fr; }
     .stock-movement-report .sr-report-letterhead,.stock-movement-report .sr-report-footer { border-color:#1e3a8a !important; }
     .stock-movement-report .sr-report-letterhead h1,.stock-movement-report .sr-detail h3 { color:#1e3a8a !important; }
-    .stock-movement-report .sr-table th { background-color:#f1f5f9 !important; color:#334155 !important; }
+    .stock-movement-report .sr-table thead th { background-color:#f1f5f9 !important; color:#334155 !important; }
     .stock-movement-report .sr-badge { background-color:var(--sr-tint) !important; color:var(--sr-ink) !important; }
     .stock-movement-report .sr-badge i { color:inherit !important; }
     .stock-movement-report .sr-caption,.stock-movement-report .sr-report-letterhead p,.stock-movement-report .sr-report-footer { color:#475569 !important; }

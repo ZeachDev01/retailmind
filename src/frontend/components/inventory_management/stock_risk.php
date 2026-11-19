@@ -90,16 +90,61 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
         </div>
         <nav class="sr-pagination" aria-label="Stock Movement pagination"><span id="risk-page-summary" role="status"></span><div><span class="sr-units">Quantities in base units</span><button type="button" id="risk-previous" aria-label="Previous Stock Movement page"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span id="risk-page-status"></span><button type="button" id="risk-next" aria-label="Next Stock Movement page"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div></nav>
     </div>
-    <template id="movement-report-letterhead">
-        <header class="sr-report-letterhead">
-            <div class="sr-report-brand"><strong><?= htmlspecialchars(trim((string)($movementStore['store_name'] ?? '')) ?: 'Shalom Store') ?></strong><span><?= htmlspecialchars(implode(' · ', array_filter(array_map('trim', [$movementStore['store_address'] ?? '', $movementStore['store_phone'] ?? '', $movementStore['store_email'] ?? ''])))) ?></span></div>
-            <div class="sr-report-stamp"><span>Generated</span><strong></strong></div>
-            <h1>Stock Movement Report</h1>
-            <p class="sr-period-label"><?= htmlspecialchars($movementPeriod['label']) ?> · Last 30 days</p>
-            <p class="sr-report-scope"></p>
-            <?php if (trim((string)($_SESSION['display_name'] ?? '')) !== ''): ?><p class="sr-report-preparer">Prepared by <?= htmlspecialchars($_SESSION['display_name']) ?></p><?php endif; ?>
-        </header>
-        <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
+    <template id="movement-report-template">
+        <main class="stock-risk sr-report">
+            <header class="sr-report-letterhead">
+                <div class="sr-report-brand"><strong><?= htmlspecialchars(trim((string)($movementStore['store_name'] ?? '')) ?: 'Shalom Store') ?></strong><span><?= htmlspecialchars(implode(' · ', array_filter(array_map('trim', [$movementStore['store_address'] ?? '', $movementStore['store_phone'] ?? '', $movementStore['store_email'] ?? ''])))) ?></span></div>
+                <div class="sr-report-stamp"><span>Generated</span><strong></strong></div>
+                <h1>Stock Movement Report</h1>
+                <p class="sr-period-label"><?= htmlspecialchars($movementPeriod['review_label']) ?> · 90-day review</p>
+                <p class="sr-report-scope"></p>
+                <?php if (trim((string)($_SESSION['display_name'] ?? '')) !== ''): ?><p class="sr-report-preparer">Prepared by <?= htmlspecialchars($_SESSION['display_name']) ?></p><?php endif; ?>
+            </header>
+            <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
+            <div class="sr-table-scroll" role="region" aria-label="Summary" tabindex="0">
+                <table class="sr-table" aria-label="Stock Movement summary">
+                    <colgroup span="2"></colgroup><colgroup span="3"></colgroup><colgroup span="3"></colgroup>
+                    <thead>
+                        <tr>
+                            <th rowspan="2" scope="col">Product</th>
+                            <th rowspan="2" scope="col" class="sr-num">Stock</th>
+                            <th colspan="3" scope="colgroup" class="sr-report-units">Units sold (base units)</th>
+                            <th rowspan="2" scope="col" class="sr-num">Selling days<span class="sr-caption">Latest 30 days</span></th>
+                            <th rowspan="2" scope="col">Status</th>
+                            <th rowspan="2" scope="col">Trend</th>
+                        </tr>
+                        <tr>
+                            <?php foreach (array_reverse($movementPeriod['windows']) as $window): ?>
+                                <th scope="col" class="sr-num sr-report-period"><?= htmlspecialchars($window['label']) ?></th>
+                            <?php endforeach; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($riskRows as $row):
+                            [$color, $icon] = $criteria[$row['movement_kind']];
+                            $trend = $row['trend'];
+                            $trendIcon = $trend > 0 ? 'arrow-up-right' : ($trend < 0 ? 'arrow-down-right' : 'arrow-right');
+                        ?>
+                        <tr data-risk-row data-product-id="<?= (int)$row['product_id'] ?>">
+                            <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars($row['sku'] ?? '') ?></span></div></th>
+                            <td class="sr-num"><?= number_format((int)$row['quantity_on_hand']) ?></td>
+                            <?php foreach ($row['sales_periods'] as $salesPeriod):
+                                $coverageLabel = $coverageLabels[$salesPeriod['coverage']];
+                            ?>
+                                <td class="sr-num">
+                                    <?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?>
+                                    <?php if ($coverageLabel !== ''): ?><span class="sr-caption"><?= htmlspecialchars($coverageLabel) ?></span><?php endif; ?>
+                                </td>
+                            <?php endforeach; ?>
+                            <td class="sr-num"><?= $row['selling_days'] ?> <span class="sr-caption sr-report-days-total">/ 30</span></td>
+                            <td><span class="sr-badge sr-<?= $color ?>"><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><?= htmlspecialchars($row['movement_label']) ?></span></td>
+                            <td><span class="sr-trend"><?php if ($trend === null): ?><span aria-label="Trend unavailable">—</span><?php else: ?><i class="bi bi-<?= $trendIcon ?>" aria-hidden="true"></i><?= $trend > 0 ? 'Nisaka' : ($trend < 0 ? 'Nihinay' : 'Pareho') ?><?php endif; ?></span></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </main>
     </template>
     <?php foreach ($riskRows as $row):
         $id = (int)$row['product_id'];

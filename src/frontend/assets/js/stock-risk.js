@@ -175,26 +175,11 @@
         print.textContent = 'Print / Save as PDF';
         print.addEventListener('click', () => report.print());
         actions.append(print);
-        const snapshot = root.cloneNode(true);
-        snapshot.classList.add('sr-report');
-        snapshot.querySelector('.sr-heading').replaceWith(root.querySelector('#movement-report-letterhead').content.cloneNode(true));
-        snapshot.querySelectorAll('template,dialog,.sr-tools,.sr-mobile-sort,.sr-mobile-status,.sr-pagination,#movement-report,#movement-report-status,.sr-row-action,.tooltip-box,.info-tooltip-trigger:not(.sr-badge)').forEach(el => el.remove());
-        snapshot.querySelector('thead tr').lastElementChild.remove();
-        snapshot.querySelectorAll('button').forEach(button => {
-            if (button.classList.contains('sr-badge')) {
-                const label = report.document.createElement('span');
-                label.className = button.className.replace('info-tooltip-trigger', '');
-                label.append(...button.cloneNode(true).childNodes);
-                button.replaceWith(label);
-            } else button.replaceWith(report.document.createTextNode(button.textContent));
-        });
+        const snapshot = root.querySelector('#movement-report-template').content.firstElementChild.cloneNode(true);
+        const summary = snapshot.querySelector('tbody');
+        const summaryRows = new Map(Array.from(summary.rows, row => [row.dataset.productId, row]));
         const matching = matchingRows();
-        const ids = new Set(matching.map(row => row.dataset.productId));
-        snapshot.querySelectorAll('[data-risk-row]').forEach(row => {
-            if (ids.has(row.dataset.productId)) row.hidden = false;
-            else row.remove();
-        });
-        snapshot.querySelector('#risk-empty').remove();
+        summary.replaceChildren(...matching.map(row => summaryRows.get(row.dataset.productId)));
         const generated = new Intl.DateTimeFormat('en-PH', {dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Manila'}).format(new Date()) + ' PHT';
         snapshot.querySelector('.sr-report-stamp strong').textContent = generated;
         snapshot.querySelector('.sr-report-scope').textContent = stockFilter.selectedOptions[0].textContent + ' · Search: ' + (search.value.trim() || 'All') + ' · ' + matching.length + ' products · Quantities in base units';

@@ -77,6 +77,17 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
         {product: 2, coverage: ['History unavailable', 'History unavailable', 'Partial'], units: ['—', '—', '6'], days: ['—', '—', '2']},
         {product: 4, coverage: ['Coverage unknown', 'Coverage unknown', 'Coverage unknown'], units: ['—', '4', '12'], days: ['—', '1', '4']},
     ];
+    async function assertReportProducts(report, productNumbers) {
+        const names = productNumbers.map(number => 'Movement Product ' + number);
+        const summary = report.getByRole('table', {name: 'Stock Movement summary', exact: true});
+        const productRows = await summary.getByRole('rowheader').allInnerTexts();
+        assert.deepEqual(productRows.map(text => text.split('\n')[0]), names, 'Summary includes each matching product in list order');
+        const details = report.locator('.sr-report-product');
+        assert.deepEqual(await details.getByRole('heading', {level: 3}).allInnerTexts(), names, 'Details follow the same order');
+        assert.equal(await details.getByRole('heading', {name: 'Stock flow · Latest 30 days', exact: true}).count(), names.length);
+        assert.equal(await details.getByText('Calculation basis', {exact: true}).count(), names.length);
+        assert.equal(await details.locator('.sr-history-note:visible').count(), names.length);
+    }
     async function assertPeriodDetails(details, example) {
         const table = details.getByRole('table');
         assert.match(await table.getByRole('columnheader', {name: /Units sold/}).innerText(), /base units/i);
@@ -250,7 +261,7 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.getByRole('button',{name:'Generate Report',exact:true}).click();
             const defaultReport = await defaultReportPromise;
             await defaultReport.waitForLoadState();
-            assert.equal(await defaultReport.locator('[data-risk-row]').count(),12,'Default report includes all matching pages and excludes empty stock');
+            await assertReportProducts(defaultReport, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
             await defaultReport.close();
             await page.getByLabel('Search Stock Movement products', {exact:true}).fill('Movement Product 2');
             assert.equal(await page.locator('[data-risk-row]:visible').count(),1);
@@ -320,8 +331,24 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await page.getByRole('button', {name:'Generate Report',exact:true}).click();
             const report = await popupPromise;
             await report.waitForLoadState();
-            assert.equal(await report.locator('[data-risk-row]').count(),13,'Report includes all matching pages');
-            assert.equal(await report.locator('.sr-report-product').count(),13,'Report includes drawer details for every product');
+            await assertReportProducts(report, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 13]);
+            const summary = report.getByRole('table', {name: 'Stock Movement summary', exact: true});
+            assert.equal(await summary.getByRole('columnheader', {name: 'Units sold (base units)', exact: true}).count(), 1);
+            assert.deepEqual(await summary.locator('thead tr').last().getByRole('columnheader').allInnerTexts(), periodRanges);
+            const summaryHeadings = await summary.locator('thead tr').first().getByRole('columnheader').allInnerTexts();
+            assert.deepEqual(summaryHeadings.map(text => text.replace(/\s+/g, ' ')), [
+                'Product', 'Stock', 'Units sold (base units)', 'Selling days Latest 30 days', 'Status', 'Trend'
+            ]);
+            for (const example of coverageExamples) {
+                const row = summary.getByRole('row').filter({
+                    has: report.getByRole('rowheader', {name: new RegExp('^Movement Product ' + example.product + '\\b')})
+                });
+                const cells = (await row.getByRole('cell').allInnerTexts()).slice(1, 4);
+                assert.deepEqual(
+                    cells.map(cell => cell.replace(/\s+/g, ' ')),
+                    example.units.map((units, index) => [units, example.coverage[index]].filter(Boolean).join(' '))
+                );
+            }
             for (const example of coverageExamples) {
                 const details = report.locator('.sr-report-product').filter({
                     has: report.getByRole('heading', {name:'Movement Product ' + example.product, exact:true})
@@ -336,14 +363,23 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             assert.match(await report.locator('.sr-report-scope').innerText(),/All products.*13 products.*base units/);
             assert.equal(await report.locator('.sr-report-preparer').innerText(),'Prepared by Inventory Reviewer <test>','Preparer remains text, including angle brackets');
             assert.match(await report.locator('.sr-report-footer').innerText(),/Shalom Store.*RetailMind[\s\S]*End of report.*13 products/);
-            assert.equal(await report.locator('dialog,template,.tooltip-box').count(),0,'Report contains readable content rather than interactive overlays');
-            assert.match(await report.locator('.sr-period-label').innerText(),/Oct 13, 2026 – Nov 11, 2026/);
+            assert.equal(await report.locator('dialog,template,.tooltip-box,canvas').count(),0,'Report uses static text and tables');
+            assert.equal(await report.locator('.sr-period-label').innerText(), 'Aug 14, 2026 – Nov 11, 2026 · 90-day review');
             assert.match(await report.locator('.sr-report-product').first().innerText(),/Returns to stock/);
+            assert.ok(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Report fits the viewport');
+            if (width < 640) {
+                const scrollArea = report.getByRole('region', {name: 'Summary', exact: true});
+                await scrollArea.press('ArrowRight');
+                await report.waitForFunction(() => document.querySelector('.sr-table-scroll').scrollLeft > 0);
+            }
             if (width === 1440) {
                 await report.screenshot({path:path.join(output,'stock-movement-report.png'),fullPage:true});
                 await report.pdf({path:path.join(output,'stock-movement-report.pdf'),printBackground:true,preferCSSPageSize:true});
                 await report.emulateMedia({media:'print'});
                 assert.equal(await report.locator('.sr-table thead').evaluate(el=>getComputedStyle(el).display),'table-header-group','Print repeats table headings');
+                assert.ok(await summary.locator('th,td').evaluateAll(cells =>
+                    cells.every(cell => cell.scrollWidth <= cell.clientWidth + 1 && cell.scrollHeight <= cell.clientHeight + 1)
+                ), 'Print keeps dates, values and coverage within their cells');
                 assert.equal(await report.locator('[data-risk-row]').first().evaluate(el=>getComputedStyle(el).display),'table-row','Print keeps tabular layout');
                 assert.equal(await report.locator('h1').evaluate(el=>getComputedStyle(el).color),'rgb(30, 58, 138)','Printed title retains Store report accent');
                 assert.notEqual(await report.locator('.sr-badge.sr-green').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','Status color survives the shared print reset');
@@ -355,13 +391,14 @@ const html = execFileSync(process.env.PHP_BINARY || 'php', [], {encoding: 'utf8'
             await report.getByRole('button',{name:'Print / Save as PDF',exact:true}).click();
             assert.equal(await report.evaluate(()=>window.printed),true);
             await report.close();
+            await page.getByLabel('Stock',{exact:true}).selectOption('in-stock');
             await page.getByLabel('Search Stock Movement products',{exact:true}).fill('Movement Product 2');
             const filteredPromise = page.waitForEvent('popup');
             await page.getByRole('button', {name:'Generate Report',exact:true}).click();
             const filteredReport = await filteredPromise;
             await filteredReport.waitForLoadState();
-            assert.equal(await filteredReport.locator('[data-risk-row]').count(),1,'Report respects search and stock filter');
-            assert.match(await filteredReport.locator('.sr-report-scope').innerText(),/Search: Movement Product 2.*1 products/);
+            await assertReportProducts(filteredReport, [2]);
+            assert.match(await filteredReport.locator('.sr-report-scope').innerText(),/With stock.*Search: Movement Product 2.*1 products/);
             await filteredReport.close();
             await page.getByLabel('Search Stock Movement products',{exact:true}).fill('');
             await page.evaluate(()=>{window.originalOpen=window.open;window.open=()=>null;});
