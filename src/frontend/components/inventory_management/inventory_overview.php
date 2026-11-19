@@ -882,6 +882,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ['overview-metrics', 'overview-charts'].forEach(id => { document.getElementById(id).hidden = true; });
         document.documentElement.classList.remove('overview-fefo-active');
         setOverviewTab('risk');
+        document.getElementById('stock-risk').dispatchEvent(new Event('retailmind:stockmovementopen'));
     }
     document.getElementById('overview-risk-tab').addEventListener('click', showStockRisk);
     const pageTabs = Array.from(document.querySelectorAll('#overview-product-tabs [data-overview-page-tab]'));

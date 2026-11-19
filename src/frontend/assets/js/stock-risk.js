@@ -4,6 +4,8 @@
     const rows = Array.from(root.querySelectorAll('[data-risk-row]'));
     const search = root.querySelector('#risk-search');
     const stockFilter = root.querySelector('#movement-stock');
+    const salesMetric = root.querySelector('#movement-sales-metric');
+    const salesCharts = new Map();
     const reportButton = root.querySelector('#movement-report');
     const body = root.querySelector('#risk-table-body');
     const sorters = Array.from(root.querySelectorAll('[data-risk-sort]'));
@@ -12,6 +14,7 @@
     const drawer = root.querySelector('#movement-drawer');
     const detailBody = root.querySelector('#movement-detail-body');
     const collator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
+    const numberFormat = new Intl.NumberFormat('en-PH');
     let page = 1;
     let sort = 'days';
     let direction = 1;
@@ -20,6 +23,53 @@
     function matchingRows() {
         const query = search.value.trim().toLowerCase();
         return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0) && row.dataset.search.includes(query));
+    }
+    function renderSales() {
+        if (!root.getClientRects().length) return;
+        const metric = salesMetric.value;
+        const unit = metric === 'days' ? 'selling days' : 'base units sold';
+        const color = getComputedStyle(root).getPropertyValue('--primary').trim() || '#2563eb';
+        for (const [row, chart] of salesCharts) {
+            if (!row.hidden) continue;
+            chart.canvas.parentElement.hidden = true;
+            chart.destroy();
+            salesCharts.delete(row);
+        }
+        rows.filter(row => !row.hidden).forEach(row => {
+            const values = Array.from(row.querySelectorAll('.sr-sales-value'), value => {
+                const amount = value.dataset[metric] === '' ? null : Number(value.dataset[metric]);
+                value.textContent = amount === null ? '—' : numberFormat.format(amount);
+                value.nextElementSibling.textContent = amount === null ? unit + ' unavailable' : unit;
+                return value.dataset.coverage === 'unavailable' ? null : amount;
+            });
+            if (!window.Chart) return;
+            const canvas = row.querySelector('.sr-sales-chart canvas');
+            const chart = salesCharts.get(row);
+            try {
+                if (chart) {
+                    chart.data.datasets[0].data = values;
+                    chart.data.datasets[0].backgroundColor = color;
+                    chart.update();
+                    return;
+                }
+                const context = canvas.getContext('2d');
+                if (!context) return;
+                canvas.parentElement.hidden = false;
+                salesCharts.set(row, new window.Chart(context, {
+                    type:'bar',
+                    data:{labels:values.map((_, index) => index), datasets:[{data:values, backgroundColor:color, maxBarThickness:36}]},
+                    options:{
+                        maintainAspectRatio:false, animation:false, events:[],
+                        plugins:{legend:{display:false}},
+                        scales:{x:{display:false}, y:{display:false, beginAtZero:true}}
+                    }
+                }));
+            } catch {
+                canvas.parentElement.hidden = true;
+                salesCharts.delete(row);
+                window.Chart.getChart?.(canvas)?.destroy();
+            }
+        });
     }
     function render() {
         const matching = matchingRows();
@@ -33,9 +83,13 @@
         root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
         previous.disabled = page === 1;
         next.disabled = page === pages;
+        renderSales();
     }
     search.addEventListener('input', () => { page = 1; render(); });
     stockFilter.addEventListener('change', () => { page = 1; render(); });
+    salesMetric.addEventListener('change', renderSales);
+    root.addEventListener('retailmind:stockmovementopen', renderSales);
+    window.addEventListener('retailmind:themechange', renderSales);
     function outsideDrawer(event) {
         if (event.target !== drawer) return;
         const rect = drawer.getBoundingClientRect();
@@ -121,26 +175,11 @@
         print.textContent = 'Print / Save as PDF';
         print.addEventListener('click', () => report.print());
         actions.append(print);
-        const snapshot = root.cloneNode(true);
-        snapshot.classList.add('sr-report');
-        snapshot.querySelector('.sr-heading').replaceWith(root.querySelector('#movement-report-letterhead').content.cloneNode(true));
-        snapshot.querySelectorAll('template,dialog,.sr-tools,.sr-mobile-sort,.sr-mobile-status,.sr-pagination,#movement-report,#movement-report-status,.sr-row-action,.tooltip-box,.info-tooltip-trigger:not(.sr-badge)').forEach(el => el.remove());
-        snapshot.querySelector('thead tr').lastElementChild.remove();
-        snapshot.querySelectorAll('button').forEach(button => {
-            if (button.classList.contains('sr-badge')) {
-                const label = report.document.createElement('span');
-                label.className = button.className.replace('info-tooltip-trigger', '');
-                label.append(...button.cloneNode(true).childNodes);
-                button.replaceWith(label);
-            } else button.replaceWith(report.document.createTextNode(button.textContent));
-        });
+        const snapshot = root.querySelector('#movement-report-template').content.firstElementChild.cloneNode(true);
+        const summary = snapshot.querySelector('tbody');
+        const summaryRows = new Map(Array.from(summary.rows, row => [row.dataset.productId, row]));
         const matching = matchingRows();
-        const ids = new Set(matching.map(row => row.dataset.productId));
-        snapshot.querySelectorAll('[data-risk-row]').forEach(row => {
-            if (ids.has(row.dataset.productId)) row.hidden = false;
-            else row.remove();
-        });
-        snapshot.querySelector('#risk-empty').remove();
+        summary.replaceChildren(...matching.map(row => summaryRows.get(row.dataset.productId)));
         const generated = new Intl.DateTimeFormat('en-PH', {dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Manila'}).format(new Date()) + ' PHT';
         snapshot.querySelector('.sr-report-stamp strong').textContent = generated;
         snapshot.querySelector('.sr-report-scope').textContent = stockFilter.selectedOptions[0].textContent + ' · Search: ' + (search.value.trim() || 'All') + ' · ' + matching.length + ' products · Quantities in base units';
@@ -153,11 +192,12 @@
             section.className = 'sr-report-product';
             section.append(root.querySelector('#risk-detail-' + row.dataset.productId).content.cloneNode(true));
             section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            section.querySelector('.sr-coverage-note').remove();
             section.querySelectorAll('details').forEach(el => { el.open = true; });
             snapshot.append(section);
         });
         // Shared calculation limitations belong once in a complete report.
-        const basis = Array.from(snapshot.querySelector('.sr-report-product .sr-basis')).slice(0,2).map(el => el.textContent).join(' ');
+        const basis = Array.from(snapshot.querySelector('.sr-report-product').querySelectorAll('.sr-basis')).map(el => el.textContent).join(' ');
         snapshot.querySelectorAll('.sr-basis').forEach(el => el.remove());
         const note = report.document.createElement('p');
         note.className = 'sr-caption';

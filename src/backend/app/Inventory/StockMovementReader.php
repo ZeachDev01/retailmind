@@ -88,10 +88,24 @@ final class StockMovementReader
             $created = substr((string)($product['created_at'] ?? ''), 0, 10);
             if ($created > $period['end']) continue;
             $item = $history[$id];
-            $sold = $days = [];
+            $sold = $days = $salesPeriods = [];
             foreach ($period['windows'] as $i => $window) {
-                $sold[] = (int)($sales[$id][$i]['units'] ?? 0);
-                $days[] = (int)($sales[$id][$i]['days'] ?? 0);
+                $unitsSold = (int)($sales[$id][$i]['units'] ?? 0);
+                $sellingDays = (int)($sales[$id][$i]['days'] ?? 0);
+                $sold[] = $unitsSold;
+                $days[] = $sellingDays;
+                $coverage = match (true) {
+                    $created === '' => 'unknown',
+                    $created >= $window['end'] => 'unavailable',
+                    $created > $window['start'] => 'partial',
+                    default => 'complete',
+                };
+                $showFigures = $unitsSold > 0 || $coverage === 'complete' || $coverage === 'partial';
+                $salesPeriods[] = $window + [
+                    'units_sold' => $showFigures ? $unitsSold : null,
+                    'selling_days' => $showFigures ? $sellingDays : null,
+                    'coverage' => $coverage,
+                ];
             }
             $total = array_sum($sold);
             $kind = match (true) {
@@ -113,6 +127,7 @@ final class StockMovementReader
             $trend = in_array($kind, ['limited', 'stockout'], true) || $item['minimum'] <= 0 ? null : ($days[0] * 2 <=> $days[1] + $days[2]);
             $item['balance'] = $item['remaining'] - $item['received'] - $item['sale_out'] - $item['returns'] - $item['other'];
             $rows[] = array_merge($product, $item, ['period_sales' => $sold, 'period_days' => $days,
+                'sales_periods' => array_reverse($salesPeriods),
                 'total_sales' => $total, 'recent_sales' => $sold[0], 'selling_days' => $days[0],
                 'trend' => $trend, 'previous_average' => ($days[1] + $days[2]) / 2,
                 'movement_kind' => $kind, 'movement_label' => $label, 'history_note' => $note]);

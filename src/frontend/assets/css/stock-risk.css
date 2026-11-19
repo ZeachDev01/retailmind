@@ -20,7 +20,8 @@
 .stock-risk .sr-search input { width:100%; min-width:0; border:0; border-radius:9px; min-height:42px; background:transparent; color:var(--text); padding:10px 0; font-size:.84rem; caret-color:var(--primary); }
 .stock-risk .sr-search input::placeholder { color:var(--muted); opacity:1; }
 .stock-risk select { color:var(--text); background:var(--sr-surface); border:1px solid var(--border); border-radius:9px; min-height:42px; padding:8px 10px; font-size:.84rem; max-width:100%; }
-.stock-risk .sr-review-period { margin-left:auto; display:flex; align-items:center; gap:4px; }
+.stock-risk :is(.sr-metric-tools,.sr-metric-label) { display:flex; align-items:center; gap:6px; }
+.stock-risk .sr-metric-tools { flex:none; flex-wrap:wrap; max-width:100%; color:var(--muted); font-size:.78rem; }
 .stock-risk .sr-mobile-sort { display:none; }
 .stock-risk .sr-table-scroll { overflow:auto; scrollbar-color:var(--border) transparent; scrollbar-width:thin; }
 .stock-risk .sr-table { width:100%; border-collapse:collapse; margin:0; font-size:.86rem; }
@@ -30,6 +31,13 @@
 .stock-risk .sr-table td { padding:16px 14px; vertical-align:middle; border-bottom:1px solid var(--border); }
 .stock-risk .sr-table tbody > tr[data-risk-row]:hover { background:var(--sr-soft); }
 .stock-risk .sr-num { text-align:right; font-variant-numeric:tabular-nums; }
+.stock-risk .sr-table td.sr-90-day-sales { min-width:270px; }
+.stock-risk .sr-sales-chart { position:relative; height:38px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+.stock-risk .sr-sales-chart canvas { position:absolute; inset:0; }
+.stock-risk .sr-sales-periods { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); text-align:center; white-space:normal; margin:0; }
+.stock-risk .sr-sales-periods > div { display:grid; grid-template-rows:subgrid; grid-row:span 2; padding-inline:2px; }
+.stock-risk .sr-sales-periods dd { margin:4px 0 0; font-variant-numeric:tabular-nums; }
+.stock-risk .sr-sales-range,.stock-risk .sr-sales-coverage { display:block; line-height:1.35; }
 .stock-risk .sr-product { min-width:140px; max-width:250px; }
 .stock-risk .sr-product-link { display:block; text-align:left; font-weight:600; color:var(--primary); background:transparent; border:0; padding:0; overflow-wrap:anywhere; }
 .stock-risk .sr-product-link:hover { text-decoration:underline; text-underline-offset:3px; }
@@ -63,10 +71,12 @@
 .stock-risk .sr-detail-section h4 { font-size:.88rem; margin:0 0 10px; }
 .stock-risk .sr-period-table { width:100%; border-collapse:collapse; font-size:.76rem; margin:0; }
 .stock-risk .sr-period-table :is(th,td) { padding:10px 7px; border-bottom:1px solid var(--border); }
-.stock-risk .sr-period-table th { text-align:left; color:var(--muted); font-weight:500; font-size:.72rem; text-transform:none; letter-spacing:0; background:transparent; }
+.stock-risk .sr-period-table th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; background:transparent; }
+.stock-risk .sr-period-table thead th { color:var(--muted); font-size:.72rem; }
 .stock-risk .sr-period-table .sr-num { text-align:right; }
 .stock-risk .sr-period-table .sr-recent { background:var(--theme-info-surface,#eff6ff); }
 .stock-risk .sr-period-table .sr-caption { display:block; font-size:.7rem; margin-top:3px; }
+.stock-risk .sr-coverage-note { margin:10px 0; line-height:1.5; }
 .stock-risk .sr-trend-basis { font-size:.76rem; color:var(--muted); margin:10px 0 0; line-height:1.6; }
 .stock-risk .sr-flow { margin:0; }
 .stock-risk .sr-flow > div { display:flex; justify-content:space-between; gap:16px; padding:6px 0; }
@@ -102,6 +112,7 @@
     .stock-risk .sr-table tr[data-risk-row] { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); padding:16px; gap:14px 8px; border-bottom:1px solid var(--border); }
     .stock-risk .sr-table tr[data-risk-row] td { padding:0; border:0; text-align:left; }
     .stock-risk .sr-table tr[data-risk-row] td:first-child { grid-column:1/3; }
+    .stock-risk .sr-table td.sr-90-day-sales { grid-row:4; grid-column:1/-1; min-width:0; }
     .stock-risk .sr-table tr[data-risk-row] .sr-status { grid-column:1/3; align-self:center; }
     .stock-risk .sr-table tr[data-risk-row] .sr-row-action { grid-column:3; grid-row:1; justify-self:end; align-self:start; }
     .stock-risk .sr-table td[data-label]::before { content:attr(data-label); display:block; color:var(--muted); font-size:.7rem; margin-bottom:6px; }
@@ -113,7 +124,6 @@
 body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#0f172a; font:14px/1.5 "Segoe UI",Arial,sans-serif; }
 .stock-movement-report .sr-report-actions { max-width:1040px; margin:0 auto 16px; display:flex; justify-content:flex-end; }
 .stock-movement-report .sr-report { --text:#0f172a; --muted:#475569; --border:#dbe1e8; --card-bg:#fff; --sr-soft:#f8fafc; --primary:#1e3a8a; max-width:1040px; margin:auto; padding:36px; background:#fff; border:1px solid #dbe1e8; border-radius:4px; }
-.stock-movement-report .sr-records { border:0; border-radius:0; overflow:visible; }
 .stock-movement-report .sr-report-letterhead { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 20px; padding-bottom:18px; margin-bottom:22px; border-bottom:2.5px solid #1e3a8a; break-inside:avoid; }
 .stock-movement-report .sr-report-brand { display:flex; flex-direction:column; gap:3px; overflow-wrap:anywhere; }
 .stock-movement-report .sr-report-brand strong { font-size:19px; color:#0f172a; }
@@ -123,14 +133,19 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
 .stock-movement-report .sr-report-letterhead h1 { grid-column:1/-1; font-size:30px; font-weight:750; letter-spacing:-.02em; line-height:1.2; color:#0f172a; margin:18px 0 4px; }
 .stock-movement-report .sr-report-letterhead p { grid-column:1/-1; margin:0; color:#475569; font-size:12px; }
 .stock-movement-report .sr-report-letterhead .sr-period-label { font-size:14px; font-weight:600; color:#0f172a; }
-.stock-movement-report .sr-table-scroll { overflow:visible; }
-.stock-movement-report .sr-table { min-width:0; font-size:12px; }
+.stock-movement-report .sr-table-scroll { overflow:auto; }
+.stock-movement-report .sr-table { min-width:760px; font-size:12px; }
 .stock-movement-report .sr-table thead { position:static; clip-path:none; width:auto; height:auto; overflow:visible; display:table-header-group; }
 .stock-movement-report .sr-table tbody { display:table-row-group; }
 .stock-movement-report .sr-table tr[data-risk-row] { display:table-row; break-inside:avoid; }
-.stock-movement-report .sr-table tr[data-risk-row] td { display:table-cell; padding:10px 9px; border-bottom:1px solid #dbe1e8; }
-.stock-movement-report .sr-table th { padding:9px; font-size:11px; color:#334155; background:#f1f5f9; }
-.stock-movement-report .sr-table td[data-label]::before { display:none; }
+.stock-movement-report .sr-table tr[data-risk-row] :is(th,td) { display:table-cell; padding:10px 9px; border-bottom:1px solid #dbe1e8; }
+.stock-movement-report .sr-table thead th { padding:9px; font-size:11px; color:#334155; background:#f1f5f9; }
+.stock-movement-report .sr-table tbody th { background:transparent; color:var(--text); font-size:inherit; text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.stock-movement-report .sr-table tr[data-risk-row] .sr-num { text-align:right; }
+.stock-movement-report .sr-table .sr-report-units { text-align:center; }
+.stock-movement-report .sr-table .sr-report-period { white-space:normal; min-width:90px; }
+.stock-movement-report .sr-table .sr-num .sr-caption { display:block; font-size:11px; }
+.stock-movement-report .sr-table .sr-num .sr-report-days-total { display:inline; }
 .stock-movement-report .sr-table tbody > tr[data-risk-row]:hover { background:transparent; }
 .stock-movement-report .sr-report-product { border-top:1px solid #cbd5e1; padding:24px 0; break-inside:avoid; }
 .stock-movement-report .sr-detail { display:grid; grid-template-columns:1fr 1fr; column-gap:32px; max-width:none; }
@@ -151,8 +166,6 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
     .stock-movement-report .sr-report-letterhead { grid-template-columns:1fr; }
     .stock-movement-report .sr-report-stamp { text-align:left; }
     .stock-movement-report .sr-report-letterhead h1 { font-size:25px; }
-    .stock-movement-report .sr-table-scroll { overflow:auto; }
-    .stock-movement-report .sr-table { min-width:620px; }
     .stock-movement-report .sr-detail { grid-template-columns:1fr; }
 }
 @media print {
@@ -162,10 +175,11 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
     .stock-movement-report .sr-report { max-width:none; padding:0; border:0; border-radius:0; }
     .stock-movement-report .sr-report-letterhead { break-after:avoid; }
     .stock-movement-report .sr-table-scroll { overflow:visible; }
+    .stock-movement-report .sr-table { min-width:0; }
     .stock-movement-report .sr-detail { grid-template-columns:1fr 1fr; }
     .stock-movement-report .sr-report-letterhead,.stock-movement-report .sr-report-footer { border-color:#1e3a8a !important; }
     .stock-movement-report .sr-report-letterhead h1,.stock-movement-report .sr-detail h3 { color:#1e3a8a !important; }
-    .stock-movement-report .sr-table th { background-color:#f1f5f9 !important; color:#334155 !important; }
+    .stock-movement-report .sr-table thead th { background-color:#f1f5f9 !important; color:#334155 !important; }
     .stock-movement-report .sr-badge { background-color:var(--sr-tint) !important; color:var(--sr-ink) !important; }
     .stock-movement-report .sr-badge i { color:inherit !important; }
     .stock-movement-report .sr-caption,.stock-movement-report .sr-report-letterhead p,.stock-movement-report .sr-report-footer { color:#475569 !important; }
