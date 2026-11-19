@@ -25,9 +25,6 @@ window.RetailMindProductCreateBarcode = {
         const feedback = control('create-barcode-feedback');
         const sellingPacks = control('create-sell-packs');
         const cartonItemScan = control('create-carton-item-scan');
-        const scan = control('add-product-scan-btn');
-        const scannerSection = control('add-product-scanner-section');
-        const stopScan = control('stop-add-product-scan');
         const modal = form.closest('.rm-modal-overlay');
         const change = control('create-barcode-change');
         const keep = control('create-barcode-keep');
@@ -42,9 +39,6 @@ window.RetailMindProductCreateBarcode = {
         let catalogMatch;
         let requestId = 0;
         let burst;
-        let camera;
-        let openingCamera;
-        let stoppingCamera;
 
         function clearFeedback() {
             requestId++;
@@ -250,7 +244,6 @@ window.RetailMindProductCreateBarcode = {
             }
             setCode(kind, code);
             lookup();
-            return true;
         }
 
         async function lookup() {
@@ -303,7 +296,6 @@ window.RetailMindProductCreateBarcode = {
 
         type.addEventListener('change', () => { change.hidden = true; clearFeedback(); sync(); });
         cartonItemScan.addEventListener('click', () => {
-            if (!scannerSection.hidden) stopCamera();
             type.value = 'unit_barcode';
             type.dispatchEvent(new Event('change', { bubbles: true }));
             unit.focus();
@@ -382,56 +374,10 @@ window.RetailMindProductCreateBarcode = {
             } else if (event.key !== 'Shift') burst = null;
         });
 
-        async function stopCamera(restoreFocus = false) {
-            if (stoppingCamera) return;
-            stoppingCamera = true;
-            scannerSection.hidden = true;
-            scan.setAttribute('aria-expanded', 'false');
-            try {
-                await openingCamera;
-                if (camera?.isScanning) await camera.stop();
-            } catch (error) {
-                console.error('Add Product camera stopped with an error:', error);
-            } finally {
-                openingCamera = null;
-                stoppingCamera = false;
-                scan.disabled = false;
-                if (restoreFocus && change.hidden && modal.classList.contains('open')) scan.focus();
-            }
-        }
-
-        scan.addEventListener('click', async () => {
-            clearFeedback();
-            if (!window.Html5Qrcode) {
-                feedback.textContent = 'Camera scanning is unavailable. Enter the barcode manually.';
-                return;
-            }
-            scan.disabled = true;
-            scan.setAttribute('aria-expanded', 'true');
-            scannerSection.hidden = false;
-            stopScan.focus();
-            try {
-                camera ??= new window.Html5Qrcode('add-product-scanner-reader');
-                openingCamera = camera.start({ facingMode: 'environment' }, { fps: 10 }, decoded => {
-                    if (stoppingCamera || scannerSection.hidden) return;
-                    const focusedDetails = checkScannedCode(type.value, String(decoded).trim());
-                    stopCamera(!focusedDetails);
-                }, () => {});
-                await openingCamera;
-            } catch (error) {
-                if (!scannerSection.hidden) {
-                    console.error('Add Product camera could not start:', error);
-                    feedback.textContent = 'The camera could not start. Allow camera access or enter the barcode manually.';
-                    stopCamera(true);
-                }
-            }
-        });
-        stopScan.addEventListener('click', () => stopCamera(true));
         modal.addEventListener('retailmind:overlayclose', () => {
             burst = null;
             change.hidden = true;
             clearFeedback();
-            if (!scannerSection.hidden) stopCamera();
         });
         modal.addEventListener('retailmind:overlayopen', sync);
         sync();

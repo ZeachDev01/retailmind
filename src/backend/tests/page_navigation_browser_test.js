@@ -7,9 +7,6 @@ const php = process.env.PHP_BINARY || (process.platform === 'win32' ? 'C:/xampp/
 const ui = fs.readFileSync('src/frontend/assets/js/ui.js', 'utf8');
 const navigation = fs.readFileSync('src/frontend/assets/js/page-navigation.js', 'utf8');
 const css = fs.readFileSync('src/frontend/assets/css/page-navigation.css', 'utf8');
-const products = fs.readFileSync('src/frontend/components/inventory_management/products.php', 'utf8');
-assert(products.includes("app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')"));
-assert(!products.includes('https://unpkg.com/html5-qrcode'));
 const scanner = fs.readFileSync('src/frontend/assets/vendor/html5-qrcode/html5-qrcode.min.js', 'utf8');
 const render = (html, partial) => {
     const result = spawnSync(php, ['src/backend/tests/support/navigation_response_fixture.php', partial ? '1' : ''], {input: html, encoding: 'utf8'});

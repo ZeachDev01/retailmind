@@ -64,7 +64,7 @@ const fixture = action => {
             const type = dialog.getByLabel('Barcode type');
             const unit = dialog.getByLabel('Individual Item Barcode');
             const lookup = dialog.getByRole('button', { name: 'Look up', exact: true });
-            const scan = dialog.getByRole('button', { name: 'Scan', exact: true });
+            assert.equal(await dialog.getByRole('button', { name: 'Scan', exact: true }).count(), 0, 'Add Product offers no camera scan control');
             const save = dialog.getByRole('button', { name: 'Save Product', exact: true });
             const feedback = dialog.locator('#create-barcode-feedback');
             const details = dialog.getByLabel('Product Name');
@@ -77,7 +77,7 @@ const fixture = action => {
             }
             assert(saveRect.y + saveRect.height <= 900, 'The Save action remains in the viewport');
             await type.focus();
-            for (const id of ['create-barcode-input', 'create-barcode-lookup', 'add-product-scan-btn']) {
+            for (const id of ['create-barcode-input', 'create-barcode-lookup']) {
                 await page.keyboard.press('Tab');
                 assert.equal(await page.evaluate(() => document.activeElement.id), id);
             }
@@ -149,21 +149,14 @@ const fixture = action => {
             assert.equal(requests.at(-1).get('barcode_type'), 'pack_barcode');
             assert.equal(await dialog.locator('#create-pack-barcode').inputValue(), 'THEME-PACK');
 
-            await page.evaluate(() => {
-                window.Html5Qrcode = class {
-                    async start(_camera, _options, complete) { this.isScanning = true; window.finishCameraScan = complete; }
-                    async stop() { this.isScanning = false; }
-                };
-            });
             await type.selectOption('case_barcode');
-            await scan.click();
-            await dialog.getByRole('button', { name: 'Stop scanning' }).waitFor();
-            const camera = page.waitForResponse(response => response.url().startsWith(lookupUrl));
-            await page.evaluate(() => window.finishCameraScan('THEME-CASE'));
-            assert.equal((await (await camera).json()).matched_code_kind, 'case_barcode');
+            const cartonInput = dialog.getByLabel('Receiving Carton Barcode', { exact: true });
+            await cartonInput.fill('THEME-CASE');
+            const carton = page.waitForResponse(response => response.url().startsWith(lookupUrl));
+            await cartonInput.press('Enter');
+            assert.equal((await (await carton).json()).matched_code_kind, 'case_barcode');
             assert.equal(requests.at(-1).get('barcode_type'), 'case_barcode');
             assert.equal(await dialog.locator('#create-receiving-barcode').inputValue(), 'THEME-CASE');
-            await dialog.getByRole('button', { name: 'Stop scanning' }).waitFor({ state: 'hidden' });
             assert.deepEqual(errors, []);
             await page.close();
         }
@@ -331,7 +324,7 @@ const fixture = action => {
         assert.equal((await denied.json()).product, undefined, 'An Administrator cannot obtain inactive details via Add Product');
         const ordinary = await admin.request.get(lookupUrl + '?code=THEME-BARCODE');
         assert.equal((await ordinary.json()).outcome, 'unknown', 'Ordinary lookup still excludes inactive Products');
-        console.log('Add Product barcode lookup: layout, manual/wedge/camera lookup, catalog match/miss/error/offline, draft choices, stale responses, persistence and authorization passed');
+        console.log('Add Product barcode lookup: layout, manual/wedge lookup without camera, catalog match/miss/error/offline, draft choices, stale responses, persistence and authorization passed');
     } finally {
         try {
             if (browser) await browser.close();

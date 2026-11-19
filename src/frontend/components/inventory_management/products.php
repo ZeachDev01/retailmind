@@ -637,7 +637,6 @@ foreach ($products as $product) {
 
         #add-product-modal .planning-section-title {
             margin: 0;
-            font-size: 1rem;
         }
 
         /* Pricing helpers: three labelled sections instead of one unbroken field grid. */
@@ -666,17 +665,19 @@ foreach ($products as $product) {
             border-radius: 999px;
             background: var(--theme-surface-soft, #f1f5f9);
             color: var(--muted);
-            font-size: 0.68rem;
+            font-size: .72rem;
             font-weight: 700;
-            letter-spacing: 0.08em;
+            letter-spacing: .12em;
             text-transform: uppercase;
         }
 
         #add-product-modal .pricing-note {
             margin: 0;
             color: var(--muted);
-            font-size: 0.82rem;
-            line-height: 1.45;
+            max-inline-size: 65ch;
+            font-size: .95rem;
+            line-height: 1.5;
+            text-wrap: pretty;
         }
 
         #add-product-modal .pricing-readout {
@@ -685,8 +686,9 @@ foreach ($products as $product) {
             border-radius: 8px;
             background: var(--theme-surface-soft, #f8fafc);
             color: var(--text, #1f2937);
-            font-size: 0.82rem;
-            line-height: 1.45;
+            font-size: .95rem;
+            line-height: 1.5;
+            font-variant-numeric: tabular-nums;
         }
 
         #add-product-modal .pricing-readout:empty {
@@ -733,6 +735,35 @@ foreach ($products as $product) {
         }
 
         @media (max-width: 640px) {
+            #add-product-modal .rm-modal {
+                overflow-y: auto;
+                overscroll-behavior-y: contain;
+            }
+
+            #add-product-form {
+                overflow: visible;
+            }
+
+            #add-product-modal .rm-modal-header {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                row-gap: .25rem;
+            }
+
+            #add-product-modal .rm-modal-header > div {
+                display: contents;
+            }
+
+            #add-product-modal .rm-modal-header p {
+                grid-row: 2;
+                grid-column: 1 / -1;
+            }
+
+            #add-product-modal .rm-modal-body {
+                min-block-size: min(8rem, 30dvh);
+                overscroll-behavior-y: auto;
+            }
+
             #add-product-modal .rm-modal-actions {
                 display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -865,8 +896,10 @@ foreach ($products as $product) {
             border: 1px solid transparent;
             border-radius: 6px;
             font: inherit;
-            font-size: .84rem;
-            font-weight: 700;
+            font-size: .875rem;
+            font-weight: 600;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
             cursor: pointer;
         }
 
@@ -886,22 +919,30 @@ foreach ($products as $product) {
             display: none;
         }
 
-        .product-edit-intro { margin: 0 0 1.5rem; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+        #product-drawer .rm-drawer { overflow-y: auto; }
+        #product-drawer .rm-drawer-body { min-block-size: min(8rem, 30dvh); }
+        #product-drawer .rm-drawer-header { flex-wrap: wrap; }
+        #product-drawer .rm-drawer-header > div:first-child { flex: 1 1 10ch; min-width: 0; }
+        #product-drawer .rm-drawer-header > div:last-child { margin-inline-start: auto; }
+        #product-drawer-title { text-wrap: balance; }
+        #product-drawer-title, #product-drawer-subtitle { overflow-wrap: anywhere; }
+
+        .product-edit-intro { margin: 0 0 1.5rem; max-inline-size: 65ch; color: var(--muted); font-size: .95rem; line-height: 1.5; text-wrap: pretty; }
         .product-edit-section { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
         .product-edit-section > legend { margin-bottom: 1rem; font-size: 1rem; }
         :is(#product-edit-form, #barcode-correction-form) .form-field { display: flex; flex-direction: column; gap: .4rem; min-width: 0; margin-bottom: 1rem; }
         :is(#product-edit-form, #barcode-correction-form) .form-field > span:first-child,
-        :is(#product-edit-form, #barcode-correction-form) .form-field > label { font-size: .85rem; font-weight: 600; line-height: 1.5; }
+        :is(#product-edit-form, #barcode-correction-form) .form-field > label { font-size: .875rem; font-weight: 600; line-height: 1.5; }
         #product-edit-form .form-grid { align-items: end; }
-        #product-edit-form small { display: block; color: var(--muted); font-size: .76rem; font-weight: 400; }
-        :is(#product-edit-form, #barcode-correction-form) .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; font-size: .9rem; }
+        #product-edit-form small { display: block; color: var(--muted); font-size: .875rem; font-weight: 400; }
+        :is(#product-edit-form, #barcode-correction-form) .form-input { width: 100%; min-width: 0; min-height: 44px; padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; }
         :is(#product-edit-form, #barcode-correction-form) .form-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
         :is(#product-edit-form, #barcode-correction-form) .form-input[readonly] { background: var(--surface-soft); color: var(--muted); }
         #product-edit-form input[type="number"] { font-variant-numeric: tabular-nums; }
-        #product-edit-form input[type="file"] { font-size: .8rem; }
+        #product-edit-form input[type="file"] { font-size: .875rem; }
         #product-edit-form input::file-selector-button { margin-right: .65rem; padding: .4rem .6rem; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); color: var(--text); font: inherit; cursor: pointer; }
         .product-edit-required { color: var(--theme-danger-text, #b91c1c); }
-        #product-edit-error, #barcode-correction-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .85rem; line-height: 1.5; }
+        #product-edit-error, #barcode-correction-error, #selling-price-warning { margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 10px; font-size: .95rem; line-height: 1.5; }
         #product-edit-error, #barcode-correction-error { color: var(--theme-danger-text, #b91c1c); background: var(--theme-danger-surface, #fef2f2); }
         #selling-price-warning { color: var(--theme-warning-text, #92400e); background: var(--theme-warning-surface, #fef3c7); }
         .product-edit-actions { position: sticky; bottom: 0; z-index: 1; display: flex; justify-content: flex-end; gap: .75rem; margin: 0; padding: 1rem 0; padding-bottom: max(1rem, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--card-bg); }
@@ -930,9 +971,10 @@ foreach ($products as $product) {
         .products-page-heading {
             margin: 0 0 20px;
             color: var(--text);
-            font-size: 1.75rem;
-            font-weight: 600;
+            font-size: clamp(1.4rem, 2vw, 1.8rem);
+            font-weight: 700;
             line-height: 1.2;
+            text-wrap: balance;
         }
 
         .products-page .catalog-toolbar-primary,
@@ -971,16 +1013,29 @@ foreach ($products as $product) {
         }
 
         .products-page .product-table-shell .data-table th {
-            font-weight: 500;
+            font-weight: 600;
+            white-space: nowrap;
         }
 
-        .products-page .stock-value {
+        #products-table :is(.column-cost, .column-price, .column-profit, .stock-cell) {
             font-variant-numeric: tabular-nums;
-            font-weight: 600;
+        }
+
+        #products-table .stock-cell small {
+            color: var(--muted);
+            font-size: .875rem;
+            line-height: 1.4;
+        }
+
+        #products-table .stock-cell .stock-expired {
+            color: var(--theme-danger-text, #991b1b);
+        }
+
+        @media (min-width: 901px) {
+            #products-table :is(.column-cost, .column-price, .column-profit) { text-align: end; }
         }
 
         @media (max-width: 560px) {
-            .products-page-heading { font-size: 1.5rem; }
             .products-page .catalog-toolbar-primary,
             .products-page .catalog-filter-row { padding: 8px; }
         }
@@ -1063,8 +1118,8 @@ foreach ($products as $product) {
 
         .catalog-field > span {
             color: var(--muted);
-            font-size: .68rem;
-            font-weight: 700;
+            font-size: .875rem;
+            font-weight: 600;
         }
 
         .catalog-field select {
@@ -1126,7 +1181,8 @@ foreach ($products as $product) {
         .product-pagination-status {
             min-width: 86px;
             color: var(--muted);
-            font-size: .82rem;
+            font-size: .875rem;
+            font-variant-numeric: tabular-nums;
             text-align: center;
         }
 
@@ -1159,8 +1215,8 @@ foreach ($products as $product) {
             font-size: 1.05rem;
         }
 
-        .catalog-empty h2 { margin: 1.25rem 0 .5rem; }
-        .catalog-empty p { margin: 0 auto 1.5rem; color: var(--muted); line-height: 1.5; }
+        .catalog-empty h2 { margin: 1.25rem 0 .5rem; font-size: 1.05rem; line-height: 1.3; text-wrap: balance; }
+        .catalog-empty p { margin: 0 auto 1.5rem; color: var(--muted); line-height: 1.5; text-wrap: pretty; }
         .catalog-empty .btn { gap: .5rem; }
 
         .product-table-shell .data-table-scroll {
@@ -1429,7 +1485,6 @@ foreach ($products as $product) {
 
             .product-drawer-tab {
                 padding-inline: .35rem;
-                font-size: .76rem;
             }
         }
     </style>
@@ -1570,7 +1625,7 @@ foreach ($products as $product) {
                                         <td class="column-cost mobile-hide"><?= \App\Inventory\ProductCost::known($product) ? '₱' . number_format((float)$product['cost_price'], 2) : 'Not recorded' ?></td>
                                         <td class="column-price">₱<?= number_format((float)($product['unit_price'] ?? 0), 2) ?></td>
                                         <td class="column-profit mobile-hide"><?= \App\Inventory\ProductCost::known($product) ? '₱' . number_format((float)$product['unit_price'] - (float)$product['cost_price'], 2) : 'Not recorded' ?></td>
-                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small style="color:var(--text-muted);"><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small style="color:var(--danger, #dc2626);"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
+                                        <td class="stock-cell"><span class="stock-value"><?= number_format($quantity) ?></span><?php if (!empty($product['pack_size']) && (int)$product['pack_size'] > 1): ?><br><small><?= (int)($product['physical_sealed_packs'] ?? 0) ?> packs, <?= (int)($product['physical_loose_pieces'] ?? 0) ?> loose</small><?php if (!empty($product['expired_sealed_packs']) || !empty($product['expired_loose_pieces'])): ?><br><small class="stock-expired"><?= (int)($product['expired_sealed_packs'] ?? 0) ?> pk, <?= (int)($product['expired_loose_pieces'] ?? 0) ?> loose expired</small><?php endif; ?><?php endif; ?><br><small>Reorder at <?= number_format((int)($product['reorder_level'] ?? 0)) ?></small></td>
                                         <td class="status-cell"><span class="status-badge <?= $displayStatus ?>"><?= htmlspecialchars($statusText) ?></span></td>
                                         <td class="action-cell">
                                             <div class="row-actions">
@@ -1647,6 +1702,7 @@ foreach ($products as $product) {
 <div class="product-create-layout">
 <section class="product-create-lookup" aria-labelledby="create-barcode-heading">
 <h3 class="planning-section-title" id="create-barcode-heading">Barcode lookup</h3>
+<p class="field-help">Select the barcode field, then scan with your barcode scanner or type the code.</p>
 <div class="form-group">
     <label for="create-barcode-type">Barcode type</label>
     <select id="create-barcode-type">
@@ -1667,11 +1723,6 @@ foreach ($products as $product) {
 </div>
 <div class="product-create-lookup-actions">
     <button type="button" class="btn btn-quiet" id="create-barcode-lookup" data-url="<?= htmlspecialchars(app_url('components/barcodeScanner/apiScanner/product_code_lookup.php')) ?>">Look up</button>
-    <button type="button" class="btn btn-quiet" id="add-product-scan-btn" aria-controls="add-product-scanner-section" aria-expanded="false"><i class="bi bi-camera" aria-hidden="true"></i> Scan</button>
-</div>
-<div id="add-product-scanner-section" hidden>
-    <button type="button" class="btn btn-quiet" id="stop-add-product-scan">Stop scanning</button>
-    <div id="add-product-scanner-reader"></div>
 </div>
 <div id="create-barcode-feedback" role="status" aria-atomic="true"></div>
 <div id="create-barcode-change" class="form-group" role="group" aria-labelledby="create-barcode-change-message" hidden>
@@ -1985,7 +2036,6 @@ foreach ($products as $product) {
         </section>
     </div>
 
-    <script src="<?= htmlspecialchars(app_url('assets/vendor/html5-qrcode/html5-qrcode.min.js')) ?>"></script>
     <script src="<?= htmlspecialchars(app_url('assets/js/product-create-barcode.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/product-create-barcode.js')) ?>" defer></script>
     <script>
         function knownProductCost(product) {
@@ -2937,11 +2987,11 @@ foreach ($products as $product) {
             if (stockCell) {
                 let packBreakdown = '';
                 if (product.pack_size && Number(product.pack_size) > 1) {
-                    packBreakdown = `<br><small style="color:var(--text-muted);">${Number(product.physical_sealed_packs || 0)} packs, ${Number(product.physical_loose_pieces || 0)} loose</small>`;
+                    packBreakdown = `<br><small>${Number(product.physical_sealed_packs || 0)} packs, ${Number(product.physical_loose_pieces || 0)} loose</small>`;
                     const expSealed = Number(product.expired_sealed_packs || 0);
                     const expLoose = Number(product.expired_loose_pieces || 0);
                     if (expSealed > 0 || expLoose > 0) {
-                        packBreakdown += `<br><small style="color:var(--danger, #dc2626);">${expSealed} pk, ${expLoose} loose expired</small>`;
+                        packBreakdown += `<br><small class="stock-expired">${expSealed} pk, ${expLoose} loose expired</small>`;
                     }
                 }
                 stockCell.innerHTML = `<span class="stock-value">${Number(product.quantity_on_hand || 0).toLocaleString()}</span>${packBreakdown}<br><small>Reorder at ${Number(product.reorder_level || 0).toLocaleString()}</small>`;
@@ -3867,7 +3917,6 @@ foreach ($products as $product) {
             RetailMindUI.openOverlay(productModalOverlay);
         }
 
-        // Camera scan and internal barcode generation
         document.addEventListener('DOMContentLoaded', () => {
             addProductForm.barcodeLookup = window.RetailMindProductCreateBarcode?.init(addProductForm);
         });
